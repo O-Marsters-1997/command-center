@@ -1,0 +1,7 @@
+/cc
+.vscode
+.claude/
+.agents/
+.treepad.toml
+.treepad
+*.db

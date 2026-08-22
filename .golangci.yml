@@ -1,0 +1,30 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck # unchecked errors
+    - govet # vet checks
+    - ineffassign # unused assignments
+    - staticcheck # static analysis
+    - unused # unused code
+    - misspell # spelling
+    - exhaustive # exhaustive enum switches
+    - lll # line length
+  settings:
+    lll:
+      line-length: 120
+    exhaustive:
+      default-signifies-exhaustive: true
+
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/O-Marsters-1997/command-center
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

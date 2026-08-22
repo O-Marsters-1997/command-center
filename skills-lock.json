@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "skills": {
+    "adhd": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/misc/adhd/SKILL.md",
+      "computedHash": "4ffab0eafec7df84fbc155c3036765b7957c03118e242d209c40e9d88b36e5a8"
+    },
+    "architecture-review": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/architecture-review/SKILL.md",
+      "computedHash": "c53751dd5bfb50b7c70a59cc9780e44e5e61f362055c3552eddf3712ca13ae7f"
+    },
+    "artifact-scan": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/artifact-scan/SKILL.md",
+      "computedHash": "a8dee0aadf93e6528fdbeb708ed6e926aa9000a9c6bb507b269515450ad7df72"
+    },
+    "capture-idea": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/capture-idea/SKILL.md",
+      "computedHash": "d8ed28b6f1e923a8353275cadc1139f193cc8de2ec729651d96d7e14eec33434"
+    },
+    "chat-to-approach": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/chat-to-approach/SKILL.md",
+      "computedHash": "a7d15a2efedbd7dea171ee569be86d77e98d784ced38f96d6fdda6db989bec10"
+    },
+    "clean-comments": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/clean-comments/SKILL.md",
+      "computedHash": "aed22c61f1278aa45cfbdf4f1087829eddbd2776b5d7303ae72210e04d95283a"
+    },
+    "code-review": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/code-review/SKILL.md",
+      "computedHash": "28afc2ef6b20e2132d90b3cbceb860bc22e4ff244c50a4008374f8e10b6dccc7"
+    },
+    "compare-tools": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/compare-tools/SKILL.md",
+      "computedHash": "64c697bbf2041362ea66bf292a29a1f2cc94caad2307c693f59feebcdeb8dd0f"
+    },
+    "find-skills": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/meta/find-skills/SKILL.md",
+      "computedHash": "174bebeffea2e02dfd4fdb4b5b24724d818120f74d8238babdbea67a0d690ede"
+    },
+    "flow-friction-audit": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/flow-friction-audit/SKILL.md",
+      "computedHash": "cc8e5156758391b1e8b20ea0f67bd8015515737ec5c22f17454b9ef809db7fee"
+    },
+    "frontend-best-practices": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/frontend-best-practices/SKILL.md",
+      "computedHash": "ebe01d05694ce40e8af82657f8bd9b57b9c3fcf30a25e07c0257e2824fc9dc09"
+    },
+    "go-idiomatic": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/go-idiomatic/SKILL.md",
+      "computedHash": "98e8be9d1ae1c51af92bf18ca92ea3dc07d8d1c7444f31b9c62a5222df6f2063"
+    },
+    "goquery-parsing": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/goquery-parsing/SKILL.md",
+      "computedHash": "8501b532e55a47eed8a525585dca8952b9a0dbef9cd7f3e437d8a8502cee9d04"
+    },
+    "grill-me": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/grill-me/SKILL.md",
+      "computedHash": "af10ead707c27833563dd051872314164af4128512821a553506f79b937946e9"
+    },
+    "grill-me-with-docs": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/grill-me-with-docs/SKILL.md",
+      "computedHash": "9919bb2dc675997c73639851b83a6876a2635c1e06a7ce0fd1384e826ae69f44"
+    },
+    "grilling": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/grilling/SKILL.md",
+      "computedHash": "710ada1a31ffd479961a367b93eade85dc98d259af0466c97a64c5c15014b4f2"
+    },
+    "handoff": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/handoff/SKILL.md",
+      "computedHash": "b9d6d3d25ed246de2d1cc0a14429bf134cc35314c5529eb5075d345ba1ae8ecb"
+    },
+    "ideate": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/ideate/SKILL.md",
+      "computedHash": "0650bb14665675bd661b780c2c79742dd727dad4bd5b099195ddd7d2287689fc"
+    },
+    "improve-codebase-architecture": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/improve-codebase-architecture/SKILL.md",
+      "computedHash": "2bbc907b34ef14436d123bf94af90e09fc959ad02f651d20f7fc6a442ab35723"
+    },
+    "prototype": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/prototype/SKILL.md",
+      "computedHash": "faba901c53a6ca245174c4ba5db3929d14253232b3050fdbd46539720adf1ab8"
+    },
+    "readme-generator": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/readme-generator/SKILL.md",
+      "computedHash": "4932f8574a021cfec8a9dca081e28bce21db57d4a3d1f8e57f4efd82d05a92c3"
+    },
+    "record-decision": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/record-decision/SKILL.md",
+      "computedHash": "67daac756d52df2e0ac3d66936a3b9e0a85ab57abb8b3ecd16ea08ea0f2c4c13"
+    },
+    "review-skills": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/meta/review-skills/SKILL.md",
+      "computedHash": "c96a5ccb798a30fd0c2eab65103c2a4a25ff4d361e3ff7ba62c5c78b4679e18c"
+    },
+    "skill-brief": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/meta/skill-brief/SKILL.md",
+      "computedHash": "5657e52ac346ca73af904f8510c59ac6aa25b0f11ee20f8a41d2f43ee81ce892"
+    },
+    "skill-feedback-collector": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/meta/skill-feedback-collector/SKILL.md",
+      "computedHash": "7acd4ea51258c49a365ad9376cd5c008620f3e540c46f7c22d0270d2cef9b127"
+    },
+    "skill-updater": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/meta/skill-updater/SKILL.md",
+      "computedHash": "2a5f811cfba8865e1b01279254cfc478f926c82be0c2dc9287c4474e755adc74"
+    },
+    "source-synthesis": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/source-synthesis/SKILL.md",
+      "computedHash": "dfd4d983b1d06cae09a768619f26e3af6e585d57d1f9c1d9fc82c9cdf8033b70"
+    },
+    "tailwind-shadcn": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/tailwind-shadcn/SKILL.md",
+      "computedHash": "e3d84b962fa49587f9fb0b3eba7404d6a6f96a76e208952fc6ba09a1546480fb"
+    },
+    "tdd": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/tdd/SKILL.md",
+      "computedHash": "2655c94ad298d26e4750567170de470bb4ff64b32492c1751ab19e2d865a3841"
+    },
+    "teach": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/teach/SKILL.md",
+      "computedHash": "1965fad63689326904233a9409d27c04f287e22061c40438cbdd4d8f848ce59b"
+    },
+    "ticket-tracker": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/ticket-tracker/SKILL.md",
+      "computedHash": "0c56d6029dfd55ec9be7886f39b9fffa86caa549b6a17cbeb305135c2ebe77cc"
+    },
+    "to-plan": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/to-plan/SKILL.md",
+      "computedHash": "296575f5e9cd6d13d6eba1df6edab422c1bc65a2dcdbd56bba18bc39cc71b42b"
+    },
+    "to-prd": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/to-prd/SKILL.md",
+      "computedHash": "6bda49525a5723199c52a0c660fe09f98d059641912cee9f3d38856205c2fcec"
+    },
+    "to-roadmap": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/to-roadmap/SKILL.md",
+      "computedHash": "431cfa2a1b1985f95d0d0d431a052bb02d7aeed258222e14351dca91ef4d4ae6"
+    },
+    "to-tickets": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workflow/to-tickets/SKILL.md",
+      "computedHash": "fc71a9bb1f138d7357cb89583949f8f8a1e2d9dd80feb21a7f95c45aeb5d09ef"
+    },
+    "triage-issue": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/product/triage-issue/SKILL.md",
+      "computedHash": "6834b87393bff8f529b3126b9f761c1c2b9706af8a784ad1061961c34bbdb4a9"
+    },
+    "update-project-docs": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/update-project-docs/SKILL.md",
+      "computedHash": "2d7468749fecaf5dfb0b2d5bf7e8e3ea294f7df22fa206de5dc3f28d525e9a61"
+    }
+  }
+}
