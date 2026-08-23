@@ -21,8 +21,9 @@ type App struct {
 }
 
 type options struct {
-	now     func() time.Time
-	observe ObserveFunc
+	now       func() time.Time
+	observe   ObserveFunc
+	repoCheck RepoCheckFunc
 }
 
 // Option configures New.
@@ -39,6 +40,14 @@ func WithObserver(observe ObserveFunc) Option {
 	return func(o *options) { o.observe = observe }
 }
 
+// RepoCheckFunc asserts the configured repos' merge settings. See AssertReposSquashOnly.
+type RepoCheckFunc func(ctx context.Context, ws Workspace, repos []Repo) error
+
+// WithRepoCheck replaces the startup squash-only check, so a test can run without gh.
+func WithRepoCheck(check RepoCheckFunc) Option {
+	return func(o *options) { o.repoCheck = check }
+}
+
 // New resolves the workspace, takes the flock, opens the store and upserts the configured
 // tasks. A second instance against the same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
@@ -53,6 +62,14 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	}
 	ws, err := ResolveWorkspace(configPath)
 	if err != nil {
+		return nil, err
+	}
+
+	repoCheck := settings.repoCheck
+	if repoCheck == nil {
+		repoCheck = AssertReposSquashOnly
+	}
+	if err := repoCheck(ctx, ws, cfg.Repos); err != nil {
 		return nil, err
 	}
 
