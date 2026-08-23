@@ -37,11 +37,11 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 
-	memberships, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("ActiveMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if !memberships["sandbox://CC-1"] || !memberships["sandbox://CC-2"] {
+	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
 		t.Errorf("memberships = %+v, want both tasks active", memberships)
 	}
 
@@ -128,15 +128,15 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 	}
 }
 
-func TestActiveMembershipsExcludesUnauthorisedTasks(t *testing.T) {
+func TestLaunchMembershipsExcludesUnauthorisedTasks(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	memberships, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("ActiveMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if len(memberships) != 0 {
 		t.Errorf("memberships = %+v, want none with no launches", memberships)
@@ -167,7 +167,7 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 		t.Fatal(err)
 	}
 
-	members, err := store.CancelLaunchesFor(ctx, "sandbox://CC-2", at.Add(2*time.Second))
+	members, err := store.CancelLaunchesFor(ctx, "sandbox://CC-2")
 	if err != nil {
 		t.Fatalf("CancelLaunchesFor: %v", err)
 	}
@@ -175,22 +175,14 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 		t.Errorf("members = %d, want 3: every ticket the launch withdraws", members)
 	}
 
-	active, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if len(active) != 0 {
-		t.Errorf("active memberships = %+v, want none: the whole launch was cancelled", active)
-	}
-
-	cancelled, err := store.CancelledMemberships(ctx)
-	if err != nil {
-		t.Fatalf("CancelledMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if !cancelled[taskID] {
-			t.Errorf("cancelled memberships = %+v, want %s cancelled too: every sibling, not just the one named",
-				cancelled, taskID)
+		if !memberships[taskID].Cancelled {
+			t.Errorf("memberships = %+v, want %s cancelled too: every sibling, not just the one named",
+				memberships, taskID)
 		}
 	}
 }
@@ -201,7 +193,7 @@ func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	members, err := store.CancelLaunchesFor(ctx, "sandbox://GHOST", time.Now())
+	members, err := store.CancelLaunchesFor(ctx, "sandbox://GHOST")
 	if err != nil {
 		t.Fatalf("CancelLaunchesFor: %v", err)
 	}
@@ -210,7 +202,7 @@ func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
 	}
 }
 
-func TestCancelledMembershipsExcludesARelaunchedTask(t *testing.T) {
+func TestLaunchMembershipsExcludeARelaunchedTaskFromCancelled(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -227,7 +219,7 @@ func TestCancelledMembershipsExcludesARelaunchedTask(t *testing.T) {
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CancelLaunchesFor(ctx, task.TicketURL, at.Add(2*time.Second)); err != nil {
+	if _, err := store.CancelLaunchesFor(ctx, task.TicketURL); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-2", "group-b", at.Add(3*time.Second)); err != nil {
@@ -237,24 +229,16 @@ func TestCancelledMembershipsExcludesARelaunchedTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cancelled, err := store.CancelledMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("CancelledMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if cancelled[task.TicketURL] {
-		t.Errorf("cancelled memberships = %+v, want %s absent: it was relaunched", cancelled, task.TicketURL)
-	}
-
-	active, err := store.ActiveMemberships(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !active[task.TicketURL] {
-		t.Errorf("active memberships = %+v, want %s active under its new launch", active, task.TicketURL)
+	if got := memberships[task.TicketURL]; got.Cancelled || got.LaunchID == 0 {
+		t.Errorf("membership = %+v, want %s active under its new launch, not cancelled", got, task.TicketURL)
 	}
 }
 
-func TestActiveLaunchMembershipsNamesTheLaunchAndItsMemberCount(t *testing.T) {
+func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -277,9 +261,9 @@ func TestActiveLaunchMembershipsNamesTheLaunchAndItsMemberCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	memberships, err := store.ActiveLaunchMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("ActiveLaunchMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	cc1, ok := memberships["sandbox://CC-1"]
 	if !ok {

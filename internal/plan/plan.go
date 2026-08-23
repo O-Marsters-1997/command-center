@@ -237,11 +237,9 @@ func Status(f Facts) (State, Reason) {
 	if state, reason, ok := statusFromRun(f.LatestRun); ok {
 		return state, reason
 	}
-	if f.CancelledMember {
-		return Cancelled, "authorised then cancelled before launching"
-	}
-
 	switch {
+	case f.CancelledMember:
+		return Cancelled, "authorised then cancelled before launching"
 	case f.Unlock.Unlocked && f.Authorised:
 		return Queued, "waiting for a slot"
 	case f.Unlock.Unlocked:
