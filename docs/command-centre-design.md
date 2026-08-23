@@ -1,13 +1,13 @@
-# Command Centre — v1 design
+# Command Centre — design
 
 **Date:** 2026-08-22 · **Revision 4** · **Status:** designed, not built
 
 **Supersedes:** `.claude/handoffs/treepad__command-centre-architecture.md`, and revisions 1–3
 of this document. Revision 1 was reviewed in
 `docs/architecture-reviews/command-centre-v1-review.md`; revision 2 in
-`command-centre-v2-buildability-review.md` (six mechanisms that do not work as written);
+`docs/architecture-reviews/revision-2-buildability-review.md` (six mechanisms that do not work as written);
 revision 3 in
-`docs/architecture-reviews/command-centre-v3-phase1-foundations-review.md` (verdict: BUILD
+`docs/architecture-reviews/revision-3-foundations-review.md` (verdict: BUILD
 AFTER FIXING 9, with five claims found false — three propping up deletions). **Revision 4 is
 the response to that review.** §14 records what changed from revision 1; §15 from revision 2;
 §16 from revision 3, including the false premises corrected.
@@ -930,7 +930,7 @@ and seams as prompt context only.
 
 ## 15 · Changed in revision 3
 
-Revision 2 was reviewed in `command-centre-v2-buildability-review.md`, which found six
+Revision 2 was reviewed in `revision-2-buildability-review.md`, which found six
 mechanisms that do not work as written. Revision 3 fixes two and **dissolves four** by
 changing two decisions that sit above them.
 
@@ -981,7 +981,7 @@ being blocked between them *is* the product.
 ## 16 · Changed in revision 4
 
 Revision 3 was reviewed in
-`docs/architecture-reviews/command-centre-v3-phase1-foundations-review.md` — seven dimension
+`docs/architecture-reviews/revision-3-foundations-review.md` — seven dimension
 reviews plus a dedicated citation-verification pass against treepad source, both plain
 repos, live PRs and the GitHub API. Verdict: **BUILD AFTER FIXING 9**, and the
 revision-1/2 failure pattern had recurred: of 24 load-bearing claims checked, **five were

@@ -2,7 +2,7 @@
 
 > Source: [`docs/prd-command-centre.md`](../docs/prd-command-centre.md) § Phases → Phase 1.
 > Mechanism, state list and invariants are normative in
-> [`docs/command-centre-v1.md`](../docs/command-centre-v1.md) (revision 4) — cited as `§n` and
+> [`docs/command-centre-design.md`](../docs/command-centre-design.md) (revision 4) — cited as `§n` and
 > `inv. n` below. Where this plan and the design disagree, the design wins.
 
 Phase 1 goal: **one repo, `max_agents = 1`, `stacking = false`, a two-ticket slice with one

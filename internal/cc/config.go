@@ -11,7 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// Config is the user-edited TOML file named by --config. See docs/command-centre-v1.md §8.
+// Config is the user-edited TOML file named by --config. See docs/command-centre-design.md §8.
 type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`

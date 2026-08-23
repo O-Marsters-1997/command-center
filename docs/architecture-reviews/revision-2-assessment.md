@@ -1,14 +1,14 @@
 # Command Centre — assessment
 
-**Date:** 2026-08-20 · **Assesses:** `command-centre-v1.md` (revision 2)
+**Date:** 2026-08-20 · **Assesses:** `command-centre-design.md` (revision 2)
 
-## What's in this folder
+## What these files are
 
 | File | What it is |
 |---|---|
-| `command-centre-v1.md` | The design doc, revision 2. The thing being assessed. |
-| `command-centre-v2-buildability-review.md` | Full staff-engineer review, 466 lines. The detail behind §1 below. |
-| `assessment.md` | This file. Verdict summary, competitive comparison, adaptability analysis, user's-eye view. |
+| `../command-centre-design.md` | The design doc, at revision 2 when this was written. The thing being assessed. |
+| `revision-2-buildability-review.md` | Full staff-engineer review, 466 lines. The detail behind §1 below. |
+| `revision-2-assessment.md` | This file. Verdict summary, competitive comparison, adaptability analysis, user's-eye view. |
 
 Source of truth for the design remains `treepad/docs/command-centre-v1.md`. These are copies taken 2026-08-20.
 

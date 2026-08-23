@@ -2,12 +2,12 @@
 
 **Status:** WIP · **Date:** 2026-08-22 · **Shape:** concept doc
 
-**Reads with:** [`command-centre-v1.md`](command-centre-v1.md) (the design, revision 4 —
+**Reads with:** [`command-centre-design.md`](command-centre-design.md) (the design, revision 4 —
 **normative** for mechanism, state list and invariants),
-[`architecture-reviews/command-centre-v3-phase1-foundations-review.md`](architecture-reviews/command-centre-v3-phase1-foundations-review.md)
+[`architecture-reviews/revision-3-foundations-review.md`](architecture-reviews/revision-3-foundations-review.md)
 (the review of revision 3 that drove revision 4),
-[`command-centre-v2-buildability-review.md`](command-centre-v2-buildability-review.md)
-(the review of revision 2), [`assessment.md`](assessment.md).
+[`architecture-reviews/revision-2-buildability-review.md`](architecture-reviews/revision-2-buildability-review.md)
+(the review of revision 2), [`architecture-reviews/revision-2-assessment.md`](architecture-reviews/revision-2-assessment.md).
 
 ## TL;DR
 

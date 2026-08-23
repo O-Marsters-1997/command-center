@@ -3,7 +3,7 @@
 **Status:** WIP · **Date:** 2026-08-23 · **Shape:** change doc
 
 **Reads with:** [`prd-command-centre.md`](prd-command-centre.md) (the product doc this extends,
-whose § The page is the one paragraph it replaces), [`command-centre-v1.md`](command-centre-v1.md)
+whose § The page is the one paragraph it replaces), [`command-centre-design.md`](command-centre-design.md)
 (the design, revision 4, **normative** for the state list in §5, the consent binding in §4b, the
 config and schema in §8, and the invariants in §9).
 

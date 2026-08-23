@@ -1,5 +1,5 @@
 // Package gh is the only place that knows the gh CLI's JSON shape. It normalises a pull
-// request's status check rollup before anything else sees it (docs/command-centre-v1.md §3).
+// request's status check rollup before anything else sees it (docs/command-centre-design.md §3).
 package gh
 
 import (

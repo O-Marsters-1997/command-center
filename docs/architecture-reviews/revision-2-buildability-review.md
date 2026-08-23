@@ -1,6 +1,6 @@
 # Command Centre revision 2 — buildability review
 
-_Date: 2026-08-20. Target: `docs/command-centre-v1.md` revision 2. Read-only; no source file
+_Date: 2026-08-20. Target: `docs/command-centre-design.md` revision 2. Read-only; no source file
 was modified. Verified against treepad source, `/Users/ollymarsters/Documents/plain/services`,
 `/Users/ollymarsters/Documents/plain/support-app`, and the installed skills trees. §14 was read
 first; nothing it already corrected is re-reported, but each fix was checked for new defects and
