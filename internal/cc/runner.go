@@ -66,6 +66,11 @@ func stripAPIKey(environ []string) []string {
 // signal every subprocess it spawns, not just itself. It deliberately skips exec.CommandContext:
 // since Go 1.20 that kills only the leader pid on ctx cancellation, which is wrong for crash
 // recovery — a graceful shutdown must leave agents running exactly like a crash does (§3).
+//
+// Dir is always cfg.WorktreePath, never left to default to this process's own cwd: an
+// agent_command that never references {worktree} in its argv (real claude -p takes no such
+// argument) must still run in the cut worktree, not wherever the daemon happens to be running
+// from.
 func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
@@ -76,6 +81,7 @@ func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, err
 	}
 
 	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir = cfg.WorktreePath
 	cmd.Stdout = cfg.LogFile
 	cmd.Stderr = cfg.LogFile
 	cmd.Env = stripAPIKey(os.Environ())

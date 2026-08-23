@@ -218,3 +218,57 @@ func TestProcessRunnerSpawnSetsANewProcessGroup(t *testing.T) {
 			gotPgid, result.Pid)
 	}
 }
+
+// TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt guards against Spawn ever
+// again defaulting to this test binary's own cwd: real claude -p takes no {worktree} argument
+// (its positional argument is prompt text, not a path), so Dir is the only thing that puts the
+// agent in the right place. dump-pwd.sh below deliberately ignores argv.
+func TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt(t *testing.T) {
+	worktree := t.TempDir()
+	outsideDir := t.TempDir()
+	settingsPath := filepath.Join(t.TempDir(), "agent.json")
+	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pwdDump := filepath.Join(outsideDir, "pwd.txt")
+	script := "#!/bin/sh\npwd > " + pwdDump + "\n"
+	scriptPath := filepath.Join(t.TempDir(), "dump-pwd.sh")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logFile.Close() })
+
+	cfg := cc.SpawnConfig{
+		AgentCommand: []string{scriptPath}, // no {worktree} anywhere in argv, on purpose
+		WorktreePath: worktree,
+		SettingsPath: settingsPath,
+		PromptPath:   promptPath,
+		LogFile:      logFile,
+	}
+	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	reapExit(t, result.Pid)
+
+	raw, err := os.ReadFile(pwdDump)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantWorktree, err := filepath.EvalSymlinks(worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotDir, err := filepath.EvalSymlinks(strings.TrimSpace(string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotDir != wantWorktree {
+		t.Errorf("agent ran in %q, want the worktree %q", gotDir, wantWorktree)
+	}
+}
