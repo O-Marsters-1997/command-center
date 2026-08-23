@@ -150,10 +150,14 @@ func ClosePR(ctx context.Context, repoPath string, number int) error
 ```
 
 ```go
-// internal/plan — pure
+// internal/plan — pure. The import guard (issue #2 AC12) requires every import to be
+// stdlib, closing the transitive hole a plain os/exec/database/sql/net/http denylist would
+// leave open — internal/gh execs, so this package cannot import it. It declares its own
+// PRState instead; internal/cc maps between the two.
+type PRState int // Absent, Open, Merged, Closed — plan's own copy, not gh.PRState
 type Task struct { TicketURL, Repo, Branch string; BlockedBy []string }
 type Unlock struct { Unlocked bool; BaseBranch, Reason string }
-func Unlocked(t Task, byURL map[string]Task, prs map[string]gh.PRState, stacking bool) Unlock
+func Unlocked(t Task, byURL map[string]Task, prs map[string]PRState, stacking bool) Unlock
 
 type Facts struct { /* task, unlock, launch membership, latest run, latest push, verdict */ }
 func Status(f Facts) (State, Reason)
@@ -168,10 +172,13 @@ func LaunchPlan(f []Facts, maxAgents int) []string // ticket_urls to cut+spawn t
 ```
 
 ```go
-// internal/verdict — pure
+// internal/verdict — pure. Same constraint as internal/plan (#2 AC12): it cannot import
+// internal/gh, so it declares its own CheckState rather than the signature below being
+// literally gh.CheckState; internal/cc maps between the two.
+type CheckState int // Pending, Success, Failure, Skipped — verdict's own copy, not gh.CheckState
 type Predicate struct { AllOf, AnyOf []Predicate; Not *Predicate; Success, Skipped, AbsentOK string }
 type Input struct {
-    Checks         map[string]gh.CheckState
+    Checks         map[string]CheckState
     HeadOidMatch   bool          // rollup head == the tip we pushed
     StackedBase    bool          // false for every Phase 1 row
     BaseSHAMatch   bool          // only consulted when StackedBase

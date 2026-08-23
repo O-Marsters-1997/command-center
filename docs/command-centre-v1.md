@@ -693,7 +693,8 @@ Numbered so each can become a test.
 8. The tick spawns a process only for a task that is unlocked, belongs to an `active`
    launch, whose recomposed prompt hash matches the hash recorded at authorisation, and has
    no prior run. Every relaunch is a user verb.
-9. One app instance per workspace (flock on the DB path); within it, only the loop goroutine
+9. One app instance per workspace (flock on a sibling lock file, not the DB file itself —
+   locking the DB deadlocks modernc.org/sqlite under SQLITE_BUSY); within it, only the loop goroutine
    writes the DB — verbs are queued intents.
 10. A tick whose `git fetch` or `gh` read exited non-zero applies no GitHub-derived
     transition and launches nothing; the failure is recorded and the page shows tick age.
