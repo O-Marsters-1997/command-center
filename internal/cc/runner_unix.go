@@ -110,7 +110,8 @@ const (
 
 // Cancel terminates every process in pgid: SIGTERM, then poll for it to disappear, then SIGKILL
 // as a backstop. It signals -pgid (the whole process group), not just the leader's pid — unlike
-// exec.Cmd's built-in Cancel/WaitDelay, which would leave a subprocess the agent spawned under the same pgid holding the worktree.
+// exec.Cmd's built-in Cancel/WaitDelay, which would leave a subprocess the agent spawned under
+// the same pgid holding the worktree.
 func Cancel(pgid int) error {
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return fmt.Errorf("SIGTERM process group %d: %w", pgid, err)
