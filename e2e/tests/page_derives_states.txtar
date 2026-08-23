@@ -1,0 +1,15 @@
+# One tick against a repo with no pull requests, then the page derived from it: the root task
+# is ready, the dependent one is blocked and names its blocker.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request GET /
+
+stdout '<td>sandbox://CC-1</td>'
+stdout '<td>ready</td>'
+stdout '<td>sandbox://CC-2</td>'
+stdout '<td>blocked</td>'
+stdout 'blocked by sandbox://CC-1'
