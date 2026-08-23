@@ -144,9 +144,71 @@ func nonNil(s []string) []string {
 }
 
 const (
-	metaObservation = "observation"
-	metaLastError   = "last_error"
+	metaObservation   = "observation"
+	metaLastError     = "last_error"
+	metaCheckingTicks = "checking_ticks"
+	metaLastVerdicts  = "last_verdicts"
 )
+
+// CheckingTicks returns each task's count of successful ticks since it last had anything to
+// resolve into a CI verdict -- verdict.Input.Now is derived from this, never wall clock, so a
+// GitHub outage cannot walk every in-flight row to needs_you the moment it ends (docs/command-
+// centre-v1.md § 11 inv. 11). It lives in meta rather than a new column: schema version 1 already
+// has every table Phase 1-6 need, and this is a fact the world cannot reconstruct, exactly what
+// meta already holds for the observation and the last tick error.
+func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
+	ticks := map[string]int{}
+	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
+		return nil, err
+	}
+	return ticks, nil
+}
+
+// IncrementCheckingTicks bumps every named task's counter by one -- called once per successful
+// tick (never on a failed observe, which is what makes the counter track successful ticks and
+// not wall time). RecordPush resets a task's own counter to zero on every fresh push (Phase 6's
+// re-run), so a second push never inherits the first push's stale tick count.
+func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
+	ticks, err := s.CheckingTicks(ctx)
+	if err != nil {
+		return err
+	}
+	for _, url := range ticketURLs {
+		ticks[url]++
+	}
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
+}
+
+// resetCheckingTicks zeroes one task's counter -- called by RecordPush (pushes.go) on every
+// fresh push, so a re-run's second push starts its own bounded wait rather than inheriting the
+// first push's.
+func (s *Store) resetCheckingTicks(ctx context.Context, taskID string) error {
+	ticks, err := s.CheckingTicks(ctx)
+	if err != nil {
+		return err
+	}
+	if _, ok := ticks[taskID]; !ok {
+		return nil
+	}
+	delete(ticks, taskID)
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
+}
+
+// LastVerdicts returns each task's most recently recorded CI verdict label ("review_me",
+// "needs_you" or "checking"), keyed by ticket URL -- what recordVerdictTransitions (loop.go)
+// compares this tick's freshly computed verdict against before logging a transition event.
+func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
+	verdicts := map[string]string{}
+	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
+		return nil, err
+	}
+	return verdicts, nil
+}
+
+// SaveLastVerdicts replaces the persisted last-verdict map.
+func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
+	return s.putMeta(ctx, metaLastVerdicts, verdicts)
+}
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it, which
 // is what makes the page's observe age an honest inv. 10 signal.

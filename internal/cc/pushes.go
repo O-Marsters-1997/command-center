@@ -18,7 +18,7 @@ func (s *Store) RecordPush(ctx context.Context, taskID, pushedTip, baseBranch, b
 	if err != nil {
 		return fmt.Errorf("record push for %s: %w", taskID, err)
 	}
-	return nil
+	return s.resetCheckingTicks(ctx, taskID)
 }
 
 // LastPushedTips returns each task's most recently recorded pushed_tip -- what plan.PushPlan
@@ -47,6 +47,45 @@ func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
 	return tips, nil
 }
 
+// PushRow is one task's latest recorded push, in full -- what internal/verdict's Input needs
+// beyond the check rollup itself: which tip and base it was pushed against, and when.
+type PushRow struct {
+	PushedTip     string
+	BaseBranch    string
+	BaseSHAAtPush string
+	PushedAt      time.Time
+}
+
+// LatestPushes returns each task's latest recorded push in full, keyed by ticket URL -- the CI
+// verdict step's own per-task facts, read fresh every render (inv. 14).
+func (s *Store) LatestPushes(ctx context.Context) (map[string]PushRow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT p.task_id, p.pushed_tip, p.base_branch, p.base_sha_at_push, p.pushed_at FROM pushes p
+		JOIN (SELECT task_id, MAX(id) AS id FROM pushes GROUP BY task_id) latest
+		  ON latest.task_id = p.task_id AND latest.id = p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("select latest pushes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	pushes := map[string]PushRow{}
+	for rows.Next() {
+		var taskID, pushedAt string
+		var row PushRow
+		if err := rows.Scan(&taskID, &row.PushedTip, &row.BaseBranch, &row.BaseSHAAtPush, &pushedAt); err != nil {
+			return nil, fmt.Errorf("scan push row: %w", err)
+		}
+		if row.PushedAt, err = time.Parse(time.RFC3339Nano, pushedAt); err != nil {
+			return nil, fmt.Errorf("decode pushed_at %q: %w", pushedAt, err)
+		}
+		pushes[taskID] = row
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate push rows: %w", err)
+	}
+	return pushes, nil
+}
+
 // PushFact is a task's outstanding push-policy problem, if it has one: refused outright (naming
 // the path), or a push/PR-create failure. Neither is a stored column (inv. 14) -- both are
 // derived from the latest push_refused/push_failed event newer than the task's last recorded
@@ -60,6 +99,7 @@ type PushFact struct {
 const (
 	eventPushRefused = "push_refused"
 	eventPushFailed  = "push_failed"
+	eventPushed      = "pushed"
 )
 
 // PushFacts returns every task's outstanding push-policy problem, keyed by ticket URL: what the

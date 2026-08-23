@@ -1,0 +1,53 @@
+# An all-green rollup at the commit the app actually pushed derives review_me; swapping one
+# check to failure derives needs_you on the next tick; a rollup at a foreign head SHA derives
+# checking, never green (docs/command-centre-v1.md § 11 inv. 11). Each of those is also a
+# verdict_transition event -- the last category events needs to reconstruct the whole run
+# (Phase 6) -- logged once per change, never repeated while the verdict holds steady.
+
+cc-init-repo
+cp mergify-v1.yml repo/.mergify.yml
+exec git -C $WORK/repo add .mergify.yml
+exec git -C $WORK/repo commit -q -m 'add mergify config'
+exec git -C $WORK/repo push -q origin main
+
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
+# liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+exec cc tick --count 1
+
+cc-fake-gh-head verdict-review-me cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>review_me</td>'
+exec cc request GET /events
+stdout '"Kind":"verdict_transition","Detail":"review_me'
+
+# A second tick with nothing changed must not repeat the transition.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=1 'verdict_transition'
+
+cc-fake-gh-head verdict-one-red cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>needs_you</td>'
+stdout 'a required check failed'
+exec cc request GET /events
+stdout -count=2 'verdict_transition'
+stdout '"Kind":"verdict_transition","Detail":"needs_you'
+
+cc-fake-gh verdict-foreign-head
+exec cc tick --count 1
+exec cc request GET /
+! stdout '<td>review_me</td>'
+stdout '<td>checking</td>'
+
+-- mergify-v1.yml --
+queue_rules: []
+pull_request_rules: []

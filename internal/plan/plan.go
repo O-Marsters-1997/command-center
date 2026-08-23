@@ -35,12 +35,16 @@ type Reason string
 
 // Unlock is the answer to "could this task be cut, and off what?". Blocking names the
 // same-repo blockers still standing in the way (empty once Unlocked), so a caller building a
-// launch preview knows which of them a candidate slice would need to cover.
+// launch preview knows which of them a candidate slice would need to cover. BlockerClosed is
+// true only when the single blocker's own pull request was closed without merging — as
+// opposed to never having had one — which is what lets a row that has already run derive
+// `base gone` instead of falling back to `blocked` (inv. 19).
 type Unlock struct {
-	Unlocked   bool
-	BaseBranch string
-	Reason     Reason
-	Blocking   []string
+	Unlocked      bool
+	BaseBranch    string
+	Reason        Reason
+	Blocking      []string
+	BlockerClosed bool
 }
 
 // defaultBranch is the base every row without a stacked parent is cut from.
@@ -84,7 +88,14 @@ func unlockedOnBlocker(blocker Task, prs map[string]PRState, stacking bool) Unlo
 		return Unlock{Unlocked: true, BaseBranch: base, Reason: "every blocker has a pull request"}
 	case Merged:
 		return Unlock{Unlocked: true, BaseBranch: defaultBranch, Reason: "every blocker has a pull request"}
-	default: // Absent, Closed
+	case Closed:
+		return Unlock{
+			Reason: Reason(fmt.Sprintf(
+				"blocked by %s: %s's pull request was closed without merging", blocker.TicketURL, blocker.Branch)),
+			Blocking:      []string{blocker.TicketURL},
+			BlockerClosed: true,
+		}
+	default: // Absent
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
 				"blocked by %s: %s has no open or merged pull request", blocker.TicketURL, blocker.Branch)),
@@ -126,6 +137,13 @@ const (
 	Checking
 	NeedsYou
 	PushFailed
+	ReviewMe
+	// PRMerged is prefixed (unlike its siblings) because plan.Merged already names a PRState
+	// value (§2's naming-collision precedent, as with Refused in issue #5) — flagged rather
+	// than silently working around it.
+	PRMerged
+	PRClosedUnmerged
+	BaseGone
 )
 
 func (s State) String() string {
@@ -148,6 +166,14 @@ func (s State) String() string {
 		return "needs_you"
 	case PushFailed:
 		return "push_failed"
+	case ReviewMe:
+		return "review_me"
+	case PRMerged:
+		return "merged"
+	case PRClosedUnmerged:
+		return "pr_closed_unmerged"
+	case BaseGone:
+		return "base_gone"
 	case Blocked:
 		return "blocked"
 	default:
@@ -170,6 +196,21 @@ type RunFact struct {
 	PushRefusedPath string
 	PushFailed      bool
 	PROpen          bool
+	// PRMerged and PRClosedUnmerged read this task's own branch's current pull request state —
+	// never the blocker's (that is Unlock.BlockerClosed's job). Both outrank every other push
+	// fact below: once GitHub says merged or closed, that is the terminal truth regardless of
+	// what this run's own push or verdict facts still say (docs/prd-command-centre.md § The
+	// states, `merged` and `pr closed unmerged`).
+	PRMerged         bool
+	PRClosedUnmerged bool
+	// Verdict* fields matter only once PROpen: internal/cc's own call to internal/verdict's pure
+	// Evaluate, mapped down to booleans here since this package cannot import that one any more
+	// than it can import internal/gh (issue #2 AC12 — see internal/verdict's own api_test.go).
+	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
+	// whatever cc computed, or is left empty for the pre-Phase-5 fallback text.
+	VerdictReviewMe bool
+	VerdictNeedsYou bool
+	VerdictReason   Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -192,6 +233,13 @@ type Facts struct {
 // whether it is waiting on a base (hours-or-forever) or a slot (seconds), the two must not
 // render alike.
 func Status(f Facts) (State, Reason) {
+	// A row that has ever run never returns to blocked (inv. 19): once its blocker's pull
+	// request is closed without merging, the premise it launched under is withdrawn, and that
+	// outranks whatever its own run, push or verdict facts would otherwise say — running,
+	// checking, needs you, all of it.
+	if f.LatestRun != nil && f.Unlock.BlockerClosed {
+		return BaseGone, f.Unlock.Reason
+	}
 	if state, reason, ok := statusFromRun(f.LatestRun); ok {
 		return state, reason
 	}
@@ -240,12 +288,24 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 // to the verdict step (Phase 5), and otherwise the push is still pending.
 func statusFromPush(run RunFact) (State, Reason) {
 	switch {
+	case run.PRMerged:
+		return PRMerged, "pull request merged"
+	case run.PRClosedUnmerged:
+		return PRClosedUnmerged, "pull request closed without merging"
 	case run.PushRefused:
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:
 		return PushFailed, "push or pull request creation failed"
+	case run.VerdictReviewMe:
+		return ReviewMe, run.VerdictReason
+	case run.VerdictNeedsYou:
+		return NeedsYou, run.VerdictReason
 	case run.PROpen:
-		return Checking, "pull request open, no verdict yet"
+		reason := run.VerdictReason
+		if reason == "" {
+			reason = "pull request open, no verdict yet"
+		}
+		return Checking, reason
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}

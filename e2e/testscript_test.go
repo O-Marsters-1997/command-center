@@ -86,10 +86,11 @@ func TestScripts(t *testing.T) {
 		Dir:   "tests",
 		Setup: setup,
 		Cmds: map[string]func(*testscript.TestScript, bool, []string){
-			"cc-init-repo": ccInitRepo,
-			"cc-config":    ccConfig,
-			"cc-fake-gh":   ccFakeGh,
-			"cc-daemon":    ccDaemon,
+			"cc-init-repo":    ccInitRepo,
+			"cc-config":       ccConfig,
+			"cc-fake-gh":      ccFakeGh,
+			"cc-fake-gh-head": ccFakeGhHead,
+			"cc-daemon":       ccDaemon,
 		},
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
@@ -141,6 +142,24 @@ func ccFakeGh(ts *testscript.TestScript, neg bool, args []string) {
 	}
 	body, err := os.ReadFile(filepath.Join(testdataDir, "gh", args[0]+".json"))
 	ts.Check(err)
+	ts.Check(os.WriteFile(ts.Getenv("CC_GH_FIXTURE"), body, 0o600))
+}
+
+// ccFakeGhHead stages a gh fixture template whose {{head}} placeholder is replaced with the real
+// current tip of a branch in the repo -- the verdict scripts' way of pointing a fixture's
+// headRefOid at a commit whose SHA a script cannot know ahead of time.
+func ccFakeGhHead(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: cc-fake-gh-head <fixture> <branch>")
+	}
+	work := ts.Getenv("WORK")
+	out, err := exec.Command("git", "-C", filepath.Join(work, "repo"), "rev-parse", args[1]).Output()
+	ts.Check(err)
+	head := strings.TrimSpace(string(out))
+
+	body, err := os.ReadFile(filepath.Join(testdataDir, "gh", args[0]+".json"))
+	ts.Check(err)
+	body = []byte(strings.ReplaceAll(string(body), "{{head}}", head))
 	ts.Check(os.WriteFile(ts.Getenv("CC_GH_FIXTURE"), body, 0o600))
 }
 
@@ -203,5 +222,9 @@ func scriptEnv(work string) []string {
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),
+		// Read by testdata/agents/commits.sh and empty.sh, inherited by every spawned agent
+		// process (cc.ProcessRunner.Spawn never strips it) -- a script's proof of exactly how
+		// many times an agent actually ran, distinct from tp.log's cuts or events' own count.
+		"CC_AGENT_LOG=" + filepath.Join(work, "agent.log"),
 	}
 }

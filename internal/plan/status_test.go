@@ -70,6 +70,13 @@ func TestStateString(t *testing.T) {
 		plan.PushFailed.String() != "push_failed" {
 		t.Errorf("states render as %q, %q and %q", plan.Checking, plan.NeedsYou, plan.PushFailed)
 	}
+	if plan.ReviewMe.String() != "review_me" {
+		t.Errorf("state renders as %q, want review_me", plan.ReviewMe)
+	}
+	if plan.PRMerged.String() != "merged" || plan.PRClosedUnmerged.String() != "pr_closed_unmerged" ||
+		plan.BaseGone.String() != "base_gone" {
+		t.Errorf("states render as %q, %q and %q", plan.PRMerged, plan.PRClosedUnmerged, plan.BaseGone)
+	}
 }
 
 func TestStatusWithLatestRun(t *testing.T) {
@@ -129,11 +136,39 @@ func TestStatusWithLatestRun(t *testing.T) {
 			wantState: plan.PushFailed,
 		},
 		{
-			name: "an open PR derives checking",
+			name: "an open PR with no verdict yet derives checking",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 			},
 			wantState: plan.Checking,
+			reasonHas: "no verdict yet",
+		},
+		{
+			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictReason: "check config changed",
+			},
+			wantState: plan.Checking,
+			reasonHas: "check config changed",
+		},
+		{
+			name: "an open PR with a review-me verdict derives review me",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictReviewMe: true, VerdictReason: "every required check passed",
+			},
+			wantState: plan.ReviewMe,
+			reasonHas: "every required check passed",
+		},
+		{
+			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictNeedsYou: true, VerdictReason: "a required check failed",
+			},
+			wantState: plan.NeedsYou,
+			reasonHas: "a required check failed",
 		},
 		{
 			name: "commits with no push attempt yet still derives push pending",
@@ -141,6 +176,21 @@ func TestStatusWithLatestRun(t *testing.T) {
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush,
 			},
 			wantState: plan.PushPending,
+		},
+		{
+			name: "the pull request having merged outranks an open-PR verdict",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: false, PRMerged: true,
+				VerdictReviewMe: true, VerdictReason: "every required check passed",
+			},
+			wantState: plan.PRMerged,
+		},
+		{
+			name: "the pull request having closed unmerged outranks a would-be checking state",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRClosedUnmerged: true,
+			},
+			wantState: plan.PRClosedUnmerged,
 		},
 	}
 
@@ -172,5 +222,62 @@ func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	})
 	if state != plan.Ready || reason != "no blockers" {
 		t.Errorf("state = %v, reason = %q, want ready/\"no blockers\"", state, reason)
+	}
+}
+
+// TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun covers inv. 19: a row that has ever run
+// derives base_gone the moment its blocker's PR is closed unmerged, never blocked — and this
+// outranks even a live run or a fully-resolved push, which the design's state diagram (§5)
+// draws as transitioning into base_gone from any of them.
+func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
+	t.Parallel()
+
+	blockerClosed := plan.Unlock{
+		Reason:        "blocked by sandbox://CC-1: cc-1's pull request was closed without merging",
+		BlockerClosed: true,
+	}
+
+	tests := []struct {
+		name      string
+		latestRun *plan.RunFact
+	}{
+		{name: "a live run", latestRun: &plan.RunFact{Alive: true}},
+		{name: "a failed run", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomeFailed}},
+		{name: "a run still waiting to push", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomePush}},
+		{name: "a run already checking", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			state, reason := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: tt.latestRun})
+			if state != plan.BaseGone {
+				t.Errorf("state = %v, want base_gone", state)
+			}
+			if reason != blockerClosed.Reason {
+				t.Errorf("reason = %q, want the unlock reason %q", reason, blockerClosed.Reason)
+			}
+		})
+	}
+}
+
+// TestStatusNeverDerivesBaseGoneWithoutAPriorRun covers the other half of inv. 19: a member
+// that never launched re-derives blocked or queued, exactly the pre-Phase-3 2x2, even when its
+// blocker's PR was closed unmerged.
+func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
+	t.Parallel()
+
+	blockerClosed := plan.Unlock{
+		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []string{"sandbox://CC-1"},
+	}
+
+	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: nil})
+	if state != plan.Blocked {
+		t.Errorf("state = %v, want blocked: no run ever happened", state)
+	}
+
+	state, _ = plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: nil})
+	if state != plan.Queued {
+		t.Errorf("state = %v, want queued: authorised but never launched", state)
 	}
 }

@@ -80,6 +80,58 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 }
 
+const oneRepoWithChecks = `
+[[task]]
+ticket_url = "a"
+repo       = "r"
+branch     = "b"
+
+[[repo]]
+name        = "r"
+path        = "r"
+mergify_sha = "sha256:deadbeef"
+
+  [repo.checks]
+  all_of = [
+    { success = "Lint" },
+    { any_of = [
+        { success = "verify / Linear issue is linked" },
+        { author = "dependabot[bot]" },
+    ] },
+  ]
+`
+
+// TestLoadConfigParsesChecks decodes [repo.checks] straight into verdict.Predicate — the same
+// struct internal/verdict.Evaluate takes, with no intermediate DTO (issue #6).
+func TestLoadConfigParsesChecks(t *testing.T) {
+	t.Parallel()
+
+	got, err := cc.LoadConfig(writeConfig(t, oneRepoWithChecks))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos = %+v", got.Repos)
+	}
+	repo := got.Repos[0]
+	if repo.MergifySHA != "sha256:deadbeef" {
+		t.Errorf("mergify_sha = %q", repo.MergifySHA)
+	}
+	if repo.Checks.IsZero() {
+		t.Fatal("checks decoded as zero-value")
+	}
+	if len(repo.Checks.AllOf) != 2 {
+		t.Fatalf("all_of = %+v, want 2 entries", repo.Checks.AllOf)
+	}
+	if repo.Checks.AllOf[0].Success != "Lint" {
+		t.Errorf("all_of[0] = %+v", repo.Checks.AllOf[0])
+	}
+	anyOf := repo.Checks.AllOf[1].AnyOf
+	if len(anyOf) != 2 || anyOf[1].Author != "dependabot[bot]" {
+		t.Errorf("all_of[1].any_of = %+v", anyOf)
+	}
+}
+
 func TestLoadConfigUnknownRepo(t *testing.T) {
 	t.Parallel()
 

@@ -1,0 +1,86 @@
+# Terminal states and teardown (docs/prd-command-centre.md § Phase 6): a merged fixture derives
+# merged and remove-worktree calls faketp remove --force; a closed-unmerged fixture on a row
+# that has run derives base_gone, not blocked; remove-worktree refuses a dirty worktree; re-run
+# on a failed row creates a second runs row in the same worktree and pushes its commits through
+# the same push step; close-pr derives pr_closed_unmerged.
+
+cc-init-repo
+cc-config teardown-cc7-empty
+cc-fake-gh no-prs
+
+# CC-7 fails with the empty-commit fake agent: no commits, no push, a plain failed row.
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-7'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>sandbox://CC-7</td>\s*\n\s*<td>failed</td>'
+
+# Switch the agent to one that actually commits, introduce the root/dependent pair (CC-3/CC-4)
+# and the solo CC-1, and re-run CC-7 in its existing worktree -- no second cut.
+cc-config teardown-commits
+# A tick upserts the newly-declared tasks before any verb or launch can name them.
+exec cc tick --count 1
+exec cc request POST '/verb?verb=re-run&task=sandbox://CC-7'
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-3&task=sandbox://CC-4'
+exec cc tick --count 1
+grep -count=1 'new cc-7' $WORK/tp.log
+exec sleep 0.5
+exec cc tick --count 1
+
+# CC-7's re-run pushed its commits through the very same push step a fresh launch uses.
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-7
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-3
+exec cc request GET /events
+stdout -count=2 '"TaskURL":"sandbox://CC-7","Kind":"run_launched"'
+stdout '"TaskURL":"sandbox://CC-7","Kind":"pushed"'
+
+# Swap the fixture: CC-1's PR is now merged, CC-3's is open (which unlocks CC-4), CC-7's is open.
+cc-fake-gh teardown-mid
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4
+exec cc request GET /
+stdout '<td>sandbox://CC-1</td>\s*\n\s*<td>merged</td>'
+
+# remove-worktree refuses a dirty worktree: the file is left, nothing is removed.
+cp scratch.txt $WORK/repo-cc-1/scratch.txt
+exec cc request POST '/verb?verb=remove-worktree&task=sandbox://CC-1'
+exec cc tick --count 1
+exists $WORK/repo-cc-1
+exec cc request GET /events
+stdout '"Kind":"remove_worktree_refused","Detail":"worktree is dirty"'
+exec rm $WORK/repo-cc-1/scratch.txt
+
+# Cleaned up, the same verb now succeeds: tp remove --force, and the worktree is gone.
+exec cc request POST '/verb?verb=remove-worktree&task=sandbox://CC-1'
+exec cc tick --count 1
+! exists $WORK/repo-cc-1
+grep -count=1 'remove --force cc-1' $WORK/tp.log
+exec cc request GET /events
+stdout '"TaskURL":"sandbox://CC-1","Kind":"worktree_removed"'
+
+# CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
+cc-fake-gh teardown-late
+exec cc request POST '/verb?verb=close-pr&task=sandbox://CC-7'
+exec cc tick --count 1
+grep -count=1 'pr close' $WORK/gh.log
+
+# CC-4 has already run (it cut, committed and pushed above), so its blocker's pull request
+# closing unmerged derives base_gone -- never blocked (inv. 19).
+exec cc request GET /
+stdout '<td>sandbox://CC-4</td>\s*\n\s*<td>base_gone</td>'
+! stdout '<td>sandbox://CC-4</td>\s*\n\s*<td>blocked</td>'
+
+# The fallback read now reports CC-7's own pull request closed too: pr_closed_unmerged, not a
+# lingering checking/review_me from before the close.
+cc-fake-gh teardown-cc7-closed
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>sandbox://CC-7</td>\s*\n\s*<td>pr_closed_unmerged</td>'
+
+-- scratch.txt --
+oops

@@ -15,6 +15,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 //go:embed page.tmpl
@@ -26,16 +27,23 @@ var page = template.Must(template.New("page").Parse(pageSource))
 // writes the database directly except to queue a launch intent: every state it shows is
 // derived from tasks and the last observation at render time (§5, inv. 14).
 type Server struct {
-	store          *Store
-	now            func() time.Time
-	stackingByRepo map[string]bool
-	mux            *http.ServeMux
+	store            *Store
+	now              func() time.Time
+	stackingByRepo   map[string]bool
+	checksByRepo     map[string]verdict.Predicate
+	mergifySHAByRepo map[string]string
+	mux              *http.ServeMux
 }
 
 // NewServer assembles the page and its routes over a store, a clock and the configured repos
-// (stacking is per-repo config, consulted on every unlock decision).
+// (stacking, the CI verdict predicate and the recorded mergify hash are all per-repo config,
+// consulted on every render).
 func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
-	s := &Server{store: store, now: now, stackingByRepo: stackingByRepo(repos)}
+	s := &Server{
+		store: store, now: now,
+		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
+		mergifySHAByRepo: mergifySHAByRepo(repos),
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /preview", s.handlePreview)
@@ -130,11 +138,23 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
+	pushRows, err := s.store.LatestPushes(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
+	checkingTicks, err := s.store.CheckingTicks(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 
 	now := s.now()
+	vd := verdictDeps{
+		pushRows: pushRows, checkingTicks: checkingTicks,
+		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
+	}
 	view := pageView{
 		ObserveAge: "never",
-		Rows:       derive(tasks, obs, authorised, latestRuns, pushFacts, s.stackingByRepo, now),
+		Rows:       derive(tasks, obs, authorised, latestRuns, pushFacts, vd, s.stackingByRepo, now),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -150,9 +170,18 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 // are what let a task's state depend on its run: the store has the durable facts (pgid, log
 // path, outcome), the observation has this tick's own liveness read — both survive a restart,
 // so the page renders identically whether this is tick 1 or tick 4000 (§ Crash recovery).
+// verdictDeps is the CI-verdict-specific facts derive needs per task, gathered once per render
+// rather than threaded through as four more scalar parameters.
+type verdictDeps struct {
+	pushRows         map[string]PushRow
+	checkingTicks    map[string]int
+	checksByRepo     map[string]verdict.Predicate
+	mergifySHAByRepo map[string]string
+}
+
 func derive(
 	tasks []Task, obs Observation, authorised map[string]bool, latestRuns map[string]RunSummary,
-	pushFacts map[string]PushFact, stackingByRepo map[string]bool, now time.Time,
+	pushFacts map[string]PushFact, vd verdictDeps, stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
@@ -161,7 +190,7 @@ func derive(
 	for _, t := range tasks {
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
-		runFact, pgid, elapsed, logPath := runFactFor(t.TicketURL, t.Branch, obs, latestRuns, pushFacts, now)
+		runFact, pgid, elapsed, logPath := runFactFor(t, obs, latestRuns, pushFacts, vd, now)
 		state, reason := plan.Status(plan.Facts{
 			Task:       pt,
 			Unlock:     unlock,
@@ -189,26 +218,33 @@ func derive(
 // elapsed time and log path the page renders alongside it. nil/empty when the task has no run.
 // Push facts are only meaningful once the run's own outcome is push (docs/prd-command-centre.md
 // § Phase 4): PROpen reads this tick's own PR snapshot for the task's branch, never a stored
-// column (inv. 14).
+// column (inv. 14). The CI verdict, once PROpen and clear of a refusal or failure, is
+// internal/verdict's own job (applyVerdict).
 func runFactFor(
-	ticketURL, branch string, obs Observation, latestRuns map[string]RunSummary,
-	pushFacts map[string]PushFact, now time.Time,
+	t Task, obs Observation, latestRuns map[string]RunSummary,
+	pushFacts map[string]PushFact, vd verdictDeps, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
-	summary, ok := latestRuns[ticketURL]
+	summary, ok := latestRuns[t.TicketURL]
 	if !ok {
 		return nil, "", "", ""
 	}
 
-	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[ticketURL].Alive}
+	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.TicketURL].Alive}
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
 		if summary.Outcome == plan.OutcomePush {
-			pf := pushFacts[ticketURL]
+			pf := pushFacts[t.TicketURL]
 			fact.PushRefused = pf.Refused
 			fact.PushRefusedPath = pf.RefusedPath
 			fact.PushFailed = pf.Failed
-			fact.PROpen = obs.PRs[branch].State == gh.Open
+			ownState := obs.PRs[t.Branch].State
+			fact.PROpen = ownState == gh.Open
+			fact.PRMerged = ownState == gh.Merged
+			fact.PRClosedUnmerged = ownState == gh.Closed
+			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
+				applyVerdict(fact, t, obs, vd)
+			}
 		}
 	}
 
@@ -220,6 +256,76 @@ func runFactFor(
 		elapsed = now.Sub(*summary.ProcStartedAt).Round(time.Second).String()
 	}
 	return fact, pgid, elapsed, logPath
+}
+
+// defaultBaseBranch mirrors internal/plan's own unexported copy: verdict's import guard (like
+// plan's) forbids depending on that package for one string constant.
+const defaultBaseBranch = "main"
+
+// applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
+// unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
+// fixture reading exactly as it did before this phase (statusFromPush's own PROpen fallback).
+func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
+	predicate := vd.checksByRepo[t.Repo]
+	if predicate.IsZero() {
+		return
+	}
+	pushRow, pushed := vd.pushRows[t.TicketURL]
+	if !pushed {
+		return // disposed push-outcome this same tick, before push.go recorded the row
+	}
+
+	pr := obs.PRs[t.Branch]
+	stackedBase := pushRow.BaseBranch != "" && pushRow.BaseBranch != defaultBaseBranch
+	mergifySHA := vd.mergifySHAByRepo[t.Repo]
+
+	result := verdict.Evaluate(predicate, verdict.Input{
+		Checks:       verdictChecks(pr.Checks),
+		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
+		StackedBase:  stackedBase,
+		BaseSHAMatch: obs.PRs[pushRow.BaseBranch].HeadOid == pushRow.BaseSHAAtPush,
+		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
+		PushedAt:     pushRow.PushedAt,
+		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
+		AuthorLogin:  pr.AuthorLogin,
+	})
+
+	switch result.Verdict {
+	case verdict.ReviewMe:
+		fact.VerdictReviewMe = true
+	case verdict.NeedsYou:
+		fact.VerdictNeedsYou = true
+	case verdict.Checking:
+		// leave both flags false; VerdictReason below still carries the sentence.
+	}
+	fact.VerdictReason = plan.Reason(result.Reason)
+}
+
+// verdictChecks maps gh's normalised check shape onto verdict's own -- the pure package cannot
+// import internal/gh (issue #2 AC12), so this is the one place the two vocabularies meet.
+func verdictChecks(checks map[string]gh.CheckState) map[string]verdict.CheckState {
+	out := make(map[string]verdict.CheckState, len(checks))
+	for name, c := range checks {
+		out[name] = toVerdictCheckState(c)
+	}
+	return out
+}
+
+// toVerdictCheckState mirrors the "no retry-pending rule" call (docs/command-centre-design.md § 8):
+// anything completed but not exactly SUCCESS or SKIPPED reads as a definite Failure, never a
+// third kind of maybe.
+func toVerdictCheckState(cs gh.CheckState) verdict.CheckState {
+	if cs.Status != "COMPLETED" {
+		return verdict.Pending
+	}
+	switch cs.Conclusion {
+	case "SUCCESS":
+		return verdict.Success
+	case "SKIPPED":
+		return verdict.Skipped
+	default:
+		return verdict.Failure
+	}
 }
 
 // handleEvents dumps the append-only audit log as JSON: what reconstructs the whole run, every
@@ -348,9 +454,8 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 // handleVerb queues one verb intent against one task — a handler only ever does this single
 // blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
-// applyKillIntents and push.go's applyRetryPushIntents). `kill` and `retry-push` are the verbs
-// this phase implements; the design's route table also lists re-run, close-pr and
-// remove-worktree for later phases.
+// applyKillIntents, push.go's applyRetryPushIntents and verbs.go's re-run/close-pr/
+// remove-worktree appliers). `cancel` is Phase 2 and is not implemented.
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	verb := r.URL.Query().Get("verb")
@@ -359,7 +464,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "verb and task are both required", http.StatusBadRequest)
 		return
 	}
-	if verb != killVerb && verb != retryPushVerb {
+	if !supportedVerbs[verb] {
 		http.Error(w, fmt.Sprintf("unsupported verb %q", verb), http.StatusBadRequest)
 		return
 	}

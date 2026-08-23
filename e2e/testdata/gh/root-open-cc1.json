@@ -1,0 +1,14 @@
+{
+  "pr list": {
+    "stdout": "[{\"number\":7,\"headRefName\":\"cc-1\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
+  },
+  "pr list --state all --head cc-2": {
+    "stdout": "[]\n"
+  },
+  "pr create": {
+    "stdout": "https://example.com/owner/repo/pull/8\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  }
+}

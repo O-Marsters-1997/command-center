@@ -1,0 +1,16 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+
+max_agents = 5
+agent_command = ["{{agents}}/empty.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[task]]
+ticket_url = "sandbox://CC-7"
+repo       = "repo"
+branch     = "cc-7"
+blocked_by = []
+
+[[repo]]
+name     = "repo"
+path     = "repo"
+stacking = false

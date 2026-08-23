@@ -1,0 +1,46 @@
+# Editing the repo's .mergify.yml suppresses a would-be-green row to checking (check config
+# changed), rather than a silent lie; restoring the recorded hash brings review_me back
+# (docs/command-centre-v1.md § 7).
+
+cc-init-repo
+cp mergify-v1.yml repo/.mergify.yml
+exec git -C $WORK/repo add .mergify.yml
+exec git -C $WORK/repo commit -q -m 'add mergify config'
+exec git -C $WORK/repo push -q origin main
+
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+cc-fake-gh-head verdict-review-me cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>review_me</td>'
+
+# The predicate's recorded hash no longer matches the file on disk -- a green result must be
+# suppressed to checking, not shown as review_me from a stale predicate.
+cp mergify-v2.yml repo/.mergify.yml
+exec cc tick --count 1
+exec cc request GET /
+! stdout '<td>review_me</td>'
+stdout '<td>checking</td>'
+stdout 'check config changed'
+
+# Restoring the exact file the hash was recorded against brings review_me back.
+cp mergify-v1.yml repo/.mergify.yml
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>review_me</td>'
+
+-- mergify-v1.yml --
+queue_rules: []
+pull_request_rules: []
+-- mergify-v2.yml --
+queue_rules: []
+pull_request_rules:
+  - name: edited
