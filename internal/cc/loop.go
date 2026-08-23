@@ -296,7 +296,7 @@ func currentlyRunning(latest map[string]RunSummary) int {
 
 // tickCheckingWaits bumps every task's checking-wait tick count by one. It runs only after a
 // successful observe (RunOnce returns before reaching it otherwise), which is what makes the
-// count track ticks whose observe phase succeeded and never wall clock (docs/command-centre-v1.md
+// count track ticks whose observe phase succeeded and never wall clock (docs/command-centre-design.md
 // § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.now().
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	tasks, err := l.store.Tasks(ctx)

@@ -27,7 +27,7 @@ func New(ctx context.Context, repoPath, branch, baseRef string) error {
 // Remove tears down branch's worktree and deletes the branch via `tp remove --force <branch>`,
 // run inside repoPath. Always forced: the app only ever calls this once it has independently
 // established the branch is safe to force-delete — MERGED PR state, or a base_gone row the user
-// cleared (docs/command-centre-v1.md § 9 inv. 3) — so there is no plain, non-force caller.
+// cleared (docs/command-centre-design.md § 9 inv. 3) — so there is no plain, non-force caller.
 func Remove(ctx context.Context, repoPath, branch string) error {
 	cmd := exec.CommandContext(ctx, "tp", "remove", "--force", branch)
 	cmd.Dir = repoPath

@@ -311,7 +311,7 @@ func verdictChecks(checks map[string]gh.CheckState) map[string]verdict.CheckStat
 	return out
 }
 
-// toVerdictCheckState mirrors the "no retry-pending rule" call (docs/command-centre-v1.md § 8):
+// toVerdictCheckState mirrors the "no retry-pending rule" call (docs/command-centre-design.md § 8):
 // anything completed but not exactly SUCCESS or SKIPPED reads as a definite Failure, never a
 // third kind of maybe.
 func toVerdictCheckState(cs gh.CheckState) verdict.CheckState {
