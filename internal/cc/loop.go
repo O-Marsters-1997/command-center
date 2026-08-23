@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
@@ -369,6 +370,13 @@ func (l *Loop) spawnRun(ctx context.Context, task Task, worktreePath, baselineSH
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	prompt := plan.Compose(planTask(task), nil)
+	body, err := gh.IssueBody(ctx, worktreePath, task.TicketURL)
+	if err != nil {
+		return fmt.Errorf("fetch ticket body for %s: %w", task.TicketURL, err)
+	}
+	if body != "" {
+		prompt += "\n\n## Ticket\n\n" + body
+	}
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
 	}

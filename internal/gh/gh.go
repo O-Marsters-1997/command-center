@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -129,6 +130,16 @@ func Create(ctx context.Context, repoPath, base, body string) error {
 func Close(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "close", branch)
 	return err
+}
+
+// IssueBody reads ticketURL's body. The agent-owned settings deny it Bash(gh:*), so this is how
+// its prompt carries the ticket's content instead of a URL it has no way to fetch itself.
+func IssueBody(ctx context.Context, repoPath, ticketURL string) (string, error) {
+	out, err := run(ctx, repoPath, "issue", "view", ticketURL, "--json", "body", "--jq", ".body")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {

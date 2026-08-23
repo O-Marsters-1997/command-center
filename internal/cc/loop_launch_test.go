@@ -25,6 +25,7 @@ func authoriseTask(t *testing.T, store *cc.Store, ticketURL, hash string, at tim
 func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
+	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
@@ -116,6 +117,7 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
+	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))

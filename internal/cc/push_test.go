@@ -17,7 +17,8 @@ import (
 
 // installFakeGh puts a script named gh on PATH that logs every invocation to a file and answers
 // `pr create` per the caller's control: failCreate makes it exit non-zero, exercising push
-// failed without a real GitHub call.
+// failed without a real GitHub call. `issue view` always answers with a canned body, which is
+// what lets a spawn's prompt-composition step run against a fake ticket URL.
 func installFakeGh(t *testing.T, failCreate bool) (logPath string) {
 	t.Helper()
 	bin := t.TempDir()
@@ -32,6 +33,9 @@ func installFakeGh(t *testing.T, failCreate bool) (logPath string) {
 		"if [ \"$1 $2\" = \"pr create\" ] && [ \"" + fail + "\" = \"1\" ]; then\n" +
 		"  echo 'fake gh: pr create failed' >&2\n" +
 		"  exit 1\n" +
+		"fi\n" +
+		"if [ \"$1 $2\" = \"issue view\" ]; then\n" +
+		"  echo 'fake ticket body'\n" +
 		"fi\n" +
 		"exit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {

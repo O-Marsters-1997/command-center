@@ -17,6 +17,7 @@ import (
 // never touches tp; nothing about re-run does).
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
