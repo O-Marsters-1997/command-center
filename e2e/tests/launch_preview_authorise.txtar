@@ -1,0 +1,23 @@
+# The preview for the two-ticket slice reads "now" for the root and "on unlock" for the
+# dependent, both bases origin/main (stacking off). POST /launch then one tick leaves both rows
+# queued with distinct reasons: one for a slot, one for a base.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request GET '/preview?task=sandbox://CC-1&task=sandbox://CC-2'
+stdout '"Label":"now"'
+stdout '"Label":"on unlock"'
+stdout '"Base":"origin/main"'
+
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
+exec cc tick --count 1
+exec cc request GET /
+
+stdout '<td>sandbox://CC-1</td>'
+stdout '<td>sandbox://CC-2</td>'
+stdout '<td>queued</td>'
+stdout 'waiting for a slot'
+stdout 'waiting on sandbox://CC-1&#39;s PR'

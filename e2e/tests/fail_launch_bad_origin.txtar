@@ -1,0 +1,16 @@
+# A POST to /launch with a foreign Origin is rejected, so no launches row appears and both
+# tasks stay in their unauthorised states.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+! exec cc request -origin http://evil.example POST '/launch?task=sandbox://CC-1'
+stderr '403'
+
+exec cc tick --count 1
+exec cc request GET /
+! stdout 'queued'
+stdout '<td>ready</td>'
+stdout '<td>blocked</td>'

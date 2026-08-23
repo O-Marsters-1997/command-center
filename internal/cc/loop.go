@@ -32,7 +32,7 @@ func NewLoop(store *Store, observe ObserveFunc, now func() time.Time) *Loop {
 
 // RunOnce runs one tick. A failed observe applies no transition and launches nothing: it
 // records the error and leaves the last good observation in place, so the page's observe age
-// keeps growing (inv. 10).
+// keeps growing (inv. 10). Only a successful observe goes on to apply queued launch intents.
 func (l *Loop) RunOnce(ctx context.Context) error {
 	obs, err := l.observe(ctx)
 	if err != nil {
@@ -45,7 +45,10 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	}
 
 	obs.ObservedAt = l.now()
-	return l.store.SaveObservation(ctx, obs)
+	if err := l.store.SaveObservation(ctx, obs); err != nil {
+		return err
+	}
+	return l.store.ApplyLaunchIntents(ctx, l.now())
 }
 
 // Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is
