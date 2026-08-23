@@ -1,6 +1,6 @@
 # The end-to-end harness
 
-Fifteen
+Eighteen
 [testscript](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript)
 scripts drive the real `cc` binary against a real git repository, a fake `gh`
 and a fake `tp`. Each one asserts a behaviour the unit tests cannot reach,
@@ -102,10 +102,10 @@ prompt file.
 | `commits.sh` | Commits one file and exits 0. The ordinary happy path. |
 | `commits_ci.sh` | Commits under `.github/workflows`, so the push policy refuses it. |
 | `empty.sh` | Does nothing, leaving HEAD where it was. |
-| `sleeps.sh` | Backgrounds a long sleep and waits for a signal, so kill and pgid reaping are testable. |
+| `sleeps.sh` | Backgrounds a long sleep and waits for a signal, so kill and pgid reaping are testable. Writes its own `$$` to `<worktree>/pgid`, which `Setpgid` makes the pgid the app records too, so a script can check the page against the OS rather than against the app's own bookkeeping. |
 
-`commits.sh` and `empty.sh` append their own invocation to `$CC_AGENT_LOG`. That
-is a script's proof of how many times an agent actually ran, which is a
+Every script but `commits_ci.sh` appends its own invocation to `$CC_AGENT_LOG`.
+That is a script's proof of how many times an agent actually ran, which is a
 different fact from tp.log's cuts or the `events` table's `run_launched` rows.
 
 ## Environment
@@ -135,6 +135,6 @@ Every script, and everything it starts, runs with:
    together are how a script distinguishes "the app decided this" from "the app
    actually did this".
 
-A few scripts contain `exec sleep 0.5`. It is always waiting for a real spawned
+Eleven scripts contain `exec sleep 0.5`. It is always waiting for a real spawned
 agent process to exit between ticks, never for the app's own timing. Nothing in
 the app is polled for.
