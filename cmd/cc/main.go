@@ -23,7 +23,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, *config); err != nil {
+	command := subcmd(flag.Args())
+	if command == nil {
+		command = run
+	}
+	if err := command(ctx, *config); err != nil {
 		log.Fatalf("cc: %v", err)
 	}
 }

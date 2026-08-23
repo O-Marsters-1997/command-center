@@ -1,0 +1,26 @@
+# Inv. 10 end to end: a non-zero gh read ends the tick before decide. The page keeps the states
+# the last good observation derived and shows the error.
+#
+# It deliberately does not assert that the tick age grows. Two `cc request` calls milliseconds
+# apart render the same age, and the script-controlled clock that would fix that was declined;
+# the growth is covered by a unit test in Phase 1a.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>ready</td>'
+stdout '<td>blocked</td>'
+! stdout 'Last tick error'
+
+cc-fake-gh fail
+! exec cc tick --count 1
+stderr 'gh is unavailable'
+
+exec cc request GET /
+stdout 'Last tick error'
+stdout 'gh is unavailable'
+stdout '<td>ready</td>'
+stdout '<td>blocked</td>'

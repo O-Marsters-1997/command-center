@@ -1,0 +1,13 @@
+# Inv. 9: one instance per workspace. The flock is on command-centre.lock, a file beside the
+# database rather than the database itself — an flock on the DB deadlocks the SQLite driver —
+# so the refusal must name that file.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+cc-daemon
+! exec cc tick --count 1
+stderr 'cannot take the flock'
+stderr 'command-centre\.lock'
+stderr 'already running'
