@@ -156,12 +156,17 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 	if err != nil {
 		return err
 	}
+	lastPushed, err := l.store.LastPushedTips(ctx)
+	if err != nil {
+		return err
+	}
 	rc := removeWorktreeContext{
-		byURL:     planTasksByURL(tasks),
-		prs:       prsByBranch(obs),
-		stacking:  stackingByRepo(l.cfg.Repos),
-		repoPaths: repoPathsByName(l.ws.Root, l.cfg.Repos),
-		obs:       obs,
+		byURL:      planTasksByURL(tasks),
+		prs:        prsByBranch(obs),
+		stacking:   stackingByRepo(l.cfg.Repos),
+		repoPaths:  repoPathsByName(l.ws.Root, l.cfg.Repos),
+		lastPushed: lastPushed,
+		obs:        obs,
 	}
 	byTicket := tasksByTicket(tasks)
 
@@ -187,7 +192,10 @@ type removeWorktreeContext struct {
 	prs       map[string]plan.PRState
 	stacking  map[string]bool
 	repoPaths map[string]string
-	obs       Observation
+	// lastPushed is what HasUnpushedCommits falls back to once GitHub's delete-branch-on-merge
+	// and our own fetch --prune have removed the remote-tracking ref a merged branch was pushed to.
+	lastPushed map[string]string
+	obs        Observation
 }
 
 // removeWorktreeOne applies inv. 3's gate, in order: is this row even eligible (merged, or
@@ -223,7 +231,7 @@ func (l *Loop) removeWorktreeOne(
 		return refuse("worktree is dirty")
 	}
 
-	unpushed, err := HasUnpushedCommits(ctx, repoPath, task.Branch)
+	unpushed, err := HasUnpushedCommits(ctx, repoPath, task.Branch, rc.lastPushed[task.TicketURL])
 	if err != nil {
 		return fmt.Errorf("check unpushed commits for %s: %w", task.TicketURL, err)
 	}
