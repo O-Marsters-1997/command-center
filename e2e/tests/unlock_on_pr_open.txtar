@@ -1,0 +1,18 @@
+# Swapping the fixture to report the root's PR as open flips the dependent's queued reason from
+# base to slot on the next tick.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
+exec cc tick --count 1
+exec cc request GET /
+stdout 'waiting on sandbox://CC-1&#39;s PR'
+
+cc-fake-gh pr-open-cc1
+exec cc tick --count 1
+exec cc request GET /
+stdout 'waiting for a slot'
+! stdout 'waiting on sandbox://CC-1&#39;s PR'

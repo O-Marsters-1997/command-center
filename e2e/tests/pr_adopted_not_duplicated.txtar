@@ -1,0 +1,19 @@
+# With a fixture already reporting an open PR for the branch, a tick opens nothing new: the push
+# still lands, but pr create is never called, and a later tick does not push again either
+# (inv. 20).
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh pr-open-cc1
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+! grep 'pr create' $WORK/gh.log
+
+exec cc tick --count 1
+! grep 'pr create' $WORK/gh.log

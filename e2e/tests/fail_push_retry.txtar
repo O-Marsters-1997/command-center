@@ -1,0 +1,29 @@
+# gh pr create fails: the row reads push_failed. A retry-push verb, after gh recovers, completes
+# it without a second agent ever spawning.
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh pr-create-fails
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec cc request GET /
+stdout '<td>push_failed</td>'
+
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+grep -count=1 'pr create' $WORK/gh.log
+
+# No auto-retry: another automatic tick must not attempt pr create again.
+exec cc tick --count 1
+grep -count=1 'pr create' $WORK/gh.log
+
+cc-fake-gh no-prs
+exec cc request POST '/verb?verb=retry-push&task=sandbox://CC-1'
+exec cc tick --count 1
+
+grep -count=2 'pr create' $WORK/gh.log
+grep -count=1 'new cc-1' $WORK/tp.log

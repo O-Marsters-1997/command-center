@@ -1,0 +1,21 @@
+# A clean run pushes once and opens a PR: the fake gh log shows exactly one pr create carrying
+# --fill, --label keep-open and the right --base, and a later tick neither pushes nor creates
+# again (inv. 20).
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+
+grep -count=1 'pr create' $WORK/gh.log
+grep 'pr create --base main --fill --label keep-open' $WORK/gh.log
+
+exec cc tick --count 1
+grep -count=1 'pr create' $WORK/gh.log

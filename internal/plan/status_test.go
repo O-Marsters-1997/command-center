@@ -66,6 +66,10 @@ func TestStateString(t *testing.T) {
 	if plan.Blocked.String() != "blocked" || plan.Ready.String() != "ready" || plan.Queued.String() != "queued" {
 		t.Errorf("states render as %q, %q and %q", plan.Blocked, plan.Ready, plan.Queued)
 	}
+	if plan.Checking.String() != "checking" || plan.NeedsYou.String() != "needs_you" ||
+		plan.PushFailed.String() != "push_failed" {
+		t.Errorf("states render as %q, %q and %q", plan.Checking, plan.NeedsYou, plan.PushFailed)
+	}
 }
 
 func TestStatusWithLatestRun(t *testing.T) {
@@ -107,6 +111,36 @@ func TestStatusWithLatestRun(t *testing.T) {
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed,
 			},
 			wantState: plan.CutFailed,
+		},
+		{
+			name: "a refused push derives needs you, naming the path",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush,
+				PushRefused: true, PushRefusedPath: ".github/workflows/ci.yml",
+			},
+			wantState: plan.NeedsYou,
+			reasonHas: ".github/workflows/ci.yml",
+		},
+		{
+			name: "a push or PR-create failure derives push failed",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PushFailed: true,
+			},
+			wantState: plan.PushFailed,
+		},
+		{
+			name: "an open PR derives checking",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			},
+			wantState: plan.Checking,
+		},
+		{
+			name: "commits with no push attempt yet still derives push pending",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush,
+			},
+			wantState: plan.PushPending,
 		},
 	}
 

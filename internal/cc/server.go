@@ -39,6 +39,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /preview", s.handlePreview)
+	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	s.mux = mux
@@ -125,9 +126,16 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
+	pushFacts, err := s.store.PushFacts(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 
 	now := s.now()
-	view := pageView{ObserveAge: "never", Rows: derive(tasks, obs, authorised, latestRuns, s.stackingByRepo, now)}
+	view := pageView{
+		ObserveAge: "never",
+		Rows:       derive(tasks, obs, authorised, latestRuns, pushFacts, s.stackingByRepo, now),
+	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
 	}
@@ -144,7 +152,7 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 // so the page renders identically whether this is tick 1 or tick 4000 (§ Crash recovery).
 func derive(
 	tasks []Task, obs Observation, authorised map[string]bool, latestRuns map[string]RunSummary,
-	stackingByRepo map[string]bool, now time.Time,
+	pushFacts map[string]PushFact, stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
@@ -153,7 +161,7 @@ func derive(
 	for _, t := range tasks {
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
-		runFact, pgid, elapsed, logPath := runFactFor(t.TicketURL, obs, latestRuns, now)
+		runFact, pgid, elapsed, logPath := runFactFor(t.TicketURL, t.Branch, obs, latestRuns, pushFacts, now)
 		state, reason := plan.Status(plan.Facts{
 			Task:       pt,
 			Unlock:     unlock,
@@ -179,8 +187,12 @@ func derive(
 
 // runFactFor builds plan.Status's LatestRun input for one task, plus the plain-text pgid,
 // elapsed time and log path the page renders alongside it. nil/empty when the task has no run.
+// Push facts are only meaningful once the run's own outcome is push (docs/prd-command-centre.md
+// § Phase 4): PROpen reads this tick's own PR snapshot for the task's branch, never a stored
+// column (inv. 14).
 func runFactFor(
-	ticketURL string, obs Observation, latestRuns map[string]RunSummary, now time.Time,
+	ticketURL, branch string, obs Observation, latestRuns map[string]RunSummary,
+	pushFacts map[string]PushFact, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
 	summary, ok := latestRuns[ticketURL]
 	if !ok {
@@ -191,6 +203,13 @@ func runFactFor(
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
+		if summary.Outcome == plan.OutcomePush {
+			pf := pushFacts[ticketURL]
+			fact.PushRefused = pf.Refused
+			fact.PushRefusedPath = pf.RefusedPath
+			fact.PushFailed = pf.Failed
+			fact.PROpen = obs.PRs[branch].State == gh.Open
+		}
 	}
 
 	logPath = summary.LogPath
@@ -201,6 +220,20 @@ func runFactFor(
 		elapsed = now.Sub(*summary.ProcStartedAt).Round(time.Second).String()
 	}
 	return fact, pgid, elapsed, logPath
+}
+
+// handleEvents dumps the append-only audit log as JSON: what reconstructs the whole run, every
+// authorisation, launch, disposition, push and refusal (docs/prd-command-centre.md § Phase 4).
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := s.store.Events(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(events); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // previewRow is one line of a launch preview: what would happen to this task, and why. Base
@@ -315,8 +348,9 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 // handleVerb queues one verb intent against one task — a handler only ever does this single
 // blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
-// applyKillIntents). `kill` is the only verb this phase implements; the design's route table
-// also lists re-run, retry-push, close-pr and remove-worktree for later phases.
+// applyKillIntents and push.go's applyRetryPushIntents). `kill` and `retry-push` are the verbs
+// this phase implements; the design's route table also lists re-run, close-pr and
+// remove-worktree for later phases.
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	verb := r.URL.Query().Get("verb")
@@ -325,7 +359,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "verb and task are both required", http.StatusBadRequest)
 		return
 	}
-	if verb != "kill" {
+	if verb != killVerb && verb != retryPushVerb {
 		http.Error(w, fmt.Sprintf("unsupported verb %q", verb), http.StatusBadRequest)
 		return
 	}

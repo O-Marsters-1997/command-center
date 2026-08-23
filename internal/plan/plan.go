@@ -123,6 +123,9 @@ const (
 	Failed
 	CutFailed
 	PushPending
+	Checking
+	NeedsYou
+	PushFailed
 )
 
 func (s State) String() string {
@@ -139,6 +142,12 @@ func (s State) String() string {
 		return "cut_failed"
 	case PushPending:
 		return "push_pending"
+	case Checking:
+		return "checking"
+	case NeedsYou:
+		return "needs_you"
+	case PushFailed:
+		return "push_failed"
 	case Blocked:
 		return "blocked"
 	default:
@@ -154,6 +163,13 @@ type RunFact struct {
 	Outcome    Outcome
 	HasOutcome bool
 	LogPath    string
+	// Push* fields matter only when Outcome == OutcomePush: this tick's own push-policy and
+	// push/PR-create result (docs/prd-command-centre.md § Phase 4). PROpen comes from the
+	// observation's own PR snapshot for this task's branch, not a stored column (inv. 14).
+	PushRefused     bool
+	PushRefusedPath string
+	PushFailed      bool
+	PROpen          bool
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -208,13 +224,30 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	}
 	switch run.Outcome {
 	case OutcomePush:
-		return PushPending, "agent finished with commits, waiting to push", true
+		state, reason := statusFromPush(*run)
+		return state, reason, true
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:
 		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
+	}
+}
+
+// statusFromPush refines a push-outcome run's state from this tick's own push facts: a policy
+// hit refuses outright, a push or PR-create failure needs a human's retry, an open PR hands off
+// to the verdict step (Phase 5), and otherwise the push is still pending.
+func statusFromPush(run RunFact) (State, Reason) {
+	switch {
+	case run.PushRefused:
+		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
+	case run.PushFailed:
+		return PushFailed, "push or pull request creation failed"
+	case run.PROpen:
+		return Checking, "pull request open, no verdict yet"
+	default:
+		return PushPending, "agent finished with commits, waiting to push"
 	}
 }
 

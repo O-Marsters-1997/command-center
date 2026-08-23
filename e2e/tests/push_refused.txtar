@@ -1,0 +1,25 @@
+# A fake agent that commits .github/workflows/x.yml is refused outright: the branch stays
+# unpushed against the local bare remote, the row reads needs_you naming the path, and the
+# refusal lands in events.
+
+cc-init-repo
+cc-config single-task-commits-ci
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
+# liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+exec cc tick --count 1
+
+exec cc request GET /
+stdout '<td>needs_you</td>'
+stdout 'protected path'
+
+exec cc request GET /events
+stdout 'push_refused'
+stdout '\.github/workflows/x\.yml'
+
+! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1

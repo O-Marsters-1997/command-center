@@ -70,6 +70,16 @@ func stackingByRepo(repos []Repo) map[string]bool {
 	return m
 }
 
+// denyByRepo indexes each configured repo's per-repo push-policy additions by name -- the push
+// step's own per-repo half of plan.Policy (the default set lives in internal/plan).
+func denyByRepo(repos []Repo) map[string][]string {
+	m := make(map[string][]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.Deny
+	}
+	return m
+}
+
 // repoPathsByName resolves each configured repo's absolute path from the workspace root.
 func repoPathsByName(root string, repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))

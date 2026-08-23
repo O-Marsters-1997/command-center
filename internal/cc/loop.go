@@ -16,8 +16,8 @@ import (
 // why it woke.
 const tickPeriod = 15 * time.Second
 
-// killVerb is the only verb this phase implements; the others in the design's route table
-// (re-run, retry-push, close-pr, remove-worktree) belong to later phases.
+// killVerb and retryPushVerb (push.go) are the verbs this phase implements; the others in the
+// design's route table (re-run, close-pr, remove-worktree) belong to later phases.
 const killVerb = "kill"
 
 // TickError is the last failed tick, rendered on the page with its age.
@@ -47,9 +47,10 @@ func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config
 // RunOnce runs one tick. A failed observe applies no transition and launches nothing: it
 // records the error and leaves the last good observation in place, so the page's observe age
 // keeps growing (inv. 10). Only a successful observe goes on to apply queued launch intents,
-// consume kill requests, reconcile every run's liveness and disposition, and cut and spawn
-// whatever plan.LaunchPlan selects — in that order, every tick, restart or not (§ Crash
-// recovery: there is no separate recovery code path, this is the same tick).
+// consume kill and retry-push requests, reconcile every run's liveness and disposition, push
+// what plan.PushPlan selects and open its PR, and cut and spawn whatever plan.LaunchPlan selects
+// — in that order, every tick, restart or not (§ Crash recovery: there is no separate recovery
+// code path, this is the same tick).
 func (l *Loop) RunOnce(ctx context.Context) error {
 	obs, err := l.observe(ctx)
 	if err != nil {
@@ -81,6 +82,12 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	// tick's own liveness reads — saved again so the page can render them after a restart
 	// without re-probing between requests.
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.pushPushable(ctx, obs); err != nil {
 		return err
 	}
 	return l.launchEligible(ctx, obs)

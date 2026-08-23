@@ -1,0 +1,105 @@
+package cc
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
+)
+
+// RecordPush writes one successful push -- the row Phase 4's crash-safety hinges on:
+// pushed_tip is compared against on every later tick's plan.PushPlan, so a duplicate push or a
+// duplicate PR create both stop the moment this lands (inv. 20).
+func (s *Store) RecordPush(ctx context.Context, taskID, pushedTip, baseBranch, baseSHA string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO pushes (task_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
+		VALUES (?, ?, ?, ?, ?)`,
+		taskID, pushedTip, baseBranch, baseSHA, at.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return fmt.Errorf("record push for %s: %w", taskID, err)
+	}
+	return nil
+}
+
+// LastPushedTips returns each task's most recently recorded pushed_tip -- what plan.PushPlan
+// compares a branch's current local tip against.
+func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT p.task_id, p.pushed_tip FROM pushes p
+		JOIN (SELECT task_id, MAX(id) AS id FROM pushes GROUP BY task_id) latest
+		  ON latest.task_id = p.task_id AND latest.id = p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("select last pushed tips: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	tips := map[string]string{}
+	for rows.Next() {
+		var taskID, tip string
+		if err := rows.Scan(&taskID, &tip); err != nil {
+			return nil, fmt.Errorf("scan pushed tip: %w", err)
+		}
+		tips[taskID] = tip
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pushed tips: %w", err)
+	}
+	return tips, nil
+}
+
+// PushFact is a task's outstanding push-policy problem, if it has one: refused outright (naming
+// the path), or a push/PR-create failure. Neither is a stored column (inv. 14) -- both are
+// derived from the latest push_refused/push_failed event newer than the task's last recorded
+// push, so a later success clears it without any explicit reset.
+type PushFact struct {
+	Refused     bool
+	RefusedPath string
+	Failed      bool
+}
+
+const (
+	eventPushRefused = "push_refused"
+	eventPushFailed  = "push_failed"
+)
+
+// PushFacts returns every task's outstanding push-policy problem, keyed by ticket URL: what the
+// automatic push step's auto-retry gate (a failure, never a refusal, blocks it -- retry-push is
+// your verb) and the page's needs-you/push-failed rendering both read.
+func (s *Store) PushFacts(ctx context.Context) (map[string]PushFact, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT e.task_id, e.kind, e.detail
+		FROM events e
+		JOIN (
+			SELECT e2.task_id, MAX(e2.id) AS id
+			FROM events e2
+			LEFT JOIN (
+				SELECT task_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY task_id
+			) p ON p.task_id = e2.task_id
+			WHERE e2.kind IN (?, ?) AND e2.at > COALESCE(p.pushed_at, '')
+			GROUP BY e2.task_id
+		) latest ON latest.task_id = e.task_id AND latest.id = e.id`,
+		eventPushRefused, eventPushFailed)
+	if err != nil {
+		return nil, fmt.Errorf("select push facts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	facts := map[string]PushFact{}
+	for rows.Next() {
+		var taskID, kind string
+		var detail sql.NullString
+		if err := rows.Scan(&taskID, &kind, &detail); err != nil {
+			return nil, fmt.Errorf("scan push fact: %w", err)
+		}
+		switch kind {
+		case eventPushRefused:
+			facts[taskID] = PushFact{Refused: true, RefusedPath: detail.String}
+		case eventPushFailed:
+			facts[taskID] = PushFact{Failed: true}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate push facts: %w", err)
+	}
+	return facts, nil
+}
