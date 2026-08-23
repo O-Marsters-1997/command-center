@@ -842,6 +842,7 @@ API, not citations inherited from earlier revisions).
 | Adaptive rate-limit governor | you hit rate limits often enough to notice. Until then `max_agents` is the knob |
 | `POST /tasks` | you want to add a ticket without re-running `to-tickets` |
 | Slack / OTel / Datadog egress | a localhost page is not enough. Tick-age and last-error are already Phase 1 page fields |
+| An inbox — one channel for a decision the agent cannot make: a `waiting on you` state, the question and the reply as rows, answering resumes the run | an agent guesses wrong, or a `failed` run turns out to have been an unanswerable question, more than once. It is the app's **first tool grant**, so invariant 17 flips from a denylist to an explicit allowlist on the same change; it removes one *cause* of an apparently-wedged run (limit 2) without detecting one |
 | MCP permission-prompt loop | denied permissions become a common failure mode |
 | TUI | the HTTP page is demonstrably the wrong shape |
 | Chain depth cap or warning | rebase churn from deep chains shows up in practice (a ~4-deep flag already ships in `to-tickets`' guidance; the page shows depth as information) |
@@ -854,7 +855,9 @@ API, not citations inherited from earlier revisions).
 1. **Nothing anywhere validates a consumer against a seam.** Cross-repo consumers are red
    until the producer deploys, and the app's only response is to name the state correctly.
 2. **The app cannot tell a wedged agent from a working one** (§5). The page shows elapsed
-   time; the judgement is the user's.
+   time; the judgement is the user's. An agent silently stuck on a decision it cannot make
+   is indistinguishable from a wedged one today — the inbox in §12 removes that cause, not
+   the limit.
 3. **`.env.development.local` is synced into every `support-app` worktree.** It is the local
    override worktrees need to boot, so it stays; the mitigations are invariant 17 (the
    agent's deny settings) and the `.env*` push policy. The no-op `.env` sync lines are
