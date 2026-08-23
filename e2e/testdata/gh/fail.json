@@ -2,5 +2,8 @@
   "pr list": {
     "exit": 1,
     "stderr": "gh is unavailable\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
   }
 }

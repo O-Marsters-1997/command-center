@@ -1,5 +1,8 @@
 {
   "pr list": {
     "stdout": "[]\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
   }
 }
