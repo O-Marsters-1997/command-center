@@ -1,6 +1,9 @@
 # The preview for the two-ticket slice reads "now" for the root and "on unlock" for the
 # dependent, both bases origin/main (stacking off). POST /launch then one tick leaves both rows
-# queued with distinct reasons: one for a slot, one for a base.
+# queued with distinct reasons: one for a slot, one for a base — CC-1 is genuinely cut and
+# spawned (agent_command points at the empty.sh fake agent) in that tick, but its liveness is
+# read from the observation the tick started with, taken before the spawn happened, so the page
+# still shows it queued until the following tick observes it.
 
 cc-init-repo
 cc-config two-tasks

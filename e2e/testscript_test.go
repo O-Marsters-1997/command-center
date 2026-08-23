@@ -19,6 +19,10 @@ import (
 // their cwd, not the package's.
 var testdataDir string
 
+// agentsDir is the repo-root testdata/agents directory, holding the fake agent scripts a
+// config fixture's agent_command points at. Absolute for the same reason as testdataDir.
+var agentsDir string
+
 func TestMain(m *testing.M) {
 	os.Exit(runScripts(m))
 }
@@ -32,6 +36,13 @@ func runScripts(m *testing.M) (code int) {
 		return 1
 	}
 	testdataDir = abs
+
+	agentsAbs, err := filepath.Abs("../testdata/agents")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+		return 1
+	}
+	agentsDir = agentsAbs
 
 	bin, err := os.MkdirTemp("", "cc-e2e-bin")
 	if err != nil {
@@ -107,13 +118,15 @@ func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
 
 // ccConfig installs a named config fixture at cc's default path, so no script ever passes
 // --config. Port 0 is forced rather than left to the fixture: scripts run in parallel and a
-// fixed port collides.
+// fixed port collides. {{agents}} is substituted with agentsDir so a fixture's agent_command can
+// point at a fake agent script without hardcoding this checkout's absolute path.
 func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 1 {
 		ts.Fatalf("usage: cc-config <name>")
 	}
 	body, err := os.ReadFile(filepath.Join(testdataDir, "config", args[0]+".toml"))
 	ts.Check(err)
+	body = []byte(strings.ReplaceAll(string(body), "{{agents}}", agentsDir))
 
 	dir := filepath.Join(ts.Getenv("WORK"), ".claude")
 	ts.Check(os.MkdirAll(dir, 0o700))
@@ -189,5 +202,6 @@ func scriptEnv(work string) []string {
 		"GIT_COMMITTER_EMAIL=cc@example.com",
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
+		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),
 	}
 }

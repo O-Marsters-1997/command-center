@@ -124,6 +124,26 @@ func TestFailEnvCreatesNothing(t *testing.T) {
 	}
 }
 
+func TestCCTPLogRecordsEveryAttemptEvenAFailingOne(t *testing.T) {
+	initRepo(t)
+	logPath := filepath.Join(t.TempDir(), "tp.log")
+
+	var stdout, stderr bytes.Buffer
+	getenv := env(map[string]string{"CC_TP_FAIL": "1", "CC_TP_LOG": logPath})
+	if code := run([]string{"new", "feat/issue-1", "--base", "main"}, getenv, &stdout, &stderr); code == 0 {
+		t.Fatal("exit code = 0, want non-zero when CC_TP_FAIL is set")
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read tp log: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(logged), "\n"), "\n")
+	if len(lines) != 1 || lines[0] != "new feat/issue-1 --base main" {
+		t.Errorf("tp log = %q, want exactly one line for the attempted call", logged)
+	}
+}
+
 func TestNewAddsSiblingWorktree(t *testing.T) {
 	repo := initRepo(t)
 

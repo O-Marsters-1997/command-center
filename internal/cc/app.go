@@ -24,6 +24,7 @@ type options struct {
 	now       func() time.Time
 	observe   ObserveFunc
 	repoCheck RepoCheckFunc
+	runner    Runner
 }
 
 // Option configures New.
@@ -46,6 +47,12 @@ type RepoCheckFunc func(ctx context.Context, ws Workspace, repos []Repo) error
 // WithRepoCheck replaces the startup squash-only check, so a test can run without gh.
 func WithRepoCheck(check RepoCheckFunc) Option {
 	return func(o *options) { o.repoCheck = check }
+}
+
+// WithRunner replaces the real process runner, so a test can drive spawn, liveness and cancel
+// without touching the OS.
+func WithRunner(runner Runner) Option {
+	return func(o *options) { o.runner = runner }
 }
 
 // New resolves the workspace, takes the flock, opens the store and upserts the configured
@@ -98,15 +105,25 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		return nil, err
 	}
 
+	// Written once at startup rather than per spawn: the content never varies, and every spawn
+	// just passes the same path (inv. 17).
+	if err := WriteAgentSettings(ws.SettingsPath); err != nil {
+		return nil, err
+	}
+
 	observe := settings.observe
 	if observe == nil {
 		observe = NewObserver(store, cfg, ws.Root)
+	}
+	runner := settings.runner
+	if runner == nil {
+		runner = ProcessRunner{}
 	}
 	return &App{
 		cfg:    cfg,
 		lock:   lock,
 		store:  store,
-		loop:   NewLoop(store, observe, settings.now),
+		loop:   NewLoop(store, observe, settings.now, cfg, ws, runner),
 		server: NewServer(store, settings.now, cfg.Repos),
 	}, nil
 }

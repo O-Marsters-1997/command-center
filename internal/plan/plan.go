@@ -119,6 +119,10 @@ const (
 	Blocked State = iota
 	Ready
 	Queued
+	Running
+	Failed
+	CutFailed
+	PushPending
 )
 
 func (s State) String() string {
@@ -127,6 +131,14 @@ func (s State) String() string {
 		return "ready"
 	case Queued:
 		return "queued"
+	case Running:
+		return "running"
+	case Failed:
+		return "failed"
+	case CutFailed:
+		return "cut_failed"
+	case PushPending:
+		return "push_pending"
 	case Blocked:
 		return "blocked"
 	default:
@@ -134,20 +146,40 @@ func (s State) String() string {
 	}
 }
 
+// RunFact is the latest run's liveness and disposition, as the loop observed it this tick.
+// Alive is decided by pid+start-time identity (docs/prd-command-centre.md § A run); HasOutcome
+// distinguishes "not yet disposed" from a genuine zero-value Outcome.
+type RunFact struct {
+	Alive      bool
+	Outcome    Outcome
+	HasOutcome bool
+	LogPath    string
+}
+
 // Facts is everything Status derives from. Now is passed in because this package never calls
 // time.Now: the clock is the shell's, which is what makes the rendered page byte-stable.
 // Authorised is supplied by the caller (membership in an active launch), not derived here.
+// LatestRun is nil until a task's first launch — the pre-Phase-3 unlocked × authorised 2x2 is
+// exactly what a nil LatestRun still derives.
 type Facts struct {
 	Task       Task
 	Unlock     Unlock
 	Now        time.Time
 	Authorised bool
+	LatestRun  *RunFact
 }
 
-// Status derives a task's state and the sentence explaining it from the unlocked × authorised
-// 2x2 (docs/prd-command-centre.md § The states). A queued row must say whether it is waiting
-// on a base (hours-or-forever) or a slot (seconds) — the two must not render alike.
+// Status derives a task's state and the sentence explaining it. A task with a run derives from
+// that run's liveness and disposition first — a live or disposed run outranks the unlocked ×
+// authorised facts that only ever mattered before its first launch. Everything else falls back
+// to the pre-Phase-3 2x2 (docs/prd-command-centre.md § The states): a queued row must say
+// whether it is waiting on a base (hours-or-forever) or a slot (seconds), the two must not
+// render alike.
 func Status(f Facts) (State, Reason) {
+	if state, reason, ok := statusFromRun(f.LatestRun); ok {
+		return state, reason
+	}
+
 	switch {
 	case f.Unlock.Unlocked && f.Authorised:
 		return Queued, "waiting for a slot"
@@ -157,6 +189,32 @@ func Status(f Facts) (State, Reason) {
 		return Queued, waitingOnBlockers(f.Unlock.Blocking)
 	default:
 		return Blocked, f.Unlock.Reason
+	}
+}
+
+// statusFromRun derives a state from the latest run, when it has anything conclusive to say: a
+// live process, or a disposed one. A run that is neither (dead but not yet disposed) reports ok
+// = false rather than guessing, since the loop always disposes a run in the same tick it finds
+// it dead — that combination should not reach a persisted Facts.
+func statusFromRun(run *RunFact) (State, Reason, bool) {
+	if run == nil {
+		return 0, "", false
+	}
+	if run.Alive {
+		return Running, "agent running", true
+	}
+	if !run.HasOutcome {
+		return 0, "", false
+	}
+	switch run.Outcome {
+	case OutcomePush:
+		return PushPending, "agent finished with commits, waiting to push", true
+	case OutcomeCutFailed:
+		return CutFailed, "tp new failed to cut a worktree", true
+	case OutcomeFailed:
+		fallthrough
+	default:
+		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
 	}
 }
 

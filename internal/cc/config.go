@@ -4,6 +4,7 @@ package cc
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -57,4 +58,23 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// stackingByRepo indexes each configured repo's stacking flag by name — consulted on every
+// unlock decision, in both the page and the loop's own launch-eligibility check.
+func stackingByRepo(repos []Repo) map[string]bool {
+	m := make(map[string]bool, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.Stacking
+	}
+	return m
+}
+
+// repoPathsByName resolves each configured repo's absolute path from the workspace root.
+func repoPathsByName(root string, repos []Repo) map[string]string {
+	m := make(map[string]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = filepath.Join(root, r.Path)
+	}
+	return m
 }

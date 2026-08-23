@@ -82,9 +82,10 @@ already delegated. The babysitting and the twelve steps at the end of each run a
 is what stops you running four.
 
 **A pid is the only honest liveness signal, and no tool is built around one.** Everything in this
-space infers state from log timing or its own session bookkeeping. `kill(-pgid, 0)` plus a
-process-start-time check cannot be wrong, and artifact-first classification — commits since *this
-run's* baseline SHA — cannot be fooled by a previous attempt's work.
+space infers state from log timing or its own session bookkeeping. A direct check of the pid plus
+a process-start-time check cannot be wrong, and artifact-first classification — commits since
+*this run's* baseline SHA — cannot be fooled by a previous attempt's work. (The check is
+`ps -o stat=,etime=`, not `kill(-pgid, 0)`, for cross-platform reasons — see §"A run".)
 
 **Bounded autonomy is what makes the failure modes cheap.** Every expensive failure in the
 buildability review comes from the app acting on state it computed. The fix is not to remove the
@@ -225,9 +226,12 @@ One agent process against one task.
 | `log_path` | a file in the app's state dir (outside the workspace — worktrees are siblings of `plain/.claude/`), redirected, never piped |
 | `exit_code`, `ended_at` | recorded when the process is found dead |
 
-A run is alive when `kill(-pgid, 0)` succeeds and the process start time matches. No timing rule
-ever marks a run dead. A dead run's disposition comes from artifacts: commits after **its own**
-`baseline_sha`.
+A run is alive when `ps -o stat=,etime= -p <pgid>` reports a non-zombie process whose start time
+matches — not `kill(-pgid, 0)` as originally specified: that call returns `EPERM`, not `ESRCH`,
+against a process group whose leader has become a zombie on Darwin, which is exactly the moment
+liveness must report false, and BSD `ps` has no `etimes` keyword at all, only the `etime` format
+GNU and BSD `ps` both support (`internal/cc/runner_unix.go`). No timing rule ever marks a run
+dead. A dead run's disposition comes from artifacts: commits after **its own** `baseline_sha`.
 
 ### The verdict
 
@@ -376,7 +380,8 @@ any application code compiles.
 
 **How it works:** Agent output goes to a file, never a pipe, and every run's pgid and start time
 are in SQLite. A crash leaves the agents running. On restart the app takes the flock, re-reads
-runs, re-checks each with `kill(-pgid, 0)` plus the start-time match, and carries on mid-run. It
+runs, re-checks each with `ps -o stat=,etime=` plus the start-time match (§"A run"), and carries
+on mid-run. It
 does not relaunch — and because every outward effect records intent first and is reconciled
 from the world (an existing PR is adopted, a worktree is found via git), a crash *mid-tick*
 is equally boring.
@@ -559,7 +564,7 @@ runs.
   `tp remove --force` on teardown.
 - Spawn `claude -p` with `Setpgid` and an app-owned `--settings` file denying `git push` and
   `gh`; output redirected to a run log; no `ANTHROPIC_API_KEY` inherited, no `--bare`.
-- Liveness by `kill(-pgid, 0)` + start-time match; disposition from commits after the
+- Liveness by `ps -o stat=,etime=` + start-time match (§"A run"); disposition from commits after the
   baseline, recorded as data.
 - Per-repo push policy: `.github/`, `.mergify.yml`, `CODEOWNERS`, lockfiles, every
   `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.env*`, plus `support-app`'s scripts and

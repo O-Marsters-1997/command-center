@@ -5,7 +5,10 @@
 <p>Last successful observe: {{.ObserveAge}}</p>
 {{with .LastError}}<p>Last tick error ({{.Age}}): {{.Message}}</p>{{end}}
 <table>
-  <tr><th>ticket</th><th>state</th><th>why</th><th>branch</th><th>base</th><th>worktree</th><th>pr</th></tr>
+  <tr>
+    <th>ticket</th><th>state</th><th>why</th><th>branch</th><th>base</th><th>worktree</th><th>pr</th>
+    <th>pgid</th><th>elapsed</th><th>log</th>
+  </tr>
   {{range .Rows}}
   <tr>
     <td>{{.TicketURL}}</td>
@@ -15,6 +18,9 @@
     <td>{{.Base}}</td>
     <td>{{.Worktree}}</td>
     <td>{{.PR}}</td>
+    <td>{{.Pgid}}</td>
+    <td>{{.Elapsed}}</td>
+    <td>{{.LogPath}}</td>
   </tr>
   {{end}}
 </table>

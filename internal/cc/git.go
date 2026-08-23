@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -40,6 +41,30 @@ func parseWorktrees(out []byte) map[string]string {
 		}
 	}
 	return worktrees
+}
+
+// BranchTip reads a branch's current tip SHA, from the shared object database so it resolves
+// equally well from the main checkout or from any of its worktrees.
+func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
+	out, err := git(ctx, repoPath, "rev-parse", "refs/heads/"+branch)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CommitsSince counts commits reachable from worktreePath's HEAD but not from baselineSHA — a
+// dead run's disposition rests on this count, never on missing events (inv. 7).
+func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, error) {
+	out, err := git(ctx, worktreePath, "rev-list", "--count", baselineSHA+"..HEAD")
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("parse rev-list --count output %q: %w", out, err)
+	}
+	return n, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
