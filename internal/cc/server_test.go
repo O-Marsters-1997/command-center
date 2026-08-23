@@ -225,6 +225,56 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 	}
 }
 
+func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err != nil {
+		t.Fatalf("decode preview response %s: %v", body, err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+	if rows[0]["Label"] != "refused" {
+		t.Errorf("label = %v, want refused", rows[0]["Label"])
+	}
+	reason, _ := rows[0]["Reason"].(string)
+	if !strings.Contains(reason, "already authorised in launch") {
+		t.Errorf("reason = %q, want it to name the active launch", reason)
+	}
+}
+
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 	t.Parallel()
 

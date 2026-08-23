@@ -49,6 +49,10 @@
     <td>queued</td>
     <td></td>
     <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://queued">
+        <button type="submit" name="verb" value="cancel">cancel launch (0 tickets)</button>
+      </form>
     </td>
     <td></td>
     <td></td>
@@ -278,6 +282,22 @@
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form>
+    </td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  
+  <tr>
+    <td>sandbox://cancelled</td>
+    <td>cancelled</td>
+    <td></td>
+    <td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://cancelled">launch
     </td>
     <td></td>
     <td></td>

@@ -1,0 +1,176 @@
+package cc_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+)
+
+// renderPage renders the server's index page as a plain string, for tests that need to read the
+// derived state of a specific row rather than call an unexported function directly.
+func renderPage(t *testing.T, server *cc.Server) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("render page: status = %d: %s", rec.Code, rec.Body)
+	}
+	return rec.Body.String()
+}
+
+// rowState reads the <td>state</td> cell immediately following a row's ticket URL cell.
+func rowState(t *testing.T, page, ticketURL string) string {
+	t.Helper()
+	re := regexp.MustCompile(regexp.QuoteMeta("<td>"+ticketURL+"</td>") + `\s*<td>([^<]*)</td>`)
+	m := re.FindStringSubmatch(page)
+	if m == nil {
+		t.Fatalf("no row found for %s in page:\n%s", ticketURL, page)
+	}
+	return m[1]
+}
+
+// TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest covers the ticket's central scenario:
+// authorising four tasks under max_agents = 1 starts one and leaves three queued; cancelling the
+// launch (naming any one member) cancels every member's launch, and the next tick's
+// launchEligible starts nothing further from it — the running member is neither killed nor
+// disposed.
+func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+
+	tickets := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
+	tasks := make([]cc.Task, len(tickets))
+	for i, ticketURL := range tickets {
+		branch := strings.TrimPrefix(ticketURL, "sandbox://")
+		tasks[i] = cc.Task{TicketURL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
+	}
+	if err := store.UpsertTasks(t.Context(), tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, ticketURL := range tickets {
+		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: ticketURL}, nil))
+		if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.spawns))
+	}
+
+	latest, err := store.LatestRunsByTask(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var runningTicket string
+	for ticketURL, summary := range latest {
+		if summary.Pgid != nil {
+			runningTicket = ticketURL
+		}
+	}
+	if runningTicket == "" {
+		t.Fatal("no task recorded a run after tick 1")
+	}
+	runningPgid := *latest[runningTicket].Pgid
+
+	// Cancel naming a queued sibling, never the running one: cancel is launch-scoped, so this
+	// withdraws the whole launch regardless of which member's ticket names it.
+	var queuedSibling string
+	for _, ticketURL := range tickets {
+		if ticketURL != runningTicket {
+			queuedSibling = ticketURL
+			break
+		}
+	}
+	if err := store.QueueVerbIntent(t.Context(), queuedSibling, "cancel", at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+
+	if len(fake.spawns) != 1 {
+		t.Errorf("spawns after tick 2 = %d, want still 1: launchEligible must start nothing from a cancelled launch",
+			len(fake.spawns))
+	}
+	if len(fake.canceled) != 0 {
+		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", fake.canceled)
+	}
+	if !fake.alive[runningPgid] {
+		t.Error("the running member's process was stopped; cancel must leave it running")
+	}
+
+	active, err := store.ActiveMemberships(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 0 {
+		t.Errorf("active memberships = %+v, want none: the whole launch was cancelled", active)
+	}
+
+	// CancelledMemberships is the raw launch_members join: it reports every non-active member of
+	// a cancelled launch, running one included. It is plan.Status, not this query, that suppresses
+	// cancelled once a row has run (inv. 19-style), asserted below via the rendered page.
+	cancelled, err := store.CancelledMemberships(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ticketURL := range tickets {
+		if !cancelled[ticketURL] {
+			t.Errorf("cancelled memberships = %+v, want %s cancelled", cancelled, ticketURL)
+		}
+	}
+
+	server := cc.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos)
+	page := renderPage(t, server)
+	if state := rowState(t, page, runningTicket); state != "running" {
+		t.Errorf("running member's rendered state = %q, want running: a row that ever ran is never cancelled", state)
+	}
+	if state := rowState(t, page, queuedSibling); state != "cancelled" {
+		t.Errorf("queued sibling's rendered state = %q, want cancelled", state)
+	}
+
+	latestAfter, err := store.LatestRunsByTask(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latestAfter[runningTicket].HasOutcome {
+		t.Error("the running member was disposed; cancel must not touch a live run")
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawCancelEvent bool
+	for _, e := range events {
+		if e.Kind == "launch_cancelled" {
+			sawCancelEvent = true
+			if !strings.Contains(e.Detail, "4") {
+				t.Errorf("launch_cancelled detail = %q, want it to name 4 members", e.Detail)
+			}
+		}
+	}
+	if !sawCancelEvent {
+		t.Errorf("events = %+v, want a launch_cancelled event", events)
+	}
+}

@@ -17,8 +17,8 @@ import (
 // why it woke.
 const tickPeriod = 15 * time.Second
 
-// killVerb; retryPushVerb (push.go); reRunVerb, closePRVerb and removeWorktreeVerb (verbs.go)
-// are every verb this design implements. `cancel` is Phase 2 and is not built.
+// killVerb; retryPushVerb (push.go); reRunVerb, closePRVerb, removeWorktreeVerb and cancelVerb
+// (verbs.go) are every verb this design implements.
 const killVerb = plan.VerbKill
 
 // Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
@@ -78,6 +78,12 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return err
 	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.now()); err != nil {
+		return err
+	}
+	// Before applyKillIntents and, in particular, before launchEligible reads membership: this
+	// is the race-free cancel — nothing later in the tick can start work from a launch cancelled
+	// earlier in the same tick (plans/command-centre-phase-2.md § New loop steps, and their order).
+	if err := l.applyCancelIntents(ctx); err != nil {
 		return err
 	}
 	if err := l.applyKillIntents(ctx); err != nil {

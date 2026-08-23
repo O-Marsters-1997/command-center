@@ -85,6 +85,38 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	}
 }
 
+func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&task=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+		t.Fatalf("pending cancel intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+}
+
 func TestVerbRejectsUnknownTaskOrUnsupportedVerb(t *testing.T) {
 	t.Parallel()
 

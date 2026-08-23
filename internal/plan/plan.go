@@ -141,6 +141,7 @@ const (
 	PRMerged
 	PRClosedUnmerged
 	BaseGone
+	Cancelled
 )
 
 func (s State) String() string {
@@ -171,6 +172,8 @@ func (s State) String() string {
 		return "pr_closed_unmerged"
 	case BaseGone:
 		return "base_gone"
+	case Cancelled:
+		return "cancelled"
 	case Blocked:
 		return "blocked"
 	default:
@@ -216,6 +219,11 @@ type Facts struct {
 	Now        time.Time
 	Authorised bool
 	LatestRun  *RunFact
+	// CancelledMember is true once a launch this task belonged to was cancelled and it is not a
+	// member of any active launch since (a cancel-then-relaunch mints a second, active launch,
+	// which supersedes it). Only ever consulted for a task with no run: a row that ever ran is
+	// never cancelled (inv. 19-style, plans/command-centre-phase-2.md § Phase 3).
+	CancelledMember bool
 }
 
 // Status derives a task's state and the sentence explaining it. A run's liveness and disposition
@@ -232,6 +240,9 @@ func Status(f Facts) (State, Reason) {
 	}
 	if state, reason, ok := statusFromRun(f.LatestRun); ok {
 		return state, reason
+	}
+	if f.CancelledMember {
+		return Cancelled, "authorised then cancelled before launching"
 	}
 
 	switch {

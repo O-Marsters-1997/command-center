@@ -2,8 +2,8 @@ package plan
 
 // The verbs a row can offer. These are the wire values the page's forms post and internal/cc's
 // handler accepts, so they are spelled exactly as the route's `verb` field, not prettified.
-// `cancel` is absent because it is Phase 2 (plans/command-centre-phase-1.md § Deliberately
-// unreachable in Phase 1), and `refresh` because stacking = false makes `base moved` unreachable.
+// `refresh` is absent because stacking = false makes `base moved` unreachable
+// (plans/command-centre-phase-2.md § Out of scope).
 const (
 	VerbLaunch         = "launch"
 	VerbKill           = "kill"
@@ -11,16 +11,22 @@ const (
 	VerbRetryPush      = "retry-push"
 	VerbClosePR        = "close-pr"
 	VerbRemoveWorktree = "remove-worktree"
+	VerbCancel         = "cancel"
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
-// (docs/prds/prd-command-centre.md § The states). Two states offer none: `queued`, whose only verb
-// is Phase 2's `cancel`, and `push_pending`, where the push being waited on is the next tick's
-// own work — re-run would race it and there is no live process to kill.
+// (docs/prds/prd-command-centre.md § The states). `push_pending` offers none: the push being
+// waited on is the next tick's own work — re-run would race it and there is no live process to
+// kill. `cancelled` offers `launch` only, not `remove worktree`: cutting and spawning are one
+// step, so a member with a worktree always has a run row, and a cancelled member — which by
+// definition never launched — never has one (plans/command-centre-phase-2.md § New states, new
+// verbs, deviation from design §5).
 func Verbs(s State) []string {
 	switch s {
-	case Ready, Blocked:
+	case Ready, Blocked, Cancelled:
 		return []string{VerbLaunch}
+	case Queued:
+		return []string{VerbCancel}
 	case Running:
 		return []string{VerbKill}
 	case Failed, CutFailed:
