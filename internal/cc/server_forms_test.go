@@ -47,8 +47,8 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	t.Parallel()
 
-	states := make([]plan.State, 0, int(plan.Cancelled)+1)
-	for s := plan.Blocked; s <= plan.Cancelled; s++ {
+	states := make([]plan.State, 0, int(plan.BaseMoved)+1)
+	for s := plan.Blocked; s <= plan.BaseMoved; s++ {
 		states = append(states, s)
 	}
 

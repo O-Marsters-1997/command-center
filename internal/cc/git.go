@@ -3,6 +3,7 @@ package cc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -128,6 +129,39 @@ func HasUnpushedCommits(ctx context.Context, repoPath, branch, lastPushedTip str
 		return local != lastPushedTip, nil
 	}
 	return local != remote, nil
+}
+
+// MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing outright if that is not
+// possible -- refresh's own step 2 (docs/designs/command-centre-design.md § 4a): reviewers'
+// "commit suggestion" clicks and Mergify's own update_method: merge push to the app's head
+// branches this way, and the app never rewrites history to make a divergent push fit.
+func MergeFFOnly(ctx context.Context, worktreePath, ref string) error {
+	_, err := git(ctx, worktreePath, "merge", "--ff-only", ref)
+	return err
+}
+
+// Merge merges ref into worktreePath's own branch -- refresh's own step 3 (§4a). A conflict
+// leaves the worktree mid-merge for a human; the caller (refresh.go) treats that as this ticket's
+// deliberate stopping point, `refresh conflicted` being a separate, blocked ticket.
+func Merge(ctx context.Context, worktreePath, ref string) error {
+	_, err := git(ctx, worktreePath, "merge", ref)
+	return err
+}
+
+// MidMerge reports whether worktreePath itself is left mid-merge -- MERGE_HEAD resolving means a
+// previous `git merge` (a refresh's own step 3, or a human's) left it there unresolved. It is
+// read, not recorded (§4a): a human resolving the conflict and committing clears it with no
+// bookkeeping.
+func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", worktreePath, "rev-parse", "--verify", "-q", "MERGE_HEAD")
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("check MERGE_HEAD in %s: %w", worktreePath, err)
+	}
+	return true, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {

@@ -27,6 +27,7 @@ var supportedVerbs = map[string]bool{
 	closePRVerb:        true,
 	removeWorktreeVerb: true,
 	cancelVerb:         true,
+	refreshVerb:        true,
 }
 
 const (

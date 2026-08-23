@@ -142,6 +142,11 @@ const (
 	PRClosedUnmerged
 	BaseGone
 	Cancelled
+	// BaseMoved is derived from RunFact.VerdictBaseMoved, never from a stored column (inv. 14):
+	// internal/verdict's own expiry, checked ahead of predicate resolution (§4a), so a red check
+	// on a descendant whose base moved is not read as needs_you (plans/command-centre-phase-2.md
+	// § Phase 5).
+	BaseMoved
 )
 
 func (s State) String() string {
@@ -174,6 +179,8 @@ func (s State) String() string {
 		return "base_gone"
 	case Cancelled:
 		return "cancelled"
+	case BaseMoved:
+		return "base_moved"
 	case Blocked:
 		return "blocked"
 	default:
@@ -204,10 +211,17 @@ type RunFact struct {
 	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
 	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
 	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
-	// whatever cc computed, else empty.
-	VerdictReviewMe bool
-	VerdictNeedsYou bool
-	VerdictReason   Reason
+	// whatever cc computed, else empty. VerdictBaseMoved is internal/verdict's own expiry (§4a),
+	// checked ahead of the predicate, so it can be true however the other two read.
+	VerdictReviewMe  bool
+	VerdictNeedsYou  bool
+	VerdictBaseMoved bool
+	VerdictReason    Reason
+	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
+	// row reads needs_you naming the reason, and the automatic pass (internal/cc/refresh.go)
+	// never retries it -- only the refresh verb does.
+	RefreshRefused       bool
+	RefreshRefusedReason Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -293,6 +307,10 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:
 		return PushFailed, "push or pull request creation failed"
+	case run.RefreshRefused:
+		return NeedsYou, run.RefreshRefusedReason
+	case run.VerdictBaseMoved:
+		return BaseMoved, run.VerdictReason
 	case run.VerdictReviewMe:
 		return ReviewMe, run.VerdictReason
 	case run.VerdictNeedsYou:

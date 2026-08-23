@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"io"
@@ -8,12 +9,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 var update = flag.Bool("update", false, "regenerate golden files")
@@ -74,6 +77,71 @@ func TestServerRendersThePage(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Errorf("page differs from %s; rerun with -update to accept\n--- got ---\n%s", goldenPage, got)
+	}
+}
+
+// TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":
+// a red check on a descendant whose base moved may not be its own fault, so the row also renders
+// the base's own CI verdict alongside its own.
+func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, "sandbox://PARENT", at)
+	dispositionAsPushed(t, store, "sandbox://CHILD", at)
+	const parentTip, childTip = "parent-tip", "child-tip"
+	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "parent", parentTip, at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		Worktrees:  map[string]string{"parent": "/repos/parent", "child": "/repos/child"},
+		BranchTips: map[string]string{"parent": parentTip},
+		PRs: map[string]gh.PR{
+			"parent": {
+				Number: 1, State: gh.Open, HeadOid: parentTip,
+				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
+			},
+			"child": {
+				Number: 2, State: gh.Open, HeadOid: childTip,
+				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+			},
+		},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	server := cc.NewServer(store, fixedClock(at), repos)
+	page := renderPage(t, server)
+
+	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
+		t.Fatalf("parent's own state = %q, want needs_you (its CI check failed)", state)
+	}
+
+	// (?s) so a dot also matches the newlines inside the verbs cell's nested <form> markup.
+	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta("<td>sandbox://CHILD</td>") +
+		`(?:\s*<td>.*?</td>){5}\s*<td>([^<]*)</td>`)
+	m := re.FindStringSubmatch(page)
+	if m == nil {
+		t.Fatalf("could not find child row's base-verdict cell in page:\n%s", page)
+	}
+	if m[1] != "needs_you" {
+		t.Errorf("child's rendered base verdict = %q, want needs_you (the parent's own verdict)", m[1])
 	}
 }
 

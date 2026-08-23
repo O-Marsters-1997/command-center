@@ -29,12 +29,13 @@ func TestVerbs(t *testing.T) {
 		{state: plan.PRClosedUnmerged, want: []string{plan.VerbReRun, plan.VerbRemoveWorktree}},
 		{state: plan.BaseGone, want: []string{plan.VerbReRun, plan.VerbRemoveWorktree}},
 		{state: plan.Cancelled, want: []string{plan.VerbLaunch}},
+		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}},
 	}
 
-	// Cancelled is the last state in the enum, so a new one added after it lands here as a
+	// BaseMoved is the last state in the enum, so a new one added after it lands here as a
 	// missing row rather than as a silently unverbed row on the page.
-	if len(tests) != int(plan.Cancelled)+1 {
-		t.Fatalf("table covers %d states, the enum has %d", len(tests), int(plan.Cancelled)+1)
+	if len(tests) != int(plan.BaseMoved)+1 {
+		t.Fatalf("table covers %d states, the enum has %d", len(tests), int(plan.BaseMoved)+1)
 	}
 
 	for _, tt := range tests {

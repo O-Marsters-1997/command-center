@@ -358,4 +358,66 @@ func TestVerdictString(t *testing.T) {
 		verdict.Checking.String() != "checking" {
 		t.Errorf("verdicts render as %q, %q, %q", verdict.ReviewMe, verdict.NeedsYou, verdict.Checking)
 	}
+	if verdict.BaseMoved.String() != "base_moved" {
+		t.Errorf("verdict renders as %q, want base_moved", verdict.BaseMoved)
+	}
+}
+
+// TestEvaluateBaseMoved covers §4a's expiry, moved ahead of predicate resolution
+// (plans/command-centre-phase-2.md § Phase 5): a stacked base whose tip has moved past what was
+// recorded reads base_moved regardless of the check rollup -- a red descendant included, since
+// the parent's fix is not yet in its history -- and a root row (StackedBase false) never reads it
+// no matter how stale BaseSHAMatch is.
+func TestEvaluateBaseMoved(t *testing.T) {
+	t.Parallel()
+
+	pushedAt, now := freshInput()
+	greenBase := verdict.Input{
+		Checks: supportAppGreenChecks(), HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+	}
+
+	tests := []struct {
+		name string
+		in   verdict.Input
+		want verdict.Verdict
+	}{
+		{
+			name: "a stacked base whose tip moved is base moved even with every check green",
+			in:   func() verdict.Input { in := greenBase; in.StackedBase, in.BaseSHAMatch = true, false; return in }(),
+			want: verdict.BaseMoved,
+		},
+		{
+			name: "a stacked base whose tip moved is base moved even with a red check",
+			in: func() verdict.Input {
+				in := greenBase
+				checks := supportAppGreenChecks()
+				checks["Typecheck"] = verdict.Failure
+				in.Checks = checks
+				in.StackedBase, in.BaseSHAMatch = true, false
+				return in
+			}(),
+			want: verdict.BaseMoved,
+		},
+		{
+			name: "a stacked base whose tip has not moved evaluates normally",
+			in:   func() verdict.Input { in := greenBase; in.StackedBase, in.BaseSHAMatch = true, true; return in }(),
+			want: verdict.ReviewMe,
+		},
+		{
+			name: "a root row never reads base moved however BaseSHAMatch reads",
+			in:   func() verdict.Input { in := greenBase; in.StackedBase, in.BaseSHAMatch = false, false; return in }(),
+			want: verdict.ReviewMe,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := verdict.Evaluate(supportAppPredicate(), tt.in)
+			if got.Verdict != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			}
+		})
+	}
 }
