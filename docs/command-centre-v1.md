@@ -136,8 +136,9 @@ table test.
    is reduced to **latest completed run per name** (by `startedAt`), with `CheckRun` and
    `StatusContext` collapsed into one `CheckState`. That reduction is the package's first
    table test. Nothing outside `internal/gh` touches gh's JSON shape.
-3. **Liveness** per `running` task: `kill(-pgid, 0)` plus a process-start-time identity
-   check. Alive → running, whatever the log says. No timing rule. Read-only here; the
+3. **Liveness** per `running` task: `ps -o stat=,etime= -p <pgid>` plus a process-start-time
+   identity check — not `kill(-pgid, 0)` as originally specified here; see invariant 6 (§9)
+   for why. Alive → running, whatever the log says. No timing rule. Read-only here; the
    consequences are decided in the next phase.
 4. **Worktree facts**: `git worktree list --porcelain` (the authoritative branch → path
    map), plus per active worktree: dirty?, commits since the run's baseline, unresolved
@@ -659,8 +660,8 @@ cancelled — the flock is per-process and both writers shared the process), mak
 idempotent, and is why the per-agent exit-collecting goroutine could be deleted (§3).
 
 Agent stdout is **redirected to a file**, never piped. An app crash leaves the fleet alive;
-a restart takes the flock, re-reads `runs`, re-checks each pid with `kill(-pgid, 0)` plus
-the start-time match, and carries on mid-run. Spawn with `Setpgid`; cancel with a custom
+a restart takes the flock, re-reads `runs`, re-checks each pid with `ps -o stat=,etime=` plus
+the start-time match (invariant 6, §9), and carries on mid-run. Spawn with `Setpgid`; cancel with a custom
 `Cancel` signalling `-pgid` SIGTERM then SIGKILL, because `exec.CommandContext`'s default
 signals one pid and `claude -p` spawns tool subprocesses that would otherwise orphan holding
 the worktree.
@@ -687,8 +688,12 @@ Numbered so each can become a test.
 5. The app's treepad surface is `tp new --base` and `tp remove --force`; it never calls
    `tp batch sync`, `gh stack init/add/submit/modify/rebase/sync`, or any rebase; worktree
    paths come from `git worktree list --porcelain`, never from a reimplemented derivation.
-6. Liveness is `kill(-pgid, 0)` plus a start-time identity check. No timing rule ever marks
-   a run dead.
+6. Liveness is `ps -o stat=,etime= -p <pgid>` plus a start-time identity check, not
+   `kill(-pgid, 0)` as originally specified: on Darwin, `kill(-pgid, 0)` against a process
+   group whose leader has become a zombie returns `EPERM`, not `ESRCH` — exactly the moment
+   liveness must report false — and BSD `ps` has no `etimes` keyword at all, only the `etime`
+   format GNU and BSD `ps` share. A `Z` stat from the same `ps` call also means dead, zombie
+   or not (`internal/cc/runner_unix.go`). No timing rule ever marks a run dead.
 7. A dead run's disposition comes from artifacts — commits since **that run's** recorded
    baseline SHA — recorded as data (`kind`, `outcome`), never from the absence of events.
 8. The tick spawns a process only for a task that is unlocked, belongs to an `active`
