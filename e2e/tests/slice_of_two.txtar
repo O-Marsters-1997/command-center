@@ -1,0 +1,61 @@
+# The plan's headline scenario: authorise both tickets once, the root cuts and runs, its PR
+# opens, job 3 fires exactly once more and the dependent cuts off origin/main (stacking off) and
+# runs, both PRs reach an open verdict. events shows exactly two launches and the fake agent log
+# exactly two spawns (docs/prd-command-centre.md § Phase 6).
+
+cc-init-repo
+cc-config two-tasks-commits
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
+
+# Tick: the authorisation intent becomes one launches row with both members, the root is
+# unlocked (no blockers) and authorised so it cuts and spawns, and the dependent -- which has no
+# PR to unlock off yet -- stays queued naming the root's ticket.
+exec cc tick --count 1
+exec cc request GET /events
+stdout 'authorised with 2 member'
+stdout -count=1 'run_launched'
+exec cc request GET /
+stdout 'waiting on sandbox://CC-1'
+
+# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
+# liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+
+# Tick: the root's dead run disposes with commits, pushes and opens its PR. The dependent still
+# reads the pre-push snapshot this same tick, so it has not unlocked yet.
+exec cc tick --count 1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+grep -count=1 'pr create' $WORK/gh.log
+exec cc request GET /events
+stdout -count=1 'run_launched'
+
+# Swap the fixture to report the root's PR open -- what a real gh would now answer.
+cc-fake-gh root-open-cc1
+
+# Tick: job 3 fires exactly once more -- the dependent is now unlocked (root PR open, stacking
+# off means base main) and authorised with no prior run, so it cuts and spawns.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=2 'run_launched'
+grep -count=2 'new cc-' $WORK/tp.log
+
+exec sleep 0.5
+
+# Tick: the dependent's dead run disposes with commits, pushes and opens its own PR.
+exec cc tick --count 1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2
+grep -count=2 'pr create' $WORK/gh.log
+
+# Exactly two spawns, ever -- the fake agent log is independent of both tp.log's cuts and
+# events' own count.
+grep -count=2 'commits.sh' $WORK/agent.log
+
+# Nothing was cd-ed into and ps was never run: the whole run is driven by cc request and cc
+# tick alone, against the repo's siblings on disk.
+exec cc request GET /
+stdout '<td>sandbox://CC-1</td>'
+stdout '<td>sandbox://CC-2</td>'
+! stdout '<td>blocked</td>'

@@ -147,6 +147,7 @@ const (
 	metaObservation   = "observation"
 	metaLastError     = "last_error"
 	metaCheckingTicks = "checking_ticks"
+	metaLastVerdicts  = "last_verdicts"
 )
 
 // CheckingTicks returns each task's count of successful ticks since it last had anything to
@@ -165,12 +166,8 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 
 // IncrementCheckingTicks bumps every named task's counter by one -- called once per successful
 // tick (never on a failed observe, which is what makes the counter track successful ticks and
-// not wall time).
-//
-// ponytail: never reset on a fresh push, so a re-run's second push would inherit the first
-// push's stale tick count. Unreachable today -- Phase 1 ships no re-run verb, so a task is
-// pushed at most once -- but the fix when Phase 6 adds one is to reset a task's count to zero
-// wherever RecordPush is called.
+// not wall time). RecordPush resets a task's own counter to zero on every fresh push (Phase 6's
+// re-run), so a second push never inherits the first push's stale tick count.
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -180,6 +177,37 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string)
 		ticks[url]++
 	}
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
+}
+
+// resetCheckingTicks zeroes one task's counter -- called by RecordPush (pushes.go) on every
+// fresh push, so a re-run's second push starts its own bounded wait rather than inheriting the
+// first push's.
+func (s *Store) resetCheckingTicks(ctx context.Context, taskID string) error {
+	ticks, err := s.CheckingTicks(ctx)
+	if err != nil {
+		return err
+	}
+	if _, ok := ticks[taskID]; !ok {
+		return nil
+	}
+	delete(ticks, taskID)
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
+}
+
+// LastVerdicts returns each task's most recently recorded CI verdict label ("review_me",
+// "needs_you" or "checking"), keyed by ticket URL -- what recordVerdictTransitions (loop.go)
+// compares this tick's freshly computed verdict against before logging a transition event.
+func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
+	verdicts := map[string]string{}
+	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
+		return nil, err
+	}
+	return verdicts, nil
+}
+
+// SaveLastVerdicts replaces the persisted last-verdict map.
+func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
+	return s.putMeta(ctx, metaLastVerdicts, verdicts)
 }
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it, which

@@ -1,0 +1,20 @@
+{
+  "pr list": {
+    "stdout": "[]\n"
+  },
+  "pr list --state all --head cc-1": {
+    "stdout": "[{\"number\":9,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\"}]\n"
+  },
+  "pr list --state all --head cc-3": {
+    "stdout": "[{\"number\":10,\"state\":\"CLOSED\",\"baseRefName\":\"main\",\"headRefOid\":\"3333333333333333333333333333333333333333\"}]\n"
+  },
+  "pr list --state all --head cc-4": {
+    "stdout": "[]\n"
+  },
+  "pr list --state all --head cc-7": {
+    "stdout": "[{\"number\":11,\"state\":\"CLOSED\",\"baseRefName\":\"main\",\"headRefOid\":\"7777777777777777777777777777777777777777\"}]\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  }
+}

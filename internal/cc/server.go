@@ -238,7 +238,10 @@ func runFactFor(
 			fact.PushRefused = pf.Refused
 			fact.PushRefusedPath = pf.RefusedPath
 			fact.PushFailed = pf.Failed
-			fact.PROpen = obs.PRs[t.Branch].State == gh.Open
+			ownState := obs.PRs[t.Branch].State
+			fact.PROpen = ownState == gh.Open
+			fact.PRMerged = ownState == gh.Merged
+			fact.PRClosedUnmerged = ownState == gh.Closed
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
 				applyVerdict(fact, t, obs, vd)
 			}
@@ -451,9 +454,8 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 // handleVerb queues one verb intent against one task — a handler only ever does this single
 // blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
-// applyKillIntents and push.go's applyRetryPushIntents). `kill` and `retry-push` are the verbs
-// this phase implements; the design's route table also lists re-run, close-pr and
-// remove-worktree for later phases.
+// applyKillIntents, push.go's applyRetryPushIntents and verbs.go's re-run/close-pr/
+// remove-worktree appliers). `cancel` is Phase 2 and is not implemented.
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	verb := r.URL.Query().Get("verb")
@@ -462,7 +464,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "verb and task are both required", http.StatusBadRequest)
 		return
 	}
-	if verb != killVerb && verb != retryPushVerb {
+	if !supportedVerbs[verb] {
 		http.Error(w, fmt.Sprintf("unsupported verb %q", verb), http.StatusBadRequest)
 		return
 	}

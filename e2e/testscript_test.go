@@ -222,5 +222,9 @@ func scriptEnv(work string) []string {
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),
+		// Read by testdata/agents/commits.sh and empty.sh, inherited by every spawned agent
+		// process (cc.ProcessRunner.Spawn never strips it) -- a script's proof of exactly how
+		// many times an agent actually ran, distinct from tp.log's cuts or events' own count.
+		"CC_AGENT_LOG=" + filepath.Join(work, "agent.log"),
 	}
 }

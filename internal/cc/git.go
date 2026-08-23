@@ -96,6 +96,37 @@ func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, e
 	return n, nil
 }
 
+// IsDirty reports whether worktreePath has any uncommitted change, tracked or untracked --
+// `remove worktree`'s first refusal (inv. 3): the app never removes a worktree with anything
+// in it a `git status` would show.
+func IsDirty(ctx context.Context, worktreePath string) (bool, error) {
+	out, err := git(ctx, worktreePath, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
+// HasUnpushedCommits reports whether branch's local tip is ahead of its remote-tracking ref --
+// `remove worktree`'s second refusal (inv. 3).
+//
+// ponytail: a branch with no remote-tracking ref at all (never pushed) always reads as
+// unpushed, even if it turns out to hold zero commits beyond its base. That is a conservative
+// over-refusal, not a correctness bug -- remove worktree is destructive, so erring toward "ask
+// a human" is the safe default here; tighten it if a real base_gone-before-first-push row ever
+// makes it annoying.
+func HasUnpushedCommits(ctx context.Context, repoPath, branch string) (bool, error) {
+	local, err := RevParse(ctx, repoPath, "refs/heads/"+branch)
+	if err != nil {
+		return false, err
+	}
+	remote, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return true, nil
+	}
+	return local != remote, nil
+}
+
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
 	var stderr bytes.Buffer

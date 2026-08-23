@@ -126,6 +126,13 @@ func Create(ctx context.Context, repoPath, base, body string) error {
 	return err
 }
 
+// Close closes branch's pull request: the app can open one (Create), so it needs a sanctioned
+// way to unopen one too (docs/command-centre-v1.md § 5, the `close PR` verb). It never merges.
+func Close(ctx context.Context, repoPath, branch string) error {
+	_, err := run(ctx, repoPath, "pr", "close", branch)
+	return err
+}
+
 func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = repoPath

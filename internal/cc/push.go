@@ -62,6 +62,14 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
+		// remove worktree (verbs.go) deletes the branch along with the worktree, and a task
+		// that has ever run stays a push candidate forever (its latest run's outcome never
+		// changes) -- without this guard, a removed task's absence from the same tick's own
+		// worktree map would make every later tick's BranchTip fail on an unknown ref and
+		// abort the whole tick.
+		if pc.obs.Worktrees[t.Branch] == "" {
+			continue
+		}
 		tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
 		if err != nil {
 			return fmt.Errorf("branch tip for %s: %w", t.TicketURL, err)
@@ -166,5 +174,11 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
-	return l.store.RecordPush(ctx, t.TicketURL, localTip, base, baseSHA, now)
+	if err := l.store.RecordPush(ctx, t.TicketURL, localTip, base, baseSHA, now); err != nil {
+		return err
+	}
+	return l.store.AppendEvent(ctx, Event{
+		At: now, TaskURL: t.TicketURL, Kind: eventPushed,
+		Detail: fmt.Sprintf("pushed %s to origin/%s", localTip, base),
+	})
 }
