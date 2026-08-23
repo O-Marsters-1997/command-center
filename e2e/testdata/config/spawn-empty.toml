@@ -1,0 +1,32 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+#
+# One of the three spawn-*.toml fixtures spawn_and_dispose.txtar swaps between. They declare the
+# same three tasks -- re-declaring a ticket_url upserts its row rather than minting a second one
+# -- so the only thing that changes underneath them is agent_command.
+
+max_agents = 3
+agent_command = ["{{agents}}/empty.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[task]]
+ticket_url = "sandbox://CC-1"
+repo       = "repo"
+branch     = "cc-1"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-2"
+repo       = "repo"
+branch     = "cc-2"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-3"
+repo       = "repo"
+branch     = "cc-3"
+blocked_by = []
+
+[[repo]]
+name     = "repo"
+path     = "repo"
+stacking = false

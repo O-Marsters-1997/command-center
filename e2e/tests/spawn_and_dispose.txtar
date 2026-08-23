@@ -1,0 +1,82 @@
+# Spawn and dispose against real OS processes (docs/prd-command-centre.md § A run): three tasks
+# run under three different fake agents and each derives the disposition its own process earns.
+# commits.sh commits and exits, so its run disposes with commits and pushes; empty.sh exits
+# having committed nothing, so its run disposes failed; sleeps.sh never exits, so its row stays
+# running until a kill verb empties its process group. internal/cc's unit tests already cover
+# all three against a fake runner -- what this locks is that a really spawned process, a real
+# `ps` liveness read and a real Cancel agree with them.
+#
+# Only agent_command differs between the three spawn-*.toml fixtures; every one of them
+# declares all three tasks, so a swap re-upserts the same rows rather than minting new ones.
+
+cc-init-repo
+cc-config spawn-commits
+cc-fake-gh no-prs
+
+# The first tick is what upserts the configured tasks -- cc request never does.
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+
+# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
+# liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+
+# Tick: CC-1's dead run disposes with commits, so the same tick pushes it and opens its PR. The
+# page still renders that tick's pre-push snapshot, so it reads push_pending, not checking.
+exec cc tick --count 1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+exec cc request GET /
+stdout -count=1 '<td>push_pending</td>'
+stdout 'agent finished with commits, waiting to push'
+
+# Swap the agent to the one that commits nothing, and launch CC-2 under it.
+cc-config spawn-empty
+exec cc request POST '/launch?task=sandbox://CC-2'
+exec cc tick --count 1
+exec sleep 0.5
+
+# Tick: no commits after CC-2's own baseline is failed, decided by the commit count and never by
+# a missing event (inv. 7) -- and a failed run is not a push candidate, so cc-2 never reached
+# the remote.
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=1 '<td>failed</td>'
+stdout 'no commits after this run'
+! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2
+
+# Swap to the agent that never exits on its own, and launch CC-3 under it.
+cc-config spawn-sleeps
+exec cc request POST '/launch?task=sandbox://CC-3'
+exec cc tick --count 1
+
+# A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
+# also observe it: running is derived by the tick after it.
+exec cc request GET /
+! stdout '<td>running</td>'
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=1 '<td>running</td>'
+stdout 'agent running'
+
+# Further ticks leave a live run alone: no second spawn, no premature disposition.
+exec cc tick --count 2
+exec cc request GET /
+stdout -count=1 '<td>running</td>'
+grep -count=1 'sleeps.sh' $WORK/agent.log
+
+# The kill verb signals the whole process group, and the same tick's liveness pass finds the
+# group empty and disposes the run: nothing left running, and no commits means failed.
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-3'
+exec cc tick --count 1
+exec cc request GET /
+! stdout '<td>running</td>'
+stdout -count=2 '<td>failed</td>'
+
+# Three tasks, three agents, three spawns -- the agent log is independent of both tp.log's cuts
+# and events' own count.
+grep -count=1 'commits.sh' $WORK/agent.log
+grep -count=1 'empty.sh' $WORK/agent.log
+grep -count=1 'sleeps.sh' $WORK/agent.log
+exec cc request GET /events
+stdout -count=3 'run_launched'

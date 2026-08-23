@@ -1,0 +1,50 @@
+# Crash recovery (docs/prd-command-centre.md § Crash recovery): an agent spawned by one instance
+# is still running, and still owned, after that instance is gone. Every `cc tick` here is a
+# whole app lifecycle -- take the flock, upsert, tick, release -- so the gap between two of them
+# is exactly the gap a crash leaves. ProcessRunner.Spawn skips exec.CommandContext for this
+# reason: the agent is its own process group leader and outlives whoever started it.
+#
+# There is no recovery code path to test in isolation. RunOnce reconciles liveness every tick,
+# restart or not, so the only way to see re-attachment fail is to watch a later instance either
+# lose the pgid or spawn a second agent -- which is what this script asserts it does not.
+
+cc-init-repo
+cc-config single-task-sleeps
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+
+# This instance cuts and spawns, then exits. sleeps.sh writes its worktree files immediately but
+# needs real wall time to get there -- ready is written last, so its presence means pgid is
+# already complete.
+exec cc tick --count 1
+exec sleep 0.5
+exists $WORK/repo-cc-1/ready
+
+# A fresh instance, with nothing in memory from the one that spawned it, finds the run alive.
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=1 '<td>running</td>'
+stdout 'agent running'
+
+# And it is the same process: the pgid the page carries is the one sleeps.sh recorded for itself
+# under the previous instance, read back from the OS rather than from the app's own bookkeeping.
+# Matched as a bare word so the assertion survives the page's markup changing around it.
+exec sh -c 'pgid=$(cat $WORK/repo-cc-1/pgid) && cc request GET / | grep -qw "$pgid"'
+
+# One spawn, ever. A relaunch would have appended a second line here and a second run_launched,
+# and would have been invisible to every assertion above.
+grep -count=1 'sleeps.sh' $WORK/agent.log
+exec cc request GET /events
+stdout -count=1 'run_launched'
+
+# Kill the recovered run rather than leaking its `sleep 300` past the end of the script. It
+# disposes failed: no commits, and no exit code to record either, since a re-attached process
+# is not this instance's child to reap.
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-1'
+exec cc tick --count 1
+exec cc request GET /
+! stdout '<td>running</td>'
+stdout -count=1 '<td>failed</td>'
+grep -count=1 'sleeps.sh' $WORK/agent.log
