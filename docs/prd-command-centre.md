@@ -503,7 +503,8 @@ the app cannot trigger them, but because with no manifests there are no members 
 
 SQLite in the app's own state dir (mode 0700, **not** under `plain/` — the worktrees are
 siblings of `plain/.claude/`, which would have put the consent table one `../` away from
-every agent), one instance per workspace enforced by flock on the DB path. WAL, and only the
+every agent), one instance per workspace enforced by flock on a sibling lock file (locking
+the DB file itself deadlocks modernc.org/sqlite under SQLITE_BUSY). WAL, and only the
 loop writes — page verbs queue intents the next tick applies, which is what makes `cancel`
 race-free against a launch. Status is derived from the stored facts by one pure function,
 not stored; `events` is append-only audit, one insert on every transition, authorisation,
