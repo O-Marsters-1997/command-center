@@ -70,6 +70,9 @@ func TestStateString(t *testing.T) {
 		plan.PushFailed.String() != "push_failed" {
 		t.Errorf("states render as %q, %q and %q", plan.Checking, plan.NeedsYou, plan.PushFailed)
 	}
+	if plan.ReviewMe.String() != "review_me" {
+		t.Errorf("state renders as %q, want review_me", plan.ReviewMe)
+	}
 }
 
 func TestStatusWithLatestRun(t *testing.T) {
@@ -129,11 +132,39 @@ func TestStatusWithLatestRun(t *testing.T) {
 			wantState: plan.PushFailed,
 		},
 		{
-			name: "an open PR derives checking",
+			name: "an open PR with no verdict yet derives checking",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 			},
 			wantState: plan.Checking,
+			reasonHas: "no verdict yet",
+		},
+		{
+			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictReason: "check config changed",
+			},
+			wantState: plan.Checking,
+			reasonHas: "check config changed",
+		},
+		{
+			name: "an open PR with a review-me verdict derives review me",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictReviewMe: true, VerdictReason: "every required check passed",
+			},
+			wantState: plan.ReviewMe,
+			reasonHas: "every required check passed",
+		},
+		{
+			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictNeedsYou: true, VerdictReason: "a required check failed",
+			},
+			wantState: plan.NeedsYou,
+			reasonHas: "a required check failed",
 		},
 		{
 			name: "commits with no push attempt yet still derives push pending",

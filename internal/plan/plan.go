@@ -126,6 +126,7 @@ const (
 	Checking
 	NeedsYou
 	PushFailed
+	ReviewMe
 )
 
 func (s State) String() string {
@@ -148,6 +149,8 @@ func (s State) String() string {
 		return "needs_you"
 	case PushFailed:
 		return "push_failed"
+	case ReviewMe:
+		return "review_me"
 	case Blocked:
 		return "blocked"
 	default:
@@ -170,6 +173,14 @@ type RunFact struct {
 	PushRefusedPath string
 	PushFailed      bool
 	PROpen          bool
+	// Verdict* fields matter only once PROpen: internal/cc's own call to internal/verdict's pure
+	// Evaluate, mapped down to booleans here since this package cannot import that one any more
+	// than it can import internal/gh (issue #2 AC12 — see internal/verdict's own api_test.go).
+	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
+	// whatever cc computed, or is left empty for the pre-Phase-5 fallback text.
+	VerdictReviewMe bool
+	VerdictNeedsYou bool
+	VerdictReason   Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -244,8 +255,16 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:
 		return PushFailed, "push or pull request creation failed"
+	case run.VerdictReviewMe:
+		return ReviewMe, run.VerdictReason
+	case run.VerdictNeedsYou:
+		return NeedsYou, run.VerdictReason
 	case run.PROpen:
-		return Checking, "pull request open, no verdict yet"
+		reason := run.VerdictReason
+		if reason == "" {
+			reason = "pull request open, no verdict yet"
+		}
+		return Checking, reason
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}

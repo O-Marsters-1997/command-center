@@ -46,11 +46,11 @@ func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config
 
 // RunOnce runs one tick. A failed observe applies no transition and launches nothing: it
 // records the error and leaves the last good observation in place, so the page's observe age
-// keeps growing (inv. 10). Only a successful observe goes on to apply queued launch intents,
-// consume kill and retry-push requests, reconcile every run's liveness and disposition, push
-// what plan.PushPlan selects and open its PR, and cut and spawn whatever plan.LaunchPlan selects
-// — in that order, every tick, restart or not (§ Crash recovery: there is no separate recovery
-// code path, this is the same tick).
+// keeps growing (inv. 10). Only a successful observe goes on to bump every task's checking-wait
+// tick count, apply queued launch intents, consume kill and retry-push requests, reconcile every
+// run's liveness and disposition, push what plan.PushPlan selects and open its PR, and cut and
+// spawn whatever plan.LaunchPlan selects — in that order, every tick, restart or not (§ Crash
+// recovery: there is no separate recovery code path, this is the same tick).
 func (l *Loop) RunOnce(ctx context.Context) error {
 	obs, err := l.observe(ctx)
 	if err != nil {
@@ -65,6 +65,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	obs.ObservedAt = l.now()
 	if obs.Runs == nil {
 		obs.Runs = map[string]RunObservation{}
+	}
+	if err := l.tickCheckingWaits(ctx); err != nil {
+		return err
 	}
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
 		return err
@@ -267,6 +270,22 @@ func currentlyRunning(latest map[string]RunSummary) int {
 		}
 	}
 	return n
+}
+
+// tickCheckingWaits bumps every task's checking-wait tick count by one. It runs only after a
+// successful observe (RunOnce returns before reaching it otherwise), which is what makes the
+// count track ticks whose observe phase succeeded and never wall clock (docs/command-centre-v1.md
+// § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.now().
+func (l *Loop) tickCheckingWaits(ctx context.Context) error {
+	tasks, err := l.store.Tasks(ctx)
+	if err != nil {
+		return err
+	}
+	urls := make([]string, len(tasks))
+	for i, t := range tasks {
+		urls[i] = t.TicketURL
+	}
+	return l.store.IncrementCheckingTicks(ctx, urls)
 }
 
 func tasksByTicket(tasks []Task) map[string]Task {

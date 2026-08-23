@@ -2,6 +2,10 @@ package cc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -16,6 +20,11 @@ type Observation struct {
 	PRs        map[string]gh.PR          `json:"prs"`
 	Worktrees  map[string]string         `json:"worktrees"`
 	Runs       map[string]RunObservation `json:"runs"`
+	// MergifyHash is each configured repo's current sha256(.mergify.yml), keyed by repo name --
+	// only for a repo that names a mergify_sha to compare against (§7's staleness detector).
+	// A repo with no predicate configured is never read, so an untracked repo's missing file
+	// never fails a tick.
+	MergifyHash map[string]string `json:"mergify_hash"`
 }
 
 // RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it on
@@ -41,7 +50,7 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			return Observation{}, err
 		}
 
-		obs := Observation{PRs: map[string]gh.PR{}, Worktrees: map[string]string{}}
+		obs := Observation{PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{}}
 		for _, repo := range cfg.Repos {
 			path := filepath.Join(root, repo.Path)
 			if err := Fetch(ctx, path); err != nil {
@@ -63,9 +72,30 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			for branch, wtPath := range worktrees {
 				obs.Worktrees[branch] = wtPath
 			}
+
+			if repo.MergifySHA == "" {
+				continue // no predicate opted in; nothing to hash or gate on (§7)
+			}
+			hash, err := mergifyHash(path)
+			if err != nil {
+				return Observation{}, fmt.Errorf("hash .mergify.yml for %s: %w", repo.Name, err)
+			}
+			obs.MergifyHash[repo.Name] = hash
 		}
 		return obs, nil
 	}
+}
+
+// mergifyHash reads and hashes repoPath's .mergify.yml, formatted to match the mergify_sha a
+// human records in config after reviewing the file (docs/command-centre-v1.md § 7's example,
+// "sha256:…").
+func mergifyHash(repoPath string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(repoPath, ".mergify.yml"))
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func branchesFor(tasks []Task, repo string) []string {

@@ -144,9 +144,43 @@ func nonNil(s []string) []string {
 }
 
 const (
-	metaObservation = "observation"
-	metaLastError   = "last_error"
+	metaObservation   = "observation"
+	metaLastError     = "last_error"
+	metaCheckingTicks = "checking_ticks"
 )
+
+// CheckingTicks returns each task's count of successful ticks since it last had anything to
+// resolve into a CI verdict -- verdict.Input.Now is derived from this, never wall clock, so a
+// GitHub outage cannot walk every in-flight row to needs_you the moment it ends (docs/command-
+// centre-v1.md § 11 inv. 11). It lives in meta rather than a new column: schema version 1 already
+// has every table Phase 1-6 need, and this is a fact the world cannot reconstruct, exactly what
+// meta already holds for the observation and the last tick error.
+func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
+	ticks := map[string]int{}
+	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
+		return nil, err
+	}
+	return ticks, nil
+}
+
+// IncrementCheckingTicks bumps every named task's counter by one -- called once per successful
+// tick (never on a failed observe, which is what makes the counter track successful ticks and
+// not wall time).
+//
+// ponytail: never reset on a fresh push, so a re-run's second push would inherit the first
+// push's stale tick count. Unreachable today -- Phase 1 ships no re-run verb, so a task is
+// pushed at most once -- but the fix when Phase 6 adds one is to reset a task's count to zero
+// wherever RecordPush is called.
+func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
+	ticks, err := s.CheckingTicks(ctx)
+	if err != nil {
+		return err
+	}
+	for _, url := range ticketURLs {
+		ticks[url]++
+	}
+	return s.putMeta(ctx, metaCheckingTicks, ticks)
+}
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it, which
 // is what makes the page's observe age an honest inv. 10 signal.
