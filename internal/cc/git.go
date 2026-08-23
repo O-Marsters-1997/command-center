@@ -46,11 +46,40 @@ func parseWorktrees(out []byte) map[string]string {
 // BranchTip reads a branch's current tip SHA, from the shared object database so it resolves
 // equally well from the main checkout or from any of its worktrees.
 func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
-	out, err := git(ctx, repoPath, "rev-parse", "refs/heads/"+branch)
+	return RevParse(ctx, repoPath, "refs/heads/"+branch)
+}
+
+// RevParse resolves any ref to its commit SHA -- BranchTip's underlying primitive, reused for
+// pushes.base_sha_at_push, whose ref is a remote-tracking branch (origin/<base>), not a local
+// one.
+func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
+	out, err := git(ctx, repoPath, "rev-parse", ref)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// ChangedPaths lists the paths base and branch differ on -- the diff the push policy is
+// evaluated against (docs/prd-command-centre.md § Phase 4). Three dots diffs against the merge
+// base, so only what branch itself added over base is named.
+func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
+	out, err := git(ctx, repoPath, "diff", "--name-only", base+"..."+branch)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
+}
+
+// Push pushes branch to origin. Never force: a refused diff never reaches this call, and a
+// non-fast-forward here is a genuine push failed, not something to override.
+func Push(ctx context.Context, repoPath, branch string) error {
+	_, err := git(ctx, repoPath, "push", "origin", branch)
+	return err
 }
 
 // CommitsSince counts commits reachable from worktreePath's HEAD but not from baselineSHA — a

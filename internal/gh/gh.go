@@ -112,6 +112,20 @@ func List(ctx context.Context, repoPath string, tracked []string) (Snapshot, err
 	return Snapshot{ByBranch: byBranch}, nil
 }
 
+// Create opens a pull request for the branch checked out at repoPath against base, filling the
+// title and body from the last commit and applying the keep-open label -- the whole of stacking
+// on the GitHub side, and the label that defuses both repos' 14-day auto-close. body overrides
+// --fill's body only for a stacked base's "Merge after #N" line (docs/prd-command-centre.md §
+// Phase 4); empty for every root PR.
+func Create(ctx context.Context, repoPath, base, body string) error {
+	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
+	if body != "" {
+		args = append(args, "--body", body)
+	}
+	_, err := run(ctx, repoPath, args...)
+	return err
+}
+
 func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = repoPath
