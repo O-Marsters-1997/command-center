@@ -9,7 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config is the user-edited TOML file named by --config. See docs/command-centre-v1.md §8.
+// Config is the user-edited TOML file named by --config. See docs/command-centre-design.md §8.
 type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`

@@ -1,6 +1,6 @@
 # Command Centre revision 3 — architecture review (Phase 1 foundations)
 
-_Date: 2026-08-22. Read-only; no source file was modified. Target: `docs/command-centre-v1.md`
+_Date: 2026-08-22. Read-only; no source file was modified. Target: `docs/command-centre-design.md`
 revision 3 and `docs/prd-command-centre.md`, reviewed against treepad source, both plain repos
 (`services`, `support-app`), the installed skills trees, live GitHub data (`gh pr list`/`gh api`
 against real PRs), and `gh` 2.97.0's actual flag semantics. Seven parallel dimension reviews plus

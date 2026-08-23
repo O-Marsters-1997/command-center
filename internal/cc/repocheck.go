@@ -16,7 +16,7 @@ type repoSettings struct {
 }
 
 // assertSquashOnly decodes a repo's settings and refuses anything but squash-only: the whole
-// merge-don't-rebase design (docs/command-centre-v1.md §4a) rests on GitHub flattening every
+// merge-don't-rebase design (docs/command-centre-design.md §4a) rests on GitHub flattening every
 // merge, and that only holds if merge commits and rebase merges are both disabled server-side.
 func assertSquashOnly(repoName string, raw []byte) error {
 	var settings repoSettings
@@ -52,7 +52,7 @@ func checkRepoSquashOnly(ctx context.Context, repoPath, repoName string) error {
 
 // AssertReposSquashOnly checks every configured repo's merge settings, once each, before the
 // tick loop starts. It mirrors OpenStore's schema_version check: a precondition the design
-// depends on, checked loudly rather than assumed (docs/command-centre-v1.md §11.6).
+// depends on, checked loudly rather than assumed (docs/command-centre-design.md §11.6).
 func AssertReposSquashOnly(ctx context.Context, ws Workspace, repos []Repo) error {
 	for _, r := range repos {
 		if err := checkRepoSquashOnly(ctx, filepath.Join(ws.Root, r.Path), r.Name); err != nil {

@@ -1,5 +1,5 @@
 // Command cc runs the Command Centre: one reconcile loop plus one status page.
-// See docs/command-centre-v1.md.
+// See docs/command-centre-design.md.
 package main
 
 import (
