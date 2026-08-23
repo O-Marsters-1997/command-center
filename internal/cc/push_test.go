@@ -348,3 +348,49 @@ func mustLookPath(t *testing.T, name string) string {
 	}
 	return path
 }
+
+// TestPushPushableSkipsATaskWhoseBranchWasRemoved covers the hazard remove-worktree (verbs.go)
+// introduces: a task's latest run keeps outcome=push forever, so without a guard, pushPushable
+// would call BranchTip on it every tick for the rest of the app's life -- and once
+// tp remove --force has deleted the branch along with the worktree, that call errors and would
+// abort every subsequent tick, for every task, not just this one.
+func TestPushPushableSkipsATaskWhoseBranchWasRemoved(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, task.TicketURL, at)
+	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
+	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
+	tip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	if err := store.RecordPush(t.Context(), task.TicketURL, tip, "main", tip, at); err != nil {
+		t.Fatal(err)
+	}
+
+	// The worktree and the branch are both gone -- tp remove --force's real effect.
+	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
+	runGit(t, "-C", repoPath, "branch", "-D", "cc-1")
+
+	obs := cc.Observation{Worktrees: map[string]string{}, PRs: map[string]gh.PR{}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce must not fail once a pushed task's branch has been removed: %v", err)
+	}
+	// A second tick too: the hazard is that every future tick would fail, not just the first.
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+}

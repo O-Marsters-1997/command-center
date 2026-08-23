@@ -270,3 +270,27 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 	}
 	return hashes, nil
 }
+
+// RunIDsForTask returns every run id ever recorded for a task, oldest first -- what
+// remove-worktree's log pruning needs to find every runs/<id>.jsonl and runs/<id>.prompt it
+// left behind (docs/prd-command-centre.md § Phase 6).
+func (s *Store) RunIDsForTask(ctx context.Context, taskID string) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE task_id = ? ORDER BY id`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("select run ids for %s: %w", taskID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan run id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate run ids for %s: %w", taskID, err)
+	}
+	return ids, nil
+}

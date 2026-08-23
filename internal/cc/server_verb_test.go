@@ -91,7 +91,7 @@ func TestVerbRejectsUnknownTaskOrUnsupportedVerb(t *testing.T) {
 
 	tests := []struct{ name, query string }{
 		{name: "unknown task", query: "verb=kill&task=sandbox://GHOST"},
-		{name: "unsupported verb", query: "verb=re-run&task=sandbox://CC-1"},
+		{name: "unsupported verb", query: "verb=bogus-verb&task=sandbox://CC-1"},
 		{name: "missing verb", query: "task=sandbox://CC-1"},
 		{name: "missing task", query: "verb=kill"},
 	}

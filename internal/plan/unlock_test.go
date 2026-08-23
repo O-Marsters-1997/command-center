@@ -180,6 +180,43 @@ func equalUnordered(got, want []string) bool {
 	return true
 }
 
+// TestUnlockedBlockerClosedFlag covers Unlock.BlockerClosed on its own: it must be true only
+// when the single blocker's own pull request was closed without merging, never for an absent
+// one — the distinction `base gone` needs to tell "never had a PR" apart from "had one, and it
+// was closed" (inv. 19).
+func TestUnlockedBlockerClosedFlag(t *testing.T) {
+	t.Parallel()
+
+	root := plan.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	dependent := plan.Task{
+		TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second",
+		BlockedBy: []string{"sandbox://CC-1"},
+	}
+	byURL := map[string]plan.Task{root.TicketURL: root, dependent.TicketURL: dependent}
+
+	tests := []struct {
+		name string
+		prs  map[string]plan.PRState
+		want bool
+	}{
+		{name: "no pull request at all", prs: map[string]plan.PRState{}, want: false},
+		{name: "closed without merging",
+			prs: map[string]plan.PRState{"cc-1-first": plan.Closed}, want: true},
+		{name: "open", prs: map[string]plan.PRState{"cc-1-first": plan.Open}, want: false},
+		{name: "merged", prs: map[string]plan.PRState{"cc-1-first": plan.Merged}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := plan.Unlocked(dependent, byURL, tt.prs, false).BlockerClosed
+			if got != tt.want {
+				t.Errorf("BlockerClosed = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUnlockedUnknownBlockerStaysBlocked(t *testing.T) {
 	t.Parallel()
 

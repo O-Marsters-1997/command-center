@@ -18,7 +18,7 @@ func (s *Store) RecordPush(ctx context.Context, taskID, pushedTip, baseBranch, b
 	if err != nil {
 		return fmt.Errorf("record push for %s: %w", taskID, err)
 	}
-	return nil
+	return s.resetCheckingTicks(ctx, taskID)
 }
 
 // LastPushedTips returns each task's most recently recorded pushed_tip -- what plan.PushPlan
@@ -99,6 +99,7 @@ type PushFact struct {
 const (
 	eventPushRefused = "push_refused"
 	eventPushFailed  = "push_failed"
+	eventPushed      = "pushed"
 )
 
 // PushFacts returns every task's outstanding push-policy problem, keyed by ticket URL: what the

@@ -1,0 +1,38 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+#
+# CC-7 is the same task teardown-cc7-empty.toml declares -- re-declaring it here with the same
+# ticket_url upserts the existing row rather than minting a second one, and only the shared
+# agent_command actually changes underneath it.
+
+max_agents = 5
+agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[task]]
+ticket_url = "sandbox://CC-7"
+repo       = "repo"
+branch     = "cc-7"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-1"
+repo       = "repo"
+branch     = "cc-1"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-3"
+repo       = "repo"
+branch     = "cc-3"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-4"
+repo       = "repo"
+branch     = "cc-4"
+blocked_by = ["sandbox://CC-3"]
+
+[[repo]]
+name     = "repo"
+path     = "repo"
+stacking = false

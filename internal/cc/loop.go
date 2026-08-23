@@ -16,9 +16,17 @@ import (
 // why it woke.
 const tickPeriod = 15 * time.Second
 
-// killVerb and retryPushVerb (push.go) are the verbs this phase implements; the others in the
-// design's route table (re-run, close-pr, remove-worktree) belong to later phases.
+// killVerb; retryPushVerb (push.go); reRunVerb, closePRVerb and removeWorktreeVerb (verbs.go)
+// are every verb this design implements. `cancel` is Phase 2 and is not built.
 const killVerb = "kill"
+
+// Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
+// alongside push.go's push_refused/push_failed and verbs.go's remove/close-pr kinds, what lets
+// `events` reconstruct the whole run (docs/prd-command-centre.md § Phase 6).
+const (
+	eventRunLaunched = "run_launched"
+	eventRunDisposed = "run_disposed"
+)
 
 // TickError is the last failed tick, rendered on the page with its age.
 type TickError struct {
@@ -91,6 +99,18 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return err
 	}
 	if err := l.pushPushable(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.recordVerdictTransitions(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.applyReRunIntents(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.applyClosePRIntents(ctx); err != nil {
+		return err
+	}
+	if err := l.applyRemoveWorktreeIntents(ctx, obs); err != nil {
 		return err
 	}
 	return l.launchEligible(ctx, obs)
@@ -197,7 +217,9 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, task Task, obs Ob
 	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
-	return nil
+	return l.store.AppendEvent(ctx, Event{
+		At: now, TaskURL: task.TicketURL, Kind: eventRunDisposed, Detail: outcome.String(),
+	})
 }
 
 // launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this
@@ -305,21 +327,9 @@ type launchSpec struct {
 	repoPath   string
 }
 
-// cutAndSpawn is the spawn sequence (docs/prd-command-centre.md § A run), in the order the
-// design calls out as load-bearing:
-//
-//  1. Cut. tp new failing is `cut failed`, not a crash — one INSERT, no pgid, ever, and move on
-//     to the next candidate rather than failing the tick.
-//  2. Read the baseline: the branch tip at the moment this run launches.
-//  3. Reserve a run skeleton to get a run id, then name the prompt file and the log file after
-//     it (they cannot be named before it exists).
-//  4. Spawn. A failure here is recorded as `failed` on the reserved row — the process never
-//     existed, so there is nothing to reap.
-//  5. Immediately after Spawn returns, with nothing else in between: capture the pid and this
-//     instant as the process start time, and write both in the one UPDATE that is the only
-//     record of this process's identity. No logging, no next-candidate work, between spawn and
-//     that write — a crash in that gap is the one known, unclosed race in this design (see the
-//     PR description).
+// cutAndSpawn is the spawn sequence (docs/prd-command-centre.md § A run) for a task with no
+// worktree yet: cut, then hand off to spawnRun. tp new failing is `cut failed`, not a crash —
+// one INSERT, no pgid, ever, and move on to the next candidate rather than failing the tick.
 func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	branch := spec.task.Branch
 	baseRef := "origin/" + spec.baseBranch
@@ -334,13 +344,35 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("read baseline for %s: %w", spec.task.TicketURL, err)
 	}
 
-	runID, err := l.store.InsertRunSkeleton(ctx, spec.task.TicketURL, "agent", baselineSHA, spec.promptHash)
+	worktrees, err := Worktrees(ctx, spec.repoPath)
+	if err != nil {
+		return fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
+	}
+	worktreePath, ok := worktrees[branch]
+	if !ok {
+		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
+	}
+
+	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash)
+}
+
+// spawnRun is the part of the spawn sequence that is identical whether the worktree was just
+// cut (cutAndSpawn) or already existed (verbs.go's re-run): reserve a run skeleton to get a run
+// id, then name the prompt file and the log file after it (they cannot be named before it
+// exists), spawn, and record the process's identity in the one UPDATE that is its only record.
+//
+// A failure to spawn is recorded as `failed` on the reserved row — the process never existed,
+// so there is nothing to reap. On success, nothing may run between Spawn returning and the
+// RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
+// (see the PR description).
+func (l *Loop) spawnRun(ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string) error {
+	runID, err := l.store.InsertRunSkeleton(ctx, task.TicketURL, "agent", baselineSHA, promptHash)
 	if err != nil {
 		return err
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	prompt := plan.Compose(planTask(spec.task), nil)
+	prompt := plan.Compose(planTask(task), nil)
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
 	}
@@ -351,15 +383,6 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("open log for run %d: %w", runID, err)
 	}
 	defer func() { _ = logFile.Close() }()
-
-	worktrees, err := Worktrees(ctx, spec.repoPath)
-	if err != nil {
-		return fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
-	}
-	worktreePath, ok := worktrees[branch]
-	if !ok {
-		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
-	}
 
 	spawnCfg := SpawnConfig{
 		AgentCommand: l.cfg.AgentCommand,
@@ -376,5 +399,11 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	// Nothing may be added between here and the UPDATE below — see the doc comment above.
 	pgid := result.Pid
 	startedAt := l.now()
-	return l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath)
+	if err := l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath); err != nil {
+		return err
+	}
+	return l.store.AppendEvent(ctx, Event{
+		At: startedAt, TaskURL: task.TicketURL, Kind: eventRunLaunched,
+		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
+	})
 }

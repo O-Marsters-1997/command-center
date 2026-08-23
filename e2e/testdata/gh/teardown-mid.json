@@ -1,0 +1,17 @@
+{
+  "pr list": {
+    "stdout": "[{\"number\":10,\"headRefName\":\"cc-3\",\"headRefOid\":\"3333333333333333333333333333333333333333\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":11,\"headRefName\":\"cc-7\",\"headRefOid\":\"7777777777777777777777777777777777777777\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
+  },
+  "pr list --state all --head cc-1": {
+    "stdout": "[{\"number\":9,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\"}]\n"
+  },
+  "pr list --state all --head cc-4": {
+    "stdout": "[]\n"
+  },
+  "pr create": {
+    "stdout": "https://example.com/owner/repo/pull/12\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  }
+}
