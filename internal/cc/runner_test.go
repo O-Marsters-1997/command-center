@@ -81,8 +81,13 @@ func TestProcessRunnerSpawnRunsTheAgentWithSubstitutedArgvAndRedirectedOutput(t 
 		t.Fatal("Spawn returned a zero pid")
 	}
 
-	out := waitForCommit(t, worktree, "commit from commits.sh")
-	if !strings.Contains(out, "commit from commits.sh") {
+	reapExit(t, result.Pid)
+
+	out, err := exec.Command("git", "-C", worktree, "log", "--oneline").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log: %v: %s", err, out)
+	}
+	if !strings.Contains(string(out), "commit from commits.sh") {
 		t.Errorf("git log = %q, want the agent's commit", out)
 	}
 
@@ -109,22 +114,19 @@ func waitForFile(t *testing.T, path string) {
 	t.Fatalf("%s did not appear within the deadline", path)
 }
 
-// waitForCommit polls `git log` until it contains want, failing after a short deadline. Writing
-// agent.txt and committing it are two separate steps in commits.sh, so polling for the file
-// alone races the commit that follows it.
-func waitForCommit(t *testing.T, worktree, want string) string {
+// reapExit blocks until a spawned agent has exited, asserting it exited cleanly. Every Spawn
+// test must call it before returning: the spawned process writes inside a t.TempDir, and Go
+// fires that directory's RemoveAll at cleanup — a child still running there fails the removal,
+// and testing.T reports that against the whole package rather than this one test.
+func reapExit(t *testing.T, pid int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	var out []byte
-	for time.Now().Before(deadline) {
-		out, _ = exec.Command("git", "-C", worktree, "log", "--oneline").CombinedOutput()
-		if strings.Contains(string(out), want) {
-			return string(out)
-		}
-		time.Sleep(10 * time.Millisecond)
+	exitCode, ok := cc.Reap(pid)
+	if !ok {
+		t.Fatalf("Reap reported no exit code for pid %d, which is our own direct child", pid)
 	}
-	t.Fatalf("git log in %s never contained %q; last seen:\n%s", worktree, want, out)
-	return ""
+	if exitCode != 0 {
+		t.Fatalf("spawned agent exited %d, want 0", exitCode)
+	}
 }
 
 func TestProcessRunnerSpawnStripsAnthropicAPIKey(t *testing.T) {
@@ -135,7 +137,7 @@ func TestProcessRunnerSpawnStripsAnthropicAPIKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	envDump := filepath.Join(worktree, "env.txt")
-	script := "#!/bin/sh\nenv > " + envDump + ".tmp && mv " + envDump + ".tmp " + envDump + "\n"
+	script := "#!/bin/sh\nenv > " + envDump + "\n"
 	scriptPath := filepath.Join(t.TempDir(), "dump-env.sh")
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -155,11 +157,12 @@ func TestProcessRunnerSpawnStripsAnthropicAPIKey(t *testing.T) {
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	if _, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg); err != nil {
+	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
+	reapExit(t, result.Pid)
 
-	waitForFile(t, envDump)
 	env, err := os.ReadFile(envDump)
 	if err != nil {
 		t.Fatal(err)
@@ -177,10 +180,7 @@ func TestProcessRunnerSpawnSetsANewProcessGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	pgidDump := filepath.Join(worktree, "pgid.txt")
-	// Written via a temp file plus rename, not a direct redirect: redirection truncates the
-	// target to empty before ps produces any output, and waitForFile would then race an
-	// existing-but-still-empty file.
-	script := "#!/bin/sh\nps -o pgid= -p $$ > " + pgidDump + ".tmp && mv " + pgidDump + ".tmp " + pgidDump + "\n"
+	script := "#!/bin/sh\nps -o pgid= -p $$ > " + pgidDump + "\n"
 	scriptPath := filepath.Join(t.TempDir(), "dump-pgid.sh")
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -203,7 +203,8 @@ func TestProcessRunnerSpawnSetsANewProcessGroup(t *testing.T) {
 		t.Fatalf("Spawn: %v", err)
 	}
 
-	waitForFile(t, pgidDump)
+	reapExit(t, result.Pid)
+
 	raw, err := os.ReadFile(pgidDump)
 	if err != nil {
 		t.Fatal(err)
