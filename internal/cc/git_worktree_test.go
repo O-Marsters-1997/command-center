@@ -66,7 +66,7 @@ func TestHasUnpushedCommitsIsFalseRightAfterAPush(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoWithOriginForGitTest(t)
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main")
+	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
 	if err != nil {
 		t.Fatalf("HasUnpushedCommits: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestHasUnpushedCommitsIsTrueAfterALocalCommit(t *testing.T) {
 	dir := initRepoWithOriginForGitTest(t)
 	commitEmpty(t, dir, "not yet pushed")
 
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main")
+	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
 	if err != nil {
 		t.Fatalf("HasUnpushedCommits: %v", err)
 	}
@@ -94,11 +94,63 @@ func TestHasUnpushedCommitsIsTrueWithNoRemoteTrackingRefAtAll(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoForGitTest(t) // no origin remote configured at all
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main")
+	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
 	if err != nil {
 		t.Fatalf("HasUnpushedCommits: %v", err)
 	}
 	if !unpushed {
 		t.Error("a branch with no remote-tracking ref at all should read as unpushed (conservative default)")
+	}
+}
+
+// The merged-and-deleted case: GitHub deletes the branch on merge, then the app's own
+// `git fetch origin --prune` drops the remote-tracking ref. The recorded push is the only
+// surviving evidence the branch ever reached the remote.
+func TestHasUnpushedCommitsIsFalseWhenTheRefIsGoneButTheTipWasRecordedAsPushed(t *testing.T) {
+	t.Parallel()
+
+	dir := initRepoWithOriginForGitTest(t)
+	tip, err := RevParse(t.Context(), dir, "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pruneRemoteTrackingRef(t, dir, "main")
+
+	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", tip)
+	if err != nil {
+		t.Fatalf("HasUnpushedCommits: %v", err)
+	}
+	if unpushed {
+		t.Error("a branch at its recorded pushed tip read as unpushed once the pruned ref was gone")
+	}
+}
+
+func TestHasUnpushedCommitsIsTrueWhenTheRefIsGoneAndTheTipMovedPastTheRecordedPush(t *testing.T) {
+	t.Parallel()
+
+	dir := initRepoWithOriginForGitTest(t)
+	tip, err := RevParse(t.Context(), dir, "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pruneRemoteTrackingRef(t, dir, "main")
+	commitEmpty(t, dir, "committed after the merge, never pushed")
+
+	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", tip)
+	if err != nil {
+		t.Fatalf("HasUnpushedCommits: %v", err)
+	}
+	if !unpushed {
+		t.Error("a commit made after the recorded push did not read as unpushed")
+	}
+}
+
+// pruneRemoteTrackingRef deletes refs/remotes/origin/<branch> the way `fetch --prune` does once
+// the remote branch is gone.
+func pruneRemoteTrackingRef(t *testing.T, repoPath, branch string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repoPath, "update-ref", "-d", "refs/remotes/origin/"+branch)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("update-ref -d: %v: %s", err, out)
 	}
 }
