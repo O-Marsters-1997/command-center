@@ -1,0 +1,33 @@
+# The browser path: both mutating routes driven with their fields in the request body rather than
+# the query string, as the page's own forms send them -- the slice launch posts one repeated
+# `task` per checked row, and the row's retry-push form posts `verb` and `task`.
+
+cc-init-repo
+cc-config two-tasks-commits
+cc-fake-gh pr-create-fails
+
+exec cc tick --count 1
+exec cc request -form 'task=sandbox://CC-1&task=sandbox://CC-2' POST /launch
+
+# One form submission authorised the whole slice.
+exec cc tick --count 1
+exec cc request GET /events
+stdout 'authorised with 2 member'
+
+exec sleep 0.5
+
+# CC-1's agent committed and pushed, gh pr create failed; CC-2 waits on CC-1's PR.
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>push_failed</td>'
+stdout 'waiting on sandbox://CC-1'
+
+grep -count=1 'pr create' $WORK/gh.log
+
+cc-fake-gh no-prs
+exec cc request -form 'verb=retry-push&task=sandbox://CC-1' POST /verb
+exec cc tick --count 1
+
+# The push step alone ran again: one more pr create, and no second agent.
+grep -count=2 'pr create' $WORK/gh.log
+grep -count=1 'commits.sh' $WORK/agent.log

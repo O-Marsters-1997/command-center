@@ -18,7 +18,7 @@ const tickPeriod = 15 * time.Second
 
 // killVerb; retryPushVerb (push.go); reRunVerb, closePRVerb and removeWorktreeVerb (verbs.go)
 // are every verb this design implements. `cancel` is Phase 2 and is not built.
-const killVerb = "kill"
+const killVerb = plan.VerbKill
 
 // Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
 // alongside push.go's push_refused/push_failed and verbs.go's remove/close-pr kinds, what lets

@@ -11,7 +11,7 @@ import (
 
 // retryPushVerb is the only verb push failed offers a human: the push step alone, no agent
 // (docs/prd-command-centre.md § The states).
-const retryPushVerb = "retry-push"
+const retryPushVerb = plan.VerbRetryPush
 
 // pushContext is the per-tick facts pushOne needs that are the same for every candidate,
 // computed once by pushPushable/applyRetryPushIntents rather than re-queried per task.
