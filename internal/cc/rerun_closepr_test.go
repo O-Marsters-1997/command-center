@@ -12,7 +12,7 @@ import (
 )
 
 // TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting covers re-run's own contract
-// (docs/prd-command-centre.md § Phase 6): relaunch in the same worktree, incrementally -- a
+// (docs/prds/prd-command-centre.md § Phase 6): relaunch in the same worktree, incrementally -- a
 // second `runs` row against the same task, with no `tp new` call at all (the fake runner here
 // never touches tp; nothing about re-run does).
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {

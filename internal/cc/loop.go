@@ -22,7 +22,7 @@ const killVerb = plan.VerbKill
 
 // Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
 // alongside push.go's push_refused/push_failed and verbs.go's remove/close-pr kinds, what lets
-// `events` reconstruct the whole run (docs/prd-command-centre.md § Phase 6).
+// `events` reconstruct the whole run (docs/prds/prd-command-centre.md § Phase 6).
 const (
 	eventRunLaunched = "run_launched"
 	eventRunDisposed = "run_disposed"
@@ -193,7 +193,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// disposeRun computes and records one dead run's outcome (docs/prd-command-centre.md § A run):
+// disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
 func (l *Loop) disposeRun(ctx context.Context, run PendingRun, task Task, obs Observation, now time.Time) error {
 	commits := 0
@@ -292,7 +292,7 @@ func currentlyRunning(latest map[string]RunSummary) int {
 
 // tickCheckingWaits bumps every task's checking-wait tick count by one. It runs only after a
 // successful observe (RunOnce returns before reaching it otherwise), which is what makes the
-// count track ticks whose observe phase succeeded and never wall clock (docs/command-centre-design.md
+// count track ticks whose observe phase succeeded and never wall clock (docs/designs/command-centre-design.md
 // § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.now().
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	tasks, err := l.store.Tasks(ctx)
@@ -323,7 +323,7 @@ type launchSpec struct {
 	repoPath   string
 }
 
-// cutAndSpawn is the spawn sequence (docs/prd-command-centre.md § A run) for a task with no
+// cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a task with no
 // worktree yet: cut, then hand off to spawnRun. tp new failing is `cut failed`, not a crash —
 // one INSERT, no pgid, ever, and move on to the next candidate rather than failing the tick.
 func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {

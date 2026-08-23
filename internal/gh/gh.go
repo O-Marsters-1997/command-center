@@ -1,5 +1,5 @@
 // Package gh is the only place that knows the gh CLI's JSON shape. It normalises a pull
-// request's status check rollup before anything else sees it (docs/command-centre-design.md §3).
+// request's status check rollup before anything else sees it (docs/designs/command-centre-design.md §3).
 package gh
 
 import (
@@ -114,7 +114,7 @@ func List(ctx context.Context, repoPath string, tracked []string) (Snapshot, err
 
 // Create opens a pull request for the branch checked out at repoPath against base, applying the
 // keep-open label that defuses both repos' 14-day auto-close. body overrides --fill's body only
-// for a stacked base's "Merge after #N" line (docs/prd-command-centre.md § Phase 4); empty for a root PR.
+// for a stacked base's "Merge after #N" line (docs/prds/prd-command-centre.md § Phase 4); empty for a root PR.
 func Create(ctx context.Context, repoPath, base, body string) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
@@ -125,7 +125,7 @@ func Create(ctx context.Context, repoPath, base, body string) error {
 }
 
 // Close closes branch's pull request: the app can open one (Create), so it needs a sanctioned
-// way to unopen one too (docs/command-centre-design.md § 5, the `close PR` verb). It never merges.
+// way to unopen one too (docs/designs/command-centre-design.md § 5, the `close PR` verb). It never merges.
 func Close(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "close", branch)
 	return err

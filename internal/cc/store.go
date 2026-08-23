@@ -151,7 +151,7 @@ const (
 // CheckingTicks returns each task's count of successful ticks since it last had anything to
 // resolve into a CI verdict. verdict.Input.Now is derived from this, never wall clock, so a
 // GitHub outage cannot walk every in-flight row to needs_you the moment it ends
-// (docs/command-centre-design.md § 11 inv. 11).
+// (docs/designs/command-centre-design.md § 11 inv. 11).
 func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	ticks := map[string]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {

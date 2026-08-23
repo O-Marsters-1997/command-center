@@ -10,7 +10,7 @@ import (
 )
 
 // retryPushVerb is the only verb push failed offers a human: the push step alone, no agent
-// (docs/prd-command-centre.md § The states).
+// (docs/prds/prd-command-centre.md § The states).
 const retryPushVerb = plan.VerbRetryPush
 
 // pushContext is the per-tick facts pushOne needs that are the same for every candidate,
@@ -35,7 +35,7 @@ func (l *Loop) newPushContext(tasks []Task, obs Observation) pushContext {
 	}
 }
 
-// pushPushable is job 1's push step (docs/prd-command-centre.md § The tick): every task whose
+// pushPushable is job 1's push step (docs/prds/prd-command-centre.md § The tick): every task whose
 // latest run disposed with commits gets its branch diffed against its base and either pushed
 // and PR-opened, or refused outright. A push or PR-create failure is not retried automatically
 // -- retry-push is your verb (see applyRetryPushIntents).
@@ -102,7 +102,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 }
 
 // applyRetryPushIntents consumes every pending retry-push request synchronously, bypassing
-// pushPushable's failure gate: this is the retry (docs/prd-command-centre.md § The states, push
+// pushPushable's failure gate: this is the retry (docs/prds/prd-command-centre.md § The states, push
 // failed's only verb).
 func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, retryPushVerb)

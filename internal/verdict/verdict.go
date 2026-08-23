@@ -1,5 +1,5 @@
 // Package verdict evaluates one repo's boolean check predicate over a normalised snapshot —
-// never gh's raw JSON (docs/command-centre-design.md § 11 inv. 11). It declares its own
+// never gh's raw JSON (docs/designs/command-centre-design.md § 11 inv. 11). It declares its own
 // CheckState rather than importing gh's (issue #2 AC12); api_test.go enforces the import purity.
 package verdict
 
@@ -18,7 +18,7 @@ const (
 )
 
 // Verdict is Evaluate's headline answer -- one of the three states the PRD names for a pushed
-// PR (docs/prd-command-centre.md § The states): review me, needs you, checking.
+// PR (docs/prds/prd-command-centre.md § The states): review me, needs you, checking.
 type Verdict int
 
 const (
@@ -40,10 +40,10 @@ func (v Verdict) String() string {
 
 // BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it.
 // It is clocked over ticks whose observe phase succeeded, never wall clock, so a GitHub outage
-// cannot walk every in-flight row to needs_you at once (docs/command-centre-design.md § 11 inv. 11).
+// cannot walk every in-flight row to needs_you at once (docs/designs/command-centre-design.md § 11 inv. 11).
 const BoundedWait = 10 * time.Minute
 
-// Predicate is the boolean check-config grammar (docs/command-centre-design.md § 8): all_of,
+// Predicate is the boolean check-config grammar (docs/designs/command-centre-design.md § 8): all_of,
 // any_of, not, success, skipped, absent_ok, plus Author -- the non-check escape hatch for the
 // dependabot arm of a Linear-branch predicate, since a PR's author is not a check-run.
 type Predicate struct {
@@ -63,7 +63,7 @@ func (p Predicate) IsZero() bool {
 		p.Success == "" && p.Skipped == "" && p.AbsentOK == "" && p.Author == ""
 }
 
-// Input is everything Evaluate needs (docs/command-centre-design.md § 8), including the
+// Input is everything Evaluate needs (docs/designs/command-centre-design.md § 8), including the
 // stacked-base check, which stays unscoped from HeadOidMatch since main's own tip moving would
 // otherwise make every root row look like its base moved too.
 type Input struct {
@@ -94,7 +94,7 @@ const (
 	red
 )
 
-// Evaluate resolves p against in and reports the verdict (docs/command-centre-design.md § 11
+// Evaluate resolves p against in and reports the verdict (docs/designs/command-centre-design.md § 11
 // inv. 11). A foreign-SHA or absent rollup is never green: HeadOidMatch false discards in.Checks
 // entirely. A resolved-red predicate is needs_you outright; staleness only ever downgrades green.
 func Evaluate(p Predicate, in Input) Result {
@@ -123,7 +123,7 @@ func Evaluate(p Predicate, in Input) Result {
 
 // waited reports whether the bounded wait has elapsed. in.Now is never wall clock in practice —
 // the caller derives it from ticks whose observe phase succeeded, which is what keeps an outage
-// from walking every row to needs_you at once (docs/command-centre-design.md § 11 inv. 11).
+// from walking every row to needs_you at once (docs/designs/command-centre-design.md § 11 inv. 11).
 func waited(in Input) bool {
 	return !in.PushedAt.IsZero() && in.Now.Sub(in.PushedAt) >= BoundedWait
 }
@@ -207,7 +207,7 @@ func leaf(p Predicate, in Input) triState {
 
 // requireConclusion resolves a plain success/skipped leaf: green once the check reports exactly
 // the required conclusion, red once it reports a different final one (there is no retry-pending
-// rule -- red is red, docs/command-centre-design.md § 11), pending otherwise, including a check
+// rule -- red is red, docs/designs/command-centre-design.md § 11), pending otherwise, including a check
 // absent from the rollup (a missing map key already reads Pending).
 func requireConclusion(got, want CheckState) triState {
 	switch got {
@@ -221,9 +221,10 @@ func requireConclusion(got, want CheckState) triState {
 }
 
 // absentOK resolves the leniency the path-filtered "Lint GitHub Actions / Lint" check needs:
-// approximating Mergify's own "-check-neutral AND -check-pending AND -check-failure" (docs/
-// command-centre-design.md § 8), a check absent from the rollup reads pending until the bounded
-// wait elapses, then passing -- never green from a young snapshot, which would reopen per-check
+// approximating Mergify's own "-check-neutral AND -check-pending AND -check-failure"
+// (docs/designs/command-centre-design.md § 8), a check absent from the rollup reads pending
+// until the bounded wait elapses, then passing -- never green from a young snapshot, which
+// would reopen per-check
 // the hole the rollup-level rule closes. A check that did run must still conclude success or
 // skipped; a completed failure is red regardless of the wait.
 func absentOK(checks map[string]CheckState, name string, in Input) triState {

@@ -11,7 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// Config is the user-edited TOML file named by --config. See docs/command-centre-design.md §8.
+// Config is the user-edited TOML file named by --config. See docs/designs/command-centre-design.md §8.
 type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
@@ -30,7 +30,7 @@ type Task struct {
 
 // Repo is one [[repo]] block. Path is relative to the workspace root.
 // Checks and MergifySHA are both empty until a repo opts into a CI verdict, matching the
-// pre-Phase-5 behaviour where every row stops at checking (docs/command-centre-design.md § 11 inv. 11).
+// pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
 	Path        string            `toml:"path"`
@@ -97,7 +97,7 @@ func checksByRepo(repos []Repo) map[string]verdict.Predicate {
 
 // mergifySHAByRepo indexes each configured repo's recorded .mergify.yml hash by name -- the
 // value the predicate was written against, compared each tick to the file's current hash
-// (docs/command-centre-design.md § 7).
+// (docs/designs/command-centre-design.md § 7).
 func mergifySHAByRepo(repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {

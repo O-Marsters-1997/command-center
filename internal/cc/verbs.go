@@ -12,9 +12,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-// reRunVerb, closePRVerb and removeWorktreeVerb are Phase 6's remaining verbs (docs/prd-command-
-// centre.md § The states): relaunch in the same worktree, unopen a pull request the app opened,
-// and tear down a terminal row's worktree. `cancel` is Phase 2 and is not implemented.
+// reRunVerb, closePRVerb and removeWorktreeVerb are Phase 6's remaining verbs
+// (docs/prds/prd-command-centre.md § The states): relaunch in the same worktree, unopen a pull
+// request the app opened, and tear down a terminal row's worktree. `cancel` is Phase 2 and is
+// not implemented.
 const (
 	reRunVerb          = plan.VerbReRun
 	closePRVerb        = plan.VerbClosePR
@@ -39,7 +40,7 @@ const (
 )
 
 // applyReRunIntents consumes every pending re-run request: relaunch in the same worktree,
-// incrementally -- a second `runs` row against the same task (docs/prd-command-centre.md §
+// incrementally -- a second `runs` row against the same task (docs/prds/prd-command-centre.md §
 // Phase 6). Unlike a fresh launch, re-run is not gated by unlock, authorisation or a
 // prompt-hash match: it is a human's explicit, one-off decision, not the tick's own
 // eligibility check.
@@ -99,7 +100,7 @@ func (l *Loop) reRunOne(
 }
 
 // applyClosePRIntents consumes every pending close-pr request: `gh pr close`, the sanctioned way
-// to unopen a pull request the app opened (docs/prd-command-centre.md § The states). The next
+// to unopen a pull request the app opened (docs/prds/prd-command-centre.md § The states). The next
 // tick's fallback PR read is what turns this into a derived `pr_closed_unmerged` row.
 func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, closePRVerb)

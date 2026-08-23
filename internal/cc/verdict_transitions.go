@@ -12,7 +12,7 @@ const eventVerdictTransition = "verdict_transition"
 
 // recordVerdictTransitions logs one event per task whose CI verdict label ("checking",
 // "review_me" or "needs_you") differs from what the previous tick recorded -- the last category
-// of what `events` needs to reconstruct the whole run (docs/prd-command-centre.md § Phase 6).
+// of what `events` needs to reconstruct the whole run (docs/prds/prd-command-centre.md § Phase 6).
 // It computes the verdict the exact way the page does (applyVerdict, server.go), over this same
 // tick's observation, so a transition an operator would see on the next page load is exactly
 // the transition logged here.

@@ -48,8 +48,8 @@ type Unlock struct {
 const defaultBranch = "main"
 
 // Unlocked decides whether a task's blockers are satisfied, over stacking edges only — a
-// cross-repo blocker feeds the Phase-3 draft gate, never unlock or the base (docs/prd-command-
-// centre.md § Unlock).
+// cross-repo blocker feeds the Phase-3 draft gate, never unlock or the base
+// (docs/prds/prd-command-centre.md § Unlock).
 func Unlocked(t Task, byURL map[string]Task, prs map[string]PRState, stacking bool) Unlock {
 	var sameRepo []Task
 	for _, blockerURL := range t.BlockedBy {
@@ -179,7 +179,7 @@ func (s State) String() string {
 }
 
 // RunFact is the latest run's liveness and disposition, as the loop observed it this tick.
-// Alive is decided by pid+start-time identity (docs/prd-command-centre.md § A run); HasOutcome
+// Alive is decided by pid+start-time identity (docs/prds/prd-command-centre.md § A run); HasOutcome
 // distinguishes "not yet disposed" from a genuine zero-value Outcome.
 type RunFact struct {
 	Alive      bool
@@ -187,7 +187,7 @@ type RunFact struct {
 	HasOutcome bool
 	LogPath    string
 	// Push* fields matter only when Outcome == OutcomePush: this tick's own push-policy and
-	// push/PR-create result (docs/prd-command-centre.md § Phase 4). PROpen comes from the
+	// push/PR-create result (docs/prds/prd-command-centre.md § Phase 4). PROpen comes from the
 	// observation's own PR snapshot for this task's branch, not a stored column (inv. 14).
 	PushRefused     bool
 	PushRefusedPath string
@@ -195,7 +195,7 @@ type RunFact struct {
 	PROpen          bool
 	// PRMerged and PRClosedUnmerged read this task's own branch's PR state, never the blocker's
 	// (that is Unlock.BlockerClosed's job). Once GitHub says merged or closed, that outranks
-	// every other push fact below (docs/prd-command-centre.md § The states).
+	// every other push fact below (docs/prds/prd-command-centre.md § The states).
 	PRMerged         bool
 	PRClosedUnmerged bool
 	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
@@ -220,7 +220,8 @@ type Facts struct {
 
 // Status derives a task's state and the sentence explaining it. A run's liveness and disposition
 // outrank the unlocked × authorised facts that mattered only before its first launch. A queued
-// row must say whether it's waiting on a base (hours) or a slot (seconds) (docs/prd-command-centre.md § The states).
+// row must say whether it's waiting on a base (hours) or a slot (seconds)
+// (docs/prds/prd-command-centre.md § The states).
 func Status(f Facts) (State, Reason) {
 	// A row that has ever run never returns to blocked (inv. 19): once its blocker's pull
 	// request is closed without merging, the premise it launched under is withdrawn, and that

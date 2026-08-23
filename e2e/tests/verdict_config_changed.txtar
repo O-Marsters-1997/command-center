@@ -1,6 +1,6 @@
 # Editing the repo's .mergify.yml suppresses a would-be-green row to checking (check config
 # changed), rather than a silent lie; restoring the recorded hash brings review_me back
-# (docs/command-centre-v1.md § 7).
+# (docs/designs/command-centre-design.md § 7).
 
 cc-init-repo
 cp mergify-v1.yml repo/.mergify.yml

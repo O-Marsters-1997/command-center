@@ -12,7 +12,7 @@ AFTER FIXING 9, with five claims found false — three propping up deletions). *
 the response to that review.** §14 records what changed from revision 1; §15 from revision 2;
 §16 from revision 3, including the false premises corrected.
 
-Product framing lives in `prd-command-centre.md`; this document is the mechanism and is
+Product framing lives in `docs/prds/prd-command-centre.md`; this document is the mechanism and is
 **normative** where the two disagree (state list, unlock rule, invariants).
 
 A local app that takes a DAG of tickets across several repos and drives them to reviewable

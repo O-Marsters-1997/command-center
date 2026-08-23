@@ -31,7 +31,7 @@ var defaultDeny = []string{
 }
 
 // PushRefused reports whether any changed path hits the policy's deny set, naming the first
-// match so the row can list it (docs/prd-command-centre.md § The states, needs you). One hit
+// match so the row can list it (docs/prds/prd-command-centre.md § The states, needs you). One hit
 // refuses the whole diff: nothing is force-pushed and nothing partial is pushed.
 func PushRefused(changedPaths []string, policy Policy) (bool, string) {
 	patterns := make([]string, 0, len(defaultDeny)+len(policy.Deny))
@@ -75,7 +75,7 @@ type PushCandidate struct {
 }
 
 // PushPlan selects every ticket whose local tip has moved past its last recorded push -- every
-// app-owned branch the tick must attempt to push this cycle (docs/prd-command-centre.md § Phase
+// app-owned branch the tick must attempt to push this cycle (docs/prds/prd-command-centre.md § Phase
 // 4). A branch already at its last pushed tip is not re-attempted (inv. 20).
 func PushPlan(candidates []PushCandidate) []string {
 	var selected []string

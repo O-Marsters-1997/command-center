@@ -86,7 +86,7 @@ type row struct {
 	Base     string
 	Worktree string
 	PR       string
-	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prd-command-centre.md §
+	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
 	Pgid    string
 	Elapsed string
@@ -224,7 +224,7 @@ func derive(
 
 // runFactFor builds plan.Status's LatestRun input for one task, plus the plain-text pgid,
 // elapsed time and log path the page renders alongside it. nil/empty when the task has no run.
-// Push facts are only meaningful once the run's own outcome is push (docs/prd-command-centre.md
+// Push facts are only meaningful once the run's own outcome is push (docs/prds/prd-command-centre.md
 // § Phase 4): PROpen reads this tick's own PR snapshot for the task's branch, never a stored
 // column (inv. 14). The CI verdict, once PROpen and clear of a refusal or failure, is
 // internal/verdict's own job (applyVerdict).
@@ -319,7 +319,7 @@ func verdictChecks(checks map[string]gh.CheckState) map[string]verdict.CheckStat
 	return out
 }
 
-// toVerdictCheckState mirrors the "no retry-pending rule" call (docs/command-centre-design.md § 8):
+// toVerdictCheckState mirrors the "no retry-pending rule" call (docs/designs/command-centre-design.md § 8):
 // anything completed but not exactly SUCCESS or SKIPPED reads as a definite Failure, never a
 // third kind of maybe.
 func toVerdictCheckState(cs gh.CheckState) verdict.CheckState {
@@ -337,7 +337,7 @@ func toVerdictCheckState(cs gh.CheckState) verdict.CheckState {
 }
 
 // handleEvents dumps the append-only audit log as JSON: what reconstructs the whole run, every
-// authorisation, launch, disposition, push and refusal (docs/prd-command-centre.md § Phase 4).
+// authorisation, launch, disposition, push and refusal (docs/prds/prd-command-centre.md § Phase 4).
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := s.store.Events(r.Context())
 	if err != nil {

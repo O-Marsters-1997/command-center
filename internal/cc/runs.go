@@ -11,7 +11,7 @@ import (
 
 // InsertRunSkeleton reserves a runs row before the process exists: task_id, kind, baseline_sha
 // and prompt_hash are known at cut time, but pgid and log_path are named after the row's own id
-// (docs/prd-command-centre.md § A run), so they land in a later RecordSpawn.
+// (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, taskID, kind, baselineSHA, promptHash string) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO runs (task_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?)`,
@@ -53,7 +53,7 @@ func (s *Store) RecordDisposition(
 }
 
 // InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no
-// pgid, ever (docs/prd-command-centre.md § The states, cut failed).
+// pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
 func (s *Store) InsertCutFailedRun(ctx context.Context, taskID, promptHash string, at time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO runs (task_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?)`,
@@ -273,7 +273,7 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 
 // RunIDsForTask returns every run id ever recorded for a task, oldest first -- what
 // remove-worktree's log pruning needs to find every runs/<id>.jsonl and runs/<id>.prompt it
-// left behind (docs/prd-command-centre.md § Phase 6).
+// left behind (docs/prds/prd-command-centre.md § Phase 6).
 func (s *Store) RunIDsForTask(ctx context.Context, taskID string) ([]int64, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE task_id = ? ORDER BY id`, taskID)
 	if err != nil {

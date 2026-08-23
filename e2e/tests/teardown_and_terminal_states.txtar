@@ -1,4 +1,4 @@
-# Terminal states and teardown (docs/prd-command-centre.md § Phase 6): a merged fixture derives
+# Terminal states and teardown (docs/prds/prd-command-centre.md § Phase 6): a merged fixture derives
 # merged and remove-worktree calls faketp remove --force; a closed-unmerged fixture on a row
 # that has run derives base_gone, not blocked; remove-worktree refuses a dirty worktree; re-run
 # on a failed row creates a second runs row in the same worktree and pushes its commits through

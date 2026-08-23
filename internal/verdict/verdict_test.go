@@ -7,7 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// supportAppPredicate transcribes support-app's real predicate (docs/command-centre-design.md § 8,
+// supportAppPredicate transcribes support-app's real predicate (docs/designs/command-centre-design.md § 8,
 // "re-verified"): five plain checks plus a three-way Linear any_of.
 func supportAppPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
@@ -35,7 +35,7 @@ func supportAppGreenChecks() map[string]verdict.CheckState {
 	}
 }
 
-// servicesPredicate transcribes services' real predicate (docs/command-centre-design.md § 8): six
+// servicesPredicate transcribes services' real predicate (docs/designs/command-centre-design.md § 8): six
 // plain checks, a three-way deployment any_of whose third arm is itself an all_of pairing a
 // success with a skip, a four-way Linear any_of whose first arm is the dependabot author escape
 // hatch, and the path-filtered absent_ok lint check.

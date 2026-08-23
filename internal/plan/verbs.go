@@ -14,7 +14,7 @@ const (
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
-// (docs/prd-command-centre.md § The states). Two states offer none: `queued`, whose only verb
+// (docs/prds/prd-command-centre.md § The states). Two states offer none: `queued`, whose only verb
 // is Phase 2's `cancel`, and `push_pending`, where the push being waited on is the next tick's
 // own work — re-run would race it and there is no live process to kill.
 func Verbs(s State) []string {

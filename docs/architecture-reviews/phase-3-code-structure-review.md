@@ -2,8 +2,8 @@
 
 _Date: 2026-08-23. Target: the built code at `64fb37f`,
 all ~1,900 lines of non-test Go across `cmd/cc`, `internal/cc`, `internal/plan`, `internal/gh`,
-`internal/tp`, read against `docs/prd-command-centre.md`, `docs/command-centre-design.md`,
-`docs/prd-operator-surface.md` and `plans/command-centre-phase-1.md`. Issues #1, #2, #4, #11 and
+`internal/tp`, read against `docs/prds/prd-command-centre.md`, `docs/designs/command-centre-design.md`,
+`docs/prds/prd-operator-surface.md` and `plans/command-centre-phase-1.md`. Issues #1, #2, #4, #11 and
 #12 are merged; #3, #5, #6, #7 and #8 are open. Three questions: what is the design, do the
 module boundaries hold, and is the file layout carrying its weight? Piles 3 and 4 below were
 fixed in the same pass that wrote this; no Go behaviour changed._

@@ -84,7 +84,7 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 }
 
 // mergifyHash reads and hashes repoPath's .mergify.yml, formatted to match the mergify_sha a
-// human records in config after reviewing the file (docs/command-centre-design.md § 7's example,
+// human records in config after reviewing the file (docs/designs/command-centre-design.md § 7's example,
 // "sha256:…").
 func mergifyHash(repoPath string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(repoPath, ".mergify.yml"))

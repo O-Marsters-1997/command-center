@@ -1,6 +1,6 @@
 # An all-green rollup at the commit the app actually pushed derives review_me; swapping one
 # check to failure derives needs_you on the next tick; a rollup at a foreign head SHA derives
-# checking, never green (docs/command-centre-v1.md § 11 inv. 11). Each of those is also a
+# checking, never green (docs/designs/command-centre-design.md § 11 inv. 11). Each of those is also a
 # verdict_transition event -- the last category events needs to reconstruct the whole run
 # (Phase 6) -- logged once per change, never repeated while the verdict holds steady.
 

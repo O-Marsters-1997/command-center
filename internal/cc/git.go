@@ -61,7 +61,7 @@ func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 }
 
 // ChangedPaths lists the paths base and branch differ on -- the diff the push policy is
-// evaluated against (docs/prd-command-centre.md § Phase 4). Three dots diffs against the merge
+// evaluated against (docs/prds/prd-command-centre.md § Phase 4). Three dots diffs against the merge
 // base, so only what branch itself added over base is named.
 func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
 	out, err := git(ctx, repoPath, "diff", "--name-only", base+"..."+branch)

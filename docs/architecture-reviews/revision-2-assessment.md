@@ -6,7 +6,7 @@
 
 | File | What it is |
 |---|---|
-| `../command-centre-design.md` | The design doc, at revision 2 when this was written. The thing being assessed. |
+| `../designs/command-centre-design.md` | The design doc, at revision 2 when this was written. The thing being assessed. |
 | `revision-2-buildability-review.md` | Full staff-engineer review, 466 lines. The detail behind §1 below. |
 | `revision-2-assessment.md` | This file. Verdict summary, competitive comparison, adaptability analysis, user's-eye view. |
 

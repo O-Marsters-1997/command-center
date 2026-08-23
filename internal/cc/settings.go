@@ -6,7 +6,7 @@ import (
 )
 
 // agentSettings is the app-owned settings file passed to every spawn: deny beats the repos'
-// own tracked and synced allows, so an agent's pre-approved push (docs/prd-command-centre.md §
+// own tracked and synced allows, so an agent's pre-approved push (docs/prds/prd-command-centre.md §
 // The agent edits the CI config) never reaches it.
 const agentSettings = `{
   "permissions": {

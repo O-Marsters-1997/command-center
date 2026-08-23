@@ -1,7 +1,7 @@
 # The plan's headline scenario: authorise both tickets once, the root cuts and runs, its PR
 # opens, job 3 fires exactly once more and the dependent cuts off origin/main (stacking off) and
 # runs, both PRs reach an open verdict. events shows exactly two launches and the fake agent log
-# exactly two spawns (docs/prd-command-centre.md § Phase 6).
+# exactly two spawns (docs/prds/prd-command-centre.md § Phase 6).
 
 cc-init-repo
 cc-config two-tasks-commits
