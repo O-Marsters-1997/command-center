@@ -88,9 +88,10 @@ type row struct {
 	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
-	Pgid    string
-	Elapsed string
-	LogPath string
+	Pgid        string
+	Elapsed     string
+	LogPath     string
+	CancelCount int
 }
 
 type tickErrorView struct {
@@ -105,6 +106,7 @@ type pageView struct {
 	// LaunchVerb is how the template recognises the verb it renders as a checkbox in the
 	// slice-wide launch form rather than as a per-row POST to /verb, without naming it in markup.
 	LaunchVerb string
+	CancelVerb string
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -158,10 +160,22 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
 	}
+	cancelledMemberships, err := s.store.CancelledMemberships(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
+	activeLaunches, err := s.store.ActiveLaunchMemberships(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
+
 	view := pageView{
 		ObserveAge: "never",
 		LaunchVerb: plan.VerbLaunch,
-		Rows:       derive(tasks, obs, authorised, latestRuns, pushFacts, vd, s.stackingByRepo, now),
+		CancelVerb: plan.VerbCancel,
+		Rows: derive(
+			tasks, obs, authorised, cancelledMemberships, activeLaunches, latestRuns, pushFacts, vd, s.stackingByRepo, now,
+		),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -187,7 +201,8 @@ type verdictDeps struct {
 }
 
 func derive(
-	tasks []Task, obs Observation, authorised map[string]bool, latestRuns map[string]RunSummary,
+	tasks []Task, obs Observation, authorised, cancelledMemberships map[string]bool,
+	activeLaunches map[string]ActiveLaunchMembership, latestRuns map[string]RunSummary,
 	pushFacts map[string]PushFact, vd verdictDeps, stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
@@ -199,24 +214,26 @@ func derive(
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
 		runFact, pgid, elapsed, logPath := runFactFor(t, obs, latestRuns, pushFacts, vd, now)
 		state, reason := plan.Status(plan.Facts{
-			Task:       pt,
-			Unlock:     unlock,
-			Now:        now,
-			Authorised: authorised[t.TicketURL],
-			LatestRun:  runFact,
+			Task:            pt,
+			Unlock:          unlock,
+			Now:             now,
+			Authorised:      authorised[t.TicketURL],
+			LatestRun:       runFact,
+			CancelledMember: cancelledMemberships[t.TicketURL],
 		})
 		rows = append(rows, row{
-			TicketURL: t.TicketURL,
-			State:     state.String(),
-			Reason:    string(reason),
-			Verbs:     plan.Verbs(state),
-			Branch:    t.Branch,
-			Base:      unlock.BaseBranch,
-			Worktree:  obs.Worktrees[t.Branch],
-			PR:        prSummary(obs.PRs[t.Branch]),
-			Pgid:      pgid,
-			Elapsed:   elapsed,
-			LogPath:   logPath,
+			TicketURL:   t.TicketURL,
+			State:       state.String(),
+			Reason:      string(reason),
+			Verbs:       plan.Verbs(state),
+			Branch:      t.Branch,
+			Base:        unlock.BaseBranch,
+			Worktree:    obs.Worktrees[t.Branch],
+			PR:          prSummary(obs.PRs[t.Branch]),
+			Pgid:        pgid,
+			Elapsed:     elapsed,
+			LogPath:     logPath,
+			CancelCount: activeLaunches[t.TicketURL].Members,
 		})
 	}
 	return rows
@@ -391,13 +408,18 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
+	activeLaunches, err := s.store.ActiveLaunchMemberships(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	rows := make([]previewRow, 0, len(requested))
 	for _, ticketURL := range requested {
 		t := byURL[ticketURL]
 		stacking := s.stackingByRepo[t.Repo]
 		unlock := plan.Unlocked(t, byURL, prs, stacking)
-		label, reason := plan.Preview(unlock, slice)
+		label, reason := plan.Preview(unlock, slice, activeLaunches[ticketURL].LaunchID)
 
 		base := unlock.BaseBranch
 		if base == "" {

@@ -143,6 +143,159 @@ func TestActiveMembershipsExcludesUnauthorisedTasks(t *testing.T) {
 	}
 }
 
+func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
+		if err := store.QueueLaunchIntent(ctx, taskID, "hash", "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	members, err := store.CancelLaunchesFor(ctx, "sandbox://CC-2", at.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("CancelLaunchesFor: %v", err)
+	}
+	if members != 3 {
+		t.Errorf("members = %d, want 3: every ticket the launch withdraws", members)
+	}
+
+	active, err := store.ActiveMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 0 {
+		t.Errorf("active memberships = %+v, want none: the whole launch was cancelled", active)
+	}
+
+	cancelled, err := store.CancelledMemberships(ctx)
+	if err != nil {
+		t.Fatalf("CancelledMemberships: %v", err)
+	}
+	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
+		if !cancelled[taskID] {
+			t.Errorf("cancelled memberships = %+v, want %s cancelled too: every sibling, not just the one named",
+				cancelled, taskID)
+		}
+	}
+}
+
+func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+
+	members, err := store.CancelLaunchesFor(ctx, "sandbox://GHOST", time.Now())
+	if err != nil {
+		t.Fatalf("CancelLaunchesFor: %v", err)
+	}
+	if members != 0 {
+		t.Errorf("members = %d, want 0", members)
+	}
+}
+
+func TestCancelledMembershipsExcludesARelaunchedTask(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CancelLaunchesFor(ctx, task.TicketURL, at.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-2", "group-b", at.Add(3*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	cancelled, err := store.CancelledMemberships(ctx)
+	if err != nil {
+		t.Fatalf("CancelledMemberships: %v", err)
+	}
+	if cancelled[task.TicketURL] {
+		t.Errorf("cancelled memberships = %+v, want %s absent: it was relaunched", cancelled, task.TicketURL)
+	}
+
+	active, err := store.ActiveMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !active[task.TicketURL] {
+		t.Errorf("active memberships = %+v, want %s active under its new launch", active, task.TicketURL)
+	}
+}
+
+func TestActiveLaunchMembershipsNamesTheLaunchAndItsMemberCount(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+		if err := store.QueueLaunchIntent(ctx, taskID, "hash", "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	memberships, err := store.ActiveLaunchMemberships(ctx)
+	if err != nil {
+		t.Fatalf("ActiveLaunchMemberships: %v", err)
+	}
+	cc1, ok := memberships["sandbox://CC-1"]
+	if !ok {
+		t.Fatalf("memberships = %+v, want sandbox://CC-1 present", memberships)
+	}
+	if cc1.Members != 2 {
+		t.Errorf("CC-1 members = %d, want 2", cc1.Members)
+	}
+	if cc1.LaunchID == 0 {
+		t.Error("CC-1 launch id is 0, want the real launch id")
+	}
+	if got := memberships["sandbox://CC-2"].LaunchID; got != cc1.LaunchID {
+		t.Errorf("CC-2 launch id = %d, want CC-1's launch id %d: same group", got, cc1.LaunchID)
+	}
+}
+
 // launchMemberHashes reads launch_members directly: the store's own methods expose only
 // membership, and asserting distinct, non-empty prompt hashes needs the column itself.
 func launchMemberHashes(t *testing.T, dbPath string) map[string]string {

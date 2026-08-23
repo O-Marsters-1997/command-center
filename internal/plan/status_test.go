@@ -77,6 +77,38 @@ func TestStateString(t *testing.T) {
 		plan.BaseGone.String() != "base_gone" {
 		t.Errorf("states render as %q, %q and %q", plan.PRMerged, plan.PRClosedUnmerged, plan.BaseGone)
 	}
+	if plan.Cancelled.String() != "cancelled" {
+		t.Errorf("state renders as %q, want cancelled", plan.Cancelled)
+	}
+}
+
+func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
+	t.Parallel()
+
+	state, reason := plan.Status(plan.Facts{
+		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		Authorised:      true,
+		CancelledMember: true,
+	})
+	if state != plan.Cancelled {
+		t.Errorf("state = %v, want cancelled", state)
+	}
+	if reason == "" {
+		t.Error("reason is empty")
+	}
+}
+
+func TestStatusNeverDerivesCancelledOnceItHasRun(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		LatestRun:       &plan.RunFact{Alive: true},
+		CancelledMember: true,
+	})
+	if state != plan.Running {
+		t.Errorf("state = %v, want running: a row that ever ran is never cancelled", state)
+	}
 }
 
 func TestStatusWithLatestRun(t *testing.T) {

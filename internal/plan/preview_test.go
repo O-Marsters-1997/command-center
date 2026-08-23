@@ -11,11 +11,12 @@ func TestPreview(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		unlock      plan.Unlock
-		slice       map[string]bool
-		wantLabel   plan.PreviewLabel
-		reasonNames string
+		name           string
+		unlock         plan.Unlock
+		slice          map[string]bool
+		activeLaunchID int64
+		wantLabel      plan.PreviewLabel
+		reasonNames    string
 	}{
 		{
 			name:      "an unlocked row starts now",
@@ -37,13 +38,21 @@ func TestPreview(t *testing.T) {
 			wantLabel:   plan.Refused,
 			reasonNames: "sandbox://CC-9",
 		},
+		{
+			name:           "a task already in an active launch is refused, naming that launch",
+			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+			slice:          map[string]bool{},
+			activeLaunchID: 3,
+			wantLabel:      plan.Refused,
+			reasonNames:    "launch 3",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			label, reason := plan.Preview(tt.unlock, tt.slice)
+			label, reason := plan.Preview(tt.unlock, tt.slice, tt.activeLaunchID)
 			if label != tt.wantLabel {
 				t.Errorf("label = %v, want %v (reason %q)", label, tt.wantLabel, reason)
 			}
@@ -59,7 +68,7 @@ func TestPreviewRefusedNamesNoOpenOrMergedPullRequest(t *testing.T) {
 
 	_, reason := plan.Preview(
 		plan.Unlock{Blocking: []string{"sandbox://CC-9"}},
-		map[string]bool{},
+		map[string]bool{}, 0,
 	)
 	if !strings.Contains(string(reason), "no open or merged pull request") {
 		t.Errorf("reason %q does not say the blocker has no open or merged pull request", reason)

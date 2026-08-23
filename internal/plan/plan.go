@@ -141,6 +141,7 @@ const (
 	PRMerged
 	PRClosedUnmerged
 	BaseGone
+	Cancelled
 )
 
 func (s State) String() string {
@@ -171,6 +172,8 @@ func (s State) String() string {
 		return "pr_closed_unmerged"
 	case BaseGone:
 		return "base_gone"
+	case Cancelled:
+		return "cancelled"
 	case Blocked:
 		return "blocked"
 	default:
@@ -211,11 +214,12 @@ type RunFact struct {
 // time.Now: the clock is the shell's, which keeps the rendered page byte-stable. LatestRun is
 // nil until a task's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
 type Facts struct {
-	Task       Task
-	Unlock     Unlock
-	Now        time.Time
-	Authorised bool
-	LatestRun  *RunFact
+	Task            Task
+	Unlock          Unlock
+	Now             time.Time
+	Authorised      bool
+	LatestRun       *RunFact
+	CancelledMember bool
 }
 
 // Status derives a task's state and the sentence explaining it. A run's liveness and disposition
@@ -232,6 +236,9 @@ func Status(f Facts) (State, Reason) {
 	}
 	if state, reason, ok := statusFromRun(f.LatestRun); ok {
 		return state, reason
+	}
+	if f.CancelledMember {
+		return Cancelled, "authorised then cancelled before launching"
 	}
 
 	switch {

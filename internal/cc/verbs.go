@@ -12,14 +12,11 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-// reRunVerb, closePRVerb and removeWorktreeVerb are Phase 6's remaining verbs
-// (docs/prds/prd-command-centre.md § The states): relaunch in the same worktree, unopen a pull
-// request the app opened, and tear down a terminal row's worktree. `cancel` is Phase 2 and is
-// not implemented.
 const (
 	reRunVerb          = plan.VerbReRun
 	closePRVerb        = plan.VerbClosePR
 	removeWorktreeVerb = plan.VerbRemoveWorktree
+	cancelVerb         = plan.VerbCancel
 )
 
 // supportedVerbs is every verb handleVerb (server.go) accepts.
@@ -29,6 +26,7 @@ var supportedVerbs = map[string]bool{
 	reRunVerb:          true,
 	closePRVerb:        true,
 	removeWorktreeVerb: true,
+	cancelVerb:         true,
 }
 
 const (
@@ -37,7 +35,36 @@ const (
 	eventClosePRFailed         = "close_pr_failed"
 	eventRemoveWorktreeRefused = "remove_worktree_refused"
 	eventWorktreeRemoved       = "worktree_removed"
+	eventLaunchCancelled       = "launch_cancelled"
 )
+
+func (l *Loop) applyCancelIntents(ctx context.Context) error {
+	intents, err := l.store.PendingVerbIntents(ctx, cancelVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	now := l.now()
+	for _, intent := range intents {
+		members, err := l.store.CancelLaunchesFor(ctx, intent.TaskID, now)
+		if err != nil {
+			return err
+		}
+		if err := l.store.AppendEvent(ctx, Event{
+			At: now, TaskURL: intent.TaskID, Kind: eventLaunchCancelled,
+			Detail: fmt.Sprintf("launch cancelled, %d member(s)", members),
+		}); err != nil {
+			return err
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // applyReRunIntents consumes every pending re-run request: relaunch in the same worktree,
 // incrementally -- a second `runs` row against the same task (docs/prds/prd-command-centre.md §
