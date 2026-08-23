@@ -392,6 +392,7 @@ func (l *Loop) spawnRun(ctx context.Context, task Task, worktreePath, baselineSH
 		AgentCommand: l.cfg.AgentCommand,
 		WorktreePath: worktreePath,
 		SettingsPath: l.ws.SettingsPath,
+		Prompt:       prompt,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}

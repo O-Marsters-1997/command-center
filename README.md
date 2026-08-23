@@ -155,9 +155,14 @@ The workspace root is the config file's grandparent directory, so
 |---|---|
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
-| `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}` and `{prompt_file}` are substituted into every element. |
+| `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
 | `[[repo]]` | `name`, `path` relative to the workspace root, `stacking`, `mergify_sha`, `deny`, `checks`. |
+
+Give a real agent `{prompt}`, not `{prompt_file}`. Claude Code expands a slash
+command only when the prompt arrives as argv text, so a path is read back as
+inert text and `/implement` never fires. `{prompt_file}` stays for anything that
+would rather take a path.
 
 `checks` is the repo's boolean predicate over its gating checks, evaluated by
 `internal/verdict` against a normalised rollup. `mergify_sha` is the
