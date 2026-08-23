@@ -88,12 +88,9 @@ type row struct {
 	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
-	Pgid    string
-	Elapsed string
-	LogPath string
-	// CancelCount is the member count of the active launch this row belongs to, zero otherwise —
-	// what the cancel verb labels itself with ("cancel launch (N tickets)"): cancel is
-	// launch-scoped, not row-scoped (plans/command-centre-phase-2.md § Phase 3).
+	Pgid        string
+	Elapsed     string
+	LogPath     string
 	CancelCount int
 }
 
@@ -109,8 +106,6 @@ type pageView struct {
 	// LaunchVerb is how the template recognises the verb it renders as a checkbox in the
 	// slice-wide launch form rather than as a per-row POST to /verb, without naming it in markup.
 	LaunchVerb string
-	// CancelVerb is how the template recognises the verb whose button text names the member
-	// count rather than the bare verb ("cancel launch (N tickets)"), without naming it in markup.
 	CancelVerb string
 }
 

@@ -82,9 +82,6 @@ func TestStateString(t *testing.T) {
 	}
 }
 
-// TestStatusDerivesCancelledForAMemberWithNoRun covers plan.Facts.CancelledMember: a queued
-// sibling whose launch was cancelled before it ran reads cancelled, regardless of the pre-Phase-3
-// unlocked × authorised facts it would otherwise derive from.
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 	t.Parallel()
 
@@ -101,9 +98,6 @@ func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 	}
 }
 
-// TestStatusNeverDerivesCancelledOnceItHasRun covers the inv. 19-style half of Facts.CancelledMember:
-// a row that ever ran keeps reading its run's own state, never cancelled, even if it is (still,
-// stalely) a cancelled-launch member.
 func TestStatusNeverDerivesCancelledOnceItHasRun(t *testing.T) {
 	t.Parallel()
 

@@ -13,8 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// renderPage renders the server's index page as a plain string, for tests that need to read the
-// derived state of a specific row rather than call an unexported function directly.
 func renderPage(t *testing.T, server *cc.Server) string {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -25,7 +23,6 @@ func renderPage(t *testing.T, server *cc.Server) string {
 	return rec.Body.String()
 }
 
-// rowState reads the <td>state</td> cell immediately following a row's ticket URL cell.
 func rowState(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	re := regexp.MustCompile(regexp.QuoteMeta("<td>"+ticketURL+"</td>") + `\s*<td>([^<]*)</td>`)
@@ -36,11 +33,6 @@ func rowState(t *testing.T, page, ticketURL string) string {
 	return m[1]
 }
 
-// TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest covers the ticket's central scenario:
-// authorising four tasks under max_agents = 1 starts one and leaves three queued; cancelling the
-// launch (naming any one member) cancels every member's launch, and the next tick's
-// launchEligible starts nothing further from it — the running member is neither killed nor
-// disposed.
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
@@ -91,8 +83,6 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 	runningPgid := *latest[runningTicket].Pgid
 
-	// Cancel naming a queued sibling, never the running one: cancel is launch-scoped, so this
-	// withdraws the whole launch regardless of which member's ticket names it.
 	var queuedSibling string
 	for _, ticketURL := range tickets {
 		if ticketURL != runningTicket {
@@ -127,9 +117,6 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Errorf("active memberships = %+v, want none: the whole launch was cancelled", active)
 	}
 
-	// CancelledMemberships is the raw launch_members join: it reports every non-active member of
-	// a cancelled launch, running one included. It is plan.Status, not this query, that suppresses
-	// cancelled once a row has run (inv. 19-style), asserted below via the rendered page.
 	cancelled, err := store.CancelledMemberships(t.Context())
 	if err != nil {
 		t.Fatal(err)

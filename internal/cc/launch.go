@@ -164,16 +164,11 @@ func (s *Store) ActiveMemberships(ctx context.Context) (map[string]bool, error) 
 	return memberships, nil
 }
 
-// ActiveLaunchMembership is one task's current authorisation: which active launch it belongs to,
-// and how many tickets that launch as a whole would withdraw if cancelled — what the page's
-// cancel button labels itself with, and what the preview's overlap rule names.
 type ActiveLaunchMembership struct {
 	LaunchID int64
 	Members  int
 }
 
-// ActiveLaunchMemberships returns, for every task belonging to an active launch, that launch's
-// id and total member count.
 func (s *Store) ActiveLaunchMemberships(ctx context.Context) (map[string]ActiveLaunchMembership, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT lm.task_id, lm.launch_id, counts.members
@@ -202,9 +197,6 @@ func (s *Store) ActiveLaunchMemberships(ctx context.Context) (map[string]ActiveL
 	return memberships, nil
 }
 
-// CancelledMemberships returns the set of ticket URLs whose most recent launch membership was
-// cancelled before it ran, and who are not a member of any active launch since — a
-// cancel-then-relaunch mints a second, active launch that supersedes the cancelled one.
 func (s *Store) CancelledMemberships(ctx context.Context) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT lm.task_id FROM launch_members lm
@@ -233,10 +225,6 @@ func (s *Store) CancelledMemberships(ctx context.Context) (map[string]bool, erro
 	return memberships, nil
 }
 
-// CancelLaunchesFor cancels every active launch taskID belongs to and returns the total number
-// of tickets those launches withdraw. It only flips launches.state: nothing here kills a run or
-// removes a worktree, so members already running are untouched
-// (plans/command-centre-phase-2.md § Phase 3).
 func (s *Store) CancelLaunchesFor(ctx context.Context, taskID string, at time.Time) (members int, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

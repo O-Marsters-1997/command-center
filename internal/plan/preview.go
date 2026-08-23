@@ -28,10 +28,6 @@ func (l PreviewLabel) String() string {
 // Preview labels one task's row in a launch preview: unlocked tasks start now; a locked task
 // starts on unlock only if every blocker is itself in the requested slice — otherwise nothing
 // in this launch will ever satisfy it, and the row is refused (docs/prds/prd-command-centre.md § A launch).
-// activeLaunchID is the id of the active launch the task already belongs to, or 0 for none:
-// authorising more work always mints a second launch, never adds to an existing one
-// (plans/command-centre-phase-2.md § Technical design decisions), so an already-authorised task
-// is refused outright, ahead of the unlock check.
 func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64) (PreviewLabel, Reason) {
 	if activeLaunchID != 0 {
 		return Refused, Reason(fmt.Sprintf("already authorised in launch %d", activeLaunchID))

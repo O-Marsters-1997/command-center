@@ -12,10 +12,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-// reRunVerb, closePRVerb and removeWorktreeVerb are Phase 6's remaining verbs
-// (docs/prds/prd-command-centre.md § The states): relaunch in the same worktree, unopen a pull
-// request the app opened, and tear down a terminal row's worktree. cancelVerb is Phase 3's
-// (launch.go's CancelLaunchesFor and applyCancelIntents below).
 const (
 	reRunVerb          = plan.VerbReRun
 	closePRVerb        = plan.VerbClosePR
@@ -42,12 +38,6 @@ const (
 	eventLaunchCancelled       = "launch_cancelled"
 )
 
-// applyCancelIntents consumes every pending cancel request: it resolves the task's active
-// launch(es), cancels each, and appends one launch_cancelled event naming how many tickets that
-// withdraws. Launch-scoped, not row-scoped: every other member of the same launch reads
-// cancelled on this same tick's render, and nothing here kills a run or removes a worktree — a
-// member already running keeps being pushed and read exactly as before
-// (plans/command-centre-phase-2.md § Phase 3).
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, cancelVerb)
 	if err != nil {

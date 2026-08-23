@@ -210,9 +210,6 @@ func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
 	}
 }
 
-// TestCancelledMembershipsExcludesARelaunchedTask covers the design's overlap rule the other
-// way round: cancelling then relaunching mints a second, active launch that supersedes the
-// cancelled one, so the task must read as active membership again, never cancelled.
 func TestCancelledMembershipsExcludesARelaunchedTask(t *testing.T) {
 	t.Parallel()
 

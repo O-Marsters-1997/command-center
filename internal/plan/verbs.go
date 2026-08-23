@@ -2,8 +2,6 @@ package plan
 
 // The verbs a row can offer. These are the wire values the page's forms post and internal/cc's
 // handler accepts, so they are spelled exactly as the route's `verb` field, not prettified.
-// `refresh` is absent because stacking = false makes `base moved` unreachable
-// (plans/command-centre-phase-2.md § Out of scope).
 const (
 	VerbLaunch         = "launch"
 	VerbKill           = "kill"
@@ -15,12 +13,7 @@ const (
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
-// (docs/prds/prd-command-centre.md § The states). `push_pending` offers none: the push being
-// waited on is the next tick's own work — re-run would race it and there is no live process to
-// kill. `cancelled` offers `launch` only, not `remove worktree`: cutting and spawning are one
-// step, so a member with a worktree always has a run row, and a cancelled member — which by
-// definition never launched — never has one (plans/command-centre-phase-2.md § New states, new
-// verbs, deviation from design §5).
+// (docs/prds/prd-command-centre.md § The states).
 func Verbs(s State) []string {
 	switch s {
 	case Ready, Blocked, Cancelled:

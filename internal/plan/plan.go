@@ -214,15 +214,11 @@ type RunFact struct {
 // time.Now: the clock is the shell's, which keeps the rendered page byte-stable. LatestRun is
 // nil until a task's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
 type Facts struct {
-	Task       Task
-	Unlock     Unlock
-	Now        time.Time
-	Authorised bool
-	LatestRun  *RunFact
-	// CancelledMember is true once a launch this task belonged to was cancelled and it is not a
-	// member of any active launch since (a cancel-then-relaunch mints a second, active launch,
-	// which supersedes it). Only ever consulted for a task with no run: a row that ever ran is
-	// never cancelled (inv. 19-style, plans/command-centre-phase-2.md § Phase 3).
+	Task            Task
+	Unlock          Unlock
+	Now             time.Time
+	Authorised      bool
+	LatestRun       *RunFact
 	CancelledMember bool
 }
 
