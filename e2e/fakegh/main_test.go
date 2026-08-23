@@ -133,3 +133,51 @@ func TestLogsArgvWhenLogSet(t *testing.T) {
 		t.Errorf("log = %q, want %q", logged, want)
 	}
 }
+
+func TestLongestMatchingKeyWins(t *testing.T) {
+	t.Parallel()
+
+	fixture := stageFixture(t, `{
+		"pr list":                             {"stdout": "bulk\n"},
+		"pr list --state all --head feat-x":   {"stdout": "head-scoped\n"}
+	}`)
+
+	tests := []struct {
+		name     string
+		args     []string
+		wantOut  string
+		wantCode int
+	}{
+		{"bulk read falls back to the two-word key",
+			[]string{"pr", "list", "--state", "open", "--limit", "100", "--json", "number"},
+			"bulk\n", 0},
+		{"head-scoped read matches the longer key",
+			[]string{"pr", "list", "--state", "all", "--head", "feat-x", "--json", "number,state"},
+			"head-scoped\n", 0},
+		{"a longer key is not matched by a shorter argv",
+			[]string{"pr", "list", "--state", "all", "--head", "feat-xyz"},
+			"bulk\n", 0},
+		{"unknown key still fails naming it",
+			[]string{"pr", "merge", "1"},
+			"", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout, stderr bytes.Buffer
+			code := run(tt.args, env(map[string]string{"CC_GH_FIXTURE": fixture}), &stdout, &stderr)
+
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d (stderr: %q)", code, tt.wantCode, stderr.String())
+			}
+			if stdout.String() != tt.wantOut {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantOut)
+			}
+			if tt.wantCode != 0 && !strings.Contains(stderr.String(), "pr merge") {
+				t.Errorf("stderr = %q, want it to name the missing key", stderr.String())
+			}
+		})
+	}
+}
