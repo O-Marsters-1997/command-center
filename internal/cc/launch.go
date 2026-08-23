@@ -138,94 +138,53 @@ func insertLaunch(ctx context.Context, tx dbTx, at string, members []pendingInte
 	return nil
 }
 
-// ActiveMemberships returns the set of ticket URLs belonging to an active launch — what the
-// page needs to derive Facts.Authorised per row.
-func (s *Store) ActiveMemberships(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.task_id FROM launch_members lm
-		JOIN launches l ON l.id = lm.launch_id
-		WHERE l.state = 'active'`)
-	if err != nil {
-		return nil, fmt.Errorf("select active memberships: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	memberships := map[string]bool{}
-	for rows.Next() {
-		var taskID string
-		if err := rows.Scan(&taskID); err != nil {
-			return nil, fmt.Errorf("scan active membership: %w", err)
-		}
-		memberships[taskID] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate active memberships: %w", err)
-	}
-	return memberships, nil
+type LaunchMembership struct {
+	LaunchID  int64
+	Members   int
+	Cancelled bool
 }
 
-type ActiveLaunchMembership struct {
-	LaunchID int64
-	Members  int
-}
-
-func (s *Store) ActiveLaunchMemberships(ctx context.Context) (map[string]ActiveLaunchMembership, error) {
+// LaunchMemberships returns every task in an active launch, keyed by ticket URL, plus that
+// launch's member count — and Cancelled for a task whose launch was cancelled and not relaunched.
+func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembership, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.task_id, lm.launch_id, counts.members
+		SELECT lm.task_id, lm.launch_id, l.state, COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 		FROM launch_members lm
 		JOIN launches l ON l.id = lm.launch_id
-		JOIN (SELECT launch_id, COUNT(*) AS members FROM launch_members GROUP BY launch_id) counts
-			ON counts.launch_id = lm.launch_id
-		WHERE l.state = 'active'`)
+		WHERE l.state IN ('active', 'cancelled')`)
 	if err != nil {
-		return nil, fmt.Errorf("select active launch memberships: %w", err)
+		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	memberships := map[string]ActiveLaunchMembership{}
+	memberships := map[string]LaunchMembership{}
+	cancelled := map[string]bool{}
 	for rows.Next() {
-		var taskID string
-		var m ActiveLaunchMembership
-		if err := rows.Scan(&taskID, &m.LaunchID, &m.Members); err != nil {
-			return nil, fmt.Errorf("scan active launch membership: %w", err)
+		var taskID, state string
+		var m LaunchMembership
+		if err := rows.Scan(&taskID, &m.LaunchID, &state, &m.Members); err != nil {
+			return nil, fmt.Errorf("scan launch membership: %w", err)
+		}
+		if state == "cancelled" {
+			cancelled[taskID] = true
+			continue
 		}
 		memberships[taskID] = m
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate active launch memberships: %w", err)
+		return nil, fmt.Errorf("iterate launch memberships: %w", err)
 	}
-	return memberships, nil
-}
-
-func (s *Store) CancelledMemberships(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.task_id FROM launch_members lm
-		JOIN launches l ON l.id = lm.launch_id
-		WHERE l.state = 'cancelled' AND lm.task_id NOT IN (
-			SELECT lm2.task_id FROM launch_members lm2
-			JOIN launches l2 ON l2.id = lm2.launch_id
-			WHERE l2.state = 'active'
-		)`)
-	if err != nil {
-		return nil, fmt.Errorf("select cancelled memberships: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	memberships := map[string]bool{}
-	for rows.Next() {
-		var taskID string
-		if err := rows.Scan(&taskID); err != nil {
-			return nil, fmt.Errorf("scan cancelled membership: %w", err)
+	for taskID := range cancelled {
+		if _, active := memberships[taskID]; !active {
+			memberships[taskID] = LaunchMembership{Cancelled: true}
 		}
-		memberships[taskID] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate cancelled memberships: %w", err)
 	}
 	return memberships, nil
 }
 
-func (s *Store) CancelLaunchesFor(ctx context.Context, taskID string, at time.Time) (members int, err error) {
+// CancelLaunchesFor cancels every active launch the task belongs to, returning how many
+// memberships those launches withdraw — the named task's own included.
+func (s *Store) CancelLaunchesFor(ctx context.Context, taskID string) (members int, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin: %w", err)
@@ -236,38 +195,19 @@ func (s *Store) CancelLaunchesFor(ctx context.Context, taskID string, at time.Ti
 		}
 	}()
 
-	rows, err := tx.QueryContext(ctx, `
-		SELECT lm.launch_id, counts.members
-		FROM launch_members lm
+	const activeLaunches = `
+		SELECT lm.launch_id FROM launch_members lm
 		JOIN launches l ON l.id = lm.launch_id
-		JOIN (SELECT launch_id, COUNT(*) AS members FROM launch_members GROUP BY launch_id) counts
-			ON counts.launch_id = lm.launch_id
-		WHERE l.state = 'active' AND lm.task_id = ?`, taskID)
-	if err != nil {
-		return 0, fmt.Errorf("select active launches for %s: %w", taskID, err)
-	}
-	var launchIDs []int64
-	for rows.Next() {
-		var launchID int64
-		var count int
-		if err := rows.Scan(&launchID, &count); err != nil {
-			_ = rows.Close()
-			return 0, fmt.Errorf("scan active launch for %s: %w", taskID, err)
-		}
-		launchIDs = append(launchIDs, launchID)
-		members += count
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return 0, fmt.Errorf("iterate active launches for %s: %w", taskID, err)
-	}
-	_ = rows.Close()
+		WHERE l.state = 'active' AND lm.task_id = ?`
 
-	for _, launchID := range launchIDs {
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE launches SET state = 'cancelled' WHERE id = ?`, launchID); err != nil {
-			return 0, fmt.Errorf("cancel launch %d: %w", launchID, err)
-		}
+	err = tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM launch_members WHERE launch_id IN (`+activeLaunches+`)`, taskID).Scan(&members)
+	if err != nil {
+		return 0, fmt.Errorf("count members of active launches for %s: %w", taskID, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE launches SET state = 'cancelled' WHERE id IN (`+activeLaunches+`)`, taskID); err != nil {
+		return 0, fmt.Errorf("cancel launches for %s: %w", taskID, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)

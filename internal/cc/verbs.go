@@ -43,13 +43,10 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(intents) == 0 {
-		return nil
-	}
 
 	now := l.now()
 	for _, intent := range intents {
-		members, err := l.store.CancelLaunchesFor(ctx, intent.TaskID, now)
+		members, err := l.store.CancelLaunchesFor(ctx, intent.TaskID)
 		if err != nil {
 			return err
 		}

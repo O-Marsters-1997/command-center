@@ -109,21 +109,13 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Error("the running member's process was stopped; cancel must leave it running")
 	}
 
-	active, err := store.ActiveMemberships(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(active) != 0 {
-		t.Errorf("active memberships = %+v, want none: the whole launch was cancelled", active)
-	}
-
-	cancelled, err := store.CancelledMemberships(t.Context())
+	memberships, err := store.LaunchMemberships(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, ticketURL := range tickets {
-		if !cancelled[ticketURL] {
-			t.Errorf("cancelled memberships = %+v, want %s cancelled", cancelled, ticketURL)
+		if !memberships[ticketURL].Cancelled {
+			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticketURL)
 		}
 	}
 

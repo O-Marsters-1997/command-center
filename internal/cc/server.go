@@ -134,7 +134,7 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
-	authorised, err := s.store.ActiveMemberships(ctx)
+	memberships, err := s.store.LaunchMemberships(ctx)
 	if err != nil {
 		return pageView{}, err
 	}
@@ -160,22 +160,11 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
 	}
-	cancelledMemberships, err := s.store.CancelledMemberships(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	activeLaunches, err := s.store.ActiveLaunchMemberships(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-
 	view := pageView{
 		ObserveAge: "never",
 		LaunchVerb: plan.VerbLaunch,
 		CancelVerb: plan.VerbCancel,
-		Rows: derive(
-			tasks, obs, authorised, cancelledMemberships, activeLaunches, latestRuns, pushFacts, vd, s.stackingByRepo, now,
-		),
+		Rows:       derive(tasks, obs, memberships, latestRuns, pushFacts, vd, s.stackingByRepo, now),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -201,9 +190,9 @@ type verdictDeps struct {
 }
 
 func derive(
-	tasks []Task, obs Observation, authorised, cancelledMemberships map[string]bool,
-	activeLaunches map[string]ActiveLaunchMembership, latestRuns map[string]RunSummary,
-	pushFacts map[string]PushFact, vd verdictDeps, stackingByRepo map[string]bool, now time.Time,
+	tasks []Task, obs Observation, memberships map[string]LaunchMembership,
+	latestRuns map[string]RunSummary, pushFacts map[string]PushFact, vd verdictDeps,
+	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
@@ -213,13 +202,14 @@ func derive(
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
 		runFact, pgid, elapsed, logPath := runFactFor(t, obs, latestRuns, pushFacts, vd, now)
+		membership := memberships[t.TicketURL]
 		state, reason := plan.Status(plan.Facts{
 			Task:            pt,
 			Unlock:          unlock,
 			Now:             now,
-			Authorised:      authorised[t.TicketURL],
+			Authorised:      membership.LaunchID != 0,
 			LatestRun:       runFact,
-			CancelledMember: cancelledMemberships[t.TicketURL],
+			CancelledMember: membership.Cancelled,
 		})
 		rows = append(rows, row{
 			TicketURL:   t.TicketURL,
@@ -233,7 +223,7 @@ func derive(
 			Pgid:        pgid,
 			Elapsed:     elapsed,
 			LogPath:     logPath,
-			CancelCount: activeLaunches[t.TicketURL].Members,
+			CancelCount: membership.Members,
 		})
 	}
 	return rows
@@ -408,7 +398,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
-	activeLaunches, err := s.store.ActiveLaunchMemberships(ctx)
+	memberships, err := s.store.LaunchMemberships(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -419,7 +409,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		t := byURL[ticketURL]
 		stacking := s.stackingByRepo[t.Repo]
 		unlock := plan.Unlocked(t, byURL, prs, stacking)
-		label, reason := plan.Preview(unlock, slice, activeLaunches[ticketURL].LaunchID)
+		label, reason := plan.Preview(unlock, slice, memberships[ticketURL].LaunchID)
 
 		base := unlock.BaseBranch
 		if base == "" {
