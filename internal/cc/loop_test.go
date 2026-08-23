@@ -42,6 +42,35 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	}
 }
 
+func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatalf("UpsertTasks: %v", err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+		t.Fatalf("QueueLaunchIntent: %v", err)
+	}
+
+	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	loop := cc.NewLoop(store, stub, fixedClock(at))
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	memberships, err := store.ActiveMemberships(ctx)
+	if err != nil {
+		t.Fatalf("ActiveMemberships: %v", err)
+	}
+	if !memberships["sandbox://CC-1"] {
+		t.Error("RunOnce did not apply the queued launch intent after a successful observe")
+	}
+}
+
 func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	t.Parallel()
 
@@ -50,10 +79,21 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	good := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	bad := good.Add(15 * time.Second)
 
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatalf("UpsertTasks: %v", err)
+	}
+
 	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}
 	ok := cc.NewLoop(store, func(context.Context) (cc.Observation, error) { return observed, nil }, fixedClock(good))
 	if err := ok.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
+	}
+
+	// Queued after the only successful tick, so the failing tick below is the only one that
+	// could apply it — and inv. 10 says a failed observe must apply no transition at all.
+	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", bad); err != nil {
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 
 	boom := errors.New("gh pr list: exit status 1")
@@ -67,6 +107,14 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 	if !errors.Is(err, boom) {
 		t.Errorf("error %v does not wrap the observe failure", err)
+	}
+
+	memberships, err := store.ActiveMemberships(ctx)
+	if err != nil {
+		t.Fatalf("ActiveMemberships: %v", err)
+	}
+	if len(memberships) != 0 {
+		t.Errorf("memberships = %+v, want none: a failed observe must apply no queued intent", memberships)
 	}
 
 	// inv. 10: the tick applied no transition, so the last good observation is still the one

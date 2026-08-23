@@ -62,14 +62,25 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 // request prints the page a real HTTP client gets back from the real handler.
 //
 // It deliberately does not take the flock: a script needs to read the page while `cc tick` or a
-// background daemon holds it. That is safe in Phase 1 only because no route mutates anything —
-// it becomes an inv. 9 question as soon as one does.
+// background daemon holds it. POST /launch now mutates (it queues an intent), but that write is
+// a single blind INSERT against SQLite in WAL mode with a busy_timeout — safe without the flock;
+// a future verb doing more than that would make this an inv. 9 question.
 func request(ctx context.Context, configPath string, args []string) (err error) {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: cc request <method> <path>")
+	flags := flag.NewFlagSet("request", flag.ContinueOnError)
+	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
+	if err := flags.Parse(args); err != nil {
+		return err
 	}
-	method, path := args[0], args[1]
+	rest := flags.Args()
+	if len(rest) != 2 {
+		return fmt.Errorf("usage: cc request [-origin url] <method> <path>")
+	}
+	method, path := rest[0], rest[1]
 
+	cfg, err := cc.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
 	ws, err := cc.ResolveWorkspace(configPath)
 	if err != nil {
 		return err
@@ -81,14 +92,18 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(cc.NewServer(store, time.Now))
+	server := httptest.NewServer(cc.NewServer(store, time.Now, cfg.Repos))
 	defer server.Close()
 
 	req, err := http.NewRequestWithContext(ctx, method, server.URL+path, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Origin", server.URL)
+	requestOrigin := *origin
+	if requestOrigin == "" {
+		requestOrigin = server.URL
+	}
+	req.Header.Set("Origin", requestOrigin)
 
 	resp, err := server.Client().Do(req)
 	if err != nil {
