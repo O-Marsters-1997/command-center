@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
@@ -62,6 +63,9 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 func request(ctx context.Context, configPath string, args []string) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
+	// -form is how a script drives a route the way the page's own forms do, with the fields in
+	// the body: a path-only `cc request POST /verb` cannot express that.
+	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -89,9 +93,16 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	server := httptest.NewServer(cc.NewServer(store, time.Now, cfg.Repos))
 	defer server.Close()
 
-	req, err := http.NewRequestWithContext(ctx, method, server.URL+path, nil)
+	var body io.Reader
+	if *form != "" {
+		body = strings.NewReader(*form)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, server.URL+path, body)
 	if err != nil {
 		return err
+	}
+	if *form != "" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	requestOrigin := *origin
 	if requestOrigin == "" {

@@ -289,7 +289,9 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	for _, want := range []string{"running", "4242", "1m30s", "/state/runs/1.jsonl"} {
+	wants := []string{"running", "4242", "1m30s", "/state/runs/1.jsonl",
+		`<button type="submit" name="verb" value="kill">kill</button>`}
+	for _, want := range wants {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}

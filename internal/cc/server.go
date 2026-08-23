@@ -79,10 +79,13 @@ type row struct {
 	TicketURL string
 	State     string
 	Reason    string
-	Branch    string
-	Base      string
-	Worktree  string
-	PR        string
+	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
+	// tested beside plan.Status rather than spelled out per state in the template.
+	Verbs    []string
+	Branch   string
+	Base     string
+	Worktree string
+	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
 	Pgid    string
@@ -99,6 +102,9 @@ type pageView struct {
 	ObserveAge string
 	LastError  *tickErrorView
 	Rows       []row
+	// LaunchVerb is how the template recognises the verb it renders as a checkbox in the
+	// slice-wide launch form rather than as a per-row POST to /verb, without naming it in markup.
+	LaunchVerb string
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +160,7 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	}
 	view := pageView{
 		ObserveAge: "never",
+		LaunchVerb: plan.VerbLaunch,
 		Rows:       derive(tasks, obs, authorised, latestRuns, pushFacts, vd, s.stackingByRepo, now),
 	}
 	if observed {
@@ -202,6 +209,7 @@ func derive(
 			TicketURL: t.TicketURL,
 			State:     state.String(),
 			Reason:    string(reason),
+			Verbs:     plan.Verbs(state),
 			Branch:    t.Branch,
 			Base:      unlock.BaseBranch,
 			Worktree:  obs.Worktrees[t.Branch],
@@ -416,9 +424,15 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 // simply stays queued forever with an honest reason (§ A launch).
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	requested := r.URL.Query()["task"]
+	// ParseForm merges the posted body with the query string, so one checkbox per launchable row
+	// and a hand-built `POST /launch?task=...&task=...` are the same repeated field to r.Form.
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	requested := r.Form["task"]
 	if len(requested) == 0 {
-		http.Error(w, "at least one ?task= is required", http.StatusBadRequest)
+		http.Error(w, "at least one task is required", http.StatusBadRequest)
 		return
 	}
 
@@ -458,8 +472,11 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 // remove-worktree appliers). `cancel` is Phase 2 and is not implemented.
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	verb := r.URL.Query().Get("verb")
-	taskURL := r.URL.Query().Get("task")
+	// FormValue, not URL.Query: the page's per-row form posts both fields in the body
+	// (plans/command-centre-phase-1.md § Routes). It reads the query string too, which is what
+	// keeps a hand-built `POST /verb?verb=kill&task=...` working unchanged.
+	verb := r.FormValue("verb")
+	taskURL := r.FormValue("task")
 	if verb == "" || taskURL == "" {
 		http.Error(w, "verb and task are both required", http.StatusBadRequest)
 		return

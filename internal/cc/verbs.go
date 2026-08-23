@@ -16,9 +16,9 @@ import (
 // centre.md § The states): relaunch in the same worktree, unopen a pull request the app opened,
 // and tear down a terminal row's worktree. `cancel` is Phase 2 and is not implemented.
 const (
-	reRunVerb          = "re-run"
-	closePRVerb        = "close-pr"
-	removeWorktreeVerb = "remove-worktree"
+	reRunVerb          = plan.VerbReRun
+	closePRVerb        = plan.VerbClosePR
+	removeWorktreeVerb = plan.VerbRemoveWorktree
 )
 
 // supportedVerbs is every verb handleVerb (server.go) accepts.

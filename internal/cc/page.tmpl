@@ -4,23 +4,40 @@
 <h1>Command Centre</h1>
 <p>Last successful observe: {{.ObserveAge}}</p>
 {{with .LastError}}<p>Last tick error ({{.Age}}): {{.Message}}</p>{{end}}
+<!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
+     checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
+     instead would nest the per-row verb forms inside it, which HTML forbids. -->
+<form id="launch" method="post" action="/launch"></form>
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>branch</th><th>base</th><th>worktree</th><th>pr</th>
-    <th>pgid</th><th>elapsed</th><th>log</th>
+    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>worktree</th>
+    <th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
   </tr>
-  {{range .Rows}}
+  {{range $row := .Rows}}
   <tr>
-    <td>{{.TicketURL}}</td>
-    <td>{{.State}}</td>
-    <td>{{.Reason}}</td>
-    <td>{{.Branch}}</td>
-    <td>{{.Base}}</td>
-    <td>{{.Worktree}}</td>
-    <td>{{.PR}}</td>
-    <td>{{.Pgid}}</td>
-    <td>{{.Elapsed}}</td>
-    <td>{{.LogPath}}</td>
+    <td>{{$row.TicketURL}}</td>
+    <td>{{$row.State}}</td>
+    <td>{{$row.Reason}}</td>
+    <td>
+      {{- range $row.Verbs}}
+      {{- if eq . $.LaunchVerb}}
+      <input type="checkbox" form="launch" name="task" value="{{$row.TicketURL}}">{{.}}
+      {{- else}}
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <button type="submit" name="verb" value="{{.}}">{{.}}</button>
+      </form>
+      {{- end}}
+      {{- end}}
+    </td>
+    <td>{{$row.Branch}}</td>
+    <td>{{$row.Base}}</td>
+    <td>{{$row.Worktree}}</td>
+    <td>{{$row.PR}}</td>
+    <td>{{$row.Pgid}}</td>
+    <td>{{$row.Elapsed}}</td>
+    <td>{{$row.LogPath}}</td>
   </tr>
   {{end}}
 </table>
+<button type="submit" form="launch">launch selected</button>

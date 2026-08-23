@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,5 +113,40 @@ func TestVerbRejectsUnknownTaskOrUnsupportedVerb(t *testing.T) {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestVerbAcceptsFormEncodedFields(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	t.Cleanup(srv.Close)
+
+	// A handler reading only the query string sees neither of these.
+	body := url.Values{"verb": {"kill"}, "task": {"sandbox://CC-1"}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusAccepted {
+		got, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, got)
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
 	}
 }
