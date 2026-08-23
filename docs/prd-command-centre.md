@@ -430,7 +430,8 @@ patch-replay conflicts a rebase hits after a squash merge. The reason it costs n
 squash is **server-enforced** in both repos (`allow_merge_commit: false`), so every merge
 commit in a stack is flattened on the way in — and the parent's merge commits do not pollute
 the descendant PR's review diff (verified). **All of the rebase machinery in revision 2
-existed to preserve a history that GitHub discards.**
+existed to preserve a history that GitHub discards.** This premise is now asserted at
+startup, not just verified once by hand (`internal/cc/repocheck.go`).
 
 **When a parent merges, the app retargets.** Both repos delete the merged branch, and
 Mergify's queue only accepts PRs based on `main` (`base=main` heads its conditions in both

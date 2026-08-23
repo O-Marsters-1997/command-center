@@ -289,7 +289,8 @@ unconditional comparison would have made `base moved` the steady state of every 
 
 The repair is a merge, not a rebase, and the justification is now *stronger* than revision 3
 claimed: squash is **server-enforced** in both repos (`allow_merge_commit: false`,
-`allow_rebase_merge: false` — verified via API), so there is no history to preserve, and a
+`allow_rebase_merge: false` — verified via API, and now **asserted at startup**, not just
+recorded here — `internal/cc/repocheck.go`), so there is no history to preserve, and a
 descendant PR's three-dot diff stays clean under repeated refreshes (verified — merge
 commits from the parent do not pollute the review).
 
@@ -803,7 +804,8 @@ API, not citations inherited from earlier revisions).
   `gh pr edit --base` exists (the retarget verb).
 - Both repos, server-side (API): `delete_branch_on_merge: true`;
   `allow_merge_commit: false`; `allow_rebase_merge: false` (squash is enforced, not just
-  configured).
+  configured). This was a one-time manual check; the app now re-asserts it on every
+  configured repo at startup and refuses to start on a violation (`internal/cc/repocheck.go`).
 - Both `.mergify.yml`s: `base=main` is the first `common_checks` condition (stacked PRs
   never enter the queue); `update_method: merge` (the queue merges, it does not rebase);
   `batch_size: 4`; a no-base-condition "Merge when ready" rule on `label=ready-to-merge`;
