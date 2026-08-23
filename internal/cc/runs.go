@@ -40,7 +40,9 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 
 // RecordDisposition writes a dead run's outcome. exitCode is nil when there is none to report —
 // a spawn that never started a process, or one this instance could not reap.
-func (s *Store) RecordDisposition(ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time) error {
+func (s *Store) RecordDisposition(
+	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
+) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE runs SET outcome = ?, exit_code = ?, ended_at = ? WHERE id = ?`,
 		outcome.String(), exitCode, endedAt.UTC().Format(time.RFC3339Nano), runID)

@@ -25,7 +25,9 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 		PRs:       map[string]gh.PR{"cc-1-first": {Number: 41, HeadRef: "cc-1-first", State: gh.Open}},
 		Worktrees: map[string]string{"cc-1-first": "/tmp/cc-1-first"},
 	}
-	loop := cc.NewLoop(store, func(context.Context) (cc.Observation, error) { return observed, nil }, fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store,
+		func(context.Context) (cc.Observation, error) { return observed, nil },
+		fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -85,7 +87,9 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}
-	ok := cc.NewLoop(store, func(context.Context) (cc.Observation, error) { return observed, nil }, fixedClock(good), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	ok := cc.NewLoop(store,
+		func(context.Context) (cc.Observation, error) { return observed, nil },
+		fixedClock(good), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	if err := ok.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
