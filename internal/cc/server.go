@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -34,16 +35,12 @@ type Server struct {
 // NewServer assembles the page and its routes over a store, a clock and the configured repos
 // (stacking is per-repo config, consulted on every unlock decision).
 func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
-	stacking := make(map[string]bool, len(repos))
-	for _, r := range repos {
-		stacking[r.Name] = r.Stacking
-	}
-
-	s := &Server{store: store, now: now, stackingByRepo: stacking}
+	s := &Server{store: store, now: now, stackingByRepo: stackingByRepo(repos)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
+	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	s.mux = mux
 	return s
 }
@@ -77,6 +74,11 @@ type row struct {
 	Base      string
 	Worktree  string
 	PR        string
+	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prd-command-centre.md §
+	// The page) — empty for a task with no run yet.
+	Pgid    string
+	Elapsed string
+	LogPath string
 }
 
 type tickErrorView struct {
@@ -119,9 +121,13 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
+	latestRuns, err := s.store.LatestRunsByTask(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 
 	now := s.now()
-	view := pageView{ObserveAge: "never", Rows: derive(tasks, obs, authorised, s.stackingByRepo, now)}
+	view := pageView{ObserveAge: "never", Rows: derive(tasks, obs, authorised, latestRuns, s.stackingByRepo, now)}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
 	}
@@ -132,9 +138,13 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 }
 
 // derive computes every row's label from tasks plus the last observation. Nothing here is
-// read from a stored status column, because there is not one.
+// read from a stored status column, because there is not one. latestRuns and obs.Runs together
+// are what let a task's state depend on its run: the store has the durable facts (pgid, log
+// path, outcome), the observation has this tick's own liveness read — both survive a restart,
+// so the page renders identically whether this is tick 1 or tick 4000 (§ Crash recovery).
 func derive(
-	tasks []Task, obs Observation, authorised, stackingByRepo map[string]bool, now time.Time,
+	tasks []Task, obs Observation, authorised map[string]bool, latestRuns map[string]RunSummary,
+	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
@@ -143,11 +153,13 @@ func derive(
 	for _, t := range tasks {
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
+		runFact, pgid, elapsed, logPath := runFactFor(t.TicketURL, obs, latestRuns, now)
 		state, reason := plan.Status(plan.Facts{
 			Task:       pt,
 			Unlock:     unlock,
 			Now:        now,
 			Authorised: authorised[t.TicketURL],
+			LatestRun:  runFact,
 		})
 		rows = append(rows, row{
 			TicketURL: t.TicketURL,
@@ -157,9 +169,38 @@ func derive(
 			Base:      unlock.BaseBranch,
 			Worktree:  obs.Worktrees[t.Branch],
 			PR:        prSummary(obs.PRs[t.Branch]),
+			Pgid:      pgid,
+			Elapsed:   elapsed,
+			LogPath:   logPath,
 		})
 	}
 	return rows
+}
+
+// runFactFor builds plan.Status's LatestRun input for one task, plus the plain-text pgid,
+// elapsed time and log path the page renders alongside it. nil/empty when the task has no run.
+func runFactFor(
+	ticketURL string, obs Observation, latestRuns map[string]RunSummary, now time.Time,
+) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
+	summary, ok := latestRuns[ticketURL]
+	if !ok {
+		return nil, "", "", ""
+	}
+
+	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[ticketURL].Alive}
+	if summary.HasOutcome {
+		fact.HasOutcome = true
+		fact.Outcome = summary.Outcome
+	}
+
+	logPath = summary.LogPath
+	if summary.Pgid != nil {
+		pgid = strconv.Itoa(*summary.Pgid)
+	}
+	if fact.Alive && summary.ProcStartedAt != nil {
+		elapsed = now.Sub(*summary.ProcStartedAt).Round(time.Second).String()
+	}
+	return fact, pgid, elapsed, logPath
 }
 
 // previewRow is one line of a launch preview: what would happen to this task, and why. Base
@@ -268,6 +309,40 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleVerb queues one verb intent against one task — a handler only ever does this single
+// blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
+// applyKillIntents). `kill` is the only verb this phase implements; the design's route table
+// also lists re-run, retry-push, close-pr and remove-worktree for later phases.
+func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	verb := r.URL.Query().Get("verb")
+	taskURL := r.URL.Query().Get("task")
+	if verb == "" || taskURL == "" {
+		http.Error(w, "verb and task are both required", http.StatusBadRequest)
+		return
+	}
+	if verb != "kill" {
+		http.Error(w, fmt.Sprintf("unsupported verb %q", verb), http.StatusBadRequest)
+		return
+	}
+
+	tasks, err := s.store.Tasks(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if _, ok := planTasksByURL(tasks)[taskURL]; !ok {
+		http.Error(w, fmt.Sprintf("unknown task %q", taskURL), http.StatusBadRequest)
+		return
+	}
+
+	if err := s.store.QueueVerbIntent(ctx, taskURL, verb, s.now()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusAccepted)
 }

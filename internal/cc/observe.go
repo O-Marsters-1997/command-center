@@ -12,9 +12,18 @@ import (
 // can render after a restart, and so that a failed tick shows the last good facts rather than
 // an empty table. It holds facts, never state labels — those stay derived (inv. 14).
 type Observation struct {
-	ObservedAt time.Time         `json:"observed_at"`
-	PRs        map[string]gh.PR  `json:"prs"`
-	Worktrees  map[string]string `json:"worktrees"`
+	ObservedAt time.Time                 `json:"observed_at"`
+	PRs        map[string]gh.PR          `json:"prs"`
+	Worktrees  map[string]string         `json:"worktrees"`
+	Runs       map[string]RunObservation `json:"runs"`
+}
+
+// RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it on
+// the Observation is what lets the page render pgid/elapsed/log path after a restart without
+// re-probing between requests: LatestRunsByTask has the facts, this has the one thing only a
+// tick's own liveness check can answer.
+type RunObservation struct {
+	Alive bool `json:"alive"`
 }
 
 // ObserveFunc reads the world. Any non-zero exit ends the tick before anything changes.

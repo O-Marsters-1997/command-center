@@ -19,6 +19,15 @@ func main() {
 }
 
 func run(args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+	// Logged before anything else, mirroring fakegh's CC_GH_LOG, so a call that goes on to
+	// fail (CC_TP_FAIL) still shows up — that is the whole point of fail_cut.txtar's assertion
+	// that tp new was attempted exactly once.
+	if logPath := getenv("CC_TP_LOG"); logPath != "" {
+		if err := appendLine(logPath, strings.Join(args, " ")); err != nil {
+			printf(stderr, "faketp: %v\n", err)
+			return 1
+		}
+	}
 	if getenv("CC_TP_FAIL") != "" {
 		printf(stderr, "faketp: CC_TP_FAIL is set\n")
 		return 1
@@ -157,4 +166,15 @@ func gitRun(dir string, stdout, stderr io.Writer, args ...string) int {
 // printf writes to w, discarding the write error: these are diagnostics on a test fake.
 func printf(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+func appendLine(path, line string) (err error) {
+	f, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if openErr != nil {
+		return openErr
+	}
+	defer func() { err = errors.Join(err, f.Close()) }()
+
+	_, err = fmt.Fprintln(f, line)
+	return err
 }

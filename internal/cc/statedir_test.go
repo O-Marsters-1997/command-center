@@ -47,4 +47,18 @@ func TestResolveWorkspace(t *testing.T) {
 	if perm := info.Mode().Perm(); perm != 0o700 {
 		t.Errorf("state dir mode = %04o, want 0700", perm)
 	}
+
+	if want := filepath.Join(ws.Dir, "runs"); ws.RunsDir != want {
+		t.Errorf("runs dir = %q, want %q", ws.RunsDir, want)
+	}
+	if _, err := os.Stat(ws.RunsDir); err != nil {
+		t.Errorf("runs dir not created: %v", err)
+	}
+
+	if want := filepath.Join(ws.Dir, "settings", "agent.json"); ws.SettingsPath != want {
+		t.Errorf("settings path = %q, want %q", ws.SettingsPath, want)
+	}
+	if _, err := os.Stat(filepath.Dir(ws.SettingsPath)); err != nil {
+		t.Errorf("settings dir not created: %v", err)
+	}
 }
