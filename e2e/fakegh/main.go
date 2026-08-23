@@ -1,5 +1,7 @@
 // Command fakegh stands in for the gh CLI in end-to-end tests. It answers from a JSON fixture
-// staged at $CC_GH_FIXTURE, keyed on the first two argv words ("pr list", "pr create", …).
+// staged at $CC_GH_FIXTURE, keyed on the first two argv words ("pr list", "pr create", …). A
+// fixture may also key on a longer argv prefix ("pr list --state all --head feat-x") to answer one
+// shape of a call differently from the rest; the longest matching key wins.
 package main
 
 import (
@@ -47,7 +49,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return 1
 	}
 
-	key := fixtureKey(args)
+	key := matchKey(fixture, args)
 	resp, ok := fixture[key]
 	if !ok {
 		printf(stderr, "fakegh: no fixture entry for %q\n", key)
@@ -67,6 +69,19 @@ func appendLine(path, line string) (err error) {
 
 	_, err = fmt.Fprintln(f, line)
 	return err
+}
+
+// matchKey returns the longest fixture key that is a whole-word prefix of the argv, falling back
+// to the two-word key when none is.
+func matchKey(fixture map[string]response, args []string) string {
+	joined := strings.Join(args, " ") + " "
+	best := fixtureKey(args)
+	for key := range fixture {
+		if len(key) > len(best) && strings.HasPrefix(joined, key+" ") {
+			best = key
+		}
+	}
+	return best
 }
 
 func fixtureKey(args []string) string {
