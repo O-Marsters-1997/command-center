@@ -128,7 +128,6 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	}, nil
 }
 
-// RunOnce runs a single tick.
 func (a *App) RunOnce(ctx context.Context) error { return a.loop.RunOnce(ctx) }
 
 // Handler is the status page.

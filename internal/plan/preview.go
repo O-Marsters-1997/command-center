@@ -25,10 +25,9 @@ func (l PreviewLabel) String() string {
 	}
 }
 
-// Preview labels one task's row in a launch preview: already unlocked tasks start now; a
-// locked task starts on unlock only if every one of its blockers is itself in the requested
-// slice — otherwise there is nothing in this launch that will ever satisfy it, and the row is
-// refused, naming the blocker outside the slice (docs/prd-command-centre.md § A launch).
+// Preview labels one task's row in a launch preview: unlocked tasks start now; a locked task
+// starts on unlock only if every blocker is itself in the requested slice — otherwise nothing
+// in this launch will ever satisfy it, and the row is refused (docs/prd-command-centre.md § A launch).
 func Preview(unlock Unlock, slice map[string]bool) (PreviewLabel, Reason) {
 	if unlock.Unlocked {
 		return Now, unlock.Reason
@@ -43,9 +42,8 @@ func Preview(unlock Unlock, slice map[string]bool) (PreviewLabel, Reason) {
 }
 
 // ProspectiveBase is the base an OnUnlock row would get once unlocked, computed without an
-// existing PR — the same selection rule Unlocked applies to its single-blocker, open-PR arm,
-// since that is how such a row actually unlocks. Kept separate from Unlock.BaseBranch, which
-// must stay empty for a blocked row so the golden-tested main page is untouched by this.
+// existing PR — the same selection rule Unlocked applies to its single-blocker, open-PR arm.
+// Kept separate from Unlock.BaseBranch, which must stay empty for a blocked row (golden-tested main page).
 func ProspectiveBase(t Task, byURL map[string]Task, stacking bool) string {
 	var sameRepo []Task
 	for _, blockerURL := range t.BlockedBy {

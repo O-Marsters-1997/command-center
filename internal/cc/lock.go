@@ -32,7 +32,6 @@ func Lock(path string) (*Flock, error) {
 	return &Flock{f: f}, nil
 }
 
-// Close releases the lock.
 func (l *Flock) Close() error {
 	if err := syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN); err != nil {
 		return errors.Join(fmt.Errorf("release flock: %w", err), l.f.Close())

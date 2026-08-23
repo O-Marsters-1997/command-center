@@ -42,7 +42,6 @@ type SpawnResult struct {
 // ProcessRunner is the real Runner, spawning and signalling OS processes.
 type ProcessRunner struct{}
 
-// substitute renders one agent_command argument, replacing every placeholder token.
 func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
@@ -64,12 +63,8 @@ func stripAPIKey(environ []string) []string {
 }
 
 // Spawn starts one agent process as the leader of its own process group, so Cancel can later
-// signal every subprocess it spawns, not just itself.
-//
-// It deliberately does not use exec.CommandContext: since Go 1.20 that ties the child's life to
-// ctx via a goroutine that kills the leader pid alone when ctx is done. That is both the extra
-// per-run goroutine the design forbids (§3) and the wrong behaviour for crash recovery — a
-// graceful shutdown must leave agents running exactly like a crash does.
+// signal every subprocess it spawns, not just itself. It deliberately skips exec.CommandContext:
+// since Go 1.20 that kills only the leader pid on ctx cancellation, which is wrong for crash recovery — a graceful shutdown must leave agents running exactly like a crash does (§3).
 func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")

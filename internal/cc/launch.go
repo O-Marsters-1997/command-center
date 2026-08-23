@@ -41,9 +41,8 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, taskID, promptHash, group
 }
 
 // ApplyLaunchIntents turns every unconsumed launch intent into a launch: one launches row per
-// group plus one launch_members row per intent, each carrying the prompt hash it was queued
-// with. Called once per tick (after a successful observe), so applying twice with nothing new
-// queued must be a no-op — every intent it touches it also marks consumed.
+// group plus one launch_members row per intent. Called once per tick; every intent it touches
+// it also marks consumed, so re-applying with nothing new queued is a no-op.
 func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -109,8 +108,6 @@ func pendingLaunchIntents(ctx context.Context, tx dbTx) (map[string][]pendingInt
 	return groups, order, nil
 }
 
-// insertLaunch writes one launches row, its launch_members, marks the group's intents
-// consumed and appends the audit event — everything one authorisation produces.
 func insertLaunch(ctx context.Context, tx dbTx, at string, members []pendingIntent) error {
 	res, err := tx.ExecContext(ctx, `INSERT INTO launches (created_at, state) VALUES (?, 'active')`, at)
 	if err != nil {

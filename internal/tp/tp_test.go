@@ -9,8 +9,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-// fakeTp installs an executable named tp on PATH for the duration of the test. It records its
-// argv and working directory to argsPath and exits with exitCode.
 func fakeTp(t *testing.T, exitCode int) (argsPath string) {
 	t.Helper()
 

@@ -24,7 +24,6 @@ func git(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
-// initRepo creates a repo with one commit and returns its path, chdir'd to for the test.
 func initRepo(t *testing.T) string {
 	t.Helper()
 	// EvalSymlinks so the path matches what `git rev-parse --show-toplevel` reports on macOS.

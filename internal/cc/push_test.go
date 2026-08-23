@@ -90,7 +90,6 @@ func hasEvent(events []cc.Event, kind, detailSubstring string) bool {
 	return false
 }
 
-// remoteHasBranch reports whether the bare origin at root/remote.git has branch.
 func remoteHasBranch(t *testing.T, root, branch string) bool {
 	t.Helper()
 	remote := filepath.Join(root, "remote.git")

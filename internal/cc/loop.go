@@ -52,13 +52,9 @@ func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config
 	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws}
 }
 
-// RunOnce runs one tick. A failed observe applies no transition and launches nothing: it
-// records the error and leaves the last good observation in place, so the page's observe age
-// keeps growing (inv. 10). Only a successful observe goes on to bump every task's checking-wait
-// tick count, apply queued launch intents, consume kill and retry-push requests, reconcile every
-// run's liveness and disposition, push what plan.PushPlan selects and open its PR, and cut and
-// spawn whatever plan.LaunchPlan selects — in that order, every tick, restart or not (§ Crash
-// recovery: there is no separate recovery code path, this is the same tick).
+// RunOnce runs one tick. A failed observe records the error and leaves the last good
+// observation in place rather than applying any transition, so the page's observe age
+// keeps growing instead of resetting (inv. 10).
 func (l *Loop) RunOnce(ctx context.Context) error {
 	obs, err := l.observe(ctx)
 	if err != nil {

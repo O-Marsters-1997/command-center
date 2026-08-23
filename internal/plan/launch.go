@@ -10,7 +10,6 @@ type LaunchCandidate struct {
 	HasRun            bool
 }
 
-// eligible reports whether c may be cut and spawned this tick.
 func (c LaunchCandidate) eligible() bool {
 	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun
 }

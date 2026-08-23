@@ -1,15 +1,13 @@
 // Package verdict evaluates one repo's boolean check predicate over a normalised snapshot —
-// never gh's raw JSON (docs/command-centre-design.md § 11 inv. 11). Like internal/plan, it imports
-// nothing outside the standard library (issue #2 AC12: internal/gh execs, so this package
-// declares its own CheckState rather than importing gh.CheckState); api_test.go enforces it.
+// never gh's raw JSON (docs/command-centre-design.md § 11 inv. 11). It declares its own
+// CheckState rather than importing gh's (issue #2 AC12); api_test.go enforces the import purity.
 package verdict
 
 import "time"
 
-// CheckState is one gating check's outcome, as this package needs it. The zero value is
-// Pending, which doubles as "absent from the rollup" -- a map lookup by a missing key already
-// returns it, so a leaf never has to special-case presence unless it specifically cares (see
-// AbsentOK's leniency).
+// CheckState is one gating check's outcome. The zero value, Pending, doubles as "absent from
+// the rollup" since a missing map key already returns it, so a leaf need not special-case
+// presence unless it cares (see AbsentOK).
 type CheckState int
 
 const (
@@ -40,19 +38,14 @@ func (v Verdict) String() string {
 	}
 }
 
-// BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it
-// (an absent absent_ok check, or no rollup at all) -- clocked over ticks whose observe phase
-// succeeded only, never wall clock, so a GitHub outage cannot walk every in-flight row to
-// needs_you the moment it ends (docs/command-centre-design.md § 11 inv. 11). The PRD leaves the
-// number itself an open question; ten minutes is this package's one knob, moved by a human if
-// it proves wrong.
+// BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it.
+// It is clocked over ticks whose observe phase succeeded, never wall clock, so a GitHub outage
+// cannot walk every in-flight row to needs_you at once (docs/command-centre-design.md § 11 inv. 11).
 const BoundedWait = 10 * time.Minute
 
-// Predicate is the boolean check-config grammar (docs/command-centre-design.md § 8): all_of / any_of
-// / not / success / skipped / absent_ok, plus Author -- the non-check escape hatch services'
-// Linear-branch predicate needs for its dependabot arm, since a PR's author is not a check-run.
-// Exactly one leaf field, or one of AllOf/AnyOf/Not, is set on any given node; that shape is
-// parsed straight out of [repo.checks] by encoding/toml, not asserted here.
+// Predicate is the boolean check-config grammar (docs/command-centre-design.md § 8): all_of,
+// any_of, not, success, skipped, absent_ok, plus Author -- the non-check escape hatch for the
+// dependabot arm of a Linear-branch predicate, since a PR's author is not a check-run.
 type Predicate struct {
 	AllOf    []Predicate `toml:"all_of"`
 	AnyOf    []Predicate `toml:"any_of"`
@@ -70,11 +63,9 @@ func (p Predicate) IsZero() bool {
 		p.Success == "" && p.Skipped == "" && p.AbsentOK == "" && p.Author == ""
 }
 
-// Input is everything Evaluate needs, honestly enumerated (docs/command-centre-design.md § 8):
-// the reduced check map, whether the rollup belongs to the commit the app pushed, the stacked-
-// base check (unscoped, main's own tip moves would make every root row look like its base
-// moved), the config-hash match, the bounded wait's two endpoints, and the PR author for the
-// dependabot arm.
+// Input is everything Evaluate needs (docs/command-centre-design.md § 8), including the
+// stacked-base check, which stays unscoped from HeadOidMatch since main's own tip moving would
+// otherwise make every root row look like its base moved too.
 type Input struct {
 	Checks       map[string]CheckState
 	HeadOidMatch bool // the rollup's head == the tip the app pushed
@@ -103,12 +94,9 @@ const (
 	red
 )
 
-// Evaluate resolves p against in and reports the verdict. Semantics that have to hold (docs/
-// command-centre-design.md § 11 inv. 11): an empty rollup, an absent rollup, or one belonging to
-// another commit is never green -- HeadOidMatch being false discards in.Checks entirely, so a
-// foreign-SHA rollup reads exactly like no rollup at all. A resolved-red predicate is needs_you
-// outright, config-hash and stacked-base staleness notwithstanding: those two only ever
-// downgrade a green result, never excuse a real red one.
+// Evaluate resolves p against in and reports the verdict (docs/command-centre-design.md § 11
+// inv. 11). A foreign-SHA or absent rollup is never green: HeadOidMatch false discards in.Checks
+// entirely. A resolved-red predicate is needs_you outright; staleness only ever downgrades green.
 func Evaluate(p Predicate, in Input) Result {
 	if !in.HeadOidMatch {
 		in.Checks = nil

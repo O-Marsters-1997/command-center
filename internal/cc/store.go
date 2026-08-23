@@ -66,10 +66,8 @@ func (s *Store) init(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-// SchemaVersion reports the version recorded in meta.
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	var v int
 	if err := s.db.QueryRowContext(ctx,
@@ -151,11 +149,8 @@ const (
 )
 
 // CheckingTicks returns each task's count of successful ticks since it last had anything to
-// resolve into a CI verdict -- verdict.Input.Now is derived from this, never wall clock, so a
-// GitHub outage cannot walk every in-flight row to needs_you the moment it ends (docs/command-
-// centre-v1.md § 11 inv. 11). It lives in meta rather than a new column: schema version 1 already
-// has every table Phase 1-6 need, and this is a fact the world cannot reconstruct, exactly what
-// meta already holds for the observation and the last tick error.
+// resolve into a CI verdict. verdict.Input.Now is derived from this, never wall clock, so a
+// GitHub outage cannot walk every in-flight row to needs_you the moment it ends (docs/command-centre-v1.md § 11 inv. 11).
 func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	ticks := map[string]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
@@ -165,9 +160,8 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 }
 
 // IncrementCheckingTicks bumps every named task's counter by one -- called once per successful
-// tick (never on a failed observe, which is what makes the counter track successful ticks and
-// not wall time). RecordPush resets a task's own counter to zero on every fresh push (Phase 6's
-// re-run), so a second push never inherits the first push's stale tick count.
+// tick, never on a failed observe, which is what makes the counter track successful ticks,
+// not wall time.
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -205,7 +199,6 @@ func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
 	return verdicts, nil
 }
 
-// SaveLastVerdicts replaces the persisted last-verdict map.
 func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
 	return s.putMeta(ctx, metaLastVerdicts, verdicts)
 }
@@ -216,7 +209,6 @@ func (s *Store) SaveObservation(ctx context.Context, obs Observation) error {
 	return s.putMeta(ctx, metaObservation, obs)
 }
 
-// LastObservation returns the last successful observation, if there has been one.
 func (s *Store) LastObservation(ctx context.Context) (Observation, bool, error) {
 	var obs Observation
 	found, err := s.getMeta(ctx, metaObservation, &obs)
@@ -247,7 +239,6 @@ type Event struct {
 	Detail  string
 }
 
-// AppendEvent writes one audit row.
 func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	var taskID any
 	if e.TaskURL != "" {

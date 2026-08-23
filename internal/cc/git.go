@@ -109,12 +109,8 @@ func IsDirty(ctx context.Context, worktreePath string) (bool, error) {
 
 // HasUnpushedCommits reports whether branch's local tip is ahead of its remote-tracking ref --
 // `remove worktree`'s second refusal (inv. 3).
-//
-// ponytail: a branch with no remote-tracking ref at all (never pushed) always reads as
-// unpushed, even if it turns out to hold zero commits beyond its base. That is a conservative
-// over-refusal, not a correctness bug -- remove worktree is destructive, so erring toward "ask
-// a human" is the safe default here; tighten it if a real base_gone-before-first-push row ever
-// makes it annoying.
+// ponytail: a never-pushed branch always reads as unpushed, even with zero commits beyond
+// base -- a deliberate conservative refusal, since remove worktree is destructive.
 func HasUnpushedCommits(ctx context.Context, repoPath, branch string) (bool, error) {
 	local, err := RevParse(ctx, repoPath, "refs/heads/"+branch)
 	if err != nil {

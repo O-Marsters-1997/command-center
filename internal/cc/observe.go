@@ -27,10 +27,9 @@ type Observation struct {
 	MergifyHash map[string]string `json:"mergify_hash"`
 }
 
-// RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it on
-// the Observation is what lets the page render pgid/elapsed/log path after a restart without
-// re-probing between requests: LatestRunsByTask has the facts, this has the one thing only a
-// tick's own liveness check can answer.
+// RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it
+// is what lets the page render pgid/elapsed/log path after a restart without a tick
+// re-probing between requests.
 type RunObservation struct {
 	Alive bool `json:"alive"`
 }
@@ -39,10 +38,8 @@ type RunObservation struct {
 type ObserveFunc func(ctx context.Context) (Observation, error)
 
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the worktree
-// map, per configured repo.
-//
-// Branches are keyed globally, not per repo: Phase 1 runs one repo, and the same branch name
-// in two repos would collide. Key by (repo, branch) when Phase 2 adds the second repo.
+// map, per configured repo. Branches are keyed globally, not per repo — a same-named branch
+// in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
 func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
 		tasks, err := store.Tasks(ctx)

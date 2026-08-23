@@ -7,10 +7,8 @@ import (
 )
 
 // Workspace is the pair of directories the app works between: the workspace root the config
-// file sits in (repo paths are relative to it) and the private state dir holding the DB.
-//
-// The state dir is deliberately outside the workspace: worktrees are siblings of the config
-// dir, so a DB under it would be one "../" from every agent (§8).
+// file sits in and the private state dir holding the DB. The state dir sits outside the
+// workspace so a DB there is never one "../" from an agent's own worktree (§8).
 type Workspace struct {
 	Name   string
 	Root   string

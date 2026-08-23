@@ -1,9 +1,6 @@
 // Package register holds the subcommands that exist only in an end-to-end build of cc. It is
 // an ordinary untagged package so it compiles and lints like any other; cmd/cc/register_e2e.go
 // is the build-tagged file that decides whether the release binary can reach it.
-//
-// Both commands exist to make a daemon scriptable: one drives the loop a fixed number of times
-// without sleeping, the other reads the page out of a separate process.
 package register
 
 import (
@@ -59,12 +56,9 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 	return nil
 }
 
-// request prints the page a real HTTP client gets back from the real handler.
-//
-// It deliberately does not take the flock: a script needs to read the page while `cc tick` or a
-// background daemon holds it. POST /launch now mutates (it queues an intent), but that write is
-// a single blind INSERT against SQLite in WAL mode with a busy_timeout — safe without the flock;
-// a future verb doing more than that would make this an inv. 9 question.
+// request prints the page a real HTTP client gets back from the real handler. It deliberately
+// does not take the flock: a script reads while `cc tick` or a daemon holds it. POST /launch's
+// write is a safe blind SQLite INSERT under WAL; a future verb doing more would revisit inv. 9.
 func request(ctx context.Context, configPath string, args []string) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")

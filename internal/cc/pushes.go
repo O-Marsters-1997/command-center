@@ -86,10 +86,9 @@ func (s *Store) LatestPushes(ctx context.Context) (map[string]PushRow, error) {
 	return pushes, nil
 }
 
-// PushFact is a task's outstanding push-policy problem, if it has one: refused outright (naming
-// the path), or a push/PR-create failure. Neither is a stored column (inv. 14) -- both are
-// derived from the latest push_refused/push_failed event newer than the task's last recorded
-// push, so a later success clears it without any explicit reset.
+// PushFact is a task's outstanding push-policy problem: refused outright (naming the path), or
+// a push/PR-create failure. Neither is a stored column (inv. 14) -- both are derived from the
+// latest push_refused/push_failed event since the task's last recorded push, so a later success clears it.
 type PushFact struct {
 	Refused     bool
 	RefusedPath string

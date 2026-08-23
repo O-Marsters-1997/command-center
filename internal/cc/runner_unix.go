@@ -18,22 +18,10 @@ import (
 // as the same process — a known, accepted gap, not a closed one).
 const pidReuseTolerance = 5 * time.Second
 
-// Liveness reports whether the process recorded as pgid is still the same one that was
-// launched at wantStart.
-//
-// The design's original mechanism was kill(-pgid, 0) plus `ps -o etimes=`. Both turned out to
-// be wrong on macOS in exactly the case that matters most (a run that has just finished):
-//   - `ps -o etimes=` does not exist on BSD ps at all (macOS rejects the keyword outright) —
-//     only GNU ps has it. `etime` ([[dd-]hh:]mm:ss) is the one keyword both implementations
-//     actually share.
-//   - kill(-pgid, 0) against a process group whose leader has become a zombie (exited, not yet
-//     reaped) returns EPERM on Darwin, not ESRCH — verified empirically, not assumed. That is
-//     precisely the moment liveness must report false so disposition can run, so treating only
-//     ESRCH as "dead" would leave a finished run reading as alive forever.
-//
-// `ps -o stat=,etime= -p <pgid>` alone settles both existence and elapsed time in one call: no
-// output (or a non-zero exit) means the process is gone, and a `Z` stat means it is a zombie —
-// finished, whether or not it has been reaped yet. Neither case is an error; both mean dead.
+// Liveness reports whether the process recorded as pgid is still the one launched at wantStart.
+// It shells out to `ps -o stat=,etime=` rather than kill(-pgid, 0): on Darwin, signalling a
+// process group whose leader has become a zombie returns EPERM, not ESRCH, so a kill-based check
+// would read a just-finished run as alive forever.
 func Liveness(pgid int, wantStart, now time.Time) (bool, error) {
 	stat, etime, ok := psStatAndEtime(pgid)
 	if !ok {
@@ -122,9 +110,7 @@ const (
 
 // Cancel terminates every process in pgid: SIGTERM, then poll for it to disappear, then SIGKILL
 // as a backstop. It signals -pgid (the whole process group), not just the leader's pid — unlike
-// exec.Cmd's built-in Cancel/WaitDelay, which signals only the leader and would leave any
-// subprocess the agent spawned under the same pgid (a tool call, in `claude -p`'s case) holding
-// the worktree.
+// exec.Cmd's built-in Cancel/WaitDelay, which would leave a subprocess the agent spawned under the same pgid holding the worktree.
 func Cancel(pgid int) error {
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return fmt.Errorf("SIGTERM process group %d: %w", pgid, err)
@@ -147,11 +133,9 @@ func Cancel(pgid int) error {
 	return nil
 }
 
-// Reap collects a dead child's exit code. We never call cmd.Wait() at spawn time (that would
-// need a goroutine per run, which the design forbids), so a finished run sits as a zombie until
-// something reaps it — this is that something, called once liveness has found a run dead, right
-// before recording its disposition. ok is false when pid is not our direct child: after a
-// restart, a recovered run belongs to init, not to us, and its exit code is simply unknown.
+// Reap collects a dead child's exit code, called once liveness has found a run dead. We never
+// call cmd.Wait() at spawn time (that would need a goroutine per run, which the design forbids).
+// ok is false when pid is not our direct child: after a restart, a recovered run belongs to init.
 func Reap(pid int) (exitCode int, ok bool) {
 	var status syscall.WaitStatus
 	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {

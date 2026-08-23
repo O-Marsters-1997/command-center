@@ -34,8 +34,7 @@ func TestNoImpureImports(t *testing.T) {
 	}
 }
 
-// isStdlib reports whether an import path is in the standard library. Every module path has a
-// dot in its first element (a domain); no stdlib path does.
+// Every module path has a dot in its first element (a domain); no stdlib path does.
 func isStdlib(path string) bool {
 	first, _, _ := strings.Cut(path, "/")
 	return !strings.Contains(first, ".")

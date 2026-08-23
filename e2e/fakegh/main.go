@@ -1,7 +1,6 @@
 // Command fakegh stands in for the gh CLI in end-to-end tests. It answers from a JSON fixture
-// staged at $CC_GH_FIXTURE, keyed on the first two argv words ("pr list", "pr create", …). A
-// fixture may also key on a longer argv prefix ("pr list --state all --head feat-x") to answer one
-// shape of a call differently from the rest; the longest matching key wins.
+// staged at $CC_GH_FIXTURE, keyed on the first two argv words ("pr list", "pr create", …) or a
+// longer argv prefix to disambiguate one shape of a call from the rest; the longest key wins.
 package main
 
 import (

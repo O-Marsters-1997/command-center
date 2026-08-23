@@ -25,8 +25,6 @@ func git(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// newWorktree returns a real git repository with one commit, plus the settings and prompt paths
-// the agent scripts are handed as $2 and $3.
 func newWorktree(t *testing.T) (dir, settings, prompt string) {
 	t.Helper()
 	dir = t.TempDir()

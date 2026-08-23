@@ -33,12 +33,9 @@ type Task struct {
 // Reason is the human-readable sentence the page renders on a row.
 type Reason string
 
-// Unlock is the answer to "could this task be cut, and off what?". Blocking names the
-// same-repo blockers still standing in the way (empty once Unlocked), so a caller building a
-// launch preview knows which of them a candidate slice would need to cover. BlockerClosed is
-// true only when the single blocker's own pull request was closed without merging — as
-// opposed to never having had one — which is what lets a row that has already run derive
-// `base gone` instead of falling back to `blocked` (inv. 19).
+// Unlock is the answer to "could this task be cut, and off what?" for one task.
+// BlockerClosed is true only when the blocker's PR closed without merging, not merely absent,
+// which lets an already-run row derive `base gone` instead of `blocked` (inv. 19).
 type Unlock struct {
 	Unlocked      bool
 	BaseBranch    string
@@ -196,28 +193,22 @@ type RunFact struct {
 	PushRefusedPath string
 	PushFailed      bool
 	PROpen          bool
-	// PRMerged and PRClosedUnmerged read this task's own branch's current pull request state —
-	// never the blocker's (that is Unlock.BlockerClosed's job). Both outrank every other push
-	// fact below: once GitHub says merged or closed, that is the terminal truth regardless of
-	// what this run's own push or verdict facts still say (docs/prd-command-centre.md § The
-	// states, `merged` and `pr closed unmerged`).
+	// PRMerged and PRClosedUnmerged read this task's own branch's PR state, never the blocker's
+	// (that is Unlock.BlockerClosed's job). Once GitHub says merged or closed, that outranks
+	// every other push fact below (docs/prd-command-centre.md § The states).
 	PRMerged         bool
 	PRClosedUnmerged bool
-	// Verdict* fields matter only once PROpen: internal/cc's own call to internal/verdict's pure
-	// Evaluate, mapped down to booleans here since this package cannot import that one any more
-	// than it can import internal/gh (issue #2 AC12 — see internal/verdict's own api_test.go).
-	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
-	// whatever cc computed, or is left empty for the pre-Phase-5 fallback text.
+	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
+	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
+	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries whatever cc computed, else empty.
 	VerdictReviewMe bool
 	VerdictNeedsYou bool
 	VerdictReason   Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
-// time.Now: the clock is the shell's, which is what makes the rendered page byte-stable.
-// Authorised is supplied by the caller (membership in an active launch), not derived here.
-// LatestRun is nil until a task's first launch — the pre-Phase-3 unlocked × authorised 2x2 is
-// exactly what a nil LatestRun still derives.
+// time.Now: the clock is the shell's, which keeps the rendered page byte-stable. LatestRun is
+// nil until a task's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
 type Facts struct {
 	Task       Task
 	Unlock     Unlock
@@ -226,12 +217,9 @@ type Facts struct {
 	LatestRun  *RunFact
 }
 
-// Status derives a task's state and the sentence explaining it. A task with a run derives from
-// that run's liveness and disposition first — a live or disposed run outranks the unlocked ×
-// authorised facts that only ever mattered before its first launch. Everything else falls back
-// to the pre-Phase-3 2x2 (docs/prd-command-centre.md § The states): a queued row must say
-// whether it is waiting on a base (hours-or-forever) or a slot (seconds), the two must not
-// render alike.
+// Status derives a task's state and the sentence explaining it. A run's liveness and disposition
+// outrank the unlocked × authorised facts that mattered only before its first launch. A queued
+// row must say whether it's waiting on a base (hours) or a slot (seconds) (docs/prd-command-centre.md § The states).
 func Status(f Facts) (State, Reason) {
 	// A row that has ever run never returns to blocked (inv. 19): once its blocker's pull
 	// request is closed without merging, the premise it launched under is withdrawn, and that

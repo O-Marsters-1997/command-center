@@ -28,10 +28,9 @@ type Task struct {
 	BlockedBy []string `toml:"blocked_by"`
 }
 
-// Repo is one [[repo]] block. Path is relative to the workspace root. Checks and MergifySHA are
-// both empty for a repo that has not opted into a CI verdict yet: observe then skips reading and
-// hashing .mergify.yml entirely, and every row stops at checking, exactly the pre-Phase-5
-// behaviour (docs/command-centre-design.md § 11 inv. 11).
+// Repo is one [[repo]] block. Path is relative to the workspace root.
+// Checks and MergifySHA are both empty until a repo opts into a CI verdict, matching the
+// pre-Phase-5 behaviour where every row stops at checking (docs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
 	Path        string            `toml:"path"`
@@ -107,7 +106,6 @@ func mergifySHAByRepo(repos []Repo) map[string]string {
 	return m
 }
 
-// repoPathsByName resolves each configured repo's absolute path from the workspace root.
 func repoPathsByName(root string, repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {
