@@ -1,6 +1,6 @@
 # Command Centre
 
-**Status:** WIP · **Date:** 2026-08-22 · **Shape:** concept doc
+**Status:** Phase 1 shipped · **Date:** 2026-08-23 · **Shape:** concept doc
 
 **Reads with:** [`command-centre-design.md`](../designs/command-centre-design.md) (the design, revision 4 —
 **normative** for mechanism, state list and invariants),
@@ -292,6 +292,11 @@ table is the product summary.
 | `cancelled` | authorised then cancelled before launching | remove worktree, launch |
 | `merged` | PR merged | remove worktree |
 
+**Built today:** every state above except `base moved`, `refresh conflicted`,
+`waiting on producer deploy` and `cancelled`. `base moved` exists as a *reason* on `checking`
+with no verb attached, so the row you are meant to refresh currently just waits. Phase 2
+promotes it to a state.
+
 `seam changed` is a flag on a row, not a state — it composes with any of the above.
 
 **A wedged agent is not a state** — pid liveness cannot compute it, so the page shows each running
@@ -530,7 +535,7 @@ revision 3 "fixed" a guard that, verified, no longer had a reader).
 
 | # | Must-fix | Now |
 |---|---|---|
-| 1 | CI verdict: predicate shape, wrong `services` names, no expiry | **Live, Phase 1.** The only gate. Predicate + normalised snapshot + a stacked-base-only expiry (rev 4 scoped it — unscoped, `main`'s daily drift made `base moved` the steady state). |
+| 1 | CI verdict: predicate shape, wrong `services` names, no expiry | **Shipped in Phase 1.** The only gate. Predicate + normalised snapshot + a stacked-base-only expiry (rev 4 scoped it — unscoped, `main`'s daily drift made `base moved` the steady state). |
 | 2 | Activity-file ownership | **Dissolved (rev 4).** Every treepad reader is manifest-gated and the app writes no manifests — the file had no reader, so the app stopped writing it. |
 | 3 | `origin/main`, not `main` | **Dissolved.** Verified `--base` takes a ref; every cut passes `origin/main` or a parent branch explicitly, so the stale-root case cannot arise. |
 | 4 | Batch scoping and teardown | **Dissolved.** No `tp batch sync`, so no manifests, so nothing to scope and no teardown loop. |
@@ -546,10 +551,27 @@ a one-line description of them.
 
 ## Phases
 
-### Phase 1 — one repo, a slice of two
+### Phase 1 — one repo, a slice of two (shipped)
 
 Enough graph that the tick's third job actually fires, over primitives that are unproven until it
 runs.
+
+**Shipped and verified live.** Issues #1 to #12 and #25 are closed. The five criteria that could
+not run in CI or against fixtures ran as a daemon against `cc-sandbox`: a real push opened a real
+PR that the next tick adopted rather than duplicated, a real rollup went green and then red when
+one check was flipped, one authorisation produced two open PRs with no further human action, a
+real squash-merge derived `merged` and `remove worktree` then succeeded, and a `SIGKILL` mid-slice
+resumed without relaunching or duplicating. Two things went differently from what the
+requirements below say.
+
+**The repo was `cc-sandbox`, not `support-app`.** Everything was proved against a fixture repo
+whose gating checks mirror the real ones and whose `.mergify.yml` is committed but inert, because
+the Mergify app is not installed there. Neither `support-app` nor `services` is configured yet.
+That cutover is Phase 1.5.
+
+**Neither entry spike ran.** There was no hand-made two-PR stack and no `--fill` PR checked
+against the required Linear check. Both questions are still unanswered, and both now block
+Phase 2 instead of Phase 1.
 
 **Requirements.**
 
@@ -577,11 +599,11 @@ runs.
 - Crash recovery: flock, re-read runs, re-check liveness, resume; intent recorded before
   every outward effect.
 
-**Entry criteria (spikes — hours, no Go).** One hand-made two-PR stack: merge the parent,
-watch whether GitHub retargets the child and what Mergify's checks show, then queue the
-retargeted child. And one `--fill`-style PR from an agent-shaped branch name, to confirm the
-required Linear check passes — if it doesn't, every Phase 1 PR parks in `needs you` and the
-branch-naming convention needs settling first.
+**Entry criteria (spikes — hours, no Go).** *Neither ran; both are now Phase 2 blockers.* One
+hand-made two-PR stack: merge the parent, watch whether GitHub retargets the child and what
+Mergify's checks show, then queue the retargeted child. And one `--fill`-style PR from an
+agent-shaped branch name, to confirm the required Linear check passes. If it doesn't, every PR
+parks in `needs you` and the branch-naming convention needs settling first.
 
 **Which repo.** `support-app`. Its five gating checks are already right and its predicate has no
 deployment branch. `services` means dozens of jobs and an AWS stage deploy per push, plus the
@@ -600,19 +622,54 @@ live counter. (Tick-age was here in revision 3; it is a requirement now.)
   run four of.
 - **Seams and cross-repo** → Phase 3, blocked on `to-seams` not existing.
 
+### Phase 1.5 — cutover to a real repo
+
+Phase 1's acceptance criteria re-run against `support-app`, with nothing new built. Its five real
+gating checks instead of mirrored ones, its real `sha256(.mergify.yml)`, the required Linear
+check, and `.env.development.local` in a real worktree. `stacking` stays off and `max_agents`
+stays 1, so this proves the cutover and nothing else.
+
+`support-app` is also the first repo where Mergify is actually installed and the Linear check is
+actually required, which is what makes the two skipped entry spikes runnable here.
+
 ### Phase 2 — the backlog
 
 The shape the product is for: authorise a feature, one ticket lands first, four parallel tickets
 start themselves the moment its PR opens, and an hour later there is a stack waiting for review.
 
-Stacked bases via `stacking = true` (`--base <parent branch>` on both `tp new` and
-`gh pr create`); `max_agents` as a real cap; slices of arbitrary size with the full preview;
-`cancel launch`; `base moved`, `refresh` and the retarget-on-parent-merge; and the verdict's
-stacked-base expiry, which only becomes reachable once anything stacks.
+**Blocked until both Phase 1 entry spikes run.** They were skipped, and Phase 2's throughput
+claim rests on their answers. Install Mergify on `cc-sandbox` or run them against `support-app`.
 
-**The one new risk:** Mergify's queue never sees a stacked PR (`base=main` gates it), so
-everything rides on the retarget step and on the queue's behaviour on a just-retargeted
-child — which is exactly what the Phase 1 entry spike measures before any of this is built.
+- **Retarget behaviour × the Mergify queue.** Two hand-made stacked PRs: merge the parent, watch
+  whether GitHub retargets the child and when, then watch the queue on the retargeted child.
+  Mergify's queue never sees a stacked PR because `base=main` gates it, so everything rides on
+  this one step.
+- **`--fill` × the Linear check.** A required check the predicate includes. If agent branch names
+  fail it, every stacked PR parks in `needs you`.
+
+**Left to build.** Three things, where this section used to list six.
+
+- `cancel launch`, and the `cancelled` state it produces. `plan.Verbs` has no `cancel`, so a
+  `queued` row currently offers nothing at all.
+- `base moved` as a state with `refresh` as its verb, plus `refresh conflicted` when that merge
+  conflicts. `internal/verdict` already returns `checking: base moved`; nothing acts on it.
+- The retarget on parent merge. `internal/gh` has no `pr edit`, so nothing re-points a child
+  at `main`.
+
+**Already built, waiting to be proved.** Phase 1 built these behind the flag rather than around
+it, so Phase 2 turns them on rather than writing them.
+
+- Stacked bases. `plan.Unlocked` takes the stacking flag and returns the blocker's branch, and
+  `tp new` and `gh pr create` both already pass `--base`. Every configured repo sets
+  `stacking = false`.
+- `max_agents` as a real cap. `plan.LaunchPlan` applies it globally per tick. Never run above 1.
+- Slices of arbitrary size with the full preview. No size limit exists anywhere in the launch or
+  preview path.
+- The verdict's stacked-base expiry, derived off `pushes.base_branch`. Unreachable, not absent.
+
+**Two open questions turn blocking here.** Whether a `base moved` descendant refreshes
+automatically or waits for you, and whether you can add to an active launch. Both are decisions
+Phase 2's first commit needs, and both are still only leaning.
 
 ### Phase 3 — cross-repo
 
@@ -624,10 +681,10 @@ Seams as prompt context, the draft gate, `compat_check`, `waiting on producer de
 
 | Thing | State |
 |---|---|
-| **`tp remove --force`** (treepad) | **Blocks Phase 1 teardown.** The plumbing exists — `lifecycle.go:243` builds `git worktree remove --force` and `git branch -D` — but no CLI flag reaches it, so `tp remove` uses `git branch -d` and refuses a squash-merged branch. `.mergify.yml` sets `merge_method: squash`, so that is *every* merged ticket. Small, in a repo you own. |
-| **`to-tickets` emits `blocked_by[]`** | Phase 2. Edges only, upserting on `ticket_url`, no chain semantics — and its manifest-emission step (plus `references/treepad-manifest.md`) gets deleted, since nothing reads manifests any more. |
-| **Retarget behaviour × Mergify queue** | **Phase 1 entry spike.** Two hand-made stacked PRs answer what config files can't: auto-retarget timing on branch deletion, and the queue on a retargeted child. `base=main` gating the queue is already answered by the files. |
-| **`--fill` × the Linear check** | **Phase 1 entry spike.** A required check the app's predicate includes; if agent branch names fail it, every Phase 1 PR parks in `needs you`. |
+| **`tp remove --force`** (treepad) | **Shipped.** The flag landed upstream and teardown calls it, verified in #25 against a branch GitHub had squash-merged and deleted. |
+| **`to-tickets` emits `blocked_by[]`** | **Blocks Phase 2, unstarted.** `SKILL.md` still emits a treepad manifest and no `blocked_by[]`. Edges only, upserting on `ticket_url`, no chain semantics, and the manifest-emission step (plus `references/treepad-manifest.md`) gets deleted, since nothing reads manifests any more. |
+| **Retarget behaviour × Mergify queue** | **Blocks Phase 2.** Was Phase 1's entry spike and never ran. Two hand-made stacked PRs answer what config files can't: auto-retarget timing on branch deletion, and the queue on a retargeted child. Needs a repo where Mergify is installed, which `cc-sandbox` is not. |
+| **`--fill` × the Linear check** | **Blocks Phase 2.** Also skipped in Phase 1. `cc-sandbox`'s mirrored checks say nothing about it. If agent branch names fail the required check, every stacked PR parks in `needs you`. |
 | **`to-seams`** | Phase 3. Does not exist. |
 
 **No longer needed:** the `link`/`restack` Activity-file veto in treepad — with no manifests
@@ -658,13 +715,14 @@ at all (the file's readers are all manifest-gated).
 
 **Product**
 
-- **Does a `base moved` descendant refresh automatically, or wait for you?** Automatic keeps the
-  stack coherent without attention; manual avoids surprising a running agent with a merge in its
-  worktree. Leaning: automatic when no agent is live in that worktree, the verb otherwise.
+- **Does a `base moved` descendant refresh automatically, or wait for you?** *(Blocks Phase 2.)*
+  Automatic keeps the stack coherent without attention; manual avoids surprising a running agent
+  with a merge in its worktree. Leaning: automatic when no agent is live in that worktree, the
+  verb otherwise.
 - **Can you add to an active launch,** or does authorising more work always create a second one?
-  Two active launches over overlapping tasks needs a rule; one mutable launch needs an audit trail.
+  *(Blocks Phase 2.)* Two active launches over overlapping tasks needs a rule; one mutable launch
+  needs an audit trail.
 - Does `re-run` on a task that already has a worktree and commits go through the preview?
-- Where does intake come from in Phase 1 — a row you insert by hand, or a file the app reads?
 - Should local check results gate a push? `/implement` already runs the suite; the app ignores the
   result. Reading it would cut the chance a parent needs a fix, which is the thing that causes
   `base moved` in the first place. Weak predictor of CI green on `services` though.
@@ -709,6 +767,8 @@ at all (the file's readers are all manifest-gated).
 - **Where does the check predicate live?** → hand-written in `command-centre.toml`, with a
   recorded hash of `.mergify.yml` that suppresses green and flags the row when the source
   moves. The parser is deferred until the hash fires more than twice.
+- **Where does intake come from?** → `[[task]]` rows in `command-centre.toml`, upserted at
+  startup only, so the tick never adds rows to its own intake table.
 - **`.env` in treepad's `[sync] include`?** → taken: the no-op `.env` lines are deleted. The
   file that is both secret-bearing and synced (`.env.development.local`) stays — worktrees
   need it to boot — covered by the agent's deny-settings and the `.env*` push policy.
