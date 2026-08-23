@@ -200,7 +200,8 @@ type RunFact struct {
 	PRClosedUnmerged bool
 	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
 	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
-	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries whatever cc computed, else empty.
+	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
+	// whatever cc computed, else empty.
 	VerdictReviewMe bool
 	VerdictNeedsYou bool
 	VerdictReason   Reason

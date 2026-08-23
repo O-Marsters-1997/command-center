@@ -64,7 +64,8 @@ func stripAPIKey(environ []string) []string {
 
 // Spawn starts one agent process as the leader of its own process group, so Cancel can later
 // signal every subprocess it spawns, not just itself. It deliberately skips exec.CommandContext:
-// since Go 1.20 that kills only the leader pid on ctx cancellation, which is wrong for crash recovery — a graceful shutdown must leave agents running exactly like a crash does (§3).
+// since Go 1.20 that kills only the leader pid on ctx cancellation, which is wrong for crash
+// recovery — a graceful shutdown must leave agents running exactly like a crash does (§3).
 func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
