@@ -162,7 +162,13 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	now := l.now()
 	for _, intent := range intents {
 		if task, ok := byTicket[intent.TaskID]; ok {
-			err := l.reRunOne(ctx, task, repoPaths[task.Repo], obs, authorisedHashes[task.TicketURL], now, retirements)
+			var oldPromptPath string
+			if run, ok := latest[task.TicketURL]; ok {
+				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
+			}
+			err := l.reRunOne(
+				ctx, task, repoPaths[task.Repo], obs, authorisedHashes[task.TicketURL], now, retirements, oldPromptPath,
+			)
 			if err != nil {
 				return err
 			}
@@ -178,7 +184,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 // disposition counts only the commits this new run itself produces, never a previous run's.
 func (l *Loop) reRunOne(
 	ctx context.Context, task Task, repoPath string, obs Observation, promptHash string, now time.Time,
-	retirements map[string]retirement,
+	retirements map[string]retirement, oldPromptPath string,
 ) error {
 	worktreePath, ok := obs.Worktrees[task.Branch]
 	if !ok {
@@ -192,7 +198,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", task.TicketURL, err)
 	}
-	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash, retirements)
+	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash, retirements, oldPromptPath)
 }
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat

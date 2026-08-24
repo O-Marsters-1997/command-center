@@ -381,7 +381,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash, spec.retirements)
+	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash, spec.retirements, "")
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
@@ -395,6 +395,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // (see the PR description).
 func (l *Loop) spawnRun(
 	ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string, retirements map[string]retirement,
+	oldPromptPath string,
 ) error {
 	prompt, refused, ok := composePrompt(ctx, l.ws.Root, planTask(task), retirements)
 	if !ok {
