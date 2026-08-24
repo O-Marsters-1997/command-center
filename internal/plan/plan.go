@@ -142,10 +142,9 @@ const (
 	PRClosedUnmerged
 	BaseGone
 	Cancelled
-	// BaseMoved is derived from RunFact.VerdictBaseMoved, never from a stored column (inv. 14):
-	// internal/verdict's own expiry, checked ahead of predicate resolution (§4a), so a red check
-	// on a descendant whose base moved is not read as needs_you (plans/command-centre-phase-2.md
-	// § Phase 5).
+	// BaseMoved is derived from RunFact.VerdictBaseMoved, never a stored column (inv. 14), and
+	// verdict checks its expiry ahead of the predicate so a red descendant whose base moved is
+	// not read as needs_you (docs/designs/command-centre-design.md § 4a).
 	BaseMoved
 )
 

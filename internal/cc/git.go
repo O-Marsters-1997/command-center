@@ -131,10 +131,9 @@ func HasUnpushedCommits(ctx context.Context, repoPath, branch, lastPushedTip str
 	return local != remote, nil
 }
 
-// MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing outright if that is not
-// possible -- refresh's own step 2 (docs/designs/command-centre-design.md § 4a): reviewers'
-// "commit suggestion" clicks and Mergify's own update_method: merge push to the app's head
-// branches this way, and the app never rewrites history to make a divergent push fit.
+// MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing if that is not possible.
+// Reviewers' "commit suggestion" clicks and Mergify's update_method: merge both push to the app's
+// head branches, and the app never rewrites history to make a divergent push fit (§ 4a).
 func MergeFFOnly(ctx context.Context, worktreePath, ref string) error {
 	_, err := git(ctx, worktreePath, "merge", "--ff-only", ref)
 	return err
@@ -148,10 +147,9 @@ func Merge(ctx context.Context, worktreePath, ref string) error {
 	return err
 }
 
-// MidMerge reports whether worktreePath itself is left mid-merge -- MERGE_HEAD resolving means a
-// previous `git merge` (a refresh's own step 3, or a human's) left it there unresolved. It is
-// read, not recorded (§4a): a human resolving the conflict and committing clears it with no
-// bookkeeping.
+// MidMerge reports whether worktreePath is left mid-merge, which a resolving MERGE_HEAD means.
+// It is read, never recorded: a human resolving the conflict and committing clears it with no
+// bookkeeping (docs/designs/command-centre-design.md § 4a).
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", worktreePath, "rev-parse", "--verify", "-q", "MERGE_HEAD")
 	if err := cmd.Run(); err != nil {

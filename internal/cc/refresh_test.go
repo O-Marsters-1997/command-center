@@ -29,10 +29,8 @@ func stackedConfigAndWorkspace(t *testing.T, root string) (cc.Config, cc.Workspa
 	return cfg, ws
 }
 
-// forcePushDivergentCommit simulates history rewritten on the app's own head branch -- the rare
-// case refresh's own ff-only step (§4a step 2) exists to refuse rather than paper over. It pushes
-// a commit that shares no history with whatever is already on branch, from a throwaway clone, so
-// the branch's local worktree (still on its own prior commit) can never fast-forward onto it.
+// forcePushDivergentCommit pushes a commit sharing no history with branch, from a throwaway
+// clone, so the branch's local worktree can never fast-forward onto it.
 func forcePushDivergentCommit(t *testing.T, root, branch string) {
 	t.Helper()
 	remote := filepath.Join(root, "remote.git")
@@ -47,10 +45,9 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 	runGit(t, "-C", clone, "push", "-q", "--force", "origin", "HEAD:"+branch)
 }
 
-// stackedFixture cuts a parent branch and a child branch stacked on it, each pushed once, and
-// records both as already-pushed tasks -- the shape every refresh test starts from. The child's
-// own commit and the parent's commit (added by the caller afterwards) diverge from their common
-// ancestor, so a refresh's step 3 merge is a genuine three-way merge, not a trivial fast-forward.
+// stackedFixture cuts a parent branch and a child stacked on it, both pushed and recorded as
+// tasks. Their commits diverge from the common ancestor, so a refresh merge is a genuine
+// three-way merge rather than a fast-forward.
 type stackedFixture struct {
 	parent, child                 cc.Task
 	parentWorktree, childWorktree string

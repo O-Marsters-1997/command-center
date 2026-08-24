@@ -97,12 +97,9 @@ const (
 	red
 )
 
-// Evaluate resolves p against in and reports the verdict (docs/designs/command-centre-design.md § 11
-// inv. 11, § 4a). The stacked-base expiry is checked ahead of the predicate: a descendant whose
-// parent advanced does not have the parent's fix, so a red check on it may not be its own fault
-// (plans/command-centre-phase-2.md § Phase 5) -- base_moved is reported however in.Checks reads. A
-// foreign-SHA or absent rollup is never green: HeadOidMatch false discards in.Checks entirely. A
-// resolved-red predicate is needs_you outright; staleness only ever downgrades green.
+// Evaluate resolves p against in and reports the verdict (docs/designs/command-centre-design.md
+// § 11 inv. 11, § 4a). A foreign-SHA or absent rollup is never green; a resolved-red predicate is
+// needs_you, and the stacked-base expiry is checked ahead of it so base_moved outranks red.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
 		return Result{BaseMoved, "base moved: the parent advanced past what this branch was cut from"}

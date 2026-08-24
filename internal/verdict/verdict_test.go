@@ -363,11 +363,9 @@ func TestVerdictString(t *testing.T) {
 	}
 }
 
-// TestEvaluateBaseMoved covers §4a's expiry, moved ahead of predicate resolution
-// (plans/command-centre-phase-2.md § Phase 5): a stacked base whose tip has moved past what was
-// recorded reads base_moved regardless of the check rollup -- a red descendant included, since
-// the parent's fix is not yet in its history -- and a root row (StackedBase false) never reads it
-// no matter how stale BaseSHAMatch is.
+// TestEvaluateBaseMoved covers § 4a's expiry ahead of predicate resolution: a moved stacked base
+// reads base_moved whatever the rollup says, a red descendant included, and a root row never
+// reads it however stale BaseSHAMatch is.
 func TestEvaluateBaseMoved(t *testing.T) {
 	t.Parallel()
 
