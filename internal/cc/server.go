@@ -37,8 +37,8 @@ type Server struct {
 }
 
 // NewServer assembles the page and its routes over a store, a clock and the configured repos
-// (stacking, the CI verdict predicate and the recorded mergify hash are all per-repo config,
-// consulted on every render).
+// (stacking, the CI verdict predicate, the recorded mergify hash and the compat check name are
+// all per-repo config, consulted on every render).
 func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
 	s := &Server{
 		store: store, now: now,

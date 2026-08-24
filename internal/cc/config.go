@@ -29,8 +29,8 @@ type Task struct {
 }
 
 // Repo is one [[repo]] block. Path is relative to the workspace root.
-// Checks and MergifySHA are both empty until a repo opts into a CI verdict, matching the
-// pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
+// Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
+// the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
 	Path        string            `toml:"path"`
