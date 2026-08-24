@@ -81,11 +81,15 @@ type row struct {
 	Reason    string
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
-	Verbs    []string
-	Branch   string
-	Base     string
-	Worktree string
-	PR       string
+	Verbs  []string
+	Branch string
+	Base   string
+	// BaseVerdict is the base's own CI verdict label ("review_me"/"needs_you"/"checking"/
+	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
+	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
+	BaseVerdict string
+	Worktree    string
+	PR          string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
 	Pgid        string
@@ -146,6 +150,10 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
+	refreshFacts, err := s.store.RefreshFacts(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 	pushRows, err := s.store.LatestPushes(ctx)
 	if err != nil {
 		return pageView{}, err
@@ -160,11 +168,15 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
 	}
+	facts := taskFacts{
+		memberships: memberships, latestRuns: latestRuns,
+		pushes: pushFacts, refreshes: refreshFacts,
+	}
 	view := pageView{
 		ObserveAge: "never",
 		LaunchVerb: plan.VerbLaunch,
 		CancelVerb: plan.VerbCancel,
-		Rows:       derive(tasks, obs, memberships, latestRuns, pushFacts, vd, s.stackingByRepo, now),
+		Rows:       derive(tasks, obs, facts, vd, s.stackingByRepo, now),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -175,13 +187,6 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	return view, nil
 }
 
-// derive computes every row's label from tasks plus the last observation. Nothing here is
-// read from a stored status column, because there is not one. latestRuns and obs.Runs together
-// are what let a task's state depend on its run: the store has the durable facts (pgid, log
-// path, outcome), the observation has this tick's own liveness read — both survive a restart,
-// so the page renders identically whether this is tick 1 or tick 4000 (§ Crash recovery).
-// verdictDeps is the CI-verdict-specific facts derive needs per task, gathered once per render
-// rather than threaded through as four more scalar parameters.
 type verdictDeps struct {
 	pushRows         map[string]PushRow
 	checkingTicks    map[string]int
@@ -189,20 +194,31 @@ type verdictDeps struct {
 	mergifySHAByRepo map[string]string
 }
 
+// taskFacts is the durable per-task state a row is derived from, keyed by ticket URL.
+type taskFacts struct {
+	memberships map[string]LaunchMembership
+	latestRuns  map[string]RunSummary
+	pushes      map[string]PushFact
+	refreshes   map[string]RefreshFact
+}
+
+// derive labels every row from the stored facts plus this tick's observation. No status is
+// stored: facts are stored, labels are derived every tick
+// (docs/designs/command-centre-design.md § Schema, inv. 14).
 func derive(
-	tasks []Task, obs Observation, memberships map[string]LaunchMembership,
-	latestRuns map[string]RunSummary, pushFacts map[string]PushFact, vd verdictDeps,
+	tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
 	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
 
 	rows := make([]row, 0, len(tasks))
+	verdictLabelByBranch := make(map[string]string, len(tasks))
 	for _, t := range tasks {
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
-		runFact, pgid, elapsed, logPath := runFactFor(t, obs, latestRuns, pushFacts, vd, now)
-		membership := memberships[t.TicketURL]
+		runFact, pgid, elapsed, logPath := runFactFor(t, obs, facts, vd, now)
+		membership := facts.memberships[t.TicketURL]
 		state, reason := plan.Status(plan.Facts{
 			Task:            pt,
 			Unlock:          unlock,
@@ -211,6 +227,7 @@ func derive(
 			LatestRun:       runFact,
 			CancelledMember: membership.Cancelled,
 		})
+		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		rows = append(rows, row{
 			TicketURL:   t.TicketURL,
 			State:       state.String(),
@@ -226,20 +243,24 @@ func derive(
 			CancelCount: membership.Members,
 		})
 	}
+
+	// A second pass: a row's base is another row's own branch (never main, §4a), so its verdict
+	// is only known once every row above has been built.
+	for i := range rows {
+		if rows[i].Base != "" && rows[i].Base != defaultBaseBranch {
+			rows[i].BaseVerdict = verdictLabelByBranch[rows[i].Base]
+		}
+	}
 	return rows
 }
 
-// runFactFor builds plan.Status's LatestRun input for one task, plus the plain-text pgid,
-// elapsed time and log path the page renders alongside it. nil/empty when the task has no run.
-// Push facts are only meaningful once the run's own outcome is push (docs/prds/prd-command-centre.md
-// § Phase 4): PROpen reads this tick's own PR snapshot for the task's branch, never a stored
-// column (inv. 14). The CI verdict, once PROpen and clear of a refusal or failure, is
-// internal/verdict's own job (applyVerdict).
+// runFactFor builds plan.Status's LatestRun input for one task, plus the pgid, elapsed time and
+// log path the page renders. Push facts only count once the run's outcome is push, and PROpen
+// reads this tick's PR snapshot rather than a stored column (inv. 14).
 func runFactFor(
-	t Task, obs Observation, latestRuns map[string]RunSummary,
-	pushFacts map[string]PushFact, vd verdictDeps, now time.Time,
+	t Task, obs Observation, facts taskFacts, vd verdictDeps, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
-	summary, ok := latestRuns[t.TicketURL]
+	summary, ok := facts.latestRuns[t.TicketURL]
 	if !ok {
 		return nil, "", "", ""
 	}
@@ -249,10 +270,13 @@ func runFactFor(
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
 		if summary.Outcome == plan.OutcomePush {
-			pf := pushFacts[t.TicketURL]
+			pf := facts.pushes[t.TicketURL]
 			fact.PushRefused = pf.Refused
 			fact.PushRefusedPath = pf.RefusedPath
 			fact.PushFailed = pf.Failed
+			rf := facts.refreshes[t.TicketURL]
+			fact.RefreshRefused = rf.Refused
+			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
 			ownState := obs.PRs[t.Branch].State
 			fact.PROpen = ownState == gh.Open
 			fact.PRMerged = ownState == gh.Merged
@@ -298,7 +322,7 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
 		StackedBase:  stackedBase,
-		BaseSHAMatch: obs.PRs[pushRow.BaseBranch].HeadOid == pushRow.BaseSHAAtPush,
+		BaseSHAMatch: obs.BranchTips[pushRow.BaseBranch] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
@@ -310,8 +334,10 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 		fact.VerdictReviewMe = true
 	case verdict.NeedsYou:
 		fact.VerdictNeedsYou = true
+	case verdict.BaseMoved:
+		fact.VerdictBaseMoved = true
 	case verdict.Checking:
-		// leave both flags false; VerdictReason below still carries the sentence.
+		// leave every flag false; VerdictReason below still carries the sentence.
 	}
 	fact.VerdictReason = plan.Reason(result.Reason)
 }

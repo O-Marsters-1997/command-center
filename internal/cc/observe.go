@@ -25,6 +25,14 @@ type Observation struct {
 	// A repo with no predicate configured is never read, so an untracked repo's missing file
 	// never fails a tick.
 	MergifyHash map[string]string `json:"mergify_hash"`
+	// BranchTips is git rev-parse origin/<branch>, post-fetch, keyed by branch (§4a): the git
+	// fact a stacked base's tip is compared against, rather than the PR snapshot's headRefOid --
+	// one indirection off it, and stale the moment a reviewer pushes without GitHub re-reporting.
+	BranchTips map[string]string `json:"branch_tips"`
+	// MidMerge reports whether each branch's own worktree is left mid-merge, read fresh every
+	// tick (§4a) -- never recorded, since a human resolving the conflict by hand and committing
+	// must clear it with no bookkeeping.
+	MidMerge map[string]bool `json:"mid_merge"`
 }
 
 // RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it
@@ -47,19 +55,28 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			return Observation{}, err
 		}
 
-		obs := Observation{PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{}}
+		obs := Observation{
+			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
+			BranchTips: map[string]string{}, MidMerge: map[string]bool{},
+		}
 		for _, repo := range cfg.Repos {
 			path := filepath.Join(root, repo.Path)
 			if err := Fetch(ctx, path); err != nil {
 				return Observation{}, err
 			}
 
-			snapshot, err := gh.List(ctx, path, branchesFor(tasks, repo.Name))
+			branches := branchesFor(tasks, repo.Name)
+			snapshot, err := gh.List(ctx, path, branches)
 			if err != nil {
 				return Observation{}, err
 			}
 			for branch, pr := range snapshot.ByBranch {
 				obs.PRs[branch] = pr
+			}
+			for _, branch := range branches {
+				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
+					obs.BranchTips[branch] = tip
+				}
 			}
 
 			worktrees, err := Worktrees(ctx, path)
@@ -68,6 +85,11 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			}
 			for branch, wtPath := range worktrees {
 				obs.Worktrees[branch] = wtPath
+				mid, err := MidMerge(ctx, wtPath)
+				if err != nil {
+					return Observation{}, fmt.Errorf("check mid-merge for %s: %w", branch, err)
+				}
+				obs.MidMerge[branch] = mid
 			}
 
 			if repo.MergifySHA == "" {

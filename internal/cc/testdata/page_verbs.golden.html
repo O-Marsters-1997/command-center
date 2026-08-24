@@ -8,8 +8,8 @@
 <form id="launch" method="post" action="/launch"></form>
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>worktree</th>
-    <th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
   </tr>
   
   <tr>
@@ -26,6 +26,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -35,6 +36,7 @@
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://ready">launch
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -61,6 +63,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -73,6 +76,7 @@
         <button type="submit" name="verb" value="kill">kill</button>
       </form>
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -99,6 +103,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -118,6 +123,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -126,6 +132,7 @@
     <td></td>
     <td>
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -149,6 +156,7 @@
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form>
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -183,6 +191,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -199,6 +208,7 @@
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -225,6 +235,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -237,6 +248,7 @@
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form>
     </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>
@@ -267,6 +279,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -290,6 +303,7 @@
     <td></td>
     <td></td>
     <td></td>
+    <td></td>
   </tr>
   
   <tr>
@@ -299,6 +313,31 @@
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://cancelled">launch
     </td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  
+  <tr>
+    <td>sandbox://base_moved</td>
+    <td>base_moved</td>
+    <td></td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://base_moved">
+        <button type="submit" name="verb" value="refresh">refresh</button>
+      </form>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://base_moved">
+        <button type="submit" name="verb" value="re-run">re-run</button>
+      </form>
+    </td>
+    <td></td>
     <td></td>
     <td></td>
     <td></td>

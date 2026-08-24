@@ -80,6 +80,9 @@ func TestStateString(t *testing.T) {
 	if plan.Cancelled.String() != "cancelled" {
 		t.Errorf("state renders as %q, want cancelled", plan.Cancelled)
 	}
+	if plan.BaseMoved.String() != "base_moved" {
+		t.Errorf("state renders as %q, want base_moved", plan.BaseMoved)
+	}
 }
 
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
@@ -223,6 +226,25 @@ func TestStatusWithLatestRun(t *testing.T) {
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRClosedUnmerged: true,
 			},
 			wantState: plan.PRClosedUnmerged,
+		},
+		{
+			name: "a base-moved verdict derives base moved even over a needs-you check reading",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictBaseMoved: true, VerdictReason: "base moved: the parent advanced past what this branch was cut from",
+			},
+			wantState: plan.BaseMoved,
+			reasonHas: "the parent advanced",
+		},
+		{
+			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictBaseMoved: true, RefreshRefused: true,
+				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
+			},
+			wantState: plan.NeedsYou,
+			reasonHas: "not a fast-forward",
 		},
 	}
 

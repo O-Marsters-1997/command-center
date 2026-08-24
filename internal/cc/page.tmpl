@@ -10,8 +10,8 @@
 <form id="launch" method="post" action="/launch"></form>
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>worktree</th>
-    <th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
   </tr>
   {{range $row := .Rows}}
   <tr>
@@ -34,6 +34,7 @@
     </td>
     <td>{{$row.Branch}}</td>
     <td>{{$row.Base}}</td>
+    <td>{{$row.BaseVerdict}}</td>
     <td>{{$row.Worktree}}</td>
     <td>{{$row.PR}}</td>
     <td>{{$row.Pgid}}</td>

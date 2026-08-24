@@ -82,10 +82,16 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 }
 
 // verdictLabel names a task's just-computed verdict for comparison against the last recorded
-// one. Empty only when applyVerdict left every flag untouched -- no predicate configured for
-// this repo (§7) -- which must never itself count as a transition.
+// one, and (server.go's derive) a row's own label as its dependents' BaseVerdict. Empty for a nil
+// fact (no run yet) or when applyVerdict left every flag untouched -- no predicate configured for
+// this repo (§7) -- neither of which may count as a transition.
 func verdictLabel(fact *plan.RunFact) string {
+	if fact == nil {
+		return ""
+	}
 	switch {
+	case fact.VerdictBaseMoved:
+		return "base_moved"
 	case fact.VerdictReviewMe:
 		return "review_me"
 	case fact.VerdictNeedsYou:
