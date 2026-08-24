@@ -1,0 +1,61 @@
+# One authorisation of a 1+4 stacked fan-out opens five PRs with no human action between the
+# root's PR opening and the four dependents' launches: job 3 alone, on the tick that sees the
+# root's PR open, cuts and spawns every dependent off the root's own branch (issue #33; plan.
+# Unlocked's stacked arm, tp new --base and plan.PRBody's "Merge after #N").
+
+cc-init-repo
+cc-config fan-out-stacked
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5'
+
+# Tick: the root has no blockers, so it alone is unlocked and authorised -- cuts and spawns.
+# Every dependent is locked, naming the root as what it is waiting on.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=1 'run_launched'
+exec cc request GET /
+stdout -count=4 'waiting on sandbox://CC-1&#39;s PR'
+
+exec sleep 0.5
+
+# Tick: the root's dead run disposes with commits, pushes to origin/main and opens its own PR --
+# base main, so no stacked body. The dependents still read this tick's pre-push snapshot.
+exec cc tick --count 1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+grep -count=1 'pr create --base main --fill --label keep-open' $WORK/gh.log
+
+# Swap the fixture to report the root's PR open at #42 -- what a real gh would now answer.
+cc-fake-gh root-open-fanout
+
+# Tick: job 3 alone -- no second /launch -- cuts and spawns all four dependents in this one tick,
+# each off origin/cc-1 (stacking on, single open blocker): max_agents (5) covers the whole surplus.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=5 'run_launched'
+grep -count=1 'new cc-2 --base origin/cc-1' $WORK/tp.log
+grep -count=1 'new cc-3 --base origin/cc-1' $WORK/tp.log
+grep -count=1 'new cc-4 --base origin/cc-1' $WORK/tp.log
+grep -count=1 'new cc-5 --base origin/cc-1' $WORK/tp.log
+
+# Four concurrent agent processes need more real wall time to exit than one does.
+exec sleep 1.5
+
+# Tick: every dependent's dead run disposes, pushes its own branch cut off origin/cc-1, and opens
+# a stacked PR whose body carries "Merge after #42" -- the root's real PR number, read off this
+# tick's own observation, no further human step.
+exec cc tick --count 1
+exec cc request GET /events
+exec cc request GET /
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-3
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-5
+grep -count=4 'pr create --base cc-1 --fill --label keep-open --body Merge after #42' $WORK/gh.log
+
+# Five spawns, ever -- the fake agent log is independent of both tp.log's cuts and events' count.
+grep -count=5 'commits.sh' $WORK/agent.log
+
+exec cc request GET /
+! stdout '<td>blocked</td>'

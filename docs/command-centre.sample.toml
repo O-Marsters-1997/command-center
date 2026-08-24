@@ -6,9 +6,10 @@
 #   just run --config docs/command-centre.sample.toml
 #
 # The two branch names below are invented and have no pull requests, so the page renders CC-1
-# as "ready" and CC-2 as "blocked" naming CC-1 — truthfully, off real gh output.
+# as "ready" and CC-2 as "blocked" naming CC-1 — truthfully, off real gh output. Stacking is on,
+# so once CC-1's PR opens, CC-2 cuts and pushes off CC-1's own branch rather than main.
 
-max_agents = 1
+max_agents = 2
 port       = 7777
 
 [[task]]
@@ -26,4 +27,4 @@ blocked_by = ["sandbox://CC-1"]
 [[repo]]
 name     = "command-center"
 path     = "."             # relative to the workspace root: the directory holding docs/
-stacking = false           # Phase 2 flips it
+stacking = true

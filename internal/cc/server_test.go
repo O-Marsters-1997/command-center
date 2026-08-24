@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -368,6 +369,80 @@ func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 		})
+	}
+}
+
+// TestPreviewAndLaunchHandleAnArbitrarilySizedSlice proves issue #33's "no size limit anywhere
+// in the path": a fan-out is one root plus as many dependents as the plan calls for, and neither
+// /preview nor /launch may special-case a small slice.
+func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
+	t.Parallel()
+
+	const fanOut = 50
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+
+	root := cc.Task{TicketURL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
+	tasks := []cc.Task{root}
+	query := "task=" + root.TicketURL
+	for i := 1; i <= fanOut; i++ {
+		ticketURL := fmt.Sprintf("sandbox://CC-%d", i)
+		tasks = append(tasks, cc.Task{
+			TicketURL: ticketURL, Repo: "cc-sandbox", Branch: fmt.Sprintf("cc-%d", i),
+			BlockedBy: []string{root.TicketURL},
+		})
+		query += "&task=" + ticketURL
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?" + query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("preview status = %d, want 200", resp.StatusCode)
+	}
+	var rows []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != fanOut+1 {
+		t.Fatalf("preview rows = %d, want %d", len(rows), fanOut+1)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?"+query, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	launchResp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = launchResp.Body.Close() }()
+	if launchResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(launchResp.Body)
+		t.Fatalf("launch status = %d, want 202: %s", launchResp.StatusCode, body)
+	}
+
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	memberships, err := store.LaunchMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(memberships) != fanOut+1 {
+		t.Fatalf("authorised memberships = %d, want %d: the slice must not be truncated", len(memberships), fanOut+1)
 	}
 }
 

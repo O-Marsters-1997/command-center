@@ -1,0 +1,73 @@
+# The same 1+4 stacked fan-out as fan_out_stacked.txtar, but max_agents = 2 can only ever cover
+# two of the four dependents at once: the surplus stays queued reading "waiting for a slot",
+# never "waiting on a base" -- it is already unlocked -- and the tick after a slot frees starts
+# another (issue #33). Dependents run under sleeps.sh, not commits.sh: a run that never exits on
+# its own is what makes "running" and "still queued for a slot" observable in the same snapshot,
+# rather than racing a fast agent's own exit.
+
+cc-init-repo
+cc-config fan-out-stacked-capped
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5'
+
+# Tick: only the root is unlocked yet, so the cap never even comes into play here.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=1 'run_launched'
+
+exec sleep 0.5
+
+# Tick: the root disposes, pushes to origin/main and opens its own PR.
+exec cc tick --count 1
+grep -count=1 'pr create --base main' $WORK/gh.log
+
+# The root's PR is now open at #42, and from here on dependents run under sleeps.sh so a launch
+# is observable as running rather than raced against a fast agent's own exit.
+cc-fake-gh root-open-fanout
+cc-config fan-out-stacked-capped-sleeps
+
+# Tick: all four dependents are now unlocked, but max_agents = 2 and nothing is currently
+# running, so only two cut and spawn off origin/cc-1.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=3 'run_launched'
+grep -count=2 '\-\-base origin/cc-1' $WORK/tp.log
+
+# A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
+# also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=2 '<td>running</td>'
+stdout -count=2 'waiting for a slot'
+! stdout 'waiting on sandbox://CC-1'
+
+# Kill one running dependent: its process group empties, the same tick's liveness pass disposes
+# it (failed, no commits from sleeps.sh), and job 3 -- run after disposition in the same tick --
+# starts the next queued dependent with the slot that just freed.
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-2'
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=4 'run_launched'
+grep -count=3 '\-\-base origin/cc-1' $WORK/tp.log
+
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=2 '<td>running</td>'
+stdout -count=1 'waiting for a slot'
+
+# Kill the last two: the second kill's freed slot starts the last dependent, and nothing is ever
+# left "capped" once every task has had its turn.
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-3'
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=5 'run_launched'
+grep -count=4 '\-\-base origin/cc-1' $WORK/tp.log
+
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-4'
+exec cc request POST '/verb?verb=kill&task=sandbox://CC-5'
+exec cc tick --count 1
+exec cc request GET /
+! stdout 'waiting for a slot'
+! stdout '<td>blocked</td>'
