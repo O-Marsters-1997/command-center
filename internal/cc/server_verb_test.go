@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -66,15 +65,12 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	}
 	req.Header.Set("Origin", srv.URL)
 
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
-	}
+	wantSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
@@ -98,15 +94,12 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	}
 	req.Header.Set("Origin", srv.URL)
 
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
-	}
+	wantSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
 	if err != nil {
@@ -164,15 +157,12 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	req.Header.Set("Origin", srv.URL)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		got, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, got)
-	}
+	wantSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {

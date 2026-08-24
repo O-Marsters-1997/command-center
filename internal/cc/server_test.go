@@ -24,6 +24,27 @@ var update = flag.Bool("update", false, "regenerate golden files")
 
 const goldenPage = "testdata/page.golden.html"
 
+// noRedirect defeats http.Client's default of following a 303, so a test asserts on the
+// POST's own response.
+func noRedirect(srv *httptest.Server) *http.Client {
+	return &http.Client{
+		Transport:     srv.Client().Transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+func wantSeeOtherHome(t *testing.T, resp *http.Response) {
+	t.Helper()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
+	}
+	if got := resp.Header.Get("Location"); got != "/" {
+		t.Errorf("Location = %q, want %q", got, "/")
+	}
+}
+
 func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	t.Helper()
 
@@ -266,15 +287,12 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	}
 	req.Header.Set("Origin", srv.URL)
 
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
-	}
+	wantSeeOtherHome(t, resp)
 }
 
 func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
@@ -541,15 +559,12 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Origin", srv.URL)
-	launchResp, err := srv.Client().Do(req)
+	launchResp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = launchResp.Body.Close() }()
-	if launchResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(launchResp.Body)
-		t.Fatalf("launch status = %d, want 202: %s", launchResp.StatusCode, body)
-	}
+	wantSeeOtherHome(t, launchResp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -817,14 +832,12 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("status = %d, want 202", resp.StatusCode)
-	}
+	wantSeeOtherHome(t, resp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
