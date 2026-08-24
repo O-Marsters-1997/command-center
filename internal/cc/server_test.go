@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -134,15 +133,8 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatalf("parent's own state = %q, want needs_you (its CI check failed)", state)
 	}
 
-	// (?s) so a dot also matches the newlines inside the verbs cell's nested <form> markup.
-	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta("<td>sandbox://CHILD</td>") +
-		`(?:\s*<td>.*?</td>){5}\s*<td>([^<]*)</td>`)
-	m := re.FindStringSubmatch(page)
-	if m == nil {
-		t.Fatalf("could not find child row's base-verdict cell in page:\n%s", page)
-	}
-	if m[1] != "needs_you" {
-		t.Errorf("child's rendered base verdict = %q, want needs_you (the parent's own verdict)", m[1])
+	if got := rowCellAt(t, page, "sandbox://CHILD", 6); got != "needs_you" {
+		t.Errorf("child's rendered base verdict = %q, want needs_you (the parent's own verdict)", got)
 	}
 }
 
@@ -291,6 +283,74 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 	}
 	if reason, _ := byTicket["sandbox://CC-3"]["Reason"].(string); !strings.Contains(reason, "sandbox://CC-4") {
 		t.Errorf("CC-3 reason = %q, does not name its blocker sandbox://CC-4", reason)
+	}
+}
+
+// TestPreviewShowsTheBasesVerdictForAStackedRow covers issue #34's "you are about to build on a
+// red parent": the preview is read before authorising, so a row whose base is a blocker's own
+// branch carries that blocker's own CI verdict, not just its base branch name.
+func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, "sandbox://PARENT", at)
+	const parentTip = "parent-tip"
+	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		BranchTips: map[string]string{"parent": parentTip},
+		PRs: map[string]gh.PR{
+			"parent": {
+				Number: 1, State: gh.Open, HeadOid: parentTip,
+				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
+			},
+		},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CHILD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err != nil {
+		t.Fatalf("decode preview response %s: %v", body, err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+	if got := rows[0]["Label"]; got != "now" {
+		t.Errorf("label = %v, want now (parent's PR is open)", got)
+	}
+	if got := rows[0]["Base"]; got != "origin/parent" {
+		t.Errorf("base = %v, want origin/parent", got)
+	}
+	if got := rows[0]["BaseVerdict"]; got != "needs_you" {
+		t.Errorf("base verdict = %v, want needs_you (the parent's own red CI)", got)
 	}
 }
 
