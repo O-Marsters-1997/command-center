@@ -113,6 +113,10 @@ type row struct {
 	Elapsed     string
 	LogPath     string
 	CancelCount int
+	// Draft mirrors the PR's own observed isDraft, not DraftGate's own opinion: a failed gh pr
+	// ready leaves GitHub's real state unchanged, and this must still render honestly.
+	Draft       bool
+	DraftReason string
 }
 
 type tickErrorView struct {
@@ -194,11 +198,7 @@ func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, err
 	if err != nil {
 		return taskFacts{}, verdictDeps{}, err
 	}
-	pushRows, err := s.store.LatestPushes(ctx)
-	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
-	}
-	checkingTicks, err := s.store.CheckingTicks(ctx)
+	vd, err := verdictDepsFor(ctx, s.store, s.checksByRepo, s.mergifySHAByRepo, s.compatCheckByRepo)
 	if err != nil {
 		return taskFacts{}, verdictDeps{}, err
 	}
@@ -206,11 +206,6 @@ func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, err
 	facts := taskFacts{
 		memberships: memberships, latestRuns: latestRuns,
 		pushes: pushFacts, refreshes: refreshFacts,
-	}
-	vd := verdictDeps{
-		pushRows: pushRows, checkingTicks: checkingTicks,
-		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
-		compatCheckByRepo: s.compatCheckByRepo,
 	}
 	return facts, vd, nil
 }
@@ -221,6 +216,29 @@ type verdictDeps struct {
 	checksByRepo      map[string]verdict.Predicate
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
+}
+
+// verdictDepsFor gathers the store-derived facts applyVerdict needs, over the caller's own
+// per-repo predicate and mergify-hash maps -- shared by the page's render and the loop's own
+// verdict-transition and draft-gate tick steps, which all compute the same verdict the same way
+// (docs/designs/command-centre-design.md § 11 inv. 11).
+func verdictDepsFor(
+	ctx context.Context, store *Store, checksByRepo map[string]verdict.Predicate, mergifySHAByRepo map[string]string,
+	compatCheckByRepo map[string]string,
+) (verdictDeps, error) {
+	pushRows, err := store.LatestPushes(ctx)
+	if err != nil {
+		return verdictDeps{}, err
+	}
+	checkingTicks, err := store.CheckingTicks(ctx)
+	if err != nil {
+		return verdictDeps{}, err
+	}
+	return verdictDeps{
+		pushRows: pushRows, checkingTicks: checkingTicks,
+		checksByRepo: checksByRepo, mergifySHAByRepo: mergifySHAByRepo,
+		compatCheckByRepo: compatCheckByRepo,
+	}, nil
 }
 
 // taskFacts is the durable per-task state a row is derived from, keyed by ticket URL.
@@ -277,6 +295,8 @@ func derive(
 			LogPath:     logPath,
 			CancelCount: membership.Members,
 			Warning:     readyToMergeWarning(pr),
+			Draft:       pr.IsDraft,
+			DraftReason: draftReasonFor(pr, pt, byURL, prs, runFact),
 			SeamChanged: plan.SeamChanged(plan.SeamCheck{
 				HasRun: hasRun, Authorised: membership.LaunchID != 0, ComposeOK: composeOK,
 				ComposedHash: plan.Hash(composed), RunHash: latestRun.PromptHash, MemberHash: membership.PromptHash,
@@ -322,6 +342,24 @@ func readyToMergeWarning(pr gh.PR) string {
 	}
 	return fmt.Sprintf(
 		"ready-to-merge on a non-main base (%s): would squash into the parent branch, checks unseen", pr.BaseRef)
+}
+
+// draftReasonFor names why a drafted row is still a draft: plan.DraftGate's own reason, or --
+// when the gate says ready but pr.IsDraft is still true -- that the last `gh pr ready` call
+// failed and the next tick retries (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
+func draftReasonFor(
+	pr gh.PR, t plan.Task, byURL map[string]plan.Task, prs map[string]plan.PRState, runFact *plan.RunFact,
+) string {
+	if !pr.IsDraft {
+		return ""
+	}
+	gating := plan.GatingBlockers(t, byURL)
+	verdictGreen := runFact != nil && runFact.VerdictReviewMe
+	draft, reason := plan.DraftGate(gating, prs, verdictGreen)
+	if !draft {
+		return "ready to un-draft; the last gh pr ready call has not taken effect yet"
+	}
+	return string(reason)
 }
 
 // runFactFor builds plan.Status's LatestRun input for one task, plus the pgid, elapsed time and

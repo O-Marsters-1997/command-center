@@ -119,12 +119,23 @@ func List(ctx context.Context, repoPath string, tracked []string) (Snapshot, err
 // Create opens a pull request for the branch checked out at repoPath against base, applying the
 // keep-open label that defuses both repos' 14-day auto-close. body overrides --fill's body only
 // for a stacked base's "Merge after #N" line (docs/prds/prd-command-centre.md § Phase 4); empty for a root PR.
-func Create(ctx context.Context, repoPath, base, body string) error {
+func Create(ctx context.Context, repoPath, base, body string, draft bool) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
 		args = append(args, "--body", body)
 	}
+	if draft {
+		args = append(args, "--draft")
+	}
 	_, err := run(ctx, repoPath, args...)
+	return err
+}
+
+// Ready marks branch's pull request as ready for review, undoing draft state. It is one-way:
+// the reconciliation that calls this never asks to re-draft an already-ready PR
+// (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
+func Ready(ctx context.Context, repoPath, branch string) error {
+	_, err := run(ctx, repoPath, "pr", "ready", branch)
 	return err
 }
 

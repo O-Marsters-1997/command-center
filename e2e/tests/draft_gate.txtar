@@ -1,0 +1,45 @@
+# A consumer task with a cross-repo gating edge opens its PR as a draft, stays drafted while the
+# gating blocker's PR is open and while its own CI verdict is red, and is un-drafted only on the
+# tick after both hold -- calling `gh pr ready` exactly once (issue #57). Two repos are needed
+# because a gating edge is a cross-repo blocker: one repo cannot express it at all.
+
+cc-init-repo
+cc-init-repo services
+cc-config draft-gate-two-repos
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
+# liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+exec cc tick --count 1
+
+grep 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
+
+# The gating blocker's own PR is still open, and the consumer's own CI is red: stays drafted.
+cc-fake-gh-head draft-gate-open cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout 'waiting on sandbox://PLA-40'
+! stdout 'pr ready'
+
+# The blocker merges and the consumer's own CI goes green: this is the tick that un-drafts it.
+cc-fake-gh-head draft-gate-merged cc-1
+exec cc tick --count 1
+grep -count=1 'pr ready cc-1' $WORK/gh.log
+
+# GitHub now reports the PR as ready, as a real observe would from here on. Nine more ticks must
+# not call `gh pr ready` again.
+cc-fake-gh-head draft-gate-ready cc-1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+grep -count=1 'pr ready cc-1' $WORK/gh.log

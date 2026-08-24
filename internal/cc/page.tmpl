@@ -13,6 +13,7 @@
     <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
     <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>draft</th><th>draft reason</th>
   </tr>
   {{range $row := .Rows}}
   <tr>
@@ -45,6 +46,8 @@
     <td>{{$row.Pgid}}</td>
     <td>{{$row.Elapsed}}</td>
     <td>{{$row.LogPath}}</td>
+    <td>{{$row.Draft}}</td>
+    <td>{{$row.DraftReason}}</td>
   </tr>
   {{end}}
 </table>
