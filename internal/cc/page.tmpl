@@ -10,7 +10,7 @@
 <form id="launch" method="post" action="/launch"></form>
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
     <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
     <th>draft</th><th>draft reason</th>
@@ -20,6 +20,7 @@
     <td>{{$row.TicketURL}}</td>
     <td>{{$row.State}}</td>
     <td>{{$row.Reason}}</td>
+    <td>{{if $row.SeamChanged}}seam changed{{end}}</td>
     <td>
       {{- range $row.Verbs}}
       {{- if eq . $.LaunchVerb}}

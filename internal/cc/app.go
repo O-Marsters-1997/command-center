@@ -124,7 +124,11 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		lock:   lock,
 		store:  store,
 		loop:   NewLoop(store, observe, settings.now, cfg, ws, runner),
+<<<<<<< HEAD
 		server: NewServer(store, settings.now, cfg.Repos, ws.Root),
+=======
+		server: NewServer(store, settings.now, cfg.Repos, cfg.Seams, ws.Root),
+>>>>>>> origin/main
 	}, nil
 }
 

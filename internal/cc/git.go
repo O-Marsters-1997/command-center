@@ -61,6 +61,16 @@ func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// ShowFile reads path's content at ref without touching the working tree -- the retirement
+// pointer's read (docs/designs/command-centre-design.md § 6 job 3).
+func ShowFile(ctx context.Context, repoPath, ref, path string) (string, error) {
+	out, err := git(ctx, repoPath, "show", ref+":"+path)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
 // ChangedPaths lists the paths base and branch differ on -- the diff the push policy is
 // evaluated against (docs/prds/prd-command-centre.md § Phase 4). Three dots diffs against the merge
 // base, so only what branch itself added over base is named.

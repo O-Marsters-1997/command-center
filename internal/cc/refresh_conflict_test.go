@@ -75,7 +75,11 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		f:         f,
 		aliveRuns: aliveRuns,
 		loop:      cc.NewLoop(store, observe, clock, cfg, ws, cc.ProcessRunner{}),
+<<<<<<< HEAD
 		server:    cc.NewServer(store, clock, cfg.Repos, ""),
+=======
+		server:    cc.NewServer(store, clock, cfg.Repos, nil, ""),
+>>>>>>> origin/main
 		store:     store,
 	}
 }
@@ -113,7 +117,7 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	if state := rowState(t, page, c.f.child.TicketURL); state != "refresh_conflicted" {
 		t.Fatalf("child's state = %q, want refresh_conflicted", state)
 	}
-	if got := rowCellAt(t, page, c.f.child.TicketURL, 10); got != c.f.childWorktree {
+	if got := rowCellAt(t, page, c.f.child.TicketURL, 11); got != c.f.childWorktree {
 		t.Errorf("child's rendered worktree = %q, want the path to shell into: %q", got, c.f.childWorktree)
 	}
 	if !strings.Contains(page, `value="`+plan.VerbAbort+`"`) {

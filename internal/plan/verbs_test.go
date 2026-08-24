@@ -31,9 +31,7 @@ func TestVerbs(t *testing.T) {
 		{state: plan.Cancelled, want: []string{plan.VerbLaunch}},
 		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}},
-		// WaitingOnProducerDeploy's verb (re-check) is a separate ticket; state derivation lands
-		// first, unverbed.
-		{state: plan.WaitingOnProducerDeploy, want: nil},
+		{state: plan.WaitingOnProducerDeploy, want: []string{plan.VerbReCheck, plan.VerbReRun}},
 	}
 
 	// WaitingOnProducerDeploy is the last state in the enum, so a new one added after it lands

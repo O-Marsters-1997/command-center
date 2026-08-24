@@ -57,21 +57,25 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+<<<<<<< HEAD
 	server := cc.NewServer(store, fixedClock(at), repos, "")
+=======
+	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
+>>>>>>> origin/main
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://ROOT", 7); got != "0" {
+	if got := rowCellAt(t, page, "sandbox://ROOT", 8); got != "0" {
 		t.Errorf("root stack depth = %q, want 0", got)
 	}
-	if got := rowCellAt(t, page, "sandbox://ROOT", 8); got != "1" {
+	if got := rowCellAt(t, page, "sandbox://ROOT", 9); got != "1" {
 		t.Errorf("root merge order = %q, want 1", got)
 	}
 	for _, c := range children {
 		ticket := "sandbox://" + c
-		if got := rowCellAt(t, page, ticket, 7); got != "1" {
+		if got := rowCellAt(t, page, ticket, 8); got != "1" {
 			t.Errorf("%s stack depth = %q, want 1", c, got)
 		}
-		if got := rowCellAt(t, page, ticket, 8); got != "2" {
+		if got := rowCellAt(t, page, ticket, 9); got != "2" {
 			t.Errorf("%s merge order = %q, want 2", c, got)
 		}
 	}
@@ -115,13 +119,17 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+<<<<<<< HEAD
 	server := cc.NewServer(store, fixedClock(at), repos, "")
+=======
+	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
+>>>>>>> origin/main
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://PARENT", 9); got != "" {
+	if got := rowCellAt(t, page, "sandbox://PARENT", 10); got != "" {
 		t.Errorf("root (main-based) warning = %q, want empty even with the label", got)
 	}
-	got := rowCellAt(t, page, "sandbox://CHILD", 9)
+	got := rowCellAt(t, page, "sandbox://CHILD", 10)
 	if !strings.Contains(got, "ready-to-merge") {
 		t.Errorf("child (non-main-based) warning = %q, want it to name ready-to-merge", got)
 	}

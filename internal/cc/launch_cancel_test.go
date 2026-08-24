@@ -132,7 +132,11 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
+<<<<<<< HEAD
 	server := cc.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, "")
+=======
+	server := cc.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, nil, "")
+>>>>>>> origin/main
 	page := renderPage(t, server)
 	if state := rowState(t, page, runningTicket); state != "running" {
 		t.Errorf("running member's rendered state = %q, want running: a row that ever ran is never cancelled", state)

@@ -154,6 +154,13 @@ func Close(ctx context.Context, repoPath, branch string) error {
 	return err
 }
 
+// Rerun re-runs a GitHub Actions run: `gh run rerun <id>`, the re-check verb's way to ask a
+// resolved-red compat check to run again (docs/prds/prd-command-centre.md § Phase 5).
+func Rerun(ctx context.Context, repoPath, runID string) error {
+	_, err := run(ctx, repoPath, "run", "rerun", runID)
+	return err
+}
+
 // IssueBody reads ticketURL's body. The agent-owned settings deny it Bash(gh:*), so this is how
 // its prompt carries the ticket's content instead of a URL it has no way to fetch itself.
 func IssueBody(ctx context.Context, repoPath, ticketURL string) (string, error) {

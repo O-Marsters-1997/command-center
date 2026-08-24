@@ -6,6 +6,7 @@ const (
 	VerbLaunch         = "launch"
 	VerbKill           = "kill"
 	VerbReRun          = "re-run"
+	VerbReCheck        = "re-check"
 	VerbRetryPush      = "retry-push"
 	VerbClosePR        = "close-pr"
 	VerbRemoveWorktree = "remove-worktree"
@@ -42,6 +43,8 @@ func Verbs(s State) []string {
 		return []string{VerbRefresh, VerbReRun}
 	case RefreshConflicted:
 		return []string{VerbAbort}
+	case WaitingOnProducerDeploy:
+		return []string{VerbReCheck, VerbReRun}
 	default:
 		return nil
 	}
