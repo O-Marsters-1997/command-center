@@ -146,6 +146,10 @@ const (
 	// verdict checks its expiry ahead of the predicate so a red descendant whose base moved is
 	// not read as needs_you (docs/designs/command-centre-design.md § 4a).
 	BaseMoved
+	// RefreshConflicted is derived from RunFact.MidMerge, read from the worktree's MERGE_HEAD
+	// every tick, so a human who resolves the conflict by hand and commits clears the state with
+	// no verb (docs/designs/command-centre-design.md § 4a).
+	RefreshConflicted
 )
 
 func (s State) String() string {
@@ -180,6 +184,8 @@ func (s State) String() string {
 		return "cancelled"
 	case BaseMoved:
 		return "base_moved"
+	case RefreshConflicted:
+		return "refresh_conflicted"
 	case Blocked:
 		return "blocked"
 	default:
@@ -221,6 +227,10 @@ type RunFact struct {
 	// never retries it -- only the refresh verb does.
 	RefreshRefused       bool
 	RefreshRefusedReason Reason
+	// MidMerge is set while the worktree holds an unresolved merge -- refresh's step 3 conflicted
+	// (docs/designs/command-centre-design.md § 4a). It is read from MERGE_HEAD, never stored, and
+	// outranks every push and verdict fact: re-run must not spawn an agent into a mid-merge worktree.
+	MidMerge bool
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -300,6 +310,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return PRMerged, "pull request merged"
 	case run.PRClosedUnmerged:
 		return PRClosedUnmerged, "pull request closed without merging"
+	case run.MidMerge:
+		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
 	case run.PushRefused:
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:

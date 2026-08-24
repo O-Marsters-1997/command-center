@@ -13,8 +13,9 @@ import (
 const refreshVerb = plan.VerbRefresh
 
 const (
-	eventRefreshRefused = "refresh_refused"
-	eventRefreshed      = "refreshed"
+	eventRefreshRefused    = "refresh_refused"
+	eventRefreshConflicted = "refresh_conflicted"
+	eventRefreshed         = "refreshed"
 )
 
 // RefreshFact is a task's outstanding refused fast-forward, derived from the latest
@@ -29,8 +30,27 @@ type RefreshFact struct {
 // A refusal gates the automatic pass's retry; the refresh verb ignores it
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error) {
+	outcomes, err := s.latestRefreshOutcomes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	facts := make(map[string]RefreshFact, len(outcomes))
+	for taskID, o := range outcomes {
+		if o.kind == eventRefreshRefused {
+			facts[taskID] = RefreshFact{Refused: true, Reason: o.detail}
+		}
+	}
+	return facts, nil
+}
+
+type refreshOutcome struct{ kind, detail string }
+
+// latestRefreshOutcomes returns each task's latest refresh outcome the automatic pass never
+// retries, keyed by ticket URL, and the push that clears it
+// (docs/designs/command-centre-design.md § 4a).
+func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT e.task_id, e.detail
+		SELECT e.task_id, e.kind, e.detail
 		FROM events e
 		JOIN (
 			SELECT e2.task_id, MAX(e2.id) AS id
@@ -38,28 +58,28 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error
 			LEFT JOIN (
 				SELECT task_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY task_id
 			) p ON p.task_id = e2.task_id
-			WHERE e2.kind = ? AND e2.at > COALESCE(p.pushed_at, '')
+			WHERE e2.kind IN (?, ?) AND e2.at > COALESCE(p.pushed_at, '')
 			GROUP BY e2.task_id
 		) latest ON latest.task_id = e.task_id AND latest.id = e.id`,
-		eventRefreshRefused)
+		eventRefreshRefused, eventRefreshConflicted)
 	if err != nil {
-		return nil, fmt.Errorf("select refresh facts: %w", err)
+		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	facts := map[string]RefreshFact{}
+	outcomes := map[string]refreshOutcome{}
 	for rows.Next() {
-		var taskID string
+		var taskID, kind string
 		var detail sql.NullString
-		if err := rows.Scan(&taskID, &detail); err != nil {
-			return nil, fmt.Errorf("scan refresh fact: %w", err)
+		if err := rows.Scan(&taskID, &kind, &detail); err != nil {
+			return nil, fmt.Errorf("scan refresh outcome: %w", err)
 		}
-		facts[taskID] = RefreshFact{Refused: true, Reason: detail.String}
+		outcomes[taskID] = refreshOutcome{kind: kind, detail: detail.String}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate refresh facts: %w", err)
+		return nil, fmt.Errorf("iterate refresh outcomes: %w", err)
 	}
-	return facts, nil
+	return outcomes, nil
 }
 
 type refreshContext struct {
@@ -113,8 +133,8 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 }
 
 // autoRefresh sweeps every pushed, base-moved row that no live run or unresolved merge bars
-// (inv. 4) and that carries no refresh_refused fact, since a refusal is never retried
-// automatically (docs/designs/command-centre-design.md § 4a).
+// (inv. 4) and whose last refresh neither refused nor conflicted, so a human's abort is not
+// undone by the next tick re-running the same merge (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) autoRefresh(
 	ctx context.Context, tasks []Task, rc refreshContext, requested map[string]bool, now time.Time,
 ) error {
@@ -126,7 +146,7 @@ func (l *Loop) autoRefresh(
 	if err != nil {
 		return err
 	}
-	refreshFacts, err := l.store.RefreshFacts(ctx)
+	outcomes, err := l.store.latestRefreshOutcomes(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,7 +166,9 @@ func (l *Loop) autoRefresh(
 		if !pushed || !baseMoved(pushRow, rc.obs) {
 			continue
 		}
-		if refreshFacts[t.TicketURL].Refused {
+		// ponytail: the gate holds until the row's next push, so a later, cleanly-mergeable base
+		// advance also waits for the refresh verb. Compare the conflict's own base tip if that bites.
+		if _, tried := outcomes[t.TicketURL]; tried {
 			continue
 		}
 		if err := l.refreshOne(ctx, t, rc, now); err != nil {
@@ -184,7 +206,9 @@ func (l *Loop) refreshOne(ctx context.Context, task Task, rc refreshContext, now
 		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
 	}
 	if err := Merge(ctx, worktreePath, "origin/"+unlock.BaseBranch); err != nil {
-		return nil // conflict: left mid-merge for a human
+		return l.store.AppendEvent(ctx, Event{
+			At: now, TaskURL: task.TicketURL, Kind: eventRefreshConflicted, Detail: err.Error(),
+		})
 	}
 
 	return l.store.AppendEvent(ctx, Event{
