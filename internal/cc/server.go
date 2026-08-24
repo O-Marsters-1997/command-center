@@ -27,23 +27,25 @@ var page = template.Must(template.New("page").Parse(pageSource))
 // writes the database directly except to queue a launch intent: every state it shows is
 // derived from tasks and the last observation at render time (§5, inv. 14).
 type Server struct {
-	store            *Store
-	now              func() time.Time
-	stackingByRepo   map[string]bool
-	checksByRepo     map[string]verdict.Predicate
-	mergifySHAByRepo map[string]string
-	seamsRoot        string
-	mux              *http.ServeMux
+	store             *Store
+	now               func() time.Time
+	stackingByRepo    map[string]bool
+	checksByRepo      map[string]verdict.Predicate
+	mergifySHAByRepo  map[string]string
+	compatCheckByRepo map[string]string
+	seamsRoot         string
+	mux               *http.ServeMux
 }
 
 // NewServer assembles the page and its routes over a store, a clock, the configured repos
-// (stacking, the CI verdict predicate and the recorded mergify hash are all per-repo config,
-// consulted on every render) and the workspace root seams resolve against.
+// (stacking, the verdict predicate, the mergify hash and the compat check name are all per-repo
+// config, consulted on every render) and the workspace root seams resolve against.
 func NewServer(store *Store, now func() time.Time, repos []Repo, seamsRoot string) *Server {
 	s := &Server{
 		store: store, now: now,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
-		mergifySHAByRepo: mergifySHAByRepo(repos), seamsRoot: seamsRoot,
+		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
+		seamsRoot: seamsRoot,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -206,15 +208,17 @@ func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, err
 	vd := verdictDeps{
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
+		compatCheckByRepo: s.compatCheckByRepo,
 	}
 	return facts, vd, nil
 }
 
 type verdictDeps struct {
-	pushRows         map[string]PushRow
-	checkingTicks    map[string]int
-	checksByRepo     map[string]verdict.Predicate
-	mergifySHAByRepo map[string]string
+	pushRows          map[string]PushRow
+	checkingTicks     map[string]int
+	checksByRepo      map[string]verdict.Predicate
+	mergifySHAByRepo  map[string]string
+	compatCheckByRepo map[string]string
 }
 
 // taskFacts is the durable per-task state a row is derived from, keyed by ticket URL.
@@ -391,11 +395,14 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
 		AuthorLogin:  pr.AuthorLogin,
+		CompatCheck:  vd.compatCheckByRepo[t.Repo],
 	})
 
 	switch result.Verdict {
 	case verdict.ReviewMe:
 		fact.VerdictReviewMe = true
+	case verdict.WaitingOnProducerDeploy:
+		fact.VerdictWaitingOnProducer = true
 	case verdict.NeedsYou:
 		fact.VerdictNeedsYou = true
 	case verdict.BaseMoved:
