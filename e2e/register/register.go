@@ -110,8 +110,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	}
 	req.Header.Set("Origin", requestOrigin)
 
-	// http.Client follows a 303 by default, which would print the board instead of the POST's
-	// own empty body.
+	// http.Client follows a 303 by default.
 	client := *server.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 

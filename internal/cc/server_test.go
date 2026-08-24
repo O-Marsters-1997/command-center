@@ -24,16 +24,14 @@ var update = flag.Bool("update", false, "regenerate golden files")
 
 const goldenPage = "testdata/page.golden.html"
 
-// noRedirect defeats http.Client's default of following a 303, so a test asserts on the
-// POST's own response.
+// noRedirect defeats http.Client's default of following a 303.
 func noRedirect(srv *httptest.Server) *http.Client {
-	return &http.Client{
-		Transport:     srv.Client().Transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
+	client := *srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &client
 }
 
-func wantSeeOtherHome(t *testing.T, resp *http.Response) {
+func assertSeeOtherHome(t *testing.T, resp *http.Response) {
 	t.Helper()
 
 	if resp.StatusCode != http.StatusSeeOther {
@@ -41,7 +39,7 @@ func wantSeeOtherHome(t *testing.T, resp *http.Response) {
 		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
 	}
 	if got := resp.Header.Get("Location"); got != "/" {
-		t.Errorf("Location = %q, want %q", got, "/")
+		t.Fatalf("Location = %q, want %q", got, "/")
 	}
 }
 
@@ -292,7 +290,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 }
 
 func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
@@ -564,7 +562,7 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = launchResp.Body.Close() }()
-	wantSeeOtherHome(t, launchResp)
+	assertSeeOtherHome(t, launchResp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -837,7 +835,7 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)

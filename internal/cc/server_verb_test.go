@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -70,7 +71,7 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
@@ -99,7 +100,7 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
 	if err != nil {
@@ -162,7 +163,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
@@ -170,5 +171,39 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	}
 	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
 		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+}
+
+// TestVerbLandsTheBrowserBackOnTheBoard is the redirect from the browser's side: the default
+// client, like a browser, follows the 303 with a GET and ends up on the page.
+func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&task=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status after following the redirect = %d, want 200", resp.StatusCode)
+	}
+	if resp.Request.Method != http.MethodGet || resp.Request.URL.Path != "/" {
+		t.Errorf("followed with %s %s, want GET /", resp.Request.Method, resp.Request.URL.Path)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "<h1>Command Centre</h1>") {
+		t.Errorf("body after the redirect is not the board: %s", body)
 	}
 }

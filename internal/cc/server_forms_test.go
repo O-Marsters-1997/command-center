@@ -89,7 +89,7 @@ func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	wantSeeOtherHome(t, resp)
+	assertSeeOtherHome(t, resp)
 
 	ctx := t.Context()
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
