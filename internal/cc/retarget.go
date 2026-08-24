@@ -8,7 +8,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-const eventRetargeted = "retargeted"
+const (
+	eventRetargeted     = "retargeted"
+	eventRetargetFailed = "retarget_failed"
+)
 
 // retargetMerged re-points every descendant whose parent has merged at the default branch.
 // Both repos delete a merged branch, and Mergify's queue takes main-based pull requests only
@@ -40,12 +43,13 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// retargetOne re-points one descendant's pull request and records the new base against the same
-// pushed_tip. gh.Edit is called whatever base GitHub reports, since GitHub's own
-// delete-branch-on-merge retarget racing ours is the normal case, not an error.
+// retargetOne records nothing when gh refuses, so the next tick retries: a retarget is
+// idempotent, unlike the push whose failure waits for a human's retry-push verb.
 func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, repoPath string, now time.Time) error {
 	if err := gh.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
-		return fmt.Errorf("retarget %s at %s: %w", t.Branch, defaultBaseBranch, err)
+		return l.store.AppendEvent(ctx, Event{
+			At: now, TaskURL: t.TicketURL, Kind: eventRetargetFailed, Detail: err.Error(),
+		})
 	}
 
 	baseSHA, err := RevParse(ctx, repoPath, "origin/"+defaultBaseBranch)

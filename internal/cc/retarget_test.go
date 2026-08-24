@@ -24,8 +24,6 @@ func mergeParentIntoMain(t *testing.T, repoPath string) {
 	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
 }
 
-// mergedObservation is the tick that first sees the parent merged: its pull request reads merged
-// and origin/parent no longer resolves, so nothing may be merged against it.
 func mergedObservation(f stackedFixture, childBaseRef string) cc.Observation {
 	obs := baseObservation(f, "")
 	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged}
@@ -35,9 +33,8 @@ func mergedObservation(f stackedFixture, childBaseRef string) cc.Observation {
 }
 
 func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T) {
-	// The observed base is what GitHub has the descendant's PR targeting. gh pr edit is called
-	// either way: GitHub's own delete-branch-on-merge retarget racing ours is expected, not an
-	// error (plans/command-centre-phase-2.md § Phase 6).
+	// The axis is the base GitHub reports the descendant's PR on: ours to re-point, or already
+	// re-pointed by GitHub itself.
 	for _, childBaseRef := range []string{"parent", "main"} {
 		t.Run("github has it on "+childBaseRef, func(t *testing.T) {
 			// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
@@ -172,6 +169,61 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	}
 }
 
+// TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick covers the hazard the step's own
+// precondition creates: a task whose recorded base stays non-main is a candidate on every later
+// tick, so aborting the tick on a `gh pr edit` gh refuses would stall every other task's push,
+// verdict and launch for as long as that one pull request stays un-editable.
+func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	ghLog := installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	mergeParentIntoMain(t, repoPath)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(mustLookPath(t, "gh")), "gh"),
+		[]byte("#!/bin/sh\necho \"$*\" >> \""+ghLog+"\"\necho 'fake gh: pr edit refused' >&2\nexit 1\n"),
+		0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := mergedObservation(f, "parent")
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "retarget_failed", "pr edit refused") {
+		t.Errorf("events = %+v, want a retarget_failed event naming gh's own refusal", events)
+	}
+	if hasEvent(events, "retargeted", "") {
+		t.Errorf("events = %+v, want no retargeted event: gh refused", events)
+	}
+
+	pushes, err := store.LatestPushes(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pushes[f.child.TicketURL].BaseBranch; got != "parent" {
+		t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
+	}
+
+	// The next tick retries, since a retarget is idempotent and nothing was recorded.
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 2 {
+		t.Errorf("gh pr edit calls over two ticks = %q, want two: a refused retarget is retried", got)
+	}
+}
+
 func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
 	t.Parallel()
 
@@ -228,8 +280,6 @@ func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
 	}
 }
 
-// ghLogLines is every fake-gh invocation whose argv begins with prefix -- what the retarget's
-// acceptance criteria are asserted off.
 func ghLogLines(t *testing.T, logPath, prefix string) []string {
 	t.Helper()
 	body, err := os.ReadFile(logPath)
@@ -248,8 +298,6 @@ func ghLogLines(t *testing.T, logPath, prefix string) []string {
 	return lines
 }
 
-// advanceMain pushes a commit to origin/main from a throwaway clone: work that landed after the
-// parent's own merge, which a retargeted row's refresh has to pick up.
 func advanceMain(t *testing.T, root string) {
 	t.Helper()
 	clone := filepath.Join(t.TempDir(), "main-clone")
