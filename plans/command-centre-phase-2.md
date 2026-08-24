@@ -266,6 +266,11 @@ Layers and tooling are Phase 1's. What is new:
 - **Live criteria** are marked *(live)* below. They run against `support-app` as a daemon, and
   they are the only place `claude -p`, the app-owned deny settings and Mergify's real queue are
   exercised.
+- **[2026-08-24] Every *(live)* criterion is dropped as a gate.** They no longer block closing a
+  phase, and #39, the ticket that carried the Phase 4-6 ones, is closed unrun. Nothing has
+  exercised Mergify's queue, and no fan-out larger than one task has run against a real repo, so
+  the first real one is the test. `claude -p` and the deny settings are the exception: those ran
+  live on this repo for #37 and #38.
 
 ### Out of scope
 
