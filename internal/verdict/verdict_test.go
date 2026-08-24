@@ -450,6 +450,26 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	}
 }
 
+// TestWaitingOnProducerDeploySurvivesTheBoundedWait covers issue #56 AC3.
+func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
+	t.Parallel()
+
+	pushedAt, _ := waitedInput()
+	in := verdict.Input{
+		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, CompatCheck: compatCheckName,
+		Checks: map[string]verdict.CheckState{
+			compatCheckName: verdict.Failure, "Tests": verdict.Success,
+		},
+		Now: pushedAt.Add(10 * verdict.BoundedWait),
+	}
+
+	got := verdict.Evaluate(compatPredicate(), in)
+	if got.Verdict != verdict.WaitingOnProducerDeploy {
+		t.Fatalf("verdict = %v (%s) ten bounded waits after the resolved red, want waiting_on_producer_deploy",
+			got.Verdict, got.Reason)
+	}
+}
+
 // TestEvaluateBaseMoved covers § 4a's expiry ahead of predicate resolution: a moved stacked base
 // reads base_moved whatever the rollup says, a red descendant included, and a root row never
 // reads it however stale BaseSHAMatch is.

@@ -186,6 +186,12 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
 		t.Fatalf("state = %q, want waiting_on_producer_deploy (only the compat check is red)", state)
 	}
+	if !strings.Contains(page, `value="re-check"`) {
+		t.Error("page has no re-check button for the waiting_on_producer_deploy row")
+	}
+	if !strings.Contains(page, `value="re-run"`) {
+		t.Error("page has no re-run button for the waiting_on_producer_deploy row")
+	}
 }
 
 func TestServerRejectsUnknownPaths(t *testing.T) {

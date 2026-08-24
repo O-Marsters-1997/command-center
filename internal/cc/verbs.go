@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -14,6 +15,7 @@ import (
 
 const (
 	reRunVerb          = plan.VerbReRun
+	reCheckVerb        = plan.VerbReCheck
 	closePRVerb        = plan.VerbClosePR
 	removeWorktreeVerb = plan.VerbRemoveWorktree
 	cancelVerb         = plan.VerbCancel
@@ -25,6 +27,7 @@ var supportedVerbs = map[string]bool{
 	killVerb:           true,
 	retryPushVerb:      true,
 	reRunVerb:          true,
+	reCheckVerb:        true,
 	closePRVerb:        true,
 	removeWorktreeVerb: true,
 	cancelVerb:         true,
@@ -34,6 +37,8 @@ var supportedVerbs = map[string]bool{
 
 const (
 	eventReRunRefused          = "re_run_refused"
+	eventReCheckRequested      = "re_check_requested"
+	eventReCheckRefused        = "re_check_refused"
 	eventClosePRRequested      = "close_pr_requested"
 	eventClosePRFailed         = "close_pr_failed"
 	eventRemoveWorktreeRefused = "remove_worktree_refused"
@@ -182,6 +187,86 @@ func (l *Loop) reRunOne(
 		return fmt.Errorf("read baseline for re-run of %s: %w", task.TicketURL, err)
 	}
 	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash)
+}
+
+// applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat
+// check's own GitHub Actions run (docs/prds/prd-command-centre.md § Phase 5).
+func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
+	intents, err := l.store.PendingVerbIntents(ctx, reCheckVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	tasks, err := l.store.Tasks(ctx)
+	if err != nil {
+		return err
+	}
+	byTicket := tasksByTicket(tasks)
+	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	compatChecks := compatCheckByRepo(l.cfg.Repos)
+
+	now := l.now()
+	for _, intent := range intents {
+		if task, ok := byTicket[intent.TaskID]; ok {
+			err := l.reCheckOne(ctx, task, repoPaths[task.Repo], compatChecks[task.Repo], obs, now)
+			if err != nil {
+				return err
+			}
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reCheckOne re-runs the compat check's own GitHub Actions run, named by the run id embedded in
+// its DetailsURL (https://github.com/<owner>/<repo>/actions/runs/<run-id>/job/<job-id>).
+func (l *Loop) reCheckOne(
+	ctx context.Context, task Task, repoPath, compatCheck string, obs Observation, now time.Time,
+) error {
+	refuse := func(detail string) error {
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TaskURL: task.TicketURL, Kind: eventReCheckRefused, Detail: detail})
+	}
+	if compatCheck == "" {
+		return refuse("no compat check configured for this repo")
+	}
+
+	detailsURL := obs.PRs[task.Branch].Checks[compatCheck].DetailsURL
+	runID, err := runIDFromDetailsURL(detailsURL)
+	if err != nil {
+		return refuse(err.Error())
+	}
+
+	if err := gh.Rerun(ctx, repoPath, runID); err != nil {
+		return refuse(err.Error())
+	}
+
+	// Zeroed exactly as RecordPush zeroes it (pushes.go); issue #56 AC1 requires the row read
+	// checking again on the tick after.
+	if err := l.store.resetCheckingTicks(ctx, task.TicketURL); err != nil {
+		return err
+	}
+	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventReCheckRequested})
+}
+
+// runIDFromDetailsURL parses the run id out of a check's DetailsURL
+// (https://github.com/<owner>/<repo>/actions/runs/<run-id>/job/<job-id>).
+func runIDFromDetailsURL(detailsURL string) (string, error) {
+	const marker = "/actions/runs/"
+	i := strings.Index(detailsURL, marker)
+	if i < 0 {
+		return "", fmt.Errorf("compat check details url %q has no /actions/runs/<id> segment", detailsURL)
+	}
+	id, _, _ := strings.Cut(detailsURL[i+len(marker):], "/")
+	if id == "" {
+		return "", fmt.Errorf("compat check details url %q has no /actions/runs/<id> segment", detailsURL)
+	}
+	return id, nil
 }
 
 // applyClosePRIntents consumes every pending close-pr request: `gh pr close`, the sanctioned way
