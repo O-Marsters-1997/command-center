@@ -64,11 +64,11 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	memberships, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("ActiveMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if !memberships["sandbox://CC-1"] {
+	if memberships["sandbox://CC-1"].LaunchID == 0 {
 		t.Error("RunOnce did not apply the queued launch intent after a successful observe")
 	}
 }
@@ -113,9 +113,9 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Errorf("error %v does not wrap the observe failure", err)
 	}
 
-	memberships, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatalf("ActiveMemberships: %v", err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if len(memberships) != 0 {
 		t.Errorf("memberships = %+v, want none: a failed observe must apply no queued intent", memberships)

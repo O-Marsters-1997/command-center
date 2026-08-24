@@ -99,11 +99,11 @@ func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	memberships, err := store.ActiveMemberships(ctx)
+	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !memberships["sandbox://CC-1"] || !memberships["sandbox://CC-2"] {
-		t.Fatalf("active memberships = %v, want both tasks authorised", memberships)
+	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
+		t.Fatalf("launch memberships = %v, want both tasks authorised", memberships)
 	}
 }
