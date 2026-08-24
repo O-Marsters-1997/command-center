@@ -1,0 +1,44 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+#
+# Re-declares fan-out-stacked-capped.toml's same five tasks under sleeps.sh in place of
+# commits.sh, so a dependent's launch is observable as running before it is killed -- proving
+# max_agents defers the surplus rather than inferring it from how fast an agent happens to exit.
+
+max_agents = 2
+agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[task]]
+ticket_url = "sandbox://CC-1"
+repo       = "repo"
+branch     = "cc-1"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-2"
+repo       = "repo"
+branch     = "cc-2"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-3"
+repo       = "repo"
+branch     = "cc-3"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-4"
+repo       = "repo"
+branch     = "cc-4"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-5"
+repo       = "repo"
+branch     = "cc-5"
+blocked_by = ["sandbox://CC-1"]
+
+[[repo]]
+name     = "repo"
+path     = "repo"
+stacking = true

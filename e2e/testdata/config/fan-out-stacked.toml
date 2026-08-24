@@ -1,0 +1,43 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+#
+# One root plus four dependents, stacking on and max_agents comfortably above the surplus, so
+# nothing here is capped -- issue #33's 1+4 fan-out proof.
+
+max_agents = 5
+agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[task]]
+ticket_url = "sandbox://CC-1"
+repo       = "repo"
+branch     = "cc-1"
+blocked_by = []
+
+[[task]]
+ticket_url = "sandbox://CC-2"
+repo       = "repo"
+branch     = "cc-2"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-3"
+repo       = "repo"
+branch     = "cc-3"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-4"
+repo       = "repo"
+branch     = "cc-4"
+blocked_by = ["sandbox://CC-1"]
+
+[[task]]
+ticket_url = "sandbox://CC-5"
+repo       = "repo"
+branch     = "cc-5"
+blocked_by = ["sandbox://CC-1"]
+
+[[repo]]
+name     = "repo"
+path     = "repo"
+stacking = true

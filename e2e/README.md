@@ -1,6 +1,6 @@
 # The end-to-end harness
 
-Eighteen
+Twenty
 [testscript](https://pkg.go.dev/github.com/rogpeppe/go-internal/testscript)
 scripts drive the real `cc` binary against a real git repository, a fake `gh`
 and a fake `tp`. Each one asserts a behaviour the unit tests cannot reach,
@@ -135,6 +135,6 @@ Every script, and everything it starts, runs with:
    together are how a script distinguishes "the app decided this" from "the app
    actually did this".
 
-Eleven scripts contain `exec sleep 0.5`. It is always waiting for a real spawned
+Thirteen scripts contain `exec sleep 0.5`. It is always waiting for a real spawned
 agent process to exit between ticks, never for the app's own timing. Nothing in
 the app is polled for.
