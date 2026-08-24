@@ -1,16 +1,11 @@
 package cc
 
 import (
-<<<<<<< HEAD
-	"os"
-	"path/filepath"
-=======
 	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
->>>>>>> origin/main
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -20,11 +15,7 @@ func TestComposePromptWithNoSeamsMatchesPlanCompose(t *testing.T) {
 	t.Parallel()
 
 	task := plan.Task{TicketURL: "sandbox://CC-1"}
-<<<<<<< HEAD
-	composed, _, ok := composePrompt(t.TempDir(), task)
-=======
 	composed, _, ok := composePrompt(context.Background(), t.TempDir(), task, nil)
->>>>>>> origin/main
 	if !ok {
 		t.Fatal("composePrompt refused a task with no seams")
 	}
@@ -41,11 +32,7 @@ func TestComposePromptJoinsSeamFilesInConfigOrder(t *testing.T) {
 	writeSeam(t, root, "two", "seam two")
 
 	task := plan.Task{TicketURL: "sandbox://CC-1", Seams: []string{"one", "two"}}
-<<<<<<< HEAD
-	composed, _, ok := composePrompt(root, task)
-=======
 	composed, _, ok := composePrompt(context.Background(), root, task, nil)
->>>>>>> origin/main
 	if !ok {
 		t.Fatal("composePrompt refused a task whose seams all exist")
 	}
@@ -58,11 +45,7 @@ func TestComposePromptRefusesAMissingSeam(t *testing.T) {
 	t.Parallel()
 
 	task := plan.Task{TicketURL: "sandbox://CC-1", Seams: []string{"ghost"}}
-<<<<<<< HEAD
-	_, refused, ok := composePrompt(t.TempDir(), task)
-=======
 	_, refused, ok := composePrompt(context.Background(), t.TempDir(), task, nil)
->>>>>>> origin/main
 	if ok {
 		t.Fatal("composePrompt did not refuse a missing seam")
 	}
@@ -83,11 +66,7 @@ func TestComposePromptRefusesAnUnreadableSeamWithoutPanicking(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(seamPath, 0o600) })
 
 	task := plan.Task{TicketURL: "sandbox://CC-1", Seams: []string{"locked"}}
-<<<<<<< HEAD
-	_, refused, ok := composePrompt(root, task)
-=======
 	_, refused, ok := composePrompt(context.Background(), root, task, nil)
->>>>>>> origin/main
 	if ok {
 		t.Fatal("composePrompt did not refuse an unreadable seam")
 	}
@@ -96,8 +75,6 @@ func TestComposePromptRefusesAnUnreadableSeamWithoutPanicking(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
-=======
 // TestComposePromptPastesLandsAtOnceRetiredAndDiffersFromTheSeamFile covers issue #58's AC1: a
 // retired seam pastes its lands_at content instead of the seam file, and the two compositions
 // differ, which is what makes an already-authorised hash go stale on retirement.
@@ -229,7 +206,6 @@ func TestRetirementsByNameSkipsANameWithNoSeamBlock(t *testing.T) {
 	}
 }
 
->>>>>>> origin/main
 func writeSeam(t *testing.T, root, name, content string) {
 	t.Helper()
 
@@ -241,8 +217,6 @@ func writeSeam(t *testing.T, root, name, content string) {
 		t.Fatal(err)
 	}
 }
-<<<<<<< HEAD
-=======
 
 // gitRepoWithOriginMain creates a real repo with files committed and pushed to a bare "origin"
 // remote's main branch -- the shape ShowFile's `origin/main:<path>` needs to resolve, without a
@@ -281,4 +255,3 @@ func gitRepoWithOriginMain(t *testing.T, files map[string]string) string {
 	run("-C", repoPath, "push", "-q", "-u", "origin", "main")
 	return repoPath
 }
->>>>>>> origin/main

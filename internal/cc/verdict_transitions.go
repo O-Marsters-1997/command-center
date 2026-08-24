@@ -35,16 +35,10 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 		return err
 	}
 
-<<<<<<< HEAD
-	vd, err := verdictDepsFor(ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos))
+	vd, err := verdictDepsFor(
+		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
 	if err != nil {
 		return err
-=======
-	vd := verdictDeps{
-		pushRows: pushRows, checkingTicks: checkingTicks,
-		checksByRepo: checksByRepo(l.cfg.Repos), mergifySHAByRepo: mergifySHAByRepo(l.cfg.Repos),
-		compatCheckByRepo: compatCheckByRepo(l.cfg.Repos),
->>>>>>> origin/cc-52-seams-into-prompt
 	}
 
 	now := l.now()

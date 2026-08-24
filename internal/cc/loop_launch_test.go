@@ -146,8 +146,6 @@ func TestLoopNeverSpawnsATaskWhoseSeamFileIsMissing(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
-=======
 // TestLoopSpawnsFromLandsAtOnceTheProducerHasMerged covers issue #58's AC1 at the spawn path:
 // once a seam's producer has merged, the spawned prompt carries the lands_at path's content
 // off origin/main, not the (now stale) seam file.
@@ -303,7 +301,6 @@ func TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation(t *testing.T) {
 	}
 }
 
->>>>>>> origin/main
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, true)

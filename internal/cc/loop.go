@@ -270,11 +270,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		// around it (docs/designs/command-centre-design.md § 6).
 		promptHashMatches := false
 		if isAuthorised {
-<<<<<<< HEAD
-			composed, _, seamsOK := composePrompt(l.ws.Root, pt)
-=======
 			composed, _, seamsOK := composePrompt(ctx, l.ws.Root, pt, retirements)
->>>>>>> origin/main
 			promptHashMatches = seamsOK && hash == plan.Hash(composed)
 		}
 		candidates = append(candidates, plan.LaunchCandidate{
@@ -392,19 +388,12 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // so there is nothing to reap. On success, nothing may run between Spawn returning and the
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
-<<<<<<< HEAD
-func (l *Loop) spawnRun(ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string) error {
-	prompt, refusedSeam, ok := composePrompt(l.ws.Root, planTask(task))
-	if !ok {
-		return fmt.Errorf("spawn %s: seam %q has no readable file", task.TicketURL, refusedSeam)
-=======
 func (l *Loop) spawnRun(
 	ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string, retirements map[string]retirement,
 ) error {
 	prompt, refused, ok := composePrompt(ctx, l.ws.Root, planTask(task), retirements)
 	if !ok {
 		return fmt.Errorf("spawn %s: %q has no readable content", task.TicketURL, refused)
->>>>>>> origin/main
 	}
 
 	runID, err := l.store.InsertRunSkeleton(ctx, task.TicketURL, "agent", baselineSHA, promptHash)

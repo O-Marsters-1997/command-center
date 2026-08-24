@@ -57,11 +57,7 @@ func TestServerRendersThePage(t *testing.T) {
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := observedAt.Add(45 * time.Second)
-<<<<<<< HEAD
-	server := cc.NewServer(seededStore(t, observedAt), fixedClock(now), nil, "")
-=======
 	server := cc.NewServer(seededStore(t, observedAt), fixedClock(now), nil, nil, "")
->>>>>>> origin/main
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -131,11 +127,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-<<<<<<< HEAD
-	server := cc.NewServer(store, fixedClock(at), repos, "")
-=======
 	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
->>>>>>> origin/main
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
@@ -189,11 +181,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
 		}},
 	}}
-<<<<<<< HEAD
-	server := cc.NewServer(store, fixedClock(at), repos, "")
-=======
 	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
->>>>>>> origin/main
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
@@ -210,11 +198,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-<<<<<<< HEAD
-	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, "")
-=======
 	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, "")
->>>>>>> origin/main
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -226,11 +210,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -277,11 +257,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -319,11 +295,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
@@ -408,11 +380,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CHILD")
@@ -464,11 +432,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
@@ -500,11 +464,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 	t.Parallel()
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -557,11 +517,7 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?" + query)
@@ -635,11 +591,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	server := cc.NewServer(store, fixedClock(now), nil, "")
-=======
 	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
->>>>>>> origin/main
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -676,11 +628,7 @@ func TestPreviewComposesSeamsIntoThePromptAndHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, root))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
@@ -721,11 +669,7 @@ func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, t.TempDir()))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, t.TempDir()))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
@@ -777,11 +721,7 @@ func TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, t.TempDir()))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, nil, t.TempDir()))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
@@ -821,11 +761,7 @@ func TestLaunchRefusesATaskNamingAMissingSeam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, t.TempDir()))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, t.TempDir()))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -873,11 +809,7 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 		t.Fatal(err)
 	}
 
-<<<<<<< HEAD
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, root))
-=======
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
->>>>>>> origin/main
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -906,8 +838,6 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 		t.Errorf("stored prompt_hash = %q, want %q", got, want)
 	}
 }
-<<<<<<< HEAD
-=======
 
 // TestPageFlagsSeamChangedOnAQueuedRow covers issue #55's AC1 at the page: a member sits queued
 // on its authorised hash until a seam file it names is edited, at which point the row stays
@@ -1084,4 +1014,3 @@ func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
 		t.Errorf("seam-changed cell after edit = %q, want %q", got, "seam changed")
 	}
 }
->>>>>>> origin/main

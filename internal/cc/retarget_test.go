@@ -268,11 +268,7 @@ func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
-<<<<<<< HEAD
-		return rowState(t, renderPage(t, cc.NewServer(store, fixedClock(at), repos, "")), "sandbox://CHILD")
-=======
 		return rowState(t, renderPage(t, cc.NewServer(store, fixedClock(at), repos, nil, "")), "sandbox://CHILD")
->>>>>>> origin/main
 	}
 
 	if got := stateOfChild(t, false); got != "base_moved" {
