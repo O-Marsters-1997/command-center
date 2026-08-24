@@ -17,6 +17,7 @@ const (
 	closePRVerb        = plan.VerbClosePR
 	removeWorktreeVerb = plan.VerbRemoveWorktree
 	cancelVerb         = plan.VerbCancel
+	abortVerb          = plan.VerbAbort
 )
 
 // supportedVerbs is every verb handleVerb (server.go) accepts.
@@ -28,6 +29,7 @@ var supportedVerbs = map[string]bool{
 	removeWorktreeVerb: true,
 	cancelVerb:         true,
 	refreshVerb:        true,
+	abortVerb:          true,
 }
 
 const (
@@ -37,7 +39,65 @@ const (
 	eventRemoveWorktreeRefused = "remove_worktree_refused"
 	eventWorktreeRemoved       = "worktree_removed"
 	eventLaunchCancelled       = "launch_cancelled"
+	eventMergeAborted          = "merge_aborted"
+	eventMergeAbortFailed      = "merge_abort_failed"
 )
+
+// applyAbortIntents consumes every pending abort request: `git merge --abort` in the worktree,
+// the one verb `refresh conflicted` offers. It runs before the refresh step, whose own step 1
+// refuses to touch a worktree left mid-merge (docs/designs/command-centre-design.md § 4a).
+func (l *Loop) applyAbortIntents(ctx context.Context, obs Observation) error {
+	intents, err := l.store.PendingVerbIntents(ctx, abortVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	tasks, err := l.store.Tasks(ctx)
+	if err != nil {
+		return err
+	}
+	byTicket := tasksByTicket(tasks)
+
+	now := l.now()
+	for _, intent := range intents {
+		if task, ok := byTicket[intent.TaskID]; ok {
+			if err := l.abortOne(ctx, task, obs, now); err != nil {
+				return err
+			}
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// abortOne aborts one task's unresolved merge, refusing a worktree a live agent owns (inv. 4),
+// and clears the mid-merge the same tick's refresh step reads
+// (docs/designs/command-centre-design.md § 4a).
+func (l *Loop) abortOne(ctx context.Context, task Task, obs Observation, now time.Time) error {
+	fail := func(detail string) error {
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TaskURL: task.TicketURL, Kind: eventMergeAbortFailed, Detail: detail})
+	}
+
+	worktreePath, ok := obs.Worktrees[task.Branch]
+	if !ok {
+		return fail(fmt.Sprintf("no worktree for %s", task.Branch))
+	}
+	if obs.Runs[task.TicketURL].Alive {
+		return fail(fmt.Sprintf("a run is alive in %s", worktreePath))
+	}
+	if err := MergeAbort(ctx, worktreePath); err != nil {
+		return fail(err.Error())
+	}
+
+	delete(obs.MidMerge, task.Branch)
+	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventMergeAborted})
+}
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, cancelVerb)

@@ -83,6 +83,9 @@ func TestStateString(t *testing.T) {
 	if plan.BaseMoved.String() != "base_moved" {
 		t.Errorf("state renders as %q, want base_moved", plan.BaseMoved)
 	}
+	if plan.RefreshConflicted.String() != "refresh_conflicted" {
+		t.Errorf("state renders as %q, want refresh_conflicted", plan.RefreshConflicted)
+	}
 }
 
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
@@ -245,6 +248,30 @@ func TestStatusWithLatestRun(t *testing.T) {
 			},
 			wantState: plan.NeedsYou,
 			reasonHas: "not a fast-forward",
+		},
+		{
+			name: "an unresolved merge derives refresh conflicted over base moved and a refused fast-forward",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				MidMerge: true, VerdictBaseMoved: true, RefreshRefused: true,
+				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
+			},
+			wantState: plan.RefreshConflicted,
+			reasonHas: "mid-merge",
+		},
+		{
+			name: "an unresolved merge outranks a push failure, whose re-run would spawn into it",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, MidMerge: true, PushFailed: true,
+			},
+			wantState: plan.RefreshConflicted,
+		},
+		{
+			name: "a merged pull request outranks an unresolved merge in the worktree",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRMerged: true, MidMerge: true,
+			},
+			wantState: plan.PRMerged,
 		},
 	}
 

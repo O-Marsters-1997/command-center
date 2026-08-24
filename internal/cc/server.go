@@ -330,6 +330,7 @@ func runFactFor(
 			rf := facts.refreshes[t.TicketURL]
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
+			fact.MidMerge = obs.MidMerge[t.Branch]
 			ownState := obs.PRs[t.Branch].State
 			fact.PROpen = ownState == gh.Open
 			fact.PRMerged = ownState == gh.Merged

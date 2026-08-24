@@ -11,6 +11,7 @@ const (
 	VerbRemoveWorktree = "remove-worktree"
 	VerbCancel         = "cancel"
 	VerbRefresh        = "refresh"
+	VerbAbort          = "abort"
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
@@ -39,6 +40,8 @@ func Verbs(s State) []string {
 		return []string{VerbReRun, VerbRemoveWorktree}
 	case BaseMoved:
 		return []string{VerbRefresh, VerbReRun}
+	case RefreshConflicted:
+		return []string{VerbAbort}
 	default:
 		return nil
 	}

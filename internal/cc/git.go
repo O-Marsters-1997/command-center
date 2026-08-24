@@ -140,10 +140,17 @@ func MergeFFOnly(ctx context.Context, worktreePath, ref string) error {
 }
 
 // Merge merges ref into worktreePath's own branch -- refresh's own step 3 (§4a). A conflict
-// leaves the worktree mid-merge for a human; the caller (refresh.go) treats that as this ticket's
-// deliberate stopping point, `refresh conflicted` being a separate, blocked ticket.
+// leaves the worktree mid-merge for a human, which is what the next tick's MidMerge read derives
+// `refresh conflicted` from.
 func Merge(ctx context.Context, worktreePath, ref string) error {
 	_, err := git(ctx, worktreePath, "merge", ref)
+	return err
+}
+
+// MergeAbort undoes an unresolved merge in worktreePath, restoring the pre-merge tip --
+// `refresh conflicted`'s only verb (docs/designs/command-centre-design.md § 4a).
+func MergeAbort(ctx context.Context, worktreePath string) error {
+	_, err := git(ctx, worktreePath, "merge", "--abort")
 	return err
 }
 
