@@ -3,6 +3,7 @@ package cc_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -129,6 +130,25 @@ func TestLoadConfigParsesChecks(t *testing.T) {
 	anyOf := repo.Checks.AllOf[1].AnyOf
 	if len(anyOf) != 2 || anyOf[1].Author != "dependabot[bot]" {
 		t.Errorf("all_of[1].any_of = %+v", anyOf)
+	}
+}
+
+// TestLoadConfigParsesSeamsInConfigOrder covers issue #52's `seams[]`: a task's [[task]] block
+// carries the seam names composePrompt later resolves, in the order they were declared.
+func TestLoadConfigParsesSeamsInConfigOrder(t *testing.T) {
+	t.Parallel()
+
+	body := "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\nseams = [\"one\", \"two\"]\n\n" +
+		"[[repo]]\nname = \"r\"\npath = \"r\"\n"
+	got, err := cc.LoadConfig(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(got.Tasks) != 1 {
+		t.Fatalf("tasks = %+v", got.Tasks)
+	}
+	if want := []string{"one", "two"}; !slices.Equal(got.Tasks[0].Seams, want) {
+		t.Errorf("seams = %v, want %v", got.Tasks[0].Seams, want)
 	}
 }
 

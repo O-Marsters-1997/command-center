@@ -16,6 +16,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -56,7 +57,7 @@ func TestServerRendersThePage(t *testing.T) {
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := observedAt.Add(45 * time.Second)
-	server := cc.NewServer(seededStore(t, observedAt), fixedClock(now), nil)
+	server := cc.NewServer(seededStore(t, observedAt), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -126,7 +127,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	server := cc.NewServer(store, fixedClock(at), repos)
+	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
@@ -180,7 +181,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
 		}},
 	}}
-	server := cc.NewServer(store, fixedClock(at), repos)
+	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
@@ -191,7 +192,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil)
+	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -203,7 +204,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -250,7 +251,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -288,7 +289,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
@@ -373,7 +374,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos))
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CHILD")
@@ -425,7 +426,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
@@ -457,7 +458,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -510,7 +511,7 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?" + query)
@@ -584,7 +585,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, fixedClock(now), nil)
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -598,5 +599,236 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}
+	}
+}
+
+// TestPreviewComposesSeamsIntoThePromptAndHash covers issue #52's AC1: a task with two seams
+// composes to the implement instruction plus both files' contents, in config order, and the
+// preview's hash is plan.Hash of that same composed prompt.
+func TestPreviewComposesSeamsIntoThePromptAndHash(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	root := t.TempDir()
+	writeSeamFile(t, root, "one", "seam one content")
+	writeSeamFile(t, root, "two", "seam two content")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one", "two"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, root))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var rows []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+
+	wantPrompt := plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam one content", "seam two content"})
+	if got := rows[0]["Prompt"]; got != wantPrompt {
+		t.Errorf("Prompt = %q, want %q", got, wantPrompt)
+	}
+	if got := rows[0]["Hash"]; got != plan.Hash(wantPrompt) {
+		t.Errorf("Hash = %v, want %v", got, plan.Hash(wantPrompt))
+	}
+}
+
+// TestPreviewRefusesATaskNamingAMissingSeam covers issue #52's AC2: a task naming a seam with no
+// file is refused, naming that seam, rather than composing around it with an empty paste.
+func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var rows []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+	if got := rows[0]["Label"]; got != "refused" {
+		t.Errorf("label = %v, want refused", got)
+	}
+	if reason, _ := rows[0]["Reason"].(string); !strings.Contains(reason, "ghost") {
+		t.Errorf("reason = %q, does not name the missing seam %q", reason, "ghost")
+	}
+	if got, _ := rows[0]["Prompt"].(string); got != "" {
+		t.Errorf("Prompt = %q, want empty for a refused row", got)
+	}
+}
+
+// TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam covers the case where a row is refused
+// for two independent reasons at once: a task already authorised in an active launch that also
+// names a missing seam must keep naming the active launch, not have that reason overwritten by
+// the seam refusal.
+func TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var rows []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+	if got := rows[0]["Label"]; got != "refused" {
+		t.Errorf("label = %v, want refused", got)
+	}
+	reason, _ := rows[0]["Reason"].(string)
+	if !strings.Contains(reason, "already authorised in launch") {
+		t.Errorf("reason = %q, want it to keep naming the active launch, not the missing seam", reason)
+	}
+}
+
+// TestLaunchRefusesATaskNamingAMissingSeam covers issue #52's AC2 at the authorisation route: a
+// refused task is never queued to launch.
+func TestLaunchRefusesATaskNamingAMissingSeam(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	hashes, err := store.ActiveLaunchHashes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, queued := hashes[task.TicketURL]; queued {
+		t.Error("a task naming a missing seam must never be queued to launch")
+	}
+}
+
+// TestLaunchStoresTheComposedHashForATaskWithSeams covers issue #52's AC1 at the authorisation
+// route: launch_members.prompt_hash stores plan.Hash of the seam-composed prompt.
+func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	root := t.TempDir()
+	writeSeamFile(t, root, "one", "seam one content")
+	writeSeamFile(t, root, "two", "seam two content")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one", "two"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, root))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	hashes, err := store.ActiveLaunchHashes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam one content", "seam two content"}))
+	if got := hashes[task.TicketURL]; got != want {
+		t.Errorf("stored prompt_hash = %q, want %q", got, want)
 	}
 }

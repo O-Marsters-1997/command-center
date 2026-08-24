@@ -258,11 +258,18 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 
 		hash, isAuthorised := authorisedHashes[t.TicketURL]
 		_, hasRun := latest[t.TicketURL]
+		// A seam that no longer resolves refuses the match unconditionally, never composing
+		// around it (docs/designs/command-centre-design.md § 6).
+		promptHashMatches := false
+		if isAuthorised {
+			composed, _, seamsOK := composePrompt(l.ws.Root, pt)
+			promptHashMatches = seamsOK && hash == plan.Hash(composed)
+		}
 		candidates = append(candidates, plan.LaunchCandidate{
 			TicketURL:         t.TicketURL,
 			Unlock:            unlock,
 			Authorised:        isAuthorised,
-			PromptHashMatches: isAuthorised && hash == plan.Hash(plan.Compose(pt, nil)),
+			PromptHashMatches: promptHashMatches,
 			HasRun:            hasRun,
 		})
 	}
@@ -373,13 +380,17 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string) error {
+	prompt, refusedSeam, ok := composePrompt(l.ws.Root, planTask(task))
+	if !ok {
+		return fmt.Errorf("spawn %s: seam %q has no readable file", task.TicketURL, refusedSeam)
+	}
+
 	runID, err := l.store.InsertRunSkeleton(ctx, task.TicketURL, "agent", baselineSHA, promptHash)
 	if err != nil {
 		return err
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	prompt := plan.Compose(planTask(task), nil)
 	body, err := gh.IssueBody(ctx, worktreePath, task.TicketURL)
 	if err != nil {
 		return fmt.Errorf("fetch ticket body for %s: %w", task.TicketURL, err)

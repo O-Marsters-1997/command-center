@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// Compose renders the prompt a launch authorises: the implement instruction plus, later, each
-// seam file's content as its own line. seams is nil in this phase — the parameter stays so a
-// later phase can pass seam content without reshaping the signature or every call site.
+// Compose renders the prompt a launch authorises: the implement instruction plus each seam
+// file's content as its own line, in config order.
 func Compose(t Task, seams []string) string {
 	lines := append([]string{"/implement " + t.TicketURL}, seams...)
 	return strings.Join(lines, "\n")

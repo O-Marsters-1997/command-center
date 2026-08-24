@@ -3,6 +3,7 @@ package cc_test
 import (
 	"database/sql"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -106,5 +107,32 @@ func TestUpsertTasksIsIdempotentOnTicketURL(t *testing.T) {
 	}
 	if len(got[1].BlockedBy) != 1 || got[1].BlockedBy[0] != "sandbox://CC-1" {
 		t.Errorf("blocked_by = %v, want [sandbox://CC-1]", got[1].BlockedBy)
+	}
+}
+
+// TestUpsertTasksRoundTripsSeamsInConfigOrder covers issue #52: a task's seams must survive the
+// store round-trip the loop's spawn path reads from, not just the config the app starts with.
+func TestUpsertTasksRoundTripsSeamsInConfigOrder(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+
+	task := cc.Task{
+		TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Seams: []string{"one", "two"},
+	}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatalf("UpsertTasks: %v", err)
+	}
+
+	got, err := store.Tasks(ctx)
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(got))
+	}
+	if want := []string{"one", "two"}; !slices.Equal(got[0].Seams, want) {
+		t.Errorf("seams = %v, want %v", got[0].Seams, want)
 	}
 }

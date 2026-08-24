@@ -26,6 +26,7 @@ type Task struct {
 	Repo      string   `toml:"repo"`
 	Branch    string   `toml:"branch"`
 	BlockedBy []string `toml:"blocked_by"`
+	Seams     []string `toml:"seams"`
 }
 
 // Repo is one [[repo]] block. Path is relative to the workspace root.
