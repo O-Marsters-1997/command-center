@@ -1,0 +1,17 @@
+{
+  "pr list": {
+    "stdout": "[{\"number\":43,\"headRefName\":\"cc-2\",\"headRefOid\":\"aaaa000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":44,\"headRefName\":\"cc-3\",\"headRefOid\":\"bbbb000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":45,\"headRefName\":\"cc-4\",\"headRefOid\":\"cccc000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":46,\"headRefName\":\"cc-5\",\"headRefOid\":\"dddd000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
+  },
+  "pr list --state all --head cc-1": {
+    "stdout": "[{\"number\":42,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"labels\":[]}]\n"
+  },
+  "pr edit": {
+    "stdout": "https://example.com/owner/repo/pull/43\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  },
+  "issue view": {
+    "stdout": "fake ticket body\n"
+  }
+}

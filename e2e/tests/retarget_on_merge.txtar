@@ -1,0 +1,49 @@
+# Merging the root of a 1+4 stacked fan-out re-points all four descendants at main: one
+# `gh pr edit` per descendant, asserted off the argv, and one `pushes` row each carrying the same
+# pushed tip against the new base, which is what retires the stacked expiry (issue #38;
+# internal/cc/retarget.go). The second tick proves it is a one-shot: the recorded base is already
+# main, so nothing is re-pointed and no row is appended.
+
+cc-init-repo
+cc-config fan-out-stacked
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5'
+
+# The root alone is unlocked: it cuts and spawns, then pushes and opens its own PR against main.
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+grep -count=1 'pr create --base main --fill --label keep-open' $WORK/gh.log
+
+# The root's PR reads open, so all four descendants cut off origin/cc-1, run, and open stacked PRs.
+cc-fake-gh root-open-fanout
+exec cc tick --count 1
+exec sleep 1.5
+exec cc tick --count 1
+grep -count=4 'pr create --base cc-1 --fill --label keep-open --body Merge after #42' $WORK/gh.log
+
+# The human merges the root: main carries cc-1's commits and GitHub deletes the branch, so
+# origin/cc-1 no longer resolves for anything downstream.
+exec git -C $WORK/repo push -q origin cc-1:main
+exec git -C $WORK/repo push -q origin --delete cc-1
+cc-fake-gh fanout-root-merged
+
+exec cc tick --count 1
+grep -count=1 'pr edit cc-2 --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-3 --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-4 --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-5 --base main' $WORK/gh.log
+exec cc request GET /events
+stdout -count=4 'retargeted'
+
+# The retarget records a base, never a push: five `pr create` calls, ever -- the root's and the
+# four stacked ones, none re-opened.
+grep -count=5 'pr create' $WORK/gh.log
+
+# A second tick over the same rows re-points nothing: the recorded base is already main.
+exec cc tick --count 1
+grep -count=1 'pr edit cc-2 --base main' $WORK/gh.log
+exec cc request GET /events
+stdout -count=4 'retargeted'

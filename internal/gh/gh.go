@@ -128,6 +128,14 @@ func Create(ctx context.Context, repoPath, base, body string) error {
 	return err
 }
 
+// Edit re-points branch's pull request at base. It is idempotent: GitHub's own
+// delete-branch-on-merge retarget may have got there first, and re-pointing a pull request at
+// the base it already has is a no-op (docs/designs/command-centre-design.md § 4a).
+func Edit(ctx context.Context, repoPath, branch, base string) error {
+	_, err := run(ctx, repoPath, "pr", "edit", branch, "--base", base)
+	return err
+}
+
 // Close closes branch's pull request: the app can open one (Create), so it needs a sanctioned
 // way to unopen one too (docs/designs/command-centre-design.md § 5, the `close PR` verb). It never merges.
 func Close(ctx context.Context, repoPath, branch string) error {

@@ -112,7 +112,7 @@ func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	}
 	run("-C", repoPath, "add", "README.md")
 	run("-C", repoPath, "commit", "-q", "-m", "initial")
-	run("init", "-q", "--bare", remote)
+	run("init", "-q", "-b", "main", "--bare", remote)
 	run("-C", repoPath, "remote", "add", "origin", remote)
 	run("-C", repoPath, "push", "-q", "-u", "origin", "main")
 	run("-C", repoPath, "fetch", "-q", "origin")
