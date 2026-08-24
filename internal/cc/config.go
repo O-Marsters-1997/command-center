@@ -106,6 +106,17 @@ func mergifySHAByRepo(repos []Repo) map[string]string {
 	return m
 }
 
+// compatCheckByRepo indexes each configured repo's cross-repo compat check name by name --
+// internal/verdict's inv. 12 input, empty for a repo that never opted in
+// (docs/designs/command-centre-design.md § 11 inv. 12).
+func compatCheckByRepo(repos []Repo) map[string]string {
+	m := make(map[string]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.CompatCheck
+	}
+	return m
+}
+
 func repoPathsByName(root string, repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {

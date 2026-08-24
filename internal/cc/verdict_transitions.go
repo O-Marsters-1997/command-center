@@ -45,6 +45,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 	vd := verdictDeps{
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: checksByRepo(l.cfg.Repos), mergifySHAByRepo: mergifySHAByRepo(l.cfg.Repos),
+		compatCheckByRepo: compatCheckByRepo(l.cfg.Repos),
 	}
 
 	now := l.now()
@@ -92,6 +93,8 @@ func verdictLabel(fact *plan.RunFact) string {
 	switch {
 	case fact.VerdictBaseMoved:
 		return "base_moved"
+	case fact.VerdictWaitingOnProducer:
+		return "waiting_on_producer_deploy"
 	case fact.VerdictReviewMe:
 		return "review_me"
 	case fact.VerdictNeedsYou:

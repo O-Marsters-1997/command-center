@@ -138,6 +138,56 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 }
 
+// TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed covers inv. 12 wired end to
+// end through the repo's configured compat_check: a red compat check with every other required
+// check green renders the row as waiting_on_producer_deploy, not needs_you.
+func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, "sandbox://CC-1", at)
+	const tip = "cc-1-tip"
+	if err := store.RecordPush(ctx, "sandbox://CC-1", tip, "main", "main-tip", at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		Worktrees: map[string]string{"cc-1": "/repos/cc-1"},
+		PRs: map[string]gh.PR{
+			"cc-1": {
+				Number: 1, State: gh.Open, HeadOid: tip,
+				Checks: map[string]gh.CheckState{
+					"GraphQL production compatibility": {Status: "COMPLETED", Conclusion: "FAILURE"},
+					"Tests":                            {Status: "COMPLETED", Conclusion: "SUCCESS"},
+				},
+			},
+		},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	repos := []cc.Repo{{
+		Name: "repo", CompatCheck: "GraphQL production compatibility",
+		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
+		}},
+	}}
+	server := cc.NewServer(store, fixedClock(at), repos)
+	page := renderPage(t, server)
+
+	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
+		t.Fatalf("state = %q, want waiting_on_producer_deploy (only the compat check is red)", state)
+	}
+}
+
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 

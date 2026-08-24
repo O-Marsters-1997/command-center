@@ -150,6 +150,10 @@ const (
 	// every tick, so a human who resolves the conflict by hand and commits clears the state with
 	// no verb (docs/designs/command-centre-design.md § 4a).
 	RefreshConflicted
+	// WaitingOnProducerDeploy is derived from RunFact.VerdictWaitingOnProducer, internal/verdict's
+	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
+	// (docs/designs/command-centre-design.md § 11 inv. 12).
+	WaitingOnProducerDeploy
 )
 
 func (s State) String() string {
@@ -186,6 +190,8 @@ func (s State) String() string {
 		return "base_moved"
 	case RefreshConflicted:
 		return "refresh_conflicted"
+	case WaitingOnProducerDeploy:
+		return "waiting_on_producer_deploy"
 	case Blocked:
 		return "blocked"
 	default:
@@ -218,10 +224,11 @@ type RunFact struct {
 	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
 	// whatever cc computed, else empty. VerdictBaseMoved is internal/verdict's own expiry (§4a),
 	// checked ahead of the predicate, so it can be true however the other two read.
-	VerdictReviewMe  bool
-	VerdictNeedsYou  bool
-	VerdictBaseMoved bool
-	VerdictReason    Reason
+	VerdictReviewMe          bool
+	VerdictNeedsYou          bool
+	VerdictBaseMoved         bool
+	VerdictWaitingOnProducer bool
+	VerdictReason            Reason
 	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
 	// row reads needs_you naming the reason, and the automatic pass (internal/cc/refresh.go)
 	// never retries it -- only the refresh verb does.
@@ -320,6 +327,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return NeedsYou, run.RefreshRefusedReason
 	case run.VerdictBaseMoved:
 		return BaseMoved, run.VerdictReason
+	case run.VerdictWaitingOnProducer:
+		return WaitingOnProducerDeploy, run.VerdictReason
 	case run.VerdictReviewMe:
 		return ReviewMe, run.VerdictReason
 	case run.VerdictNeedsYou:
