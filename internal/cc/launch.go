@@ -139,16 +139,18 @@ func insertLaunch(ctx context.Context, tx dbTx, at string, members []pendingInte
 }
 
 type LaunchMembership struct {
-	LaunchID  int64
-	Members   int
-	Cancelled bool
+	LaunchID   int64
+	Members    int
+	Cancelled  bool
+	PromptHash string
 }
 
 // LaunchMemberships returns every task in an active launch, keyed by ticket URL, plus that
 // launch's member count — and Cancelled for a task whose launch was cancelled and not relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembership, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.task_id, lm.launch_id, l.state, COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
+		SELECT lm.task_id, lm.launch_id, l.state, lm.prompt_hash,
+		       COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 		FROM launch_members lm
 		JOIN launches l ON l.id = lm.launch_id
 		WHERE l.state IN ('active', 'cancelled')`)
@@ -162,7 +164,7 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembers
 	for rows.Next() {
 		var taskID, state string
 		var m LaunchMembership
-		if err := rows.Scan(&taskID, &m.LaunchID, &state, &m.Members); err != nil {
+		if err := rows.Scan(&taskID, &m.LaunchID, &state, &m.PromptHash, &m.Members); err != nil {
 			return nil, fmt.Errorf("scan launch membership: %w", err)
 		}
 		if state == "cancelled" {

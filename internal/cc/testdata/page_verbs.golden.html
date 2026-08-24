@@ -8,7 +8,7 @@
 <form id="launch" method="post" action="/launch"></form>
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
     <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
   </tr>
@@ -16,6 +16,7 @@
   <tr>
     <td>sandbox://blocked</td>
     <td>blocked</td>
+    <td></td>
     <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://blocked">launch
@@ -37,6 +38,7 @@
     <td>sandbox://ready</td>
     <td>ready</td>
     <td></td>
+    <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://ready">launch
     </td>
@@ -56,6 +58,7 @@
   <tr>
     <td>sandbox://queued</td>
     <td>queued</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -80,6 +83,7 @@
     <td>sandbox://running</td>
     <td>running</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://running">
@@ -102,6 +106,7 @@
   <tr>
     <td>sandbox://failed</td>
     <td>failed</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -126,6 +131,7 @@
     <td>sandbox://cut_failed</td>
     <td>cut_failed</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://cut_failed">
@@ -149,6 +155,7 @@
     <td>sandbox://push_pending</td>
     <td>push_pending</td>
     <td></td>
+    <td></td>
     <td>
     </td>
     <td></td>
@@ -167,6 +174,7 @@
   <tr>
     <td>sandbox://checking</td>
     <td>checking</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -194,6 +202,7 @@
   <tr>
     <td>sandbox://needs_you</td>
     <td>needs_you</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -226,6 +235,7 @@
     <td>sandbox://push_failed</td>
     <td>push_failed</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://push_failed">
@@ -253,6 +263,7 @@
     <td>sandbox://review_me</td>
     <td>review_me</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://review_me">
@@ -276,6 +287,7 @@
     <td>sandbox://merged</td>
     <td>merged</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://merged">
@@ -298,6 +310,7 @@
   <tr>
     <td>sandbox://pr_closed_unmerged</td>
     <td>pr_closed_unmerged</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -326,6 +339,7 @@
     <td>sandbox://base_gone</td>
     <td>base_gone</td>
     <td></td>
+    <td></td>
     <td>
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_gone">
@@ -353,6 +367,7 @@
     <td>sandbox://cancelled</td>
     <td>cancelled</td>
     <td></td>
+    <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://cancelled">launch
     </td>
@@ -372,6 +387,7 @@
   <tr>
     <td>sandbox://base_moved</td>
     <td>base_moved</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
@@ -399,6 +415,7 @@
   <tr>
     <td>sandbox://refresh_conflicted</td>
     <td>refresh_conflicted</td>
+    <td></td>
     <td></td>
     <td>
       <form method="post" action="/verb">
