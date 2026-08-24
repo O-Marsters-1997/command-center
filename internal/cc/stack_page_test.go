@@ -57,7 +57,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
-	server := cc.NewServer(store, fixedClock(at), repos, "")
+	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://ROOT", 7); got != "0" {
@@ -115,7 +115,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
-	server := cc.NewServer(store, fixedClock(at), repos, "")
+	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://PARENT", 9); got != "" {

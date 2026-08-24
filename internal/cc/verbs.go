@@ -144,6 +144,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	}
 	byTicket := tasksByTicket(tasks)
 	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	retirements := retirementsByName(l.cfg.Seams, planTasksByURL(tasks), prsByBranch(obs), repoPaths)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
 		return err
@@ -152,7 +153,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	now := l.now()
 	for _, intent := range intents {
 		if task, ok := byTicket[intent.TaskID]; ok {
-			err := l.reRunOne(ctx, task, repoPaths[task.Repo], obs, authorisedHashes[task.TicketURL], now)
+			err := l.reRunOne(ctx, task, repoPaths[task.Repo], obs, authorisedHashes[task.TicketURL], now, retirements)
 			if err != nil {
 				return err
 			}
@@ -168,6 +169,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 // disposition counts only the commits this new run itself produces, never a previous run's.
 func (l *Loop) reRunOne(
 	ctx context.Context, task Task, repoPath string, obs Observation, promptHash string, now time.Time,
+	retirements map[string]retirement,
 ) error {
 	worktreePath, ok := obs.Worktrees[task.Branch]
 	if !ok {
@@ -181,7 +183,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", task.TicketURL, err)
 	}
-	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash)
+	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash, retirements)
 }
 
 // applyClosePRIntents consumes every pending close-pr request: `gh pr close`, the sanctioned way

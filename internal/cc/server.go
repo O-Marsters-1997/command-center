@@ -32,18 +32,21 @@ type Server struct {
 	stackingByRepo   map[string]bool
 	checksByRepo     map[string]verdict.Predicate
 	mergifySHAByRepo map[string]string
+	seams            []Seam
+	repoPaths        map[string]string
 	seamsRoot        string
 	mux              *http.ServeMux
 }
 
-// NewServer assembles the page and its routes over a store, a clock, the configured repos
-// (stacking, the CI verdict predicate and the recorded mergify hash are all per-repo config,
-// consulted on every render) and the workspace root seams resolve against.
-func NewServer(store *Store, now func() time.Time, repos []Repo, seamsRoot string) *Server {
+// NewServer assembles the page and its routes over a store, a clock, the configured repos and
+// seams (stacking, the CI verdict predicate, the mergify hash and retirement pointers are all
+// per-repo/-seam config, consulted on every render) and the workspace root seams resolve against.
+func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, seamsRoot string) *Server {
 	s := &Server{
 		store: store, now: now,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
-		mergifySHAByRepo: mergifySHAByRepo(repos), seamsRoot: seamsRoot,
+		mergifySHAByRepo: mergifySHAByRepo(repos), seams: seams,
+		repoPaths: repoPathsByName(seamsRoot, repos), seamsRoot: seamsRoot,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -490,6 +493,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
+	retirements := retirementsByName(s.seams, byURL, prs, s.repoPaths)
 	facts, vd, err := s.loadTaskFacts(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -515,12 +519,12 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 			Base:        "origin/" + base,
 			BaseVerdict: baseVerdict(base, tasksByBranch, obs, facts, vd, now),
 		}
-		if composed, refusedSeam, ok := composePrompt(s.seamsRoot, t); ok {
+		if composed, refused, ok := composePrompt(ctx, s.seamsRoot, t, retirements); ok {
 			row.Hash = plan.Hash(composed)
 			row.Prompt = composed
 		} else if label != plan.Refused {
 			row.Label = plan.Refused.String()
-			row.Reason = fmt.Sprintf("seam %q has no readable file", refusedSeam)
+			row.Reason = fmt.Sprintf("%q has no readable content", refused)
 		}
 		rows = append(rows, row)
 	}
@@ -555,6 +559,13 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byURL := planTasksByURL(tasks)
+	obs, _, err := s.store.LastObservation(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	retirements := retirementsByName(s.seams, byURL, prsByBranch(obs), s.repoPaths)
+
 	hashes := make(map[string]string, len(requested))
 	for _, ticketURL := range requested {
 		t, ok := byURL[ticketURL]
@@ -562,9 +573,9 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("unknown task %q", ticketURL), http.StatusBadRequest)
 			return
 		}
-		composed, refusedSeam, ok := composePrompt(s.seamsRoot, t)
+		composed, refused, ok := composePrompt(ctx, s.seamsRoot, t, retirements)
 		if !ok {
-			http.Error(w, fmt.Sprintf("task %s names seam %q with no readable file", ticketURL, refusedSeam),
+			http.Error(w, fmt.Sprintf("task %s names %q with no readable content", ticketURL, refused),
 				http.StatusBadRequest)
 			return
 		}
