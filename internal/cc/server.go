@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -617,6 +618,18 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "at least one task is required", http.StatusBadRequest)
 		return
 	}
+	// One `hash` field per launchable row, each naming its own task: an unchecked row still posts
+	// its hidden hash, so pairing by position would pair the survivors wrong.
+	previewed := make(map[string]string, len(r.Form["hash"]))
+	for _, field := range r.Form["hash"] {
+		ticketURL, hash, ok := strings.Cut(field, " ")
+		if !ok {
+			http.Error(w, fmt.Sprintf("malformed hash field %q, want \"<task> <hash>\"", field),
+				http.StatusBadRequest)
+			return
+		}
+		previewed[ticketURL] = hash
+	}
 
 	tasks, err := s.store.Tasks(ctx)
 	if err != nil {
@@ -644,7 +657,13 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 				http.StatusBadRequest)
 			return
 		}
-		hashes[ticketURL] = plan.Hash(composed)
+		hash := plan.Hash(composed)
+		if want, ok := previewed[ticketURL]; ok && want != hash {
+			http.Error(w, fmt.Sprintf("task %s was previewed at hash %s and now composes to %s",
+				ticketURL, want, hash), http.StatusConflict)
+			return
+		}
+		hashes[ticketURL] = hash
 	}
 
 	group, err := randomGroup()

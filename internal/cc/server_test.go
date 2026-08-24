@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1014,4 +1015,169 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 	if got := strings.Count(body, "<td>refused</td>"); got != 2 {
 		t.Errorf("refused rows = %d, want 2", got)
 	}
+}
+
+// TestPreviewCarriesTheHashOnEveryLaunchableRow covers issue #73's AC1: the authorise form posts
+// the hash the operator read alongside the task, and a refused row posts neither.
+func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	root := t.TempDir()
+	writeSeamFile(t, root, "one", "seam one content")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one"}},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-3"}},
+		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	t.Cleanup(srv.Close)
+
+	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2")
+
+	want := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, []string{"seam one content"}))
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
+		`<input type="hidden" name="hash" value="sandbox://CC-1 `+want+`">`)
+	if refused := previewRowFor(t, body, "sandbox://CC-2"); strings.Contains(refused, `name="hash"`) {
+		t.Errorf("refused row carries a hash and would be submitted:\n%s", refused)
+	}
+}
+
+// TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a seam edited
+// between reading the preview and pressing authorise is caught at /launch, and the whole slice is
+// refused — including the task whose hash still matched.
+func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	root := t.TempDir()
+	writeSeamFile(t, root, "one", "seam one content")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Seams: []string{"one"}},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	t.Cleanup(srv.Close)
+
+	previewed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, []string{"seam one content"}))
+	writeSeamFile(t, root, "one", "seam one edited")
+	recomposed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, []string{"seam one edited"}))
+
+	form := url.Values{
+		"task": {"sandbox://CC-1", "sandbox://CC-2"},
+		"hash": {
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, nil)),
+			"sandbox://CC-2 " + previewed,
+		},
+	}
+	resp, body := postLaunchForm(t, srv, form)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", resp.StatusCode, body)
+	}
+	for _, want := range []string{"sandbox://CC-2", previewed, recomposed} {
+		if !strings.Contains(body, want) {
+			t.Errorf("409 body does not name %q:\n%s", want, body)
+		}
+	}
+
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	hashes, err := store.ActiveLaunchHashes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != 0 {
+		t.Errorf("active launch hashes = %v, want nothing queued", hashes)
+	}
+}
+
+// TestLaunchIgnoresTheHashOfAnUncheckedRow covers what a browser actually posts when the operator
+// unchecks a row: the hidden hash still travels, its checkbox does not, and the tasks that are
+// checked still launch on their own hashes.
+func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	t.Cleanup(srv.Close)
+
+	form := url.Values{
+		"task": {"sandbox://CC-1"},
+		"hash": {
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, nil)),
+			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, nil)),
+		},
+	}
+	resp, body := postLaunchForm(t, srv, form)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
+	}
+
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	hashes, err := store.ActiveLaunchHashes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := hashes["sandbox://CC-1"]; !ok || len(hashes) != 1 {
+		t.Errorf("active launch hashes = %v, want only sandbox://CC-1", hashes)
+	}
+}
+
+// TestLaunchRejectsAMalformedHashField covers a hash field that names no task: it is refused
+// rather than read as a hash that matches nothing.
+func TestLaunchRejectsAMalformedHashField(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	t.Cleanup(srv.Close)
+
+	form := url.Values{"task": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
+	resp, body := postLaunchForm(t, srv, form)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+}
+
+func postLaunchForm(t *testing.T, srv *httptest.Server, form url.Values) (*http.Response, string) {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp, string(body)
 }
