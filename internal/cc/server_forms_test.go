@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 
 	body := rec.Body.String()
 	wants := []string{
-		`<form id="launch" method="post" action="/launch"></form>`,
+		`<form id="launch" method="get" action="/preview"></form>`,
 		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-1">`,
 		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-2">`,
 		`<button type="submit" form="launch">launch selected</button>`,
@@ -56,18 +55,7 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *update {
-		if err := os.WriteFile(goldenVerbsPage, []byte(got), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(goldenVerbsPage)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if got != string(want) {
-		t.Errorf("verbs page differs from %s; rerun with -update to accept\n--- got ---\n%s", goldenVerbsPage, got)
-	}
+	assertGolden(t, goldenVerbsPage, []byte(got))
 }
 
 func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
