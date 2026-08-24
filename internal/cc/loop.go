@@ -114,6 +114,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyReRunIntents(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.applyReCheckIntents(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.applyClosePRIntents(ctx); err != nil {
 		return err
 	}
