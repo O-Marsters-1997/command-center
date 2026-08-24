@@ -32,17 +32,18 @@ type Server struct {
 	stackingByRepo   map[string]bool
 	checksByRepo     map[string]verdict.Predicate
 	mergifySHAByRepo map[string]string
+	seamsRoot        string
 	mux              *http.ServeMux
 }
 
-// NewServer assembles the page and its routes over a store, a clock and the configured repos
+// NewServer assembles the page and its routes over a store, a clock, the configured repos
 // (stacking, the CI verdict predicate and the recorded mergify hash are all per-repo config,
-// consulted on every render).
-func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
+// consulted on every render) and the workspace root seams resolve against.
+func NewServer(store *Store, now func() time.Time, repos []Repo, seamsRoot string) *Server {
 	s := &Server{
 		store: store, now: now,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
-		mergifySHAByRepo: mergifySHAByRepo(repos),
+		mergifySHAByRepo: mergifySHAByRepo(repos), seamsRoot: seamsRoot,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -450,6 +451,9 @@ type previewRow struct {
 	// after (docs/designs/command-centre-design.md § 4b).
 	BaseVerdict string
 	Hash        string
+	// Prompt is the fully composed prompt this launch would authorise — the implement
+	// instruction plus every seam file's content, in config order — empty when refused.
+	Prompt string
 }
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
@@ -504,14 +508,21 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		if base == "" {
 			base = plan.ProspectiveBase(t, byURL, stacking)
 		}
-		rows = append(rows, previewRow{
+		row := previewRow{
 			TicketURL:   ticketURL,
 			Label:       label.String(),
 			Reason:      string(reason),
 			Base:        "origin/" + base,
 			BaseVerdict: baseVerdict(base, tasksByBranch, obs, facts, vd, now),
-			Hash:        plan.Hash(plan.Compose(t, nil)),
-		})
+		}
+		if composed, refusedSeam, ok := composePrompt(s.seamsRoot, t); ok {
+			row.Hash = plan.Hash(composed)
+			row.Prompt = composed
+		} else {
+			row.Label = plan.Refused.String()
+			row.Reason = fmt.Sprintf("seam %q has no readable file", refusedSeam)
+		}
+		rows = append(rows, row)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -544,11 +555,20 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byURL := planTasksByURL(tasks)
+	hashes := make(map[string]string, len(requested))
 	for _, ticketURL := range requested {
-		if _, ok := byURL[ticketURL]; !ok {
+		t, ok := byURL[ticketURL]
+		if !ok {
 			http.Error(w, fmt.Sprintf("unknown task %q", ticketURL), http.StatusBadRequest)
 			return
 		}
+		composed, refusedSeam, ok := composePrompt(s.seamsRoot, t)
+		if !ok {
+			http.Error(w, fmt.Sprintf("task %s names seam %q with no readable file", ticketURL, refusedSeam),
+				http.StatusBadRequest)
+			return
+		}
+		hashes[ticketURL] = plan.Hash(composed)
 	}
 
 	group, err := randomGroup()
@@ -559,8 +579,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 
 	now := s.now()
 	for _, ticketURL := range requested {
-		hash := plan.Hash(plan.Compose(byURL[ticketURL], nil))
-		if err := s.store.QueueLaunchIntent(ctx, ticketURL, hash, group, now); err != nil {
+		if err := s.store.QueueLaunchIntent(ctx, ticketURL, hashes[ticketURL], group, now); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -632,7 +651,9 @@ func prsByBranch(obs Observation) map[string]plan.PRState {
 }
 
 func planTask(t Task) plan.Task {
-	return plan.Task{TicketURL: t.TicketURL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
+	return plan.Task{
+		TicketURL: t.TicketURL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy, Seams: t.Seams,
+	}
 }
 
 func prState(s gh.PRState) plan.PRState {

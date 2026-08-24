@@ -28,6 +28,7 @@ type Task struct {
 	Repo      string
 	Branch    string
 	BlockedBy []string
+	Seams     []string
 }
 
 // Reason is the human-readable sentence the page renders on a row.

@@ -76,6 +76,75 @@ func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
 	}
 }
 
+// TestLoopComposesSeamsIntoTheSpawnedPrompt covers issue #52's AC1 at the spawn path: the file
+// written for the agent is the implement instruction plus every configured seam's content, in
+// config order — the same composition the preview showed when the launch was authorised.
+func TestLoopComposesSeamsIntoTheSpawnedPrompt(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+	writeSeamFile(t, root, "one", "seam one content")
+	writeSeamFile(t, root, "two", "seam two content")
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one", "two"}}
+	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	planTask := plan.Task{TicketURL: task.TicketURL, Seams: task.Seams}
+	hash := plan.Hash(plan.Compose(planTask, []string{"seam one content", "seam two content"}))
+	authoriseTask(t, store, task.TicketURL, hash, at)
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	}
+
+	written, err := os.ReadFile(fake.spawns[0].PromptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := plan.Compose(planTask, []string{"seam one content", "seam two content"})
+	if !strings.HasPrefix(string(written), want) {
+		t.Errorf("prompt = %q, want it to start with the seam-composed prompt %q", written, want)
+	}
+}
+
+// TestLoopNeverSpawnsATaskWhoseSeamFileIsMissing covers issue #52's AC2 at the spawn path: even
+// if a launch was somehow authorised, a task naming a seam with no file is never spawned.
+func TestLoopNeverSpawnsATaskWhoseSeamFileIsMissing(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"ghost"}}
+	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	// Any hash authorises: composePrompt refuses before a hash comparison is even possible.
+	authoriseTask(t, store, task.TicketURL, "any-hash", at)
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a task naming a missing seam must never be spawned", len(fake.spawns))
+	}
+}
+
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, true)

@@ -15,7 +15,7 @@ import (
 func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -57,7 +57,7 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&task=sandbox://CC-1", nil)
@@ -89,7 +89,7 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&task=sandbox://CC-1", nil)
@@ -120,7 +120,7 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 func TestVerbRejectsUnknownTaskOrUnsupportedVerb(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{
@@ -152,7 +152,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	// A handler reading only the query string sees neither of these.
