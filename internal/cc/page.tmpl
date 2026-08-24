@@ -20,7 +20,7 @@
   {{range $row := .Rows}}
   <tr>
     <td>{{$row.TicketURL}}</td>
-    <td>{{$row.State}}</td>
+    <td>{{$row.State}}{{range $row.PendingVerbs}} · {{.}} queued{{end}}</td>
     <td>{{$row.Reason}}</td>
     <td>{{if $row.SeamChanged}}seam changed{{end}}</td>
     <td>

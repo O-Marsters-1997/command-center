@@ -240,6 +240,29 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 	return intents, nil
 }
 
+// PendingIntentsByTask is every unconsumed intent, keyed by task, most recent last.
+func (s *Store) PendingIntentsByTask(ctx context.Context) (map[string][]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT task_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("select pending intents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	byTask := map[string][]string{}
+	for rows.Next() {
+		var taskID, verb string
+		if err := rows.Scan(&taskID, &verb); err != nil {
+			return nil, fmt.Errorf("scan pending intent: %w", err)
+		}
+		byTask[taskID] = append(byTask[taskID], verb)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending intents: %w", err)
+	}
+	return byTask, nil
+}
+
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
 	_, err := s.db.ExecContext(ctx,
