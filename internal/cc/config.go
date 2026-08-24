@@ -58,10 +58,17 @@ const (
 	defaultMaxAgents = 1
 )
 
+// defaultAgentCommand is the argv a config naming no agent_command gets. The model is named
+// explicitly because the CLI's own default tracks Anthropic's latest release, so leaving it off
+// would change what every run is built by without this repo changing (§8).
+var defaultAgentCommand = []string{
+	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
+}
+
 // LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block, or a
 // retiring seam (one with lands_at) whose repo has none either.
 func LoadConfig(path string) (Config, error) {
-	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents}
+	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: defaultAgentCommand}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}

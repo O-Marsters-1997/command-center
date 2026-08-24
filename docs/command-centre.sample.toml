@@ -12,6 +12,11 @@
 max_agents = 2
 port       = 7777
 
+# The default when this key is absent, written out so the model is visible in the file you read.
+# {prompt} is the composed prompt and {settings} the app-owned deny file; the runner substitutes
+# both into every argv element. Nothing spawns until a launch is authorised on the page.
+agent_command = ["claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5"]
+
 [[task]]
 ticket_url = "sandbox://CC-1"
 repo       = "command-center"

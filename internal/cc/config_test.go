@@ -79,6 +79,46 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if got.MaxAgents != 1 {
 		t.Errorf("max_agents = %d, want default 1", got.MaxAgents)
 	}
+	want := []string{"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5"}
+	if !slices.Equal(got.AgentCommand, want) {
+		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
+	}
+}
+
+func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		line string
+		want []string
+	}{
+		{
+			name: "a config naming its own argv replaces the default outright, never appending to it",
+			line: "agent_command = [\"my-agent\", \"--model\", \"claude-opus-5\"]\n",
+			want: []string{"my-agent", "--model", "claude-opus-5"},
+		},
+		{
+			// An empty array is how an operator turns spawning off: Spawn rejects it by design.
+			name: "an explicit empty array stays empty rather than falling back",
+			line: "agent_command = []\n",
+			want: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := tt.line + "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
+			got, err := cc.LoadConfig(writeConfig(t, body))
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if !slices.Equal(got.AgentCommand, tt.want) {
+				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
+			}
+		})
+	}
 }
 
 const oneRepoWithChecks = `
