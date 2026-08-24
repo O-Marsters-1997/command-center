@@ -89,6 +89,9 @@ type row struct {
 	Verbs  []string
 	Branch string
 	Base   string
+	// SeamChanged is a flag, not a State (docs/designs/command-centre-design.md § 5): it
+	// composes with State rather than replacing it.
+	SeamChanged bool
 	// BaseVerdict is the base's own CI verdict label ("review_me"/"needs_you"/"checking"/
 	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
 	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
@@ -162,7 +165,7 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		ObserveAge: "never",
 		LaunchVerb: plan.VerbLaunch,
 		CancelVerb: plan.VerbCancel,
-		Rows:       derive(tasks, obs, facts, vd, s.stackingByRepo, now),
+		Rows:       derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -232,11 +235,12 @@ type taskFacts struct {
 // stored: facts are stored, labels are derived every tick
 // (docs/designs/command-centre-design.md § Schema, inv. 14).
 func derive(
-	tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
-	stackingByRepo map[string]bool, now time.Time,
+	ctx context.Context, tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
+	stackingByRepo map[string]bool, seams []Seam, repoPaths map[string]string, seamsRoot string, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
+	retirements := retirementsByName(seams, byURL, prs, repoPaths)
 
 	rows := make([]row, 0, len(tasks))
 	verdictLabelByBranch := make(map[string]string, len(tasks))
@@ -246,6 +250,7 @@ func derive(
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
 		runFact, pgid, elapsed, logPath := runFactFor(t, obs, facts, vd, now)
 		membership := facts.memberships[t.TicketURL]
+		latestRun, hasRun := facts.latestRuns[t.TicketURL]
 		state, reason := plan.Status(plan.Facts{
 			Task:            pt,
 			Unlock:          unlock,
@@ -257,6 +262,7 @@ func derive(
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		baseByBranch[t.Branch] = unlock.BaseBranch
 		pr := obs.PRs[t.Branch]
+		composed, _, composeOK := composePrompt(ctx, seamsRoot, pt, retirements)
 		rows = append(rows, row{
 			TicketURL:   t.TicketURL,
 			State:       state.String(),
@@ -271,6 +277,10 @@ func derive(
 			LogPath:     logPath,
 			CancelCount: membership.Members,
 			Warning:     readyToMergeWarning(pr),
+			SeamChanged: plan.SeamChanged(plan.SeamCheck{
+				HasRun: hasRun, Authorised: membership.LaunchID != 0, ComposeOK: composeOK,
+				ComposedHash: plan.Hash(composed), RunHash: latestRun.PromptHash, MemberHash: membership.PromptHash,
+			}),
 		})
 	}
 

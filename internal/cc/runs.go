@@ -120,6 +120,10 @@ type RunSummary struct {
 	EndedAt       *time.Time
 	LogPath       string
 	BaselineSHA   string
+	// PromptHash is what this run was spawned (or cut-failed) against — the page's own seam-
+	// changed comparison for a row that has already run compares a fresh recomposition against
+	// this, never the launch membership's hash, which a later re-run or relaunch supersedes.
+	PromptHash string
 }
 
 // LatestRunsByTask returns each task's single most recent run (highest id). Its presence alone
@@ -127,7 +131,7 @@ type RunSummary struct {
 func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.id, r.task_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-		       r.outcome, r.exit_code, r.ended_at
+		       r.outcome, r.exit_code, r.ended_at, r.prompt_hash
 		FROM runs r
 		JOIN (SELECT task_id, MAX(id) AS id FROM runs GROUP BY task_id) latest
 		  ON latest.task_id = r.task_id AND latest.id = r.id`)
@@ -141,10 +145,10 @@ func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, er
 		var taskID string
 		var summary RunSummary
 		var pgid sql.NullInt64
-		var procStartedAt, baselineSHA, logPath, outcome, endedAt sql.NullString
+		var procStartedAt, baselineSHA, logPath, outcome, endedAt, promptHash sql.NullString
 		var exitCode sql.NullInt64
 		if err := rows.Scan(&summary.ID, &taskID, &pgid, &procStartedAt, &baselineSHA, &logPath,
-			&outcome, &exitCode, &endedAt); err != nil {
+			&outcome, &exitCode, &endedAt, &promptHash); err != nil {
 			return nil, fmt.Errorf("scan latest run: %w", err)
 		}
 		if pgid.Valid {
@@ -174,6 +178,7 @@ func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, er
 			summary.Outcome = outcomeFromString(outcome.String)
 		}
 		summary.BaselineSHA, summary.LogPath = baselineSHA.String, logPath.String
+		summary.PromptHash = promptHash.String
 		summaries[taskID] = summary
 	}
 	if err := rows.Err(); err != nil {

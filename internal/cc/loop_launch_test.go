@@ -256,6 +256,51 @@ func TestLoopRefusesASpawnWhenTheSeamRetiresAfterAuthorisation(t *testing.T) {
 	}
 }
 
+// TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation covers issue #55's AC1: editing a seam
+// file after a member is authorised leaves it queued forever, spawning nothing, however many
+// ticks pass -- the tick refuses on a hash mismatch rather than composing around it.
+func TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+	writeSeamFile(t, root, "one", "seam one content")
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one"}}
+	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	planTask := plan.Task{TicketURL: task.TicketURL, Seams: task.Seams}
+	hash := plan.Hash(plan.Compose(planTask, []string{"seam one content"}))
+	authoriseTask(t, store, task.TicketURL, hash, at)
+
+	// The seam is edited after authorisation: the hash recorded above no longer matches what a
+	// fresh composition would hash to.
+	writeSeamFile(t, root, "one", "seam one content, edited")
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	for i := 0; i < 3; i++ {
+		if err := loop.RunOnce(t.Context()); err != nil {
+			t.Fatalf("RunOnce %d: %v", i, err)
+		}
+	}
+	if len(fake.spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a seam edited after authorisation must never be spawned", len(fake.spawns))
+	}
+
+	latest, err := store.LatestRunsByTask(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ran := latest[task.TicketURL]; ran {
+		t.Error("no run should ever be recorded for a task whose seam changed after authorisation")
+	}
+}
+
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, true)
