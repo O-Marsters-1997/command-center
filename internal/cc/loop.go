@@ -1,11 +1,15 @@
 package cc
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -25,6 +29,7 @@ const killVerb = plan.VerbKill
 const (
 	eventRunLaunched = "run_launched"
 	eventRunDisposed = "run_disposed"
+	eventReRunNoDiff = "re_run_no_diff"
 )
 
 // TickError is the last failed tick, rendered on the page with its age.
@@ -413,6 +418,17 @@ func (l *Loop) spawnRun(
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
 	}
 
+	spawnPrompt := prompt
+	if oldPromptPath != "" {
+		preamble, err := l.reRunDiffPreamble(ctx, task, oldPromptPath, prompt, runID)
+		if err != nil {
+			return err
+		}
+		if preamble != "" {
+			spawnPrompt = preamble + "\n\n" + prompt
+		}
+	}
+
 	logPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", runID))
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -424,7 +440,7 @@ func (l *Loop) spawnRun(
 		AgentCommand: l.cfg.AgentCommand,
 		WorktreePath: worktreePath,
 		SettingsPath: l.ws.SettingsPath,
-		Prompt:       prompt,
+		Prompt:       spawnPrompt,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
@@ -443,4 +459,48 @@ func (l *Loop) spawnRun(
 		At: startedAt, TaskURL: task.TicketURL, Kind: eventRunLaunched,
 		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
 	})
+}
+
+func (l *Loop) reRunDiffPreamble(ctx context.Context, task Task, oldPromptPath, newPrompt string, runID int64) (string, error) {
+	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
+		return "", l.store.AppendEvent(ctx, Event{
+			At: l.now(), TaskURL: task.TicketURL, Kind: eventReRunNoDiff,
+			Detail: fmt.Sprintf("no prompt file at %s", oldPromptPath),
+		})
+	} else if err != nil {
+		return "", fmt.Errorf("stat stored prompt %s: %w", oldPromptPath, err)
+	}
+
+	diff, err := unifiedDiff(ctx, oldPromptPath, newPrompt)
+	if err != nil {
+		return "", fmt.Errorf("diff re-run prompt for %s: %w", task.TicketURL, err)
+	}
+	if diff == "" {
+		return "", nil
+	}
+
+	diffPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.diff", runID))
+	if err := os.WriteFile(diffPath, []byte(diff), 0o600); err != nil {
+		return "", fmt.Errorf("write diff for run %d: %w", runID, err)
+	}
+	return diff, nil
+}
+
+// unifiedDiff shells out to diff(1): both GNU and BSD diff (Darwin's default) accept -u and
+// --label, unlike runner_unix.go's ps (invariant 6), so this needs no OS branch.
+func unifiedDiff(ctx context.Context, beforePath, after string) (string, error) {
+	cmd := exec.CommandContext(ctx, "diff", "-u", "--label", "before", "--label", "after", beforePath, "-")
+	cmd.Stdin = strings.NewReader(after)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return string(out), nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("diff %s: %w: %s", beforePath, err, bytes.TrimSpace(stderr.Bytes()))
+	}
+	return "", nil
 }

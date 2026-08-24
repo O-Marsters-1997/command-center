@@ -154,6 +154,10 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
+	latest, err := l.store.LatestRunsByTask(ctx)
+	if err != nil {
+		return err
+	}
 
 	now := l.now()
 	for _, intent := range intents {
@@ -422,8 +426,9 @@ func (l *Loop) removeWorktreeOne(
 	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventWorktreeRemoved})
 }
 
-// pruneRunLogs deletes every runs/<id>.jsonl and runs/<id>.prompt a task's runs ever produced.
-// Best-effort: a cut-failed run never wrote either file, so a missing file is not an error.
+// pruneRunLogs deletes every runs/<id>.jsonl, runs/<id>.prompt and runs/<id>.diff a task's runs
+// ever produced. Best-effort: a cut-failed run never wrote any of them, and most runs never wrote
+// a diff at all, so a missing file is not an error.
 func (l *Loop) pruneRunLogs(ctx context.Context, taskID string) error {
 	ids, err := l.store.RunIDsForTask(ctx, taskID)
 	if err != nil {
@@ -432,6 +437,7 @@ func (l *Loop) pruneRunLogs(ctx context.Context, taskID string) error {
 	for _, id := range ids {
 		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", id)))
 		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", id)))
+		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.diff", id)))
 	}
 	return nil
 }
