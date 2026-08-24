@@ -487,7 +487,7 @@ func (l *Loop) reRunDiffPreamble(ctx context.Context, task Task, oldPromptPath, 
 }
 
 // unifiedDiff shells out to diff(1): both GNU and BSD diff (Darwin's default) accept -u and
-// --label, unlike runner_unix.go's ps (invariant 6), so this needs no OS branch.
+// --label.
 func unifiedDiff(ctx context.Context, beforePath, after string) (string, error) {
 	cmd := exec.CommandContext(ctx, "diff", "-u", "--label", "before", "--label", "after", beforePath, "-")
 	cmd.Stdin = strings.NewReader(after)
