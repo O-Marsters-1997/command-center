@@ -33,6 +33,19 @@ func rowState(t *testing.T, page, ticketURL string) string {
 	return m[1]
 }
 
+// rowCellAt returns one row's cell content, counting the ticket cell itself as column 0 — the
+// <tr> layout page.tmpl renders (docs/prds/prd-command-centre.md § The page).
+func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
+	t.Helper()
+	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta("<td>"+ticketURL+"</td>") +
+		strings.Repeat(`\s*<td>.*?</td>`, column-1) + `\s*<td>([^<]*)</td>`)
+	m := re.FindStringSubmatch(page)
+	if m == nil {
+		t.Fatalf("no column %d found for %s in page:\n%s", column, ticketURL, page)
+	}
+	return m[1]
+}
+
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)

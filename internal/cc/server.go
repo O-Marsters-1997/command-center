@@ -88,8 +88,17 @@ type row struct {
 	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
 	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
 	BaseVerdict string
-	Worktree    string
-	PR          string
+	// StackDepth and MergeOrder are the row's distance from a root and the order it merges in,
+	// bottom-up — the app never merges a PR, so this is the only place the order is shown
+	// (docs/prds/prd-command-centre.md § The page → stack order).
+	StackDepth int
+	MergeOrder int
+	// Warning is invariant 2's hazard, named on the row: a non-main-based PR carrying
+	// ready-to-merge would squash-merge into its parent branch with the parent's own checks
+	// unseen, and empty otherwise. The app never applies that label itself.
+	Warning  string
+	Worktree string
+	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a task with no run yet.
 	Pgid        string
@@ -138,40 +147,12 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
-	memberships, err := s.store.LaunchMemberships(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	latestRuns, err := s.store.LatestRunsByTask(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	pushFacts, err := s.store.PushFacts(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	refreshFacts, err := s.store.RefreshFacts(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	pushRows, err := s.store.LatestPushes(ctx)
-	if err != nil {
-		return pageView{}, err
-	}
-	checkingTicks, err := s.store.CheckingTicks(ctx)
+	facts, vd, err := s.loadTaskFacts(ctx)
 	if err != nil {
 		return pageView{}, err
 	}
 
 	now := s.now()
-	vd := verdictDeps{
-		pushRows: pushRows, checkingTicks: checkingTicks,
-		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
-	}
-	facts := taskFacts{
-		memberships: memberships, latestRuns: latestRuns,
-		pushes: pushFacts, refreshes: refreshFacts,
-	}
 	view := pageView{
 		ObserveAge: "never",
 		LaunchVerb: plan.VerbLaunch,
@@ -185,6 +166,44 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		view.LastError = &tickErrorView{Age: age(now, lastErr.At), Message: lastErr.Message}
 	}
 	return view, nil
+}
+
+// loadTaskFacts gathers the taskFacts and verdictDeps both render and handlePreview need.
+func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, error) {
+	memberships, err := s.store.LaunchMemberships(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+	latestRuns, err := s.store.LatestRunsByTask(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+	pushFacts, err := s.store.PushFacts(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+	refreshFacts, err := s.store.RefreshFacts(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+	pushRows, err := s.store.LatestPushes(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+	checkingTicks, err := s.store.CheckingTicks(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
+
+	facts := taskFacts{
+		memberships: memberships, latestRuns: latestRuns,
+		pushes: pushFacts, refreshes: refreshFacts,
+	}
+	vd := verdictDeps{
+		pushRows: pushRows, checkingTicks: checkingTicks,
+		checksByRepo: s.checksByRepo, mergifySHAByRepo: s.mergifySHAByRepo,
+	}
+	return facts, vd, nil
 }
 
 type verdictDeps struct {
@@ -214,6 +233,7 @@ func derive(
 
 	rows := make([]row, 0, len(tasks))
 	verdictLabelByBranch := make(map[string]string, len(tasks))
+	baseByBranch := make(map[string]string, len(tasks))
 	for _, t := range tasks {
 		pt := planTask(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
@@ -228,6 +248,8 @@ func derive(
 			CancelledMember: membership.Cancelled,
 		})
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
+		baseByBranch[t.Branch] = unlock.BaseBranch
+		pr := obs.PRs[t.Branch]
 		rows = append(rows, row{
 			TicketURL:   t.TicketURL,
 			State:       state.String(),
@@ -236,22 +258,53 @@ func derive(
 			Branch:      t.Branch,
 			Base:        unlock.BaseBranch,
 			Worktree:    obs.Worktrees[t.Branch],
-			PR:          prSummary(obs.PRs[t.Branch]),
+			PR:          prSummary(pr),
 			Pgid:        pgid,
 			Elapsed:     elapsed,
 			LogPath:     logPath,
 			CancelCount: membership.Members,
+			Warning:     readyToMergeWarning(pr),
 		})
 	}
 
 	// A second pass: a row's base is another row's own branch (never main, §4a), so its verdict
-	// is only known once every row above has been built.
+	// and its depth are only known once every row above has been built.
 	for i := range rows {
 		if rows[i].Base != "" && rows[i].Base != defaultBaseBranch {
 			rows[i].BaseVerdict = verdictLabelByBranch[rows[i].Base]
 		}
+		rows[i].StackDepth = plan.StackDepth(rows[i].Branch, baseByBranch)
+		rows[i].MergeOrder = rows[i].StackDepth + 1
 	}
 	return rows
+}
+
+// baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,
+// otherwise the base task's own CI verdict, exactly what the main page shows once the row has
+// launched (docs/designs/command-centre-design.md § 4b, "you are about to build on a red parent").
+func baseVerdict(
+	base string, tasksByBranch map[string]Task, obs Observation, facts taskFacts, vd verdictDeps, now time.Time,
+) string {
+	if base == "" || base == defaultBaseBranch {
+		return ""
+	}
+	baseTask, ok := tasksByBranch[base]
+	if !ok {
+		return ""
+	}
+	runFact, _, _, _ := runFactFor(baseTask, obs, facts, vd, now)
+	return verdictLabel(runFact)
+}
+
+// readyToMergeWarning names invariant 2's hazard for the page: pr.BaseRef is what GitHub
+// actually has the PR targeting, which is what matters here, not the base this app would itself
+// choose (docs/designs/command-centre-design.md § 4a inv. 2).
+func readyToMergeWarning(pr gh.PR) string {
+	if !plan.StackedReadyToMergeWarning(pr.BaseRef, pr.Labels) {
+		return ""
+	}
+	return fmt.Sprintf(
+		"ready-to-merge on a non-main base (%s): would squash into the parent branch, checks unseen", pr.BaseRef)
 }
 
 // runFactFor builds plan.Status's LatestRun input for one task, plus the pgid, elapsed time and
@@ -391,7 +444,11 @@ type previewRow struct {
 	Label     string
 	Reason    string
 	Base      string
-	Hash      string
+	// BaseVerdict is the base's own CI verdict where the base is a blocker's branch, empty for
+	// a root row — "you are about to build on a red parent" is read before authorising, not
+	// after (docs/designs/command-centre-design.md § 4b).
+	BaseVerdict string
+	Hash        string
 }
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
@@ -408,6 +465,10 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byURL := planTasksByURL(tasks)
+	tasksByBranch := make(map[string]Task, len(tasks))
+	for _, t := range tasks {
+		tasksByBranch[t.Branch] = t
+	}
 
 	slice := make(map[string]bool, len(requested))
 	for _, ticketURL := range requested {
@@ -424,29 +485,31 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
-	memberships, err := s.store.LaunchMemberships(ctx)
+	facts, vd, err := s.loadTaskFacts(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	now := s.now()
 
 	rows := make([]previewRow, 0, len(requested))
 	for _, ticketURL := range requested {
 		t := byURL[ticketURL]
 		stacking := s.stackingByRepo[t.Repo]
 		unlock := plan.Unlocked(t, byURL, prs, stacking)
-		label, reason := plan.Preview(unlock, slice, memberships[ticketURL].LaunchID)
+		label, reason := plan.Preview(unlock, slice, facts.memberships[ticketURL].LaunchID)
 
 		base := unlock.BaseBranch
 		if base == "" {
 			base = plan.ProspectiveBase(t, byURL, stacking)
 		}
 		rows = append(rows, previewRow{
-			TicketURL: ticketURL,
-			Label:     label.String(),
-			Reason:    string(reason),
-			Base:      "origin/" + base,
-			Hash:      plan.Hash(plan.Compose(t, nil)),
+			TicketURL:   ticketURL,
+			Label:       label.String(),
+			Reason:      string(reason),
+			Base:        "origin/" + base,
+			BaseVerdict: baseVerdict(base, tasksByBranch, obs, facts, vd, now),
+			Hash:        plan.Hash(plan.Compose(t, nil)),
 		})
 	}
 

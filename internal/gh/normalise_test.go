@@ -3,6 +3,8 @@ package gh
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -102,6 +104,16 @@ func TestDecode(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:    "labels decode by name",
+			fixture: "stacked_ready_to_merge.json",
+			want: func(t *testing.T, prs []PR) {
+				want := []string{"keep-open", "ready-to-merge"}
+				if !slices.Equal(prs[0].Labels, want) {
+					t.Errorf("labels = %v, want %v", prs[0].Labels, want)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -114,6 +126,21 @@ func TestDecode(t *testing.T) {
 			}
 			tt.want(t, prs)
 		})
+	}
+}
+
+// TestBulkAndFallbackFieldsBothRequestLabels guards the gap the fallback read almost carried: a
+// PR resolved only through it (merged, closed, or past the bulk page's own limit) must still
+// decode ready-to-merge, since invariant 2's warning reads whatever labels the PR actually has
+// (docs/designs/command-centre-design.md § 4a inv. 2).
+func TestBulkAndFallbackFieldsBothRequestLabels(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(bulkFields, "labels") {
+		t.Errorf("bulkFields = %q, want it to include labels", bulkFields)
+	}
+	if !strings.Contains(fallbackFields, "labels") {
+		t.Errorf("fallbackFields = %q, want it to include labels", fallbackFields)
 	}
 }
 

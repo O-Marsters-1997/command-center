@@ -58,6 +58,9 @@ type PR struct {
 	IsDraft     bool                  `json:"is_draft"`
 	State       PRState               `json:"state"`
 	Checks      map[string]CheckState `json:"checks"`
+	// Labels names every label GitHub reports, invariant 2's ready-to-merge warning among them
+	// (docs/designs/command-centre-design.md § 4a).
+	Labels []string `json:"labels"`
 }
 
 // Snapshot is the tracked branches' pull requests, keyed by head branch.
@@ -67,10 +70,10 @@ type Snapshot struct {
 
 // bulkFields is the full read; gh pr list's own defaults (--state open --limit 30) would hide
 // merged PRs and truncate below a busy repo's open count.
-const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state,statusCheckRollup,author"
+const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state,statusCheckRollup,author,labels"
 
 // fallbackFields is the per-branch read. It is the only call that sees MERGED and CLOSED.
-const fallbackFields = "number,state,baseRefName,headRefOid"
+const fallbackFields = "number,state,baseRefName,headRefOid,labels"
 
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
@@ -168,6 +171,9 @@ type rawPR struct {
 		Login string `json:"login"`
 	} `json:"author"`
 	StatusCheckRollup []rawCheck `json:"statusCheckRollup"`
+	Labels            []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
 }
 
 // rawCheck is the union of CheckRun and StatusContext as gh flattens them into one array.
@@ -191,6 +197,10 @@ func decode(raw []byte) ([]PR, error) {
 
 	prs := make([]PR, 0, len(decoded))
 	for _, r := range decoded {
+		labels := make([]string, 0, len(r.Labels))
+		for _, l := range r.Labels {
+			labels = append(labels, l.Name)
+		}
 		prs = append(prs, PR{
 			Number:      r.Number,
 			HeadRef:     r.HeadRefName,
@@ -201,6 +211,7 @@ func decode(raw []byte) ([]PR, error) {
 			IsDraft:     r.IsDraft,
 			State:       parseState(r.State),
 			Checks:      normalise(r.StatusCheckRollup),
+			Labels:      labels,
 		})
 	}
 	return prs, nil
