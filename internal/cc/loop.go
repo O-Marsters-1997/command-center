@@ -461,7 +461,9 @@ func (l *Loop) spawnRun(
 	})
 }
 
-func (l *Loop) reRunDiffPreamble(ctx context.Context, task Task, oldPromptPath, newPrompt string, runID int64) (string, error) {
+func (l *Loop) reRunDiffPreamble(
+	ctx context.Context, task Task, oldPromptPath, newPrompt string, runID int64,
+) (string, error) {
 	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
 		return "", l.store.AppendEvent(ctx, Event{
 			At: l.now(), TaskURL: task.TicketURL, Kind: eventReRunNoDiff,
