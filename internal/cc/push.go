@@ -164,7 +164,8 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 
 	if pc.obs.PRs[t.Branch].State != gh.Open {
 		body := plan.PRBody(base, pc.obs.PRs[base].Number)
-		if err := gh.Create(ctx, pc.obs.Worktrees[t.Branch], base, body); err != nil {
+		draft := plan.OpensAsDraft(pc.byURL[t.TicketURL], pc.byURL)
+		if err := gh.Create(ctx, pc.obs.Worktrees[t.Branch], base, body, draft); err != nil {
 			return l.store.AppendEvent(ctx,
 				Event{At: now, TaskURL: t.TicketURL, Kind: eventPushFailed, Detail: err.Error()})
 		}

@@ -99,14 +99,24 @@ func TestScripts(t *testing.T) {
 
 // ccInitRepo builds the repository the config points at, plus the bare origin it fetches from.
 // Observe's first act is `git fetch origin --prune`, so without a remote every script
-// fail-closes before it reaches its assertion.
+// fail-closes before it reaches its assertion. An optional name argument builds a further repo.
 func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
-	if neg || len(args) != 0 {
-		ts.Fatalf("usage: cc-init-repo")
+	if neg || len(args) > 1 {
+		ts.Fatalf("usage: cc-init-repo [name]")
+	}
+	name := "repo"
+	if len(args) == 1 {
+		name = args[0]
 	}
 	work := ts.Getenv("WORK")
-	repo := filepath.Join(work, "repo")
-	remote := filepath.Join(work, "remote.git")
+	repo := filepath.Join(work, name)
+	// The default repo's remote keeps its original bare name (every existing script references
+	// $WORK/remote.git directly); a second repo gets its own, name-prefixed, remote instead.
+	remoteName := "remote.git"
+	if name != "repo" {
+		remoteName = name + "-remote.git"
+	}
+	remote := filepath.Join(work, remoteName)
 
 	ts.Check(ts.Exec("git", "init", "-q", "-b", "main", repo))
 	ts.Check(os.WriteFile(filepath.Join(repo, "README.md"), []byte("e2e\n"), 0o600))
