@@ -29,8 +29,8 @@ type Task struct {
 }
 
 // Repo is one [[repo]] block. Path is relative to the workspace root.
-// Checks and MergifySHA are both empty until a repo opts into a CI verdict, matching the
-// pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
+// Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
+// the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
 	Path        string            `toml:"path"`
@@ -102,6 +102,17 @@ func mergifySHAByRepo(repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {
 		m[r.Name] = r.MergifySHA
+	}
+	return m
+}
+
+// compatCheckByRepo indexes each configured repo's cross-repo compat check name by name --
+// internal/verdict's inv. 12 input, empty for a repo that never opted in
+// (docs/designs/command-centre-design.md § 11 inv. 12).
+func compatCheckByRepo(repos []Repo) map[string]string {
+	m := make(map[string]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.CompatCheck
 	}
 	return m
 }

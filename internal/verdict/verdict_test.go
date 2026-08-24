@@ -361,6 +361,93 @@ func TestVerdictString(t *testing.T) {
 	if verdict.BaseMoved.String() != "base_moved" {
 		t.Errorf("verdict renders as %q, want base_moved", verdict.BaseMoved)
 	}
+	if verdict.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
+		t.Errorf("verdict renders as %q, want waiting_on_producer_deploy", verdict.WaitingOnProducerDeploy)
+	}
+}
+
+// compatPredicate is a two-check predicate standing in for a real repo's, one leaf named as the
+// cross-repo compat check.
+func compatPredicate() verdict.Predicate {
+	return verdict.Predicate{AllOf: []verdict.Predicate{
+		{Success: "GraphQL production compatibility"},
+		{Success: "Tests"},
+	}}
+}
+
+const compatCheckName = "GraphQL production compatibility"
+
+// TestEvaluateWaitingOnProducerDeploy covers inv. 12: the state names "the seam isn't live yet"
+// apart from "this consumer is broken", which only holds when the compat check is the *sole* red
+// required check.
+func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
+	t.Parallel()
+
+	pushedAt, now := freshInput()
+	base := verdict.Input{
+		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now, CompatCheck: compatCheckName,
+	}
+
+	tests := []struct {
+		name string
+		in   verdict.Input
+		want verdict.Verdict
+	}{
+		{
+			name: "the compat check red alone derives waiting on producer deploy",
+			in: func() verdict.Input {
+				in := base
+				in.Checks = map[string]verdict.CheckState{
+					compatCheckName: verdict.Failure, "Tests": verdict.Success,
+				}
+				return in
+			}(),
+			want: verdict.WaitingOnProducerDeploy,
+		},
+		{
+			name: "the compat check red and another required check red derives needs you",
+			in: func() verdict.Input {
+				in := base
+				in.Checks = map[string]verdict.CheckState{
+					compatCheckName: verdict.Failure, "Tests": verdict.Failure,
+				}
+				return in
+			}(),
+			want: verdict.NeedsYou,
+		},
+		{
+			name: "the compat check red while another required check is pending derives checking",
+			in: func() verdict.Input {
+				in := base
+				in.Checks = map[string]verdict.CheckState{compatCheckName: verdict.Failure}
+				return in
+			}(),
+			want: verdict.Checking,
+		},
+		{
+			name: "an unconfigured compat check never derives waiting on producer deploy",
+			in: func() verdict.Input {
+				in := base
+				in.CompatCheck = ""
+				in.Checks = map[string]verdict.CheckState{
+					compatCheckName: verdict.Failure, "Tests": verdict.Success,
+				}
+				return in
+			}(),
+			want: verdict.NeedsYou,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := verdict.Evaluate(compatPredicate(), tt.in)
+			if got.Verdict != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			}
+		})
+	}
 }
 
 // TestEvaluateBaseMoved covers § 4a's expiry ahead of predicate resolution: a moved stacked base
