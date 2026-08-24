@@ -11,8 +11,9 @@ import (
 const eventVerdictTransition = "verdict_transition"
 
 // recordVerdictTransitions logs one event per task whose CI verdict label ("checking",
-// "review_me" or "needs_you") differs from what the previous tick recorded -- the last category
-// of what `events` needs to reconstruct the whole run (docs/prds/prd-command-centre.md § Phase 6).
+// "review_me", "needs_you", "base_moved" or "waiting_on_producer_deploy") differs from what the
+// previous tick recorded -- the last category of what `events` needs to reconstruct the whole run
+// (docs/prds/prd-command-centre.md § Phase 6).
 // It computes the verdict the exact way the page does (applyVerdict, server.go), over this same
 // tick's observation, so a transition an operator would see on the next page load is exactly
 // the transition logged here.
@@ -45,6 +46,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 	vd := verdictDeps{
 		pushRows: pushRows, checkingTicks: checkingTicks,
 		checksByRepo: checksByRepo(l.cfg.Repos), mergifySHAByRepo: mergifySHAByRepo(l.cfg.Repos),
+		compatCheckByRepo: compatCheckByRepo(l.cfg.Repos),
 	}
 
 	now := l.now()
@@ -92,6 +94,8 @@ func verdictLabel(fact *plan.RunFact) string {
 	switch {
 	case fact.VerdictBaseMoved:
 		return "base_moved"
+	case fact.VerdictWaitingOnProducer:
+		return "waiting_on_producer_deploy"
 	case fact.VerdictReviewMe:
 		return "review_me"
 	case fact.VerdictNeedsYou:
