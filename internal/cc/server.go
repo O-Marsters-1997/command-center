@@ -21,7 +21,12 @@ import (
 //go:embed page.tmpl
 var pageSource string
 
-var page = template.Must(template.New("page").Parse(pageSource))
+//go:embed page.css
+var pageCSS string
+
+var page = template.Must(template.New("page").
+	Funcs(template.FuncMap{"css": func() template.CSS { return template.CSS(pageCSS) }}).
+	Parse(pageSource))
 
 // Server is the status page plus the launch-preview and launch-authorisation routes. It never
 // writes the database directly except to queue a launch intent: every state it shows is
