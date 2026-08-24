@@ -93,6 +93,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.retargetMerged(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.applyAbortIntents(ctx, obs); err != nil {
 		return err
 	}
