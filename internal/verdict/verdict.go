@@ -3,7 +3,10 @@
 // CheckState rather than importing gh's (issue #2 AC12); api_test.go enforces the import purity.
 package verdict
 
-import "time"
+import (
+	"maps"
+	"time"
+)
 
 // CheckState is one gating check's outcome. The zero value, Pending, doubles as "absent from
 // the rollup" since a missing map key already returns it, so a leaf need not special-case
@@ -26,6 +29,9 @@ const (
 	ReviewMe
 	NeedsYou
 	BaseMoved
+	// WaitingOnProducerDeploy is entered only when the configured compat check is the sole red
+	// required check (docs/designs/command-centre-design.md § 11 inv. 12).
+	WaitingOnProducerDeploy
 )
 
 func (v Verdict) String() string {
@@ -36,6 +42,8 @@ func (v Verdict) String() string {
 		return "needs_you"
 	case BaseMoved:
 		return "base_moved"
+	case WaitingOnProducerDeploy:
+		return "waiting_on_producer_deploy"
 	default:
 		return "checking"
 	}
@@ -78,6 +86,9 @@ type Input struct {
 	PushedAt     time.Time
 	Now          time.Time // the bounded wait's other endpoint; not wall clock (see BoundedWait)
 	AuthorLogin  string    // the dependabot arm of services' Linear branch check
+	// CompatCheck is the repo's configured cross-repo compat check name (§8's compat_check),
+	// consulted only when the real evaluation is needs_you (inv. 12). Empty means unconfigured.
+	CompatCheck string
 }
 
 // Result is Evaluate's answer plus the sentence the page renders alongside it.
@@ -98,8 +109,13 @@ const (
 )
 
 // Evaluate resolves p against in and reports the verdict (docs/designs/command-centre-design.md
-// § 11 inv. 11, § 4a). A foreign-SHA or absent rollup is never green; a resolved-red predicate is
-// needs_you, and the stacked-base expiry is checked ahead of it so base_moved outranks red.
+// § 11 inv. 11, § 4a, § 12). A foreign-SHA or absent rollup is never green; a resolved-red
+// predicate is needs_you, and the stacked-base expiry is checked ahead of it so base_moved
+// outranks red. A needs_you verdict gets one more look: re-resolved with the configured compat
+// check forced green, so the *rest* of the predicate is judged on its own — review-me there
+// proves the compat check was the sole red one (inv. 12); still-pending there means a sibling
+// hasn't reported yet, so the honest reading is checking, not needs_you; still red there means
+// the compat check was never the whole story, and the first verdict stands.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
 		return Result{BaseMoved, "base moved: the parent advanced past what this branch was cut from"}
@@ -108,6 +124,23 @@ func Evaluate(p Predicate, in Input) Result {
 		in.Checks = nil
 	}
 
+	result := evaluate(p, in)
+	if result.Verdict != NeedsYou || in.CompatCheck == "" {
+		return result
+	}
+
+	in.Checks = forcedGreen(in.Checks, in.CompatCheck)
+	switch forced := evaluate(p, in); forced.Verdict {
+	case ReviewMe:
+		return Result{WaitingOnProducerDeploy, "every required check passed except the compat check"}
+	case Checking:
+		return forced
+	default: // needs_you: the compat check was not the sole red one
+		return result
+	}
+}
+
+func evaluate(p Predicate, in Input) Result {
 	switch resolve(p, in) {
 	case red:
 		return Result{NeedsYou, "a required check failed"}
@@ -122,6 +155,13 @@ func Evaluate(p Predicate, in Input) Result {
 		}
 		return Result{Checking, "waiting on checks"}
 	}
+}
+
+func forcedGreen(checks map[string]CheckState, name string) map[string]CheckState {
+	out := make(map[string]CheckState, len(checks)+1)
+	maps.Copy(out, checks)
+	out[name] = Success
+	return out
 }
 
 // waited reports whether the bounded wait has elapsed. in.Now is never wall clock in practice —

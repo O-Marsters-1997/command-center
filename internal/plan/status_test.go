@@ -86,6 +86,9 @@ func TestStateString(t *testing.T) {
 	if plan.RefreshConflicted.String() != "refresh_conflicted" {
 		t.Errorf("state renders as %q, want refresh_conflicted", plan.RefreshConflicted)
 	}
+	if plan.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
+		t.Errorf("state renders as %q, want waiting_on_producer_deploy", plan.WaitingOnProducerDeploy)
+	}
 }
 
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
@@ -229,6 +232,15 @@ func TestStatusWithLatestRun(t *testing.T) {
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRClosedUnmerged: true,
 			},
 			wantState: plan.PRClosedUnmerged,
+		},
+		{
+			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				VerdictWaitingOnProducer: true, VerdictReason: "every required check passed except the compat check",
+			},
+			wantState: plan.WaitingOnProducerDeploy,
+			reasonHas: "except the compat check",
 		},
 		{
 			name: "a base-moved verdict derives base moved even over a needs-you check reading",

@@ -31,12 +31,15 @@ func TestVerbs(t *testing.T) {
 		{state: plan.Cancelled, want: []string{plan.VerbLaunch}},
 		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}},
+		// WaitingOnProducerDeploy's verb (re-check) is a separate ticket; state derivation lands
+		// first, unverbed.
+		{state: plan.WaitingOnProducerDeploy, want: nil},
 	}
 
-	// RefreshConflicted is the last state in the enum, so a new one added after it lands here as
-	// a missing row rather than as a silently unverbed row on the page.
-	if len(tests) != int(plan.RefreshConflicted)+1 {
-		t.Fatalf("table covers %d states, the enum has %d", len(tests), int(plan.RefreshConflicted)+1)
+	// WaitingOnProducerDeploy is the last state in the enum, so a new one added after it lands
+	// here as a missing row rather than as a silently unverbed row on the page.
+	if len(tests) != int(plan.WaitingOnProducerDeploy)+1 {
+		t.Fatalf("table covers %d states, the enum has %d", len(tests), int(plan.WaitingOnProducerDeploy)+1)
 	}
 
 	for _, tt := range tests {
