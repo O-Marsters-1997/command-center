@@ -518,7 +518,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		if composed, refusedSeam, ok := composePrompt(s.seamsRoot, t); ok {
 			row.Hash = plan.Hash(composed)
 			row.Prompt = composed
-		} else {
+		} else if label != plan.Refused {
 			row.Label = plan.Refused.String()
 			row.Reason = fmt.Sprintf("seam %q has no readable file", refusedSeam)
 		}

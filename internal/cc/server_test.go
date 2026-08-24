@@ -640,6 +640,56 @@ func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
 	}
 }
 
+// TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam covers the case where a row is refused
+// for two independent reasons at once: a task already authorised in an active launch that also
+// names a missing seam must keep naming the active launch, not have that reason overwritten by
+// the seam refusal.
+func TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
+	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, t.TempDir()))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var rows []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v, want 1", rows)
+	}
+	if got := rows[0]["Label"]; got != "refused" {
+		t.Errorf("label = %v, want refused", got)
+	}
+	reason, _ := rows[0]["Reason"].(string)
+	if !strings.Contains(reason, "already authorised in launch") {
+		t.Errorf("reason = %q, want it to keep naming the active launch, not the missing seam", reason)
+	}
+}
+
 // TestLaunchRefusesATaskNamingAMissingSeam covers issue #52's AC2 at the authorisation route: a
 // refused task is never queued to launch.
 func TestLaunchRefusesATaskNamingAMissingSeam(t *testing.T) {

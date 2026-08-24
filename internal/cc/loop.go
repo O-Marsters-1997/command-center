@@ -260,12 +260,16 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		_, hasRun := latest[t.TicketURL]
 		// A seam that no longer resolves refuses the match unconditionally, never composing
 		// around it (docs/designs/command-centre-design.md § 6).
-		composed, _, seamsOK := composePrompt(l.ws.Root, pt)
+		promptHashMatches := false
+		if isAuthorised {
+			composed, _, seamsOK := composePrompt(l.ws.Root, pt)
+			promptHashMatches = seamsOK && hash == plan.Hash(composed)
+		}
 		candidates = append(candidates, plan.LaunchCandidate{
 			TicketURL:         t.TicketURL,
 			Unlock:            unlock,
 			Authorised:        isAuthorised,
-			PromptHashMatches: seamsOK && isAuthorised && hash == plan.Hash(composed),
+			PromptHashMatches: promptHashMatches,
 			HasRun:            hasRun,
 		})
 	}
