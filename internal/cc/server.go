@@ -4,11 +4,13 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -26,6 +28,9 @@ var pageSource string
 
 //go:embed page.css
 var pageCSS string
+
+//go:embed assets/htmx.min.js
+var htmxJS []byte
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
@@ -83,6 +88,8 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /assets/htmx.min.js", serveHTMX)
+	mux.HandleFunc("GET /task/{task}/detail", s.handleDetail)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
@@ -93,6 +100,11 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+
+func serveHTMX(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	_, _ = w.Write(htmxJS)
+}
 
 // requireBrowserOrigin rejects any request whose Origin header does not name this server's own
 // host. Comparing against r.Host rather than a fixed allowlist is what makes this work under
@@ -148,11 +160,32 @@ type row struct {
 	Elapsed     string
 	LogPath     string
 	CancelCount int
+	// BaselineSHA and Checks are the detail fragment's, not the board's: the row is derived once
+	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
+	BaselineSHA string
+	Checks      []check
 	// Draft mirrors the PR's own observed isDraft, not DraftGate's own opinion: a failed gh pr
 	// ready leaves GitHub's real state unchanged, and this must still render honestly.
 	Draft       bool
 	DraftReason string
 }
+
+type check struct {
+	Name       string
+	Status     string
+	Conclusion string
+}
+
+// DetailID is the row's stable DOM id. A ticket URL is neither a usable id nor a CSS selector,
+// and htmx needs both: hx-target resolves the selector, and hx-preserve matches the id to keep
+// an expanded detail mounted through the board's own five-second swap.
+func (r row) DetailID() string {
+	sum := sha256.Sum256([]byte(r.TicketURL))
+	return "detail-" + hex.EncodeToString(sum[:6])
+}
+
+// DetailPath percent-encodes the ticket URL into one path segment, "://" and all.
+func (r row) DetailPath() string { return "/task/" + url.PathEscape(r.TicketURL) + "/detail" }
 
 type tickErrorView struct {
 	Age     string
@@ -338,6 +371,8 @@ func derive(
 			LogPath:      logPath,
 			CancelCount:  membership.Members,
 			Warning:      readyToMergeWarning(pr),
+			BaselineSHA:  latestRun.BaselineSHA,
+			Checks:       sortedChecks(pr.Checks),
 			Blocking:     unlock.Blocking,
 			Draft:        pr.IsDraft,
 			DraftReason:  draftReasonFor(pr, pt, byURL, prs, runFact),
@@ -358,6 +393,14 @@ func derive(
 		rows[i].MergeOrder = rows[i].StackDepth + 1
 	}
 	return rows
+}
+
+func sortedChecks(checks map[string]gh.CheckState) []check {
+	out := make([]check, 0, len(checks))
+	for _, name := range slices.Sorted(maps.Keys(checks)) {
+		out = append(out, check{Name: name, Status: checks[name].Status, Conclusion: checks[name].Conclusion})
+	}
+	return out
 }
 
 // groupRows keys a fan-in row's group on the first blocker in its own Blocking
