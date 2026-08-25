@@ -148,7 +148,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 
 	// Someone else's work lands on main after the retarget, so the merge the refresh performs is
 	// observable rather than an already-up-to-date no-op.
-	advanceMain(t, root)
+	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
 	if err := store.QueueVerbIntent(t.Context(), f.child.TicketURL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -305,10 +305,65 @@ func ghLogLines(t *testing.T, logPath, prefix string) []string {
 	return lines
 }
 
-func advanceMain(t *testing.T, root string) {
+func advanceMain(t *testing.T, root, relPath, contents string) {
 	t.Helper()
 	clone := filepath.Join(t.TempDir(), "main-clone")
 	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
-	commitFile(t, clone, "main-fix.txt", "someone else's landed work\n")
+	commitFile(t, clone, relPath, contents)
 	runGit(t, "-C", clone, "push", "-q", "origin", "HEAD:main")
+}
+
+// TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted covers issue #85's fourth root
+// cause: retargetOne used to record main's own current tip as the row's base_sha_at_push without
+// ever merging main, so baseMoved read "not stale" forever and the board showed review_me over a
+// pull request GitHub already called dirty.
+func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+		t.Fatal(err)
+	}
+
+	mergeParentIntoMain(t, repoPath)
+	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
+	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	obs := mergedObservation(f, "parent")
+	obs.BranchTips["repo//main"] = mainSHA
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "refresh_conflicted", "") {
+		t.Errorf("events = %+v, want a refresh_conflicted event: retargeting onto main must merge main, "+
+			"and this child's parent.txt conflicts with main's own", events)
+	}
+	if hasEvent(events, "refreshed", "") {
+		t.Errorf("events = %+v, want no refreshed event: the merge conflicted", events)
+	}
+
+	mid, err := cc.MidMerge(t.Context(), f.childWorktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mid {
+		t.Errorf("child worktree is not left mid-merge, so the next tick's observation cannot derive " +
+			"refresh_conflicted and the board falls back to the pull request's own verdict")
+	}
 }

@@ -26,7 +26,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	rc := l.newRefreshContext(tasks, obs)
 	now := l.now()
 	for _, t := range tasks {
 		row, pushed := pushRows[t.TicketURL]
@@ -36,7 +36,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		if obs.PRs[t.Branch].State != gh.Open || obs.PRs[row.BaseBranch].State != gh.Merged {
 			continue
 		}
-		if err := l.retargetOne(ctx, t, row, repoPaths[t.Repo], now); err != nil {
+		if err := l.retargetOne(ctx, t, row, rc, now); err != nil {
 			return err
 		}
 	}
@@ -45,7 +45,10 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 
 // retargetOne records nothing when gh refuses, so the next tick retries: a retarget is
 // idempotent, unlike the push whose failure waits for a human's retry-push verb.
-func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, repoPath string, now time.Time) error {
+// It closes with the same merge the refresh step performs, because base_sha_at_push would
+// otherwise record a main this branch's content was never tried against (issue #85).
+func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, rc refreshContext, now time.Time) error {
+	repoPath := rc.repoPaths[t.Repo]
 	if err := gh.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TaskURL: t.TicketURL, Kind: eventRetargetFailed, Detail: err.Error(),
@@ -59,8 +62,11 @@ func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, repoPath st
 	if err := l.store.RecordPush(ctx, t.TicketURL, row.PushedTip, defaultBaseBranch, baseSHA, now); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{
+	if err := l.store.AppendEvent(ctx, Event{
 		At: now, TaskURL: t.TicketURL, Kind: eventRetargeted,
 		Detail: fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, defaultBaseBranch),
-	})
+	}); err != nil {
+		return err
+	}
+	return l.refreshOne(ctx, t, rc, now)
 }
