@@ -107,9 +107,9 @@ tick reads it.
 
 ### The page
 
-`internal/cc/server.go` serves six routes. The board, the launch preview and the
-confirm page are each `html/template` over an embedded template: `page.tmpl`,
-`preview.tmpl` and `confirm.tmpl`.
+`internal/cc/server.go` serves eight routes. The board, the launch preview, the
+confirm page and a row's detail fragment are each `html/template` over an
+embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`.
 
 | Route | What |
 |---|---|
@@ -117,8 +117,16 @@ confirm page are each `html/template` over an embedded template: `page.tmpl`,
 | `GET /preview` | What launching `?task=...` would do, and why. Where the board's checkboxes submit to, and where `[ authorise ]` posts to `/launch` from. |
 | `GET /events` | The append-only audit log, as JSON. |
 | `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
+| `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
+| `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
+
+The board polls itself every five seconds with `hx-get="/"` and
+`hx-select="#board"`, and the liveness banner rides the same response as an
+`hx-swap-oob` region. Each row's detail sits in a sibling `<tr>` carrying
+`hx-preserve` and a stable id, so an expanded row survives the board's own
+swap.
 
 Both POSTs are wrapped in `requireBrowserOrigin`, which rejects any request
 whose `Origin` header does not match `r.Host`.

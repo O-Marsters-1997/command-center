@@ -1,0 +1,13 @@
+<td colspan="19" class="detail">
+  <dl>
+    <dt>base sha</dt><dd>{{.BaselineSHA}}</dd>
+    <dt>worktree</dt><dd>{{.Worktree}}</dd>
+    <dt>elapsed</dt><dd>{{.Elapsed}}</dd>
+    <dt>checks</dt>
+    <dd>
+      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{end -}}
+    </dd>
+    <dt>log</dt><dd>{{.LogPath}}</dd>
+  </dl>
+  <pre>{{.LogTail}}</pre>
+</td>

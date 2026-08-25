@@ -59,3 +59,26 @@ tr[data-depth="3"] td:first-child {
 tr[data-depth="4"] td:first-child {
   padding-left: 6rem;
 }
+
+td.detail dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 1rem;
+  margin: 0;
+}
+
+td.detail dt {
+  color: #666;
+}
+
+td.detail dd {
+  margin: 0;
+}
+
+td.detail pre {
+  overflow: auto;
+  max-height: 20rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem;
+  background: #f4f4f4;
+}

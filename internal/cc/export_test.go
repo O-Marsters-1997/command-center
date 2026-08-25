@@ -26,3 +26,7 @@ func RenderStatesPage(states []plan.State) (string, error) {
 	}
 	return out.String(), nil
 }
+
+// TailLog exposes the log tail to the external test package: driving it through the route needs
+// a store and a run, and the window branch only shows on a file larger than the window.
+var TailLog = tailLog
