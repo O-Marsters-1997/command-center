@@ -48,6 +48,11 @@ func newRowSlot(r row, head bool, depth int) rowSlot {
 	return rowSlot{row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel}
 }
 
+//go:embed preview.tmpl
+var previewSource string
+
+var previewPage = template.Must(template.New("preview").Parse(previewSource))
+
 // Server is the status page plus the launch-preview and launch-authorisation routes. It never
 // writes the database directly except to queue a launch intent: every state it shows is
 // derived from tasks and the last observation at render time (§5, inv. 14).
@@ -586,13 +591,17 @@ type previewRow struct {
 	Label     string
 	Reason    string
 	Base      string
+	// Refused is Label's own refused case, so the template renders the row without a checkbox
+	// rather than comparing the label string it prints.
+	Refused bool
 	// BaseVerdict is the base's own CI verdict where the base is a blocker's branch, empty for
 	// a root row — "you are about to build on a red parent" is read before authorising, not
 	// after (docs/designs/command-centre-design.md § 4b).
 	BaseVerdict string
 	Hash        string
 	// Prompt is the fully composed prompt this launch would authorise — the implement
-	// instruction plus every seam file's content, in config order — empty when refused.
+	// instruction plus every seam file's content, in config order — empty when a named seam
+	// had no readable content, which is itself what refuses the row.
 	Prompt string
 }
 
@@ -660,14 +669,16 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 			row.Hash = plan.Hash(composed)
 			row.Prompt = composed
 		} else if label != plan.Refused {
-			row.Label = plan.Refused.String()
+			label = plan.Refused
+			row.Label = label.String()
 			row.Reason = fmt.Sprintf("%q has no readable content", refused)
 		}
+		row.Refused = label == plan.Refused
 		rows = append(rows, row)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(rows); err != nil {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := previewPage.Execute(w, rows); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

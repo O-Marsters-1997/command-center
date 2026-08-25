@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Launch preview</title>
+<h1>LAUNCH</h1>
+<form method="post" action="/launch">
+<table>
+  <tr>
+    <th></th><th>label</th><th>ticket</th><th>base</th><th>base verdict</th><th>why</th><th>prompt</th>
+  </tr>
+  {{range .}}
+  <tr>
+    <td>{{if not .Refused}}<input type="checkbox" name="task" value="{{.TicketURL}}" checked>{{end}}</td>
+    <td>{{.Label}}</td>
+    <td>{{.TicketURL}}</td>
+    <td>{{.Base}}</td>
+    <td>{{.BaseVerdict}}</td>
+    <td>{{.Reason}}</td>
+    <td>
+      {{- if .Prompt}}
+      <details><summary>prompt {{.Hash}}</summary><pre>{{.Prompt}}</pre></details>
+      {{- end}}
+    </td>
+  </tr>
+  {{end}}
+</table>
+<button type="submit">[ authorise ]</button>
+</form>
+<a href="/">[ cancel ]</a>
