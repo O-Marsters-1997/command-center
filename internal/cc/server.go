@@ -679,7 +679,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	w.WriteHeader(http.StatusAccepted)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handleVerb queues one verb intent against one task — a handler only ever does this single
@@ -716,7 +716,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // randomGroup mints the token that ties every intent from one POST /launch call together —

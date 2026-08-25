@@ -90,6 +90,25 @@ func assertCells(t *testing.T, row string, cells ...string) {
 	}
 }
 
+// noRedirect defeats http.Client's default of following a 303.
+func noRedirect(srv *httptest.Server) *http.Client {
+	client := *srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &client
+}
+
+func assertSeeOtherHome(t *testing.T, resp *http.Response) {
+	t.Helper()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
+	}
+	if got := resp.Header.Get("Location"); got != "/" {
+		t.Fatalf("Location = %q, want %q", got, "/")
+	}
+}
+
 func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	t.Helper()
 
@@ -320,15 +339,12 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	}
 	req.Header.Set("Origin", srv.URL)
 
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
-	}
+	assertSeeOtherHome(t, resp)
 }
 
 func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
@@ -512,15 +528,12 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Origin", srv.URL)
-	launchResp, err := srv.Client().Do(req)
+	launchResp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = launchResp.Body.Close() }()
-	if launchResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(launchResp.Body)
-		t.Fatalf("launch status = %d, want 202: %s", launchResp.StatusCode, body)
-	}
+	assertSeeOtherHome(t, launchResp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -740,14 +753,12 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("status = %d, want 202", resp.StatusCode)
-	}
+	assertSeeOtherHome(t, resp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -1128,10 +1139,8 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, nil)),
 		},
 	}
-	resp, body := postLaunchForm(t, srv, form)
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("status = %d, want 202: %s", resp.StatusCode, body)
-	}
+	resp, _ := postLaunchForm(t, srv, form)
+	assertSeeOtherHome(t, resp)
 
 	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -1169,7 +1178,7 @@ func postLaunchForm(t *testing.T, srv *httptest.Server, form url.Values) (*http.
 	}
 	req.Header.Set("Origin", srv.URL)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := srv.Client().Do(req)
+	resp, err := noRedirect(srv).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

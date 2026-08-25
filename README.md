@@ -102,7 +102,8 @@ leaves the last good facts on the page and lets the observe age keep growing
 instead of resetting.
 
 The loop is the only writer of the database. No HTTP handler ever acts on the
-world: it writes one intent row, returns 202, and the next tick reads it.
+world: it writes one intent row, redirects back to the board, and the next
+tick reads it.
 
 ### The page
 
