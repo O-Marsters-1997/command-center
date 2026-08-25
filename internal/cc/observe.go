@@ -73,12 +73,16 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			for branch, pr := range snapshot.ByBranch {
 				obs.PRs[branch] = pr
 			}
-			// defaultBaseBranch's own tip is read too (§4a): baseMoved and applyVerdict compare
-			// against it for every row retargeted onto main, not only rows still stacked.
-			for _, branch := range append(branches, defaultBaseBranch) {
+			for _, branch := range branches {
 				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
 					obs.BranchTips[branch] = tip
 				}
+			}
+			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
+			// name: unlike a task's own branch, every repo has a "main", so the plain name would
+			// collide the moment a second repo is configured.
+			if tip, err := RevParse(ctx, path, "origin/"+defaultBaseBranch); err == nil {
+				obs.BranchTips[mainTipKey(repo.Name)] = tip
 			}
 
 			worktrees, err := Worktrees(ctx, path)

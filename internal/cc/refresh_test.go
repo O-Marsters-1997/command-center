@@ -109,7 +109,7 @@ func baseObservation(f stackedFixture, parentTip string) cc.Observation {
 			"parent": {Number: 1, HeadRef: "parent", State: gh.Open},
 			"child":  {Number: 2, HeadRef: "child", State: gh.Open},
 		},
-		BranchTips: map[string]string{"parent": parentTip, "main": f.mainSHA},
+		BranchTips: map[string]string{"parent": parentTip, "repo//main": f.mainSHA},
 		Runs:       map[string]cc.RunObservation{},
 		MidMerge:   map[string]bool{},
 	}
@@ -187,7 +187,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
 
 	obs := baseObservation(f, f.parentTip0)
-	obs.BranchTips["main"] = mainTip1
+	obs.BranchTips["repo//main"] = mainTip1
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)

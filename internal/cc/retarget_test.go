@@ -265,7 +265,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		}
 		obs := cc.Observation{
 			Worktrees:  map[string]string{"child": "/repos/child"},
-			BranchTips: map[string]string{"main": observedMainTip},
+			BranchTips: map[string]string{"repo//main": observedMainTip},
 			PRs:        prs,
 		}
 		if err := store.SaveObservation(ctx, obs); err != nil {

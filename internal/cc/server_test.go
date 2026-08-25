@@ -183,7 +183,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 
 	obs := cc.Observation{
 		Worktrees:  map[string]string{"parent": "/repos/parent", "child": "/repos/child"},
-		BranchTips: map[string]string{"parent": parentTip, "main": "main-tip"},
+		BranchTips: map[string]string{"parent": parentTip, "repo//main": "main-tip"},
 		PRs: map[string]gh.PR{
 			"parent": {
 				Number: 1, State: gh.Open, HeadOid: parentTip,
@@ -234,7 +234,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 
 	obs := cc.Observation{
 		Worktrees:  map[string]string{"cc-1": "/repos/cc-1"},
-		BranchTips: map[string]string{"main": "main-tip"},
+		BranchTips: map[string]string{"repo//main": "main-tip"},
 		PRs: map[string]gh.PR{
 			"cc-1": {
 				Number: 1, State: gh.Open, HeadOid: tip,
@@ -407,7 +407,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		BranchTips: map[string]string{"parent": parentTip, "main": "main-tip"},
+		BranchTips: map[string]string{"parent": parentTip, "repo//main": "main-tip"},
 		PRs: map[string]gh.PR{
 			"parent": {
 				Number: 1, State: gh.Open, HeadOid: parentTip,
@@ -926,7 +926,7 @@ func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
 				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 			},
 		},
-		BranchTips: map[string]string{"main": "main-tip"},
+		BranchTips: map[string]string{"repo//main": "main-tip"},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

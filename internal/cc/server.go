@@ -421,6 +421,21 @@ func runFactFor(
 // plan's) forbids depending on that package for one string constant.
 const defaultBaseBranch = "main"
 
+// mainTipKey names defaultBaseBranch's own tip in Observation.BranchTips. Every repo has a
+// "main", unlike a task's own branch name, so the plain name would collide the moment a second
+// repo is configured; "//" can never appear in a real git branch name, so this key never can.
+func mainTipKey(repo string) string { return repo + "//" + defaultBaseBranch }
+
+// baseTipKey is the Observation.BranchTips key a recorded base resolves to: mainTipKey when it's
+// main, the plain branch name otherwise (issue #85: main's own tip is checked exactly like a
+// still-stacked base's, not exempted, since retargetOne can re-point a row onto it).
+func baseTipKey(repo, base string) string {
+	if base == defaultBaseBranch {
+		return mainTipKey(repo)
+	}
+	return base
+}
+
 // applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
 // unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
 // fixture reading exactly as it did before this phase (statusFromPush's own PROpen fallback).
@@ -435,9 +450,6 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 	}
 
 	pr := obs.PRs[t.Branch]
-	// hasRecordedBase covers main too (issue #85): a row retargetOne re-pointed onto main is
-	// checked the same way a still-stacked row is, so a stale main-based PR reads base_moved
-	// instead of a review_me the board can't back up against GitHub's own mergeable_state.
 	hasRecordedBase := pushRow.BaseBranch != ""
 	mergifySHA := vd.mergifySHAByRepo[t.Repo]
 
@@ -445,7 +457,7 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
 		StackedBase:  hasRecordedBase,
-		BaseSHAMatch: obs.BranchTips[pushRow.BaseBranch] == pushRow.BaseSHAAtPush,
+		BaseSHAMatch: obs.BranchTips[baseTipKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
