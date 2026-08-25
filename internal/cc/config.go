@@ -5,6 +5,7 @@ package cc
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 
@@ -68,7 +69,7 @@ var defaultAgentCommand = []string{
 // LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block, or a
 // retiring seam (one with lands_at) whose repo has none either.
 func LoadConfig(path string) (Config, error) {
-	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: defaultAgentCommand}
+	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}
