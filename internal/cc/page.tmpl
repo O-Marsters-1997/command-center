@@ -17,40 +17,49 @@
     <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
     <th>draft</th><th>draft reason</th>
   </tr>
-  {{range $row := .Rows}}
-  <tr>
-    <td>{{$row.TicketURL}}</td>
-    <td>{{$row.State}}{{range $row.PendingVerbs}} · {{.}} queued{{end}}</td>
-    <td>{{$row.Reason}}</td>
-    <td>{{if $row.SeamChanged}}seam changed{{end}}</td>
+  {{range $group := .Groups}}
+  {{if $group.Root}}
+  {{template "row" (head $group.Root)}}
+  {{range $group.Children}}{{template "row" (child . 1)}}{{end}}
+  {{else}}
+  {{range $group.Children}}{{template "row" (child . 0)}}{{end}}
+  {{end}}
+  {{end}}
+</table>
+<button type="submit" form="launch">launch selected</button>
+{{define "row"}}
+  <tr{{if .Head}} class="group-head"{{end}} data-depth="{{.Depth}}">
+    <td>{{.TicketURL}}</td>
+    <td>{{.State}}{{range .PendingVerbs}} · {{.}} queued{{end}}</td>
+    <td>{{.Reason}}</td>
+    <td>{{if .SeamChanged}}seam changed{{end}}</td>
     <td>
-      {{- range $row.Verbs}}
-      {{- if eq . $.LaunchVerb}}
+      {{- $row := .}}
+      {{- range .Verbs}}
+      {{- if eq . $row.LaunchVerb}}
       <input type="checkbox" form="launch" name="task" value="{{$row.TicketURL}}">{{.}}
       {{- else}}
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="{{$row.TicketURL}}">
         <button type="submit" name="verb" value="{{.}}">
-          {{- .}}{{if eq . $.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
+          {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
         </button>
       </form>
       {{- end}}
       {{- end -}}
     </td>
-    <td>{{$row.Branch}}</td>
-    <td>{{$row.Base}}</td>
-    <td>{{$row.BaseVerdict}}</td>
-    <td>{{$row.StackDepth}}</td>
-    <td>{{$row.MergeOrder}}</td>
-    <td>{{$row.Warning}}</td>
-    <td>{{$row.Worktree}}</td>
-    <td>{{$row.PR}}</td>
-    <td>{{$row.Pgid}}</td>
-    <td>{{$row.Elapsed}}</td>
-    <td>{{$row.LogPath}}</td>
-    <td>{{$row.Draft}}</td>
-    <td>{{$row.DraftReason}}</td>
+    <td>{{.Branch}}</td>
+    <td>{{.Base}}</td>
+    <td>{{.BaseVerdict}}</td>
+    <td>{{.StackDepth}}</td>
+    <td>{{.MergeOrder}}</td>
+    <td>{{.Warning}}</td>
+    <td>{{.Worktree}}</td>
+    <td>{{.PR}}</td>
+    <td>{{.Pgid}}</td>
+    <td>{{.Elapsed}}</td>
+    <td>{{.LogPath}}</td>
+    <td>{{.Draft}}</td>
+    <td>{{.DraftReason}}</td>
   </tr>
-  {{end}}
-</table>
-<button type="submit" form="launch">launch selected</button>
+{{end}}
