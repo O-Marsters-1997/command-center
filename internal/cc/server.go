@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -29,8 +29,8 @@ var pageSource string
 //go:embed page.css
 var pageCSS string
 
-//go:embed assets/htmx.min.js
-var htmxJS []byte
+//go:embed assets
+var assetsDir embed.FS
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
@@ -88,8 +88,9 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("GET /assets/htmx.min.js", serveHTMX)
+	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /task/{task}/detail", s.handleDetail)
+	mux.HandleFunc("GET /task/{task}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
@@ -100,11 +101,6 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
-
-func serveHTMX(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	_, _ = w.Write(htmxJS)
-}
 
 // requireBrowserOrigin rejects any request whose Origin header does not name this server's own
 // host. Comparing against r.Host rather than a fixed allowlist is what makes this work under

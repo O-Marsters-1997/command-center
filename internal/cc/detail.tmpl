@@ -9,5 +9,7 @@
     </dd>
     <dt>log</dt><dd>{{.LogPath}}</dd>
   </dl>
-  <pre>{{.LogTail}}</pre>
+  <pre hx-ext="sse" sse-connect="{{.LogStream}}" sse-swap="message" sse-close="end" hx-swap="beforeend">
+    {{- range .LogTail}}<div>{{.}}</div>{{end -}}
+  </pre>
 </td>

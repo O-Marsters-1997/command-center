@@ -3,6 +3,7 @@ package cc
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -321,4 +322,21 @@ func (s *Store) RunIDsForTask(ctx context.Context, taskID string) ([]int64, erro
 		return nil, fmt.Errorf("iterate run ids for %s: %w", taskID, err)
 	}
 	return ids, nil
+}
+
+// LatestRunLog returns the newest run's log path for a task and whether that run has ended. A
+// task with no run at all reads as ended with no path, so a caller tailing the log streams
+// nothing rather than failing.
+func (s *Store) LatestRunLog(ctx context.Context, taskURL string) (path string, ended bool, err error) {
+	var logPath, endedAt sql.NullString
+	row := s.db.QueryRowContext(ctx,
+		`SELECT log_path, ended_at FROM runs WHERE task_id = ? ORDER BY id DESC LIMIT 1`, taskURL)
+	switch err := row.Scan(&logPath, &endedAt); {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", true, nil
+	case err != nil:
+		return "", false, fmt.Errorf("select latest run log for %s: %w", taskURL, err)
+	default:
+		return logPath.String, endedAt.Valid, nil
+	}
 }

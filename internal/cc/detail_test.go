@@ -285,7 +285,7 @@ func TestTailLogReadsBackPastItsWindow(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := strings.Split(cc.TailLog(path), "\n")
+			got, _ := cc.TailLog(path)
 			for i, line := range got {
 				if len(line) != tc.lineLength-1 {
 					t.Fatalf("line %d is clipped at %d bytes: %.20q...", i, len(line), line)
