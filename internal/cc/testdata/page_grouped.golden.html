@@ -1,0 +1,238 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="5">
+<style>body {
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin: 1rem;
+  color: #222;
+}
+
+h1 {
+  font-size: 1.2rem;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f4f4f4;
+}
+
+td:empty::after {
+  content: "–";
+  color: #999;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+tr.group-head td:first-child,
+tr[data-depth]:not([data-depth="0"]) td:first-child {
+  border-left: 3px solid #ccc;
+}
+
+tr.group-head {
+  background: #f4f4f4;
+  color: #666;
+}
+
+tr[data-depth="1"] td:first-child {
+  padding-left: 1.5rem;
+}
+
+tr[data-depth="2"] td:first-child {
+  padding-left: 3rem;
+}
+
+tr[data-depth="3"] td:first-child {
+  padding-left: 4.5rem;
+}
+
+tr[data-depth="4"] td:first-child {
+  padding-left: 6rem;
+}
+</style>
+<title>Command Centre</title>
+<h1>Command Centre</h1>
+<p>Last successful observe: 0s ago</p>
+
+
+<form id="launch" method="get" action="/preview"></form>
+<table>
+  <tr>
+    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>stack depth</th><th>merge order</th><th>warning</th>
+    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>draft</th><th>draft reason</th>
+  </tr>
+  
+  
+  
+  <tr class="group-head" data-depth="0">
+    <td>sandbox://ROOT</td>
+    <td>failed</td>
+    <td>no commits after this run&#39;s baseline; log at /state/runs/1.jsonl</td>
+    <td>seam changed</td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://ROOT">
+        <button type="submit" name="verb" value="re-run">re-run</button>
+      </form></td>
+    <td>root</td>
+    <td>main</td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td>111</td>
+    <td></td>
+    <td>/state/runs/1.jsonl</td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  
+  <tr data-depth="1">
+    <td>sandbox://CC-2</td>
+    <td>queued</td>
+    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td>seam changed</td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://CC-2">
+        <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
+      </form></td>
+    <td>CC-2</td>
+    <td></td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  <tr data-depth="1">
+    <td>sandbox://CC-3</td>
+    <td>queued</td>
+    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td>seam changed</td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://CC-3">
+        <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
+      </form></td>
+    <td>CC-3</td>
+    <td></td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  <tr data-depth="1">
+    <td>sandbox://CC-4</td>
+    <td>queued</td>
+    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td>seam changed</td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://CC-4">
+        <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
+      </form></td>
+    <td>CC-4</td>
+    <td></td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  <tr data-depth="1">
+    <td>sandbox://CC-5</td>
+    <td>queued</td>
+    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td>seam changed</td>
+    <td>
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="sandbox://CC-5">
+        <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
+      </form></td>
+    <td>CC-5</td>
+    <td></td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  
+  
+  
+  
+  <tr data-depth="0">
+    <td>sandbox://LONE</td>
+    <td>ready</td>
+    <td>no blockers</td>
+    <td></td>
+    <td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://LONE">launch</td>
+    <td>lone</td>
+    <td>main</td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+  </tr>
+
+  
+  
+</table>
+<button type="submit" form="launch">launch selected</button>
+

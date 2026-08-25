@@ -1,6 +1,7 @@
 package cc
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	_ "embed"
@@ -10,6 +11,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,8 +28,26 @@ var pageSource string
 var pageCSS string
 
 var page = template.Must(template.New("page").
-	Funcs(template.FuncMap{"css": func() template.CSS { return template.CSS(pageCSS) }}).
+	Funcs(template.FuncMap{
+		"css":   func() template.CSS { return template.CSS(pageCSS) },
+		"head":  func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
+		"child": func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
+	}).
 	Parse(pageSource))
+
+// rowSlot carries LaunchVerb and CancelVerb because html/template resets $ to the invoked
+// subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies.
+type rowSlot struct {
+	row
+	Head       bool
+	Depth      int
+	LaunchVerb string
+	CancelVerb string
+}
+
+func newRowSlot(r row, head bool, depth int) rowSlot {
+	return rowSlot{row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel}
+}
 
 //go:embed preview.tmpl
 var previewSource string
@@ -117,6 +137,7 @@ type row struct {
 	// ready-to-merge would squash-merge into its parent branch with the parent's own checks
 	// unseen, and empty otherwise. The app never applies that label itself.
 	Warning  string
+	Blocking []string
 	Worktree string
 	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
@@ -136,14 +157,17 @@ type tickErrorView struct {
 	Message string
 }
 
+// group is one blocker and the rows waiting on it. A row with no blocker in the task set is its
+// own group with a nil Root (docs/prds/prd-operator-surface.md § Reading the board).
+type group struct {
+	Root     *row
+	Children []row
+}
+
 type pageView struct {
 	ObserveAge string
 	LastError  *tickErrorView
-	Rows       []row
-	// LaunchVerb is how the template recognises the verb it renders as a checkbox in the
-	// slice-wide launch form rather than as a per-row POST to /verb, without naming it in markup.
-	LaunchVerb string
-	CancelVerb string
+	Groups     []group
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -179,9 +203,8 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	now := s.now()
 	view := pageView{
 		ObserveAge: "never",
-		LaunchVerb: plan.VerbLaunch,
-		CancelVerb: plan.VerbCancel,
-		Rows:       derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now),
+		Groups: groupRows(
+			derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now)),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -313,6 +336,7 @@ func derive(
 			LogPath:      logPath,
 			CancelCount:  membership.Members,
 			Warning:      readyToMergeWarning(pr),
+			Blocking:     unlock.Blocking,
 			Draft:        pr.IsDraft,
 			DraftReason:  draftReasonFor(pr, pt, byURL, prs, runFact),
 			SeamChanged: plan.SeamChanged(plan.SeamCheck{
@@ -332,6 +356,53 @@ func derive(
 		rows[i].MergeOrder = rows[i].StackDepth + 1
 	}
 	return rows
+}
+
+// groupRows keys a fan-in row's group on the first blocker in its own Blocking
+// (internal/plan/plan.go:119); Reason still names every blocker.
+func groupRows(rows []row) []group {
+	byURL := make(map[string]row, len(rows))
+	childrenByRoot := make(map[string][]row, len(rows))
+	for _, r := range rows {
+		byURL[r.TicketURL] = r
+		if len(r.Blocking) > 0 {
+			root := r.Blocking[0]
+			childrenByRoot[root] = append(childrenByRoot[root], r)
+		}
+	}
+
+	rootURLs := make([]string, 0, len(childrenByRoot))
+	for root := range childrenByRoot {
+		rootURLs = append(rootURLs, root)
+	}
+	slices.Sort(rootURLs)
+
+	groups := make([]group, 0, len(rootURLs)+len(rows))
+	for _, root := range rootURLs {
+		children := childrenByRoot[root]
+		slices.SortFunc(children, func(a, b row) int {
+			if a.MergeOrder != b.MergeOrder {
+				return cmp.Compare(a.MergeOrder, b.MergeOrder)
+			}
+			return cmp.Compare(a.TicketURL, b.TicketURL)
+		})
+		rootRow := byURL[root]
+		groups = append(groups, group{Root: &rootRow, Children: children})
+	}
+
+	var ungrouped []row
+	for _, r := range rows {
+		if len(r.Blocking) == 0 {
+			if _, isRoot := childrenByRoot[r.TicketURL]; !isRoot {
+				ungrouped = append(ungrouped, r)
+			}
+		}
+	}
+	slices.SortFunc(ungrouped, func(a, b row) int { return cmp.Compare(a.TicketURL, b.TicketURL) })
+	for _, r := range ungrouped {
+		groups = append(groups, group{Children: []row{r}})
+	}
+	return groups
 }
 
 // baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,
