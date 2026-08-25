@@ -542,3 +542,72 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 			"is a human's problem", events)
 	}
 }
+
+// TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution covers issue #93. advanceOnto
+// reports the restack on its error path too, because the rebase is what failed, and refreshOne
+// used to drop that: the branch was rewritten, the licence was not recorded, and the push after
+// a hand resolution was rejected non-fast-forward with nothing left to grant it.
+func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+		t.Fatal(err)
+	}
+
+	squashParentIntoMain(t, root, repoPath)
+	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
+	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	obs := mergedObservation(f, "parent")
+	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
+	obs.BranchTips["repo//main"] = mainSHA
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("restack RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "refresh_conflicted", "") {
+		t.Fatalf("events = %+v, want refresh_conflicted: the child's parent.txt conflicts with main's", events)
+	}
+	restacked, err := store.RestackedSinceLastPush(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !restacked[f.child.TicketURL] {
+		t.Fatalf("RestackedSinceLastPush = %v, want the child: the app's own rebase --onto rewrote "+
+			"this branch, and a conflict interrupts that rather than handing it to anyone else", restacked)
+	}
+
+	// What a human does at the conflict, and all they do: resolve, continue, touch nothing else.
+	conflicted := filepath.Join(f.childWorktree, "parent.txt")
+	if err := os.WriteFile(conflicted, []byte("both rewrites, reconciled\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, "-C", f.childWorktree, "add", "parent.txt")
+	runGit(t, "-C", f.childWorktree, "-c", "core.editor=true", "rebase", "--continue")
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("push RunOnce: %v", err)
+	}
+	local := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	remote := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+	if remote != local {
+		t.Errorf("origin/child = %q, want the resolved tip %q (it was %q before the restack): the "+
+			"work never reaches the pull request without the lease", remote, local, childTip)
+	}
+}
