@@ -10,33 +10,34 @@ just run --config docs/command-centre.sample.toml
 
 ## Status
 
-Phases 0 to 6 are built and merged to main. That is config, store, tick and
-page; unlock, launch preview and consent; cut, spawn, liveness, disposition and
-crash recovery; push policy, push and PR create; the CI verdict; and the
-two-ticket slice with terminal states and teardown. Issues #1 to #8 and #10 to
-#12 are all closed. `tp remove --force` landed upstream and is what teardown
-calls.
+The single-repo pipeline is built and merged: config, store, tick and page;
+unlock, launch preview and consent; cut, spawn, liveness, disposition and crash
+recovery; push policy, push and PR create; the CI verdict; and the terminal
+states with teardown.
 
-One issue is open, and it is a verification run rather than unbuilt code.
-[#25](https://github.com/O-Marsters-1997/command-center/issues/25) gathers five
-acceptance criteria deferred out of Phases 4, 5 and 6 because none of them can
-run in CI or against fixtures. Each needs `cc` running as a real daemon against
-the real `O-Marsters-1997/cc-sandbox` repo:
+So is the cross-repo work. `[[seam]]` with `producers` and `lands_at`, a repo's
+`compat_check`, the draft gate that holds a consumer's PR, the `re-check` verb
+and the `waiting_on_producer_deploy` state all have code on main.
 
-- A real push opens a real PR carrying the `keep-open` label, and the next tick
-  adopts it rather than duplicating it.
-- A real check rollup goes green, then red when one check is flipped.
-- One authorisation produces two open PRs with no further human action.
-- A real squash-merge derives `pr_merged`, and `remove worktree` then succeeds.
-- Killing the app mid-slice and restarting relaunches nothing and duplicates
-  no PR.
+So is the operator surface. The board groups rows by blocker, polls itself with
+htmx rather than a meta refresh, expands a row into a detail fragment, tails a
+run's log over SSE, and puts a confirm page in front of `kill` and
+`remove-worktree`.
 
-The issue records one known limitation. The Mergify app is not installed on the
-sandbox, so `.mergify.yml` is committed there but inert, and the `keep-open`
-label's stale-close behaviour stays inspection-only.
+The newest mechanism is restacking, described below. It has run against real
+GitHub through four consecutive squash merges, which is what turned up the four
+defects fixed in #92, #94 and #96.
 
-Two verbs named in the design are deliberately absent. `cancel` is Phase 2.
-`refresh` is unreachable while every repo sets `stacking = false`.
+The issue tracker lags the code and is not a todo list. Fourteen issues are
+open, and at least seven describe work that has shipped: #74, #75 and #77
+landed as #84, #86 and #88, and #53, #55, #56 and #57 all have code on main.
+[#85](https://github.com/O-Marsters-1997/command-center/issues/85) is the real
+open problem. Two of its four root causes are prose conflicts that no merge
+strategy resolves.
+
+One limitation stands. The Mergify app is not installed on `cc-sandbox`, so
+`.mergify.yml` is committed there but inert, and the `keep-open` label's
+stale-close behaviour stays inspection-only.
 
 ## Requirements
 
@@ -82,19 +83,25 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 
 ### The tick
 
-`Loop.RunOnce` in `internal/cc/loop.go` observes, decides, then acts, in this
-order:
+`Loop.RunOnce` in `internal/cc/loop.go` observes, decides, then acts. Observe
+runs once; every other step is conditional on observing successfully.
 
-1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, the worktree map, each
-   repo's current `sha256(.mergify.yml)`.
-2. Tick the checking-waits, then save the observation.
-3. Apply launch intents, then kill intents.
-4. Reconcile runs: liveness, then disposition. Save the observation again, now
+1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, the worktree map,
+   each repo's current `sha256(.mergify.yml)`.
+2. Tick the checking-waits, save the observation.
+3. Apply launch intents, apply cancel intents, apply kill intents.
+4. Reconcile runs: liveness, then disposition. Save the observation again,
    carrying this tick's liveness reads.
-5. Apply retry-push intents, push whatever is pushable, record verdict
+5. Retarget: reparent merged branches' descendants onto the base their siblings
+   landed on, preserving their own squash.
+6. Apply abort intents (clear conflicted restacks), apply refresh intents
+   (fast-forward and rebase if needed).
+7. Apply retry-push intents, push whatever is pushable, record verdict
    transitions.
-6. Apply re-run intents, then close-pr, then remove-worktree.
-7. Launch whatever is now eligible, capped at `max_agents`.
+8. Apply draft gate (hold cross-repo consumers' PRs in draft).
+9. Apply re-run intents, apply re-check intents, apply close-pr intents, apply
+   remove-worktree intents.
+10. Launch whatever is now eligible, capped at `max_agents`.
 
 The period is 15 seconds, slept after the work rather than before, so ticks
 never overlap. A failed observe records a tick error and applies nothing, which
@@ -105,9 +112,30 @@ The loop is the only writer of the database. No HTTP handler ever acts on the
 world: it writes one intent row, redirects back to the board, and the next
 tick reads it.
 
+### Restacking on squash-merge conflict
+
+When GitHub squash-merges a branch, it flattens its commits into one and writes
+it to the base branch with no ancestry link to the branch's own history. Merging
+the base back into a child branch would therefore replay every commit the base
+already carries, conflicting on every touched line.
+
+The app detects this: the refresh phase checks whether the base's recorded
+boundary commit (from the merged PR's `headRefOid`, falling back to
+`base_sha_at_push`) is still an ancestor of the base's current tip. If it is
+not, the app runs `git rebase --onto <base> <boundary>` instead of merging. That
+replays only what the branch added after the boundary and drops everything up to
+it, because the base already carries that work under new SHAs.
+
+A restack rewrites the branch, so the next push has to force. It may only use
+`--force-with-lease`, and only when a `restacked` event was recorded after the
+row's last push. A restack that stops on a conflict records one too. It has
+already rewritten the branch, so whoever resolves the conflict by hand still
+needs the lease. `advanceOnto` and `restackBoundary` in
+`internal/cc/refresh.go` are the two functions to read.
+
 ### The page
 
-`internal/cc/server.go` serves eight routes. The board, the launch preview, the
+`internal/cc/server.go` serves nine routes. The board, the launch preview, the
 confirm page and a row's detail fragment are each `html/template` over an
 embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`.
 
@@ -118,6 +146,7 @@ embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`
 | `GET /events` | The append-only audit log, as JSON. |
 | `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
 | `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
+| `GET /task/{task}/log` | The run's log tail, streamed as JSON over SSE. |
 | `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
@@ -131,13 +160,15 @@ swap.
 Both POSTs are wrapped in `requireBrowserOrigin`, which rejects any request
 whose `Origin` header does not match `r.Host`.
 
-The verbs are launch, kill, re-run, retry-push, close-pr and remove-worktree.
-Which of them a row offers is `plan.Verbs`, a decision, so it is table-tested.
+The verbs offered on the board are launch, kill, re-run, re-check, retry-push,
+close-pr, remove-worktree, cancel, refresh and abort. Which verbs a row offers
+is `plan.Verbs`, a decision over its state, so it is table-tested.
 
 The states are blocked, ready, queued, running, failed, cut_failed,
-push_pending, checking, needs_you, push_failed, review_me, pr_merged,
-pr_closed_unmerged and base_gone. None of them is ever stored. Facts are stored
-and the label is derived on every render.
+push_pending, checking, needs_you, push_failed, review_me, merged,
+pr_closed_unmerged, base_gone, cancelled, base_moved, refresh_conflicted and
+waiting_on_producer_deploy. None of them is ever stored. Facts are stored and
+the label is derived on every render.
 
 ### Where state lives
 
@@ -183,8 +214,12 @@ per-repo path patterns to the push policy's default refusals. A repo that
 configures neither `checks` nor `mergify_sha` stops at `checking` and never
 derives a verdict.
 
-`[[repo]]` also accepts `compat_check`, which the config decodes but nothing
-reads yet.
+`[[repo]]` also accepts `compat_check`, the name of the check that reports
+whether a consumer still builds against its producer.
+`internal/cc/draftgate.go` and `internal/cc/verdict_transitions.go` read it.
+
+`[[seam]]` is the cross-repo edge: `name`, `repo`, `producers` and `lands_at`. A
+`[[task]]` names the seams it touches in `seams`.
 
 ## Testing
 
