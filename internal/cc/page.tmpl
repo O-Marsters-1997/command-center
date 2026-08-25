@@ -9,7 +9,7 @@
 <!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
      checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
      instead would nest the per-row verb forms inside it, which HTML forbids. -->
-<form id="launch" method="post" action="/launch"></form>
+<form id="launch" method="get" action="/preview"></form>
 <table>
   <tr>
     <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
