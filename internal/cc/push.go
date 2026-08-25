@@ -21,18 +21,24 @@ type pushContext struct {
 	prs        map[string]plan.PRState
 	repoPaths  map[string]string
 	denyByRepo map[string][]string
+	pushedTips map[string]string
 	obs        Observation
 }
 
-func (l *Loop) newPushContext(tasks []Task, obs Observation) pushContext {
+func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation) (pushContext, error) {
+	pushedTips, err := l.store.LastPushedTips(ctx)
+	if err != nil {
+		return pushContext{}, err
+	}
 	return pushContext{
 		byURL:      planTasksByURL(tasks),
 		stacking:   stackingByRepo(l.cfg.Repos),
 		prs:        prsByBranch(obs),
 		repoPaths:  repoPathsByName(l.ws.Root, l.cfg.Repos),
 		denyByRepo: denyByRepo(l.cfg.Repos),
+		pushedTips: pushedTips,
 		obs:        obs,
-	}
+	}, nil
 }
 
 // pushPushable is job 1's push step (docs/prds/prd-command-centre.md § The tick): every task whose
@@ -52,7 +58,10 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	pc := l.newPushContext(tasks, obs)
+	pc, err := l.newPushContext(ctx, tasks, obs)
+	if err != nil {
+		return err
+	}
 
 	byTicket := tasksByTicket(tasks)
 	var candidates []plan.PushCandidate
@@ -118,7 +127,10 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		return err
 	}
 	byTicket := tasksByTicket(tasks)
-	pc := l.newPushContext(tasks, obs)
+	pc, err := l.newPushContext(ctx, tasks, obs)
+	if err != nil {
+		return err
+	}
 
 	now := l.now()
 	for _, intent := range intents {
@@ -136,6 +148,24 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		}
 	}
 	return nil
+}
+
+// pushBranch pushes branch, leasing on recordedTip when the local branch no longer descends
+// from it -- which only a restack does (issue #89). Everything else takes the plain push, so a
+// genuine non-fast-forward stays a push failed rather than something the app overrides, and the
+// lease still refuses if anything reached origin since that recorded tip.
+func pushBranch(ctx context.Context, repoPath, branch, recordedTip string) error {
+	if recordedTip == "" {
+		return Push(ctx, repoPath, branch)
+	}
+	descended, err := Ancestor(ctx, repoPath, recordedTip, branch)
+	if err != nil {
+		return err
+	}
+	if descended {
+		return Push(ctx, repoPath, branch)
+	}
+	return PushRestacked(ctx, repoPath, branch, recordedTip)
 }
 
 // pushOne computes t's base fresh (the same pure plan.Unlocked call job 2 uses, over this tick's
@@ -158,7 +188,7 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushRefused, Detail: path})
 	}
 
-	if err := Push(ctx, repoPath, t.Branch); err != nil {
+	if err := pushBranch(ctx, repoPath, t.Branch, pc.pushedTips[t.TicketURL]); err != nil {
 		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushFailed, Detail: err.Error()})
 	}
 
