@@ -427,8 +427,8 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasEvent(events, "refreshed", "restacked onto origin/main") {
-		t.Fatalf("events = %+v, want a refreshed event naming a restack onto origin/main", events)
+	if !hasEvent(events, "restacked", "restacked onto origin/main") {
+		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/main", events)
 	}
 	if hasEvent(events, "refresh_conflicted", "") {
 		t.Errorf("events = %+v, want no conflict: dropping the parent's commits is what avoids it", events)
@@ -448,7 +448,9 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	}
 
 	// The restack rewrote the branch, so the next tick's push has to lease rather than
-	// fast-forward, or the work never reaches the pull request.
+	// fast-forward, or the work never reaches the pull request. This also pins the comparison
+	// RestackedSinceLastPush makes: retargetOne stamps its push row and this restack with one
+	// clock reading, so a strict > there leaves the branch stranded at its pre-restack tip.
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("push RunOnce: %v", err)
 	}
@@ -490,8 +492,8 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasEvent(events, "refreshed", "restacked onto origin/parent") {
-		t.Fatalf("events = %+v, want a refreshed event naming a restack onto origin/parent", events)
+	if !hasEvent(events, "restacked", "restacked onto origin/parent") {
+		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/parent", events)
 	}
 	if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
 		t.Errorf("the parent's pre-rewrite tip %s is still in the child's history, so the child "+
@@ -499,5 +501,44 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	}
 	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD^")); got != newParentTip {
 		t.Errorf("child's parent commit = %q, want the parent's rewritten tip %q", got, newParentTip)
+	}
+}
+
+// TestARewriteTheAppDidNotPerformIsNeverForcePushed covers the licence the restack needs and
+// must not hand out generally (issue #89). An agent's own amend or reset in its worktree leaves
+// the branch exactly as diverged from origin as a restack does, and that is a push failed for a
+// human to look at, not something to overwrite the pull request with.
+func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	remoteBefore := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+
+	runGit(t, "-C", f.childWorktree, "reset", "-q", "--hard", "HEAD~1")
+	commitFile(t, f.childWorktree, "child.txt", "the child's second thoughts\n")
+
+	obs := baseObservation(f, f.parentTip0)
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if got := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child")); got != remoteBefore {
+		t.Errorf("origin/child = %q, want %q untouched: the app never rewrote this branch, so the "+
+			"commit that was there is the agent's to account for, not the app's to discard", got, remoteBefore)
+	}
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "push_failed", "") {
+		t.Errorf("events = %+v, want a push_failed event: a diverged branch the app did not restack "+
+			"is a human's problem", events)
 	}
 }

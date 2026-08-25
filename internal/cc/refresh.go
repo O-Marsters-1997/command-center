@@ -16,6 +16,7 @@ const (
 	eventRefreshRefused    = "refresh_refused"
 	eventRefreshConflicted = "refresh_conflicted"
 	eventRefreshed         = "refreshed"
+	eventRestacked         = "restacked"
 )
 
 // RefreshFact is a task's outstanding refused fast-forward, derived from the latest
@@ -212,15 +213,19 @@ func (l *Loop) refreshOne(
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
 	}
-	detail, err := advanceOnto(ctx, worktreePath, unlock.BaseBranch, row, rc.obs)
+	restacked, detail, err := advanceOnto(ctx, worktreePath, unlock.BaseBranch, row, rc.obs)
 	if err != nil {
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TaskURL: task.TicketURL, Kind: eventRefreshConflicted, Detail: err.Error(),
 		})
 	}
 
+	kind := eventRefreshed
+	if restacked {
+		kind = eventRestacked
+	}
 	return l.store.AppendEvent(ctx, Event{
-		At: now, TaskURL: task.TicketURL, Kind: eventRefreshed,
+		At: now, TaskURL: task.TicketURL, Kind: kind,
 		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
 	})
 }
@@ -229,23 +234,24 @@ func (l *Loop) refreshOne(
 // history no longer contains what the branch was built on -- a squash-merged parent, or a base
 // the app itself rewrote a tick earlier (issue #89). Merging in that case replays the branch's
 // own copies of commits the base already carries under new SHAs, which conflicts on every line
-// either side touched. It returns what the refreshed event should say it did.
+// either side touched. It reports which of the two it did, because only a restack licenses the
+// push step to lease-force, and what the event should say.
 func advanceOnto(
 	ctx context.Context, worktreePath, base string, row PushRow, obs Observation,
-) (string, error) {
+) (bool, string, error) {
 	ref := "origin/" + base
 	boundary := restackBoundary(row, obs)
 	if boundary == "" {
-		return ref, Merge(ctx, worktreePath, ref)
+		return false, ref, Merge(ctx, worktreePath, ref)
 	}
 	kept, err := Ancestor(ctx, worktreePath, boundary, ref)
 	if err != nil {
-		return "", err
+		return false, "", err
 	}
 	if kept {
-		return ref, Merge(ctx, worktreePath, ref)
+		return false, ref, Merge(ctx, worktreePath, ref)
 	}
-	return fmt.Sprintf("restacked onto %s, dropping everything up to %s", ref, boundary),
+	return true, fmt.Sprintf("restacked onto %s, dropping everything up to %s", ref, boundary),
 		Rebase(ctx, worktreePath, ref, boundary)
 }
 

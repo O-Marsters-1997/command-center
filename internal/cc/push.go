@@ -22,11 +22,16 @@ type pushContext struct {
 	repoPaths  map[string]string
 	denyByRepo map[string][]string
 	pushedTips map[string]string
+	restacked  map[string]bool
 	obs        Observation
 }
 
 func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation) (pushContext, error) {
 	pushedTips, err := l.store.LastPushedTips(ctx)
+	if err != nil {
+		return pushContext{}, err
+	}
+	restacked, err := l.store.RestackedSinceLastPush(ctx)
 	if err != nil {
 		return pushContext{}, err
 	}
@@ -37,6 +42,7 @@ func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation
 		repoPaths:  repoPathsByName(l.ws.Root, l.cfg.Repos),
 		denyByRepo: denyByRepo(l.cfg.Repos),
 		pushedTips: pushedTips,
+		restacked:  restacked,
 		obs:        obs,
 	}, nil
 }
@@ -150,12 +156,12 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 	return nil
 }
 
-// pushBranch pushes branch, leasing on recordedTip when the local branch no longer descends
-// from it -- which only a restack does (issue #89). Everything else takes the plain push, so a
-// genuine non-fast-forward stays a push failed rather than something the app overrides, and the
-// lease still refuses if anything reached origin since that recorded tip.
-func pushBranch(ctx context.Context, repoPath, branch, recordedTip string) error {
-	if recordedTip == "" {
+// pushBranch pushes branch, leasing on recordedTip only when the app's own restack is what left
+// the local branch no longer descended from it (issue #89). A rewrite the app did not perform --
+// an agent's amend or reset in the worktree -- takes the plain push and stays a push failed a
+// human is told about, and the lease still refuses if anything reached origin since that tip.
+func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, restacked bool) error {
+	if !restacked || recordedTip == "" {
 		return Push(ctx, repoPath, branch)
 	}
 	descended, err := Ancestor(ctx, repoPath, recordedTip, branch)
@@ -188,7 +194,7 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushRefused, Detail: path})
 	}
 
-	if err := pushBranch(ctx, repoPath, t.Branch, pc.pushedTips[t.TicketURL]); err != nil {
+	if err := pushBranch(ctx, repoPath, t.Branch, pc.pushedTips[t.TicketURL], pc.restacked[t.TicketURL]); err != nil {
 		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushFailed, Detail: err.Error()})
 	}
 
