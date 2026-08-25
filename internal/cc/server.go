@@ -29,9 +29,10 @@ var pageCSS string
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
-		"css":   func() template.CSS { return template.CSS(pageCSS) },
-		"head":  func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
-		"child": func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
+		"css":         func() template.CSS { return template.CSS(pageCSS) },
+		"head":        func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
+		"child":       func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
+		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
 	}).
 	Parse(pageSource))
 
@@ -84,6 +85,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /events", s.handleEvents)
+	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	s.mux = mux

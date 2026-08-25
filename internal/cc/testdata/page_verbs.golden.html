@@ -166,7 +166,7 @@ tr[data-depth="4"] td:first-child {
     <td></td>
     <td></td>
     <td>
-      <form method="post" action="/verb">
+      <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
@@ -315,7 +315,7 @@ tr[data-depth="4"] td:first-child {
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="post" action="/verb">
+      <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="kill">kill</button>
       </form>
@@ -410,7 +410,7 @@ tr[data-depth="4"] td:first-child {
     <td></td>
     <td></td>
     <td>
-      <form method="post" action="/verb">
+      <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
@@ -443,7 +443,7 @@ tr[data-depth="4"] td:first-child {
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="post" action="/verb">
+      <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
@@ -476,7 +476,7 @@ tr[data-depth="4"] td:first-child {
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="post" action="/verb">
+      <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>

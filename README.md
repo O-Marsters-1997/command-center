@@ -107,14 +107,16 @@ tick reads it.
 
 ### The page
 
-`internal/cc/server.go` serves five routes. The board and the launch preview are
-both `html/template` over an embedded template, `page.tmpl` and `preview.tmpl`.
+`internal/cc/server.go` serves six routes. The board, the launch preview and the
+confirm page are each `html/template` over an embedded template: `page.tmpl`,
+`preview.tmpl` and `confirm.tmpl`.
 
 | Route | What |
 |---|---|
 | `GET /` | The page. One row per task, with each row's verbs rendered as forms. |
 | `GET /preview` | What launching `?task=...` would do, and why. Where the board's checkboxes submit to, and where `[ authorise ]` posts to `/launch` from. |
 | `GET /events` | The append-only audit log, as JSON. |
+| `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
 

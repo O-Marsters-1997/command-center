@@ -38,6 +38,11 @@
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
       <input type="checkbox" form="launch" name="task" value="{{$row.TicketURL}}">{{.}}
+      {{- else if destructive .}}
+      <form method="get" action="/confirm">
+        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <button type="submit" name="verb" value="{{.}}">{{.}}</button>
+      </form>
       {{- else}}
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="{{$row.TicketURL}}">
