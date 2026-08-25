@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Launch preview</title>
+<h1>LAUNCH</h1>
+<form method="post" action="/launch">
+<table>
+  <tr>
+    <th></th><th>label</th><th>ticket</th><th>base</th><th>base verdict</th><th>why</th><th>prompt</th>
+  </tr>
+  
+  <tr>
+    <td><input type="checkbox" name="task" value="sandbox://CC-1" checked></td>
+    <td>now</td>
+    <td>sandbox://CC-1</td>
+    <td>origin/main</td>
+    <td></td>
+    <td>no blockers</td>
+    <td>
+      <details><summary>prompt 67b11449bc59678e197c723563401a0bb86a19fb7916d50c06e39338b075e9a8</summary><pre>/implement sandbox://CC-1
+seam one content</pre></details>
+    </td>
+  </tr>
+  
+  <tr>
+    <td><input type="checkbox" name="task" value="sandbox://CC-2" checked></td>
+    <td>on unlock</td>
+    <td>sandbox://CC-2</td>
+    <td>origin/main</td>
+    <td></td>
+    <td>blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</td>
+    <td>
+      <details><summary>prompt f1557a5f889a6b3b1e7e84a75324207b86da292794d8a4d9a421225b1aa14a0c</summary><pre>/implement sandbox://CC-2</pre></details>
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td>refused</td>
+    <td>sandbox://CC-3</td>
+    <td>origin/main</td>
+    <td></td>
+    <td>blocked by sandbox://CC-4, which has no open or merged pull request outside this slice</td>
+    <td>
+      <details><summary>prompt 4e0a80d32fdb9443d268f38d6752dbddeb86af50fedc12f5b7adce2983daadd1</summary><pre>/implement sandbox://CC-3</pre></details>
+    </td>
+  </tr>
+  
+</table>
+<button type="submit">[ authorise ]</button>
+</form>
+<a href="/">[ cancel ]</a>

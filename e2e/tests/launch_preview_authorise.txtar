@@ -11,9 +11,10 @@ cc-fake-gh no-prs
 
 exec cc tick --count 1
 exec cc request GET '/preview?task=sandbox://CC-1&task=sandbox://CC-2'
-stdout '"Label":"now"'
-stdout '"Label":"on unlock"'
-stdout '"Base":"origin/main"'
+stdout '<td>now</td>'
+stdout '<td>on unlock</td>'
+stdout '<td>origin/main</td>'
+stdout '<button type="submit">\[ authorise \]</button>'
 
 exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
 exec cc tick --count 1

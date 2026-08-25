@@ -2,9 +2,9 @@ package cc_test
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +23,71 @@ import (
 var update = flag.Bool("update", false, "regenerate golden files")
 
 const goldenPage = "testdata/page.golden.html"
+const goldenPreview = "testdata/preview.golden.html"
+
+// assertGolden compares got against the golden file at path, rewriting it under -update.
+func assertGolden(t *testing.T, path string, got []byte) {
+	t.Helper()
+
+	if *update {
+		if err := os.WriteFile(path, got, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden (regenerate with -update): %v", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
+	}
+}
+
+func fetchPreview(t *testing.T, srv *httptest.Server, query string) string {
+	t.Helper()
+
+	resp, err := http.Get(srv.URL + "/preview?" + query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("Content-Type = %q, want text/html", ct)
+	}
+	return string(body)
+}
+
+// previewRowFor returns the one <tr> block naming ticketURL, so a test asserts on a single row's
+// cells without pulling in an HTML parser.
+func previewRowFor(t *testing.T, body, ticketURL string) string {
+	t.Helper()
+
+	for _, tr := range strings.Split(body, "<tr>") {
+		if strings.Contains(tr, "<td>"+ticketURL+"</td>") {
+			return tr
+		}
+	}
+	t.Fatalf("no preview row for %s in:\n%s", ticketURL, body)
+	return ""
+}
+
+func assertCells(t *testing.T, row string, cells ...string) {
+	t.Helper()
+
+	for _, cell := range cells {
+		if !strings.Contains(row, cell) {
+			t.Errorf("row does not contain %q:\n%s", cell, row)
+		}
+	}
+}
 
 // noRedirect defeats http.Client's default of following a 303.
 func noRedirect(srv *httptest.Server) *http.Client {
@@ -85,19 +150,7 @@ func TestServerRendersThePage(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 
-	got := rec.Body.Bytes()
-	if *update {
-		if err := os.WriteFile(goldenPage, got, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(goldenPage)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("page differs from %s; rerun with -update to accept\n--- got ---\n%s", goldenPage, got)
-	}
+	assertGolden(t, goldenPage, rec.Body.Bytes())
 }
 
 // TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":
@@ -316,46 +369,15 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 
 	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
 	// outside it with no pull request.
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
+	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3")
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>now</td>", "<td>origin/main</td>")
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-2"), "<td>on unlock</td>", "<td>origin/main</td>")
 
-	var rows []map[string]any
-	if err := json.Unmarshal(body, &rows); err != nil {
-		t.Fatalf("decode preview response %s: %v", body, err)
-	}
-	byTicket := make(map[string]map[string]any, len(rows))
-	for _, r := range rows {
-		byTicket[r["TicketURL"].(string)] = r
-	}
-
-	if got := byTicket["sandbox://CC-1"]["Label"]; got != "now" {
-		t.Errorf("CC-1 label = %v, want now", got)
-	}
-	if got := byTicket["sandbox://CC-1"]["Base"]; got != "origin/main" {
-		t.Errorf("CC-1 base = %v, want origin/main", got)
-	}
-	if got := byTicket["sandbox://CC-2"]["Label"]; got != "on unlock" {
-		t.Errorf("CC-2 label = %v, want on unlock", got)
-	}
-	if got := byTicket["sandbox://CC-2"]["Base"]; got != "origin/main" {
-		t.Errorf("CC-2 base = %v, want origin/main", got)
-	}
-	if got := byTicket["sandbox://CC-3"]["Label"]; got != "refused" {
-		t.Errorf("CC-3 label = %v, want refused", got)
-	}
-	if reason, _ := byTicket["sandbox://CC-3"]["Reason"].(string); !strings.Contains(reason, "sandbox://CC-4") {
-		t.Errorf("CC-3 reason = %q, does not name its blocker sandbox://CC-4", reason)
+	refused := previewRowFor(t, body, "sandbox://CC-3")
+	assertCells(t, refused, "<td>refused</td>", "sandbox://CC-4")
+	if strings.Contains(refused, `<input type="checkbox"`) {
+		t.Errorf("refused row carries a checkbox and would be submitted:\n%s", refused)
 	}
 }
 
@@ -399,32 +421,12 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, nil, ""))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CHILD")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	body := fetchPreview(t, srv, "task=sandbox://CHILD")
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(body, &rows); err != nil {
-		t.Fatalf("decode preview response %s: %v", body, err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("rows = %+v, want 1", rows)
-	}
-	if got := rows[0]["Label"]; got != "now" {
-		t.Errorf("label = %v, want now (parent's PR is open)", got)
-	}
-	if got := rows[0]["Base"]; got != "origin/parent" {
-		t.Errorf("base = %v, want origin/parent", got)
-	}
-	if got := rows[0]["BaseVerdict"]; got != "needs_you" {
-		t.Errorf("base verdict = %v, want needs_you (the parent's own red CI)", got)
-	}
+	// now because the parent's PR is open, origin/parent because stacking is on, and needs_you
+	// because that parent's own CI is red.
+	assertCells(t, previewRowFor(t, body, "sandbox://CHILD"),
+		"<td>now</td>", "<td>origin/parent</td>", "<td>needs_you</td>")
 }
 
 func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
@@ -451,30 +453,9 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
-	var rows []map[string]any
-	if err := json.Unmarshal(body, &rows); err != nil {
-		t.Fatalf("decode preview response %s: %v", body, err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("rows = %+v, want 1", rows)
-	}
-	if rows[0]["Label"] != "refused" {
-		t.Errorf("label = %v, want refused", rows[0]["Label"])
-	}
-	reason, _ := rows[0]["Reason"].(string)
-	if !strings.Contains(reason, "already authorised in launch") {
-		t.Errorf("reason = %q, want it to name the active launch", reason)
-	}
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
 }
 
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
@@ -536,20 +517,9 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?" + query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("preview status = %d, want 200", resp.StatusCode)
-	}
-	var rows []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != fanOut+1 {
-		t.Fatalf("preview rows = %d, want %d", len(rows), fanOut+1)
+	body := fetchPreview(t, srv, query)
+	if got := strings.Count(body, `<input type="checkbox"`); got != fanOut+1 {
+		t.Fatalf("preview checkboxes = %d, want %d: the slice must not be truncated", got, fanOut+1)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?"+query, nil)
@@ -644,27 +614,11 @@ func TestPreviewComposesSeamsIntoThePromptAndHash(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var rows []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("rows = %+v, want 1", rows)
-	}
+	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
 	wantPrompt := plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam one content", "seam two content"})
-	if got := rows[0]["Prompt"]; got != wantPrompt {
-		t.Errorf("Prompt = %q, want %q", got, wantPrompt)
-	}
-	if got := rows[0]["Hash"]; got != plan.Hash(wantPrompt) {
-		t.Errorf("Hash = %v, want %v", got, plan.Hash(wantPrompt))
-	}
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
+		"<details><summary>prompt "+plan.Hash(wantPrompt)+"</summary><pre>"+html.EscapeString(wantPrompt)+"</pre></details>")
 }
 
 // TestPreviewRefusesATaskNamingAMissingSeam covers issue #52's AC2: a task naming a seam with no
@@ -685,27 +639,12 @@ func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, t.TempDir()))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
-	var rows []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("rows = %+v, want 1", rows)
-	}
-	if got := rows[0]["Label"]; got != "refused" {
-		t.Errorf("label = %v, want refused", got)
-	}
-	if reason, _ := rows[0]["Reason"].(string); !strings.Contains(reason, "ghost") {
-		t.Errorf("reason = %q, does not name the missing seam %q", reason, "ghost")
-	}
-	if got, _ := rows[0]["Prompt"].(string); got != "" {
-		t.Errorf("Prompt = %q, want empty for a refused row", got)
+	row := previewRowFor(t, body, "sandbox://CC-1")
+	assertCells(t, row, "<td>refused</td>", "ghost")
+	if strings.Contains(row, "<details>") {
+		t.Errorf("refused row renders a prompt it never composed:\n%s", row)
 	}
 }
 
@@ -737,26 +676,9 @@ func TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, nil, t.TempDir()))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/preview?task=sandbox://CC-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
-	var rows []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 1 {
-		t.Fatalf("rows = %+v, want 1", rows)
-	}
-	if got := rows[0]["Label"]; got != "refused" {
-		t.Errorf("label = %v, want refused", got)
-	}
-	reason, _ := rows[0]["Reason"].(string)
-	if !strings.Contains(reason, "already authorised in launch") {
-		t.Errorf("reason = %q, want it to keep naming the active launch, not the missing seam", reason)
-	}
+	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
 }
 
 // TestLaunchRefusesATaskNamingAMissingSeam covers issue #52's AC2 at the authorisation route: a
@@ -1023,5 +945,84 @@ func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
 	}
 	if got := rowCellAt(t, page, task.TicketURL, 3); got != "seam changed" {
 		t.Errorf("seam-changed cell after edit = %q, want %q", got, "seam changed")
+	}
+}
+
+// TestPreviewRendersItsPage goldens the whole preview render: a now row, an on-unlock row and a
+// refused row rendering with no checkbox.
+func TestPreviewRendersItsPage(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	root := t.TempDir()
+	writeSeamFile(t, root, "one", "seam one content")
+
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Seams: []string{"one"}},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
+		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	server := cc.NewServer(store, fixedClock(at), nil, nil, root)
+	rec := httptest.NewRecorder()
+	target := "/preview?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3"
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+
+	assertGolden(t, goldenPreview, rec.Body.Bytes())
+}
+
+// TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice covers issue #72's slice of
+// five: CC-2 is left out of a slice sitting on top of it, so both of its direct dependents are
+// refused and the three rows above them still read on unlock.
+func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tasks := []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
+		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", BlockedBy: []string{"sandbox://CC-2"}},
+		{TicketURL: "sandbox://CC-5", Repo: "cc-sandbox", Branch: "cc-5", BlockedBy: []string{"sandbox://CC-3"}},
+		{TicketURL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
+		{TicketURL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
+	}
+	if err := store.UpsertTasks(ctx, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	t.Cleanup(srv.Close)
+
+	body := fetchPreview(t, srv,
+		"task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5&task=sandbox://CC-6&task=sandbox://CC-7")
+
+	for _, ticketURL := range []string{"sandbox://CC-3", "sandbox://CC-4"} {
+		assertCells(t, previewRowFor(t, body, ticketURL), "<td>refused</td>", "sandbox://CC-2")
+	}
+	for _, ticketURL := range []string{"sandbox://CC-5", "sandbox://CC-6", "sandbox://CC-7"} {
+		assertCells(t, previewRowFor(t, body, ticketURL), "<td>on unlock</td>")
+	}
+	if got := strings.Count(body, "<td>on unlock</td>"); got != 3 {
+		t.Errorf("on unlock rows = %d, want 3", got)
+	}
+	if got := strings.Count(body, "<td>refused</td>"); got != 2 {
+		t.Errorf("refused rows = %d, want 2", got)
 	}
 }
