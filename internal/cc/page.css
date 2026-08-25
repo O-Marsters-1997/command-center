@@ -1,0 +1,35 @@
+body {
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  margin: 1rem;
+  color: #222;
+}
+
+h1 {
+  font-size: 1.2rem;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 2px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f4f4f4;
+}
+
+td:empty::after {
+  content: "–";
+  color: #999;
+}
+
+button,
+input {
+  font: inherit;
+}

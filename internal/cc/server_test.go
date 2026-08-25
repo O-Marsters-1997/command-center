@@ -948,6 +948,33 @@ func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
 	}
 }
 
+func TestPageInlinesTheStylesheetAndRefreshesItself(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	server := cc.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil, nil, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<meta http-equiv="refresh" content="5">`,
+		"<style>",
+		"border-collapse",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page is missing %q", want)
+		}
+	}
+
+	rec = httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /page.css = %d, want 404: the stylesheet is inlined, not served", rec.Code)
+	}
+}
+
 // TestPreviewRendersItsPage goldens the whole preview render: a now row, an on-unlock row and a
 // refused row rendering with no checkbox.
 func TestPreviewRendersItsPage(t *testing.T) {
