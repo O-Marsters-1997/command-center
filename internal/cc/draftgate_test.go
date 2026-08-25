@@ -94,6 +94,7 @@ func draftConsumerPR(blockerState gh.PRState, consumerChecks map[string]gh.Check
 			"cc-1":   {Number: 1, State: gh.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks},
 			"pla-40": {State: blockerState},
 		},
+		BranchTips: map[string]string{"repo//main": "main-tip"},
 	}
 }
 

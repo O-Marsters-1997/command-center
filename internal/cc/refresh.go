@@ -163,7 +163,7 @@ func (l *Loop) autoRefresh(
 			continue
 		}
 		pushRow, pushed := pushRows[t.TicketURL]
-		if !pushed || !baseMoved(pushRow, rc.obs) {
+		if !pushed || !baseMoved(pushRow, rc.obs, t.Repo) {
 			continue
 		}
 		// ponytail: the gate holds until the row's next push, so a later, cleanly-mergeable base
@@ -178,11 +178,11 @@ func (l *Loop) autoRefresh(
 	return nil
 }
 
-// baseMoved is the git-level fact §4a marks a row on: a stacked base (never the default branch)
-// whose current tip differs from what was recorded at the task's last push.
-func baseMoved(row PushRow, obs Observation) bool {
-	return row.BaseBranch != "" && row.BaseBranch != defaultBaseBranch &&
-		obs.BranchTips[row.BaseBranch] != row.BaseSHAAtPush
+// baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
+// branch, or main once retargetMerged has pointed it there -- whose current tip differs from
+// what was recorded at the task's last push (issue #85: main counts the same as a stacked base).
+func baseMoved(row PushRow, obs Observation, repo string) bool {
+	return row.BaseBranch != "" && obs.BranchTips[baseTipKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
 // refreshOne fast-forwards one task's own branch, then merges its base. A refused fast-forward
