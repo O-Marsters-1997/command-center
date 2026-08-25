@@ -611,3 +611,76 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 			"work never reaches the pull request without the lease", remote, local, childTip)
 	}
 }
+
+// TestARetargetWhoseRefreshDeclinesLeavesTheRowStale covers issue #95. retargetOne recorded the
+// row as pushed against main's tip before calling the refresh that would make that true, so a
+// refresh that declined left baseMoved comparing main against itself: the branch never advanced
+// again and the row reported the pull request's own verdict over a base it had never reached.
+func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+		t.Fatal(err)
+	}
+
+	squashParentIntoMain(t, root, repoPath)
+	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
+	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	// The worktree is already mid-rebase when the retarget fires, which is the state a stack
+	// restacking one level at a time is in almost all the time.
+	if out, err := runGitAllowingFailure(t, f.childWorktree, "rebase", "--onto", "origin/main", f.parentTip0); err == nil {
+		t.Fatalf("the setup rebase succeeded, want it stopped on a conflict: %s", out)
+	}
+
+	obs := mergedObservation(f, "parent")
+	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
+	obs.BranchTips["repo//main"] = mainSHA
+	obs.MidMerge["child"] = true
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("retarget RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "retargeted", "at main") {
+		t.Fatalf("events = %+v, want a retargeted event: the control this test rests on", events)
+	}
+
+	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
+	// it was: still built on the parent's own commit, still needing main.
+	runGit(t, "-C", f.childWorktree, "rebase", "--abort")
+	obs.MidMerge["child"] = false
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
+		t.Errorf("the child still carries the parent's own commit %s, so the retarget's stamp is "+
+			"still telling baseMoved this row sits on main when it has never been advanced there",
+			f.parentTip0)
+	}
+}
+
+// runGitAllowingFailure runs git and hands back its output and error rather than failing the test,
+// for the commands whose non-zero exit is the point.
+func runGitAllowingFailure(t *testing.T, dir string, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = os.Environ()
+	return cmd.CombinedOutput()
+}
