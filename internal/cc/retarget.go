@@ -56,11 +56,13 @@ func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, rc refreshC
 		})
 	}
 
-	baseSHA, err := RevParse(ctx, repoPath, "origin/"+defaultBaseBranch)
-	if err != nil {
-		return fmt.Errorf("resolve origin/%s: %w", defaultBaseBranch, err)
-	}
-	if err := l.store.RecordPush(ctx, t.TicketURL, row.PushedTip, defaultBaseBranch, baseSHA, now); err != nil {
+	// The base branch has to change, or this retarget re-runs `gh pr edit` every tick. The base
+	// SHA must not: recording main's tip here claims the branch already sits on main, and the
+	// refresh below declines whenever the worktree is mid-merge or a run is live, which leaves
+	// baseMoved comparing main against itself and the row never advancing again (issue #95).
+	// Carrying the merged parent's tip through is also what restackBoundary needs, since a
+	// main-based row has no base pull request to read a head from.
+	if err := l.store.RecordPush(ctx, t.TicketURL, row.PushedTip, defaultBaseBranch, row.BaseSHAAtPush, now); err != nil {
 		return err
 	}
 	if err := l.store.AppendEvent(ctx, Event{
