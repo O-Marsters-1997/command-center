@@ -435,13 +435,16 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 	}
 
 	pr := obs.PRs[t.Branch]
-	stackedBase := pushRow.BaseBranch != "" && pushRow.BaseBranch != defaultBaseBranch
+	// hasRecordedBase covers main too (issue #85): a row retargetOne re-pointed onto main is
+	// checked the same way a still-stacked row is, so a stale main-based PR reads base_moved
+	// instead of a review_me the board can't back up against GitHub's own mergeable_state.
+	hasRecordedBase := pushRow.BaseBranch != ""
 	mergifySHA := vd.mergifySHAByRepo[t.Repo]
 
 	result := verdict.Evaluate(predicate, verdict.Input{
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
-		StackedBase:  stackedBase,
+		StackedBase:  hasRecordedBase,
 		BaseSHAMatch: obs.BranchTips[pushRow.BaseBranch] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,

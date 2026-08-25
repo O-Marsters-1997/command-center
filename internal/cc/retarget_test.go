@@ -224,7 +224,11 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	}
 }
 
-func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
+// TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget covers issue #85's fourth incident:
+// retargetOne's re-point onto main is itself a base_sha_at_push, so it goes stale the same way a
+// still-stacked row does the next time its base moves -- here, main moving again after the
+// retarget, not just the parent branch retargetOne already accounted for.
+func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	t.Parallel()
 
 	const parentTip, childTip = "parent-tip", "child-tip"
@@ -234,22 +238,16 @@ func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
-	// The parent's branch is gone and main has moved on, so the child's recorded base_sha can
-	// never match again: nothing but the retarget's own push row retires the expiry.
-	obs := cc.Observation{
-		Worktrees:  map[string]string{"child": "/repos/child"},
-		BranchTips: map[string]string{"main": "main-tip-later"},
-		PRs: map[string]gh.PR{
-			"parent": {Number: 1, State: gh.Merged, BaseRef: "main"},
-			"child": {
-				Number: 2, State: gh.Open, HeadOid: childTip, BaseRef: "main",
-				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
-			},
+	prs := map[string]gh.PR{
+		"parent": {Number: 1, State: gh.Merged, BaseRef: "main"},
+		"child": {
+			Number: 2, State: gh.Open, HeadOid: childTip, BaseRef: "main",
+			Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
 	}
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
 
-	stateOfChild := func(t *testing.T, retargeted bool) string {
+	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
 		t.Helper()
 		ctx := t.Context()
 		store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
@@ -265,18 +263,27 @@ func TestARetargetedRowIsEvaluatedAsARootAndNeverReadsBaseMoved(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		obs := cc.Observation{
+			Worktrees:  map[string]string{"child": "/repos/child"},
+			BranchTips: map[string]string{"main": observedMainTip},
+			PRs:        prs,
+		}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
 		return rowState(t, renderPage(t, cc.NewServer(store, fixedClock(at), repos, nil, "")), "sandbox://CHILD")
 	}
 
-	if got := stateOfChild(t, false); got != "base_moved" {
+	if got := stateOfChild(t, false, "main-tip-later"); got != "base_moved" {
 		t.Fatalf("child's state before the retarget = %q, want base_moved: the control this test rests on", got)
 	}
-	if got := stateOfChild(t, true); got != "review_me" {
-		t.Errorf("child's state after the retarget = %q, want review_me: a main-based row is a root, "+
-			"so no stacked expiry applies to it", got)
+	if got := stateOfChild(t, true, "main-tip"); got != "review_me" {
+		t.Errorf("child's state right after the retarget = %q, want review_me: the retarget's own recorded "+
+			"main tip still matches what's observed, so nothing has moved since", got)
+	}
+	if got := stateOfChild(t, true, "main-tip-later"); got != "base_moved" {
+		t.Errorf("child's state = %q, want base_moved: main advanced again after the retarget, so this "+
+			"main-based row is exactly as stale as a still-stacked row would be", got)
 	}
 }
 

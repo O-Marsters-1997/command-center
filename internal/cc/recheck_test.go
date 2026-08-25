@@ -163,7 +163,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 			"Tests": {Status: "COMPLETED", Conclusion: "SUCCESS"},
 		},
 	}
-	obs := cc.Observation{PRs: map[string]gh.PR{"cc-1": redPR}}
+	obs := cc.Observation{PRs: map[string]gh.PR{"cc-1": redPR}, BranchTips: map[string]string{"main": "main-tip"}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	repos := []cc.Repo{{
@@ -192,7 +192,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 		reCheckCompatCheckName: {Status: "IN_PROGRESS"},
 		"Tests":                {Status: "COMPLETED", Conclusion: "SUCCESS"},
 	}
-	obs = cc.Observation{PRs: map[string]gh.PR{"cc-1": pendingPR}}
+	obs = cc.Observation{PRs: map[string]gh.PR{"cc-1": pendingPR}, BranchTips: map[string]string{"main": "main-tip"}}
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce (post-rerun tick): %v", err)
 	}

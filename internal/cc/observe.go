@@ -73,7 +73,9 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			for branch, pr := range snapshot.ByBranch {
 				obs.PRs[branch] = pr
 			}
-			for _, branch := range branches {
+			// defaultBaseBranch's own tip is read too (§4a): baseMoved and applyVerdict compare
+			// against it for every row retargeted onto main, not only rows still stacked.
+			for _, branch := range append(branches, defaultBaseBranch) {
 				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
 					obs.BranchTips[branch] = tip
 				}
