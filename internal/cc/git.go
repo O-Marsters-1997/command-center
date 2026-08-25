@@ -93,6 +93,15 @@ func Push(ctx context.Context, repoPath, branch string) error {
 	return err
 }
 
+// PushRestacked pushes a branch a restack rewrote, leasing on expectedRemote so anything that
+// reached origin since the app last recorded a push -- a reviewer's committed suggestion,
+// Mergify's own update -- refuses instead of being discarded (issue #89).
+func PushRestacked(ctx context.Context, repoPath, branch, expectedRemote string) error {
+	lease := "--force-with-lease=" + branch + ":" + expectedRemote
+	_, err := git(ctx, repoPath, "push", lease, "origin", branch)
+	return err
+}
+
 // CommitsSince counts commits reachable from worktreePath's HEAD but not from baselineSHA — a
 // dead run's disposition rests on this count, never on missing events (inv. 7).
 func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, error) {
@@ -157,24 +166,70 @@ func Merge(ctx context.Context, worktreePath, ref string) error {
 	return err
 }
 
-// MergeAbort undoes an unresolved merge in worktreePath, restoring the pre-merge tip --
-// `refresh conflicted`'s only verb (docs/designs/command-centre-design.md § 4a).
-func MergeAbort(ctx context.Context, worktreePath string) error {
-	_, err := git(ctx, worktreePath, "merge", "--abort")
+// Rebase replays worktreePath's own branch onto onto, dropping every commit reachable from
+// upstream. That is the shape a squash-merged base needs: the squash carries the base's work
+// under a commit with no ancestry, so replaying the branch's own copies conflicts against it
+// (issue #89). A conflict leaves the worktree mid-rebase, which MidMerge reads.
+func Rebase(ctx context.Context, worktreePath, onto, upstream string) error {
+	_, err := git(ctx, worktreePath, "rebase", "--onto", onto, upstream)
 	return err
 }
 
-// MidMerge reports whether worktreePath is left mid-merge, which a resolving MERGE_HEAD means.
-// It is read, never recorded: a human resolving the conflict and committing clears it with no
-// bookkeeping (docs/designs/command-centre-design.md § 4a).
+// MergeAbort undoes an unresolved merge or restack in worktreePath, restoring the pre-merge tip
+// -- `refresh conflicted`'s only verb (docs/designs/command-centre-design.md § 4a).
+func MergeAbort(ctx context.Context, worktreePath string) error {
+	rebasing, err := midRebase(ctx, worktreePath)
+	if err != nil {
+		return err
+	}
+	if rebasing {
+		_, err := git(ctx, worktreePath, "rebase", "--abort")
+		return err
+	}
+	_, err = git(ctx, worktreePath, "merge", "--abort")
+	return err
+}
+
+// MidMerge reports whether worktreePath is left mid-merge or mid-restack, which a resolving
+// MERGE_HEAD or REBASE_HEAD means. It is read, never recorded: a human resolving the conflict
+// and committing clears it with no bookkeeping (docs/designs/command-centre-design.md § 4a).
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", worktreePath, "rev-parse", "--verify", "-q", "MERGE_HEAD")
+	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
+	if err != nil || merging {
+		return merging, err
+	}
+	return midRebase(ctx, worktreePath)
+}
+
+func midRebase(ctx context.Context, worktreePath string) (bool, error) {
+	return refExists(ctx, worktreePath, "REBASE_HEAD")
+}
+
+// Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
+// has replaced the history commit sat on (issue #89).
+func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
+	return gitSucceeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
+}
+
+func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
+	return gitSucceeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
+}
+
+// gitSucceeds runs a git query whose exit status is its answer, so exit 1 is a "no" rather than
+// a failure. Every other exit -- 128 for a ref that does not resolve, most of all -- stays an
+// error, because a missing commit is not the same answer as a negative one.
+func gitSucceeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 			return false, nil
 		}
-		return false, fmt.Errorf("check MERGE_HEAD in %s: %w", worktreePath, err)
+		return false, fmt.Errorf("git %s in %s: %w: %s",
+			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
 	}
 	return true, nil
 }

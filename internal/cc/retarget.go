@@ -21,15 +21,14 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	pushRows, err := l.store.LatestPushes(ctx)
+	rc, err := l.newRefreshContext(ctx, tasks, obs)
 	if err != nil {
 		return err
 	}
 
-	rc := l.newRefreshContext(tasks, obs)
 	now := l.now()
 	for _, t := range tasks {
-		row, pushed := pushRows[t.TicketURL]
+		row, pushed := rc.pushRows[t.TicketURL]
 		if !pushed || row.BaseBranch == "" || row.BaseBranch == defaultBaseBranch {
 			continue
 		}
@@ -45,8 +44,10 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 
 // retargetOne records nothing when gh refuses, so the next tick retries: a retarget is
 // idempotent, unlike the push whose failure waits for a human's retry-push verb.
-// It closes with the same merge the refresh step performs, because base_sha_at_push would
-// otherwise record a main this branch's content was never tried against (issue #85).
+// It closes with the same step the refresh performs, because base_sha_at_push would otherwise
+// record a main this branch's content was never tried against (issue #85). The row it hands on
+// is the pre-retarget one: naming the merged parent is what tells advanceOnto to restack rather
+// than merge a squash that shares no ancestry with this branch (issue #89).
 func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, rc refreshContext, now time.Time) error {
 	repoPath := rc.repoPaths[t.Repo]
 	if err := gh.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
@@ -68,5 +69,5 @@ func (l *Loop) retargetOne(ctx context.Context, t Task, row PushRow, rc refreshC
 	}); err != nil {
 		return err
 	}
-	return l.refreshOne(ctx, t, rc, now)
+	return l.refreshOne(ctx, t, row, rc, now)
 }

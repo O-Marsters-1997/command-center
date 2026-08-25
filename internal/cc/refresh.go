@@ -16,6 +16,7 @@ const (
 	eventRefreshRefused    = "refresh_refused"
 	eventRefreshConflicted = "refresh_conflicted"
 	eventRefreshed         = "refreshed"
+	eventRestacked         = "restacked"
 )
 
 // RefreshFact is a task's outstanding refused fast-forward, derived from the latest
@@ -87,17 +88,23 @@ type refreshContext struct {
 	stacking  map[string]bool
 	prs       map[string]plan.PRState
 	repoPaths map[string]string
+	pushRows  map[string]PushRow
 	obs       Observation
 }
 
-func (l *Loop) newRefreshContext(tasks []Task, obs Observation) refreshContext {
+func (l *Loop) newRefreshContext(ctx context.Context, tasks []Task, obs Observation) (refreshContext, error) {
+	pushRows, err := l.store.LatestPushes(ctx)
+	if err != nil {
+		return refreshContext{}, err
+	}
 	return refreshContext{
 		byURL:     planTasksByURL(tasks),
 		stacking:  stackingByRepo(l.cfg.Repos),
 		prs:       prsByBranch(obs),
 		repoPaths: repoPathsByName(l.ws.Root, l.cfg.Repos),
+		pushRows:  pushRows,
 		obs:       obs,
-	}
+	}, nil
 }
 
 // applyRefreshIntents runs every requested refresh, which bypasses the RefreshFacts gate the way
@@ -109,7 +116,10 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := tasksByTicket(tasks)
-	rc := l.newRefreshContext(tasks, obs)
+	rc, err := l.newRefreshContext(ctx, tasks, obs)
+	if err != nil {
+		return err
+	}
 	now := l.now()
 
 	intents, err := l.store.PendingVerbIntents(ctx, refreshVerb)
@@ -120,7 +130,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 	for _, intent := range intents {
 		requested[intent.TaskID] = true
 		if task, ok := byTicket[intent.TaskID]; ok {
-			if err := l.refreshOne(ctx, task, rc, now); err != nil {
+			if err := l.refreshOne(ctx, task, rc.pushRows[task.TicketURL], rc, now); err != nil {
 				return err
 			}
 		}
@@ -142,10 +152,6 @@ func (l *Loop) autoRefresh(
 	if err != nil {
 		return err
 	}
-	pushRows, err := l.store.LatestPushes(ctx)
-	if err != nil {
-		return err
-	}
 	outcomes, err := l.store.latestRefreshOutcomes(ctx)
 	if err != nil {
 		return err
@@ -162,7 +168,7 @@ func (l *Loop) autoRefresh(
 		if rc.obs.PRs[t.Branch].State != gh.Open {
 			continue
 		}
-		pushRow, pushed := pushRows[t.TicketURL]
+		pushRow, pushed := rc.pushRows[t.TicketURL]
 		if !pushed || !baseMoved(pushRow, rc.obs, t.Repo) {
 			continue
 		}
@@ -171,7 +177,7 @@ func (l *Loop) autoRefresh(
 		if _, tried := outcomes[t.TicketURL]; tried {
 			continue
 		}
-		if err := l.refreshOne(ctx, t, rc, now); err != nil {
+		if err := l.refreshOne(ctx, t, pushRow, rc, now); err != nil {
 			return err
 		}
 	}
@@ -185,10 +191,12 @@ func baseMoved(row PushRow, obs Observation, repo string) bool {
 	return row.BaseBranch != "" && obs.BranchTips[baseTipKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
-// refreshOne fast-forwards one task's own branch, then merges its base. A refused fast-forward
-// records refresh_refused and stops; a conflict is left mid-merge for a human
+// refreshOne fast-forwards one task's own branch, then advances it onto its base. A refused
+// fast-forward records refresh_refused and stops; a conflict is left mid-merge for a human
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) refreshOne(ctx context.Context, task Task, rc refreshContext, now time.Time) error {
+func (l *Loop) refreshOne(
+	ctx context.Context, task Task, row PushRow, rc refreshContext, now time.Time,
+) error {
 	branch := task.Branch
 	worktreePath, ok := rc.obs.Worktrees[branch]
 	if !ok || rc.obs.Runs[task.TicketURL].Alive || rc.obs.MidMerge[branch] {
@@ -205,14 +213,58 @@ func (l *Loop) refreshOne(ctx context.Context, task Task, rc refreshContext, now
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
 	}
-	if err := Merge(ctx, worktreePath, "origin/"+unlock.BaseBranch); err != nil {
+	restacked, detail, err := advanceOnto(ctx, worktreePath, unlock.BaseBranch, row, rc.obs)
+	if err != nil {
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TaskURL: task.TicketURL, Kind: eventRefreshConflicted, Detail: err.Error(),
 		})
 	}
 
+	kind := eventRefreshed
+	if restacked {
+		kind = eventRestacked
+	}
 	return l.store.AppendEvent(ctx, Event{
-		At: now, TaskURL: task.TicketURL, Kind: eventRefreshed,
-		Detail: fmt.Sprintf("merged origin/%s then origin/%s", branch, unlock.BaseBranch),
+		At: now, TaskURL: task.TicketURL, Kind: kind,
+		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
 	})
+}
+
+// advanceOnto merges the base when the base only moved forward, and restacks when the base's
+// history no longer contains what the branch was built on -- a squash-merged parent, or a base
+// the app itself rewrote a tick earlier (issue #89). Merging in that case replays the branch's
+// own copies of commits the base already carries under new SHAs, which conflicts on every line
+// either side touched. It reports which of the two it did, because only a restack licenses the
+// push step to lease-force, and what the event should say.
+func advanceOnto(
+	ctx context.Context, worktreePath, base string, row PushRow, obs Observation,
+) (bool, string, error) {
+	ref := "origin/" + base
+	boundary := restackBoundary(row, obs)
+	if boundary == "" {
+		return false, ref, Merge(ctx, worktreePath, ref)
+	}
+	kept, err := Ancestor(ctx, worktreePath, boundary, ref)
+	if err != nil {
+		return false, "", err
+	}
+	if kept {
+		return false, ref, Merge(ctx, worktreePath, ref)
+	}
+	return true, fmt.Sprintf("restacked onto %s, dropping everything up to %s", ref, boundary),
+		Rebase(ctx, worktreePath, ref, boundary)
+}
+
+// restackBoundary is the last commit of the branch's recorded base that its own commits sit on
+// top of, so a restack drops exactly the work the base already carries. A merged base is read
+// from its pull request's head, not from base_sha_at_push, because a base that advanced after
+// this branch's last push has those later commits in the squash too (issue #89).
+func restackBoundary(row PushRow, obs Observation) string {
+	if row.BaseBranch == "" {
+		return ""
+	}
+	if pr := obs.PRs[row.BaseBranch]; pr.State == gh.Merged && pr.HeadOid != "" {
+		return pr.HeadOid
+	}
+	return row.BaseSHAAtPush
 }
