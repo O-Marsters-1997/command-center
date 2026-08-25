@@ -109,7 +109,8 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := tt.line + "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
+			body := tt.line +
+				"[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
 			got, err := cc.LoadConfig(writeConfig(t, body))
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
