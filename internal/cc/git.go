@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,11 +28,21 @@ func Worktrees(ctx context.Context, repoPath string) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	return parseWorktrees(out), nil
+	worktrees, detached := parseWorktrees(out)
+	for _, path := range detached {
+		branch, err := rebasingBranch(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		if branch != "" {
+			worktrees[branch] = path
+		}
+	}
+	return worktrees, nil
 }
 
-func parseWorktrees(out []byte) map[string]string {
-	worktrees := map[string]string{}
+func parseWorktrees(out []byte) (worktrees map[string]string, detached []string) {
+	worktrees = map[string]string{}
 	var path string
 	for line := range strings.Lines(string(out)) {
 		field, value, _ := strings.Cut(strings.TrimSpace(line), " ")
@@ -39,9 +51,36 @@ func parseWorktrees(out []byte) map[string]string {
 			path = value
 		case "branch":
 			worktrees[strings.TrimPrefix(value, "refs/heads/")] = path
+		case "detached":
+			detached = append(detached, path)
 		}
 	}
-	return worktrees
+	return worktrees, detached
+}
+
+// rebasingBranch names the branch a detached worktree's in-progress rebase lands back on, and
+// "" for one detached for any other reason. git calls a rebasing worktree "detached", so keying
+// on the branch line alone drops it from every branch-keyed observation (issue #91).
+func rebasingBranch(ctx context.Context, worktreePath string) (string, error) {
+	for _, dir := range []string{"rebase-merge", "rebase-apply"} {
+		out, err := git(ctx, worktreePath, "rev-parse", "--git-path", dir+"/head-name")
+		if err != nil {
+			return "", err
+		}
+		headName := strings.TrimSpace(string(out))
+		if !filepath.IsAbs(headName) {
+			headName = filepath.Join(worktreePath, headName)
+		}
+		ref, err := os.ReadFile(headName)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("read %s for %s: %w", headName, worktreePath, err)
+		}
+		return strings.TrimPrefix(strings.TrimSpace(string(ref)), "refs/heads/"), nil
+	}
+	return "", nil
 }
 
 // BranchTip reads a branch's current tip SHA, from the shared object database so it resolves
