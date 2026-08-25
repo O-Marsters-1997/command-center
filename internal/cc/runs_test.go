@@ -1,7 +1,9 @@
 package cc_test
 
 import (
+	"maps"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -200,5 +202,58 @@ func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTask(t *testing.T) {
 	}
 	if hashes["sandbox://CC-1"] != "hash-1" {
 		t.Errorf("hashes = %+v, want sandbox://CC-1 -> hash-1", hashes)
+	}
+}
+
+func TestPendingIntentsByTaskKeysUnconsumedVerbsByTask(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	seedOneTask(t, store)
+	second := cc.Task{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
+	if err := store.UpsertTasks(ctx, []cc.Task{second}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	queued := []struct{ task, verb string }{
+		{"sandbox://CC-1", "kill"},
+		{"sandbox://CC-1", "close-pr"},
+		{"sandbox://CC-2", "re-run"},
+	}
+	for i, q := range queued {
+		if err := store.QueueVerbIntent(ctx, q.task, q.verb, at.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatalf("QueueVerbIntent %s %s: %v", q.task, q.verb, err)
+		}
+	}
+
+	byTask, err := store.PendingIntentsByTask(ctx)
+	if err != nil {
+		t.Fatalf("PendingIntentsByTask: %v", err)
+	}
+	want := map[string][]string{
+		"sandbox://CC-1": {"kill", "close-pr"},
+		"sandbox://CC-2": {"re-run"},
+	}
+	if !maps.EqualFunc(byTask, want, slices.Equal) {
+		t.Fatalf("byTask = %+v, want %+v", byTask, want)
+	}
+
+	consumed, err := store.PendingVerbIntents(ctx, "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConsumeVerbIntent(ctx, consumed[0].ID, at.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := store.PendingIntentsByTask(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want["sandbox://CC-1"] = []string{"close-pr"}
+	if !maps.EqualFunc(after, want, slices.Equal) {
+		t.Fatalf("after = %+v, want %+v", after, want)
 	}
 }

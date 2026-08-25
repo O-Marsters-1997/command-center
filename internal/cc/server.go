@@ -97,9 +97,10 @@ type row struct {
 	Reason    string
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
-	Verbs  []string
-	Branch string
-	Base   string
+	Verbs        []string
+	Branch       string
+	PendingVerbs []string
+	Base         string
 	// SeamChanged is a flag, not a State (docs/designs/command-centre-design.md § 5): it
 	// composes with State rather than replacing it.
 	SeamChanged bool
@@ -209,6 +210,10 @@ func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, err
 	if err != nil {
 		return taskFacts{}, verdictDeps{}, err
 	}
+	pendingVerbs, err := s.store.PendingIntentsByTask(ctx)
+	if err != nil {
+		return taskFacts{}, verdictDeps{}, err
+	}
 	vd, err := verdictDepsFor(ctx, s.store, s.checksByRepo, s.mergifySHAByRepo, s.compatCheckByRepo)
 	if err != nil {
 		return taskFacts{}, verdictDeps{}, err
@@ -216,7 +221,7 @@ func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, err
 
 	facts := taskFacts{
 		memberships: memberships, latestRuns: latestRuns,
-		pushes: pushFacts, refreshes: refreshFacts,
+		pushes: pushFacts, refreshes: refreshFacts, pendingVerbs: pendingVerbs,
 	}
 	return facts, vd, nil
 }
@@ -254,10 +259,11 @@ func verdictDepsFor(
 
 // taskFacts is the durable per-task state a row is derived from, keyed by ticket URL.
 type taskFacts struct {
-	memberships map[string]LaunchMembership
-	latestRuns  map[string]RunSummary
-	pushes      map[string]PushFact
-	refreshes   map[string]RefreshFact
+	memberships  map[string]LaunchMembership
+	latestRuns   map[string]RunSummary
+	pushes       map[string]PushFact
+	refreshes    map[string]RefreshFact
+	pendingVerbs map[string][]string
 }
 
 // derive labels every row from the stored facts plus this tick's observation. No status is
@@ -293,21 +299,22 @@ func derive(
 		pr := obs.PRs[t.Branch]
 		composed, _, composeOK := composePrompt(ctx, seamsRoot, pt, retirements)
 		rows = append(rows, row{
-			TicketURL:   t.TicketURL,
-			State:       state.String(),
-			Reason:      string(reason),
-			Verbs:       plan.Verbs(state),
-			Branch:      t.Branch,
-			Base:        unlock.BaseBranch,
-			Worktree:    obs.Worktrees[t.Branch],
-			PR:          prSummary(pr),
-			Pgid:        pgid,
-			Elapsed:     elapsed,
-			LogPath:     logPath,
-			CancelCount: membership.Members,
-			Warning:     readyToMergeWarning(pr),
-			Draft:       pr.IsDraft,
-			DraftReason: draftReasonFor(pr, pt, byURL, prs, runFact),
+			TicketURL:    t.TicketURL,
+			State:        state.String(),
+			Reason:       string(reason),
+			Verbs:        plan.Verbs(state),
+			PendingVerbs: facts.pendingVerbs[t.TicketURL],
+			Branch:       t.Branch,
+			Base:         unlock.BaseBranch,
+			Worktree:     obs.Worktrees[t.Branch],
+			PR:           prSummary(pr),
+			Pgid:         pgid,
+			Elapsed:      elapsed,
+			LogPath:      logPath,
+			CancelCount:  membership.Members,
+			Warning:      readyToMergeWarning(pr),
+			Draft:        pr.IsDraft,
+			DraftReason:  draftReasonFor(pr, pt, byURL, prs, runFact),
 			SeamChanged: plan.SeamChanged(plan.SeamCheck{
 				HasRun: hasRun, Authorised: membership.LaunchID != 0, ComposeOK: composeOK,
 				ComposedHash: plan.Hash(composed), RunHash: latestRun.PromptHash, MemberHash: membership.PromptHash,

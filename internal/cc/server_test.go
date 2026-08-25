@@ -142,7 +142,11 @@ func TestServerRendersThePage(t *testing.T) {
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := observedAt.Add(45 * time.Second)
-	server := cc.NewServer(seededStore(t, observedAt), fixedClock(now), nil, nil, "")
+	store := seededStore(t, observedAt)
+	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
+		t.Fatal(err)
+	}
+	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -548,17 +552,16 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 }
 
-func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
-	t.Parallel()
+// runningRowStore seeds one task with a live agent run, the state both a pgid/elapsed row and a
+// queued-verb row are read against.
+func runningRowStore(t *testing.T, task cc.Task, startedAt, now time.Time) *cc.Store {
+	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
-
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	runID, err := store.InsertRunSkeleton(ctx, task.TicketURL, "agent", "deadbeef", "hash-1")
 	if err != nil {
 		t.Fatal(err)
@@ -566,15 +569,20 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-
-	now := startedAt.Add(90 * time.Second)
-	obs := cc.Observation{
-		ObservedAt: now,
-		Runs:       map[string]cc.RunObservation{task.TicketURL: {Alive: true}},
-	}
+	obs := cc.Observation{ObservedAt: now, Runs: map[string]cc.RunObservation{task.TicketURL: {Alive: true}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
+	return store
+}
+
+func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
+	t.Parallel()
+
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := startedAt.Add(90 * time.Second)
+	store := runningRowStore(t, task, startedAt, now)
 
 	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
 	rec := httptest.NewRecorder()
@@ -977,6 +985,75 @@ func TestPageInlinesTheStylesheetAndRefreshesItself(t *testing.T) {
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("GET /page.css = %d, want 404: the stylesheet is inlined, not served", rec.Code)
+	}
+}
+
+// TestPageShowsQueuedVerbsBesideTheState covers issue #71.
+func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := startedAt.Add(90 * time.Second)
+	store := runningRowStore(t, task, startedAt, now)
+	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+
+	if err := store.QueueVerbIntent(ctx, task.TicketURL, "kill", now); err != nil {
+		t.Fatal(err)
+	}
+	page := renderPage(t, server)
+	if got := rowState(t, page, task.TicketURL); got != "running · kill queued" {
+		t.Errorf("state = %q, want %q", got, "running · kill queued")
+	}
+	const killButton = `<button type="submit" name="verb" value="kill">kill</button>`
+	if !strings.Contains(page, killButton) {
+		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
+	}
+
+	if err := store.QueueVerbIntent(ctx, task.TicketURL, "close-pr", now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got := rowState(t, renderPage(t, server), task.TicketURL); got != "running · kill queued · close-pr queued" {
+		t.Errorf("state = %q, want both queued verbs", got)
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ConsumeVerbIntent(ctx, pending[0].ID, now.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	page = renderPage(t, server)
+	if got := rowState(t, page, task.TicketURL); got != "running · close-pr queued" {
+		t.Errorf("state = %q, want the consumed kill gone", got)
+	}
+	if !strings.Contains(page, killButton) {
+		t.Errorf("kill button missing after the tick consumed the intent:\n%s", page)
+	}
+}
+
+// TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt covers issue #71's launch window.
+func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	store := seededStore(t, now)
+	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", now); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
+		t.Errorf("state = %q, want %q", got, "ready · launch queued")
+	}
+
+	if err := store.ApplyLaunchIntents(t.Context(), now.Add(15*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "queued" {
+		t.Errorf("state = %q, want a bare %q once the tick consumed the intent", got, "queued")
 	}
 }
 
