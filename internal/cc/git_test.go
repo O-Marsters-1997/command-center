@@ -2,6 +2,7 @@ package cc
 
 import (
 	"maps"
+	"slices"
 	"testing"
 )
 
@@ -24,8 +25,12 @@ func TestParseWorktrees(t *testing.T) {
 		"main":       "/repos/cc-sandbox",
 		"cc-1-first": "/repos/cc-sandbox-cc-1-first",
 	}
-	if got := parseWorktrees([]byte(porcelain)); !maps.Equal(got, want) {
+	got, detached := parseWorktrees([]byte(porcelain))
+	if !maps.Equal(got, want) {
 		t.Errorf("parseWorktrees() = %v, want %v", got, want)
+	}
+	if wantDetached := []string{"/repos/cc-sandbox-detached"}; !slices.Equal(detached, wantDetached) {
+		t.Errorf("parseWorktrees() detached = %v, want %v", detached, wantDetached)
 	}
 }
 
