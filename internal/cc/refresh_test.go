@@ -51,7 +51,7 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 type stackedFixture struct {
 	parent, child                 cc.Task
 	parentWorktree, childWorktree string
-	parentTip0                    string
+	parentTip0, mainSHA           string
 }
 
 func newStackedFixture(t *testing.T, repoPath string, store *cc.Store, at time.Time) stackedFixture {
@@ -88,7 +88,7 @@ func newStackedFixture(t *testing.T, repoPath string, store *cc.Store, at time.T
 
 	return stackedFixture{
 		parent: parent, child: child,
-		parentWorktree: parentWorktree, childWorktree: childWorktree, parentTip0: parentTip0,
+		parentWorktree: parentWorktree, childWorktree: childWorktree, parentTip0: parentTip0, mainSHA: mainSHA,
 	}
 }
 
@@ -109,7 +109,7 @@ func baseObservation(f stackedFixture, parentTip string) cc.Observation {
 			"parent": {Number: 1, HeadRef: "parent", State: gh.Open},
 			"child":  {Number: 2, HeadRef: "child", State: gh.Open},
 		},
-		BranchTips: map[string]string{"parent": parentTip},
+		BranchTips: map[string]string{"parent": parentTip, "repo//main": f.mainSHA},
 		Runs:       map[string]cc.RunObservation{},
 		MidMerge:   map[string]bool{},
 	}
@@ -165,6 +165,47 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	}
 	if got := pushes[f.child.TicketURL].BaseSHAAtPush; got != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
+	}
+}
+
+// TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow covers issue #85's fourth incident: a
+// row whose recorded base is main (never stacked, or retargeted there already) is exactly as
+// stale as a still-stacked row once a sibling chain's own merge moves main, and baseMoved must
+// fire for it the same way.
+func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	advanceMain(t, root)
+	// advanceMain pushes from a throwaway clone, so repoPath's own tracking ref (what Merge below
+	// resolves "origin/main" against) needs an explicit fetch -- unlike advanceParent, which pushes
+	// straight from repoPath and so updates it as a push side effect.
+	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
+	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
+
+	obs := baseObservation(f, f.parentTip0)
+	obs.BranchTips["repo//main"] = mainTip1
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(f.parentWorktree, "main-fix.txt")); err != nil {
+		t.Errorf("parent worktree does not contain main's own advance after refresh: %v", err)
+	}
+
+	pushes, err := store.LatestPushes(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pushes[f.parent.TicketURL].BaseSHAAtPush; got != mainTip1 {
+		t.Errorf("parent's recorded base sha = %s, want the advanced main tip %s", got, mainTip1)
 	}
 }
 

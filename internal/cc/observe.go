@@ -78,6 +78,12 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 					obs.BranchTips[branch] = tip
 				}
 			}
+			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
+			// name: unlike a task's own branch, every repo has a "main", so the plain name would
+			// collide the moment a second repo is configured.
+			if tip, err := RevParse(ctx, path, "origin/"+defaultBaseBranch); err == nil {
+				obs.BranchTips[mainTipKey(repo.Name)] = tip
+			}
 
 			worktrees, err := Worktrees(ctx, path)
 			if err != nil {

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -498,6 +499,21 @@ func runFactFor(
 // plan's) forbids depending on that package for one string constant.
 const defaultBaseBranch = "main"
 
+// mainTipKey names defaultBaseBranch's own tip in Observation.BranchTips. Every repo has a
+// "main", unlike a task's own branch name, so the plain name would collide the moment a second
+// repo is configured; "//" can never appear in a real git branch name, so this key never can.
+func mainTipKey(repo string) string { return repo + "//" + defaultBaseBranch }
+
+// baseTipKey is the Observation.BranchTips key a recorded base resolves to: mainTipKey when it's
+// main, the plain branch name otherwise (issue #85: main's own tip is checked exactly like a
+// still-stacked base's, not exempted, since retargetOne can re-point a row onto it).
+func baseTipKey(repo, base string) string {
+	if base == defaultBaseBranch {
+		return mainTipKey(repo)
+	}
+	return base
+}
+
 // applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
 // unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
 // fixture reading exactly as it did before this phase (statusFromPush's own PROpen fallback).
@@ -512,14 +528,14 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 	}
 
 	pr := obs.PRs[t.Branch]
-	stackedBase := pushRow.BaseBranch != "" && pushRow.BaseBranch != defaultBaseBranch
+	hasRecordedBase := pushRow.BaseBranch != ""
 	mergifySHA := vd.mergifySHAByRepo[t.Repo]
 
 	result := verdict.Evaluate(predicate, verdict.Input{
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
-		StackedBase:  stackedBase,
-		BaseSHAMatch: obs.BranchTips[pushRow.BaseBranch] == pushRow.BaseSHAAtPush,
+		StackedBase:  hasRecordedBase,
+		BaseSHAMatch: obs.BranchTips[baseTipKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
@@ -700,6 +716,18 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "at least one task is required", http.StatusBadRequest)
 		return
 	}
+	// One `hash` field per launchable row, each naming its own task: an unchecked row still posts
+	// its hidden hash, so pairing by position would pair the survivors wrong.
+	previewed := make(map[string]string, len(r.Form["hash"]))
+	for _, field := range r.Form["hash"] {
+		ticketURL, hash, ok := strings.Cut(field, " ")
+		if !ok {
+			http.Error(w, fmt.Sprintf("malformed hash field %q, want \"<task> <hash>\"", field),
+				http.StatusBadRequest)
+			return
+		}
+		previewed[ticketURL] = hash
+	}
 
 	tasks, err := s.store.Tasks(ctx)
 	if err != nil {
@@ -727,7 +755,13 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 				http.StatusBadRequest)
 			return
 		}
-		hashes[ticketURL] = plan.Hash(composed)
+		hash := plan.Hash(composed)
+		if want, ok := previewed[ticketURL]; ok && want != hash {
+			http.Error(w, fmt.Sprintf("task %s was previewed at hash %s and now composes to %s",
+				ticketURL, want, hash), http.StatusConflict)
+			return
+		}
+		hashes[ticketURL] = hash
 	}
 
 	group, err := randomGroup()
