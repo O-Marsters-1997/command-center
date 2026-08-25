@@ -215,6 +215,17 @@ func (l *Loop) refreshOne(
 	}
 	restacked, detail, err := advanceOnto(ctx, worktreePath, unlock.BaseBranch, row, rc.obs)
 	if err != nil {
+		// A rebase that stops on a conflict has already rewritten the branch, so the push after
+		// whoever resolves it still needs the lease the completed restack would have earned
+		// (issue #93). A conflicted merge rewrites nothing and earns nothing.
+		if restacked {
+			if err := l.store.AppendEvent(ctx, Event{
+				At: now, TaskURL: task.TicketURL, Kind: eventRestacked,
+				Detail: detail + ", conflicted",
+			}); err != nil {
+				return err
+			}
+		}
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TaskURL: task.TicketURL, Kind: eventRefreshConflicted, Detail: err.Error(),
 		})
