@@ -139,6 +139,9 @@ func (a *App) Run(ctx context.Context) error {
 		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(a.cfg.Port)),
 		Handler:           a.server,
 		ReadHeaderTimeout: 5 * time.Second,
+		// An open log stream is an active connection until its request context is cancelled, and
+		// Shutdown waits on active connections. Without this it waits out the whole grace period.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
 	log.Printf("serving http://%s", srv.Addr)
