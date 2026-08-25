@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -365,5 +366,179 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	if !mid {
 		t.Errorf("child worktree is not left mid-merge, so the next tick's observation cannot derive " +
 			"refresh_conflicted and the board falls back to the pull request's own verdict")
+	}
+}
+
+// squashParentIntoMain is what GitHub's squash-merge leaves behind, and what mergeParentIntoMain
+// deliberately is not: main carries the parent's content under one new commit sharing no
+// ancestry with the parent's own, and the branch is gone from the remote.
+func squashParentIntoMain(t *testing.T, root, repoPath string) {
+	t.Helper()
+	clone := filepath.Join(t.TempDir(), "squash-clone")
+	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	runGit(t, "-C", clone, "merge", "-q", "--squash", "origin/parent")
+	runGit(t, "-C", clone, "commit", "-q", "-m", "the parent's work (#1)")
+	runGit(t, "-C", clone, "push", "-q", "origin", "HEAD:main")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "--delete", "parent")
+	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+}
+
+func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repoPath, "merge-base", "--is-ancestor", commit, ref)
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false
+	}
+	if err != nil {
+		t.Fatalf("merge-base --is-ancestor %s %s: %v", commit, ref, err)
+	}
+	return true
+}
+
+// TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack covers issue #89. A squash writes
+// main a commit with no ancestry to the branch it came from, so merging main back into a
+// descendant replays that descendant's own copies of the parent's commits against it and
+// conflicts on every line either side touched. The parent's work has to be dropped, not merged.
+func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	squashParentIntoMain(t, root, repoPath)
+	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	obs := mergedObservation(f, "parent")
+	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
+	obs.BranchTips["repo//main"] = mainSHA
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("retarget RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "restacked", "restacked onto origin/main") {
+		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/main", events)
+	}
+	if hasEvent(events, "refresh_conflicted", "") {
+		t.Errorf("events = %+v, want no conflict: dropping the parent's commits is what avoids it", events)
+	}
+
+	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD^")); got != mainSHA {
+		t.Errorf("child's parent commit = %q, want main's squash %q: the branch sits on main now", got, mainSHA)
+	}
+	if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
+		t.Errorf("the parent's own commit %s is still in the child's history; the squash already "+
+			"carries that work, so replaying it is exactly what conflicts", f.parentTip0)
+	}
+	for _, name := range []string{"parent.txt", "child.txt"} {
+		if _, err := os.Stat(filepath.Join(f.childWorktree, name)); err != nil {
+			t.Errorf("child worktree is missing %s after the restack: %v", name, err)
+		}
+	}
+
+	// The restack rewrote the branch, so the next tick's push has to lease rather than
+	// fast-forward, or the work never reaches the pull request. This also pins the comparison
+	// RestackedSinceLastPush makes: retargetOne stamps its push row and this restack with one
+	// clock reading, so a strict > there leaves the branch stranded at its pre-restack tip.
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("push RunOnce: %v", err)
+	}
+	local := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	remote := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+	if remote != local {
+		t.Errorf("origin/child = %q, want the restacked tip %q (it was %q before the restack)",
+			remote, local, childTip)
+	}
+}
+
+// TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack is the cascade the restack
+// itself creates: once the app rewrites one branch of a stack, every branch sitting on it is in
+// the same position as a descendant of a squash, with its recorded base tip no longer reachable.
+func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	commitFile(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
+	runGit(t, "-C", f.parentWorktree, "reset", "-q", "--hard", "HEAD~2")
+	commitFile(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
+	runGit(t, "-C", repoPath, "push", "-q", "--force", "origin", "parent")
+	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	newParentTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/parent"))
+
+	obs := baseObservation(f, newParentTip)
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "restacked", "restacked onto origin/parent") {
+		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/parent", events)
+	}
+	if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
+		t.Errorf("the parent's pre-rewrite tip %s is still in the child's history, so the child "+
+			"carries both takes on parent.txt", f.parentTip0)
+	}
+	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD^")); got != newParentTip {
+		t.Errorf("child's parent commit = %q, want the parent's rewritten tip %q", got, newParentTip)
+	}
+}
+
+// TestARewriteTheAppDidNotPerformIsNeverForcePushed covers the licence the restack needs and
+// must not hand out generally (issue #89). An agent's own amend or reset in its worktree leaves
+// the branch exactly as diverged from origin as a restack does, and that is a push failed for a
+// human to look at, not something to overwrite the pull request with.
+func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	remoteBefore := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+
+	runGit(t, "-C", f.childWorktree, "reset", "-q", "--hard", "HEAD~1")
+	commitFile(t, f.childWorktree, "child.txt", "the child's second thoughts\n")
+
+	obs := baseObservation(f, f.parentTip0)
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if got := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child")); got != remoteBefore {
+		t.Errorf("origin/child = %q, want %q untouched: the app never rewrote this branch, so the "+
+			"commit that was there is the agent's to account for, not the app's to discard", got, remoteBefore)
+	}
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "push_failed", "") {
+		t.Errorf("events = %+v, want a push_failed event: a diverged branch the app did not restack "+
+			"is a human's problem", events)
 	}
 }

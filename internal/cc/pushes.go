@@ -21,6 +21,37 @@ func (s *Store) RecordPush(ctx context.Context, taskID, pushedTip, baseBranch, b
 	return s.resetCheckingTicks(ctx, taskID)
 }
 
+// RestackedSinceLastPush names every task whose branch the app itself rebased since it last
+// recorded a push of it, which is the only licence the push step has to lease-force (issue #89).
+// The comparison is >= rather than >: retargetOne stamps its push row and the restack that
+// follows it with one tick's single clock reading, so a strict > would never see its own work.
+func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT e.task_id
+		FROM events e
+		LEFT JOIN (
+			SELECT task_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY task_id
+		) p ON p.task_id = e.task_id
+		WHERE e.kind = ? AND e.at >= COALESCE(p.pushed_at, '')`, eventRestacked)
+	if err != nil {
+		return nil, fmt.Errorf("select restacked tasks: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	restacked := map[string]bool{}
+	for rows.Next() {
+		var taskID string
+		if err := rows.Scan(&taskID); err != nil {
+			return nil, fmt.Errorf("scan restacked task: %w", err)
+		}
+		restacked[taskID] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate restacked tasks: %w", err)
+	}
+	return restacked, nil
+}
+
 // LastPushedTips returns each task's most recently recorded pushed_tip -- what plan.PushPlan
 // compares a branch's current local tip against.
 func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
