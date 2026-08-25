@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,11 +28,21 @@ func Worktrees(ctx context.Context, repoPath string) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	return parseWorktrees(out), nil
+	worktrees, detached := parseWorktrees(out)
+	for _, path := range detached {
+		branch, err := rebasingBranch(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		if branch != "" {
+			worktrees[branch] = path
+		}
+	}
+	return worktrees, nil
 }
 
-func parseWorktrees(out []byte) map[string]string {
-	worktrees := map[string]string{}
+func parseWorktrees(out []byte) (worktrees map[string]string, detached []string) {
+	worktrees = map[string]string{}
 	var path string
 	for line := range strings.Lines(string(out)) {
 		field, value, _ := strings.Cut(strings.TrimSpace(line), " ")
@@ -39,9 +51,54 @@ func parseWorktrees(out []byte) map[string]string {
 			path = value
 		case "branch":
 			worktrees[strings.TrimPrefix(value, "refs/heads/")] = path
+		case "detached":
+			detached = append(detached, path)
 		}
 	}
-	return worktrees
+	return worktrees, detached
+}
+
+// rebasingBranch names the branch a detached worktree's in-progress rebase lands back on, and
+// "" for one detached for any other reason. git calls a rebasing worktree "detached", so keying
+// on the branch line alone drops it from every branch-keyed observation (issue #91).
+func rebasingBranch(ctx context.Context, worktreePath string) (string, error) {
+	for _, dir := range rebaseDirs {
+		headName, err := gitPath(ctx, worktreePath, dir+"/head-name")
+		if err != nil {
+			return "", err
+		}
+		ref, err := os.ReadFile(headName)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("read %s for %s: %w", headName, worktreePath, err)
+		}
+		name := strings.TrimSpace(string(ref))
+		if !strings.HasPrefix(name, "refs/heads/") {
+			return "", nil // a rebase started from a detached HEAD has no branch to key it under
+		}
+		return strings.TrimPrefix(name, "refs/heads/"), nil
+	}
+	return "", nil
+}
+
+// rebaseDirs are the two state directories git keeps a rebase in, one per backend. Either one
+// existing is what git itself treats as "a rebase is in progress".
+var rebaseDirs = []string{"rebase-merge", "rebase-apply"}
+
+// gitPath resolves a name inside worktreePath's own git directory. --git-path answers relatively
+// in a plain repo and absolutely in a linked worktree, so a caller can never simply join it.
+func gitPath(ctx context.Context, worktreePath, name string) (string, error) {
+	out, err := git(ctx, worktreePath, "rev-parse", "--git-path", name)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(out))
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	return filepath.Join(worktreePath, path), nil
 }
 
 // BranchTip reads a branch's current tip SHA, from the shared object database so it resolves
@@ -190,9 +247,9 @@ func MergeAbort(ctx context.Context, worktreePath string) error {
 	return err
 }
 
-// MidMerge reports whether worktreePath is left mid-merge or mid-restack, which a resolving
-// MERGE_HEAD or REBASE_HEAD means. It is read, never recorded: a human resolving the conflict
-// and committing clears it with no bookkeeping (docs/designs/command-centre-design.md § 4a).
+// MidMerge reports whether worktreePath is left mid-merge or mid-rebase. It is read, never
+// recorded: a human resolving the conflict and committing clears it with no bookkeeping
+// (docs/designs/command-centre-design.md § 4a).
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
 	if err != nil || merging {
@@ -201,8 +258,24 @@ func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	return midRebase(ctx, worktreePath)
 }
 
+// midRebase asks whether git's own rebase state directory is there, not whether REBASE_HEAD
+// resolves: git leaves that ref behind after `rebase --continue`, which pinned the row to
+// refresh_conflicted for good and left `rebase --abort` no rebase to abort (issue #91).
 func midRebase(ctx context.Context, worktreePath string) (bool, error) {
-	return refExists(ctx, worktreePath, "REBASE_HEAD")
+	for _, dir := range rebaseDirs {
+		path, err := gitPath(ctx, worktreePath, dir)
+		if err != nil {
+			return false, err
+		}
+		switch _, err := os.Stat(path); {
+		case err == nil:
+			return true, nil
+		case errors.Is(err, os.ErrNotExist):
+		default:
+			return false, fmt.Errorf("stat %s for %s: %w", path, worktreePath, err)
+		}
+	}
+	return false, nil
 }
 
 // Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
