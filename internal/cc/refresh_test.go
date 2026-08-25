@@ -179,7 +179,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	advanceMain(t, root)
+	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 	// advanceMain pushes from a throwaway clone, so repoPath's own tracking ref (what Merge below
 	// resolves "origin/main" against) needs an explicit fetch -- unlike advanceParent, which pushes
 	// straight from repoPath and so updates it as a push side effect.
