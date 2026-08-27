@@ -26,15 +26,11 @@ import (
 //go:embed page.tmpl
 var pageSource string
 
-//go:embed page.css
-var pageCSS string
-
-//go:embed assets
+//go:embed assets all:assets/dist
 var assetsDir embed.FS
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
-		"css":         func() template.CSS { return template.CSS(pageCSS) },
 		"head":        func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
 		"child":       func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
@@ -89,6 +85,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
+	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /task/{task}/detail", s.handleDetail)
 	mux.HandleFunc("GET /task/{task}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
@@ -101,6 +98,10 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+
+func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
+	http.ServeFileFS(w, r, assetsDir, "assets/dist/app.css")
+}
 
 // requireBrowserOrigin rejects any request whose Origin header does not name this server's own
 // host. Comparing against r.Host rather than a fixed allowlist is what makes this work under

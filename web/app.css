@@ -1,0 +1,243 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: oklch(99% 0.002 250);
+  --color-fg: oklch(25% 0.012 250);
+  --color-muted: oklch(58% 0.014 250);
+  --color-border: oklch(90% 0.006 250);
+
+  --color-s-done: oklch(62% 0.148 150);
+  --color-s-live: oklch(60% 0.158 250);
+  --color-s-wait: oklch(72% 0.146 80);
+  --color-s-stop: oklch(58% 0.196 25);
+  --color-s-idle: oklch(65% 0.012 250);
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --color-bg: oklch(18% 0.008 250);
+  --color-fg: oklch(93% 0.006 250);
+  --color-muted: oklch(65% 0.014 250);
+  --color-border: oklch(30% 0.012 250);
+
+  --color-s-done: oklch(72% 0.148 150);
+  --color-s-live: oklch(70% 0.148 250);
+  --color-s-wait: oklch(80% 0.138 80);
+  --color-s-stop: oklch(68% 0.178 25);
+  --color-s-idle: oklch(55% 0.012 250);
+}
+
+@layer base {
+  body {
+    font: 13px/1.4 var(--font-mono);
+    margin: 1rem;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  h1 {
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+  a {
+    color: var(--color-s-live);
+    text-decoration: underline;
+  }
+
+  table {
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    border: 1px solid var(--color-border);
+    padding: 2px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
+  }
+
+  td:empty::after {
+    content: "–";
+    color: var(--color-muted);
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button {
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0 0.35rem;
+    color: var(--color-fg);
+    cursor: pointer;
+  }
+
+  button:hover {
+    border-color: var(--color-muted);
+  }
+}
+
+@layer components {
+  tr.group-head td:first-child,
+  tr[data-depth]:not([data-depth="0"]) td:first-child {
+    border-left: 3px solid var(--color-border);
+  }
+
+  tr.group-head {
+    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
+    color: var(--color-muted);
+  }
+
+  tr[data-depth="1"] td:first-child {
+    padding-left: 1.5rem;
+  }
+
+  tr[data-depth="2"] td:first-child {
+    padding-left: 3rem;
+  }
+
+  tr[data-depth="3"] td:first-child {
+    padding-left: 4.5rem;
+  }
+
+  tr[data-depth="4"] td:first-child {
+    padding-left: 6rem;
+  }
+
+  td.detail dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0 1rem;
+    margin: 0;
+  }
+
+  td.detail dt {
+    color: var(--color-muted);
+  }
+
+  td.detail dd {
+    margin: 0;
+  }
+
+  td.detail pre {
+    overflow: auto;
+    max-height: 20rem;
+    margin: 0.5rem 0 0;
+    padding: 0.5rem;
+    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
+  }
+
+  .pill,
+  .ribbon,
+  .meter {
+    --tone: var(--color-s-idle);
+  }
+
+  [data-tone="done"] {
+    --tone: var(--color-s-done);
+  }
+
+  [data-tone="live"] {
+    --tone: var(--color-s-live);
+  }
+
+  [data-tone="wait"] {
+    --tone: var(--color-s-wait);
+  }
+
+  [data-tone="stop"] {
+    --tone: var(--color-s-stop);
+  }
+
+  [data-tone="idle"] {
+    --tone: var(--color-s-idle);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid color-mix(in oklab, var(--tone) 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--tone) 12%, transparent);
+    color: var(--tone);
+    white-space: nowrap;
+  }
+
+  .pill-disc,
+  .pill-ring,
+  .pill-pulse {
+    display: inline-block;
+    flex: none;
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 999px;
+  }
+
+  .pill-disc {
+    background: var(--tone);
+  }
+
+  .pill-ring {
+    border: 1px solid var(--tone);
+  }
+
+  .pill-pulse {
+    background: var(--tone);
+    animation: pill-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pill-pulse {
+    50% {
+      opacity: 0.25;
+      transform: scale(0.7);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-pulse {
+      animation: none;
+    }
+  }
+
+  .ribbon {
+    box-shadow: inset 3px 0 0 var(--tone);
+  }
+
+  .meter {
+    display: block;
+    overflow: hidden;
+    width: 6rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
+  }
+
+  .meter-fill {
+    display: block;
+    height: 100%;
+    background: var(--tone);
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 1.25rem 0 0.35rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}

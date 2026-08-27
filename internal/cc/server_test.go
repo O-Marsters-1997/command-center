@@ -961,7 +961,7 @@ func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
 	}
 }
 
-func TestPageInlinesTheStylesheet(t *testing.T) {
+func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	t.Parallel()
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -971,16 +971,31 @@ func TestPageInlinesTheStylesheet(t *testing.T) {
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	body := rec.Body.String()
-	for _, want := range []string{"<style>", "border-collapse"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page is missing %q", want)
+	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
+		t.Errorf("page is missing %q", want)
+	}
+	if strings.Contains(body, "<style>") {
+		t.Error("page still inlines a stylesheet")
+	}
+
+	rec = httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.css", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /assets/app.css = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
+		t.Errorf("Content-Type = %q, want text/css", got)
+	}
+	for _, want := range []string{"--color-s-live", ".pill", "data-theme=dark"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("built stylesheet is missing %q", want)
 		}
 	}
 
 	rec = httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
 	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET /page.css = %d, want 404: the stylesheet is inlined, not served", rec.Code)
+		t.Errorf("GET /page.css = %d, want 404", rec.Code)
 	}
 }
 
