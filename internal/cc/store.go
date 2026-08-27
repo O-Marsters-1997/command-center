@@ -3,31 +3,26 @@ package cc
 import (
 	"context"
 	"database/sql"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // database/sql driver "sqlite", pure Go
 )
 
-// SchemaVersion is the only version this binary understands. There is no migration code:
-// a mismatch is refused, not upgraded.
-const SchemaVersion = 1
-
-//go:embed schema.sql
-var schema string
-
-const metaSchemaVersion = "schema_version"
+//go:embed migrations/*.sql
+var migrations embed.FS
 
 // Store is the SQLite database. Only the loop goroutine writes it (inv. 9).
 type Store struct {
 	db *sql.DB
 }
 
-// OpenStore opens (creating if needed) the database at path, applies the schema and refuses
-// a database written by a different schema version.
+// OpenStore opens (creating if needed) the database at path and migrates it up to the latest
+// embedded migration.
 func OpenStore(path string) (*Store, error) {
 	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
@@ -43,39 +38,18 @@ func OpenStore(path string) (*Store, error) {
 }
 
 func (s *Store) init(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schema); err != nil {
-		return fmt.Errorf("apply schema: %w", err)
+	goose.SetBaseFS(migrations)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
 	}
-
-	var found int
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaSchemaVersion).Scan(&found)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		_, err := s.db.ExecContext(ctx,
-			`INSERT INTO meta (key, value) VALUES (?, ?)`, metaSchemaVersion, SchemaVersion)
-		if err != nil {
-			return fmt.Errorf("record schema version: %w", err)
-		}
-		return nil
-	case err != nil:
-		return fmt.Errorf("read schema version: %w", err)
-	case found != SchemaVersion:
-		return fmt.Errorf("database is at schema version %d, this binary understands %d: "+
-			"there is no migration path, move the database aside", found, SchemaVersion)
+	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
+		return fmt.Errorf("migrate: %w", err)
 	}
 	return nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
-
-func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
-	var v int
-	if err := s.db.QueryRowContext(ctx,
-		`SELECT value FROM meta WHERE key = ?`, metaSchemaVersion).Scan(&v); err != nil {
-		return 0, fmt.Errorf("read schema version: %w", err)
-	}
-	return v, nil
-}
 
 // UpsertTasks writes the configured intake, keyed on ticket_url. Re-running with an edited
 // block must update the row, never mint a second one — inv. 8 loses its key otherwise.

@@ -3,7 +3,6 @@ package cc_test
 import (
 	"database/sql"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -25,28 +24,44 @@ func openStore(t *testing.T, path string) *cc.Store {
 	return store
 }
 
-func TestOpenStoreAppliesSchema(t *testing.T) {
-	t.Parallel()
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	got, err := store.SchemaVersion(t.Context())
+func gooseVersion(t *testing.T, path string) int64 {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		t.Fatalf("SchemaVersion: %v", err)
+		t.Fatal(err)
 	}
-	if got != cc.SchemaVersion {
-		t.Errorf("schema version = %d, want %d", got, cc.SchemaVersion)
+	defer func() { _ = db.Close() }()
+	var v int64
+	if err := db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v); err != nil {
+		t.Fatalf("read goose version: %v", err)
 	}
+	return v
 }
 
-func TestOpenStoreRefusesVersionMismatch(t *testing.T) {
+func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "cc.db")
-	store, err := cc.OpenStore(path)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
+	store := openStore(t, path)
+	if err := store.UpsertTasks(t.Context(), []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	}); err != nil {
+		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if err := store.Close(); err != nil {
+	if got := gooseVersion(t, path); got != 1 {
+		t.Errorf("goose version = %d, want 1", got)
+	}
+}
+
+// TestOpenStoreAdoptsADatabaseThatPredatesGoose is the migration that matters: the live database
+// already holds every table 0001 creates, so 0001 must apply as a no-op, goose must record it,
+// and no row may move.
+func TestOpenStoreAdoptsADatabaseThatPredatesGoose(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "cc.db")
+	schema, err := cc.Migration0001()
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,21 +69,54 @@ func TestOpenStoreRefusesVersionMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE meta SET value = '99' WHERE key = 'schema_version'`); err != nil {
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO tasks (ticket_url, repo, branch) VALUES ('sandbox://CC-1', 'cc-sandbox', 'cc-1')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = cc.OpenStore(path)
-	if err == nil {
-		t.Fatal("want an error opening a DB at the wrong schema version")
+	store := openStore(t, path)
+	tasks, err := store.Tasks(t.Context())
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, want := range []string{"99", "1"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not name version %s", err, want)
-		}
+	if len(tasks) != 1 || tasks[0].TicketURL != "sandbox://CC-1" {
+		t.Errorf("tasks = %+v, want the pre-goose row untouched", tasks)
+	}
+	if got := gooseVersion(t, path); got != 1 {
+		t.Errorf("goose version = %d, want 1 recorded against the adopted database", got)
+	}
+}
+
+func TestOpenStoreTwiceIsANoOp(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "cc.db")
+	first := openStore(t, path)
+	if err := first.UpsertTasks(t.Context(), []cc.Task{
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	second := openStore(t, path)
+	tasks, err := second.Tasks(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("tasks = %d, want the first open's row to survive the second", len(tasks))
+	}
+	if got := gooseVersion(t, path); got != 1 {
+		t.Errorf("goose version = %d, want 1", got)
 	}
 }
 
