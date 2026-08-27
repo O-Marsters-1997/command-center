@@ -13,6 +13,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -131,8 +132,11 @@ func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
 
 type row struct {
 	TicketURL string
-	State     string
-	Reason    string
+	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
+	// `gh issue list`'s own 100-row limit.
+	Title  string
+	State  string
+	Reason string
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
 	Verbs        []string
@@ -179,6 +183,8 @@ type check struct {
 	Status     string
 	Conclusion string
 }
+
+func (r row) Ticket() string { return "#" + path.Base(r.TicketURL) }
 
 // DetailID is the row's stable DOM id. A ticket URL is neither a usable id nor a CSS selector,
 // and htmx needs both: hx-target resolves the selector, and hx-preserve matches the id to keep
@@ -380,6 +386,7 @@ func derive(
 		composed, _, composeOK := composePrompt(ctx, seamsRoot, pt, retirements)
 		rows = append(rows, row{
 			TicketURL:    t.TicketURL,
+			Title:        obs.Titles[t.TicketURL],
 			State:        state.String(),
 			Reason:       string(reason),
 			Verbs:        plan.Verbs(state),

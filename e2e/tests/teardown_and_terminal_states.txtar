@@ -15,7 +15,7 @@ exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>sandbox://CC-7</td>\s*\n\s*<td>failed</td>'
+stdout '<td>#CC-7</td>\s*\n\s*<td>failed</td>'
 
 # Switch the agent to one that actually commits, introduce the root/dependent pair (CC-3/CC-4)
 # and the solo CC-1, and re-run CC-7 in its existing worktree -- no second cut.
@@ -44,7 +44,7 @@ exec sleep 0.5
 exec cc tick --count 1
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4
 exec cc request GET /
-stdout '<td>sandbox://CC-1</td>\s*\n\s*<td>merged</td>'
+stdout '<td>#CC-1</td>\s*\n\s*<td>merged</td>'
 
 # remove-worktree refuses a dirty worktree: the file is left, nothing is removed.
 cp scratch.txt $WORK/repo-cc-1/scratch.txt
@@ -72,15 +72,15 @@ grep -count=1 'pr close' $WORK/gh.log
 # CC-4 has already run (it cut, committed and pushed above), so its blocker's pull request
 # closing unmerged derives base_gone -- never blocked (inv. 19).
 exec cc request GET /
-stdout '<td>sandbox://CC-4</td>\s*\n\s*<td>base_gone</td>'
-! stdout '<td>sandbox://CC-4</td>\s*\n\s*<td>blocked</td>'
+stdout '<td>#CC-4</td>\s*\n\s*<td>base_gone</td>'
+! stdout '<td>#CC-4</td>\s*\n\s*<td>blocked</td>'
 
 # The fallback read now reports CC-7's own pull request closed too: pr_closed_unmerged, not a
 # lingering checking/review_me from before the close.
 cc-fake-gh teardown-cc7-closed
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>sandbox://CC-7</td>\s*\n\s*<td>pr_closed_unmerged</td>'
+stdout '<td>#CC-7</td>\s*\n\s*<td>pr_closed_unmerged</td>'
 
 -- scratch.txt --
 oops

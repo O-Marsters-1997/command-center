@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -29,6 +30,10 @@ type Observation struct {
 	// fact a stacked base's tip is compared against, rather than the PR snapshot's headRefOid --
 	// one indirection off it, and stale the moment a reviewer pushes without GitHub re-reporting.
 	BranchTips map[string]string `json:"branch_tips"`
+	// Titles is each configured repo's open issue titles, keyed by issue URL, which is what a
+	// task's own ticket_url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
+	// than mis-keyed.
+	Titles map[string]string `json:"titles"`
 	// MidMerge reports whether each branch's own worktree is left mid-merge, read fresh every
 	// tick (§4a) -- never recorded, since a human resolving the conflict by hand and committing
 	// must clear it with no bookkeeping.
@@ -45,9 +50,9 @@ type RunObservation struct {
 // ObserveFunc reads the world. Any non-zero exit ends the tick before anything changes.
 type ObserveFunc func(ctx context.Context) (Observation, error)
 
-// NewObserver builds the real observe phase: fetch, then the PR snapshot, then the worktree
-// map, per configured repo. Branches are keyed globally, not per repo — a same-named branch
-// in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
+// NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
+// then the worktree map, per configured repo. Branches are keyed globally, not per repo — a
+// same-named branch in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
 func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
 		tasks, err := store.Tasks(ctx)
@@ -57,7 +62,7 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
-			BranchTips: map[string]string{}, MidMerge: map[string]bool{},
+			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
 		}
 		for _, repo := range cfg.Repos {
 			path := filepath.Join(root, repo.Path)
@@ -73,6 +78,12 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			for branch, pr := range snapshot.ByBranch {
 				obs.PRs[branch] = pr
 			}
+			titles, err := gh.IssueTitles(ctx, path)
+			if err != nil {
+				return Observation{}, err
+			}
+			maps.Copy(obs.Titles, titles)
+
 			for _, branch := range branches {
 				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
 					obs.BranchTips[branch] = tip

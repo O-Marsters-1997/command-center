@@ -56,6 +56,6 @@ grep -count=2 'commits.sh' $WORK/agent.log
 # Nothing was cd-ed into and ps was never run: the whole run is driven by cc request and cc
 # tick alone, against the repo's siblings on disk.
 exec cc request GET /
-stdout '<td>sandbox://CC-1</td>'
-stdout '<td>sandbox://CC-2</td>'
+stdout '<td>#CC-1</td>'
+stdout '<td>#CC-2</td>'
 ! stdout '<td>blocked</td>'

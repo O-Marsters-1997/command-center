@@ -1,4 +1,7 @@
 {
+  "issue list": {
+    "stdout": "[]\n"
+  },
   "pr list": {
     "stdout": "[{\"number\":43,\"headRefName\":\"cc-2\",\"headRefOid\":\"aaaa000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":44,\"headRefName\":\"cc-3\",\"headRefOid\":\"bbbb000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":45,\"headRefName\":\"cc-4\",\"headRefOid\":\"cccc000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":46,\"headRefName\":\"cc-5\",\"headRefOid\":\"dddd000000000000000000000000000000000000\",\"baseRefName\":\"cc-1\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
   },

@@ -13,7 +13,7 @@ import (
 )
 
 // renderedRow is one <tr> the board emitted: its attributes, which carry the grouping, and the
-// ticket in its first cell.
+// ticket ref in its first cell.
 type renderedRow struct {
 	Attrs  string
 	Ticket string
@@ -101,7 +101,7 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	if got, want := len(rows), 5; got != want {
 		t.Fatalf("rendered %d rows, want %d:\n%s", got, want, page)
 	}
-	if rows[0].Ticket != "sandbox://ROOT" {
+	if rows[0].Ticket != ticketRef("sandbox://ROOT") {
 		t.Errorf("first row = %q, want the blocker's group line", rows[0].Ticket)
 	}
 	if !strings.Contains(rows[0].Attrs, `class="group-head"`) {
@@ -136,7 +136,10 @@ func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
 	store := failedRootAndQueuedChildren(t, []string{"sandbox://CC-5", "sandbox://CC-3", "sandbox://CC-4"})
 	page := boardFor(t, store)
 
-	want := []string{"sandbox://ROOT", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"}
+	want := []string{
+		ticketRef("sandbox://ROOT"), ticketRef("sandbox://CC-3"),
+		ticketRef("sandbox://CC-4"), ticketRef("sandbox://CC-5"),
+	}
 	if got := tickets(renderedRows(page)); !slices.Equal(got, want) {
 		t.Errorf("row order = %v, want %v", got, want)
 	}
@@ -169,7 +172,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	}
 
 	page := boardFor(t, store)
-	want := []string{"sandbox://CC-1", "sandbox://CC-3", "sandbox://CC-2"}
+	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-3"), ticketRef("sandbox://CC-2")}
 	if got := tickets(renderedRows(page)); !slices.Equal(got, want) {
 		t.Errorf("row order = %v, want CC-3 under CC-1 only, %v", got, want)
 	}
