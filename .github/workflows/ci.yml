@@ -60,3 +60,19 @@ jobs:
           go-version-file: go.mod
       - run: go mod tidy
       - run: git diff --exit-code go.mod go.sum
+
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun install --frozen-lockfile
+        working-directory: web
+      # ponytail: web/app.css doesn't exist until #98 lands; skip the build rather
+      # than fail every push in between. Drop this guard once app.css is committed.
+      - if: hashFiles('web/app.css') != ''
+        run: bun run build
+        working-directory: web
+      - run: git diff --exit-code internal/cc/assets/dist

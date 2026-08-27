@@ -25,6 +25,8 @@ var defaultDeny = []string{
 	"**/package-lock.json",
 	"**/pnpm-lock.yaml",
 	"**/yarn.lock",
+	"**/bun.lock",
+	"**/bun.lockb",
 	"pnpm-workspace.yaml",
 	".npmrc",
 	".env*",

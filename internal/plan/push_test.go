@@ -18,6 +18,7 @@ func TestPushRefused(t *testing.T) {
 		{name: "root mergify config refuses", path: ".mergify.yml", refused: true},
 		{name: "nested package.json refuses", path: "packages/foo/package.json", refused: true},
 		{name: "pnpm lockfile refuses", path: "pnpm-lock.yaml", refused: true},
+		{name: "bun lockfile refuses", path: "web/bun.lock", refused: true},
 		{name: "npmrc refuses", path: ".npmrc", refused: true},
 		{name: "local env file refuses", path: ".env.development.local", refused: true},
 		{name: "per-repo deny addition refuses", path: "scripts/gen.sh", refused: true},

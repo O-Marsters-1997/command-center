@@ -6,3 +6,4 @@
 .treepad
 *.db
 ideas/
+web/node_modules/

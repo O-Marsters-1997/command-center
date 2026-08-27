@@ -1,0 +1,17 @@
+{
+  "name": "command-center-web",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "scripts": {
+    "build": "tailwindcss -i ./app.css -o ../internal/cc/assets/dist/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "solid-element": "^1.9.1"
+  }
+}
