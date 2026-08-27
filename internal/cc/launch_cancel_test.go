@@ -3,6 +3,7 @@ package cc_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -23,21 +24,31 @@ func renderPage(t *testing.T, server *cc.Server) string {
 	return rec.Body.String()
 }
 
-func rowState(t *testing.T, page, ticketURL string) string {
+func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
+
+func ticketCellRE(ticketURL string) string {
+	return regexp.QuoteMeta(ticketRef(ticketURL)) + `(?: [^<]*)?`
+}
+
+func rowTicket(t *testing.T, page, ticketURL string) string {
 	t.Helper()
-	re := regexp.MustCompile(regexp.QuoteMeta("<td>"+ticketURL+"</td>") + `\s*<td>([^<]*)</td>`)
-	m := re.FindStringSubmatch(page)
+	m := regexp.MustCompile(`<td>(` + ticketCellRE(ticketURL) + `)</td>`).FindStringSubmatch(page)
 	if m == nil {
 		t.Fatalf("no row found for %s in page:\n%s", ticketURL, page)
 	}
 	return m[1]
 }
 
+func rowState(t *testing.T, page, ticketURL string) string {
+	t.Helper()
+	return rowCellAt(t, page, ticketURL, 1)
+}
+
 // rowCellAt returns one row's cell content, counting the ticket cell itself as column 0 — the
 // <tr> layout page.tmpl renders (docs/prds/prd-command-centre.md § The page).
 func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
 	t.Helper()
-	re := regexp.MustCompile(`(?s)` + regexp.QuoteMeta("<td>"+ticketURL+"</td>") +
+	re := regexp.MustCompile(`(?s)<td>` + ticketCellRE(ticketURL) + `</td>` +
 		strings.Repeat(`\s*<td>.*?</td>`, column-1) + `\s*<td>([^<]*)</td>`)
 	m := re.FindStringSubmatch(page)
 	if m == nil {

@@ -1,10 +1,9 @@
 {
   "issue list": {
-    "stdout": "[]\n"
+    "stdout": "[{\"number\":1,\"title\":\"Ship the first slice\",\"url\":\"sandbox://CC-1\"},{\"number\":9,\"title\":\"An issue nobody is working on\",\"url\":\"sandbox://CC-9\"}]\n"
   },
   "pr list": {
-    "exit": 1,
-    "stderr": "gh is unavailable\n"
+    "stdout": "[]\n"
   },
   "api repos/{owner}/{repo}": {
     "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"

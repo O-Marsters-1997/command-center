@@ -86,8 +86,8 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 `Loop.RunOnce` in `internal/cc/loop.go` observes, decides, then acts. Observe
 runs once; every other step is conditional on observing successfully.
 
-1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, the worktree map,
-   each repo's current `sha256(.mergify.yml)`.
+1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, each repo's open
+   issue titles, the worktree map, each repo's current `sha256(.mergify.yml)`.
 2. Tick the checking-waits, save the observation.
 3. Apply launch intents, apply cancel intents, apply kill intents.
 4. Reconcile runs: liveness, then disposition. Save the observation again,

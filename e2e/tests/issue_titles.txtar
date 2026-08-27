@@ -1,0 +1,25 @@
+# Issue #100 end to end: the tick reads each repo's issue titles and the board names its rows by
+# them. A title is joined on the ticket URL, so an issue nobody is working on stays off the board
+# and a task the read did not cover keeps its number alone.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh issue-titles
+
+exec cc tick --count 1
+exec cc request GET /
+
+stdout '<td>#CC-1 Ship the first slice</td>'
+stdout '<td>#CC-2</td>'
+! stdout 'An issue nobody is working on'
+! stdout '<td>sandbox://CC-1</td>'
+
+# A failed issue list ends the tick like any other observe read, and the page falls back to the
+# last good observation -- titles and all.
+cc-fake-gh issue-titles-fail
+! exec cc tick --count 1
+stderr 'gh is unavailable'
+
+exec cc request GET /
+stdout 'Last tick error'
+stdout '<td>#CC-1 Ship the first slice</td>'

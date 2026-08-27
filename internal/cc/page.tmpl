@@ -38,7 +38,7 @@
 <button type="submit" form="launch">launch selected</button>
 {{define "row"}}
   <tr{{if .Head}} class="group-head"{{end}} data-depth="{{.Depth}}">
-    <td>{{.TicketURL}}</td>
+    <td>{{.Ticket}}{{with .Title}} {{.}}{{end}}</td>
     <td>{{.State}}{{range .PendingVerbs}} · {{.}} queued{{end}}</td>
     <td>{{.Reason}}</td>
     <td>{{if .SeamChanged}}seam changed{{end}}</td>
