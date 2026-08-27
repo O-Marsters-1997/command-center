@@ -2,6 +2,7 @@
   "name": "command-center-web",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.0",
   "scripts": {
     "build": "tailwindcss -i ./app.css -o ../internal/cc/assets/dist/app.css --minify"
   },
