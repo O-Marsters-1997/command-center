@@ -13,6 +13,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -203,10 +204,16 @@ type group struct {
 }
 
 type pageView struct {
+	Workspace  string
+	LiveAgents int
 	ObserveAge string
-	LastError  *tickErrorView
-	Groups     []group
+	// ObserveStale is decided here rather than in the template, which cannot compare durations.
+	ObserveStale bool
+	LastError    *tickErrorView
+	Groups       []group
 }
+
+const observeStaleAfter = 20 * time.Second
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.renderView(w, r, page)
@@ -247,15 +254,19 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	}
 
 	now := s.now()
+	rows := derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now)
 	view := pageView{
-		ObserveAge: "never",
-		Groups: groupRows(
-			derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now)),
+		Workspace:    workspaceName(s.seamsRoot),
+		LiveAgents:   liveAgents(tasks, obs),
+		ObserveAge:   "never",
+		ObserveStale: true,
+		Groups:       groupRows(rows),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
+		view.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
-	if failed {
+	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
 		view.LastError = &tickErrorView{Age: age(now, lastErr.At), Message: lastErr.Message}
 	}
 	return view, nil
@@ -925,6 +936,23 @@ func prSummary(pr gh.PR) string {
 		return "none"
 	}
 	return fmt.Sprintf("#%d %s", pr.Number, pr.State)
+}
+
+func workspaceName(root string) string {
+	if root == "" {
+		return ""
+	}
+	return filepath.Base(root)
+}
+
+func liveAgents(tasks []Task, obs Observation) int {
+	live := 0
+	for _, t := range tasks {
+		if obs.Runs[t.TicketURL].Alive {
+			live++
+		}
+	}
+	return live
 }
 
 func age(now, then time.Time) string {
