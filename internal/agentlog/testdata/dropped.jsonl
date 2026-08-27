@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_id":"s"}
+{"type":"rate_limit_event","session_id":"s","rate_limit_info":{}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1","message":{"usage":{"output_tokens":1},"content":[{"type":"thinking","thinking":"still weighing it up"}]}}
