@@ -1,0 +1,68 @@
+<table>
+  <tr>
+    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>stack depth</th><th>merge order</th><th>warning</th>
+    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>draft</th><th>draft reason</th><th>detail</th>
+  </tr>
+  
+  
+  
+  <tr class="group-head" data-depth="0">
+    <td>sandbox://CC-1</td>
+    <td>ready · launch queued</td>
+    <td>no blockers</td>
+    <td></td>
+    <td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://CC-1">launch</td>
+    <td>cc-1-first</td>
+    <td>main</td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td>/repos/cc-sandbox-cc-1-first</td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+    <td>
+      <button type="button" hx-get="/task/sandbox:%2F%2FCC-1/detail" hx-target="#detail-16bdef70ab6c" hx-swap="innerHTML">detail</button>
+    </td>
+  </tr>
+  
+  <tr id="detail-16bdef70ab6c" hx-preserve="true"></tr>
+
+  
+  <tr data-depth="1">
+    <td>sandbox://CC-2</td>
+    <td>blocked</td>
+    <td>blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</td>
+    <td></td>
+    <td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://CC-2">launch</td>
+    <td>cc-2-second</td>
+    <td></td>
+    <td></td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td>none</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>false</td>
+    <td></td>
+    <td>
+      <button type="button" hx-get="/task/sandbox:%2F%2FCC-2/detail" hx-target="#detail-0b3e3f615cc3" hx-swap="innerHTML">detail</button>
+    </td>
+  </tr>
+  
+  <tr id="detail-0b3e3f615cc3" hx-preserve="true"></tr>
+
+  
+  
+</table>

@@ -1,0 +1,66 @@
+{{define "board" -}}
+<table>
+  <tr>
+    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>stack depth</th><th>merge order</th><th>warning</th>
+    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
+    <th>draft</th><th>draft reason</th><th>detail</th>
+  </tr>
+  {{range $group := .Groups}}
+  {{if $group.Root}}
+  {{template "row" (head $group.Root)}}
+  {{range $group.Children}}{{template "row" (child . 1)}}{{end}}
+  {{else}}
+  {{range $group.Children}}{{template "row" (child . 0)}}{{end}}
+  {{end}}
+  {{end}}
+</table>
+{{- end}}
+
+{{define "row"}}
+  <tr{{if .Head}} class="group-head"{{end}} data-depth="{{.Depth}}">
+    <td>{{.TicketURL}}</td>
+    <td>{{.State}}{{range .PendingVerbs}} · {{.}} queued{{end}}</td>
+    <td>{{.Reason}}</td>
+    <td>{{if .SeamChanged}}seam changed{{end}}</td>
+    <td>
+      {{- $row := .}}
+      {{- range .Verbs}}
+      {{- if eq . $row.LaunchVerb}}
+      <input type="checkbox" form="launch" name="task" value="{{$row.TicketURL}}">{{.}}
+      {{- else if destructive .}}
+      <form method="get" action="/confirm">
+        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <button type="submit" name="verb" value="{{.}}">{{.}}</button>
+      </form>
+      {{- else}}
+      <form method="post" action="/verb">
+        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <button type="submit" name="verb" value="{{.}}">
+          {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
+        </button>
+      </form>
+      {{- end}}
+      {{- end -}}
+    </td>
+    <td>{{.Branch}}</td>
+    <td>{{.Base}}</td>
+    <td>{{.BaseVerdict}}</td>
+    <td>{{.StackDepth}}</td>
+    <td>{{.MergeOrder}}</td>
+    <td>{{.Warning}}</td>
+    <td>{{.Worktree}}</td>
+    <td>{{.PR}}</td>
+    <td>{{.Pgid}}</td>
+    <td>{{.Elapsed}}</td>
+    <td>{{.LogPath}}</td>
+    <td>{{.Draft}}</td>
+    <td>{{.DraftReason}}</td>
+    <td>
+      <button type="button" hx-get="{{.DetailPath}}" hx-target="#{{.DetailID}}" hx-swap="innerHTML">detail</button>
+    </td>
+  </tr>
+  <!-- hx-preserve keeps an expanded detail mounted through the board's own swap, which would
+       otherwise destroy and remount it every five seconds. -->
+  <tr id="{{.DetailID}}" hx-preserve="true"></tr>
+{{end}}

@@ -1,49 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Command Centre</title>
-<link rel="stylesheet" href="/assets/app.css">
-<script>
-  var stored = localStorage.getItem("theme");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
-  function toggleTheme() {
-    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-  }
-</script>
-<script src="/assets/htmx.min.js"></script>
-<script src="/assets/sse.min.js"></script>
-<script>
-  document.addEventListener("htmx:sseMessage", function (e) {
-    var pre = e.target;
-    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
-  });
-</script>
-</head>
-<body>
-<a class="skip-link" href="#board">skip to the board</a>
-<div id="masthead" hx-swap-oob="true">
-  <header class="masthead">
-    <h1>Command Centre</h1>
-    
-    <span class="pill">
-      <span class="pill-ring"></span>0 live
-    </span>
-    
-    <span class="pill"><span class="pill-disc"></span>observed 0s ago</span>
-    
-    <button type="button" class="theme-toggle" onclick="toggleTheme()">theme</button>
-  </header>
-  
-</div>
-<main>
-
-<form id="launch" method="get" action="/preview"></form>
-<table id="board" hx-get="/" hx-trigger="every 5s" hx-select="#board" hx-swap="outerHTML">
+<table>
   <tr>
     <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
@@ -645,8 +600,3 @@
   
   
 </table>
-<button type="submit" form="launch">launch selected</button>
-</main>
-</body>
-</html>
-

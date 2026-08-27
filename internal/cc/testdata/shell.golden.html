@@ -29,29 +29,25 @@
 <div id="masthead" hx-swap-oob="true">
   <header class="masthead">
     <h1>Command Centre</h1>
-    {{with .Workspace}}<span class="workspace">{{.}}</span>{{end}}
-    <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
-      <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
+    
+    <span class="pill">
+      <span class="pill-ring"></span>0 live
     </span>
-    {{if .ObserveStale}}
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: {{.ObserveAge}}</span>
-    {{else}}
-    <span class="pill"><span class="pill-disc"></span>observed {{.ObserveAge}}</span>
-    {{end}}
+    
+    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: 45s ago</span>
+    
     <button type="button" class="theme-toggle" onclick="toggleTheme()">theme</button>
   </header>
-  {{with .LastError}}
+  
   <p class="banner ribbon" data-tone="stop" role="status">
-    the last tick failed {{.Age}} and nothing below has been re-derived since. {{.Message}}
+    the last tick failed 30s ago and nothing below has been re-derived since. observe: gh pr list: exit status 1
   </p>
-  {{end}}
+  
 </div>
 <main>
-<!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
-     checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
-     instead would nest the per-row verb forms inside it, which HTML forbids. -->
+
 <form id="launch" method="get" action="/preview"></form>
-<div id="board" hx-get="/board" hx-trigger="every 5s">{{template "board" .}}</div>
+<div id="board" hx-get="/board" hx-trigger="every 5s"></div>
 <button type="submit" form="launch">launch selected</button>
 </main>
 </body>
