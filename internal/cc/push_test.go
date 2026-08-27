@@ -85,6 +85,16 @@ func dispositionAsPushed(t *testing.T, store *cc.Store, ticketURL string, at tim
 	}
 }
 
+func countEvents(events []cc.Event, kind string) int {
+	n := 0
+	for _, e := range events {
+		if e.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
 func hasEvent(events []cc.Event, kind, detailSubstring string) bool {
 	for _, e := range events {
 		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
@@ -161,6 +171,17 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	}
 	if !hasEvent(events, "push_refused", ".github/workflows/x.yml") {
 		t.Errorf("events = %+v, want a push_refused event naming the path", events)
+	}
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	events, err = store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countEvents(events, "push_refused"); got != 1 {
+		t.Errorf("push_refused events after a second tick = %d, want 1: no auto-retry", got)
 	}
 }
 
