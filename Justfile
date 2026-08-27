@@ -28,6 +28,10 @@ fmt:
 tidy:
     go mod tidy
 
+# Rebuild the committed internal/cc/assets/dist/app.css. Needs bun.
+assets:
+    cd web && bun install && bun run build
+
 clean:
     rm -f cc
 
