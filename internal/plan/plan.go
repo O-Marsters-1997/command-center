@@ -155,6 +155,7 @@ const (
 	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
 	// (docs/designs/command-centre-design.md § 11 inv. 12).
 	WaitingOnProducerDeploy
+	stateCount
 )
 
 func (s State) String() string {
