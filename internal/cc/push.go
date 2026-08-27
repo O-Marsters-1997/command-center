@@ -106,7 +106,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 
 	now := l.now()
 	for _, ticketURL := range toPush {
-		if facts[ticketURL].Failed {
+		if facts[ticketURL].Failed || facts[ticketURL].Refused {
 			continue // needs a human's retry-push, never an automatic one
 		}
 		if err := l.pushOne(ctx, byTicket[ticketURL], localTips[ticketURL], pc, now); err != nil {
