@@ -214,7 +214,7 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 		`hx-trigger="every 5s"`,
 		`hx-get="/"`,
 		`hx-select="#board"`,
-		`<div id="liveness" hx-swap-oob="true">`,
+		`<div id="masthead" hx-swap-oob="true">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page is missing %q:\n%s", want, body)

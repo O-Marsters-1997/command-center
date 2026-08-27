@@ -153,10 +153,13 @@ embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`
 | `POST /verb` | Queues one verb intent against one task. |
 
 The board polls itself every five seconds with `hx-get="/"` and
-`hx-select="#board"`, and the liveness banner rides the same response as an
-`hx-swap-oob` region. Each row's detail sits in a sibling `<tr>` carrying
-`hx-preserve` and a stable id, so an expanded row survives the board's own
-swap.
+`hx-select="#board"`, and the header rides the same response as an
+`hx-swap-oob` region, so the live-agent count and the observe chip stay as
+fresh as the rows. `data-theme` sits on `<html>`, outside every swap target; a
+head script reads the stored theme before first paint and the toggle writes it
+back to `localStorage`, which holds nothing else. Each row's detail sits in a
+sibling `<tr>` carrying `hx-preserve` and a stable id, so an expanded row
+survives the board's own swap.
 
 Both POSTs are wrapped in `requireBrowserOrigin`, which rejects any request
 whose `Origin` header does not match `r.Host`.
@@ -257,9 +260,10 @@ diffs it.
 
 `web/app.css` is the Tailwind v4 source. Its `@theme` block holds the colour
 tokens and `@layer components` holds hand-written classes for the state
-grammar, `pill`, `ribbon`, `meter` and the rest. Nothing links them to the
-templates yet. Go emits no utility class anywhere, so nothing depends on
-Tailwind's scan and no class can be purged. `just assets` compiles it into
+grammar, `pill`, `ribbon`, `meter` and the rest. The header, its chips and the
+stale banner use them; the board's own rows do not yet. Go emits no utility
+class anywhere, so nothing depends on Tailwind's scan and no class can be
+purged. `just assets` compiles it into
 `internal/cc/assets/dist/app.css`, which is committed the same way
 `htmx.min.js` is, so `go build` and `just ci` need no bun. Change `web/app.css`
 and you must commit the rebuilt output, or the `assets` job fails.
