@@ -53,10 +53,23 @@ flattening every merge.
 
 ## Run it
 
-`--config` defaults to `.claude/command-centre.toml`, which `.gitignore`
-excludes. The committed sample is the copy anyone can run. It points at this
-repository and renders two rows off real `gh` output, one `ready` and one
-`blocked`:
+`--config` defaults to `cc/config.toml`, which is tracked: it is the config this
+project runs itself on, and it names its repo by remote, so the same file works
+on a machine with nothing checked out. Everything machine-specific is an
+environment variable:
+
+| Variable | What |
+|---|---|
+| `CC_DATA_DIR` | Where `state/` and `repos/` go. |
+| `CC_AGENT_COMMAND` | A JSON array replacing `agent_command`, for a local wrapper. |
+
+```
+CC_AGENT_COMMAND='["caffeinate","-i","claude","-p","{prompt}"]' just run
+```
+
+`docs/command-centre.sample.toml` is the read-only tour instead. It points at
+this repository through a relative path and renders two rows off real `gh`
+output, one `ready` and one `blocked`:
 
 ```
 just run --config docs/command-centre.sample.toml
@@ -204,7 +217,7 @@ path is relative to.
 | `data_dir` | Where state and checkouts live. Overridden by nothing; falls back to `CC_DATA_DIR`, then `$UserConfigDir/command-centre`. A leading `~` expands. |
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
-| `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
+| `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
 | `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`. |
 
@@ -249,7 +262,7 @@ kept out of the release binary by the build tag. See
 ## Commands
 
 ```
-just build       # go build -o cc ./cmd/cc
+just build       # go build -o bin/cc ./cmd/cc
 just run *args   # go run ./cmd/cc
 just test        # go test ./...
 just test-e2e    # go test -tags=e2e ./e2e/...

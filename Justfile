@@ -2,7 +2,7 @@ default:
     @just --list
 
 build:
-    go build -o cc ./cmd/cc
+    go build -o bin/cc ./cmd/cc
 
 run *args:
     go run ./cmd/cc {{args}}
@@ -33,7 +33,7 @@ assets:
     cd web && bun install && bun run build
 
 clean:
-    rm -f cc
+    rm -rf bin
 
 check-conflicts:
     #!/usr/bin/env bash

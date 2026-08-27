@@ -1,0 +1,142 @@
+# The Command Centre's own config, tracked. Everything machine-specific is an environment
+# variable, so this same file runs on a laptop and on a machine with no tree on it:
+#
+#   CC_DATA_DIR        where state/ and repos/ go. Default: os.UserConfigDir()/command-centre.
+#   CC_AGENT_COMMAND   a JSON array replacing agent_command, for a local wrapper.
+#
+# Run it with:
+#
+#   cc --config cc/config.toml
+#
+# The repo below is named by its remote, so startup clones it to <data_dir>/repos/command-center
+# rather than expecting a directory someone made by hand.
+
+max_agents = 3
+port       = 7777
+
+# {settings} is the app-owned deny file and {prompt} the composed prompt; the runner substitutes
+# both into every argv element. The laptop's caffeinate and safehouse wrapper goes in
+# CC_AGENT_COMMAND, not here.
+agent_command = [
+  "claude", "-p", "{prompt}",
+  "--output-format", "stream-json", "--verbose",
+  "--settings", "{settings}",
+  "--model", "claude-sonnet-5",
+]
+
+[[repo]]
+name     = "command-center"
+remote   = "git@github.com:O-Marsters-1997/command-center.git"
+stacking = true
+deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
+
+  [[repo.checks.all_of]]
+  success = "test (ubuntu-latest)"
+  [[repo.checks.all_of]]
+  success = "test (macos-latest)"
+  [[repo.checks.all_of]]
+  success = "e2e (ubuntu-latest)"
+  [[repo.checks.all_of]]
+  success = "e2e (macos-latest)"
+  [[repo.checks.all_of]]
+  success = "lint"
+  [[repo.checks.all_of]]
+  success = "build"
+  [[repo.checks.all_of]]
+  success = "tidy"
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/60"
+repo       = "command-center"
+branch     = "cc-60-cross-repo-e2e"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/98"
+repo       = "command-center"
+branch     = "cc-98-tailwind-stylesheet"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/99"
+repo       = "command-center"
+branch     = "cc-99-unattended-tone"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/100"
+repo       = "command-center"
+branch     = "cc-100-issue-titles"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/101"
+repo       = "command-center"
+branch     = "cc-101-board-route"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/102"
+repo       = "command-center"
+branch     = "cc-102-agentlog"
+blocked_by = []
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/103"
+repo       = "command-center"
+branch     = "cc-103-document-shell"
+blocked_by = ["https://github.com/O-Marsters-1997/command-center/issues/98"]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/104"
+repo       = "command-center"
+branch     = "cc-104-url-view-state"
+blocked_by = ["https://github.com/O-Marsters-1997/command-center/issues/101"]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/105"
+repo       = "command-center"
+branch     = "cc-105-eight-column-board"
+blocked_by = [
+  "https://github.com/O-Marsters-1997/command-center/issues/98",
+  "https://github.com/O-Marsters-1997/command-center/issues/99",
+  "https://github.com/O-Marsters-1997/command-center/issues/100",
+  "https://github.com/O-Marsters-1997/command-center/issues/104",
+]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/106"
+repo       = "command-center"
+branch     = "cc-106-analytics-band"
+blocked_by = [
+  "https://github.com/O-Marsters-1997/command-center/issues/99",
+  "https://github.com/O-Marsters-1997/command-center/issues/103",
+]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/107"
+repo       = "command-center"
+branch     = "cc-107-rendered-run-log"
+blocked_by = [
+  "https://github.com/O-Marsters-1997/command-center/issues/102",
+  "https://github.com/O-Marsters-1997/command-center/issues/104",
+]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/108"
+repo       = "command-center"
+branch     = "cc-108-spend-column"
+blocked_by = [
+  "https://github.com/O-Marsters-1997/command-center/issues/102",
+  "https://github.com/O-Marsters-1997/command-center/issues/105",
+]
+
+[[task]]
+ticket_url = "https://github.com/O-Marsters-1997/command-center/issues/109"
+repo       = "command-center"
+branch     = "cc-109-graph-island"
+blocked_by = [
+  "https://github.com/O-Marsters-1997/command-center/issues/98",
+  "https://github.com/O-Marsters-1997/command-center/issues/104",
+  "https://github.com/O-Marsters-1997/command-center/issues/105",
+]

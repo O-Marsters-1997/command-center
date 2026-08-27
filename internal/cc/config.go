@@ -3,7 +3,9 @@
 package cc
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -79,6 +81,9 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, err
 	}
 	cfg.DataDir = dataDir
+	if err := applyAgentCommandEnv(&cfg); err != nil {
+		return Config{}, err
+	}
 	for i, r := range cfg.Repos {
 		checkout, err := r.CheckoutPath(dataDir, configDir)
 		if err != nil {
@@ -97,6 +102,25 @@ func LoadConfig(path string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// agentCommandEnv replaces agent_command with a machine-local wrapper, as a JSON array.
+const agentCommandEnv = "CC_AGENT_COMMAND"
+
+func applyAgentCommandEnv(cfg *Config) error {
+	raw := os.Getenv(agentCommandEnv)
+	if raw == "" {
+		return nil
+	}
+	var argv []string
+	if err := json.Unmarshal([]byte(raw), &argv); err != nil {
+		return fmt.Errorf("%s is not a JSON array of strings: %w", agentCommandEnv, err)
+	}
+	if len(argv) == 0 {
+		return fmt.Errorf("%s is an empty array", agentCommandEnv)
+	}
+	cfg.AgentCommand = argv
+	return nil
 }
 
 // stackingByRepo indexes each configured repo's stacking flag by name — consulted on every

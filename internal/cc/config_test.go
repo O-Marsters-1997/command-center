@@ -217,3 +217,34 @@ func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
 		t.Errorf("error = %v, want one naming the repo with no path", err)
 	}
 }
+
+// TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
+// on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
+func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
+	t.Setenv("CC_DATA_DIR", t.TempDir())
+	path := writeConfig(t, "agent_command = [\"claude\", \"-p\", \"{prompt}\"]\n")
+
+	got, err := cc.LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"claude", "-p", "{prompt}"}; !slices.Equal(got.AgentCommand, want) {
+		t.Errorf("agent_command with no override = %v, want the tracked %v", got.AgentCommand, want)
+	}
+
+	t.Setenv("CC_AGENT_COMMAND", `["caffeinate", "-i", "claude", "-p", "{prompt}"]`)
+	got, err = cc.LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"caffeinate", "-i", "claude", "-p", "{prompt}"}; !slices.Equal(got.AgentCommand, want) {
+		t.Errorf("agent_command = %v, want the override %v", got.AgentCommand, want)
+	}
+
+	for _, bad := range []string{"caffeinate -i claude", "[]", `{"a":1}`} {
+		t.Setenv("CC_AGENT_COMMAND", bad)
+		if _, err := cc.LoadConfig(path); err == nil {
+			t.Errorf("CC_AGENT_COMMAND=%q was accepted, want a refusal", bad)
+		}
+	}
+}
