@@ -1,0 +1,20 @@
+# GET /board serves the table on its own. The five-second poll swaps this fragment into the
+# shell, so anything above the table -- the header, the liveness banner, the launch form --
+# must not come back down with it.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request GET /board
+
+stdout '^<table>'
+stdout '<td>sandbox://CC-1</td>'
+stdout '<td>sandbox://CC-2</td>'
+
+! stdout '<h1>Command Centre</h1>'
+! stdout 'id="liveness"'
+! stdout '<form id="launch"'
+! stdout 'launch selected'
+! stdout '<!doctype html>'
