@@ -15,10 +15,20 @@ import (
 
 func renderPage(t *testing.T, server *cc.Server) string {
 	t.Helper()
+	return renderPath(t, server, "/")
+}
+
+func renderBoard(t *testing.T, server *cc.Server) string {
+	t.Helper()
+	return renderPath(t, server, "/board")
+}
+
+func renderPath(t *testing.T, server *cc.Server, path string) string {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("render page: status = %d: %s", rec.Code, rec.Body)
+		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}
 	return rec.Body.String()
 }

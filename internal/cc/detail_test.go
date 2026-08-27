@@ -210,15 +210,15 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 		t.Error("the meta refresh is still on the page")
 	}
 	for _, want := range []string{
-		`<table id="board"`,
-		`hx-trigger="every 5s"`,
-		`hx-get="/"`,
-		`hx-select="#board"`,
+		`<div id="board" hx-get="/board" hx-trigger="every 5s">`,
 		`<div id="liveness" hx-swap-oob="true">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page is missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "hx-select") {
+		t.Errorf("the poll re-renders the whole document to select the board back out of it:\n%s", body)
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 //go:embed detail.tmpl
 var detailSource string
 
-var detailFragment = template.Must(page.New("detail").Parse(detailSource))
+var detailFragment = template.Must(boardFragment.New("detail").Parse(detailSource))
 
 const (
 	detailLogLines  = 50
