@@ -49,3 +49,31 @@ func Verbs(s State) []string {
 		return nil
 	}
 }
+
+// Unattended reports whether the loop advances this state without you: a tick job owns its next
+// move, so no verb is pending on the row.
+func (s State) Unattended() bool {
+	switch s {
+	case Queued, Running, PushPending, Checking, BaseMoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Tone is the state's health band: done, live, wait, stop or idle, never a utility class. live is
+// work in flight, wait is parked on a party the reason names, idle is neither.
+func Tone(s State) string {
+	switch s {
+	case PRMerged:
+		return "done"
+	case Running, PushPending, Checking, BaseMoved:
+		return "live"
+	case Blocked, Queued, ReviewMe, WaitingOnProducerDeploy:
+		return "wait"
+	case Ready, Cancelled:
+		return "idle"
+	default:
+		return "stop"
+	}
+}
