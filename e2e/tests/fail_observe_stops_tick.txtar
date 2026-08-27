@@ -13,14 +13,22 @@ exec cc tick --count 1
 exec cc request GET /
 stdout '<td>ready</td>'
 stdout '<td>blocked</td>'
-! stdout 'Last tick error'
+! stdout 'the last tick failed'
 
 cc-fake-gh fail
 ! exec cc tick --count 1
 stderr 'gh is unavailable'
 
 exec cc request GET /
-stdout 'Last tick error'
+stdout 'the last tick failed'
 stdout 'gh is unavailable'
 stdout '<td>ready</td>'
 stdout '<td>blocked</td>'
+
+# A tick recovers: the error is still recorded, but the rows below it have been re-derived, so the
+# banner closes rather than keep claiming they have not.
+cc-fake-gh no-prs
+exec cc tick --count 1
+exec cc request GET /
+! stdout 'the last tick failed'
+stdout '<td>ready</td>'
