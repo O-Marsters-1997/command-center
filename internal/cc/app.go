@@ -67,7 +67,11 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err != nil {
 		return nil, err
 	}
-	ws, err := ResolveWorkspace(configPath)
+	dataDir, err := ResolveDataDir(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	ws, err := ResolveWorkspace(dataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +117,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	observe := settings.observe
 	if observe == nil {
-		observe = NewObserver(store, cfg, ws.Root)
+		observe = NewObserver(store, cfg)
 	}
 	runner := settings.runner
 	if runner == nil {

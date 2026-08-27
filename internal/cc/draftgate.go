@@ -23,7 +23,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	}
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	vd, err := verdictDepsFor(
 		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))

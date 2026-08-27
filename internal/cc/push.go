@@ -39,7 +39,7 @@ func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation
 		byURL:      planTasksByURL(tasks),
 		stacking:   stackingByRepo(l.cfg.Repos),
 		prs:        prsByBranch(obs),
-		repoPaths:  repoPathsByName(l.ws.Root, l.cfg.Repos),
+		repoPaths:  repoPathsByName(l.cfg.Repos),
 		denyByRepo: denyByRepo(l.cfg.Repos),
 		pushedTips: pushedTips,
 		restacked:  restacked,

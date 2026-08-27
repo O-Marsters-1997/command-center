@@ -101,7 +101,7 @@ func (l *Loop) newRefreshContext(ctx context.Context, tasks []Task, obs Observat
 		byURL:     planTasksByURL(tasks),
 		stacking:  stackingByRepo(l.cfg.Repos),
 		prs:       prsByBranch(obs),
-		repoPaths: repoPathsByName(l.ws.Root, l.cfg.Repos),
+		repoPaths: repoPathsByName(l.cfg.Repos),
 		pushRows:  pushRows,
 		obs:       obs,
 	}, nil

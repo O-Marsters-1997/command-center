@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -184,5 +185,35 @@ func TestLoadConfigUnknownRepo(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the missing repo", err)
+	}
+}
+
+// TestLoadConfigResolvesRepoPathsAgainstTheConfigFile covers phase 3: a relative path is
+// relative to the directory the config file is in, and an absolute one is taken as written.
+func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
+	t.Parallel()
+
+	elsewhere := t.TempDir()
+	path := writeConfig(t, "[[repo]]\nname = \"rel\"\npath = \"checkouts/rel\"\n\n"+
+		"[[repo]]\nname = \"abs\"\npath = "+strconv.Quote(elsewhere)+"\n")
+
+	got, err := cc.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if want := filepath.Join(filepath.Dir(path), "checkouts", "rel"); got.Repos[0].Checkout != want {
+		t.Errorf("relative checkout = %q, want %q", got.Repos[0].Checkout, want)
+	}
+	if got.Repos[1].Checkout != elsewhere {
+		t.Errorf("absolute checkout = %q, want %q", got.Repos[1].Checkout, elsewhere)
+	}
+}
+
+func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
+	t.Parallel()
+
+	_, err := cc.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
+	if err == nil || !strings.Contains(err.Error(), "r") {
+		t.Errorf("error = %v, want one naming the repo with no path", err)
 	}
 }

@@ -229,6 +229,7 @@ func scriptEnv(work string) []string {
 		"GIT_AUTHOR_EMAIL=cc@example.com",
 		"GIT_COMMITTER_NAME=Command Centre",
 		"GIT_COMMITTER_EMAIL=cc@example.com",
+		"CC_DATA_DIR=" + filepath.Join(work, "cc-data"),
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),

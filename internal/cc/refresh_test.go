@@ -19,10 +19,9 @@ func stackedConfigAndWorkspace(t *testing.T, root string) (cc.Config, cc.Workspa
 	t.Helper()
 	cfg := cc.Config{
 		MaxAgents: 0,
-		Repos:     []cc.Repo{{Name: "repo", Path: "repo", Stacking: true}},
+		Repos:     []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: true}},
 	}
 	ws := cc.Workspace{
-		Root:         root,
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
 	}

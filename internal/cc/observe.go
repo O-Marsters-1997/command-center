@@ -48,7 +48,7 @@ type ObserveFunc func(ctx context.Context) (Observation, error)
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the worktree
 // map, per configured repo. Branches are keyed globally, not per repo — a same-named branch
 // in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
-func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
+func NewObserver(store *Store, cfg Config) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
 		tasks, err := store.Tasks(ctx)
 		if err != nil {
@@ -60,7 +60,7 @@ func NewObserver(store *Store, cfg Config, root string) ObserveFunc {
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
-			path := filepath.Join(root, repo.Path)
+			path := repo.Checkout
 			if err := Fetch(ctx, path); err != nil {
 				return Observation{}, err
 			}

@@ -259,7 +259,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	stacking := stackingByRepo(l.cfg.Repos)
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	candidates := make([]plan.LaunchCandidate, 0, len(tasks))
 	unlocks := make(map[string]plan.Unlock, len(tasks))

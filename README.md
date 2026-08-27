@@ -175,34 +175,38 @@ the label is derived on every render.
 
 ### Where state lives
 
-Outside the workspace, so no agent's worktree is one `../` away from the
-database. The state dir is `$UserConfigDir/command-centre/<workspace-name>/`:
+Under `data_dir`, which is the `data_dir` config key, else `CC_DATA_DIR`, else
+`$UserConfigDir/command-centre`. It splits in two, so no agent's worktree is one
+`../` away from the database:
 
 ```
-command-centre.db      SQLite, schema version 1
-command-centre.lock    flock, one instance per workspace
-runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
-runs/<id>.prompt       the prompt that run was given
-settings/agent.json    the app-owned deny settings passed to every spawn
+state/command-centre.db      SQLite
+state/command-centre.lock    flock, one instance per data dir
+state/runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
+state/runs/<id>.prompt       the prompt that run was given
+state/settings/agent.json    the app-owned deny settings passed to every spawn
+repos/<name>/                a repo's checkout, with the worktrees tp cuts beside it
 ```
 
-The driver is `modernc.org/sqlite`, so no cgo. `internal/cc/schema.sql` creates
-every table Phases 1 to 6 need in one go: `meta`, `tasks`, `launches`,
-`launch_members`, `runs`, `pushes`, `events`, `intents`. There is no migration
-code by design, and `OpenStore` refuses a version mismatch.
+The driver is `modernc.org/sqlite`, so no cgo. goose owns the schema from
+`internal/cc/migrations/`, embedded in the binary and applied at `OpenStore`.
+`0001_init.sql` creates `meta`, `tasks`, `launches`, `launch_members`, `runs`,
+`pushes`, `events` and `intents`, all `IF NOT EXISTS`, so a database that
+predates goose is adopted rather than rebuilt.
 
 ## Configuration
 
-The workspace root is the config file's grandparent directory, so
-`plain/.claude/command-centre.toml` is the workspace named `plain`.
+Where the config file sits decides one thing only: what a relative `[[repo]]`
+path is relative to.
 
 | Key | What |
 |---|---|
+| `data_dir` | Where state and checkouts live. Overridden by nothing; falls back to `CC_DATA_DIR`, then `$UserConfigDir/command-centre`. A leading `~` expands. |
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
 | `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, `path` relative to the workspace root, `stacking`, `mergify_sha`, `deny`, `checks`. |
+| `[[repo]]` | `name`, `path` absolute or relative to the config file's own directory, `stacking`, `mergify_sha`, `deny`, `checks`. |
 
 Give a real agent `{prompt}`, not `{prompt_file}`. Claude Code expands a slash
 command only when the prompt arrives as argv text, so a path is read back as

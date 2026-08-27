@@ -12,7 +12,7 @@ blocked_by = []
 
 [[repo]]
 name        = "repo"
-path        = "repo"
+path        = "../repo"
 stacking    = false
 mergify_sha = "sha256:5075239177838d67a7fee0291277f01b7ae0642298f08904a11d10efcb47ba9e"
 

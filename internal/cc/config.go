@@ -14,6 +14,7 @@ import (
 
 // Config is the user-edited TOML file named by --config. See docs/designs/command-centre-design.md §8.
 type Config struct {
+	DataDir      string   `toml:"data_dir"`
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
@@ -29,7 +30,7 @@ type Task struct {
 	BlockedBy []string `toml:"blocked_by"`
 }
 
-// Repo is one [[repo]] block. Path is relative to the workspace root.
+// Repo is one [[repo]] block. Path is absolute, or relative to the config file's own directory.
 // Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
 // the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
@@ -40,6 +41,9 @@ type Repo struct {
 	MergifySHA  string            `toml:"mergify_sha"`
 	Deny        []string          `toml:"deny"`
 	Checks      verdict.Predicate `toml:"checks"`
+	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
+	// downstream reads this and derives no path of its own. Not a config key.
+	Checkout string `toml:"-"`
 }
 
 const (
@@ -54,11 +58,31 @@ var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
 }
 
-// LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block.
+// LoadConfig decodes the config file, resolves each repo's checkout and rejects a task whose
+// repo has no [[repo]] block. A relative path is relative to the config file's own directory,
+// which is the only thing the config's location decides: where the data lives is data_dir's job.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
+	}
+
+	configDir, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve config path %s: %w", path, err)
+	}
+	for i, r := range cfg.Repos {
+		if r.Path == "" {
+			return Config{}, fmt.Errorf("repo %s sets no path", r.Name)
+		}
+		checkout, err := expandHome(r.Path)
+		if err != nil {
+			return Config{}, err
+		}
+		if !filepath.IsAbs(checkout) {
+			checkout = filepath.Join(configDir, checkout)
+		}
+		cfg.Repos[i].Checkout = filepath.Clean(checkout)
 	}
 
 	byName := make(map[string]bool, len(cfg.Repos))
@@ -125,10 +149,10 @@ func compatCheckByRepo(repos []Repo) map[string]string {
 	return m
 }
 
-func repoPathsByName(root string, repos []Repo) map[string]string {
+func repoPathsByName(repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {
-		m[r.Name] = filepath.Join(root, r.Path)
+		m[r.Name] = r.Checkout
 	}
 	return m
 }

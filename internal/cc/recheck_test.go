@@ -167,12 +167,12 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	repos := []cc.Repo{{
-		Name: "repo", Path: "repo", CompatCheck: reCheckCompatCheckName,
+		Name: "repo", Checkout: filepath.Join(root, "repo"), CompatCheck: reCheckCompatCheckName,
 		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 			{Success: reCheckCompatCheckName}, {Success: "Tests"},
 		}},
 	}}
-	ws := cc.Workspace{Root: root, RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	cfg := cc.Config{Repos: repos}
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {

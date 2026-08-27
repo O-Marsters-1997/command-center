@@ -78,9 +78,9 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	}
 
 	cfg := cc.Config{
-		Repos: []cc.Repo{{Name: "repo", Path: "repo", Checks: verdict.Predicate{Success: "CI"}}},
+		Repos: []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
 	}
-	ws := cc.Workspace{Root: root, RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
 }
 

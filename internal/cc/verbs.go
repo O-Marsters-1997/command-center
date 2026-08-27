@@ -148,7 +148,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := tasksByTicket(tasks)
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
 		return err
@@ -216,7 +216,7 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := tasksByTicket(tasks)
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 	compatChecks := compatCheckByRepo(l.cfg.Repos)
 
 	now := l.now()
@@ -297,7 +297,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 		return err
 	}
 	byTicket := tasksByTicket(tasks)
-	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	now := l.now()
 	for _, intent := range intents {
@@ -346,7 +346,7 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 		byURL:      planTasksByURL(tasks),
 		prs:        prsByBranch(obs),
 		stacking:   stackingByRepo(l.cfg.Repos),
-		repoPaths:  repoPathsByName(l.ws.Root, l.cfg.Repos),
+		repoPaths:  repoPathsByName(l.cfg.Repos),
 		lastPushed: lastPushed,
 		obs:        obs,
 	}

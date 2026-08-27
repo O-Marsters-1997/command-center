@@ -79,7 +79,11 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	if err != nil {
 		return err
 	}
-	ws, err := cc.ResolveWorkspace(configPath)
+	dataDir, err := cc.ResolveDataDir(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	ws, err := cc.ResolveWorkspace(dataDir)
 	if err != nil {
 		return err
 	}
