@@ -206,7 +206,16 @@ path is relative to.
 | `port` | The page's port. Default 7777. |
 | `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, `path` absolute or relative to the config file's own directory, `stacking`, `mergify_sha`, `deny`, `checks`. |
+| `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`. |
+
+A repo is located by `remote`, a git URL cloned to `<data_dir>/repos/<name>`, or by `path`,
+a checkout that already exists, absolute or relative to the config file's own
+directory. Setting both is refused at load. Startup clones when the directory is
+absent, and refuses to start when it holds something whose `origin` names a
+different repository. The ssh and https forms of one repository count as one.
+
+The app never resets, pulls or checks out a checkout. It fetches and reads
+remote-tracking refs; work happens in the worktrees tp cuts beside it.
 
 Give a real agent `{prompt}`, not `{prompt_file}`. Claude Code expands a slash
 command only when the prompt arrives as argv text, so a path is read back as

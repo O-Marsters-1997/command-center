@@ -1,6 +1,7 @@
 package cc
 
 import (
+	"context"
 	"html/template"
 	"strings"
 
@@ -42,4 +43,12 @@ var TailLog = tailLog
 func Migration0001() (string, error) {
 	b, err := migrations.ReadFile("migrations/0001_init.sql")
 	return string(b), err
+}
+
+// SameRemote is the git-URL comparison EnsureCheckout refuses on.
+func SameRemote(a, b string) bool { return sameRemote(a, b) }
+
+// MergifyHash is the observe phase's read of .mergify.yml off origin's default branch.
+func MergifyHash(ctx context.Context, repoPath string) (string, error) {
+	return mergifyHash(ctx, repoPath)
 }

@@ -67,13 +67,14 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err != nil {
 		return nil, err
 	}
-	dataDir, err := ResolveDataDir(cfg.DataDir)
+	ws, err := ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
-	ws, err := ResolveWorkspace(dataDir)
-	if err != nil {
-		return nil, err
+	for _, repo := range cfg.Repos {
+		if err := EnsureCheckout(ctx, repo); err != nil {
+			return nil, err
+		}
 	}
 
 	repoCheck := settings.repoCheck

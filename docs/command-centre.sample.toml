@@ -36,6 +36,11 @@ repo       = "command-center"
 branch     = "cc-sample-second"
 blocked_by = ["sandbox://CC-1"]
 
+# A repo is located by exactly one of remote and path. path points at a checkout that already
+# exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this
+# same file run on a machine with no tree on it:
+#
+#   remote = "git@github.com:O-Marsters-1997/command-center.git"
 [[repo]]
 name     = "command-center"
 path     = ".."            # relative to this file's own directory, docs/, so: the repo root

@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -101,7 +99,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 			if repo.MergifySHA == "" {
 				continue // no predicate opted in; nothing to hash or gate on (§7)
 			}
-			hash, err := mergifyHash(path)
+			hash, err := mergifyHash(ctx, path)
 			if err != nil {
 				return Observation{}, fmt.Errorf("hash .mergify.yml for %s: %w", repo.Name, err)
 			}
@@ -111,15 +109,15 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 	}
 }
 
-// mergifyHash reads and hashes repoPath's .mergify.yml, formatted to match the mergify_sha a
-// human records in config after reviewing the file (docs/designs/command-centre-design.md § 7's example,
-// "sha256:…").
-func mergifyHash(repoPath string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(repoPath, ".mergify.yml"))
+// mergifyHash hashes .mergify.yml as origin's default branch holds it, formatted to match the
+// mergify_sha a human records after reviewing the file (docs/designs/command-centre-design.md
+// § 7). The ref, not the working tree: a dirty checkout is not a config change.
+func mergifyHash(ctx context.Context, repoPath string) (string, error) {
+	data, err := ShowFile(ctx, repoPath, "origin/"+defaultBaseBranch, ".mergify.yml")
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(data)
+	sum := sha256.Sum256([]byte(data))
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 

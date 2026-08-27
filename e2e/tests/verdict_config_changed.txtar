@@ -1,6 +1,9 @@
-# Editing the repo's .mergify.yml suppresses a would-be-green row to checking (check config
-# changed), rather than a silent lie; restoring the recorded hash brings review_me back
-# (docs/designs/command-centre-design.md § 7).
+# A recorded mergify_sha that no longer matches .mergify.yml on origin's default branch
+# suppresses a would-be-green row to checking (check config changed), rather than a silent lie;
+# a hash that matches again brings review_me back (docs/designs/command-centre-design.md § 7).
+#
+# The file is read off origin/main, never the working tree, so a dirty checkout is not a config
+# change. This script asserts that too.
 
 cc-init-repo
 cp mergify-v1.yml repo/.mergify.yml
@@ -22,17 +25,24 @@ exec cc tick --count 1
 exec cc request GET /
 stdout '<td>review_me</td>'
 
-# The predicate's recorded hash no longer matches the file on disk -- a green result must be
-# suppressed to checking, not shown as review_me from a stale predicate.
+# An uncommitted edit is not a config change: the hash comes from the ref, so the row holds green.
 cp mergify-v2.yml repo/.mergify.yml
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>review_me</td>'
+! stdout 'check config changed'
+
+# The recorded hash no longer matches what origin/main says -- a green result must be suppressed
+# to checking, not shown as review_me from a stale predicate.
+cc-config verdict-single-task-stale-sha
 exec cc tick --count 1
 exec cc request GET /
 ! stdout '<td>review_me</td>'
 stdout '<td>checking</td>'
 stdout 'check config changed'
 
-# Restoring the exact file the hash was recorded against brings review_me back.
-cp mergify-v1.yml repo/.mergify.yml
+# Recording the hash of the file the ref actually holds brings review_me back.
+cc-config verdict-single-task
 exec cc tick --count 1
 exec cc request GET /
 stdout '<td>review_me</td>'

@@ -14,6 +14,7 @@ import (
 
 // Config is the user-edited TOML file named by --config. See docs/designs/command-centre-design.md §8.
 type Config struct {
+	// DataDir holds the resolved data directory after LoadConfig, not the raw config key.
 	DataDir      string   `toml:"data_dir"`
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
@@ -30,11 +31,13 @@ type Task struct {
 	BlockedBy []string `toml:"blocked_by"`
 }
 
-// Repo is one [[repo]] block. Path is absolute, or relative to the config file's own directory.
+// Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
+// Path, an existing checkout. Exactly one of the two.
 // Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
 // the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
+	Remote      string            `toml:"remote"`
 	Path        string            `toml:"path"`
 	Stacking    bool              `toml:"stacking"`
 	CompatCheck string            `toml:"compat_check"`
@@ -58,9 +61,9 @@ var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
 }
 
-// LoadConfig decodes the config file, resolves each repo's checkout and rejects a task whose
-// repo has no [[repo]] block. A relative path is relative to the config file's own directory,
-// which is the only thing the config's location decides: where the data lives is data_dir's job.
+// LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and
+// rejects a task whose repo has no [[repo]] block. Where the config file sits decides one thing
+// only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
@@ -71,18 +74,17 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("resolve config path %s: %w", path, err)
 	}
+	dataDir, err := ResolveDataDir(cfg.DataDir)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DataDir = dataDir
 	for i, r := range cfg.Repos {
-		if r.Path == "" {
-			return Config{}, fmt.Errorf("repo %s sets no path", r.Name)
-		}
-		checkout, err := expandHome(r.Path)
+		checkout, err := r.CheckoutPath(dataDir, configDir)
 		if err != nil {
 			return Config{}, err
 		}
-		if !filepath.IsAbs(checkout) {
-			checkout = filepath.Join(configDir, checkout)
-		}
-		cfg.Repos[i].Checkout = filepath.Clean(checkout)
+		cfg.Repos[i].Checkout = checkout
 	}
 
 	byName := make(map[string]bool, len(cfg.Repos))
