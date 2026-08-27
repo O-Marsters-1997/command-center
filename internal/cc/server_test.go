@@ -23,7 +23,8 @@ import (
 
 var update = flag.Bool("update", false, "regenerate golden files")
 
-const goldenPage = "testdata/page.golden.html"
+const goldenShell = "testdata/shell.golden.html"
+const goldenBoard = "testdata/board.golden.html"
 const goldenPreview = "testdata/preview.golden.html"
 
 // assertGolden compares got against the golden file at path, rewriting it under -update.
@@ -137,25 +138,35 @@ func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	return store
 }
 
-func TestServerRendersThePage(t *testing.T) {
-	t.Parallel()
+func seededServer(t *testing.T) *cc.Server {
+	t.Helper()
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	now := observedAt.Add(45 * time.Second)
 	store := seededStore(t, observedAt)
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
 		t.Fatal(err)
 	}
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	return cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, nil, "")
+}
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+// TestServerRendersTheShellAroundTheBoard goldens the two fragments separately and pins the join
+// between them: GET / must nest the exact bytes GET /board serves, or the poll's swap would
+// redraw the board differently from the first paint.
+func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
+	t.Parallel()
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	server := seededServer(t)
+	full := renderPage(t, server)
+	board := renderBoard(t, server)
+
+	if !strings.HasPrefix(board, "<table>") {
+		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", board)
 	}
-
-	assertGolden(t, goldenPage, rec.Body.Bytes())
+	if !strings.Contains(full, ">"+board+"</div>") {
+		t.Errorf("GET / does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s", board, full)
+	}
+	assertGolden(t, goldenBoard, []byte(board))
+	assertGolden(t, goldenShell, []byte(strings.Replace(full, board, "", 1)))
 }
 
 // TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":

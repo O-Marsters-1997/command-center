@@ -12,7 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-const goldenVerbsPage = "testdata/page_verbs.golden.html"
+const goldenVerbsBoard = "testdata/board_verbs.golden.html"
 
 func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
@@ -50,11 +50,11 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 		states = append(states, s)
 	}
 
-	got, err := cc.RenderStatesPage(states)
+	got, err := cc.RenderStatesBoard(states)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertGolden(t, goldenVerbsPage, []byte(got))
+	assertGolden(t, goldenVerbsBoard, []byte(got))
 }
 
 func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {

@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -87,7 +86,7 @@ func boardFor(t *testing.T, store *cc.Store) string {
 	t.Helper()
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return renderPage(t, cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, nil, ""))
+	return renderBoard(t, cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, nil, ""))
 }
 
 // TestBoardRendersAFanOutAsOneGroup covers issue #74's first two acceptance criteria: four rows
@@ -212,10 +211,10 @@ func TestBoardRendersATaskSetWithNoBlockersFlat(t *testing.T) {
 	}
 }
 
-const goldenGroupedPage = "testdata/page_grouped.golden.html"
+const goldenGroupedBoard = "testdata/board_grouped.golden.html"
 
 // TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow covers issue #74's fifth acceptance criterion:
-// page.golden.html covering a five-row fan-out plus an ungrouped row.
+// a golden covering a five-row fan-out plus an ungrouped row.
 func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
 	t.Parallel()
 
@@ -226,17 +225,5 @@ func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page := boardFor(t, store)
-	if *update {
-		if err := os.WriteFile(goldenGroupedPage, []byte(page), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(goldenGroupedPage)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if page != string(want) {
-		t.Errorf("page differs from %s; rerun with -update to accept\n--- got ---\n%s", goldenGroupedPage, page)
-	}
+	assertGolden(t, goldenGroupedBoard, []byte(boardFor(t, store)))
 }

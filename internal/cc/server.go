@@ -38,6 +38,11 @@ var page = template.Must(template.New("page").
 	}).
 	Parse(pageSource))
 
+//go:embed board.tmpl
+var boardSource string
+
+var boardFragment = template.Must(page.New("board").Parse(boardSource))
+
 // rowSlot carries LaunchVerb and CancelVerb because html/template resets $ to the invoked
 // subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies.
 type rowSlot struct {
@@ -85,6 +90,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, s
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /board", s.handleBoard)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /task/{task}/detail", s.handleDetail)
@@ -209,13 +215,21 @@ type pageView struct {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	s.renderView(w, r, page)
+}
+
+func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
+	s.renderView(w, r, boardFragment)
+}
+
+func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *template.Template) {
 	view, err := s.render(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := page.Execute(w, view); err != nil {
+	if err := tmpl.Execute(w, view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

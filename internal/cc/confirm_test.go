@@ -18,7 +18,7 @@ import (
 func TestBoardSendsOnlyDestructiveVerbsToConfirm(t *testing.T) {
 	t.Parallel()
 
-	body, err := cc.RenderStatesPage([]plan.State{plan.NeedsYou, plan.PRMerged})
+	body, err := cc.RenderStatesBoard([]plan.State{plan.NeedsYou, plan.PRMerged})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -135,13 +135,15 @@ needs the lease. `advanceOnto` and `restackBoundary` in
 
 ### The page
 
-`internal/cc/server.go` serves ten routes. The board, the launch preview, the
-confirm page and a row's detail fragment are each `html/template` over an
-embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`.
+`internal/cc/server.go` serves eleven routes. The shell, the board, the launch
+preview, the confirm page and a row's detail fragment are each `html/template`
+over an embedded template: `page.tmpl`, `board.tmpl`, `preview.tmpl`,
+`confirm.tmpl` and `detail.tmpl`.
 
 | Route | What |
 |---|---|
-| `GET /` | The page. One row per task, with each row's verbs rendered as forms. |
+| `GET /` | The page: the header, the liveness banner, the launch form and the board nested inside `<div id="board">`. |
+| `GET /board` | The board alone, the same `board.tmpl` fragment `GET /` nests. One row per task, with each row's verbs rendered as forms. |
 | `GET /preview` | What launching `?task=...` would do, and why. Where the board's checkboxes submit to, and where `[ authorise ]` posts to `/launch` from. |
 | `GET /events` | The append-only audit log, as JSON. |
 | `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
@@ -152,11 +154,11 @@ embedded template: `page.tmpl`, `preview.tmpl`, `confirm.tmpl` and `detail.tmpl`
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
 
-The board polls itself every five seconds with `hx-get="/"` and
-`hx-select="#board"`, and the liveness banner rides the same response as an
-`hx-swap-oob` region. Each row's detail sits in a sibling `<tr>` carrying
-`hx-preserve` and a stable id, so an expanded row survives the board's own
-swap.
+The board polls `GET /board` every five seconds and swaps the table into
+`<div id="board">`, so a tick never re-renders the shell. The liveness banner is
+an `hx-swap-oob` region of the shell and so only refreshes on a full page load.
+Each row's detail sits in a sibling `<tr>` carrying `hx-preserve` and a stable
+id, so an expanded row survives the board's own swap.
 
 Both POSTs are wrapped in `requireBrowserOrigin`, which rejects any request
 whose `Origin` header does not match `r.Host`.
