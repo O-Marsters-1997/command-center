@@ -95,15 +95,11 @@ func (s *Store) UpsertTasks(ctx context.Context, tasks []Task) (err error) {
 		if marshalErr != nil {
 			return fmt.Errorf("encode blocked_by for %s: %w", t.TicketURL, marshalErr)
 		}
-		seams, marshalErr := json.Marshal(nonNil(t.Seams))
-		if marshalErr != nil {
-			return fmt.Errorf("encode seams for %s: %w", t.TicketURL, marshalErr)
-		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO tasks (ticket_url, repo, branch, blocked_by, seams) VALUES (?, ?, ?, ?, ?)
+			INSERT INTO tasks (ticket_url, repo, branch, blocked_by) VALUES (?, ?, ?, ?)
 			ON CONFLICT (ticket_url) DO UPDATE SET repo = excluded.repo, branch = excluded.branch,
-			                                       blocked_by = excluded.blocked_by, seams = excluded.seams`,
-			t.TicketURL, t.Repo, t.Branch, string(blockedBy), string(seams))
+			                                       blocked_by = excluded.blocked_by`,
+			t.TicketURL, t.Repo, t.Branch, string(blockedBy))
 		if err != nil {
 			return fmt.Errorf("upsert task %s: %w", t.TicketURL, err)
 		}
@@ -114,7 +110,7 @@ func (s *Store) UpsertTasks(ctx context.Context, tasks []Task) (err error) {
 // Tasks returns every task row, ordered by ticket_url.
 func (s *Store) Tasks(ctx context.Context) ([]Task, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT ticket_url, repo, branch, blocked_by, seams FROM tasks ORDER BY ticket_url`)
+		`SELECT ticket_url, repo, branch, blocked_by FROM tasks ORDER BY ticket_url`)
 	if err != nil {
 		return nil, fmt.Errorf("select tasks: %w", err)
 	}
@@ -123,15 +119,12 @@ func (s *Store) Tasks(ctx context.Context) ([]Task, error) {
 	var tasks []Task
 	for rows.Next() {
 		var t Task
-		var blockedBy, seams string
-		if err := rows.Scan(&t.TicketURL, &t.Repo, &t.Branch, &blockedBy, &seams); err != nil {
+		var blockedBy string
+		if err := rows.Scan(&t.TicketURL, &t.Repo, &t.Branch, &blockedBy); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		if err := json.Unmarshal([]byte(blockedBy), &t.BlockedBy); err != nil {
 			return nil, fmt.Errorf("decode blocked_by for %s: %w", t.TicketURL, err)
-		}
-		if err := json.Unmarshal([]byte(seams), &t.Seams); err != nil {
-			return nil, fmt.Errorf("decode seams for %s: %w", t.TicketURL, err)
 		}
 		tasks = append(tasks, t)
 	}

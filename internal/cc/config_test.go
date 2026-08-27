@@ -174,25 +174,6 @@ func TestLoadConfigParsesChecks(t *testing.T) {
 	}
 }
 
-// TestLoadConfigParsesSeamsInConfigOrder covers issue #52's `seams[]`: a task's [[task]] block
-// carries the seam names composePrompt later resolves, in the order they were declared.
-func TestLoadConfigParsesSeamsInConfigOrder(t *testing.T) {
-	t.Parallel()
-
-	body := "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\nseams = [\"one\", \"two\"]\n\n" +
-		"[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.Tasks) != 1 {
-		t.Fatalf("tasks = %+v", got.Tasks)
-	}
-	if want := []string{"one", "two"}; !slices.Equal(got.Tasks[0].Seams, want) {
-		t.Errorf("seams = %v, want %v", got.Tasks[0].Seams, want)
-	}
-}
-
 func TestLoadConfigUnknownRepo(t *testing.T) {
 	t.Parallel()
 
@@ -200,60 +181,6 @@ func TestLoadConfigUnknownRepo(t *testing.T) {
 	_, err := cc.LoadConfig(writeConfig(t, body))
 	if err == nil {
 		t.Fatal("want an error for a task naming a repo with no [[repo]] block")
-	}
-	if !strings.Contains(err.Error(), "nope") {
-		t.Errorf("error %q does not name the missing repo", err)
-	}
-}
-
-// TestLoadConfigParsesSeamBlocks covers issue #58's retirement pointer config: a [[seam]]
-// block's producers and lands_at, in declared order.
-func TestLoadConfigParsesSeamBlocks(t *testing.T) {
-	t.Parallel()
-
-	body := "[[seam]]\n" +
-		"name       = \"gql\"\n" +
-		"repo       = \"r\"\n" +
-		"producers  = [\"sandbox://PRODUCER\"]\n" +
-		"lands_at   = [\"schema.graphql\", \"types.graphql\"]\n\n" +
-		"[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.Seams) != 1 {
-		t.Fatalf("seams = %+v, want 1", got.Seams)
-	}
-	seam := got.Seams[0]
-	if seam.Name != "gql" || seam.Repo != "r" {
-		t.Errorf("seam = %+v", seam)
-	}
-	if want := []string{"sandbox://PRODUCER"}; !slices.Equal(seam.Producers, want) {
-		t.Errorf("producers = %v, want %v", seam.Producers, want)
-	}
-	if want := []string{"schema.graphql", "types.graphql"}; !slices.Equal(seam.LandsAt, want) {
-		t.Errorf("lands_at = %v, want %v", seam.LandsAt, want)
-	}
-}
-
-// TestLoadConfigSeamWithNoLandsAtNeedsNoRepoBlock covers issue #58's AC4: lands_at is optional,
-// so a seam declared without it (no retirement) is never required to name a real [[repo]].
-func TestLoadConfigSeamWithNoLandsAtNeedsNoRepoBlock(t *testing.T) {
-	t.Parallel()
-
-	body := "[[seam]]\nname = \"gql\"\nrepo = \"nope\"\n"
-	if _, err := cc.LoadConfig(writeConfig(t, body)); err != nil {
-		t.Fatalf("LoadConfig: %v, want no error for a seam with no lands_at", err)
-	}
-}
-
-func TestLoadConfigSeamWithLandsAtUnknownRepo(t *testing.T) {
-	t.Parallel()
-
-	body := "[[seam]]\nname = \"gql\"\nrepo = \"nope\"\nlands_at = [\"schema.graphql\"]\n"
-	_, err := cc.LoadConfig(writeConfig(t, body))
-	if err == nil {
-		t.Fatal("want an error for a retiring seam naming a repo with no [[repo]] block")
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the missing repo", err)

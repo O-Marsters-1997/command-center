@@ -260,7 +260,6 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
 	repoPaths := repoPathsByName(l.ws.Root, l.cfg.Repos)
-	retirements := retirementsByName(l.cfg.Seams, byURL, prs, repoPaths)
 
 	candidates := make([]plan.LaunchCandidate, 0, len(tasks))
 	unlocks := make(map[string]plan.Unlock, len(tasks))
@@ -271,13 +270,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 
 		hash, isAuthorised := authorisedHashes[t.TicketURL]
 		_, hasRun := latest[t.TicketURL]
-		// A seam that no longer resolves refuses the match unconditionally, never composing
-		// around it (docs/designs/command-centre-design.md § 6).
-		promptHashMatches := false
-		if isAuthorised {
-			composed, _, seamsOK := composePrompt(ctx, l.ws.Root, pt, retirements)
-			promptHashMatches = seamsOK && hash == plan.Hash(composed)
-		}
+		promptHashMatches := isAuthorised && hash == plan.Hash(plan.Compose(pt))
 		candidates = append(candidates, plan.LaunchCandidate{
 			TicketURL:         t.TicketURL,
 			Unlock:            unlock,
@@ -296,11 +289,10 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	for _, ticketURL := range toLaunch {
 		task := byTicket[ticketURL]
 		spec := launchSpec{
-			task:        task,
-			baseBranch:  unlocks[ticketURL].BaseBranch,
-			promptHash:  authorisedHashes[ticketURL],
-			repoPath:    repoPaths[task.Repo],
-			retirements: retirements,
+			task:       task,
+			baseBranch: unlocks[ticketURL].BaseBranch,
+			promptHash: authorisedHashes[ticketURL],
+			repoPath:   repoPaths[task.Repo],
 		}
 		if err := l.cutAndSpawn(ctx, spec); err != nil {
 			return err
@@ -348,11 +340,10 @@ func tasksByTicket(tasks []Task) map[string]Task {
 // launchSpec is one candidate's cut-and-spawn inputs, gathered so cutAndSpawn's own body reads
 // as the spawn sequence rather than a map-lookup dance.
 type launchSpec struct {
-	task        Task
-	baseBranch  string
-	promptHash  string
-	repoPath    string
-	retirements map[string]retirement
+	task       Task
+	baseBranch string
+	promptHash string
+	repoPath   string
 }
 
 // cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a task with no
@@ -381,7 +372,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash, spec.retirements, "")
+	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash, "")
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
@@ -394,13 +385,9 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, task Task, worktreePath, baselineSHA, promptHash string, retirements map[string]retirement,
-	oldPromptPath string,
+	ctx context.Context, task Task, worktreePath, baselineSHA, promptHash, oldPromptPath string,
 ) error {
-	prompt, refused, ok := composePrompt(ctx, l.ws.Root, planTask(task), retirements)
-	if !ok {
-		return fmt.Errorf("spawn %s: %q has no readable content", task.TicketURL, refused)
-	}
+	prompt := plan.Compose(planTask(task))
 
 	runID, err := l.store.InsertRunSkeleton(ctx, task.TicketURL, "agent", baselineSHA, promptHash)
 	if err != nil {

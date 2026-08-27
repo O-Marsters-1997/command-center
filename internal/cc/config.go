@@ -19,7 +19,6 @@ type Config struct {
 	AgentCommand []string `toml:"agent_command"`
 	Tasks        []Task   `toml:"task"`
 	Repos        []Repo   `toml:"repo"`
-	Seams        []Seam   `toml:"seam"`
 }
 
 // Task is one [[task]] block: Phase 1 intake, upserted on TicketURL at startup.
@@ -28,7 +27,6 @@ type Task struct {
 	Repo      string   `toml:"repo"`
 	Branch    string   `toml:"branch"`
 	BlockedBy []string `toml:"blocked_by"`
-	Seams     []string `toml:"seams"`
 }
 
 // Repo is one [[repo]] block. Path is relative to the workspace root.
@@ -44,16 +42,6 @@ type Repo struct {
 	Checks      verdict.Predicate `toml:"checks"`
 }
 
-// Seam is one [[seam]] block: the retirement pointer for a named seam
-// (docs/designs/command-centre-design.md § 6 job 3). LandsAt is optional; its absence, or no
-// block at all, means the seam has no retirement.
-type Seam struct {
-	Name      string   `toml:"name"`
-	Repo      string   `toml:"repo"`
-	Producers []string `toml:"producers"`
-	LandsAt   []string `toml:"lands_at"`
-}
-
 const (
 	defaultPort      = 7777
 	defaultMaxAgents = 1
@@ -66,8 +54,7 @@ var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
 }
 
-// LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block, or a
-// retiring seam (one with lands_at) whose repo has none either.
+// LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
@@ -81,11 +68,6 @@ func LoadConfig(path string) (Config, error) {
 	for _, t := range cfg.Tasks {
 		if !byName[t.Repo] {
 			return Config{}, fmt.Errorf("task %s names repo %q with no [[repo]] block", t.TicketURL, t.Repo)
-		}
-	}
-	for _, s := range cfg.Seams {
-		if len(s.LandsAt) > 0 && !byName[s.Repo] {
-			return Config{}, fmt.Errorf("seam %s names repo %q with no [[repo]] block", s.Name, s.Repo)
 		}
 	}
 	return cfg, nil

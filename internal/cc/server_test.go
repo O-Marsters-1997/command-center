@@ -26,6 +26,7 @@ var update = flag.Bool("update", false, "regenerate golden files")
 const goldenShell = "testdata/shell.golden.html"
 const goldenBoard = "testdata/board.golden.html"
 const goldenPreview = "testdata/preview.golden.html"
+const goldenPrompt = "testdata/prompt.golden.txt"
 
 // assertGolden compares got against the golden file at path, rewriting it under -update.
 func assertGolden(t *testing.T, path string, got []byte) {
@@ -146,7 +147,7 @@ func seededServer(t *testing.T) *cc.Server {
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
 		t.Fatal(err)
 	}
-	return cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, nil, "")
+	return cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil)
 }
 
 // TestServerRendersTheShellAroundTheBoard goldens the two fragments separately and pins the join
@@ -215,14 +216,14 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
+	server := cc.NewServer(store, fixedClock(at), repos)
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
 		t.Fatalf("parent's own state = %q, want needs_you (its CI check failed)", state)
 	}
 
-	if got := rowCellAt(t, page, "sandbox://CHILD", 7); got != "needs_you" {
+	if got := rowCellAt(t, page, "sandbox://CHILD", 6); got != "needs_you" {
 		t.Errorf("child's rendered base verdict = %q, want needs_you (the parent's own verdict)", got)
 	}
 }
@@ -270,7 +271,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
 		}},
 	}}
-	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
+	server := cc.NewServer(store, fixedClock(at), repos)
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
@@ -287,7 +288,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, "")
+	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil)
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -299,7 +300,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -346,7 +347,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -381,7 +382,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
@@ -435,7 +436,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CHILD")
@@ -467,7 +468,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1")
@@ -478,7 +479,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -531,7 +532,7 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, query)
@@ -595,7 +596,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, task, startedAt, now)
 
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil)
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -612,19 +613,14 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	}
 }
 
-// TestPreviewComposesSeamsIntoThePromptAndHash covers issue #52's AC1: a task with two seams
-// composes to the implement instruction plus both files' contents, in config order, and the
-// preview's hash is plan.Hash of that same composed prompt.
-func TestPreviewComposesSeamsIntoThePromptAndHash(t *testing.T) {
+// TestPreviewShowsTheComposedPromptAndItsHash covers issue #52's AC1: the preview renders the
+// prompt a launch would authorise, and the hash beside it is plan.Hash of exactly that prompt.
+func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam one content")
-	writeSeamFile(t, root, "two", "seam two content")
-
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one", "two"}}
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
@@ -632,24 +628,24 @@ func TestPreviewComposesSeamsIntoThePromptAndHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
-	wantPrompt := plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam one content", "seam two content"})
+	wantPrompt := plan.Compose(plan.Task{TicketURL: task.TicketURL})
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
 		"<details><summary>prompt "+plan.Hash(wantPrompt)+"</summary><pre>"+html.EscapeString(wantPrompt)+"</pre></details>")
 }
 
-// TestPreviewRefusesATaskNamingAMissingSeam covers issue #52's AC2: a task naming a seam with no
-// file is refused, naming that seam, rather than composing around it with an empty paste.
-func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
+// TestLaunchStoresTheComposedHash covers issue #52's AC1 at the authorisation route:
+// launch_members.prompt_hash stores plan.Hash of the composed prompt.
+func TestLaunchStoresTheComposedHash(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
@@ -657,115 +653,7 @@ func TestPreviewRefusesATaskNamingAMissingSeam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, t.TempDir()))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "task=sandbox://CC-1")
-
-	row := previewRowFor(t, body, "sandbox://CC-1")
-	assertCells(t, row, "<td>refused</td>", "ghost")
-	if strings.Contains(row, "<details>") {
-		t.Errorf("refused row renders a prompt it never composed:\n%s", row)
-	}
-}
-
-// TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam covers the case where a row is refused
-// for two independent reasons at once: a task already authorised in an active launch that also
-// names a missing seam must keep naming the active launch, not have that reason overwritten by
-// the seam refusal.
-func TestPreviewKeepsAnExistingRefusalReasonOverAMissingSeam(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), nil, nil, t.TempDir()))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "task=sandbox://CC-1")
-
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
-}
-
-// TestLaunchRefusesATaskNamingAMissingSeam covers issue #52's AC2 at the authorisation route: a
-// refused task is never queued to launch.
-func TestLaunchRefusesATaskNamingAMissingSeam(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"ghost"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, t.TempDir()))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", resp.StatusCode)
-	}
-
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	hashes, err := store.ActiveLaunchHashes(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, queued := hashes[task.TicketURL]; queued {
-		t.Error("a task naming a missing seam must never be queued to launch")
-	}
-}
-
-// TestLaunchStoresTheComposedHashForATaskWithSeams covers issue #52's AC1 at the authorisation
-// route: launch_members.prompt_hash stores plan.Hash of the seam-composed prompt.
-func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam one content")
-	writeSeamFile(t, root, "two", "seam two content")
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one", "two"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -787,188 +675,9 @@ func TestLaunchStoresTheComposedHashForATaskWithSeams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam one content", "seam two content"}))
+	want := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
 	if got := hashes[task.TicketURL]; got != want {
 		t.Errorf("stored prompt_hash = %q, want %q", got, want)
-	}
-}
-
-// TestPageFlagsSeamChangedOnAQueuedRow covers issue #55's AC1 at the page: a member sits queued
-// on its authorised hash until a seam file it names is edited, at which point the row stays
-// queued but now also carries the seam-changed flag.
-func TestPageFlagsSeamChangedOnAQueuedRow(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam content, version A")
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam content, version A"}))
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, hash, "group-a", at); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
-		t.Fatal(err)
-	}
-
-	server := cc.NewServer(store, fixedClock(at), nil, nil, root)
-	page := renderPage(t, server)
-	if state := rowState(t, page, task.TicketURL); state != "queued" {
-		t.Fatalf("state before edit = %q, want queued", state)
-	}
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "" {
-		t.Errorf("seam-changed cell before edit = %q, want empty", got)
-	}
-
-	writeSeamFile(t, root, "one", "seam content, version B")
-
-	page = renderPage(t, server)
-	if state := rowState(t, page, task.TicketURL); state != "queued" {
-		t.Errorf("state after edit = %q, want still queued", state)
-	}
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "seam changed" {
-		t.Errorf("seam-changed cell after edit = %q, want %q", got, "seam changed")
-	}
-
-	latest, err := store.LatestRunsByTask(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ran := latest[task.TicketURL]; ran {
-		t.Error("no run should exist: this test never ticks the loop")
-	}
-}
-
-// TestPageClearsSeamChangedAfterReauthorisation covers issue #55's AC2: cancelling a launch
-// whose seam changed and re-authorising against the current composition clears the flag, since
-// the new member's hash is taken from what the seam files say now.
-func TestPageClearsSeamChangedAfterReauthorisation(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam content, version A")
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	staleHash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam content, version A"}))
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, staleHash, "group-a", at); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
-		t.Fatal(err)
-	}
-	writeSeamFile(t, root, "one", "seam content, version B")
-
-	server := cc.NewServer(store, fixedClock(at), nil, nil, root)
-	page := renderPage(t, server)
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "seam changed" {
-		t.Fatalf("seam-changed cell before re-authorising = %q, want %q", got, "seam changed")
-	}
-
-	if _, err := store.CancelLaunchesFor(ctx, task.TicketURL); err != nil {
-		t.Fatal(err)
-	}
-	freshHash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam content, version B"}))
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, freshHash, "group-b", at.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-
-	page = renderPage(t, server)
-	if state := rowState(t, page, task.TicketURL); state != "queued" {
-		t.Errorf("state after re-authorising = %q, want queued", state)
-	}
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "" {
-		t.Errorf("seam-changed cell after re-authorising = %q, want empty", got)
-	}
-}
-
-// TestPageComposesSeamChangedWithReviewMe covers issue #55's AC3: a row that has already run and
-// reads review_me still flags seam changed once its seam is edited afterwards -- the flag
-// composes with the derived state rather than plan.Status growing a case for it.
-func TestPageComposesSeamChangedWithReviewMe(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam content, version A")
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one"}}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runHash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, []string{"seam content, version A"}))
-	runID, err := store.InsertRunSkeleton(ctx, task.TicketURL, "agent", "", runHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
-		t.Fatal(err)
-	}
-	exitCode := 0
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, &exitCode, at); err != nil {
-		t.Fatal(err)
-	}
-	const pushedTip = "cc-1-tip"
-	if err := store.RecordPush(ctx, task.TicketURL, pushedTip, "main", "main-tip", at); err != nil {
-		t.Fatal(err)
-	}
-
-	obs := cc.Observation{
-		PRs: map[string]gh.PR{
-			"cc-1": {
-				Number: 1, State: gh.Open, HeadOid: pushedTip,
-				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
-			},
-		},
-		BranchTips: map[string]string{"repo//main": "main-tip"},
-	}
-	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
-	}
-
-	repos := []cc.Repo{{Name: "repo", Checks: verdict.Predicate{Success: "CI"}}}
-	server := cc.NewServer(store, fixedClock(at), repos, nil, root)
-	page := renderPage(t, server)
-	if state := rowState(t, page, task.TicketURL); state != "review_me" {
-		t.Fatalf("state before edit = %q, want review_me", state)
-	}
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "" {
-		t.Errorf("seam-changed cell before edit = %q, want empty", got)
-	}
-
-	writeSeamFile(t, root, "one", "seam content, version B")
-
-	page = renderPage(t, server)
-	if state := rowState(t, page, task.TicketURL); state != "review_me" {
-		t.Errorf("state after edit = %q, want still review_me", state)
-	}
-	if got := rowCellAt(t, page, task.TicketURL, 3); got != "seam changed" {
-		t.Errorf("seam-changed cell after edit = %q, want %q", got, "seam changed")
 	}
 }
 
@@ -976,7 +685,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	t.Parallel()
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil, nil, "")
+	server := cc.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil)
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -1019,7 +728,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, task, startedAt, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil)
 
 	if err := store.QueueVerbIntent(ctx, task.TicketURL, "kill", now); err != nil {
 		t.Fatal(err)
@@ -1066,7 +775,7 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil)
 	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
 		t.Errorf("state = %q, want %q", got, "ready · launch queued")
 	}
@@ -1085,12 +794,9 @@ func TestPreviewRendersItsPage(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam one content")
-
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Seams: []string{"one"}},
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
 		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
@@ -1103,7 +809,7 @@ func TestPreviewRendersItsPage(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(store, fixedClock(at), nil, nil, root)
+	server := cc.NewServer(store, fixedClock(at), nil)
 	rec := httptest.NewRecorder()
 	target := "/preview?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3"
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -1138,7 +844,7 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv,
@@ -1164,12 +870,9 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam one content")
-
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Seams: []string{"one"}},
+		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-3"}},
 		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
 	}
@@ -1180,12 +883,12 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2")
 
-	want := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, []string{"seam one content"}))
+	want := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}))
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
 		`<input type="hidden" name="hash" value="sandbox://CC-1 `+want+`">`)
 	if refused := previewRowFor(t, body, "sandbox://CC-2"); strings.Contains(refused, `name="hash"`) {
@@ -1193,20 +896,17 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 	}
 }
 
-// TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a seam edited
-// between reading the preview and pressing authorise is caught at /launch, and the whole slice is
-// refused — including the task whose hash still matched.
+// TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a submitted hash
+// that is not what the task composes to now is caught at /launch, and the whole slice is refused
+// — including the task whose hash still matched.
 func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	root := t.TempDir()
-	writeSeamFile(t, root, "one", "seam one content")
-
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 	tasks := []cc.Task{
 		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Seams: []string{"one"}},
+		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
 	}
 	if err := store.UpsertTasks(ctx, tasks); err != nil {
 		t.Fatal(err)
@@ -1215,17 +915,16 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, root))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
-	previewed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, []string{"seam one content"}))
-	writeSeamFile(t, root, "one", "seam one edited")
-	recomposed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, []string{"seam one edited"}))
+	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
+	recomposed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}))
 
 	form := url.Values{
 		"task": {"sandbox://CC-1", "sandbox://CC-2"},
 		"hash": {
-			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, nil)),
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"})),
 			"sandbox://CC-2 " + previewed,
 		},
 	}
@@ -1259,14 +958,14 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{
 		"task": {"sandbox://CC-1"},
 		"hash": {
-			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}, nil)),
-			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}, nil)),
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"})),
+			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"})),
 		},
 	}
 	resp, _ := postLaunchForm(t, srv, form)
@@ -1289,7 +988,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{"task": {"sandbox://CC-1"}, "hash": {"deadbeef"}}

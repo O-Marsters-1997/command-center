@@ -11,19 +11,8 @@ func TestCompose(t *testing.T) {
 
 	task := plan.Task{TicketURL: "sandbox://CC-1"}
 
-	got := plan.Compose(task, nil)
+	got := plan.Compose(task)
 	want := "/implement sandbox://CC-1"
-	if got != want {
-		t.Errorf("Compose = %q, want %q", got, want)
-	}
-}
-
-func TestComposeAppendsSeamLines(t *testing.T) {
-	t.Parallel()
-
-	task := plan.Task{TicketURL: "sandbox://CC-1"}
-	got := plan.Compose(task, []string{"seam one", "seam two"})
-	want := "/implement sandbox://CC-1\nseam one\nseam two"
 	if got != want {
 		t.Errorf("Compose = %q, want %q", got, want)
 	}
@@ -41,7 +30,7 @@ func TestHashIsStableAndSensitiveToInput(t *testing.T) {
 		t.Error("Hash returned an empty string")
 	}
 
-	edited := plan.Hash("/implement sandbox://CC-1\nnew seam content")
+	edited := plan.Hash("/implement sandbox://CC-2")
 	if edited == first {
 		t.Error("editing the composed input did not change the hash")
 	}

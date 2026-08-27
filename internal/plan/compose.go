@@ -3,14 +3,11 @@ package plan
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"strings"
 )
 
-// Compose renders the prompt a launch authorises: the implement instruction plus each seam
-// file's content as its own line, in config order.
-func Compose(t Task, seams []string) string {
-	lines := append([]string{"/implement " + t.TicketURL}, seams...)
-	return strings.Join(lines, "\n")
+// Compose renders the prompt a launch authorises: the implement instruction for the ticket.
+func Compose(t Task) string {
+	return "/implement " + t.TicketURL
 }
 
 // Hash fingerprints a composed prompt. Consent is bound to content (docs/command-centre-

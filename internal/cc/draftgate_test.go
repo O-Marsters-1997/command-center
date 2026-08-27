@@ -218,7 +218,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
-	server := cc.NewServer(f.store, fixedClock(f.at), f.cfg.Repos, nil, "")
+	server := cc.NewServer(f.store, fixedClock(f.at), f.cfg.Repos)
 	page := renderPage(t, server)
 	state := rowState(t, page, "sandbox://CC-1")
 	if state == "base_gone" {
@@ -297,10 +297,10 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
-	server := cc.NewServer(store, fixedClock(at), repos, nil, "")
+	server := cc.NewServer(store, fixedClock(at), repos)
 	page := renderPage(t, server)
 
-	if base := rowCellAt(t, page, "sandbox://CHILD", 6); base != "parent" {
+	if base := rowCellAt(t, page, "sandbox://CHILD", 5); base != "parent" {
 		t.Errorf("child's base = %q, want %q: a draft PR is still OPEN for unlock purposes", base, "parent")
 	}
 	if state := rowState(t, page, "sandbox://CHILD"); state != "ready" {
@@ -348,45 +348,9 @@ func TestPushOneOpensADraftPRForATaskWithAGatingEdge(t *testing.T) {
 	}
 }
 
-// TestPushOneOpensADraftPRForATaskWithASeam is issue #57 AC1's other trigger: a seam alone, with
-// no gating edge at all, also opens the PR as a draft.
-func TestPushOneOpensADraftPRForATaskWithASeam(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
-	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
-
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"schema.graphql"}}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
-
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
-	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	body, err := os.ReadFile(ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(body), "--draft") {
-		t.Errorf("gh log %q does not contain --draft for a task with a seam", body)
-	}
-}
-
-// TestPushOneOpensANonDraftPRWithNoGatingEdgeOrSeam is issue #57 AC1's parity clause: a plain
-// single-repo task with no seams opens a non-draft PR exactly as in Phase 2.
-func TestPushOneOpensANonDraftPRWithNoGatingEdgeOrSeam(t *testing.T) {
+// TestPushOneOpensANonDraftPRWithNoGatingEdge is issue #57 AC1's parity clause: a plain
+// single-repo task opens a non-draft PR exactly as in Phase 2.
+func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)

@@ -71,21 +71,17 @@ type Server struct {
 	checksByRepo      map[string]verdict.Predicate
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
-	seams             []Seam
-	repoPaths         map[string]string
-	seamsRoot         string
 	mux               *http.ServeMux
 }
 
-// NewServer assembles the page and its routes over a store, a clock, the configured repos and
-// seams (stacking, the verdict predicate, the mergify hash, the compat check name and retirement
-// pointers are all per-repo/-seam config) and the workspace root seams resolve against.
-func NewServer(store *Store, now func() time.Time, repos []Repo, seams []Seam, seamsRoot string) *Server {
+// NewServer assembles the page and its routes over a store, a clock and the configured repos:
+// stacking, the verdict predicate, the mergify hash and the compat check name are all per-repo
+// config.
+func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
 	s := &Server{
 		store: store, now: now,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
-		seams: seams, repoPaths: repoPathsByName(seamsRoot, repos), seamsRoot: seamsRoot,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -138,9 +134,6 @@ type row struct {
 	Branch       string
 	PendingVerbs []string
 	Base         string
-	// SeamChanged is a flag, not a State (docs/designs/command-centre-design.md § 5): it
-	// composes with State rather than replacing it.
-	SeamChanged bool
 	// BaseVerdict is the base's own CI verdict label ("review_me"/"needs_you"/"checking"/
 	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
 	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
@@ -249,8 +242,7 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	now := s.now()
 	view := pageView{
 		ObserveAge: "never",
-		Groups: groupRows(
-			derive(ctx, tasks, obs, facts, vd, s.stackingByRepo, s.seams, s.repoPaths, s.seamsRoot, now)),
+		Groups:     groupRows(derive(tasks, obs, facts, vd, s.stackingByRepo, now)),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -339,12 +331,11 @@ type taskFacts struct {
 // stored: facts are stored, labels are derived every tick
 // (docs/designs/command-centre-design.md § Schema, inv. 14).
 func derive(
-	ctx context.Context, tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
-	stackingByRepo map[string]bool, seams []Seam, repoPaths map[string]string, seamsRoot string, now time.Time,
+	tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
+	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTasksByURL(tasks)
 	prs := prsByBranch(obs)
-	retirements := retirementsByName(seams, byURL, prs, repoPaths)
 
 	rows := make([]row, 0, len(tasks))
 	verdictLabelByBranch := make(map[string]string, len(tasks))
@@ -354,7 +345,7 @@ func derive(
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
 		runFact, pgid, elapsed, logPath := runFactFor(t, obs, facts, vd, now)
 		membership := facts.memberships[t.TicketURL]
-		latestRun, hasRun := facts.latestRuns[t.TicketURL]
+		latestRun := facts.latestRuns[t.TicketURL]
 		state, reason := plan.Status(plan.Facts{
 			Task:            pt,
 			Unlock:          unlock,
@@ -366,7 +357,6 @@ func derive(
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		baseByBranch[t.Branch] = unlock.BaseBranch
 		pr := obs.PRs[t.Branch]
-		composed, _, composeOK := composePrompt(ctx, seamsRoot, pt, retirements)
 		rows = append(rows, row{
 			TicketURL:    t.TicketURL,
 			State:        state.String(),
@@ -387,10 +377,6 @@ func derive(
 			Blocking:     unlock.Blocking,
 			Draft:        pr.IsDraft,
 			DraftReason:  draftReasonFor(pr, pt, byURL, prs, runFact),
-			SeamChanged: plan.SeamChanged(plan.SeamCheck{
-				HasRun: hasRun, Authorised: membership.LaunchID != 0, ComposeOK: composeOK,
-				ComposedHash: plan.Hash(composed), RunHash: latestRun.PromptHash, MemberHash: membership.PromptHash,
-			}),
 		})
 	}
 
@@ -671,9 +657,7 @@ type previewRow struct {
 	// after (docs/designs/command-centre-design.md § 4b).
 	BaseVerdict string
 	Hash        string
-	// Prompt is the fully composed prompt this launch would authorise — the implement
-	// instruction plus every seam file's content, in config order — empty when a named seam
-	// had no readable content, which is itself what refuses the row.
+	// Prompt is the fully composed prompt this launch would authorise.
 	Prompt string
 }
 
@@ -711,7 +695,6 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
-	retirements := retirementsByName(s.seams, byURL, prs, s.repoPaths)
 	facts, vd, err := s.loadTaskFacts(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -737,14 +720,9 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 			Base:        "origin/" + base,
 			BaseVerdict: baseVerdict(base, tasksByBranch, obs, facts, vd, now),
 		}
-		if composed, refused, ok := composePrompt(ctx, s.seamsRoot, t, retirements); ok {
-			row.Hash = plan.Hash(composed)
-			row.Prompt = composed
-		} else if label != plan.Refused {
-			label = plan.Refused
-			row.Label = label.String()
-			row.Reason = fmt.Sprintf("%q has no readable content", refused)
-		}
+		composed := plan.Compose(t)
+		row.Hash = plan.Hash(composed)
+		row.Prompt = composed
 		row.Refused = label == plan.Refused
 		rows = append(rows, row)
 	}
@@ -791,13 +769,6 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byURL := planTasksByURL(tasks)
-	obs, _, err := s.store.LastObservation(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	retirements := retirementsByName(s.seams, byURL, prsByBranch(obs), s.repoPaths)
-
 	hashes := make(map[string]string, len(requested))
 	for _, ticketURL := range requested {
 		t, ok := byURL[ticketURL]
@@ -805,13 +776,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("unknown task %q", ticketURL), http.StatusBadRequest)
 			return
 		}
-		composed, refused, ok := composePrompt(ctx, s.seamsRoot, t, retirements)
-		if !ok {
-			http.Error(w, fmt.Sprintf("task %s names %q with no readable content", ticketURL, refused),
-				http.StatusBadRequest)
-			return
-		}
-		hash := plan.Hash(composed)
+		hash := plan.Hash(plan.Compose(t))
 		if want, ok := previewed[ticketURL]; ok && want != hash {
 			http.Error(w, fmt.Sprintf("task %s was previewed at hash %s and now composes to %s",
 				ticketURL, want, hash), http.StatusConflict)
@@ -901,7 +866,7 @@ func prsByBranch(obs Observation) map[string]plan.PRState {
 
 func planTask(t Task) plan.Task {
 	return plan.Task{
-		TicketURL: t.TicketURL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy, Seams: t.Seams,
+		TicketURL: t.TicketURL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,
 	}
 }
 

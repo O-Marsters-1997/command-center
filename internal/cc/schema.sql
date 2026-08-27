@@ -11,8 +11,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     ticket_url TEXT PRIMARY KEY,
     repo       TEXT NOT NULL,
     branch     TEXT NOT NULL,
-    blocked_by TEXT NOT NULL DEFAULT '[]',
-    seams      TEXT NOT NULL DEFAULT '[]'
+    blocked_by TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS launches (

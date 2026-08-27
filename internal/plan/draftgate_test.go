@@ -107,8 +107,8 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	}
 }
 
-// TestDraftGateNoGatingBlockers covers a consumer with no cross-repo edge at all (a seam with
-// no tracked producer task): the gate is decided by its own verdict alone.
+// TestDraftGateNoGatingBlockers covers a consumer with no cross-repo edge at all: the gate is
+// decided by its own verdict alone.
 func TestDraftGateNoGatingBlockers(t *testing.T) {
 	t.Parallel()
 
@@ -147,8 +147,7 @@ func TestGatingBlockers(t *testing.T) {
 }
 
 // TestOpensAsDraft covers the reconciliation's own creation-time decision (issue #57's "opens a
-// PR as a draft for any task with a gating edge or a seam"): a gating edge alone, a seam alone,
-// both, or neither.
+// PR as a draft for any task with a gating edge"): a gating edge, or none.
 func TestOpensAsDraft(t *testing.T) {
 	t.Parallel()
 
@@ -166,12 +165,7 @@ func TestOpensAsDraft(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "a seam alone, with no gating edge, opens as a draft",
-			task: plan.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Seams: []string{"schema.graphql"}},
-			want: true,
-		},
-		{
-			name: "neither a gating edge nor a seam opens as a plain PR",
+			name: "no gating edge opens as a plain PR",
 			task: plan.Task{TicketURL: "sandbox://CC-1", Repo: "repo"},
 			want: false,
 		},

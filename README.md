@@ -15,9 +15,9 @@ unlock, launch preview and consent; cut, spawn, liveness, disposition and crash
 recovery; push policy, push and PR create; the CI verdict; and the terminal
 states with teardown.
 
-So is the cross-repo work. `[[seam]]` with `producers` and `lands_at`, a repo's
-`compat_check`, the draft gate that holds a consumer's PR, the `re-check` verb
-and the `waiting_on_producer_deploy` state all have code on main.
+So is the cross-repo work. A repo's `compat_check`, the draft gate that holds a
+consumer's PR, the `re-check` verb and the `waiting_on_producer_deploy` state
+all have code on main.
 
 So is the operator surface. The board groups rows by blocker, polls itself with
 htmx rather than a meta refresh, expands a row into a detail fragment, tails a
@@ -220,9 +220,6 @@ derives a verdict.
 `[[repo]]` also accepts `compat_check`, the name of the check that reports
 whether a consumer still builds against its producer.
 `internal/cc/draftgate.go` and `internal/cc/verdict_transitions.go` read it.
-
-`[[seam]]` is the cross-repo edge: `name`, `repo`, `producers` and `lands_at`. A
-`[[task]]` names the seams it touches in `seams`.
 
 ## Testing
 

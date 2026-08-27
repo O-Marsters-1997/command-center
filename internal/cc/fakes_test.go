@@ -119,17 +119,6 @@ func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	return root, repoPath
 }
 
-func writeSeamFile(t *testing.T, root, name, content string) {
-	t.Helper()
-	dir := filepath.Join(root, ".claude", "seams")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func testConfigAndWorkspace(t *testing.T, root string, maxAgents int, agentCommand []string) (cc.Config, cc.Workspace) {
 	t.Helper()
 	cfg := cc.Config{

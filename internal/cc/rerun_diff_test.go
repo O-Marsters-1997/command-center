@@ -18,19 +18,18 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
 	installFakeGh(t, false)
-	writeSeamFile(t, root, "one", "seam one content")
+	t.Setenv("CC_FAKE_ISSUE_BODY", "ticket body")
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one"}}
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	planTask := plan.Task{TicketURL: task.TicketURL, Seams: task.Seams}
-	hash := plan.Hash(plan.Compose(planTask, []string{"seam one content"}))
-	authoriseTask(t, store, task.TicketURL, hash, at)
+	planTask := plan.Task{TicketURL: task.TicketURL}
+	authoriseTask(t, store, task.TicketURL, plan.Hash(plan.Compose(planTask)), at)
 
 	obs := &cc.Observation{Worktrees: map[string]string{}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return *obs, nil }
@@ -45,7 +44,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	}
 	obs.Worktrees["cc-1"] = fake.spawns[0].WorktreePath
 
-	writeSeamFile(t, root, "one", "seam one content, edited")
+	t.Setenv("CC_FAKE_ISSUE_BODY", "ticket body, edited")
 	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-run", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -68,20 +67,20 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantComposition := plan.Compose(planTask, []string{"seam one content, edited"})
+	wantComposition := plan.Compose(planTask)
 	if !strings.HasPrefix(string(newPrompt), wantComposition) {
 		t.Errorf("new .prompt file = %q, want it to start with the fresh composition %q", newPrompt, wantComposition)
 	}
-	if strings.Contains(string(newPrompt), "-seam one content\n") {
+	if strings.Contains(string(newPrompt), "-ticket body\n") {
 		t.Errorf("new .prompt file = %q, must not contain the diff preamble", newPrompt)
 	}
 
 	if reRunSpawn.Prompt == string(newPrompt) {
 		t.Error("re-run's spawned prompt has no preamble, want the before/after diff prepended")
 	}
-	if !strings.Contains(reRunSpawn.Prompt, "-seam one content") ||
-		!strings.Contains(reRunSpawn.Prompt, "+seam one content, edited") {
-		t.Errorf("re-run's spawned prompt = %q, want a unified diff of the seam change", reRunSpawn.Prompt)
+	if !strings.Contains(reRunSpawn.Prompt, "-ticket body") ||
+		!strings.Contains(reRunSpawn.Prompt, "+ticket body, edited") {
+		t.Errorf("re-run's spawned prompt = %q, want a unified diff of the ticket body change", reRunSpawn.Prompt)
 	}
 	if !strings.HasSuffix(reRunSpawn.Prompt, string(newPrompt)) {
 		t.Errorf("re-run's spawned prompt = %q, want the fresh composition after the diff preamble", reRunSpawn.Prompt)
@@ -92,7 +91,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if err != nil {
 		t.Fatalf("diff file not written: %v", err)
 	}
-	if !strings.Contains(string(diffOnDisk), "-seam one content") {
+	if !strings.Contains(string(diffOnDisk), "-ticket body") {
 		t.Errorf("diff file = %q, want the removed line", diffOnDisk)
 	}
 }
