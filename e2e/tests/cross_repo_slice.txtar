@@ -3,7 +3,9 @@
 # (waiting_on_producer_deploy), the producer merges, re-check flips the compat check green, and
 # only then does the consumer un-draft and read review_me (docs/prds/prd-command-centre.md §
 # Phase 3). Two repos are needed for the same reason draft_gate.txtar needs them: a gating edge
-# is a cross-repo blocker one repo cannot express.
+# is a cross-repo blocker one repo cannot express. DraftGate's two conditions -- the gating
+# blocker unresolved, and the consumer's own checks not green -- are exercised independently, not
+# only in the lockstep they happen to move in at the end of the real sequence.
 
 cc-init-repo
 cc-init-repo services
@@ -36,6 +38,17 @@ exec cc tick --count 1
 # does, so its own opens as a draft (issue #57).
 grep -count=1 'pr create --base main --fill --label keep-open$' $WORK/gh.log
 grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
+
+# The consumer's own checks are already green, but its gating blocker (the producer) is still
+# open: DraftGate's two conditions are independent, so this alone must keep it drafted, with no
+# compat check involved at all. Without this step, deleting the gating-blocker check from
+# DraftGate entirely could still pass the rest of this script.
+cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>review_me</td>'
+stdout 'waiting on sandbox://PLA-40'
+! grep 'pr ready cc-1' $WORK/gh.log
 
 # The consumer's compat check goes red while its gating blocker (the producer) is still open:
 # waiting_on_producer_deploy, still drafted. The producer's own row is untouched -- checking,
