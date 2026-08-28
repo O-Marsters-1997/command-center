@@ -1,0 +1,90 @@
+# The cross-repo slice, end to end (issue #60): authorise both tickets, the producer runs and
+# opens its own pull request, the consumer runs and opens a draft one, its compat check goes red
+# (waiting_on_producer_deploy), the producer merges, re-check flips the compat check green, and
+# only then does the consumer un-draft and read review_me (docs/prds/prd-command-centre.md §
+# Phase 3). Two repos are needed for the same reason draft_gate.txtar needs them: a gating edge
+# is a cross-repo blocker one repo cannot express.
+
+cc-init-repo
+cc-init-repo services
+cc-config cross-repo-slice
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://PLA-40'
+exec cc request POST '/launch?task=sandbox://CC-1'
+
+# Both cut and spawn on this tick.
+exec cc tick --count 1
+
+# A fresh instance -- nothing in memory from the one that spawned them -- ticks again before
+# either agent has had time to commit (commits_slow.sh sleeps a full second first, for exactly
+# this reason). Neither run relaunches.
+exec cc tick --count 1
+exec cc request GET /
+stdout -count=2 '<td>running</td>'
+exec cc request GET /events
+stdout -count=2 'run_launched'
+grep -count=1 'commits_slow.sh .*services-pla-40' $WORK/agent.log
+grep -count=1 'commits_slow.sh .*repo-cc-1' $WORK/agent.log
+
+# Real wall time for both agents to finish committing.
+exec sleep 1.5
+exec cc tick --count 1
+
+# Both push. The producer has no gating edge, so its pull request opens normally; the consumer's
+# does, so its own opens as a draft (issue #57).
+grep -count=1 'pr create --base main --fill --label keep-open$' $WORK/gh.log
+grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
+
+# The consumer's compat check goes red while its gating blocker (the producer) is still open:
+# waiting_on_producer_deploy, still drafted. The producer's own row is untouched -- checking,
+# same as any row with no configured compat check.
+cc-fake-gh-head cross-repo-open cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>waiting_on_producer_deploy</td>'
+stdout '<td>checking</td>'
+! stdout '<td>merged</td>'
+! grep 'pr ready cc-1' $WORK/gh.log
+
+# The producer merges. The consumer's own compat check is still red, so it stays a draft even
+# though its gating blocker has now resolved -- issue #60 AC2, the invariant this whole slice
+# exists to prove.
+cc-fake-gh-head cross-repo-merged cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>merged</td>'
+stdout '<td>waiting_on_producer_deploy</td>'
+! grep 'pr ready cc-1' $WORK/gh.log
+
+# re-check reruns the compat check's own Actions run, parsed out of its details URL (issue #56).
+exec cc request POST '/verb?verb=re-check&task=sandbox://CC-1'
+exec cc tick --count 1
+grep -count=1 'run rerun 4242' $WORK/gh.log
+exec cc request GET /events
+stdout 're_check_requested'
+! grep 'pr ready cc-1' $WORK/gh.log
+
+# The rerun comes back green: every required check has passed and the gating blocker is merged.
+# Only now -- never earlier -- does the consumer un-draft, exactly once.
+cc-fake-gh-head cross-repo-compat-green cc-1
+exec cc tick --count 1
+grep -count=1 'pr ready cc-1' $WORK/gh.log
+exec cc request GET /
+stdout '<td>review_me</td>'
+
+# GitHub now reports the pull request as ready, as a real observe would from here on. Further
+# ticks must not call `gh pr ready` again, and the producer's own row is never drafted or
+# un-drafted at any point above.
+cc-fake-gh-head cross-repo-review-me cc-1
+exec cc tick --count 1
+exec cc tick --count 1
+exec cc tick --count 1
+grep -count=1 'pr ready cc-1' $WORK/gh.log
+! grep 'pr ready pla-40' $WORK/gh.log
+
+# Across the whole slice, each pull request was created exactly once -- crashing mid-run and
+# every subsequent re-observation left both alone rather than adopting-and-recreating them.
+grep -count=1 'pr create --base main --fill --label keep-open$' $WORK/gh.log
+grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
