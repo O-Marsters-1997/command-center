@@ -129,7 +129,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		lock:   lock,
 		store:  store,
 		loop:   NewLoop(store, observe, settings.now, cfg, ws, runner),
-		server: NewServer(store, settings.now, cfg.Repos),
+		server: NewServer(store, settings.now, cfg.Repos, ws.DataDir),
 	}, nil
 }
 

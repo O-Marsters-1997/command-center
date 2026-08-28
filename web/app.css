@@ -31,9 +31,19 @@
 @layer base {
   body {
     font: 13px/1.4 var(--font-mono);
-    margin: 1rem;
+    margin: 0;
     background: var(--color-bg);
     color: var(--color-fg);
+  }
+
+  main {
+    display: block;
+    padding: 1rem;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-s-live);
+    outline-offset: 1px;
   }
 
   h1 {
@@ -86,6 +96,47 @@
 }
 
 @layer components {
+  .skip-link {
+    position: absolute;
+    left: -100vw;
+    padding: 0.35rem 0.6rem;
+    background: var(--color-bg);
+  }
+
+  .skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+  }
+
+  .masthead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .masthead h1 {
+    margin: 0;
+  }
+
+  .workspace {
+    color: var(--color-muted);
+  }
+
+  .theme-toggle {
+    margin-left: auto;
+  }
+
+  .banner {
+    margin: 0;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    background: color-mix(in oklab, var(--tone) 12%, transparent);
+    color: var(--tone);
+  }
+
   tr.group-head td:first-child,
   tr[data-depth]:not([data-depth="0"]) td:first-child {
     border-left: 3px solid var(--color-border);
@@ -137,7 +188,8 @@
 
   .pill,
   .ribbon,
-  .meter {
+  .meter,
+  .banner {
     --tone: var(--color-s-idle);
   }
 

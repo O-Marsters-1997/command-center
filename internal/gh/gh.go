@@ -171,6 +171,33 @@ func IssueBody(ctx context.Context, repoPath, ticketURL string) (string, error) 
 	return strings.TrimSpace(string(out)), nil
 }
 
+// IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
+// The URL is the join key because a task holds the whole ticket URL: reconstructing one from
+// `number` would guess at the repo's own host.
+func IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
+	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", "100")
+	if err != nil {
+		return nil, err
+	}
+	titles, err := decodeIssueTitles(out)
+	if err != nil {
+		return nil, fmt.Errorf("decode issue list for %s: %w", repoPath, err)
+	}
+	return titles, nil
+}
+
+func decodeIssueTitles(raw []byte) (map[string]string, error) {
+	var decoded []rawIssue
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("unmarshal issue list: %w", err)
+	}
+	titles := make(map[string]string, len(decoded))
+	for _, issue := range decoded {
+		titles[issue.URL] = issue.Title
+	}
+	return titles, nil
+}
+
 func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = repoPath
@@ -200,6 +227,12 @@ type rawPR struct {
 	Labels            []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
+}
+
+// rawIssue mirrors gh issue list's JSON exactly.
+type rawIssue struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
 }
 
 // rawCheck is the union of CheckRun and StatusContext as gh flattens them into one array.

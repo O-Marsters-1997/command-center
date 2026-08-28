@@ -147,7 +147,7 @@ func seededServer(t *testing.T) *cc.Server {
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
 		t.Fatal(err)
 	}
-	return cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil)
+	return cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
 }
 
 // TestServerRendersTheShellAroundTheBoard goldens the two fragments separately and pins the join
@@ -216,7 +216,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	server := cc.NewServer(store, fixedClock(at), repos)
+	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
@@ -271,7 +271,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
 		}},
 	}}
-	server := cc.NewServer(store, fixedClock(at), repos)
+	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
@@ -288,7 +288,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil)
+	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -300,7 +300,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -347,7 +347,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -382,7 +382,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
@@ -436,7 +436,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos))
+	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CHILD")
@@ -468,7 +468,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1")
@@ -479,7 +479,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -532,7 +532,7 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, query)
@@ -596,7 +596,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, task, startedAt, now)
 
-	server := cc.NewServer(store, fixedClock(now), nil)
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -628,7 +628,7 @@ func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1")
@@ -653,7 +653,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
@@ -685,7 +685,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	t.Parallel()
 
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil)
+	server := cc.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -728,7 +728,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, task, startedAt, now)
-	server := cc.NewServer(store, fixedClock(now), nil)
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	if err := store.QueueVerbIntent(ctx, task.TicketURL, "kill", now); err != nil {
 		t.Fatal(err)
@@ -775,7 +775,7 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, fixedClock(now), nil)
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
 		t.Errorf("state = %q, want %q", got, "ready · launch queued")
 	}
@@ -809,7 +809,7 @@ func TestPreviewRendersItsPage(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(store, fixedClock(at), nil)
+	server := cc.NewServer(store, fixedClock(at), nil, "")
 	rec := httptest.NewRecorder()
 	target := "/preview?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3"
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -844,7 +844,7 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv,
@@ -883,7 +883,7 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2")
@@ -915,7 +915,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
@@ -958,7 +958,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{
@@ -988,7 +988,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{"task": {"sandbox://CC-1"}, "hash": {"deadbeef"}}

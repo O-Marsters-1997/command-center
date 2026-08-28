@@ -1,4 +1,7 @@
 {
+  "issue list": {
+    "stdout": "[]\n"
+  },
   "pr list": {
     "stdout": "[{\"number\":42,\"headRefName\":\"cc-1\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
   },

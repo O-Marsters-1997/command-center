@@ -1,4 +1,7 @@
 {
+  "issue list": {
+    "stdout": "[]\n"
+  },
   "pr list": {
     "stdout": "[{\"number\":9,\"headRefName\":\"cc-1\",\"headRefOid\":\"{{head}}\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"name\":\"CI\",\"status\":\"COMPLETED\",\"conclusion\":\"SUCCESS\",\"startedAt\":\"2026-01-01T00:00:00Z\"}],\"author\":{\"login\":\"someone\"}}]\n"
   },

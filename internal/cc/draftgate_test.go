@@ -218,7 +218,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
-	server := cc.NewServer(f.store, fixedClock(f.at), f.cfg.Repos)
+	server := cc.NewServer(f.store, fixedClock(f.at), f.cfg.Repos, "")
 	page := renderPage(t, server)
 	state := rowState(t, page, "sandbox://CC-1")
 	if state == "base_gone" {
@@ -297,7 +297,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 
 	repos := []cc.Repo{{Name: "repo", Stacking: true}}
-	server := cc.NewServer(store, fixedClock(at), repos)
+	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if base := rowCellAt(t, page, "sandbox://CHILD", 5); base != "parent" {

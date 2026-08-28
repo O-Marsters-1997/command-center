@@ -13,6 +13,8 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -71,15 +73,16 @@ type Server struct {
 	checksByRepo      map[string]verdict.Predicate
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
+	dataDir           string
 	mux               *http.ServeMux
 }
 
-// NewServer assembles the page and its routes over a store, a clock and the configured repos:
-// stacking, the verdict predicate, the mergify hash and the compat check name are all per-repo
-// config.
-func NewServer(store *Store, now func() time.Time, repos []Repo) *Server {
+// NewServer assembles the page and its routes over a store, a clock, the configured repos and
+// the data directory: stacking, the verdict predicate, the mergify hash and the compat check
+// name are all per-repo config, and dataDir is the fleet the header names.
+func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now,
+		store: store, now: now, dataDir: dataDir,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -126,8 +129,11 @@ func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
 
 type row struct {
 	TicketURL string
-	State     string
-	Reason    string
+	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
+	// `gh issue list`'s own 100-row limit.
+	Title  string
+	State  string
+	Reason string
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
 	Verbs        []string
@@ -172,6 +178,8 @@ type check struct {
 	Conclusion string
 }
 
+func (r row) Ticket() string { return "#" + path.Base(r.TicketURL) }
+
 // DetailID is the row's stable DOM id. A ticket URL is neither a usable id nor a CSS selector,
 // and htmx needs both: hx-target resolves the selector, and hx-preserve matches the id to keep
 // an expanded detail mounted through the board's own five-second swap.
@@ -196,10 +204,16 @@ type group struct {
 }
 
 type pageView struct {
+	Workspace  string
+	LiveAgents int
 	ObserveAge string
-	LastError  *tickErrorView
-	Groups     []group
+	// ObserveStale is decided here rather than in the template, which cannot compare durations.
+	ObserveStale bool
+	LastError    *tickErrorView
+	Groups       []group
 }
+
+const observeStaleAfter = 20 * time.Second
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.renderView(w, r, page)
@@ -240,14 +254,19 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	}
 
 	now := s.now()
+	rows := derive(tasks, obs, facts, vd, s.stackingByRepo, now)
 	view := pageView{
-		ObserveAge: "never",
-		Groups:     groupRows(derive(tasks, obs, facts, vd, s.stackingByRepo, now)),
+		Workspace:    workspaceName(s.dataDir),
+		LiveAgents:   liveAgents(tasks, obs),
+		ObserveAge:   "never",
+		ObserveStale: true,
+		Groups:       groupRows(rows),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
+		view.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
-	if failed {
+	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
 		view.LastError = &tickErrorView{Age: age(now, lastErr.At), Message: lastErr.Message}
 	}
 	return view, nil
@@ -359,6 +378,7 @@ func derive(
 		pr := obs.PRs[t.Branch]
 		rows = append(rows, row{
 			TicketURL:    t.TicketURL,
+			Title:        obs.Titles[t.TicketURL],
 			State:        state.String(),
 			Reason:       string(reason),
 			Verbs:        plan.Verbs(state),
@@ -890,6 +910,23 @@ func prSummary(pr gh.PR) string {
 		return "none"
 	}
 	return fmt.Sprintf("#%d %s", pr.Number, pr.State)
+}
+
+func workspaceName(dataDir string) string {
+	if dataDir == "" {
+		return ""
+	}
+	return filepath.Base(dataDir)
+}
+
+func liveAgents(tasks []Task, obs Observation) int {
+	live := 0
+	for _, t := range tasks {
+		if obs.Runs[t.TicketURL].Alive {
+			live++
+		}
+	}
+	return live
 }
 
 func age(now, then time.Time) string {

@@ -197,7 +197,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 		t.Fatalf("RunOnce (post-rerun tick): %v", err)
 	}
 
-	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos))
+	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos, ""))
 	if state := rowState(t, page, task.TicketURL); state != "checking" {
 		t.Fatalf("state once the rerun's check goes pending = %q, want checking", state)
 	}

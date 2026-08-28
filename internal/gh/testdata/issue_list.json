@@ -1,0 +1,12 @@
+[
+  {
+    "number": 100,
+    "title": "Put each ticket's issue title on its row",
+    "url": "https://github.com/owner/repo/issues/100"
+  },
+  {
+    "number": 101,
+    "title": "Give the board its own route",
+    "url": "https://github.com/owner/repo/issues/101"
+  }
+]

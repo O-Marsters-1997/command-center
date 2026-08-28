@@ -11,6 +11,8 @@ import (
 // repos/ for the checkouts, with the worktrees tp cuts beside them. The two are siblings so
 // a database is never one "../" from an agent's own worktree (§8).
 type Workspace struct {
+	// DataDir is the root the whole layout hangs off, and the name the page's header shows.
+	DataDir  string
 	StateDir string
 	// ReposDir holds one checkout per configured repo, named after the repo.
 	ReposDir string
@@ -65,6 +67,7 @@ func expandHome(path string) (string, error) {
 func ResolveWorkspace(dataDir string) (Workspace, error) {
 	state := filepath.Join(dataDir, "state")
 	ws := Workspace{
+		DataDir:      dataDir,
 		StateDir:     state,
 		ReposDir:     filepath.Join(dataDir, "repos"),
 		DBPath:       filepath.Join(state, "command-centre.db"),
