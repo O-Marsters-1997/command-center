@@ -1,0 +1,17 @@
+[
+  {
+    "name": "project:repo-and-ticket-model"
+  },
+  {
+    "name": "project:fleet-view"
+  },
+  {
+    "name": "status:ready"
+  },
+  {
+    "name": "status:backlog"
+  },
+  {
+    "name": "bug"
+  }
+]
