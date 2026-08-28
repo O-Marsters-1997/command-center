@@ -3,10 +3,10 @@
 <link rel="stylesheet" href="/assets/app.css">
 <title>Confirm {{.Verb}}</title>
 <h1>Confirm {{.Verb}}</h1>
-<p>{{.Verb}} on {{.TicketURL}} {{.Effect}}. It cannot be undone.</p>
+<p>{{.Verb}} on {{.URL}} {{.Effect}}. It cannot be undone.</p>
 <p>{{.RiskLabel}} at risk: {{or .Risk "none recorded"}}</p>
 <form method="post" action="/verb">
-  <input type="hidden" name="task" value="{{.TicketURL}}">
+  <input type="hidden" name="task" value="{{.URL}}">
   <input type="hidden" name="verb" value="{{.Verb}}">
   <button type="submit">[ confirm ]</button>
 </form>

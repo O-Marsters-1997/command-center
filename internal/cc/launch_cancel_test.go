@@ -75,19 +75,19 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	tickets := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
-	tasks := make([]cc.Task, len(tickets))
-	for i, ticketURL := range tickets {
+	ticketURLs := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
+	tickets := make([]cc.Ticket, len(ticketURLs))
+	for i, ticketURL := range ticketURLs {
 		branch := strings.TrimPrefix(ticketURL, "sandbox://")
-		tasks[i] = cc.Task{TicketURL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
+		tickets[i] = cc.Ticket{URL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
 	}
-	if err := store.UpsertTasks(t.Context(), tasks); err != nil {
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, ticketURL := range tickets {
-		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: ticketURL}))
+	for _, ticketURL := range ticketURLs {
+		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticketURL}))
 		if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-a", at); err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +102,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.spawns))
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,12 +113,12 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 	if runningTicket == "" {
-		t.Fatal("no task recorded a run after tick 1")
+		t.Fatal("no ticket recorded a run after tick 1")
 	}
 	runningPgid := *latest[runningTicket].Pgid
 
 	var queuedSibling string
-	for _, ticketURL := range tickets {
+	for _, ticketURL := range ticketURLs {
 		if ticketURL != runningTicket {
 			queuedSibling = ticketURL
 			break
@@ -147,7 +147,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ticketURL := range tickets {
+	for _, ticketURL := range ticketURLs {
 		if !memberships[ticketURL].Cancelled {
 			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticketURL)
 		}
@@ -162,7 +162,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Errorf("queued sibling's rendered state = %q, want cancelled", state)
 	}
 
-	latestAfter, err := store.LatestRunsByTask(t.Context())
+	latestAfter, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

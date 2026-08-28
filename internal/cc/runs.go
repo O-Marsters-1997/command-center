@@ -10,19 +10,19 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// InsertRunSkeleton reserves a runs row before the process exists: task_id, kind, baseline_sha
+// InsertRunSkeleton reserves a runs row before the process exists: ticket_id, kind, baseline_sha
 // and prompt_hash are known at cut time, but pgid and log_path are named after the row's own id
 // (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
-func (s *Store) InsertRunSkeleton(ctx context.Context, taskID, kind, baselineSHA, promptHash string) (int64, error) {
+func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO runs (task_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?)`,
-		taskID, kind, baselineSHA, promptHash)
+		`INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?)`,
+		ticketID, kind, baselineSHA, promptHash)
 	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", taskID, err)
+		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("run id for %s: %w", taskID, err)
+		return 0, fmt.Errorf("run id for %s: %w", ticketID, err)
 	}
 	return id, nil
 }
@@ -55,16 +55,16 @@ func (s *Store) RecordDisposition(
 
 // InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no
 // pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
-func (s *Store) InsertCutFailedRun(ctx context.Context, taskID, promptHash string, at time.Time) (int64, error) {
+func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO runs (task_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?)`,
-		taskID, promptHash, plan.OutcomeCutFailed.String(), at.UTC().Format(time.RFC3339Nano))
+		INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?)`,
+		ticketID, promptHash, plan.OutcomeCutFailed.String(), at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return 0, fmt.Errorf("insert cut-failed run for %s: %w", taskID, err)
+		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("cut-failed run id for %s: %w", taskID, err)
+		return 0, fmt.Errorf("cut-failed run id for %s: %w", ticketID, err)
 	}
 	return id, nil
 }
@@ -72,7 +72,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, taskID, promptHash strin
 // PendingRun is one run this tick must check for liveness and, if it has died, dispose of.
 type PendingRun struct {
 	ID            int64
-	TaskID        string
+	TicketID      string
 	Pgid          int
 	ProcStartedAt time.Time
 	BaselineSHA   string
@@ -83,7 +83,7 @@ type PendingRun struct {
 // set the loop's liveness+disposition pass must check, every tick, restart or not.
 func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRun, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, task_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
+		SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
 		WHERE pgid IS NOT NULL AND outcome IS NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("select pending runs: %w", err)
@@ -95,7 +95,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 		var p PendingRun
 		var startedAt string
 		var baselineSHA, logPath sql.NullString
-		if err := rows.Scan(&p.ID, &p.TaskID, &p.Pgid, &startedAt, &baselineSHA, &logPath); err != nil {
+		if err := rows.Scan(&p.ID, &p.TicketID, &p.Pgid, &startedAt, &baselineSHA, &logPath); err != nil {
 			return nil, fmt.Errorf("scan pending run: %w", err)
 		}
 		if p.ProcStartedAt, err = time.Parse(time.RFC3339Nano, startedAt); err != nil {
@@ -110,7 +110,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	return pending, nil
 }
 
-// RunSummary is the latest run the page and the launch-eligibility check need per task.
+// RunSummary is the latest run the page and the launch-eligibility check need per ticket.
 type RunSummary struct {
 	ID            int64
 	Pgid          *int
@@ -127,15 +127,15 @@ type RunSummary struct {
 	PromptHash string
 }
 
-// LatestRunsByTask returns each task's single most recent run (highest id). Its presence alone
+// LatestRunsByTicket returns each ticket's single most recent run (highest id). Its presence alone
 // is what LaunchPlan's "no prior run" rule and the page's pgid/elapsed/log-path columns need.
-func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, error) {
+func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.id, r.task_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
+		SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
 		       r.outcome, r.exit_code, r.ended_at, r.prompt_hash
 		FROM runs r
-		JOIN (SELECT task_id, MAX(id) AS id FROM runs GROUP BY task_id) latest
-		  ON latest.task_id = r.task_id AND latest.id = r.id`)
+		JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
+		  ON latest.ticket_id = r.ticket_id AND latest.id = r.id`)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}
@@ -143,12 +143,12 @@ func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, er
 
 	summaries := map[string]RunSummary{}
 	for rows.Next() {
-		var taskID string
+		var ticketID string
 		var summary RunSummary
 		var pgid sql.NullInt64
 		var procStartedAt, baselineSHA, logPath, outcome, endedAt, promptHash sql.NullString
 		var exitCode sql.NullInt64
-		if err := rows.Scan(&summary.ID, &taskID, &pgid, &procStartedAt, &baselineSHA, &logPath,
+		if err := rows.Scan(&summary.ID, &ticketID, &pgid, &procStartedAt, &baselineSHA, &logPath,
 			&outcome, &exitCode, &endedAt, &promptHash); err != nil {
 			return nil, fmt.Errorf("scan latest run: %w", err)
 		}
@@ -180,7 +180,7 @@ func (s *Store) LatestRunsByTask(ctx context.Context) (map[string]RunSummary, er
 		}
 		summary.BaselineSHA, summary.LogPath = baselineSHA.String, logPath.String
 		summary.PromptHash = promptHash.String
-		summaries[taskID] = summary
+		summaries[ticketID] = summary
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate latest runs: %w", err)
@@ -199,21 +199,21 @@ func outcomeFromString(s string) plan.Outcome {
 	}
 }
 
-// VerbIntent is one queued action against a task — the loop's own read-then-act sequence, never
+// VerbIntent is one queued action against a ticket — the loop's own read-then-act sequence, never
 // a handler's (see server.go's handleVerb).
 type VerbIntent struct {
-	ID     int64
-	TaskID string
+	ID       int64
+	TicketID string
 }
 
-// QueueVerbIntent records one requested verb against a task. A handler only ever does this one
+// QueueVerbIntent records one requested verb against a ticket. A handler only ever does this one
 // blind INSERT; the loop is the sole reader and actor (inv. 9).
-func (s *Store) QueueVerbIntent(ctx context.Context, taskID, verb string, at time.Time) error {
+func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at time.Time) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO intents (at, task_id, verb) VALUES (?, ?, ?)`,
-		at.UTC().Format(time.RFC3339Nano), taskID, verb)
+		`INSERT INTO intents (at, ticket_id, verb) VALUES (?, ?, ?)`,
+		at.UTC().Format(time.RFC3339Nano), ticketID, verb)
 	if err != nil {
-		return fmt.Errorf("queue %s intent for %s: %w", verb, taskID, err)
+		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
 	}
 	return nil
 }
@@ -221,7 +221,7 @@ func (s *Store) QueueVerbIntent(ctx context.Context, taskID, verb string, at tim
 // PendingVerbIntents returns every unconsumed intent for verb, oldest first.
 func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbIntent, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, task_id FROM intents WHERE verb = ? AND consumed_at IS NULL ORDER BY id`, verb)
+		`SELECT id, ticket_id FROM intents WHERE verb = ? AND consumed_at IS NULL ORDER BY id`, verb)
 	if err != nil {
 		return nil, fmt.Errorf("select %s intents: %w", verb, err)
 	}
@@ -230,7 +230,7 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 	var intents []VerbIntent
 	for rows.Next() {
 		var v VerbIntent
-		if err := rows.Scan(&v.ID, &v.TaskID); err != nil {
+		if err := rows.Scan(&v.ID, &v.TicketID); err != nil {
 			return nil, fmt.Errorf("scan %s intent: %w", verb, err)
 		}
 		intents = append(intents, v)
@@ -241,27 +241,27 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 	return intents, nil
 }
 
-// PendingIntentsByTask is every unconsumed intent, keyed by task, most recent last.
-func (s *Store) PendingIntentsByTask(ctx context.Context) (map[string][]string, error) {
+// PendingIntentsByTicket is every unconsumed intent, keyed by ticket, most recent last.
+func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT task_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id`)
+		`SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("select pending intents: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	byTask := map[string][]string{}
+	byTicket := map[string][]string{}
 	for rows.Next() {
-		var taskID, verb string
-		if err := rows.Scan(&taskID, &verb); err != nil {
+		var ticketID, verb string
+		if err := rows.Scan(&ticketID, &verb); err != nil {
 			return nil, fmt.Errorf("scan pending intent: %w", err)
 		}
-		byTask[taskID] = append(byTask[taskID], verb)
+		byTicket[ticketID] = append(byTicket[ticketID], verb)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate pending intents: %w", err)
 	}
-	return byTask, nil
+	return byTicket, nil
 }
 
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
@@ -274,11 +274,11 @@ func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) e
 	return nil
 }
 
-// ActiveLaunchHashes returns the authorised prompt hash per task, for every task in an active
+// ActiveLaunchHashes returns the authorised prompt hash per ticket, for every ticket in an active
 // launch — what the loop's launch-eligibility check compares the recomposed hash against.
 func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.task_id, lm.prompt_hash FROM launch_members lm
+		SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
 		JOIN launches l ON l.id = lm.launch_id
 		WHERE l.state = 'active'`)
 	if err != nil {
@@ -288,11 +288,11 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 
 	hashes := map[string]string{}
 	for rows.Next() {
-		var taskID, hash string
-		if err := rows.Scan(&taskID, &hash); err != nil {
+		var ticketID, hash string
+		if err := rows.Scan(&ticketID, &hash); err != nil {
 			return nil, fmt.Errorf("scan active launch hash: %w", err)
 		}
-		hashes[taskID] = hash
+		hashes[ticketID] = hash
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate active launch hashes: %w", err)
@@ -300,13 +300,13 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 	return hashes, nil
 }
 
-// RunIDsForTask returns every run id ever recorded for a task, oldest first -- what
+// RunIDsForTicket returns every run id ever recorded for a ticket, oldest first -- what
 // remove-worktree's log pruning needs to find every runs/<id>.jsonl, runs/<id>.prompt and
 // runs/<id>.diff it left behind (docs/prds/prd-command-centre.md § Phase 6).
-func (s *Store) RunIDsForTask(ctx context.Context, taskID string) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE task_id = ? ORDER BY id`, taskID)
+func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE ticket_id = ? ORDER BY id`, ticketID)
 	if err != nil {
-		return nil, fmt.Errorf("select run ids for %s: %w", taskID, err)
+		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -319,23 +319,23 @@ func (s *Store) RunIDsForTask(ctx context.Context, taskID string) ([]int64, erro
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate run ids for %s: %w", taskID, err)
+		return nil, fmt.Errorf("iterate run ids for %s: %w", ticketID, err)
 	}
 	return ids, nil
 }
 
-// LatestRunLog returns the newest run's log path for a task and whether that run has ended. A
-// task with no run at all reads as ended with no path, so a caller tailing the log streams
+// LatestRunLog returns the newest run's log path for a ticket and whether that run has ended. A
+// ticket with no run at all reads as ended with no path, so a caller tailing the log streams
 // nothing rather than failing.
-func (s *Store) LatestRunLog(ctx context.Context, taskURL string) (path string, ended bool, err error) {
+func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
 	var logPath, endedAt sql.NullString
 	row := s.db.QueryRowContext(ctx,
-		`SELECT log_path, ended_at FROM runs WHERE task_id = ? ORDER BY id DESC LIMIT 1`, taskURL)
+		`SELECT log_path, ended_at FROM runs WHERE ticket_id = ? ORDER BY id DESC LIMIT 1`, ticketURL)
 	switch err := row.Scan(&logPath, &endedAt); {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", true, nil
 	case err != nil:
-		return "", false, fmt.Errorf("select latest run log for %s: %w", taskURL, err)
+		return "", false, fmt.Errorf("select latest run log for %s: %w", ticketURL, err)
 	default:
 		return logPath.String, endedAt.Valid, nil
 	}

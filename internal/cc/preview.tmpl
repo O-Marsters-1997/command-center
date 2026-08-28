@@ -9,9 +9,9 @@
   </tr>
   {{range .}}
   <tr>
-    <td>{{if not .Refused}}<input type="checkbox" name="task" value="{{.TicketURL}}" checked><input type="hidden" name="hash" value="{{.TicketURL}} {{.Hash}}">{{end}}</td>
+    <td>{{if not .Refused}}<input type="checkbox" name="task" value="{{.URL}}" checked><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
     <td>{{.Label}}</td>
-    <td>{{.TicketURL}}</td>
+    <td>{{.URL}}</td>
     <td>{{.Base}}</td>
     <td>{{.BaseVerdict}}</td>
     <td>{{.Reason}}</td>

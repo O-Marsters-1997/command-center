@@ -77,7 +77,7 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
 	}
 }
@@ -106,22 +106,22 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending cancel intents = %+v, want exactly one for sandbox://CC-1", pending)
 	}
 }
 
-func TestVerbRejectsUnknownTaskOrUnsupportedVerb(t *testing.T) {
+func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{
-		{name: "unknown task", query: "verb=kill&task=sandbox://GHOST"},
+		{name: "unknown ticket", query: "verb=kill&task=sandbox://GHOST"},
 		{name: "unsupported verb", query: "verb=bogus-verb&task=sandbox://CC-1"},
 		{name: "missing verb", query: "task=sandbox://CC-1"},
-		{name: "missing task", query: "verb=kill"},
+		{name: "missing ticket", query: "verb=kill"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -169,7 +169,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
 	}
 }

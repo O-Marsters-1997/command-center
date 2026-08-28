@@ -21,7 +21,7 @@ func conflictingAdvance(t *testing.T, repoPath string, store *cc.Store, f stacke
 	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(context.Background(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+	if err := store.RecordPush(context.Background(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,10 +110,10 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	c.tick(t) // the next tick's observation is the one that reads MERGE_HEAD
 
 	page := renderPage(t, c.server)
-	if state := rowState(t, page, c.f.child.TicketURL); state != "refresh_conflicted" {
+	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
 		t.Fatalf("child's state = %q, want refresh_conflicted", state)
 	}
-	if got := rowCellAt(t, page, c.f.child.TicketURL, 10); got != c.f.childWorktree {
+	if got := rowCellAt(t, page, c.f.child.URL, 10); got != c.f.childWorktree {
 		t.Errorf("child's rendered worktree = %q, want the path to shell into: %q", got, c.f.childWorktree)
 	}
 	if !strings.Contains(page, `value="`+plan.VerbAbort+`"`) {
@@ -130,7 +130,7 @@ func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testin
 	c.tick(t)
 	c.tick(t)
 
-	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.TicketURL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	c.tick(t)
@@ -151,7 +151,7 @@ func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testin
 	if c.midMerge(t) {
 		t.Fatal("the automatic pass re-conflicted the aborted merge: abort would be futile")
 	}
-	if state := rowState(t, renderPage(t, c.server), c.f.child.TicketURL); state != "base_moved" {
+	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state != "base_moved" {
 		t.Errorf("child's state after abort = %q, want base_moved: the base still moved, refresh is the human's now", state)
 	}
 }
@@ -166,7 +166,7 @@ func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *t
 	c.tick(t)
 
 	for _, verb := range []string{plan.VerbAbort, plan.VerbRefresh} {
-		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.TicketURL, verb, at.Add(time.Hour)); err != nil {
+		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -200,8 +200,8 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	c.tick(t)
 	c.tick(t)
 
-	c.aliveRuns[c.f.child.TicketURL] = true
-	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.TicketURL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	c.aliveRuns[c.f.child.URL] = true
+	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	c.tick(t)
@@ -235,14 +235,14 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 
 	c.tick(t)
 
-	if state := rowState(t, renderPage(t, c.server), c.f.child.TicketURL); state == "refresh_conflicted" {
+	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state == "refresh_conflicted" {
 		t.Error("child still reads refresh_conflicted after the conflict was resolved and committed by hand")
 	}
 	pushes, err := c.store.LatestPushes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[c.f.child.TicketURL].BaseSHAAtPush; got != parentTip1 {
+	if got := pushes[c.f.child.URL].BaseSHAAtPush; got != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s: the push step delivers the "+
 			"hand-resolved merge", got, parentTip1)
 	}

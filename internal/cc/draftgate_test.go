@@ -43,7 +43,7 @@ func writeFakeGhReadyScript(t *testing.T, binDir, logPath string, readyFails boo
 	}
 }
 
-// draftGateFixture is a consumer task with a cross-repo gating blocker, pushed and open, ready
+// draftGateFixture is a consumer ticket with a cross-repo gating blocker, pushed and open, ready
 // for applyDraftGate to decide over -- the shape every test below starts from.
 type draftGateFixture struct {
 	store *cc.Store
@@ -61,19 +61,19 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	}
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	consumer := cc.Task{
-		TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
+	consumer := cc.Ticket{
+		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
 	}
-	blocker := cc.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{consumer, blocker}); err != nil {
+	blocker := cc.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{consumer, blocker}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, consumer.TicketURL, at)
+	dispositionAsPushed(t, store, consumer.URL, at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(t.Context(), consumer.TicketURL, tip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(t.Context(), consumer.URL, tip, "main", "main-tip", at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -279,11 +279,11 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTasks(t.Context(), tasks); err != nil {
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,9 +308,9 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 }
 
-// TestPushOneOpensADraftPRForATaskWithAGatingEdge is issue #57 AC1's first half: a consumer
-// task with a cross-repo blocker opens its PR as a draft.
-func TestPushOneOpensADraftPRForATaskWithAGatingEdge(t *testing.T) {
+// TestPushOneOpensADraftPRForATicketWithAGatingEdge is issue #57 AC1's first half: a consumer
+// ticket with a cross-repo blocker opens its PR as a draft.
+func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
@@ -319,16 +319,16 @@ func TestPushOneOpensADraftPRForATaskWithAGatingEdge(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	consumer := cc.Task{
-		TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
+	consumer := cc.Ticket{
+		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
 	}
-	blocker := cc.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{consumer, blocker}); err != nil {
+	blocker := cc.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{consumer, blocker}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, consumer.TicketURL, at)
+	dispositionAsPushed(t, store, consumer.URL, at)
 
 	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -344,12 +344,12 @@ func TestPushOneOpensADraftPRForATaskWithAGatingEdge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(body), "--draft") {
-		t.Errorf("gh log %q does not contain --draft for a task with a gating edge", body)
+		t.Errorf("gh log %q does not contain --draft for a ticket with a gating edge", body)
 	}
 }
 
 // TestPushOneOpensANonDraftPRWithNoGatingEdge is issue #57 AC1's parity clause: a plain
-// single-repo task opens a non-draft PR exactly as in Phase 2.
+// single-repo ticket opens a non-draft PR exactly as in Phase 2.
 func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
@@ -359,12 +359,12 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -380,6 +380,6 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(body), "--draft") {
-		t.Errorf("gh log %q contains --draft for a plain task; Phase 2 parity requires none", body)
+		t.Errorf("gh log %q contains --draft for a plain ticket; Phase 2 parity requires none", body)
 	}
 }

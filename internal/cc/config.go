@@ -21,13 +21,13 @@ type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
-	Tasks        []Task   `toml:"task"`
+	Tickets      []Ticket `toml:"task"`
 	Repos        []Repo   `toml:"repo"`
 }
 
-// Task is one [[task]] block: Phase 1 intake, upserted on TicketURL at startup.
-type Task struct {
-	TicketURL string   `toml:"ticket_url"`
+// Ticket is one [[task]] block: Phase 1 intake, upserted on URL at startup.
+type Ticket struct {
+	URL       string   `toml:"ticket_url"`
 	Repo      string   `toml:"repo"`
 	Branch    string   `toml:"branch"`
 	BlockedBy []string `toml:"blocked_by"`
@@ -96,9 +96,9 @@ func LoadConfig(path string) (Config, error) {
 	for _, r := range cfg.Repos {
 		byName[r.Name] = true
 	}
-	for _, t := range cfg.Tasks {
+	for _, t := range cfg.Tickets {
 		if !byName[t.Repo] {
-			return Config{}, fmt.Errorf("task %s names repo %q with no [[repo]] block", t.TicketURL, t.Repo)
+			return Config{}, fmt.Errorf("ticket %s names repo %q with no [[repo]] block", t.URL, t.Repo)
 		}
 	}
 	return cfg, nil

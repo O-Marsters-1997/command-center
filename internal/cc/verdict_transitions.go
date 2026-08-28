@@ -10,7 +10,7 @@ import (
 
 const eventVerdictTransition = "verdict_transition"
 
-// recordVerdictTransitions logs one event per task whose CI verdict label ("checking",
+// recordVerdictTransitions logs one event per ticket whose CI verdict label ("checking",
 // "review_me", "needs_you", "base_moved" or "waiting_on_producer_deploy") differs from what the
 // previous tick recorded -- the last category of what `events` needs to reconstruct the whole run
 // (docs/prds/prd-command-centre.md § Phase 6).
@@ -18,11 +18,11 @@ const eventVerdictTransition = "verdict_transition"
 // tick's observation, so a transition an operator would see on the next page load is exactly
 // the transition logged here.
 func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
@@ -43,12 +43,12 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 
 	now := l.now()
 	changed := false
-	for _, t := range tasks {
-		summary, ok := latest[t.TicketURL]
+	for _, t := range tickets {
+		summary, ok := latest[t.URL]
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
-		pf := pushFacts[t.TicketURL]
+		pf := pushFacts[t.URL]
 		if pf.Refused || pf.Failed || obs.PRs[t.Branch].State != gh.Open {
 			continue
 		}
@@ -56,14 +56,14 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 		fact := &plan.RunFact{PROpen: true}
 		applyVerdict(fact, t, obs, vd)
 		current := verdictLabel(fact)
-		if current == "" || lastVerdicts[t.TicketURL] == current {
+		if current == "" || lastVerdicts[t.URL] == current {
 			continue
 		}
 
-		lastVerdicts[t.TicketURL] = current
+		lastVerdicts[t.URL] = current
 		changed = true
 		if err := l.store.AppendEvent(ctx, Event{
-			At: now, TaskURL: t.TicketURL, Kind: eventVerdictTransition,
+			At: now, TicketURL: t.URL, Kind: eventVerdictTransition,
 			Detail: fmt.Sprintf("%s: %s", current, fact.VerdictReason),
 		}); err != nil {
 			return err
@@ -75,7 +75,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 	return l.store.SaveLastVerdicts(ctx, lastVerdicts)
 }
 
-// verdictLabel names a task's just-computed verdict for comparison against the last recorded
+// verdictLabel names a ticket's just-computed verdict for comparison against the last recorded
 // one, and (server.go's derive) a row's own label as its dependents' BaseVerdict. Empty for a nil
 // fact (no run yet) or when applyVerdict left every flag untouched -- no predicate configured for
 // this repo (§7) -- neither of which may count as a transition.
