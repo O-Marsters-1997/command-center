@@ -86,7 +86,7 @@ func boardFor(t *testing.T, store *cc.Store) string {
 	t.Helper()
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return renderBoard(t, cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, nil, ""))
+	return renderBoard(t, cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, ""))
 }
 
 // TestBoardRendersAFanOutAsOneGroup covers issue #74's first two acceptance criteria: four rows

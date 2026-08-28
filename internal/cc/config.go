@@ -3,7 +3,9 @@
 package cc
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -14,12 +16,13 @@ import (
 
 // Config is the user-edited TOML file named by --config. See docs/designs/command-centre-design.md §8.
 type Config struct {
+	// DataDir holds the resolved data directory after LoadConfig, not the raw config key.
+	DataDir      string   `toml:"data_dir"`
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
 	Tasks        []Task   `toml:"task"`
 	Repos        []Repo   `toml:"repo"`
-	Seams        []Seam   `toml:"seam"`
 }
 
 // Task is one [[task]] block: Phase 1 intake, upserted on TicketURL at startup.
@@ -28,30 +31,24 @@ type Task struct {
 	Repo      string   `toml:"repo"`
 	Branch    string   `toml:"branch"`
 	BlockedBy []string `toml:"blocked_by"`
-	Seams     []string `toml:"seams"`
 }
 
-// Repo is one [[repo]] block. Path is relative to the workspace root.
+// Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
+// Path, an existing checkout. Exactly one of the two.
 // Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
 // the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
 	Name        string            `toml:"name"`
+	Remote      string            `toml:"remote"`
 	Path        string            `toml:"path"`
 	Stacking    bool              `toml:"stacking"`
 	CompatCheck string            `toml:"compat_check"`
 	MergifySHA  string            `toml:"mergify_sha"`
 	Deny        []string          `toml:"deny"`
 	Checks      verdict.Predicate `toml:"checks"`
-}
-
-// Seam is one [[seam]] block: the retirement pointer for a named seam
-// (docs/designs/command-centre-design.md § 6 job 3). LandsAt is optional; its absence, or no
-// block at all, means the seam has no retirement.
-type Seam struct {
-	Name      string   `toml:"name"`
-	Repo      string   `toml:"repo"`
-	Producers []string `toml:"producers"`
-	LandsAt   []string `toml:"lands_at"`
+	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
+	// downstream reads this and derives no path of its own. Not a config key.
+	Checkout string `toml:"-"`
 }
 
 const (
@@ -66,12 +63,33 @@ var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
 }
 
-// LoadConfig decodes the config file and rejects a task whose repo has no [[repo]] block, or a
-// retiring seam (one with lands_at) whose repo has none either.
+// LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and
+// rejects a task whose repo has no [[repo]] block. Where the config file sits decides one thing
+// only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
+	}
+
+	configDir, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve config path %s: %w", path, err)
+	}
+	dataDir, err := ResolveDataDir(cfg.DataDir)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DataDir = dataDir
+	if err := applyAgentCommandEnv(&cfg); err != nil {
+		return Config{}, err
+	}
+	for i, r := range cfg.Repos {
+		checkout, err := r.CheckoutPath(dataDir, configDir)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.Repos[i].Checkout = checkout
 	}
 
 	byName := make(map[string]bool, len(cfg.Repos))
@@ -83,12 +101,26 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, fmt.Errorf("task %s names repo %q with no [[repo]] block", t.TicketURL, t.Repo)
 		}
 	}
-	for _, s := range cfg.Seams {
-		if len(s.LandsAt) > 0 && !byName[s.Repo] {
-			return Config{}, fmt.Errorf("seam %s names repo %q with no [[repo]] block", s.Name, s.Repo)
-		}
-	}
 	return cfg, nil
+}
+
+// agentCommandEnv replaces agent_command with a machine-local wrapper, as a JSON array.
+const agentCommandEnv = "CC_AGENT_COMMAND"
+
+func applyAgentCommandEnv(cfg *Config) error {
+	raw := os.Getenv(agentCommandEnv)
+	if raw == "" {
+		return nil
+	}
+	var argv []string
+	if err := json.Unmarshal([]byte(raw), &argv); err != nil {
+		return fmt.Errorf("%s is not a JSON array of strings: %w", agentCommandEnv, err)
+	}
+	if len(argv) == 0 {
+		return fmt.Errorf("%s is an empty array", agentCommandEnv)
+	}
+	cfg.AgentCommand = argv
+	return nil
 }
 
 // stackingByRepo indexes each configured repo's stacking flag by name — consulted on every
@@ -143,10 +175,10 @@ func compatCheckByRepo(repos []Repo) map[string]string {
 	return m
 }
 
-func repoPathsByName(root string, repos []Repo) map[string]string {
+func repoPathsByName(repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {
-		m[r.Name] = filepath.Join(root, r.Path)
+		m[r.Name] = r.Checkout
 	}
 	return m
 }

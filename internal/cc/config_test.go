@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -174,25 +175,6 @@ func TestLoadConfigParsesChecks(t *testing.T) {
 	}
 }
 
-// TestLoadConfigParsesSeamsInConfigOrder covers issue #52's `seams[]`: a task's [[task]] block
-// carries the seam names composePrompt later resolves, in the order they were declared.
-func TestLoadConfigParsesSeamsInConfigOrder(t *testing.T) {
-	t.Parallel()
-
-	body := "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\nseams = [\"one\", \"two\"]\n\n" +
-		"[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.Tasks) != 1 {
-		t.Fatalf("tasks = %+v", got.Tasks)
-	}
-	if want := []string{"one", "two"}; !slices.Equal(got.Tasks[0].Seams, want) {
-		t.Errorf("seams = %v, want %v", got.Tasks[0].Seams, want)
-	}
-}
-
 func TestLoadConfigUnknownRepo(t *testing.T) {
 	t.Parallel()
 
@@ -206,56 +188,63 @@ func TestLoadConfigUnknownRepo(t *testing.T) {
 	}
 }
 
-// TestLoadConfigParsesSeamBlocks covers issue #58's retirement pointer config: a [[seam]]
-// block's producers and lands_at, in declared order.
-func TestLoadConfigParsesSeamBlocks(t *testing.T) {
+// TestLoadConfigResolvesRepoPathsAgainstTheConfigFile covers phase 3: a relative path is
+// relative to the directory the config file is in, and an absolute one is taken as written.
+func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
 	t.Parallel()
 
-	body := "[[seam]]\n" +
-		"name       = \"gql\"\n" +
-		"repo       = \"r\"\n" +
-		"producers  = [\"sandbox://PRODUCER\"]\n" +
-		"lands_at   = [\"schema.graphql\", \"types.graphql\"]\n\n" +
-		"[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	elsewhere := t.TempDir()
+	path := writeConfig(t, "[[repo]]\nname = \"rel\"\npath = \"checkouts/rel\"\n\n"+
+		"[[repo]]\nname = \"abs\"\npath = "+strconv.Quote(elsewhere)+"\n")
+
+	got, err := cc.LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if len(got.Seams) != 1 {
-		t.Fatalf("seams = %+v, want 1", got.Seams)
+	if want := filepath.Join(filepath.Dir(path), "checkouts", "rel"); got.Repos[0].Checkout != want {
+		t.Errorf("relative checkout = %q, want %q", got.Repos[0].Checkout, want)
 	}
-	seam := got.Seams[0]
-	if seam.Name != "gql" || seam.Repo != "r" {
-		t.Errorf("seam = %+v", seam)
-	}
-	if want := []string{"sandbox://PRODUCER"}; !slices.Equal(seam.Producers, want) {
-		t.Errorf("producers = %v, want %v", seam.Producers, want)
-	}
-	if want := []string{"schema.graphql", "types.graphql"}; !slices.Equal(seam.LandsAt, want) {
-		t.Errorf("lands_at = %v, want %v", seam.LandsAt, want)
+	if got.Repos[1].Checkout != elsewhere {
+		t.Errorf("absolute checkout = %q, want %q", got.Repos[1].Checkout, elsewhere)
 	}
 }
 
-// TestLoadConfigSeamWithNoLandsAtNeedsNoRepoBlock covers issue #58's AC4: lands_at is optional,
-// so a seam declared without it (no retirement) is never required to name a real [[repo]].
-func TestLoadConfigSeamWithNoLandsAtNeedsNoRepoBlock(t *testing.T) {
+func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
 	t.Parallel()
 
-	body := "[[seam]]\nname = \"gql\"\nrepo = \"nope\"\n"
-	if _, err := cc.LoadConfig(writeConfig(t, body)); err != nil {
-		t.Fatalf("LoadConfig: %v, want no error for a seam with no lands_at", err)
+	_, err := cc.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
+	if err == nil || !strings.Contains(err.Error(), "r") {
+		t.Errorf("error = %v, want one naming the repo with no path", err)
 	}
 }
 
-func TestLoadConfigSeamWithLandsAtUnknownRepo(t *testing.T) {
-	t.Parallel()
+// TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
+// on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
+func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
+	t.Setenv("CC_DATA_DIR", t.TempDir())
+	path := writeConfig(t, "agent_command = [\"claude\", \"-p\", \"{prompt}\"]\n")
 
-	body := "[[seam]]\nname = \"gql\"\nrepo = \"nope\"\nlands_at = [\"schema.graphql\"]\n"
-	_, err := cc.LoadConfig(writeConfig(t, body))
-	if err == nil {
-		t.Fatal("want an error for a retiring seam naming a repo with no [[repo]] block")
+	got, err := cc.LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "nope") {
-		t.Errorf("error %q does not name the missing repo", err)
+	if want := []string{"claude", "-p", "{prompt}"}; !slices.Equal(got.AgentCommand, want) {
+		t.Errorf("agent_command with no override = %v, want the tracked %v", got.AgentCommand, want)
+	}
+
+	t.Setenv("CC_AGENT_COMMAND", `["caffeinate", "-i", "claude", "-p", "{prompt}"]`)
+	got, err = cc.LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"caffeinate", "-i", "claude", "-p", "{prompt}"}; !slices.Equal(got.AgentCommand, want) {
+		t.Errorf("agent_command = %v, want the override %v", got.AgentCommand, want)
+	}
+
+	for _, bad := range []string{"caffeinate -i claude", "[]", `{"a":1}`} {
+		t.Setenv("CC_AGENT_COMMAND", bad)
+		if _, err := cc.LoadConfig(path); err == nil {
+			t.Errorf("CC_AGENT_COMMAND=%q was accepted, want a refusal", bad)
+		}
 	}
 }

@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	config := flag.String("config", ".claude/command-centre.toml", "path to config file")
+	config := flag.String("config", "cc/config.toml", "path to config file")
 	flag.Parse()
 
 	log.SetFlags(log.Ltime)

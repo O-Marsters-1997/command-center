@@ -1,7 +1,4 @@
--- Schema version 1. Every table Phases 1-6 need is created here: there is no migration code,
--- and OpenStore refuses a version mismatch, so a later phase adding DDL would brick every
--- existing developer DB. Later phases add rows, not tables.
-
+-- +goose Up
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -11,8 +8,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     ticket_url TEXT PRIMARY KEY,
     repo       TEXT NOT NULL,
     branch     TEXT NOT NULL,
-    blocked_by TEXT NOT NULL DEFAULT '[]',
-    seams      TEXT NOT NULL DEFAULT '[]'
+    blocked_by TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS launches (

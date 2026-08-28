@@ -87,7 +87,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	for _, ticketURL := range tickets {
-		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: ticketURL}, nil))
+		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: ticketURL}))
 		if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-a", at); err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
-	server := cc.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, nil, "")
+	server := cc.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, runningTicket); state != "running" {
 		t.Errorf("running member's rendered state = %q, want running: a row that ever ran is never cancelled", state)

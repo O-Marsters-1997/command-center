@@ -121,7 +121,7 @@ type RunSummary struct {
 	EndedAt       *time.Time
 	LogPath       string
 	BaselineSHA   string
-	// PromptHash is what this run was spawned (or cut-failed) against — the page's own seam-
+	// PromptHash is what this run was spawned (or cut-failed) against — the page's own prompt-
 	// changed comparison for a row that has already run compares a fresh recomposition against
 	// this, never the launch membership's hash, which a later re-run or relaunch supersedes.
 	PromptHash string

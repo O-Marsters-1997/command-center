@@ -1,13 +1,20 @@
 # A runnable sample config, pointed at this repository.
 #
-# The real config lives at <workspace>/.claude/command-centre.toml, which .gitignore excludes,
-# so this is the copy a reviewer can run:
+# This is the copy a reviewer can run:
 #
 #   just run --config docs/command-centre.sample.toml
+#
+# Where the config file sits decides nothing except what a relative [[repo]] path is relative
+# to. Where the database, run logs and checkouts live is data_dir's job, below.
 #
 # The two branch names below are invented and have no pull requests, so the page renders CC-1
 # as "ready" and CC-2 as "blocked" naming CC-1 — truthfully, off real gh output. Stacking is on,
 # so once CC-1's PR opens, CC-2 cuts and pushes off CC-1's own branch rather than main.
+
+# Where the app keeps everything: state/ for the database, lock, run logs and agent settings,
+# repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that, os.UserConfigDir()/command-centre.
+# Commented out here so running the sample does not collide with a real instance's data.
+# data_dir = "~/cc-sample-data"
 
 max_agents = 2
 port       = 7777
@@ -29,7 +36,12 @@ repo       = "command-center"
 branch     = "cc-sample-second"
 blocked_by = ["sandbox://CC-1"]
 
+# A repo is located by exactly one of remote and path. path points at a checkout that already
+# exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this
+# same file run on a machine with no tree on it:
+#
+#   remote = "git@github.com:O-Marsters-1997/command-center.git"
 [[repo]]
 name     = "command-center"
-path     = "."             # relative to the workspace root: the directory holding docs/
+path     = ".."            # relative to this file's own directory, docs/, so: the repo root
 stacking = true

@@ -34,5 +34,5 @@ blocked_by = ["sandbox://CC-3"]
 
 [[repo]]
 name     = "repo"
-path     = "repo"
+path     = "../repo"
 stacking = false

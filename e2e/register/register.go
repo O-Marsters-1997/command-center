@@ -79,7 +79,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	if err != nil {
 		return err
 	}
-	ws, err := cc.ResolveWorkspace(configPath)
+	ws, err := cc.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(cc.NewServer(store, time.Now, cfg.Repos, cfg.Seams, ws.Root))
+	server := httptest.NewServer(cc.NewServer(store, time.Now, cfg.Repos, ws.DataDir))
 	defer server.Close()
 
 	var body io.Reader

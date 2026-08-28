@@ -20,10 +20,10 @@ func GatingBlockers(t Task, byURL map[string]Task) []Task {
 }
 
 // OpensAsDraft decides whether a task's pull request should be created as a draft: any task
-// with a gating edge or a seam (docs/designs/command-centre-design.md § 6 job 2). DraftGate
-// decides the steady state; this is the one-off creation-time call.
+// with a gating edge (docs/designs/command-centre-design.md § 6 job 2). DraftGate decides the
+// steady state; this is the one-off creation-time call.
 func OpensAsDraft(t Task, byURL map[string]Task) bool {
-	return len(GatingBlockers(t, byURL)) > 0 || len(t.Seams) > 0
+	return len(GatingBlockers(t, byURL)) > 0
 }
 
 // DraftGate decides whether a consumer's pull request should stay a draft: any gating blocker

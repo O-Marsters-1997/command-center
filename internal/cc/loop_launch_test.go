@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -36,7 +35,7 @@ func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, nil))
+	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
 	authoriseTask(t, store, task.TicketURL, hash, at)
 
 	fake := newFakeRunner()
@@ -77,26 +76,22 @@ func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
 	}
 }
 
-// TestLoopComposesSeamsIntoTheSpawnedPrompt covers issue #52's AC1 at the spawn path: the file
-// written for the agent is the implement instruction plus every configured seam's content, in
-// config order — the same composition the preview showed when the launch was authorised.
-func TestLoopComposesSeamsIntoTheSpawnedPrompt(t *testing.T) {
+// TestLoopWritesTheComposedPromptAndTicketBody goldens the file written for the agent: the
+// implement instruction the preview showed at authorisation, then the ticket's body.
+func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
 	installFakeGh(t, false)
-	writeSeamFile(t, root, "one", "seam one content")
-	writeSeamFile(t, root, "two", "seam two content")
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one", "two"}}
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	planTask := plan.Task{TicketURL: task.TicketURL, Seams: task.Seams}
-	hash := plan.Hash(plan.Compose(planTask, []string{"seam one content", "seam two content"}))
+	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
 	authoriseTask(t, store, task.TicketURL, hash, at)
 
 	fake := newFakeRunner()
@@ -112,174 +107,26 @@ func TestLoopComposesSeamsIntoTheSpawnedPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := plan.Compose(planTask, []string{"seam one content", "seam two content"})
-	if !strings.HasPrefix(string(written), want) {
-		t.Errorf("prompt = %q, want it to start with the seam-composed prompt %q", written, want)
-	}
+	assertGolden(t, goldenPrompt, written)
 }
 
-// TestLoopNeverSpawnsATaskWhoseSeamFileIsMissing covers issue #52's AC2 at the spawn path: even
-// if a launch was somehow authorised, a task naming a seam with no file is never spawned.
-func TestLoopNeverSpawnsATaskWhoseSeamFileIsMissing(t *testing.T) {
+// TestLoopNeverSpawnsOnAPromptHashMismatch covers issue #55's AC1: a member authorised against a
+// hash the task no longer composes to sits queued forever, spawning nothing, however many ticks
+// pass -- the tick refuses on the mismatch rather than composing around it.
+func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"ghost"}}
+	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	// Any hash authorises: composePrompt refuses before a hash comparison is even possible.
-	authoriseTask(t, store, task.TicketURL, "any-hash", at)
-
-	fake := newFakeRunner()
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a task naming a missing seam must never be spawned", len(fake.spawns))
-	}
-}
-
-// TestLoopSpawnsFromLandsAtOnceTheProducerHasMerged covers issue #58's AC1 at the spawn path:
-// once a seam's producer has merged, the spawned prompt carries the lands_at path's content
-// off origin/main, not the (now stale) seam file.
-func TestLoopSpawnsFromLandsAtOnceTheProducerHasMerged(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-	writeSeamFile(t, root, "gql", "stale seam text")
-
-	producerFile := filepath.Join(repoPath, "schema.graphql")
-	if err := os.WriteFile(producerFile, []byte("type Query {}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runGit(t, "-C", repoPath, "add", "schema.graphql")
-	runGit(t, "-C", repoPath, "commit", "-q", "-m", "add schema")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin")
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	cfg.Seams = []cc.Seam{{
-		Name: "gql", Repo: "repo", Producers: []string{"sandbox://PRODUCER"}, LandsAt: []string{"schema.graphql"},
-	}}
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	consumer := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"gql"}}
-	producer := cc.Task{TicketURL: "sandbox://PRODUCER", Repo: "repo", Branch: "producer-branch"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{consumer, producer}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	planTask := plan.Task{TicketURL: consumer.TicketURL, Seams: consumer.Seams}
-	hash := plan.Hash(plan.Compose(planTask, []string{"type Query {}"}))
-	authoriseTask(t, store, consumer.TicketURL, hash, at)
-
-	obs := cc.Observation{PRs: map[string]gh.PR{"producer-branch": {State: gh.Merged}}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
-
-	fake := newFakeRunner()
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
-	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
-	}
-
-	written, err := os.ReadFile(fake.spawns[0].PromptPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := plan.Compose(planTask, []string{"type Query {}"})
-	if !strings.HasPrefix(string(written), want) {
-		t.Errorf("prompt = %q, want it to start with the lands_at-composed prompt %q", written, want)
-	}
-	if strings.Contains(string(written), "stale seam text") {
-		t.Error("prompt still contains the seam file's stale content once the producer merged")
-	}
-}
-
-// TestLoopRefusesASpawnWhenTheSeamRetiresAfterAuthorisation covers issue #58's AC2: a launch
-// authorised pre-merge, against the seam file's hash, must not spawn once its producer merges
-// and the composition (therefore the hash) changes underneath it.
-func TestLoopRefusesASpawnWhenTheSeamRetiresAfterAuthorisation(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-	writeSeamFile(t, root, "gql", "seam file content")
-
-	if err := os.WriteFile(filepath.Join(repoPath, "schema.graphql"), []byte("type Query {}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runGit(t, "-C", repoPath, "add", "schema.graphql")
-	runGit(t, "-C", repoPath, "commit", "-q", "-m", "add schema")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin")
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	cfg.Seams = []cc.Seam{{
-		Name: "gql", Repo: "repo", Producers: []string{"sandbox://PRODUCER"}, LandsAt: []string{"schema.graphql"},
-	}}
-
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	consumer := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"gql"}}
-	producer := cc.Task{TicketURL: "sandbox://PRODUCER", Repo: "repo", Branch: "producer-branch"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{consumer, producer}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	// Authorised pre-merge: hash bound to the seam-file composition.
-	planTask := plan.Task{TicketURL: consumer.TicketURL, Seams: consumer.Seams}
-	preMergeHash := plan.Hash(plan.Compose(planTask, []string{"seam file content"}))
-	authoriseTask(t, store, consumer.TicketURL, preMergeHash, at)
-
-	// The producer's PR has since merged, so this tick's composition no longer matches.
-	obs := cc.Observation{PRs: map[string]gh.PR{"producer-branch": {State: gh.Merged}}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
-
-	fake := newFakeRunner()
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
-	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a merged producer changes the composition, so a "+
-			"pre-merge hash must no longer match", len(fake.spawns))
-	}
-}
-
-// TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation covers issue #55's AC1: editing a seam
-// file after a member is authorised leaves it queued forever, spawning nothing, however many
-// ticks pass -- the tick refuses on a hash mismatch rather than composing around it.
-func TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-	writeSeamFile(t, root, "one", "seam one content")
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Seams: []string{"one"}}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	planTask := plan.Task{TicketURL: task.TicketURL, Seams: task.Seams}
-	hash := plan.Hash(plan.Compose(planTask, []string{"seam one content"}))
-	authoriseTask(t, store, task.TicketURL, hash, at)
-
-	// The seam is edited after authorisation: the hash recorded above no longer matches what a
-	// fresh composition would hash to.
-	writeSeamFile(t, root, "one", "seam one content, edited")
+	authoriseTask(t, store, task.TicketURL, plan.Hash("a prompt this task never composed to"), at)
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
@@ -289,7 +136,7 @@ func TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation(t *testing.T) {
 		}
 	}
 	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a seam edited after authorisation must never be spawned", len(fake.spawns))
+		t.Errorf("spawns = %d, want 0: a hash the task no longer composes to must never be spawned", len(fake.spawns))
 	}
 
 	latest, err := store.LatestRunsByTask(t.Context())
@@ -297,7 +144,7 @@ func TestLoopNeverSpawnsAfterASeamChangesPostAuthorisation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ran := latest[task.TicketURL]; ran {
-		t.Error("no run should ever be recorded for a task whose seam changed after authorisation")
+		t.Error("no run should ever be recorded for a task whose authorised hash no longer matches")
 	}
 }
 
@@ -313,7 +160,7 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, nil))
+	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
 	authoriseTask(t, store, task.TicketURL, hash, at)
 
 	fake := newFakeRunner()
@@ -356,7 +203,7 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	for _, task := range tasks {
-		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}, nil))
+		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
 		authoriseTask(t, store, task.TicketURL, hash, at)
 	}
 

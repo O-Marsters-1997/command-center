@@ -18,7 +18,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
 	// seededStore's CC-1 derives ready and CC-2 blocked, and both states offer launch.
-	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, "")
+	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -61,7 +61,7 @@ func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"task": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()

@@ -15,9 +15,9 @@ unlock, launch preview and consent; cut, spawn, liveness, disposition and crash
 recovery; push policy, push and PR create; the CI verdict; and the terminal
 states with teardown.
 
-So is the cross-repo work. `[[seam]]` with `producers` and `lands_at`, a repo's
-`compat_check`, the draft gate that holds a consumer's PR, the `re-check` verb
-and the `waiting_on_producer_deploy` state all have code on main.
+So is the cross-repo work. A repo's `compat_check`, the draft gate that holds a
+consumer's PR, the `re-check` verb and the `waiting_on_producer_deploy` state
+all have code on main.
 
 So is the operator surface. The board groups rows by blocker, polls itself with
 htmx rather than a meta refresh, expands a row into a detail fragment, tails a
@@ -53,10 +53,23 @@ flattening every merge.
 
 ## Run it
 
-`--config` defaults to `.claude/command-centre.toml`, which `.gitignore`
-excludes. The committed sample is the copy anyone can run. It points at this
-repository and renders two rows off real `gh` output, one `ready` and one
-`blocked`:
+`--config` defaults to `cc/config.toml`, which is tracked: it is the config this
+project runs itself on, and it names its repo by remote, so the same file works
+on a machine with nothing checked out. Everything machine-specific is an
+environment variable:
+
+| Variable | What |
+|---|---|
+| `CC_DATA_DIR` | Where `state/` and `repos/` go. |
+| `CC_AGENT_COMMAND` | A JSON array replacing `agent_command`, for a local wrapper. |
+
+```
+CC_AGENT_COMMAND='["caffeinate","-i","claude","-p","{prompt}"]' just run
+```
+
+`docs/command-centre.sample.toml` is the read-only tour instead. It points at
+this repository through a relative path and renders two rows off real `gh`
+output, one `ready` and one `blocked`:
 
 ```
 just run --config docs/command-centre.sample.toml
@@ -178,34 +191,47 @@ the label is derived on every render.
 
 ### Where state lives
 
-Outside the workspace, so no agent's worktree is one `../` away from the
-database. The state dir is `$UserConfigDir/command-centre/<workspace-name>/`:
+Under `data_dir`, which is the `data_dir` config key, else `CC_DATA_DIR`, else
+`$UserConfigDir/command-centre`. It splits in two, so no agent's worktree is one
+`../` away from the database:
 
 ```
-command-centre.db      SQLite, schema version 1
-command-centre.lock    flock, one instance per workspace
-runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
-runs/<id>.prompt       the prompt that run was given
-settings/agent.json    the app-owned deny settings passed to every spawn
+state/command-centre.db      SQLite
+state/command-centre.lock    flock, one instance per data dir
+state/runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
+state/runs/<id>.prompt       the prompt that run was given
+state/settings/agent.json    the app-owned deny settings passed to every spawn
+repos/<name>/                a repo's checkout, with the worktrees tp cuts beside it
 ```
 
-The driver is `modernc.org/sqlite`, so no cgo. `internal/cc/schema.sql` creates
-every table Phases 1 to 6 need in one go: `meta`, `tasks`, `launches`,
-`launch_members`, `runs`, `pushes`, `events`, `intents`. There is no migration
-code by design, and `OpenStore` refuses a version mismatch.
+The driver is `modernc.org/sqlite`, so no cgo. goose owns the schema from
+`internal/cc/migrations/`, embedded in the binary and applied at `OpenStore`.
+`0001_init.sql` creates `meta`, `tasks`, `launches`, `launch_members`, `runs`,
+`pushes`, `events` and `intents`, all `IF NOT EXISTS`, so a database that
+predates goose is adopted rather than rebuilt.
 
 ## Configuration
 
-The workspace root is the config file's grandparent directory, so
-`plain/.claude/command-centre.toml` is the workspace named `plain`.
+Where the config file sits decides one thing only: what a relative `[[repo]]`
+path is relative to.
 
 | Key | What |
 |---|---|
+| `data_dir` | Where state and checkouts live. Overridden by nothing; falls back to `CC_DATA_DIR`, then `$UserConfigDir/command-centre`. A leading `~` expands. |
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
-| `agent_command` | The argv the runner spawns. `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
+| `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, `path` relative to the workspace root, `stacking`, `mergify_sha`, `deny`, `checks`. |
+| `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`. |
+
+A repo is located by `remote`, a git URL cloned to `<data_dir>/repos/<name>`, or by `path`,
+a checkout that already exists, absolute or relative to the config file's own
+directory. Setting both is refused at load. Startup clones when the directory is
+absent, and refuses to start when it holds something whose `origin` names a
+different repository. The ssh and https forms of one repository count as one.
+
+The app never resets, pulls or checks out a checkout. It fetches and reads
+remote-tracking refs; work happens in the worktrees tp cuts beside it.
 
 Give a real agent `{prompt}`, not `{prompt_file}`. Claude Code expands a slash
 command only when the prompt arrives as argv text, so a path is read back as
@@ -224,9 +250,6 @@ derives a verdict.
 whether a consumer still builds against its producer.
 `internal/cc/draftgate.go` and `internal/cc/verdict_transitions.go` read it.
 
-`[[seam]]` is the cross-repo edge: `name`, `repo`, `producers` and `lands_at`. A
-`[[task]]` names the seams it touches in `seams`.
-
 ## Testing
 
 `go test ./...` is the unit suite. Determinism comes from four seams injected on
@@ -242,7 +265,7 @@ kept out of the release binary by the build tag. See
 ## Commands
 
 ```
-just build       # go build -o cc ./cmd/cc
+just build       # go build -o bin/cc ./cmd/cc
 just run *args   # go run ./cmd/cc
 just test        # go test ./...
 just test-e2e    # go test -tags=e2e ./e2e/...

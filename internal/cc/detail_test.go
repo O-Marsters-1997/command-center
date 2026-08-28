@@ -79,7 +79,7 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	logPath := writeLog(t, 120)
-	server := cc.NewServer(detailStore(t, logPath, startedAt, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, logPath, startedAt, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	target := detailPath("https://github.com/o/r/issues/76")
@@ -115,7 +115,7 @@ func TestDetailRejectsAnUnknownTask(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, detailPath("sandbox://NOPE"), nil))
@@ -131,7 +131,7 @@ func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
-	server := cc.NewServer(detailStore(t, writeLog(t, 3), startedAt, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, writeLog(t, 3), startedAt, now), fixedClock(now), nil, "")
 
 	board := httptest.NewRecorder()
 	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -155,7 +155,7 @@ func TestBoardLinksEveryRowToItsOwnDetail(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -173,7 +173,7 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/htmx.min.js", nil))
@@ -200,7 +200,7 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -228,7 +228,7 @@ func TestDetailRowsSurviveTheBoardSwap(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
 
 	first := httptest.NewRecorder()
 	server.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -308,7 +308,7 @@ func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
 
 	board := httptest.NewRecorder()
 	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))

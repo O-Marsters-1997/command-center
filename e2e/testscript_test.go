@@ -139,9 +139,9 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(err)
 	body = []byte(strings.ReplaceAll(string(body), "{{agents}}", agentsDir))
 
-	dir := filepath.Join(ts.Getenv("WORK"), ".claude")
+	dir := filepath.Join(ts.Getenv("WORK"), "cc")
 	ts.Check(os.MkdirAll(dir, 0o700))
-	ts.Check(os.WriteFile(filepath.Join(dir, "command-centre.toml"), append([]byte("port = 0\n"), body...), 0o600))
+	ts.Check(os.WriteFile(filepath.Join(dir, "config.toml"), append([]byte("port = 0\n"), body...), 0o600))
 }
 
 // ccFakeGh stages the fixture the fake gh answers from. It is read at exec time, so a script
@@ -229,6 +229,7 @@ func scriptEnv(work string) []string {
 		"GIT_AUTHOR_EMAIL=cc@example.com",
 		"GIT_COMMITTER_NAME=Command Centre",
 		"GIT_COMMITTER_EMAIL=cc@example.com",
+		"CC_DATA_DIR=" + filepath.Join(work, "cc-data"),
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),

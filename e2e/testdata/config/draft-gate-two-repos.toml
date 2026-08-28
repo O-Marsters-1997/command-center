@@ -17,7 +17,7 @@ branch     = "pla-40"
 
 [[repo]]
 name     = "repo"
-path     = "repo"
+path     = "../repo"
 stacking = false
 
   [repo.checks]
@@ -27,4 +27,4 @@ stacking = false
 
 [[repo]]
 name = "services"
-path = "services"
+path = "../services"

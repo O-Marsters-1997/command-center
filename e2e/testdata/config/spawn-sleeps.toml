@@ -28,5 +28,5 @@ blocked_by = []
 
 [[repo]]
 name     = "repo"
-path     = "repo"
+path     = "../repo"
 stacking = false

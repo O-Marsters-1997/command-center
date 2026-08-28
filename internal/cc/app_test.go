@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,18 +17,7 @@ import (
 )
 
 func TestNewRunsATickAndServesThePage(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-
-	root := filepath.Join(t.TempDir(), "workspace")
-	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(root, ".claude", "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte(twoTasks), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	configPath := appConfig(t)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}
@@ -68,18 +58,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 }
 
 func TestNewRefusesASecondInstance(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-
-	root := filepath.Join(t.TempDir(), "workspace")
-	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(root, ".claude", "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte(twoTasks), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	configPath := appConfig(t)
 
 	ctx := t.Context()
 	first, err := cc.New(ctx, configPath, stubSquashOnly)
@@ -93,23 +72,29 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	}
 }
 
+// appConfig writes twoTasks beside a real checkout of the repo it names, and points CC_DATA_DIR
+// at an empty directory, so cc.New's startup checkout and workspace both resolve.
+func appConfig(t *testing.T) string {
+	t.Helper()
+	t.Setenv("CC_DATA_DIR", t.TempDir())
+
+	root, repoPath := repoWithOrigin(t)
+	if err := os.Rename(repoPath, filepath.Join(root, "cc-sandbox")); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "command-centre.toml")
+	if err := os.WriteFile(configPath, []byte(twoTasks), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return configPath
+}
+
 // stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out
 // to: none of their fixture repos are real git checkouts with a GitHub remote.
 var stubSquashOnly = cc.WithRepoCheck(func(context.Context, cc.Workspace, []cc.Repo) error { return nil })
 
 func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-
-	root := filepath.Join(t.TempDir(), "workspace")
-	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	configPath := filepath.Join(root, ".claude", "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte(twoTasks), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	configPath := appConfig(t)
 
 	notSquashOnly := cc.WithRepoCheck(func(_ context.Context, _ cc.Workspace, repos []cc.Repo) error {
 		return fmt.Errorf("repo %s allows merge commits (allow_merge_commit=true): "+
@@ -122,5 +107,39 @@ func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "cc-sandbox") || !strings.Contains(err.Error(), "allow_merge_commit") {
 		t.Errorf("error %q does not name the offending repo and setting", err)
+	}
+}
+
+// TestNewClonesARemoteRepoIntoAnEmptyDataDir: a config naming only a remote, and an empty data
+// directory, reach a serving state with no directory prepared by hand.
+func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("CC_DATA_DIR", dataDir)
+
+	_, repoPath := repoWithOrigin(t)
+	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	body := "[[repo]]\nname = \"cc-sandbox\"\nremote = " + strconv.Quote(remote) + "\n"
+	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	app, err := cc.New(t.Context(), configPath, cc.WithObserver(stub), stubSquashOnly)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+
+	checkout := filepath.Join(dataDir, "repos", "cc-sandbox")
+	if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
+		t.Fatalf("startup did not clone into %s: %v", checkout, err)
+	}
+
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
 	}
 }

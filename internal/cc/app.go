@@ -67,9 +67,14 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err != nil {
 		return nil, err
 	}
-	ws, err := ResolveWorkspace(configPath)
+	ws, err := ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return nil, err
+	}
+	for _, repo := range cfg.Repos {
+		if err := EnsureCheckout(ctx, repo); err != nil {
+			return nil, err
+		}
 	}
 
 	repoCheck := settings.repoCheck
@@ -113,7 +118,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	observe := settings.observe
 	if observe == nil {
-		observe = NewObserver(store, cfg, ws.Root)
+		observe = NewObserver(store, cfg)
 	}
 	runner := settings.runner
 	if runner == nil {
@@ -124,7 +129,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		lock:   lock,
 		store:  store,
 		loop:   NewLoop(store, observe, settings.now, cfg, ws, runner),
-		server: NewServer(store, settings.now, cfg.Repos, cfg.Seams, ws.Root),
+		server: NewServer(store, settings.now, cfg.Repos, ws.DataDir),
 	}, nil
 }
 

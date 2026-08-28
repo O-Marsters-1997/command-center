@@ -1,7 +1,7 @@
 {{define "board" -}}
 <table>
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>seam changed</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
+    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
     <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
     <th>draft</th><th>draft reason</th><th>detail</th>
@@ -22,7 +22,6 @@
     <td>{{.Ticket}}{{with .Title}} {{.}}{{end}}</td>
     <td>{{.State}}{{range .PendingVerbs}} · {{.}} queued{{end}}</td>
     <td>{{.Reason}}</td>
-    <td>{{if .SeamChanged}}seam changed{{end}}</td>
     <td>
       {{- $row := .}}
       {{- range .Verbs}}

@@ -167,12 +167,12 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	repos := []cc.Repo{{
-		Name: "repo", Path: "repo", CompatCheck: reCheckCompatCheckName,
+		Name: "repo", Checkout: filepath.Join(root, "repo"), CompatCheck: reCheckCompatCheckName,
 		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 			{Success: reCheckCompatCheckName}, {Success: "Tests"},
 		}},
 	}}
-	ws := cc.Workspace{Root: root, RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	cfg := cc.Config{Repos: repos}
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
@@ -197,7 +197,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 		t.Fatalf("RunOnce (post-rerun tick): %v", err)
 	}
 
-	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos, nil, ""))
+	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos, ""))
 	if state := rowState(t, page, task.TicketURL); state != "checking" {
 		t.Fatalf("state once the rerun's check goes pending = %q, want checking", state)
 	}

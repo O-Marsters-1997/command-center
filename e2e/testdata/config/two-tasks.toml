@@ -18,5 +18,5 @@ blocked_by = ["sandbox://CC-1"]
 
 [[repo]]
 name     = "repo"
-path     = "repo"
+path     = "../repo"
 stacking = false

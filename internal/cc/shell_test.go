@@ -57,7 +57,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, nil, "/repos/fleet-hq")
+	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "/data/fleet-hq")
 	body := renderPage(t, server)
 
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {
@@ -85,7 +85,7 @@ func TestThemeSitsOnTheRootElement(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
 	body := renderPage(t, server)
 
 	if strings.Contains(boardFragment(t, body), "data-theme") {
@@ -139,7 +139,7 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 				at = nil
 			}
 			now := observedAt.Add(tt.age)
-			server := cc.NewServer(shellStore(t, at, ""), fixedClock(now), nil, nil, "")
+			server := cc.NewServer(shellStore(t, at, ""), fixedClock(now), nil, "")
 			body := renderPage(t, server)
 
 			if !strings.Contains(body, tt.wantChip) {
@@ -159,12 +159,12 @@ func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := observedAt.Add(45 * time.Second)
 
-	quiet := cc.NewServer(shellStore(t, &observedAt, ""), fixedClock(now), nil, nil, "")
+	quiet := cc.NewServer(shellStore(t, &observedAt, ""), fixedClock(now), nil, "")
 	if body := renderPage(t, quiet); strings.Contains(body, "banner") {
 		t.Errorf("a banner opened with no failed tick:\n%s", body)
 	}
 
-	failed := cc.NewServer(shellStore(t, &observedAt, "gh is unavailable"), fixedClock(now), nil, nil, "")
+	failed := cc.NewServer(shellStore(t, &observedAt, "gh is unavailable"), fixedClock(now), nil, "")
 	body := renderPage(t, failed)
 	for _, want := range []string{
 		"the last tick failed 44s ago",
@@ -191,7 +191,7 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPage(t, cc.NewServer(store, fixedClock(now), nil, nil, ""))
+	body := renderPage(t, cc.NewServer(store, fixedClock(now), nil, ""))
 	if strings.Contains(body, "banner") {
 		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
 	}
@@ -205,12 +205,12 @@ func TestHeaderCountsLiveAgents(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	live := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, nil, "")
+	live := cc.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
 	if body := renderPage(t, live); !strings.Contains(body, "1 live") {
 		t.Errorf("header does not count the one live agent:\n%s", body)
 	}
 
-	idle := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, nil, "")
+	idle := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
 	body := renderPage(t, idle)
 	if !strings.Contains(body, "0 live") {
 		t.Errorf("header does not count zero live agents:\n%s", body)
@@ -252,7 +252,7 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPage(t, cc.NewServer(store, fixedClock(now), nil, nil, ""))
+	body := renderPage(t, cc.NewServer(store, fixedClock(now), nil, ""))
 	if !strings.Contains(body, "1 live") {
 		t.Errorf("header does not count the live agent behind a base_gone row:\n%s", body)
 	}
@@ -264,7 +264,7 @@ func TestHeaderRefreshesWithTheBoard(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

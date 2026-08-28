@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 )
 
 // repoSettings is the subset of `gh api repos/{owner}/{repo}` this check reads.
@@ -55,7 +54,7 @@ func checkRepoSquashOnly(ctx context.Context, repoPath, repoName string) error {
 // depends on, checked loudly rather than assumed (docs/designs/command-centre-design.md §11.6).
 func AssertReposSquashOnly(ctx context.Context, ws Workspace, repos []Repo) error {
 	for _, r := range repos {
-		if err := checkRepoSquashOnly(ctx, filepath.Join(ws.Root, r.Path), r.Name); err != nil {
+		if err := checkRepoSquashOnly(ctx, r.Checkout, r.Name); err != nil {
 			return err
 		}
 	}

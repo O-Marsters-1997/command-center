@@ -64,7 +64,7 @@ func TestConfirmNamesTheTaskTheVerbAndTheThingAtRisk(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			server := cc.NewServer(tt.store(t), fixedClock(now), nil, nil, "")
+			server := cc.NewServer(tt.store(t), fixedClock(now), nil, "")
 			rec := httptest.NewRecorder()
 			target := "/confirm?verb=" + tt.verb + "&task=sandbox://CC-1"
 			server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -94,7 +94,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	server := cc.NewServer(store, time.Now, nil, nil, "")
+	server := cc.NewServer(store, time.Now, nil, "")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/confirm?verb=remove-worktree&task=sandbox://CC-1", nil)
 	server.ServeHTTP(rec, req)
@@ -114,7 +114,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 func TestConfirmRejectsNonDestructiveVerbsAndUnknownTasks(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{

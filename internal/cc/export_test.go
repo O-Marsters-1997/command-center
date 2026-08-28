@@ -1,6 +1,7 @@
 package cc
 
 import (
+	"context"
 	"html/template"
 	"strings"
 
@@ -36,3 +37,18 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 // TailLog exposes the log tail to the external test package: driving it through the route needs
 // a store and a run, and the window branch only shows on a file larger than the window.
 var TailLog = tailLog
+
+// Migration0001 is the initial schema, for the test that a database created before goose
+// existed is adopted rather than rebuilt.
+func Migration0001() (string, error) {
+	b, err := migrations.ReadFile("migrations/0001_init.sql")
+	return string(b), err
+}
+
+// SameRemote is the git-URL comparison EnsureCheckout refuses on.
+func SameRemote(a, b string) bool { return sameRemote(a, b) }
+
+// MergifyHash is the observe phase's read of .mergify.yml off origin's default branch.
+func MergifyHash(ctx context.Context, repoPath string) (string, error) {
+	return mergifyHash(ctx, repoPath)
+}

@@ -79,7 +79,7 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	appendLines(t, logPath, "first", `<script>alert(1)</script>`, "third")
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
@@ -112,7 +112,7 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	appendLines(t, logPath, "already read", "new one")
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	from := int64(len("already read\n"))
@@ -132,7 +132,7 @@ func TestLogStreamIsEmptyForATaskWithNoRun(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
@@ -155,7 +155,7 @@ func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	appendLines(t, logPath, "last line")
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
@@ -175,7 +175,7 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	appendLines(t, logPath, "swapped already", "not yet")
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil)
@@ -200,7 +200,7 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, "before")
 	store, runID := runStore(t, logPath, now)
-	httpServer := httptest.NewServer(cc.NewServer(store, fixedClock(now), nil, nil, ""))
+	httpServer := httptest.NewServer(cc.NewServer(store, fixedClock(now), nil, ""))
 	defer httpServer.Close()
 
 	resp, err := httpServer.Client().Get(httpServer.URL + logStreamPath(0))
@@ -261,7 +261,7 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, "still running")
 	store, _ := runStore(t, logPath, now)
-	server := cc.NewServer(store, fixedClock(now), nil, nil, "")
+	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	ctx, cancel := context.WithCancel(t.Context())
 	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil).WithContext(ctx)
@@ -303,7 +303,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	ticket := "https://github.com/o/r/issues/76"
-	server := cc.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, detailPath(ticket), nil))
@@ -330,7 +330,7 @@ func TestPageCapsThePreAtAThousandLines(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, nil, "")
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
 	asset := httptest.NewRecorder()
 	server.ServeHTTP(asset, httptest.NewRequest(http.MethodGet, "/assets/sse.min.js", nil))

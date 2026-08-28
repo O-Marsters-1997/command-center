@@ -1,0 +1,5 @@
+/implement sandbox://CC-1
+
+## Ticket
+
+fake ticket body
