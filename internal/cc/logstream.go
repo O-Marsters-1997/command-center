@@ -15,6 +15,11 @@ import (
 
 const logPollInterval = 250 * time.Millisecond
 
+const (
+	detailLogLines  = 50
+	detailLogWindow = 64 << 10
+)
+
 // handleLog streams the run's log as Server-Sent Events, one event per whole line, from the
 // ?from= byte the detail fragment's own tail stopped at. It reads the file and nothing else: the
 // loop owns the agent process, so a reader arriving or leaving cannot touch it (inv. 9).
@@ -90,4 +95,48 @@ func sendLines(w io.Writer, path string, offset *int64) int {
 
 func logStreamPath(ticketURL string, from int64) string {
 	return fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
+}
+
+// tailLog returns the log's last lines and the byte the tail read up to, which the SSE stream
+// resumes from. It is empty rather than an error when the log will not open: the agent process
+// owns that file, and a ticket with no run never had one.
+func tailLog(path string) ([]string, int64) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, 0
+	}
+	// One byte behind the window, so the first break in it separates a clipped line from a whole
+	// one either way and the same Cut below is right for both.
+	start := max(info.Size()-detailLogWindow-1, 0)
+	buf := make([]byte, info.Size()-start)
+	if _, err := f.ReadAt(buf, start); err != nil {
+		return nil, 0
+	}
+
+	// An agent flushes mid-line, so the tail stops at the last whole one and the stream, not the
+	// fragment, carries the rest of the line it was writing.
+	tail := string(buf)
+	end := strings.LastIndexByte(tail, '\n')
+	if end < 0 {
+		return nil, start
+	}
+	read := start + int64(end) + 1
+	tail = tail[:end]
+	if start > 0 {
+		_, tail, _ = strings.Cut(tail, "\n")
+	}
+	if tail == "" {
+		return nil, read
+	}
+	lines := strings.Split(tail, "\n")
+	if len(lines) > detailLogLines {
+		lines = lines[len(lines)-detailLogLines:]
+	}
+	return lines, read
 }

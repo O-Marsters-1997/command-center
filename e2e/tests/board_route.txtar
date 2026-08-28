@@ -9,7 +9,7 @@ cc-fake-gh no-prs
 exec cc tick --count 1
 exec cc request GET /board
 
-stdout '^<table>'
+stdout '^<table id="board"'
 stdout '<td>#CC-1</td>'
 stdout '<td>#CC-2</td>'
 

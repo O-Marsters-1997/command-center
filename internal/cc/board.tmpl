@@ -1,5 +1,5 @@
 {{define "board" -}}
-<table>
+<table id="board" hx-get="{{.BoardPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
     <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
@@ -26,7 +26,8 @@
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
-      <input type="checkbox" form="launch" name="task" value="{{$row.URL}}">{{.}}
+      <input type="checkbox" form="launch" name="task" value="{{$row.URL}}"{{if $row.Checked}} checked{{end}}
+        hx-get="{{$row.TogglePath}}" hx-push-url="{{$row.TogglePush}}" hx-target="#board" hx-swap="outerHTML">{{.}}
       {{- else if destructive .}}
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="{{$row.URL}}">
@@ -56,10 +57,15 @@
     <td>{{.Draft}}</td>
     <td>{{.DraftReason}}</td>
     <td>
-      <button type="button" hx-get="{{.DetailPath}}" hx-target="#{{.DetailID}}" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
+  {{if .Selected}}
   <!-- hx-preserve keeps an expanded detail mounted through the board's own swap, which would
-       otherwise destroy and remount it every five seconds. -->
-  <tr id="{{.DetailID}}" hx-preserve="true"></tr>
+       otherwise destroy and remount it every five seconds. Only the selected row ever renders
+       this <tr>: htmx matches hx-preserve by id off the incoming markup, so an unselected row
+       must render none at all rather than an empty one for a later selection to fill
+       (docs/prds/prd-fleet-view.md § The hx-preserve id is conditional on selection). -->
+  <tr id="{{.DetailID}}" hx-preserve="true">{{template "detail" .}}</tr>
+  {{end}}
 {{end}}

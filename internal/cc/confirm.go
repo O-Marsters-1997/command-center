@@ -52,7 +52,7 @@ func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := s.render(r.Context())
+	view, err := s.render(r.Context(), viewParams{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +29,8 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	body := rec.Body.String()
 	wants := []string{
 		`<form id="launch" method="get" action="/preview"></form>`,
-		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-1">`,
-		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-2">`,
+		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-1"`,
+		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-2"`,
 		`<button type="submit" form="launch">launch selected</button>`,
 	}
 	for _, want := range wants {
@@ -39,6 +40,44 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	}
 	if strings.Contains(body, `value="launch"`) {
 		t.Errorf("launch is posted to /verb rather than /launch:\n%s", body)
+	}
+}
+
+// A third launchable row proves "exactly" those two, not just "at least".
+func TestQueryChecksExactlyTheNamedTasks(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	tickets := []cc.Ticket{
+		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
+		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
+		{URL: "sandbox://C", Repo: "repo", Branch: "c"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
+
+	target := "/?" + url.Values{"task": {"sandbox://A", "sandbox://B"}}.Encode()
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	body := rec.Body.String()
+
+	for _, want := range []string{
+		`value="sandbox://A" checked`,
+		`value="sandbox://B" checked`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page does not contain %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `value="sandbox://C" checked`) {
+		t.Errorf("sandbox://C is checked but was not named in ?task=:\n%s", body)
 	}
 }
 
