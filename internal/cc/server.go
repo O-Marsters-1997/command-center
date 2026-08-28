@@ -39,6 +39,14 @@ var page = template.Must(template.New("page").
 	}).
 	Parse(pageSource))
 
+//go:embed band.tmpl
+var bandSource string
+
+// The blank identifier is deliberate, not dead code: this registers "band" into page's own tree,
+// and page.tmpl calls it by name via {{template "band" .}}. It is never registered into
+// boardFragment's tree, which is what keeps it out of the board's own five-second swap.
+var _ = template.Must(page.New("band").Parse(bandSource))
+
 //go:embed board.tmpl
 var boardSource string
 
@@ -143,6 +151,8 @@ type row struct {
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
 	Verbs        []string
+	Unattended   bool
+	Tone         string
 	Branch       string
 	PendingVerbs []string
 	Base         string
@@ -229,6 +239,7 @@ type pageView struct {
 	ObserveStale bool
 	LastError    *tickErrorView
 	Groups       []group
+	Band         bandView
 	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
 	// perpetuate this render's view state without the shell being involved.
 	BoardPath string
@@ -283,6 +294,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		ObserveAge:   "never",
 		ObserveStale: true,
 		Groups:       groupRows(rows),
+		Band:         deriveBand(rows),
 		BoardPath:    params.boardPath(),
 	}
 	if observed {
@@ -425,6 +437,8 @@ func derive(
 			State:        state.String(),
 			Reason:       string(reason),
 			Verbs:        plan.Verbs(state),
+			Unattended:   state.Unattended(),
+			Tone:         plan.Tone(state),
 			PendingVerbs: facts.pendingVerbs[t.URL],
 			Branch:       t.Branch,
 			Base:         unlock.BaseBranch,
