@@ -1,0 +1,57 @@
+{{define "band" -}}
+<section class="band" aria-label="fleet analytics">
+  <article class="card">
+    <h2>state of the fleet</h2>
+    {{if eq .Band.Fleet.Total 0}}
+    <p class="empty">no tickets tracked yet</p>
+    {{else}}
+    <p class="headline">{{.Band.Fleet.Yours}}/{{.Band.Fleet.Total}} yours</p>
+    <div class="segbar">
+      {{range .Band.Fleet.Segments}}
+      <span class="segbar-segment" data-tone="{{.Tone}}" style="flex-grow: {{.Count}}"></span>
+      {{end}}
+    </div>
+    <ul class="legend">
+      {{range .Band.Fleet.Segments}}
+      <li><span class="pill-disc" data-tone="{{.Tone}}"></span>{{.State}} · {{.Count}}</li>
+      {{end}}
+    </ul>
+    {{end}}
+  </article>
+
+  <article class="card">
+    <h2>stack depth</h2>
+    {{if not .Band.Stack.HasWorktree}}
+    <p class="empty">no worktree has been cut</p>
+    {{else}}
+    <p class="headline">{{.Band.Stack.Deepest}} deep</p>
+    <ul class="histogram">
+      {{range .Band.Stack.Bars}}
+      <li>
+        <span class="meter"><span class="meter-fill" data-tone="idle" style="width: {{.Pct}}%"></span></span>
+        depth {{.Depth}} · {{.Count}}
+      </li>
+      {{end}}
+    </ul>
+    {{end}}
+  </article>
+
+  <article class="card">
+    <h2>gating checks</h2>
+    {{if eq .Band.Checks.Reported 0}}
+    <p class="empty">no branch has reported a check yet</p>
+    {{else}}
+    <p class="headline">{{.Band.Checks.Green}} green · {{.Band.Checks.Red}} red</p>
+    <p>{{.Band.Checks.Reported}}/{{.Band.Checks.Total}} branches reported</p>
+    {{end}}
+  </article>
+
+  <article class="card">
+    <h2>spend</h2>
+    <!-- Always the written empty state: nothing accrues a run's spend yet, and only the
+         stream-json parser a later phase adds ever fills this card
+         (docs/prds/prd-fleet-view.md § Phase 4). -->
+    <p class="empty">no runs have completed this session yet</p>
+  </article>
+</section>
+{{- end}}
