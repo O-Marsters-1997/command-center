@@ -36,6 +36,10 @@ type Observation struct {
 	// tick (§4a) -- never recorded, since a human resolving the conflict by hand and committing
 	// must clear it with no bookkeeping.
 	MidMerge map[string]bool `json:"mid_merge"`
+	// ConflictsWithBase reports whether origin/<branch> would conflict with origin/main, keyed
+	// by branch. It is what the launch gate refuses on: a child cut from a base that already
+	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
+	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
 }
 
 // RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
@@ -61,6 +65,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
+			ConflictsWithBase: map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -82,16 +87,28 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 			}
 			maps.Copy(obs.Titles, titles)
 
-			for _, branch := range branches {
-				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
-					obs.BranchTips[branch] = tip
-				}
-			}
 			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
 			// name: unlike a ticket's own branch, every repo has a "main", so the plain name would
 			// collide the moment a second repo is configured.
-			if tip, err := RevParse(ctx, path, "origin/"+defaultBaseBranch); err == nil {
-				obs.BranchTips[mainTipKey(repo.Name)] = tip
+			mainTip, mainErr := RevParse(ctx, path, "origin/"+defaultBaseBranch)
+			if mainErr == nil {
+				obs.BranchTips[mainTipKey(repo.Name)] = mainTip
+			}
+			for _, branch := range branches {
+				tip, err := RevParse(ctx, path, "origin/"+branch)
+				if err != nil {
+					continue // never pushed, so there is no remote branch to read or to cut from
+				}
+				obs.BranchTips[branch] = tip
+				if mainErr != nil {
+					continue
+				}
+				clean, err := MergesCleanly(ctx, path, mainTip, tip)
+				if err != nil {
+					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
+						branch, defaultBaseBranch, err)
+				}
+				obs.ConflictsWithBase[branch] = !clean
 			}
 
 			worktrees, err := Worktrees(ctx, path)

@@ -372,6 +372,7 @@ func derive(
 			Authorised:      membership.LaunchID != 0,
 			LatestRun:       runFact,
 			CancelledMember: membership.Cancelled,
+			ConflictedBase:  conflictedBase(pt, byURL, unlock, stackingByRepo[t.Repo], obs),
 		})
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		baseByBranch[t.Branch] = unlock.BaseBranch
@@ -727,7 +728,9 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		t := byURL[ticketURL]
 		stacking := s.stackingByRepo[t.Repo]
 		unlock := plan.Unlocked(t, byURL, prs, stacking)
-		label, reason := plan.Preview(unlock, slice, facts.memberships[ticketURL].LaunchID)
+		label, reason := plan.Preview(
+			unlock, slice, facts.memberships[ticketURL].LaunchID,
+			conflictedBase(t, byURL, unlock, stacking, obs))
 
 		base := unlock.BaseBranch
 		if base == "" {

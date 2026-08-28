@@ -374,3 +374,40 @@ func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 		t.Errorf("state = %v, want queued: authorised but never launched", state)
 	}
 }
+
+// TestStatusBlocksOnAConflictedBase covers the launch gate's own row: a base that already
+// carries a conflict must say so, rather than leaving an authorised row queued on a slot that
+// the tick will refuse every time it comes round.
+func TestStatusBlocksOnAConflictedBase(t *testing.T) {
+	t.Parallel()
+
+	for _, authorised := range []bool{false, true} {
+		state, reason := plan.Status(plan.Facts{
+			Unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first", Reason: "every blocker has a pull request"},
+			Authorised:     authorised,
+			ConflictedBase: "cc-1-first",
+		})
+		if state != plan.Blocked {
+			t.Errorf("authorised = %v: state = %v, want blocked", authorised, state)
+		}
+		if !strings.Contains(string(reason), "cc-1-first") {
+			t.Errorf("reason %q does not name the conflicted base", reason)
+		}
+	}
+}
+
+// TestStatusPrefersARunToAConflictedBase: a row that has already launched is described by its
+// run, not by the state of the base it was cut from.
+func TestStatusPrefersARunToAConflictedBase(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first"},
+		Authorised:     true,
+		ConflictedBase: "cc-1-first",
+		LatestRun:      &plan.RunFact{Alive: true},
+	})
+	if state != plan.Running {
+		t.Errorf("state = %v, want running", state)
+	}
+}

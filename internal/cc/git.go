@@ -278,6 +278,18 @@ func midRebase(ctx context.Context, worktreePath string) (bool, error) {
 	return false, nil
 }
 
+// MergesCleanly reports whether merging branch into base would conflict. --write-tree is the
+// modern form of merge-tree, whose exit status is the answer: 0 clean, 1 conflicted, anything
+// else a real failure. The deprecated three-argument form reports a conflict only in its diff
+// output, which is what made `just check-conflicts` a no-op (issue #131).
+//
+// Both arguments must already resolve. git exits 1 for a ref it cannot merge just as it does
+// for a conflict, so an unresolved ref would come back as a conflicted one: callers pass the
+// SHAs they read this tick, never a name they have not resolved.
+func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, error) {
+	return gitSucceeds(ctx, repoPath, "merge-tree", "--write-tree", "--name-only", base, branch)
+}
+
 // Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
 // has replaced the history commit sat on (issue #89).
 func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
