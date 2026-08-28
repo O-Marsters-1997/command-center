@@ -306,7 +306,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	server := cc.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, detailPath(ticket), nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
 	body := rec.Body.String()
 
 	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())

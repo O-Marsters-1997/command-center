@@ -160,10 +160,10 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	full := renderPage(t, server)
 	board := renderBoard(t, server)
 
-	if !strings.HasPrefix(board, "<table>") {
+	if !strings.HasPrefix(board, `<table id="board"`) {
 		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", board)
 	}
-	if !strings.Contains(full, ">"+board+"</div>") {
+	if !strings.Contains(full, board) {
 		t.Errorf("GET / does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s", board, full)
 	}
 	assertGolden(t, goldenBoard, []byte(board))

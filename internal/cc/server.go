@@ -44,6 +44,13 @@ var boardSource string
 
 var boardFragment = template.Must(page.New("board").Parse(boardSource))
 
+//go:embed detail.tmpl
+var detailSource string
+
+// The blank identifier is deliberate, not dead code: this registers "detail" into boardFragment's
+// own tree, and board.tmpl calls it by name via {{template "detail" .}}.
+var _ = template.Must(boardFragment.New("detail").Parse(detailSource))
+
 // rowSlot carries LaunchVerb and CancelVerb because html/template resets $ to the invoked
 // subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies.
 type rowSlot struct {
@@ -91,7 +98,6 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /board", s.handleBoard)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
-	mux.HandleFunc("GET /ticket/{ticket}/detail", s.handleDetail)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /events", s.handleEvents)
@@ -170,6 +176,21 @@ type row struct {
 	// ready leaves GitHub's real state unchanged, and this must still render honestly.
 	Draft       bool
 	DraftReason string
+
+	// Selected is this render's ?sel= row: the only one whose detail <tr> exists at all, so an
+	// unattached hx-preserve id never lingers past the row that grew it
+	// (docs/prds/prd-fleet-view.md § The hx-preserve id is conditional on selection).
+	Selected bool
+	Checked  bool
+	// SelectPath/SelectPush toggle Selected; TogglePath/TogglePush toggle Checked. Each pair is
+	// the board fragment to hx-get and the root path to hx-push-url.
+	SelectPath string
+	SelectPush string
+	TogglePath string
+	TogglePush string
+	// LogTail and LogStream are set only when Selected.
+	LogTail   []string
+	LogStream string
 }
 
 type check struct {
@@ -187,9 +208,6 @@ func (r row) DetailID() string {
 	sum := sha256.Sum256([]byte(r.URL))
 	return "detail-" + hex.EncodeToString(sum[:6])
 }
-
-// DetailPath percent-encodes the ticket URL into one path segment, "://" and all.
-func (r row) DetailPath() string { return "/ticket/" + url.PathEscape(r.URL) + "/detail" }
 
 type tickErrorView struct {
 	Age     string
@@ -211,6 +229,9 @@ type pageView struct {
 	ObserveStale bool
 	LastError    *tickErrorView
 	Groups       []group
+	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
+	// perpetuate this render's view state without the shell being involved.
+	BoardPath string
 }
 
 const observeStaleAfter = 20 * time.Second
@@ -224,7 +245,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *template.Template) {
-	view, err := s.render(r.Context())
+	view, err := s.render(r.Context(), parseViewParams(r.URL.Query()))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -235,7 +256,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *templa
 	}
 }
 
-func (s *Server) render(ctx context.Context) (pageView, error) {
+func (s *Server) render(ctx context.Context, params viewParams) (pageView, error) {
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		return pageView{}, err
@@ -255,12 +276,14 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 
 	now := s.now()
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
+	applyViewState(rows, params)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		ObserveAge:   "never",
 		ObserveStale: true,
 		Groups:       groupRows(rows),
+		BoardPath:    params.boardPath(),
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)
@@ -270,6 +293,25 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 		view.LastError = &tickErrorView{Age: age(now, lastErr.At), Message: lastErr.Message}
 	}
 	return view, nil
+}
+
+// applyViewState reads the selected row's log tail only, not every row's: a board of
+// twenty-five rows must not open twenty-five log files to render one poll.
+func applyViewState(rows []row, params viewParams) {
+	for i := range rows {
+		r := &rows[i]
+		r.Selected = params.Sel == r.URL
+		r.Checked = slices.Contains(params.Tasks, r.URL)
+		toggledSel := params.toggleSel(r.URL)
+		r.SelectPath, r.SelectPush = toggledSel.boardPath(), toggledSel.pagePath()
+		toggledTask := params.toggleTask(r.URL)
+		r.TogglePath, r.TogglePush = toggledTask.boardPath(), toggledTask.pagePath()
+		if r.Selected {
+			tail, read := tailLog(r.LogPath)
+			r.LogTail = tail
+			r.LogStream = logStreamPath(r.URL, read)
+		}
+	}
 }
 
 // loadTicketFacts gathers the ticketFacts and verdictDeps both render and handlePreview need.

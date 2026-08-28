@@ -44,7 +44,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 func boardFragment(t *testing.T, page string) string {
 	t.Helper()
 
-	start := strings.Index(page, `<div id="board"`)
+	start := strings.Index(page, `<table id="board"`)
 	end := strings.Index(page, "</table>")
 	if start < 0 || end < start {
 		t.Fatalf("no board in page:\n%s", page)

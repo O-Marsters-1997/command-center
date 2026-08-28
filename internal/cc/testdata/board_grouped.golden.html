@@ -1,4 +1,4 @@
-<table>
+<table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
     <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
@@ -31,11 +31,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FROOT/detail" hx-target="#detail-29f0e26ec883" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-29f0e26ec883" hx-preserve="true"></tr>
 
   
   <tr data-depth="1">
@@ -61,11 +60,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-2/detail" hx-target="#detail-0b3e3f615cc3" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-0b3e3f615cc3" hx-preserve="true"></tr>
 
   <tr data-depth="1">
     <td>#CC-3</td>
@@ -90,11 +88,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-3/detail" hx-target="#detail-b755c5f8936d" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-3" hx-push-url="/?sel=sandbox%3A%2F%2FCC-3" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-b755c5f8936d" hx-preserve="true"></tr>
 
   <tr data-depth="1">
     <td>#CC-4</td>
@@ -119,11 +116,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-4/detail" hx-target="#detail-9c0cfeb5f82c" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-4" hx-push-url="/?sel=sandbox%3A%2F%2FCC-4" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-9c0cfeb5f82c" hx-preserve="true"></tr>
 
   <tr data-depth="1">
     <td>#CC-5</td>
@@ -148,11 +144,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-5/detail" hx-target="#detail-5d6deacc5fed" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-5" hx-push-url="/?sel=sandbox%3A%2F%2FCC-5" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-5d6deacc5fed" hx-preserve="true"></tr>
 
   
   
@@ -163,7 +158,8 @@
     <td>ready</td>
     <td>no blockers</td>
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://LONE">launch</td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://LONE"
+        hx-get="/board?task=sandbox%3A%2F%2FLONE" hx-push-url="/?task=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">launch</td>
     <td>lone</td>
     <td>main</td>
     <td></td>
@@ -178,11 +174,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FLONE/detail" hx-target="#detail-b2f7f89ce21e" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FLONE" hx-push-url="/?sel=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-b2f7f89ce21e" hx-preserve="true"></tr>
 
   
   

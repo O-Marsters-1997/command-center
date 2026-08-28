@@ -1,4 +1,4 @@
-<table>
+<table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
     <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
     <th>stack depth</th><th>merge order</th><th>warning</th>
@@ -13,7 +13,8 @@
     <td>ready · launch queued</td>
     <td>no blockers</td>
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://CC-1">launch</td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://CC-1"
+        hx-get="/board?task=sandbox%3A%2F%2FCC-1" hx-push-url="/?task=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">launch</td>
     <td>cc-1-first</td>
     <td>main</td>
     <td></td>
@@ -28,11 +29,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-1/detail" hx-target="#detail-16bdef70ab6c" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-16bdef70ab6c" hx-preserve="true"></tr>
 
   
   <tr data-depth="1">
@@ -40,7 +40,8 @@
     <td>blocked</td>
     <td>blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</td>
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://CC-2">launch</td>
+      <input type="checkbox" form="launch" name="task" value="sandbox://CC-2"
+        hx-get="/board?task=sandbox%3A%2F%2FCC-2" hx-push-url="/?task=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">launch</td>
     <td>cc-2-second</td>
     <td></td>
     <td></td>
@@ -55,11 +56,10 @@
     <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="/ticket/sandbox:%2F%2FCC-2/detail" hx-target="#detail-0b3e3f615cc3" hx-swap="innerHTML">detail</button>
+      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   
-  <tr id="detail-0b3e3f615cc3" hx-preserve="true"></tr>
 
   
   

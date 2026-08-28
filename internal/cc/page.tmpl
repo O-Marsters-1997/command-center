@@ -51,7 +51,7 @@
      checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
      instead would nest the per-row verb forms inside it, which HTML forbids. -->
 <form id="launch" method="get" action="/preview"></form>
-<div id="board" hx-get="/board" hx-trigger="every 5s">{{template "board" .}}</div>
+{{template "board" .}}
 <button type="submit" form="launch">launch selected</button>
 </main>
 </body>

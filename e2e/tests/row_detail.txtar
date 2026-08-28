@@ -1,6 +1,6 @@
-# A row's detail without leaving the board: the ticket URL percent-encoded into one path
-# segment, and the fragment carrying the facts the board row itself was derived from. htmx is
-# served out of the binary, so the page needs no network. An unknown task is a 404.
+# A row's detail without leaving the board: ?sel= names the one expanded row, the board renders
+# it inline, and the fragment carries the facts the board row itself was derived from. htmx is
+# served out of the binary, so the page needs no network. The deleted per-row route is a 404.
 
 cc-init-repo
 cp mergify-v1.yml repo/.mergify.yml
@@ -21,25 +21,30 @@ exec cc tick --count 1
 cc-fake-gh-head verdict-one-red cc-1
 exec cc tick --count 1
 
-# The board links each row to its own detail, and loads htmx locally.
+# The board links each row to its own selection, and loads htmx locally.
 exec cc request GET /
 stdout '<script src="/assets/htmx.min.js"></script>'
-stdout 'hx-get="/ticket/sandbox:%2F%2FCC-1/detail"'
+stdout 'hx-get="/board\?sel=sandbox%3A%2F%2FCC-1"'
 ! stdout 'http-equiv="refresh"'
+! stdout 'hx-preserve'
 
 exec cc request GET /assets/htmx.min.js
 stdout 'htmx'
 
-# The percent-encoded ticket URL resolves to that ticket's own facts: the check GitHub reported,
-# the worktree on disk, the run's baseline commit and its log.
-exec cc request GET /ticket/sandbox:%2F%2FCC-1/detail
+# ?sel= names the ticket whose facts the fragment carries: the check GitHub reported, the
+# worktree on disk, the run's baseline commit and its log.
+exec cc request GET '/?sel=sandbox%3A%2F%2FCC-1'
 stdout '<div>CI: COMPLETED FAILURE</div>'
 stdout '<dt>worktree</dt><dd>.*/repo-cc-1</dd>'
 stdout '<dt>base sha</dt><dd>[0-9a-f]{40}</dd>'
 stdout '<dt>log</dt><dd>.*/runs/1\.jsonl</dd>'
 stdout '<dt>elapsed</dt>'
+stdout 'hx-preserve="true"'
 
-! exec cc request GET /ticket/sandbox:%2F%2FNOPE/detail
+# The deleted per-row route is gone outright, under either name.
+! exec cc request GET /ticket/sandbox:%2F%2FCC-1/detail
+stderr '404'
+! exec cc request GET /task/sandbox:%2F%2FCC-1/detail
 stderr '404'
 
 -- mergify-v1.yml --
