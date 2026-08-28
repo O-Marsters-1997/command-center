@@ -1,0 +1,20 @@
+{
+  "issue list": {
+    "stdout": "[]\n"
+  },
+  "pr list": {
+    "stdout": "[{\"number\":1,\"headRefName\":\"cc-1\",\"headRefOid\":\"{{head}}\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":true,\"state\":\"OPEN\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"name\":\"CI\",\"status\":\"COMPLETED\",\"conclusion\":\"SUCCESS\",\"startedAt\":\"2026-01-01T00:00:00Z\"},{\"__typename\":\"CheckRun\",\"name\":\"compat\",\"status\":\"COMPLETED\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/acme/repo/actions/runs/4242/job/9999\",\"startedAt\":\"2026-01-01T00:00:00Z\"}],\"author\":{\"login\":\"cc-bot\"}}]\n"
+  },
+  "pr list --state all --head pla-40": {
+    "stdout": "[{\"number\":2,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"labels\":[]}]\n"
+  },
+  "pr ready": {
+    "stdout": ""
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  },
+  "issue view": {
+    "stdout": "fake ticket body\n"
+  }
+}

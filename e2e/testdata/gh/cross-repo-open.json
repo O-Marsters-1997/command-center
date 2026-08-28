@@ -1,0 +1,14 @@
+{
+  "issue list": {
+    "stdout": "[]\n"
+  },
+  "pr list": {
+    "stdout": "[{\"number\":2,\"headRefName\":\"pla-40\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":1,\"headRefName\":\"cc-1\",\"headRefOid\":\"{{head}}\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":true,\"state\":\"OPEN\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"name\":\"CI\",\"status\":\"COMPLETED\",\"conclusion\":\"SUCCESS\",\"startedAt\":\"2026-01-01T00:00:00Z\"},{\"__typename\":\"CheckRun\",\"name\":\"compat\",\"status\":\"COMPLETED\",\"conclusion\":\"FAILURE\",\"detailsUrl\":\"https://github.com/acme/repo/actions/runs/4242/job/9999\",\"startedAt\":\"2026-01-01T00:00:00Z\"}],\"author\":{\"login\":\"cc-bot\"}}]\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  },
+  "issue view": {
+    "stdout": "fake ticket body\n"
+  }
+}
