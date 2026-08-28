@@ -9,13 +9,13 @@ import (
 	"strings"
 )
 
-// statusRank ranks the in-flight status:* labels the ticket-tracker skill's state machine
-// defines; status:backlog and an unlabelled issue are absent and rank nowhere.
-var statusRank = map[string]int{
-	"ready":       1,
-	"in-progress": 2,
-	"in-review":   3,
-	"done":        4,
+// inFlightStatuses are the status:* labels the ticket-tracker skill's state machine ranks at
+// status:ready or beyond; status:backlog and an unlabelled issue are absent.
+var inFlightStatuses = map[string]bool{
+	"ready":       true,
+	"in-progress": true,
+	"in-review":   true,
+	"done":        true,
 }
 
 // githubSource reads one GitHub repo's issues through the gh CLI, exactly as internal/gh does.
@@ -143,7 +143,7 @@ func inFlightStatus(labels []rawLabel) (string, bool) {
 		if !ok {
 			continue
 		}
-		if _, inFlight := statusRank[status]; inFlight {
+		if inFlightStatuses[status] {
 			return status, true
 		}
 	}
