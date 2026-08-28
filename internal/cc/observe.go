@@ -29,7 +29,7 @@ type Observation struct {
 	// one indirection off it, and stale the moment a reviewer pushes without GitHub re-reporting.
 	BranchTips map[string]string `json:"branch_tips"`
 	// Titles is each configured repo's open issue titles, keyed by issue URL, which is what a
-	// task's own ticket_url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
+	// ticket's own url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
 	// than mis-keyed.
 	Titles map[string]string `json:"titles"`
 	// MidMerge reports whether each branch's own worktree is left mid-merge, read fresh every
@@ -38,7 +38,7 @@ type Observation struct {
 	MidMerge map[string]bool `json:"mid_merge"`
 }
 
-// RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it
+// RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
 // is what lets the page render pgid/elapsed/log path after a restart without a tick
 // re-probing between requests.
 type RunObservation struct {
@@ -53,7 +53,7 @@ type ObserveFunc func(ctx context.Context) (Observation, error)
 // same-named branch in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
 func NewObserver(store *Store, cfg Config) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
-		tasks, err := store.Tasks(ctx)
+		tickets, err := store.Tickets(ctx)
 		if err != nil {
 			return Observation{}, err
 		}
@@ -68,7 +68,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				return Observation{}, err
 			}
 
-			branches := branchesFor(tasks, repo.Name)
+			branches := branchesFor(tickets, repo.Name)
 			snapshot, err := gh.List(ctx, path, branches)
 			if err != nil {
 				return Observation{}, err
@@ -88,7 +88,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				}
 			}
 			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
-			// name: unlike a task's own branch, every repo has a "main", so the plain name would
+			// name: unlike a ticket's own branch, every repo has a "main", so the plain name would
 			// collide the moment a second repo is configured.
 			if tip, err := RevParse(ctx, path, "origin/"+defaultBaseBranch); err == nil {
 				obs.BranchTips[mainTipKey(repo.Name)] = tip
@@ -132,9 +132,9 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func branchesFor(tasks []Task, repo string) []string {
+func branchesFor(tickets []Ticket, repo string) []string {
 	var branches []string
-	for _, t := range tasks {
+	for _, t := range tickets {
 		if t.Repo == repo {
 			branches = append(branches, t.Branch)
 		}

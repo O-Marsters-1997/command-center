@@ -45,10 +45,10 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 }
 
 // stackedFixture cuts a parent branch and a child stacked on it, both pushed and recorded as
-// tasks. Their commits diverge from the common ancestor, so a refresh merge is a genuine
+// tickets. Their commits diverge from the common ancestor, so a refresh merge is a genuine
 // three-way merge rather than a fast-forward.
 type stackedFixture struct {
-	parent, child                 cc.Task
+	parent, child                 cc.Ticket
 	parentWorktree, childWorktree string
 	parentTip0, mainSHA           string
 }
@@ -68,20 +68,20 @@ func newStackedFixture(t *testing.T, repoPath string, store *cc.Store, at time.T
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
-	parent := cc.Task{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
-	child := cc.Task{
-		TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"},
+	parent := cc.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
+	child := cc.Ticket{
+		URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"},
 	}
-	if err := store.UpsertTasks(ctx, []cc.Task{parent, child}); err != nil {
+	if err := store.UpsertTickets(ctx, []cc.Ticket{parent, child}); err != nil {
 		t.Fatal(err)
 	}
-	dispositionAsPushed(t, store, parent.TicketURL, at)
-	dispositionAsPushed(t, store, child.TicketURL, at)
+	dispositionAsPushed(t, store, parent.URL, at)
+	dispositionAsPushed(t, store, child.URL, at)
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
-	if err := store.RecordPush(ctx, parent.TicketURL, parentTip0, "main", mainSHA, at); err != nil {
+	if err := store.RecordPush(ctx, parent.URL, parentTip0, "main", mainSHA, at); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, child.TicketURL, childTip0, "parent", parentTip0, at); err != nil {
+	if err := store.RecordPush(ctx, child.URL, childTip0, "parent", parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,7 +162,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.TicketURL].BaseSHAAtPush; got != parentTip1 {
+	if got := pushes[f.child.URL].BaseSHAAtPush; got != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
 	}
 }
@@ -203,7 +203,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.parent.TicketURL].BaseSHAAtPush; got != mainTip1 {
+	if got := pushes[f.parent.URL].BaseSHAAtPush; got != mainTip1 {
 		t.Errorf("parent's recorded base sha = %s, want the advanced main tip %s", got, mainTip1)
 	}
 }
@@ -219,7 +219,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.Runs[f.child.TicketURL] = cc.RunObservation{Alive: true}
+	obs.Runs[f.child.URL] = cc.RunObservation{Alive: true}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
@@ -273,8 +273,8 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[f.child.TicketURL].Refused {
-		t.Fatalf("refresh facts = %+v, want %s refused", facts, f.child.TicketURL)
+	if !facts[f.child.URL].Refused {
+		t.Fatalf("refresh facts = %+v, want %s refused", facts, f.child.URL)
 	}
 
 	events, err := store.Events(t.Context())
@@ -306,7 +306,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	// The human's refresh verb retries regardless -- rewrite origin/child to the worktree's own
 	// commit first, standing in for the human resolving the divergence by hand.
 	runGit(t, "-C", f.childWorktree, "push", "-q", "--force", "origin", "child")
-	if err := store.QueueVerbIntent(t.Context(), f.child.TicketURL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if err := loop.RunOnce(t.Context()); err != nil {

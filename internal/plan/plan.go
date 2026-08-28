@@ -22,9 +22,9 @@ const (
 	Closed
 )
 
-// Task is one tracked ticket.
-type Task struct {
-	TicketURL string
+// Ticket is one tracked ticket.
+type Ticket struct {
+	URL       string
 	Repo      string
 	Branch    string
 	BlockedBy []string
@@ -33,7 +33,7 @@ type Task struct {
 // Reason is the human-readable sentence the page renders on a row.
 type Reason string
 
-// Unlock is the answer to "could this task be cut, and off what?" for one task.
+// Unlock is the answer to "could this ticket be cut, and off what?" for one ticket.
 // BlockerClosed is true only when the blocker's PR closed without merging, not merely absent,
 // which lets an already-run row derive `base gone` instead of `blocked` (inv. 19).
 type Unlock struct {
@@ -47,15 +47,15 @@ type Unlock struct {
 // defaultBranch is the base every row without a stacked parent is cut from.
 const defaultBranch = "main"
 
-// Unlocked decides whether a task's blockers are satisfied, over stacking edges only — a
+// Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only — a
 // cross-repo blocker feeds the Phase-3 draft gate, never unlock or the base
 // (docs/prds/prd-command-centre.md § Unlock).
-func Unlocked(t Task, byURL map[string]Task, prs map[string]PRState, stacking bool) Unlock {
-	var sameRepo []Task
+func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stacking bool) Unlock {
+	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
 		if !ok {
-			return Unlock{Reason: Reason(fmt.Sprintf("blocked by %s, which is not a tracked task", blockerURL))}
+			return Unlock{Reason: Reason(fmt.Sprintf("blocked by %s, which is not a tracked ticket", blockerURL))}
 		}
 		if blocker.Repo == t.Repo {
 			sameRepo = append(sameRepo, blocker)
@@ -75,7 +75,7 @@ func Unlocked(t Task, byURL map[string]Task, prs map[string]PRState, stacking bo
 // unlockedOnBlocker handles the single-blocker arms: an open PR unlocks off the blocker's
 // branch when stacking is on, a merged one always unlocks off main (both repos delete
 // branches on merge, so the blocker's branch no longer exists to base on).
-func unlockedOnBlocker(blocker Task, prs map[string]PRState, stacking bool) Unlock {
+func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Unlock {
 	switch prs[blocker.Branch] {
 	case Open:
 		base := defaultBranch
@@ -88,26 +88,26 @@ func unlockedOnBlocker(blocker Task, prs map[string]PRState, stacking bool) Unlo
 	case Closed:
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
-				"blocked by %s: %s's pull request was closed without merging", blocker.TicketURL, blocker.Branch)),
-			Blocking:      []string{blocker.TicketURL},
+				"blocked by %s: %s's pull request was closed without merging", blocker.URL, blocker.Branch)),
+			Blocking:      []string{blocker.URL},
 			BlockerClosed: true,
 		}
 	default: // Absent
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
-				"blocked by %s: %s has no open or merged pull request", blocker.TicketURL, blocker.Branch)),
-			Blocking: []string{blocker.TicketURL},
+				"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
+			Blocking: []string{blocker.URL},
 		}
 	}
 }
 
 // unlockedOnBlockers handles fan-in: nothing can be cut from two branches at once, so two or
 // more blockers unlock only once every one has merged.
-func unlockedOnBlockers(blockers []Task, prs map[string]PRState) Unlock {
+func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 	var unresolved []string
 	for _, blocker := range blockers {
 		if prs[blocker.Branch] != Merged {
-			unresolved = append(unresolved, blocker.TicketURL)
+			unresolved = append(unresolved, blocker.URL)
 		}
 	}
 	if len(unresolved) == 0 {
@@ -119,7 +119,7 @@ func unlockedOnBlockers(blockers []Task, prs map[string]PRState) Unlock {
 	}
 }
 
-// State is a task's derived label. It is never stored: facts are stored, labels are derived
+// State is a ticket's derived label. It is never stored: facts are stored, labels are derived
 // every tick (inv. 14).
 type State int
 
@@ -210,12 +210,12 @@ type RunFact struct {
 	LogPath    string
 	// Push* fields matter only when Outcome == OutcomePush: this tick's own push-policy and
 	// push/PR-create result (docs/prds/prd-command-centre.md § Phase 4). PROpen comes from the
-	// observation's own PR snapshot for this task's branch, not a stored column (inv. 14).
+	// observation's own PR snapshot for this ticket's branch, not a stored column (inv. 14).
 	PushRefused     bool
 	PushRefusedPath string
 	PushFailed      bool
 	PROpen          bool
-	// PRMerged and PRClosedUnmerged read this task's own branch's PR state, never the blocker's
+	// PRMerged and PRClosedUnmerged read this ticket's own branch's PR state, never the blocker's
 	// (that is Unlock.BlockerClosed's job). Once GitHub says merged or closed, that outranks
 	// every other push fact below (docs/prds/prd-command-centre.md § The states).
 	PRMerged         bool
@@ -243,9 +243,9 @@ type RunFact struct {
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
 // time.Now: the clock is the shell's, which keeps the rendered page byte-stable. LatestRun is
-// nil until a task's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
+// nil until a ticket's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
 type Facts struct {
-	Task            Task
+	Ticket          Ticket
 	Unlock          Unlock
 	Now             time.Time
 	Authorised      bool
@@ -253,7 +253,7 @@ type Facts struct {
 	CancelledMember bool
 }
 
-// Status derives a task's state and the sentence explaining it. A run's liveness and disposition
+// Status derives a ticket's state and the sentence explaining it. A run's liveness and disposition
 // outrank the unlocked × authorised facts that mattered only before its first launch. A queued
 // row must say whether it's waiting on a base (hours) or a slot (seconds)
 // (docs/prds/prd-command-centre.md § The states).

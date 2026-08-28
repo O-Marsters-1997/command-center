@@ -60,16 +60,16 @@ func (l *Loop) applyAbortIntents(ctx context.Context, obs Observation) error {
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 
 	now := l.now()
 	for _, intent := range intents {
-		if task, ok := byTicket[intent.TaskID]; ok {
-			if err := l.abortOne(ctx, task, obs, now); err != nil {
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			if err := l.abortOne(ctx, ticket, obs, now); err != nil {
 				return err
 			}
 		}
@@ -80,28 +80,28 @@ func (l *Loop) applyAbortIntents(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// abortOne aborts one task's unresolved merge, refusing a worktree a live agent owns (inv. 4),
+// abortOne aborts one ticket's unresolved merge, refusing a worktree a live agent owns (inv. 4),
 // and clears the mid-merge the same tick's refresh step reads
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) abortOne(ctx context.Context, task Task, obs Observation, now time.Time) error {
+func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs Observation, now time.Time) error {
 	fail := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TaskURL: task.TicketURL, Kind: eventMergeAbortFailed, Detail: detail})
+			Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
 	}
 
-	worktreePath, ok := obs.Worktrees[task.Branch]
+	worktreePath, ok := obs.Worktrees[ticket.Branch]
 	if !ok {
-		return fail(fmt.Sprintf("no worktree for %s", task.Branch))
+		return fail(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
-	if obs.Runs[task.TicketURL].Alive {
+	if obs.Runs[ticket.URL].Alive {
 		return fail(fmt.Sprintf("a run is alive in %s", worktreePath))
 	}
 	if err := MergeAbort(ctx, worktreePath); err != nil {
 		return fail(err.Error())
 	}
 
-	delete(obs.MidMerge, task.Branch)
-	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventMergeAborted})
+	delete(obs.MidMerge, ticket.Branch)
+	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
@@ -112,12 +112,12 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 
 	now := l.now()
 	for _, intent := range intents {
-		members, err := l.store.CancelLaunchesFor(ctx, intent.TaskID)
+		members, err := l.store.CancelLaunchesFor(ctx, intent.TicketID)
 		if err != nil {
 			return err
 		}
 		if err := l.store.AppendEvent(ctx, Event{
-			At: now, TaskURL: intent.TaskID, Kind: eventLaunchCancelled,
+			At: now, TicketURL: intent.TicketID, Kind: eventLaunchCancelled,
 			Detail: fmt.Sprintf("launch cancelled, %d member(s)", members),
 		}); err != nil {
 			return err
@@ -130,7 +130,7 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 }
 
 // applyReRunIntents consumes every pending re-run request: relaunch in the same worktree,
-// incrementally -- a second `runs` row against the same task (docs/prds/prd-command-centre.md §
+// incrementally -- a second `runs` row against the same ticket (docs/prds/prd-command-centre.md §
 // Phase 6). Unlike a fresh launch, re-run is not gated by unlock, authorisation or a
 // prompt-hash match: it is a human's explicit, one-off decision, not the tick's own
 // eligibility check.
@@ -143,30 +143,30 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
 		return err
 	}
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
 
 	now := l.now()
 	for _, intent := range intents {
-		if task, ok := byTicket[intent.TaskID]; ok {
+		if ticket, ok := byTicket[intent.TicketID]; ok {
 			var oldPromptPath string
-			if run, ok := latest[task.TicketURL]; ok {
+			if run, ok := latest[ticket.URL]; ok {
 				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
 			}
 			err := l.reRunOne(
-				ctx, task, repoPaths[task.Repo], obs, authorisedHashes[task.TicketURL], now, oldPromptPath,
+				ctx, ticket, repoPaths[ticket.Repo], obs, authorisedHashes[ticket.URL], now, oldPromptPath,
 			)
 			if err != nil {
 				return err
@@ -179,25 +179,25 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// reRunOne spawns a new run in a task's existing worktree, baselined off its current tip so
+// reRunOne spawns a new run in a ticket's existing worktree, baselined off its current tip so
 // disposition counts only the commits this new run itself produces, never a previous run's.
 func (l *Loop) reRunOne(
-	ctx context.Context, task Task, repoPath string, obs Observation, promptHash string, now time.Time,
+	ctx context.Context, ticket Ticket, repoPath string, obs Observation, promptHash string, now time.Time,
 	oldPromptPath string,
 ) error {
-	worktreePath, ok := obs.Worktrees[task.Branch]
+	worktreePath, ok := obs.Worktrees[ticket.Branch]
 	if !ok {
 		return l.store.AppendEvent(ctx, Event{
-			At: now, TaskURL: task.TicketURL, Kind: eventReRunRefused,
-			Detail: fmt.Sprintf("no worktree for %s", task.Branch),
+			At: now, TicketURL: ticket.URL, Kind: eventReRunRefused,
+			Detail: fmt.Sprintf("no worktree for %s", ticket.Branch),
 		})
 	}
 
-	baselineSHA, err := BranchTip(ctx, repoPath, task.Branch)
+	baselineSHA, err := BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
-		return fmt.Errorf("read baseline for re-run of %s: %w", task.TicketURL, err)
+		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, task, worktreePath, baselineSHA, promptHash, oldPromptPath)
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath)
 }
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat
@@ -211,18 +211,18 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	compatChecks := compatCheckByRepo(l.cfg.Repos)
 
 	now := l.now()
 	for _, intent := range intents {
-		if task, ok := byTicket[intent.TaskID]; ok {
-			err := l.reCheckOne(ctx, task, repoPaths[task.Repo], compatChecks[task.Repo], obs, now)
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			err := l.reCheckOne(ctx, ticket, repoPaths[ticket.Repo], compatChecks[ticket.Repo], obs, now)
 			if err != nil {
 				return err
 			}
@@ -237,17 +237,17 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
 // reCheckOne re-runs the compat check's own GitHub Actions run, named by the run id embedded in
 // its DetailsURL (https://github.com/<owner>/<repo>/actions/runs/<run-id>/job/<job-id>).
 func (l *Loop) reCheckOne(
-	ctx context.Context, task Task, repoPath, compatCheck string, obs Observation, now time.Time,
+	ctx context.Context, ticket Ticket, repoPath, compatCheck string, obs Observation, now time.Time,
 ) error {
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TaskURL: task.TicketURL, Kind: eventReCheckRefused, Detail: detail})
+			Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRefused, Detail: detail})
 	}
 	if compatCheck == "" {
 		return refuse("no compat check configured for this repo")
 	}
 
-	detailsURL := obs.PRs[task.Branch].Checks[compatCheck].DetailsURL
+	detailsURL := obs.PRs[ticket.Branch].Checks[compatCheck].DetailsURL
 	runID, err := runIDFromDetailsURL(detailsURL)
 	if err != nil {
 		return refuse(err.Error())
@@ -259,10 +259,10 @@ func (l *Loop) reCheckOne(
 
 	// Zeroed exactly as RecordPush zeroes it (pushes.go); issue #56 AC1 requires the row read
 	// checking again on the tick after.
-	if err := l.store.resetCheckingTicks(ctx, task.TicketURL); err != nil {
+	if err := l.store.resetCheckingTicks(ctx, ticket.URL); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventReCheckRequested})
+	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRequested})
 }
 
 // runIDFromDetailsURL parses the run id out of a check's DetailsURL
@@ -292,19 +292,19 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	now := l.now()
 	for _, intent := range intents {
-		if task, ok := byTicket[intent.TaskID]; ok {
-			event := Event{At: now, TaskURL: task.TicketURL, Kind: eventClosePRRequested}
-			if err := gh.Close(ctx, repoPaths[task.Repo], task.Branch); err != nil {
-				event = Event{At: now, TaskURL: task.TicketURL, Kind: eventClosePRFailed, Detail: err.Error()}
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			event := Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
+			if err := gh.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
+				event = Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
 			}
 			if err := l.store.AppendEvent(ctx, event); err != nil {
 				return err
@@ -319,7 +319,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 
 // applyRemoveWorktreeIntents consumes every pending remove-worktree request: `tp remove
 // --force`, called only with MERGED PR state or on a base_gone row the user clears, and never
-// on a worktree that is dirty or holds unpushed commits (inv. 3). It prunes that task's run
+// on a worktree that is dirty or holds unpushed commits (inv. 3). It prunes that ticket's run
 // logs when it does remove.
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, removeWorktreeVerb)
@@ -330,11 +330,11 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
@@ -343,20 +343,20 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 		return err
 	}
 	rc := removeWorktreeContext{
-		byURL:      planTasksByURL(tasks),
+		byURL:      planTicketsByURL(tickets),
 		prs:        prsByBranch(obs),
 		stacking:   stackingByRepo(l.cfg.Repos),
 		repoPaths:  repoPathsByName(l.cfg.Repos),
 		lastPushed: lastPushed,
 		obs:        obs,
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 
 	now := l.now()
 	for _, intent := range intents {
-		if task, ok := byTicket[intent.TaskID]; ok {
-			_, hasRun := latest[task.TicketURL]
-			if err := l.removeWorktreeOne(ctx, task, rc, hasRun, now); err != nil {
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			_, hasRun := latest[ticket.URL]
+			if err := l.removeWorktreeOne(ctx, ticket, rc, hasRun, now); err != nil {
 				return err
 			}
 		}
@@ -368,9 +368,9 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 }
 
 // removeWorktreeContext is the per-tick facts removeWorktreeOne needs, gathered once by
-// applyRemoveWorktreeIntents rather than re-queried per task -- pushContext's own shape (push.go).
+// applyRemoveWorktreeIntents rather than re-queried per ticket -- pushContext's own shape (push.go).
 type removeWorktreeContext struct {
-	byURL     map[string]plan.Task
+	byURL     map[string]plan.Ticket
 	prs       map[string]plan.PRState
 	stacking  map[string]bool
 	repoPaths map[string]string
@@ -385,57 +385,57 @@ type removeWorktreeContext struct {
 // does it hold unpushed commits. Any refusal is recorded as an event and nothing is removed;
 // only a clean pass through every gate reaches tp.Remove.
 func (l *Loop) removeWorktreeOne(
-	ctx context.Context, task Task, rc removeWorktreeContext, hasRun bool, now time.Time,
+	ctx context.Context, ticket Ticket, rc removeWorktreeContext, hasRun bool, now time.Time,
 ) error {
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TaskURL: task.TicketURL, Kind: eventRemoveWorktreeRefused, Detail: detail})
+			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
 	}
 
-	worktreePath, ok := rc.obs.Worktrees[task.Branch]
+	worktreePath, ok := rc.obs.Worktrees[ticket.Branch]
 	if !ok {
-		return refuse(fmt.Sprintf("no worktree for %s", task.Branch))
+		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
 
-	merged := rc.obs.PRs[task.Branch].State == gh.Merged
-	unlock := plan.Unlocked(rc.byURL[task.TicketURL], rc.byURL, rc.prs, rc.stacking[task.Repo])
+	merged := rc.obs.PRs[ticket.Branch].State == gh.Merged
+	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
 	baseGone := hasRun && unlock.BlockerClosed
 	if !merged && !baseGone {
 		return refuse("neither merged nor base gone")
 	}
 
-	repoPath := rc.repoPaths[task.Repo]
+	repoPath := rc.repoPaths[ticket.Repo]
 	dirty, err := IsDirty(ctx, worktreePath)
 	if err != nil {
-		return fmt.Errorf("check dirty for %s: %w", task.TicketURL, err)
+		return fmt.Errorf("check dirty for %s: %w", ticket.URL, err)
 	}
 	if dirty {
 		return refuse("worktree is dirty")
 	}
 
-	unpushed, err := HasUnpushedCommits(ctx, repoPath, task.Branch, rc.lastPushed[task.TicketURL])
+	unpushed, err := HasUnpushedCommits(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
 	if err != nil {
-		return fmt.Errorf("check unpushed commits for %s: %w", task.TicketURL, err)
+		return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 	}
 	if unpushed {
 		return refuse("worktree holds unpushed commits")
 	}
 
-	if err := tp.Remove(ctx, repoPath, task.Branch); err != nil {
+	if err := tp.Remove(ctx, repoPath, ticket.Branch); err != nil {
 		return refuse(err.Error())
 	}
 
-	if err := l.pruneRunLogs(ctx, task.TicketURL); err != nil {
+	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{At: now, TaskURL: task.TicketURL, Kind: eventWorktreeRemoved})
+	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved})
 }
 
-// pruneRunLogs deletes every runs/<id>.jsonl, runs/<id>.prompt and runs/<id>.diff a task's runs
+// pruneRunLogs deletes every runs/<id>.jsonl, runs/<id>.prompt and runs/<id>.diff a ticket's runs
 // ever produced. Best-effort: a cut-failed run never wrote any of them, and most runs never wrote
 // a diff at all, so a missing file is not an error.
-func (l *Loop) pruneRunLogs(ctx context.Context, taskID string) error {
-	ids, err := l.store.RunIDsForTask(ctx, taskID)
+func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
+	ids, err := l.store.RunIDsForTicket(ctx, ticketID)
 	if err != nil {
 		return err
 	}

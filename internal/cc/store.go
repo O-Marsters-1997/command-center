@@ -66,9 +66,9 @@ func (s *Store) init(ctx context.Context) error {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// UpsertTasks writes the configured intake, keyed on ticket_url. Re-running with an edited
+// UpsertTickets writes the configured intake, keyed on url. Re-running with an edited
 // block must update the row, never mint a second one — inv. 8 loses its key otherwise.
-func (s *Store) UpsertTasks(ctx context.Context, tasks []Task) (err error) {
+func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
@@ -79,48 +79,48 @@ func (s *Store) UpsertTasks(ctx context.Context, tasks []Task) (err error) {
 		}
 	}()
 
-	for _, t := range tasks {
+	for _, t := range tickets {
 		blockedBy, marshalErr := json.Marshal(nonNil(t.BlockedBy))
 		if marshalErr != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", t.TicketURL, marshalErr)
+			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, marshalErr)
 		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO tasks (ticket_url, repo, branch, blocked_by) VALUES (?, ?, ?, ?)
-			ON CONFLICT (ticket_url) DO UPDATE SET repo = excluded.repo, branch = excluded.branch,
+			INSERT INTO tickets (url, repo, branch, blocked_by) VALUES (?, ?, ?, ?)
+			ON CONFLICT (url) DO UPDATE SET repo = excluded.repo, branch = excluded.branch,
 			                                       blocked_by = excluded.blocked_by`,
-			t.TicketURL, t.Repo, t.Branch, string(blockedBy))
+			t.URL, t.Repo, t.Branch, string(blockedBy))
 		if err != nil {
-			return fmt.Errorf("upsert task %s: %w", t.TicketURL, err)
+			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
 		}
 	}
 	return tx.Commit()
 }
 
-// Tasks returns every task row, ordered by ticket_url.
-func (s *Store) Tasks(ctx context.Context) ([]Task, error) {
+// Tickets returns every ticket row, ordered by url.
+func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT ticket_url, repo, branch, blocked_by FROM tasks ORDER BY ticket_url`)
+		`SELECT url, repo, branch, blocked_by FROM tickets ORDER BY url`)
 	if err != nil {
-		return nil, fmt.Errorf("select tasks: %w", err)
+		return nil, fmt.Errorf("select tickets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var tasks []Task
+	var tickets []Ticket
 	for rows.Next() {
-		var t Task
+		var t Ticket
 		var blockedBy string
-		if err := rows.Scan(&t.TicketURL, &t.Repo, &t.Branch, &blockedBy); err != nil {
-			return nil, fmt.Errorf("scan task: %w", err)
+		if err := rows.Scan(&t.URL, &t.Repo, &t.Branch, &blockedBy); err != nil {
+			return nil, fmt.Errorf("scan ticket: %w", err)
 		}
 		if err := json.Unmarshal([]byte(blockedBy), &t.BlockedBy); err != nil {
-			return nil, fmt.Errorf("decode blocked_by for %s: %w", t.TicketURL, err)
+			return nil, fmt.Errorf("decode blocked_by for %s: %w", t.URL, err)
 		}
-		tasks = append(tasks, t)
+		tickets = append(tickets, t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate tasks: %w", err)
+		return nil, fmt.Errorf("iterate tickets: %w", err)
 	}
-	return tasks, nil
+	return tickets, nil
 }
 
 func nonNil(s []string) []string {
@@ -137,7 +137,7 @@ const (
 	metaLastVerdicts  = "last_verdicts"
 )
 
-// CheckingTicks returns each task's count of successful ticks since it last had anything to
+// CheckingTicks returns each ticket's count of successful ticks since it last had anything to
 // resolve into a CI verdict. verdict.Input.Now is derived from this, never wall clock, so a
 // GitHub outage cannot walk every in-flight row to needs_you the moment it ends
 // (docs/designs/command-centre-design.md § 11 inv. 11).
@@ -149,7 +149,7 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	return ticks, nil
 }
 
-// IncrementCheckingTicks bumps every named task's counter by one -- called once per successful
+// IncrementCheckingTicks bumps every named ticket's counter by one -- called once per successful
 // tick, never on a failed observe, which is what makes the counter track successful ticks,
 // not wall time.
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
@@ -163,22 +163,22 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string)
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// resetCheckingTicks zeroes one task's counter -- called by RecordPush (pushes.go) on every
+// resetCheckingTicks zeroes one ticket's counter -- called by RecordPush (pushes.go) on every
 // fresh push, so a re-run's second push starts its own bounded wait rather than inheriting the
 // first push's.
-func (s *Store) resetCheckingTicks(ctx context.Context, taskID string) error {
+func (s *Store) resetCheckingTicks(ctx context.Context, ticketID string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
 		return err
 	}
-	if _, ok := ticks[taskID]; !ok {
+	if _, ok := ticks[ticketID]; !ok {
 		return nil
 	}
-	delete(ticks, taskID)
+	delete(ticks, ticketID)
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// LastVerdicts returns each task's most recently recorded CI verdict label ("review_me",
+// LastVerdicts returns each ticket's most recently recorded CI verdict label ("review_me",
 // "needs_you" or "checking"), keyed by ticket URL -- what recordVerdictTransitions (loop.go)
 // compares this tick's freshly computed verdict against before logging a transition event.
 func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
@@ -223,20 +223,20 @@ func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
 
 // Event is one append-only audit row.
 type Event struct {
-	At      time.Time
-	TaskURL string
-	Kind    string
-	Detail  string
+	At        time.Time
+	TicketURL string
+	Kind      string
+	Detail    string
 }
 
 func (s *Store) AppendEvent(ctx context.Context, e Event) error {
-	var taskID any
-	if e.TaskURL != "" {
-		taskID = e.TaskURL
+	var ticketID any
+	if e.TicketURL != "" {
+		ticketID = e.TicketURL
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO events (at, task_id, kind, detail) VALUES (?, ?, ?, ?)`,
-		e.At.UTC().Format(time.RFC3339Nano), taskID, e.Kind, e.Detail)
+		`INSERT INTO events (at, ticket_id, kind, detail) VALUES (?, ?, ?, ?)`,
+		e.At.UTC().Format(time.RFC3339Nano), ticketID, e.Kind, e.Detail)
 	if err != nil {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
 	}
@@ -245,7 +245,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 
 // Events returns every audit row, oldest first.
 func (s *Store) Events(ctx context.Context) ([]Event, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT at, task_id, kind, detail FROM events ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT at, ticket_id, kind, detail FROM events ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("select events: %w", err)
 	}
@@ -255,14 +255,14 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	for rows.Next() {
 		var e Event
 		var at string
-		var taskID, detail sql.NullString
-		if err := rows.Scan(&at, &taskID, &e.Kind, &detail); err != nil {
+		var ticketID, detail sql.NullString
+		if err := rows.Scan(&at, &ticketID, &e.Kind, &detail); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
 		if e.At, err = time.Parse(time.RFC3339Nano, at); err != nil {
 			return nil, fmt.Errorf("decode event time %q: %w", at, err)
 		}
-		e.TaskURL, e.Detail = taskID.String, detail.String
+		e.TicketURL, e.Detail = ticketID.String, detail.String
 		events = append(events, e)
 	}
 	if err := rows.Err(); err != nil {

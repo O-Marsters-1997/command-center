@@ -68,10 +68,10 @@ func denyMatch(pattern, path string) bool {
 	}
 }
 
-// PushCandidate is one task's push-eligibility facts: the branch's current local tip, and the
+// PushCandidate is one ticket's push-eligibility facts: the branch's current local tip, and the
 // tip its last recorded push (if any) covered.
 type PushCandidate struct {
-	TicketURL     string
+	URL           string
 	LocalTip      string
 	LastPushedTip string
 }
@@ -83,7 +83,7 @@ func PushPlan(candidates []PushCandidate) []string {
 	var selected []string
 	for _, c := range candidates {
 		if c.LocalTip != "" && c.LocalTip != c.LastPushedTip {
-			selected = append(selected, c.TicketURL)
+			selected = append(selected, c.URL)
 		}
 	}
 	return selected

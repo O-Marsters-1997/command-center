@@ -56,7 +56,7 @@ func WithRunner(runner Runner) Option {
 }
 
 // New resolves the workspace, takes the flock, opens the store and upserts the configured
-// tasks. A second instance against the same workspace is refused (inv. 9).
+// tickets. A second instance against the same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{now: time.Now}
 	for _, opt := range opts {
@@ -106,7 +106,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	}()
 
 	// Intake is upserted at startup only, so the tick never adds rows to its own table.
-	if err := store.UpsertTasks(ctx, cfg.Tasks); err != nil {
+	if err := store.UpsertTickets(ctx, cfg.Tickets); err != nil {
 		return nil, err
 	}
 

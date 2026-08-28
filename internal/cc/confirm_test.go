@@ -41,12 +41,12 @@ func TestBoardSendsOnlyDestructiveVerbsToConfirm(t *testing.T) {
 	}
 }
 
-func TestConfirmNamesTheTaskTheVerbAndTheThingAtRisk(t *testing.T) {
+func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 	t.Parallel()
 
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
-	running := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	running := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 
 	tests := []struct {
 		name  string
@@ -111,7 +111,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 	}
 }
 
-func TestConfirmRejectsNonDestructiveVerbsAndUnknownTasks(t *testing.T) {
+func TestConfirmRejectsNonDestructiveVerbsAndUnknownTickets(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
@@ -120,9 +120,9 @@ func TestConfirmRejectsNonDestructiveVerbsAndUnknownTasks(t *testing.T) {
 	tests := []struct{ name, query string }{
 		{name: "a non-destructive verb needs no confirmation", query: "?verb=re-run&task=sandbox://CC-1"},
 		{name: "an unsupported verb", query: "?verb=nope&task=sandbox://CC-1"},
-		{name: "an unknown task", query: "?verb=kill&task=sandbox://NOPE"},
+		{name: "an unknown ticket", query: "?verb=kill&task=sandbox://NOPE"},
 		{name: "a missing verb", query: "?task=sandbox://CC-1"},
-		{name: "a missing task", query: "?verb=kill"},
+		{name: "a missing ticket", query: "?verb=kill"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

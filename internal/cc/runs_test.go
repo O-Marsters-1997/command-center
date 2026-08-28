@@ -11,10 +11,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func seedOneTask(t *testing.T, store *cc.Store) {
+func seedOneTicket(t *testing.T, store *cc.Store) {
 	t.Helper()
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -24,7 +24,7 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
+	seedOneTicket(t, store)
 
 	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
 	if err != nil {
@@ -52,20 +52,20 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 		t.Fatalf("pending = %d, want 1", len(pending))
 	}
 	got := pending[0]
-	if got.TaskID != "sandbox://CC-1" || got.Pgid != 4242 || got.BaselineSHA != "deadbeef" {
+	if got.TicketID != "sandbox://CC-1" || got.Pgid != 4242 || got.BaselineSHA != "deadbeef" {
 		t.Errorf("pending run = %+v", got)
 	}
 	if !got.ProcStartedAt.Equal(startedAt) {
 		t.Errorf("proc_started_at = %s, want %s", got.ProcStartedAt, startedAt)
 	}
 
-	latest, err := store.LatestRunsByTask(ctx)
+	latest, err := store.LatestRunsByTicket(ctx)
 	if err != nil {
-		t.Fatalf("LatestRunsByTask: %v", err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
 	summary, ok := latest["sandbox://CC-1"]
 	if !ok {
-		t.Fatal("LatestRunsByTask has no entry for sandbox://CC-1")
+		t.Fatal("LatestRunsByTicket has no entry for sandbox://CC-1")
 	}
 	if summary.LogPath != "/state/runs/1.jsonl" || summary.HasOutcome {
 		t.Errorf("summary = %+v, want the log path set and no outcome yet", summary)
@@ -77,7 +77,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
+	seedOneTicket(t, store)
 
 	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
 	if err != nil {
@@ -102,7 +102,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 		t.Errorf("pending = %+v, want none once disposed", pending)
 	}
 
-	latest, err := store.LatestRunsByTask(ctx)
+	latest, err := store.LatestRunsByTicket(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
+	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	if _, err := store.InsertCutFailedRun(ctx, "sandbox://CC-1", "hash-1", at); err != nil {
@@ -138,7 +138,7 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 		t.Errorf("pending = %+v, want none: a cut failure never claims a pgid", pending)
 	}
 
-	latest, err := store.LatestRunsByTask(ctx)
+	latest, err := store.LatestRunsByTicket(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
+	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	if err := store.QueueVerbIntent(ctx, "sandbox://CC-1", "kill", at); err != nil {
@@ -164,7 +164,7 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingVerbIntents: %v", err)
 	}
-	if len(pending) != 1 || pending[0].TaskID != "sandbox://CC-1" {
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
 		t.Fatalf("pending = %+v, want one kill intent for sandbox://CC-1", pending)
 	}
 
@@ -181,12 +181,12 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 	}
 }
 
-func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTask(t *testing.T) {
+func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTicket(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
+	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
@@ -205,39 +205,39 @@ func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTask(t *testing.T) {
 	}
 }
 
-func TestPendingIntentsByTaskKeysUnconsumedVerbsByTask(t *testing.T) {
+func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	seedOneTask(t, store)
-	second := cc.Task{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
-	if err := store.UpsertTasks(ctx, []cc.Task{second}); err != nil {
+	seedOneTicket(t, store)
+	second := cc.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{second}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	queued := []struct{ task, verb string }{
+	queued := []struct{ ticket, verb string }{
 		{"sandbox://CC-1", "kill"},
 		{"sandbox://CC-1", "close-pr"},
 		{"sandbox://CC-2", "re-run"},
 	}
 	for i, q := range queued {
-		if err := store.QueueVerbIntent(ctx, q.task, q.verb, at.Add(time.Duration(i)*time.Second)); err != nil {
-			t.Fatalf("QueueVerbIntent %s %s: %v", q.task, q.verb, err)
+		if err := store.QueueVerbIntent(ctx, q.ticket, q.verb, at.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatalf("QueueVerbIntent %s %s: %v", q.ticket, q.verb, err)
 		}
 	}
 
-	byTask, err := store.PendingIntentsByTask(ctx)
+	byTicket, err := store.PendingIntentsByTicket(ctx)
 	if err != nil {
-		t.Fatalf("PendingIntentsByTask: %v", err)
+		t.Fatalf("PendingIntentsByTicket: %v", err)
 	}
 	want := map[string][]string{
 		"sandbox://CC-1": {"kill", "close-pr"},
 		"sandbox://CC-2": {"re-run"},
 	}
-	if !maps.EqualFunc(byTask, want, slices.Equal) {
-		t.Fatalf("byTask = %+v, want %+v", byTask, want)
+	if !maps.EqualFunc(byTicket, want, slices.Equal) {
+		t.Fatalf("byTicket = %+v, want %+v", byTicket, want)
 	}
 
 	consumed, err := store.PendingVerbIntents(ctx, "kill")
@@ -248,7 +248,7 @@ func TestPendingIntentsByTaskKeysUnconsumedVerbsByTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	after, err := store.PendingIntentsByTask(ctx)
+	after, err := store.PendingIntentsByTicket(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

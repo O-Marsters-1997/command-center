@@ -49,9 +49,9 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatalf("UpsertTasks: %v", err)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
@@ -81,9 +81,9 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	good := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	bad := good.Add(15 * time.Second)
 
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
-		t.Fatalf("UpsertTasks: %v", err)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
 	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}

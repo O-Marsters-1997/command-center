@@ -65,7 +65,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			row := pushes[f.child.TicketURL]
+			row := pushes[f.child.URL]
 			if row.BaseBranch != "main" {
 				t.Errorf("child's recorded base = %q, want main", row.BaseBranch)
 			}
@@ -120,7 +120,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.TicketURL].PushedAt; !got.Equal(firstTick) {
+	if got := pushes[f.child.URL].PushedAt; !got.Equal(firstTick) {
 		t.Errorf("child's latest push row is stamped %s, want the first tick's %s: an unchanged base "+
 			"must not append a second row", got, firstTick)
 	}
@@ -151,7 +151,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	// observable rather than an already-up-to-date no-op.
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
-	if err := store.QueueVerbIntent(t.Context(), f.child.TicketURL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -171,8 +171,8 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 }
 
 // TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick covers the hazard the step's own
-// precondition creates: a task whose recorded base stays non-main is a candidate on every later
-// tick, so aborting the tick on a `gh pr edit` gh refuses would stall every other task's push,
+// precondition creates: a ticket whose recorded base stays non-main is a candidate on every later
+// tick, so aborting the tick on a `gh pr edit` gh refuses would stall every other ticket's push,
 // verdict and launch for as long as that one pull request stays un-editable.
 func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
@@ -212,7 +212,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.TicketURL].BaseBranch; got != "parent" {
+	if got := pushes[f.child.URL].BaseBranch; got != "parent" {
 		t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
 	}
 
@@ -233,9 +233,9 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	t.Parallel()
 
 	const parentTip, childTip = "parent-tip", "child-tip"
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
@@ -252,7 +252,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		t.Helper()
 		ctx := t.Context()
 		store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-		if err := store.UpsertTasks(ctx, tasks); err != nil {
+		if err := store.UpsertTickets(ctx, tickets); err != nil {
 			t.Fatal(err)
 		}
 		dispositionAsPushed(t, store, "sandbox://CHILD", at)
@@ -329,7 +329,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -558,7 +558,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -588,7 +588,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !restacked[f.child.TicketURL] {
+	if !restacked[f.child.URL] {
 		t.Fatalf("RestackedSinceLastPush = %v, want the child: the app's own rebase --onto rewrote "+
 			"this branch, and a conflict interrupts that rather than handing it to anyone else", restacked)
 	}
@@ -627,7 +627,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.TicketURL, childTip, "parent", f.parentTip0, at); err != nil {
+	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 

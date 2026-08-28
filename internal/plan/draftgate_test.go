@@ -12,8 +12,8 @@ import (
 func TestDraftGate(t *testing.T) {
 	t.Parallel()
 
-	blocker := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	gating := []plan.Task{blocker}
+	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	gating := []plan.Ticket{blocker}
 
 	tests := []struct {
 		name         string
@@ -66,8 +66,8 @@ func TestDraftGate(t *testing.T) {
 func TestDraftGateUnresolvedBlockerNamesIt(t *testing.T) {
 	t.Parallel()
 
-	blocker := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Task{blocker}, map[string]plan.PRState{}, true)
+	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{}, true)
 	if !draft {
 		t.Fatal("an absent gating blocker must stay draft")
 	}
@@ -81,8 +81,8 @@ func TestDraftGateUnresolvedBlockerNamesIt(t *testing.T) {
 func TestDraftGateVerdictNotGreenNamesOwnChecks(t *testing.T) {
 	t.Parallel()
 
-	blocker := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Task{blocker}, map[string]plan.PRState{"pla-40": plan.Merged}, false)
+	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{"pla-40": plan.Merged}, false)
 	if !draft {
 		t.Fatal("a red verdict must stay draft even once every gating blocker has merged")
 	}
@@ -97,8 +97,8 @@ func TestDraftGateVerdictNotGreenNamesOwnChecks(t *testing.T) {
 func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	t.Parallel()
 
-	blocker := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Task{blocker}, map[string]plan.PRState{"pla-40": plan.Closed}, true)
+	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{"pla-40": plan.Closed}, true)
 	if !draft {
 		t.Fatal("a gating blocker closed without merging must never un-draft the consumer")
 	}
@@ -128,53 +128,53 @@ func TestDraftGateNoGatingBlockers(t *testing.T) {
 func TestGatingBlockers(t *testing.T) {
 	t.Parallel()
 
-	sameRepo := plan.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	crossRepo := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	consumer := plan.Task{
-		TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2",
+	sameRepo := plan.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	crossRepo := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	consumer := plan.Ticket{
+		URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2",
 		BlockedBy: []string{"sandbox://CC-1", "sandbox://PLA-40"},
 	}
-	byURL := map[string]plan.Task{
-		sameRepo.TicketURL:  sameRepo,
-		crossRepo.TicketURL: crossRepo,
-		consumer.TicketURL:  consumer,
+	byURL := map[string]plan.Ticket{
+		sameRepo.URL:  sameRepo,
+		crossRepo.URL: crossRepo,
+		consumer.URL:  consumer,
 	}
 
 	got := plan.GatingBlockers(consumer, byURL)
-	if len(got) != 1 || got[0].TicketURL != crossRepo.TicketURL {
-		t.Errorf("GatingBlockers = %+v, want only %s", got, crossRepo.TicketURL)
+	if len(got) != 1 || got[0].URL != crossRepo.URL {
+		t.Errorf("GatingBlockers = %+v, want only %s", got, crossRepo.URL)
 	}
 }
 
 // TestOpensAsDraft covers the reconciliation's own creation-time decision (issue #57's "opens a
-// PR as a draft for any task with a gating edge"): a gating edge, or none.
+// PR as a draft for any ticket with a gating edge"): a gating edge, or none.
 func TestOpensAsDraft(t *testing.T) {
 	t.Parallel()
 
-	blocker := plan.Task{TicketURL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	byURL := map[string]plan.Task{blocker.TicketURL: blocker}
+	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	byURL := map[string]plan.Ticket{blocker.URL: blocker}
 
 	tests := []struct {
-		name string
-		task plan.Task
-		want bool
+		name   string
+		ticket plan.Ticket
+		want   bool
 	}{
 		{
-			name: "a gating edge alone opens as a draft",
-			task: plan.Task{TicketURL: "sandbox://CC-1", Repo: "repo", BlockedBy: []string{"sandbox://PLA-40"}},
-			want: true,
+			name:   "a gating edge alone opens as a draft",
+			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo", BlockedBy: []string{"sandbox://PLA-40"}},
+			want:   true,
 		},
 		{
-			name: "no gating edge opens as a plain PR",
-			task: plan.Task{TicketURL: "sandbox://CC-1", Repo: "repo"},
-			want: false,
+			name:   "no gating edge opens as a plain PR",
+			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo"},
+			want:   false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := plan.OpensAsDraft(tt.task, byURL); got != tt.want {
+			if got := plan.OpensAsDraft(tt.ticket, byURL); got != tt.want {
 				t.Errorf("OpensAsDraft = %v, want %v", got, tt.want)
 			}
 		})

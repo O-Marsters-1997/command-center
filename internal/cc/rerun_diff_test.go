@@ -22,14 +22,14 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	planTask := plan.Task{TicketURL: task.TicketURL}
-	authoriseTask(t, store, task.TicketURL, plan.Hash(plan.Compose(planTask)), at)
+	planTicket := plan.Ticket{URL: ticket.URL}
+	authoriseTicket(t, store, ticket.URL, plan.Hash(plan.Compose(planTicket)), at)
 
 	obs := &cc.Observation{Worktrees: map[string]string{}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return *obs, nil }
@@ -45,7 +45,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	obs.Worktrees["cc-1"] = fake.spawns[0].WorktreePath
 
 	t.Setenv("CC_FAKE_ISSUE_BODY", "ticket body, edited")
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-run", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,17 +57,17 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	}
 	reRunSpawn := fake.spawns[1]
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	newRunID := latest[task.TicketURL].ID
+	newRunID := latest[ticket.URL].ID
 
 	newPrompt, err := os.ReadFile(reRunSpawn.PromptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantComposition := plan.Compose(planTask)
+	wantComposition := plan.Compose(planTicket)
 	if !strings.HasPrefix(string(newPrompt), wantComposition) {
 		t.Errorf("new .prompt file = %q, want it to start with the fresh composition %q", newPrompt, wantComposition)
 	}
@@ -102,13 +102,13 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", "", "hash-1")
+	firstRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-run", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,11 +145,11 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 		t.Errorf("spawned prompt = %q, want exactly the plain composition (no diff preamble)", spawned.Prompt)
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	newRunID := latest[task.TicketURL].ID
+	newRunID := latest[ticket.URL].ID
 	diffPath := filepath.Join(ws.RunsDir, fmt.Sprintf("%d.diff", newRunID))
 	if _, err := os.Stat(diffPath); !os.IsNotExist(err) {
 		t.Errorf("diff file exists at %s, want none written when there is nothing to diff", diffPath)

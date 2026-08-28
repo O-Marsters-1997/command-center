@@ -31,16 +31,16 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	taskURL := r.PathValue("task")
-	target, ok := findRow(view, taskURL)
+	ticketURL := r.PathValue("ticket")
+	target, ok := findRow(view, ticketURL)
 	if !ok {
-		http.Error(w, fmt.Sprintf("unknown task %q", taskURL), http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tail, read := tailLog(target.LogPath)
-	detail := detailView{row: target, LogTail: tail, LogStream: logStreamPath(taskURL, read)}
+	detail := detailView{row: target, LogTail: tail, LogStream: logStreamPath(ticketURL, read)}
 	if err := detailFragment.Execute(w, detail); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -48,7 +48,7 @@ func (s *Server) handleDetail(w http.ResponseWriter, r *http.Request) {
 
 // tailLog returns the log's last lines and the byte the tail read up to, which the SSE stream
 // resumes from. It is empty rather than an error when the log will not open: the agent process
-// owns that file, and a task with no run never had one.
+// owns that file, and a ticket with no run never had one.
 func tailLog(path string) ([]string, int64) {
 	f, err := os.Open(path)
 	if err != nil {

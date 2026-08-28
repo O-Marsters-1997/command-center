@@ -6,8 +6,8 @@ import (
 )
 
 // Compose renders the prompt a launch authorises: the implement instruction for the ticket.
-func Compose(t Task) string {
-	return "/implement " + t.TicketURL
+func Compose(t Ticket) string {
+	return "/implement " + t.URL
 }
 
 // Hash fingerprints a composed prompt. Consent is bound to content (docs/command-centre-

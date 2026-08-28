@@ -39,7 +39,7 @@ func TestPreview(t *testing.T) {
 			reasonNames: "sandbox://CC-9",
 		},
 		{
-			name:           "a task already in an active launch is refused, naming that launch",
+			name:           "a ticket already in an active launch is refused, naming that launch",
 			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
 			slice:          map[string]bool{},
 			activeLaunchID: 3,
