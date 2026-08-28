@@ -251,6 +251,10 @@ type Facts struct {
 	Authorised      bool
 	LatestRun       *RunFact
 	CancelledMember bool
+	// ConflictedBase names the base a launch would cut this task from when that base already
+	// carries a conflict, and is empty when it is clean. A row that has already run is described
+	// by its run instead (docs/adr/0006-resolve-a-conflict-once.md).
+	ConflictedBase string
 }
 
 // Status derives a task's state and the sentence explaining it. A run's liveness and disposition
@@ -271,6 +275,8 @@ func Status(f Facts) (State, Reason) {
 	switch {
 	case f.CancelledMember:
 		return Cancelled, "authorised then cancelled before launching"
+	case f.ConflictedBase != "":
+		return Blocked, conflictedBaseReason(f.ConflictedBase)
 	case f.Unlock.Unlocked && f.Authorised:
 		return Queued, "waiting for a slot"
 	case f.Unlock.Unlocked:
@@ -343,6 +349,13 @@ func statusFromPush(run RunFact) (State, Reason) {
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}
+}
+
+// conflictedBaseReason is the sentence a row and a preview both show for a base that already
+// carries a conflict, so the two surfaces never explain the same refusal differently.
+func conflictedBaseReason(base string) Reason {
+	return Reason(fmt.Sprintf(
+		"%s already carries an unresolved merge conflict: a branch cut from it inherits the conflict", base))
 }
 
 // waitingOnBlockers renders the reason a queued-but-locked row is still waiting: naming a

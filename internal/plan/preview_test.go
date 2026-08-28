@@ -15,6 +15,7 @@ func TestPreview(t *testing.T) {
 		unlock         plan.Unlock
 		slice          map[string]bool
 		activeLaunchID int64
+		conflictedBase string
 		wantLabel      plan.PreviewLabel
 		reasonNames    string
 	}{
@@ -46,13 +47,21 @@ func TestPreview(t *testing.T) {
 			wantLabel:      plan.Refused,
 			reasonNames:    "launch 3",
 		},
+		{
+			name:           "a row whose base already carries a conflict is refused, naming that base",
+			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first", Reason: "every blocker has a pull request"},
+			slice:          map[string]bool{},
+			conflictedBase: "cc-1-first",
+			wantLabel:      plan.Refused,
+			reasonNames:    "cc-1-first",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			label, reason := plan.Preview(tt.unlock, tt.slice, tt.activeLaunchID)
+			label, reason := plan.Preview(tt.unlock, tt.slice, tt.activeLaunchID, tt.conflictedBase)
 			if label != tt.wantLabel {
 				t.Errorf("label = %v, want %v (reason %q)", label, tt.wantLabel, reason)
 			}
@@ -68,7 +77,7 @@ func TestPreviewRefusedNamesNoOpenOrMergedPullRequest(t *testing.T) {
 
 	_, reason := plan.Preview(
 		plan.Unlock{Blocking: []string{"sandbox://CC-9"}},
-		map[string]bool{}, 0,
+		map[string]bool{}, 0, "",
 	)
 	if !strings.Contains(string(reason), "no open or merged pull request") {
 		t.Errorf("reason %q does not say the blocker has no open or merged pull request", reason)

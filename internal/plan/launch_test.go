@@ -71,6 +71,17 @@ func TestLaunchPlan(t *testing.T) {
 			want:             []string{"sandbox://CC-1"},
 		},
 		{
+			name: "a candidate whose base already carries a conflict is excluded",
+			candidates: []plan.LaunchCandidate{
+				{
+					TicketURL: "sandbox://CC-2", Unlock: unlocked, Authorised: true,
+					PromptHashMatches: true, ConflictedBase: "cc-1-first",
+				},
+			},
+			maxAgents: 1,
+			want:      nil,
+		},
+		{
 			name: "no free slots launches nothing",
 			candidates: []plan.LaunchCandidate{
 				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},

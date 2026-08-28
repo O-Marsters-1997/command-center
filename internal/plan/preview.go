@@ -28,9 +28,14 @@ func (l PreviewLabel) String() string {
 // Preview labels one task's row in a launch preview: unlocked tasks start now; a locked task
 // starts on unlock only if every blocker is itself in the requested slice — otherwise nothing
 // in this launch will ever satisfy it, and the row is refused (docs/prds/prd-command-centre.md § A launch).
-func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64) (PreviewLabel, Reason) {
+// A non-empty conflictedBase refuses whatever the blockers say: nothing is ever cut from a base
+// that already carries a conflict (docs/adr/0006-resolve-a-conflict-once.md).
+func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflictedBase string) (PreviewLabel, Reason) {
 	if activeLaunchID != 0 {
 		return Refused, Reason(fmt.Sprintf("already authorised in launch %d", activeLaunchID))
+	}
+	if conflictedBase != "" {
+		return Refused, conflictedBaseReason(conflictedBase)
 	}
 	if unlock.Unlocked {
 		return Now, unlock.Reason

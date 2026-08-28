@@ -277,6 +277,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 			Authorised:        isAuthorised,
 			PromptHashMatches: promptHashMatches,
 			HasRun:            hasRun,
+			ConflictedBase:    conflictedBase(pt, byURL, unlock, stacking[t.Repo], obs),
 		})
 	}
 

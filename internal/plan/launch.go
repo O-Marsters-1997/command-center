@@ -1,17 +1,21 @@
 package plan
 
 // LaunchCandidate is one task's launch eligibility facts (inv. 8): unlocked, in an active
-// launch, whose recomposed prompt still hashes to what was authorised, with no prior run.
+// launch, whose recomposed prompt still hashes to what was authorised, with no prior run, off a
+// base that merges cleanly.
 type LaunchCandidate struct {
 	TicketURL         string
 	Unlock            Unlock
 	Authorised        bool
 	PromptHashMatches bool
 	HasRun            bool
+	// ConflictedBase names the base this launch would cut from when that base already carries a
+	// conflict, and is empty when it is clean (docs/adr/0006-resolve-a-conflict-once.md).
+	ConflictedBase string
 }
 
 func (c LaunchCandidate) eligible() bool {
-	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun
+	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun && c.ConflictedBase == ""
 }
 
 // LaunchPlan selects the ticket URLs to cut and spawn this tick: every eligible candidate, in
