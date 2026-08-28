@@ -42,6 +42,11 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}, unattended: true, tone: "live"},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
+			state: plan.ConflictsWithMain,
+			want:  []string{plan.VerbRefresh, plan.VerbClosePR},
+			tone:  "stop",
+		},
+		{
 			state: plan.WaitingOnProducerDeploy,
 			want:  []string{plan.VerbReCheck, plan.VerbReRun},
 			tone:  "wait",

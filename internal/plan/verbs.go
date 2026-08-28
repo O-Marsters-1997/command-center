@@ -43,6 +43,8 @@ func Verbs(s State) []string {
 		return []string{VerbRefresh, VerbReRun}
 	case RefreshConflicted:
 		return []string{VerbAbort}
+	case ConflictsWithMain:
+		return []string{VerbRefresh, VerbClosePR}
 	case WaitingOnProducerDeploy:
 		return []string{VerbReCheck, VerbReRun}
 	default:

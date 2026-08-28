@@ -538,6 +538,11 @@ func runFactFor(
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
 			fact.MidMerge = obs.MidMerge[t.Branch]
+			if obs.ConflictsWithBase[t.Branch] {
+				fact.ConflictsWithMain = true
+				fact.ConflictsWithMainReason = plan.Reason(
+					fmt.Sprintf("%s no longer merges cleanly into main", t.Branch))
+			}
 			ownState := obs.PRs[t.Branch].State
 			fact.PROpen = ownState == gh.Open
 			fact.PRMerged = ownState == gh.Merged

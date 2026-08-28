@@ -1,0 +1,38 @@
+# A pushed branch with an open PR that no longer merges into main reads its own state, ahead of
+# any verdict reading: even an all-green rollup at cc-1's own head must not read review_me
+# (issue #131).
+
+cc-init-repo
+cp mergify-v1.yml repo/.mergify.yml
+exec git -C $WORK/repo add .mergify.yml
+exec git -C $WORK/repo commit -q -m 'add mergify config'
+exec git -C $WORK/repo push -q origin main
+
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc tick --count 1
+# The fake agent needs real wall time to exit before the next tick's liveness check reads it.
+exec sleep 0.5
+exec cc tick --count 1
+
+# main also adds agent.txt, with different content: cc-1's own push no longer merges cleanly.
+cp conflicting-agent.txt $WORK/repo/agent.txt
+exec git -C $WORK/repo add agent.txt
+exec git -C $WORK/repo commit -q -m 'main also adds agent.txt'
+exec git -C $WORK/repo push -q origin main
+
+cc-fake-gh-head verdict-review-me cc-1
+exec cc tick --count 1
+exec cc request GET /
+stdout '<td>conflicts_with_main</td>'
+stdout 'cc-1 no longer merges cleanly into main'
+! stdout '<td>review_me</td>'
+
+-- mergify-v1.yml --
+queue_rules: []
+pull_request_rules: []
+-- conflicting-agent.txt --
+main touched this file too

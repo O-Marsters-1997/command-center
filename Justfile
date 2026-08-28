@@ -39,10 +39,17 @@ check-conflicts:
     #!/usr/bin/env bash
     branch=$(git rev-parse --abbrev-ref HEAD)
     if [ "$branch" = "main" ]; then exit 0; fi
-    base=$(git merge-base HEAD origin/main 2>/dev/null)
-    if git merge-tree "$base" HEAD origin/main 2>/dev/null | grep -q "^<<<<<<< "; then
-        echo "error: branch has conflicts with origin/main" >&2 && exit 1
+    if ! git fetch -q origin main; then
+        echo "error: could not fetch origin main" >&2
+        exit 1
     fi
+    out=$(git merge-tree --write-tree --name-only origin/main HEAD)
+    status=$?
+    if [ "$status" -eq 0 ]; then exit 0; fi
+    if [ "$status" -ne 1 ]; then exit "$status"; fi
+    echo "error: branch has conflicts with origin/main:" >&2
+    echo "$out" | tail -n +2 | awk '/^$/{exit} {print}' >&2
+    exit 1
 
 ci:
     just check-conflicts
