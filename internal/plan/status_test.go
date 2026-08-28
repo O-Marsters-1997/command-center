@@ -285,6 +285,39 @@ func TestStatusWithLatestRun(t *testing.T) {
 			},
 			wantState: plan.PRMerged,
 		},
+		{
+			name: "a branch that no longer merges into main derives conflicts with main, naming the branch",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
+			},
+			wantState: plan.ConflictsWithMain,
+			reasonHas: "no longer merges cleanly into main",
+		},
+		{
+			name: "conflicts with main outranks a refused fast-forward and a base-moved verdict",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
+				VerdictBaseMoved: true, RefreshRefused: true,
+				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
+			},
+			wantState: plan.ConflictsWithMain,
+		},
+		{
+			name: "an unresolved merge outranks conflicts with main, whose refresh would spawn into it",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, MidMerge: true, ConflictsWithMain: true,
+			},
+			wantState: plan.RefreshConflicted,
+		},
+		{
+			name: "a merged pull request outranks a branch that no longer merges into main",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRMerged: true, ConflictsWithMain: true,
+			},
+			wantState: plan.PRMerged,
+		},
 	}
 
 	for _, tt := range tests {

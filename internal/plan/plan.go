@@ -150,6 +150,10 @@ const (
 	// every tick, so a human who resolves the conflict by hand and commits clears the state with
 	// no verb (docs/designs/command-centre-design.md § 4a).
 	RefreshConflicted
+	// ConflictsWithMain is derived from RunFact.ConflictsWithMain, this branch's own git
+	// merge-tree reading against origin/main (docs/adr/0006-resolve-a-conflict-once.md), never
+	// GitHub's mergeable field. refresh is the only verb that clears it.
+	ConflictsWithMain
 	// WaitingOnProducerDeploy is derived from RunFact.VerdictWaitingOnProducer, internal/verdict's
 	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
 	// (docs/designs/command-centre-design.md § 11 inv. 12).
@@ -191,6 +195,8 @@ func (s State) String() string {
 		return "base_moved"
 	case RefreshConflicted:
 		return "refresh_conflicted"
+	case ConflictsWithMain:
+		return "conflicts_with_main"
 	case WaitingOnProducerDeploy:
 		return "waiting_on_producer_deploy"
 	case Blocked:
@@ -239,6 +245,11 @@ type RunFact struct {
 	// (docs/designs/command-centre-design.md § 4a). It is read from MERGE_HEAD, never stored, and
 	// outranks every push and verdict fact: re-run must not spawn an agent into a mid-merge worktree.
 	MidMerge bool
+	// ConflictsWithMain is set when this ticket's own pushed branch no longer merges cleanly into
+	// main, read from git merge-tree, never GitHub's mergeable field
+	// (docs/adr/0006-resolve-a-conflict-once.md). It outranks every fact below it, as MidMerge does.
+	ConflictsWithMain       bool
+	ConflictsWithMainReason Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -326,6 +337,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return PRClosedUnmerged, "pull request closed without merging"
 	case run.MidMerge:
 		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
+	case run.ConflictsWithMain:
+		return ConflictsWithMain, run.ConflictsWithMainReason
 	case run.PushRefused:
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:
