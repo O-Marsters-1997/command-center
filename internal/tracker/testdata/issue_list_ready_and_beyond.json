@@ -1,0 +1,41 @@
+[
+  {
+    "number": 120,
+    "title": "Add the tracker package",
+    "body": "Owns everything about reading an issue tracker.",
+    "url": "https://github.com/O-Marsters-1997/command-center/issues/120",
+    "labels": [
+      { "name": "project:repo-and-ticket-model" },
+      { "name": "status:ready" }
+    ]
+  },
+  {
+    "number": 121,
+    "title": "Wire the import route",
+    "body": "Renders the tracker groups available.",
+    "url": "https://github.com/O-Marsters-1997/command-center/issues/121",
+    "labels": [
+      { "name": "project:repo-and-ticket-model" },
+      { "name": "status:in-progress" }
+    ]
+  },
+  {
+    "number": 122,
+    "title": "Sketch a future idea",
+    "body": "Not scoped yet.",
+    "url": "https://github.com/O-Marsters-1997/command-center/issues/122",
+    "labels": [
+      { "name": "project:repo-and-ticket-model" },
+      { "name": "status:backlog" }
+    ]
+  },
+  {
+    "number": 123,
+    "title": "Uncategorised ticket",
+    "body": "No status label at all.",
+    "url": "https://github.com/O-Marsters-1997/command-center/issues/123",
+    "labels": [
+      { "name": "project:repo-and-ticket-model" }
+    ]
+  }
+]

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 // tickPeriod is the sleep *after* work: ticks never overlap, and the loop never branches on
@@ -395,7 +395,7 @@ func (l *Loop) spawnRun(
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	body, err := gh.IssueBody(ctx, worktreePath, task.TicketURL)
+	body, err := tracker.IssueBody(ctx, task.TicketURL)
 	if err != nil {
 		return fmt.Errorf("fetch ticket body for %s: %w", task.TicketURL, err)
 	}

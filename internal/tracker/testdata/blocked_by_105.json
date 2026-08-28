@@ -1,0 +1,26 @@
+[
+  {
+    "number": 98,
+    "title": "Eight column board reads the store's ticket rows",
+    "state": "closed",
+    "html_url": "https://github.com/O-Marsters-1997/command-center/issues/98"
+  },
+  {
+    "number": 99,
+    "title": "Eight column board renders one column per verdict",
+    "state": "closed",
+    "html_url": "https://github.com/O-Marsters-1997/command-center/issues/99"
+  },
+  {
+    "number": 100,
+    "title": "Put each ticket's issue title on its row",
+    "state": "closed",
+    "html_url": "https://github.com/O-Marsters-1997/command-center/issues/100"
+  },
+  {
+    "number": 104,
+    "title": "Give the page a URL that names its view state",
+    "state": "open",
+    "html_url": "https://github.com/O-Marsters-1997/command-center/issues/104"
+  }
+]
