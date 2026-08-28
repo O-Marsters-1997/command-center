@@ -222,7 +222,7 @@ path is relative to.
 | `port` | The page's port. Default 7777. |
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`. |
+| `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`, `verify_command`. |
 
 A repo is located by `remote`, a git URL cloned to `<data_dir>/repos/<name>`, or by `path`,
 a checkout that already exists, absolute or relative to the config file's own
@@ -249,6 +249,13 @@ derives a verdict.
 `[[repo]]` also accepts `compat_check`, the name of the check that reports
 whether a consumer still builds against its producer.
 `internal/cc/draftgate.go` and `internal/cc/verdict_transitions.go` read it.
+
+`verify_command` is the argv a clean merge-forward or restack is checked with before the
+row is offered as sound: a git merge without conflicts is not proof the result compiles
+(issue #110). No shell is involved -- a repo wanting several steps chains them itself
+(`["sh", "-c", "go build ./... && go vet ./..."]`). A repo naming none is unaffected. A
+failure reads `verification_failed`, offering `retry-push` and `re-run`; a later push, or a
+restack that itself verifies clean, clears it.
 
 ## Testing
 

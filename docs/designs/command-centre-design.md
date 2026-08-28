@@ -287,6 +287,15 @@ unconditional comparison would have made `base moved` the steady state of every 
 4. On success the local tip differs from the pushed tip, so **the push step delivers it**
    (§3.8). Revision 3's `refresh` had no path to GitHub at all: its invariant 1 pushed only
    dead runs with commits, so the verb that replaced all repair machinery was inert.
+5. **A clean merge or restack is not proof the result compiles** (issue #110): two chain-mates
+   independently adding the same helper at different points in the same file merge with no
+   conflict at all, and only a real build catches the redeclaration. A repo naming
+   `verify_command` runs it in the worktree right there, before the push step ever sees the
+   new tip; a failure records `verification failed` and refuses the automatic push — `retry-push`
+   and `re-run` are the human's way past it, the same two verbs `push failed` offers. A repo
+   naming none is unaffected. The failure latches the same way `refresh refused` does: the
+   automatic pass never retries a tip it already marked failed, but a later push, or a fresh
+   restack that itself verifies clean, supersedes it without needing one.
 
 The repair is a merge, not a rebase, and the justification is now *stronger* than revision 3
 claimed: squash is **server-enforced** in both repos (`allow_merge_commit: false`,
@@ -358,7 +367,8 @@ gives orthogonal flags somewhere to live: **`seam changed` is a flag on a row, n
         running ──► checking ──► review me ──► merged
            │            │
            │            ├──► base moved ──(refresh)──► checking
-           │            │         └──(conflict)──► refresh conflicted
+           │            │         ├──(conflict)──► refresh conflicted
+           │            │         └──(verify fails)──► verification failed
            │            ├──► waiting on producer deploy ──► checking
            │            └──► needs you
            ├──► failed
@@ -379,6 +389,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
 | `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
+| `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
 | `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |
 | `failed` | dead run, no commits since its baseline | re-run |

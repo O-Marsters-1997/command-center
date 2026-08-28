@@ -537,6 +537,8 @@ func runFactFor(
 			rf := facts.refreshes[t.URL]
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
+			fact.VerificationFailed = rf.VerificationFailed
+			fact.VerificationFailedReason = plan.Reason(rf.VerificationFailedDetail)
 			fact.MidMerge = obs.MidMerge[t.Branch]
 			if obs.ConflictsWithBase[t.Branch] {
 				fact.ConflictsWithMain = true

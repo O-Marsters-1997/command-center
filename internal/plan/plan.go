@@ -154,6 +154,9 @@ const (
 	// merge-tree reading against origin/main (docs/adr/0006-resolve-a-conflict-once.md), never
 	// GitHub's mergeable field. refresh is the only verb that clears it.
 	ConflictsWithMain
+	// VerificationFailed is derived from RunFact.VerificationFailed: a clean merge-forward or
+	// restack whose repo-configured verify command then failed (issue #110).
+	VerificationFailed
 	// WaitingOnProducerDeploy is derived from RunFact.VerdictWaitingOnProducer, internal/verdict's
 	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
 	// (docs/designs/command-centre-design.md § 11 inv. 12).
@@ -197,6 +200,8 @@ func (s State) String() string {
 		return "refresh_conflicted"
 	case ConflictsWithMain:
 		return "conflicts_with_main"
+	case VerificationFailed:
+		return "verification_failed"
 	case WaitingOnProducerDeploy:
 		return "waiting_on_producer_deploy"
 	case Blocked:
@@ -250,6 +255,11 @@ type RunFact struct {
 	// (docs/adr/0006-resolve-a-conflict-once.md). It outranks every fact below it, as MidMerge does.
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
+	// VerificationFailed is set when a clean refresh or restack's configured verify command last
+	// failed since this ticket's last recorded push (issue #110). It outranks every push and
+	// verdict fact below, as MidMerge and ConflictsWithMain do.
+	VerificationFailed       bool
+	VerificationFailedReason Reason
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -339,6 +349,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
 	case run.ConflictsWithMain:
 		return ConflictsWithMain, run.ConflictsWithMainReason
+	case run.VerificationFailed:
+		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
 		return NeedsYou, Reason(fmt.Sprintf("push refused: %s touches a protected path", run.PushRefusedPath))
 	case run.PushFailed:
