@@ -24,22 +24,22 @@ exec cc tick --count 1
 # The board links each row to its own detail, and loads htmx locally.
 exec cc request GET /
 stdout '<script src="/assets/htmx.min.js"></script>'
-stdout 'hx-get="/task/sandbox:%2F%2FCC-1/detail"'
+stdout 'hx-get="/ticket/sandbox:%2F%2FCC-1/detail"'
 ! stdout 'http-equiv="refresh"'
 
 exec cc request GET /assets/htmx.min.js
 stdout 'htmx'
 
-# The percent-encoded ticket URL resolves to that task's own facts: the check GitHub reported,
+# The percent-encoded ticket URL resolves to that ticket's own facts: the check GitHub reported,
 # the worktree on disk, the run's baseline commit and its log.
-exec cc request GET /task/sandbox:%2F%2FCC-1/detail
+exec cc request GET /ticket/sandbox:%2F%2FCC-1/detail
 stdout '<div>CI: COMPLETED FAILURE</div>'
 stdout '<dt>worktree</dt><dd>.*/repo-cc-1</dd>'
 stdout '<dt>base sha</dt><dd>[0-9a-f]{40}</dd>'
 stdout '<dt>log</dt><dd>.*/runs/1\.jsonl</dd>'
 stdout '<dt>elapsed</dt>'
 
-! exec cc request GET /task/sandbox:%2F%2FNOPE/detail
+! exec cc request GET /ticket/sandbox:%2F%2FNOPE/detail
 stderr '404'
 
 -- mergify-v1.yml --

@@ -17,18 +17,18 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// detailStore seeds one running task with a worktree, a live PR carrying two checks and a log
+// detailStore seeds one running ticket with a worktree, a live PR carrying two checks and a log
 // file on disk: every value issue #76 asks the fragment to carry, in one fixture.
 func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, task.TicketURL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 	}
 	obs := cc.Observation{
 		ObservedAt: now,
-		Runs:       map[string]cc.RunObservation{task.TicketURL: {Alive: true}},
+		Runs:       map[string]cc.RunObservation{ticket.URL: {Alive: true}},
 		Worktrees:  map[string]string{"cc-76": "/repos/repo-cc-76"},
 		PRs: map[string]gh.PR{"cc-76": {
 			Number: 76, State: gh.Open, HeadRef: "cc-76",
@@ -68,7 +68,7 @@ func writeLog(t *testing.T, lines int) string {
 }
 
 func detailPath(ticketURL string) string {
-	return "/task/" + url.PathEscape(ticketURL) + "/detail"
+	return "/ticket/" + url.PathEscape(ticketURL) + "/detail"
 }
 
 // TestDetailFragmentCarriesEveryRowFact covers issue #76 AC2: one fragment, log tail, checks,
@@ -110,8 +110,8 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	}
 }
 
-// TestDetailRejectsAnUnknownTask covers issue #76 AC3's second half.
-func TestDetailRejectsAnUnknownTask(t *testing.T) {
+// TestDetailRejectsAnUnknownTicket covers issue #76 AC3's second half.
+func TestDetailRejectsAnUnknownTicket(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

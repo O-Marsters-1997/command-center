@@ -9,9 +9,9 @@ import (
 func TestCompose(t *testing.T) {
 	t.Parallel()
 
-	task := plan.Task{TicketURL: "sandbox://CC-1"}
+	ticket := plan.Ticket{URL: "sandbox://CC-1"}
 
-	got := plan.Compose(task)
+	got := plan.Compose(ticket)
 	want := "/implement sandbox://CC-1"
 	if got != want {
 		t.Errorf("Compose = %q, want %q", got, want)

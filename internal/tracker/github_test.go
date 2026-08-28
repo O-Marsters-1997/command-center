@@ -100,7 +100,8 @@ func TestDecodeIssuesFiltersOnStatus(t *testing.T) {
 
 	want := []int{120, 121}
 	if !slices.Equal(inFlight, want) {
-		t.Errorf("in-flight issue numbers = %v, want %v (a status:backlog or unlabelled issue leaked through)", inFlight, want)
+		t.Errorf("in-flight issue numbers = %v, want %v (a status:backlog or unlabelled issue leaked through)",
+			inFlight, want)
 	}
 }
 

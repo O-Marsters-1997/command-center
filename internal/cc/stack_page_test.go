@@ -19,15 +19,15 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	tasks := []cc.Task{{TicketURL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
+	tickets := []cc.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
 	children := []string{"CC-2", "CC-3", "CC-4", "CC-5"}
 	for _, c := range children {
-		tasks = append(tasks, cc.Task{
-			TicketURL: "sandbox://" + c, Repo: "repo", Branch: strings.ToLower(c),
+		tickets = append(tickets, cc.Ticket{
+			URL: "sandbox://" + c, Repo: "repo", Branch: strings.ToLower(c),
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,11 +85,11 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 

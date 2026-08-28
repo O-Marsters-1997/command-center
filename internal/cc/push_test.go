@@ -136,12 +136,12 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	commitFile(t, worktreePath, ".github/workflows/x.yml", "name: x\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -160,7 +160,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := facts[task.TicketURL]
+	f := facts[ticket.URL]
 	if !f.Refused || f.RefusedPath != ".github/workflows/x.yml" {
 		t.Errorf("push facts = %+v, want refused naming .github/workflows/x.yml", f)
 	}
@@ -194,12 +194,12 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -230,7 +230,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[task.TicketURL] == "" {
+	if tips[ticket.URL] == "" {
 		t.Error("no pushes row recorded")
 	}
 
@@ -252,12 +252,12 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{
 		Worktrees: map[string]string{"cc-1": worktreePath},
@@ -282,7 +282,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[task.TicketURL] == "" {
+	if tips[ticket.URL] == "" {
 		t.Error("no pushes row recorded despite adopting the existing PR")
 	}
 }
@@ -296,12 +296,12 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -322,10 +322,10 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[task.TicketURL].Failed {
+	if !facts[ticket.URL].Failed {
 		t.Fatal("push facts must record the failure")
 	}
-	if tips, _ := store.LastPushedTips(t.Context()); tips[task.TicketURL] != "" {
+	if tips, _ := store.LastPushedTips(t.Context()); tips[ticket.URL] != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
@@ -342,7 +342,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 		[]byte("#!/bin/sh\necho \"$*\" >> \""+ghLog+"\"\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "retry-push", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "retry-push", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -351,7 +351,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if got := countLines(t, ghLog); got != 2 {
 		t.Fatalf("gh invocations after retry-push = %d, want 2", got)
 	}
-	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[task.TicketURL] == "" {
+	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[ticket.URL] == "" {
 		t.Errorf("pushes row missing after a successful retry-push (err=%v)", err)
 	}
 
@@ -373,12 +373,12 @@ func mustLookPath(t *testing.T, name string) string {
 	return path
 }
 
-// TestPushPushableSkipsATaskWhoseBranchWasRemoved covers the hazard remove-worktree (verbs.go)
-// introduces: a task's latest run keeps outcome=push forever, so without a guard, pushPushable
+// TestPushPushableSkipsATicketWhoseBranchWasRemoved covers the hazard remove-worktree (verbs.go)
+// introduces: a ticket's latest run keeps outcome=push forever, so without a guard, pushPushable
 // would call BranchTip on it every tick for the rest of the app's life -- and once
 // tp remove --force has deleted the branch along with the worktree, that call errors and would
-// abort every subsequent tick, for every task, not just this one.
-func TestPushPushableSkipsATaskWhoseBranchWasRemoved(t *testing.T) {
+// abort every subsequent tick, for every ticket, not just this one.
+func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
@@ -388,16 +388,16 @@ func TestPushPushableSkipsATaskWhoseBranchWasRemoved(t *testing.T) {
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
 	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
 	tip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	if err := store.RecordPush(t.Context(), task.TicketURL, tip, "main", tip, at); err != nil {
+	if err := store.RecordPush(t.Context(), ticket.URL, tip, "main", tip, at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -411,7 +411,7 @@ func TestPushPushableSkipsATaskWhoseBranchWasRemoved(t *testing.T) {
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce must not fail once a pushed task's branch has been removed: %v", err)
+		t.Fatalf("RunOnce must not fail once a pushed ticket's branch has been removed: %v", err)
 	}
 	// A second tick too: the hazard is that every future tick would fail, not just the first.
 	if err := loop.RunOnce(t.Context()); err != nil {

@@ -20,13 +20,13 @@ func TestReCheckRerunsTheActionsRunParsedFromTheCompatCheckDetailsURL(t *testing
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-check", at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-check", at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,13 +75,13 @@ func TestReCheckRefusesADetailsURLWithoutARunsSegment(t *testing.T) {
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-check", at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-check", at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,26 +130,26 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, task.TicketURL, at)
+	dispositionAsPushed(t, store, ticket.URL, at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(ctx, task.TicketURL, tip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, ticket.URL, tip, "main", "main-tip", at); err != nil {
 		t.Fatal(err)
 	}
 
 	elapsedTicks := int(verdict.BoundedWait/(15*time.Second)) + 5
 	for range elapsedTicks {
-		if err := store.IncrementCheckingTicks(ctx, []string{task.TicketURL}); err != nil {
+		if err := store.IncrementCheckingTicks(ctx, []string{ticket.URL}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := store.QueueVerbIntent(ctx, task.TicketURL, "re-check", at); err != nil {
+	if err := store.QueueVerbIntent(ctx, ticket.URL, "re-check", at); err != nil {
 		t.Fatal(err)
 	}
 
@@ -183,7 +183,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ticks[task.TicketURL]; got != 0 {
+	if got := ticks[ticket.URL]; got != 0 {
 		t.Fatalf("checking ticks right after re-check = %d, want 0", got)
 	}
 
@@ -198,7 +198,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	}
 
 	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos, ""))
-	if state := rowState(t, page, task.TicketURL); state != "checking" {
+	if state := rowState(t, page, ticket.URL); state != "checking" {
 		t.Fatalf("state once the rerun's check goes pending = %q, want checking", state)
 	}
 }

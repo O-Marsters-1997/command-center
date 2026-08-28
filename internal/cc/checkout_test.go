@@ -138,3 +138,39 @@ func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 		t.Errorf("EnsureCheckout refused the same repository in its other URL form: %v", err)
 	}
 }
+
+// TestEnsureCheckoutEnablesRerere covers both arms. rerere is local config, so a re-clone on a
+// fresh machine would otherwise lose it, and the live checkout predates the change.
+func TestEnsureCheckoutEnablesRerere(t *testing.T) {
+	_, repoPath := repoWithOrigin(t)
+	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
+	checkout := filepath.Join(t.TempDir(), "repos", "r")
+	repo := cc.Repo{Name: "r", Remote: remote, Checkout: checkout}
+
+	if err := cc.EnsureCheckout(t.Context(), repo); err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	assertRerereOn(t, checkout)
+
+	runGit(t, "-C", checkout, "config", "--unset", "rerere.enabled")
+	runGit(t, "-C", checkout, "config", "--unset", "rerere.autoupdate")
+	if err := cc.EnsureCheckout(t.Context(), repo); err != nil {
+		t.Fatalf("second EnsureCheckout: %v", err)
+	}
+	assertRerereOn(t, checkout)
+
+	if err := cc.EnsureCheckout(t.Context(), repo); err != nil {
+		t.Fatalf("third EnsureCheckout: %v", err)
+	}
+	assertRerereOn(t, checkout)
+}
+
+func assertRerereOn(t *testing.T, checkout string) {
+	t.Helper()
+	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
+		got := strings.TrimSpace(runGitOutput(t, "-C", checkout, "config", "--get", key))
+		if got != "true" {
+			t.Errorf("%s = %q, want \"true\"", key, got)
+		}
+	}
+}

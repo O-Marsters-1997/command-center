@@ -74,7 +74,8 @@ func TestGithubSourceTickets(t *testing.T) {
 		},
 	}
 	if len(got) != len(want) {
-		t.Fatalf("Tickets() returned %d tickets (%v), want %d — a status:backlog or unlabelled issue leaked through", len(got), got, len(want))
+		t.Fatalf("Tickets() returned %d tickets (%v), want %d — a status:backlog or unlabelled issue leaked through",
+			len(got), got, len(want))
 	}
 	for i := range want {
 		if !reflect.DeepEqual(got[i], want[i]) {

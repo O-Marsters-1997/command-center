@@ -43,13 +43,13 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "cc.db")
 	store := openStore(t, path)
-	if err := store.UpsertTasks(t.Context(), []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, path); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, path); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
@@ -81,15 +81,15 @@ func TestOpenStoreAdoptsADatabaseThatPredatesGoose(t *testing.T) {
 	}
 
 	store := openStore(t, path)
-	tasks, err := store.Tasks(t.Context())
+	tickets, err := store.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 1 || tasks[0].TicketURL != "sandbox://CC-1" {
-		t.Errorf("tasks = %+v, want the pre-goose row untouched", tasks)
+	if len(tickets) != 1 || tickets[0].URL != "sandbox://CC-1" {
+		t.Errorf("tickets = %+v, want the pre-goose row untouched", tickets)
 	}
-	if got := gooseVersion(t, path); got != 1 {
-		t.Errorf("goose version = %d, want 1 recorded against the adopted database", got)
+	if got := gooseVersion(t, path); got != 2 {
+		t.Errorf("goose version = %d, want 2 recorded against the adopted database", got)
 	}
 }
 
@@ -98,8 +98,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "cc.db")
 	first := openStore(t, path)
-	if err := first.UpsertTasks(t.Context(), []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	if err := first.UpsertTickets(t.Context(), []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -108,46 +108,46 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	}
 
 	second := openStore(t, path)
-	tasks, err := second.Tasks(t.Context())
+	tickets, err := second.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 1 {
-		t.Errorf("tasks = %d, want the first open's row to survive the second", len(tasks))
+	if len(tickets) != 1 {
+		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, path); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, path); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
-func TestUpsertTasksIsIdempotentOnTicketURL(t *testing.T) {
+func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	first := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+	first := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
-	if err := store.UpsertTasks(ctx, first); err != nil {
-		t.Fatalf("UpsertTasks: %v", err)
-	}
-
-	edited := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-renamed"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-	}
-	if err := store.UpsertTasks(ctx, edited); err != nil {
-		t.Fatalf("UpsertTasks again: %v", err)
+	if err := store.UpsertTickets(ctx, first); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	got, err := store.Tasks(ctx)
+	edited := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-renamed"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+	}
+	if err := store.UpsertTickets(ctx, edited); err != nil {
+		t.Fatalf("UpsertTickets again: %v", err)
+	}
+
+	got, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatalf("Tasks: %v", err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("tasks = %d, want 2 (upsert on ticket_url, not insert)", len(got))
+		t.Fatalf("tickets = %d, want 2 (upsert on url, not insert)", len(got))
 	}
 	if got[0].Branch != "cc-1-renamed" {
 		t.Errorf("branch = %q, want the edited %q", got[0].Branch, "cc-1-renamed")

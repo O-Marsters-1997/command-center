@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// removeWorktreeFixture is one task fully run, pushed and recorded, its worktree cut for real --
+// removeWorktreeFixture is one ticket fully run, pushed and recorded, its worktree cut for real --
 // the shape every remove-worktree test starts from before diverging (dirty, unpushed, or left
 // alone for a clean removal).
 type removeWorktreeFixture struct {
@@ -23,7 +23,7 @@ type removeWorktreeFixture struct {
 	store                        *cc.Store
 	ws                           cc.Workspace
 	cfg                          cc.Config
-	task                         cc.Task
+	ticket                       cc.Ticket
 	runID                        int64
 	at                           time.Time
 }
@@ -62,13 +62,13 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	runGit(t, "-C", repoPath, "push", "-q", "origin", branch)
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runID, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 
 	return removeWorktreeFixture{
 		root: root, repoPath: repoPath, worktreePath: worktreePath,
-		store: store, ws: ws, cfg: cfg, task: task, runID: runID, at: at,
+		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at,
 	}
 }
 
@@ -116,7 +116,7 @@ func runLogFilesExist(runsDir string, runID int64) bool {
 func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs cc.Observation) error {
 	t.Helper()
 	at := f.at.Add(time.Second)
-	if err := f.store.QueueVerbIntent(t.Context(), f.task.TicketURL, "remove-worktree", at); err != nil {
+	if err := f.store.QueueVerbIntent(t.Context(), f.ticket.URL, "remove-worktree", at); err != nil {
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -159,9 +159,9 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	// A dependent whose blocker's PR closed unmerged after it ran: base_gone, not merged --
 	// remove-worktree's other eligible state.
 	f := newRemoveWorktreeFixture(t, "cc-2")
-	blocker := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	dependent := cc.Task{TicketURL: f.task.TicketURL, Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.TicketURL}}
-	if err := f.store.UpsertTasks(t.Context(), []cc.Task{blocker, dependent}); err != nil {
+	blocker := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	dependent := cc.Ticket{URL: f.ticket.URL, Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
+	if err := f.store.UpsertTickets(t.Context(), []cc.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,0 +1,14 @@
+# The checkout the daemon manages comes back with rerere on, so a conflict resolved once replays
+# through every later restack instead of being re-fought. The unit test covers both arms of
+# EnsureCheckout; this covers the wiring from config load through to the real git config.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc tick --count 1
+
+exec git -C $WORK/repo config --get rerere.enabled
+stdout true
+exec git -C $WORK/repo config --get rerere.autoupdate
+stdout true

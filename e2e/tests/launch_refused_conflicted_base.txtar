@@ -1,0 +1,50 @@
+# A base that already conflicts with main is never cut from. cc-1 and main both rewrite the same
+# line, so origin/cc-1 no longer merges into origin/main; cc-2, which stacks on cc-1, is blocked
+# saying so, its preview is refused, and authorising it anyway still cuts nothing.
+
+cc-init-repo
+cc-config fan-out-stacked
+cc-fake-gh pr-open-cc1
+
+cp base.txt $WORK/repo/f.txt
+exec git -C $WORK/repo add f.txt
+exec git -C $WORK/repo commit -q -m 'a file both branches rewrite'
+exec git -C $WORK/repo push -q origin main
+
+exec git -C $WORK/repo checkout -q -b cc-1
+cp from-cc1.txt $WORK/repo/f.txt
+exec git -C $WORK/repo commit -q -am 'cc-1 rewrites line two'
+exec git -C $WORK/repo push -q -u origin cc-1
+
+exec git -C $WORK/repo checkout -q main
+cp from-main.txt $WORK/repo/f.txt
+exec git -C $WORK/repo commit -q -am 'main rewrites line two'
+exec git -C $WORK/repo push -q origin main
+
+exec cc tick --count 1
+exec cc request GET /
+stdout 'cc-1 already carries an unresolved merge conflict'
+
+exec cc request GET '/preview?task=sandbox://CC-2'
+stdout '<td>refused</td>'
+stdout 'cc-1 already carries an unresolved merge conflict'
+
+exec cc request POST '/launch?task=sandbox://CC-2'
+exec cc tick --count 1
+exec cc request GET /
+! stdout '<td>running</td>'
+exec git -C $WORK/repo worktree list
+! stdout cc-2
+
+-- base.txt --
+one
+two
+three
+-- from-cc1.txt --
+one
+TWO from cc-1
+three
+-- from-main.txt --
+one
+TWO from main
+three

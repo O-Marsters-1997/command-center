@@ -53,7 +53,10 @@ func EnsureCheckout(ctx context.Context, repo Repo) error {
 			return fmt.Errorf("repo %s: no checkout at %s, and no remote to clone from",
 				repo.Name, repo.Checkout)
 		}
-		return clone(ctx, repo)
+		if err := clone(ctx, repo); err != nil {
+			return err
+		}
+		return enableRerere(ctx, repo.Checkout)
 	case err != nil:
 		return fmt.Errorf("repo %s: stat %s: %w", repo.Name, repo.Checkout, err)
 	}
@@ -67,7 +70,23 @@ func EnsureCheckout(ctx context.Context, repo Repo) error {
 		return fmt.Errorf("repo %s: %s has origin %s, but the config says %s",
 			repo.Name, repo.Checkout, origin, repo.Remote)
 	}
+	if err := enableRerere(ctx, repo.Checkout); err != nil {
+		return err
+	}
 	return Fetch(ctx, repo.Checkout)
+}
+
+// enableRerere has git record how a conflict was resolved and replay that resolution, already
+// staged, the next time the same conflict comes back -- a rebase drops the merge commit a
+// resolution was committed as, so every restack re-hits it. Local config, set here rather than
+// by hand, because a re-clone on a bare machine would otherwise lose it.
+func enableRerere(ctx context.Context, repoPath string) error {
+	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
+		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
+			return fmt.Errorf("enable %s in %s: %w", key, repoPath, err)
+		}
+	}
+	return nil
 }
 
 func clone(ctx context.Context, repo Repo) error {

@@ -12,15 +12,15 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-// shellStore seeds one task, an observation at observedAt when it is non-nil, and a tick error
+// shellStore seeds one ticket, an observation at observedAt when it is non-nil, and a tick error
 // one second later when tickErr is non-empty: a tick that failed after the last good observe.
 func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if observedAt != nil {
@@ -229,14 +229,14 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	ctx := t.Context()
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	blocker := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	dependent := cc.Task{
-		TicketURL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.TicketURL},
+	blocker := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	dependent := cc.Ticket{
+		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},
 	}
-	if err := store.UpsertTasks(ctx, []cc.Task{blocker, dependent}); err != nil {
+	if err := store.UpsertTickets(ctx, []cc.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, dependent.TicketURL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, dependent.URL, "agent", "basesha1234", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	}
 	obs := cc.Observation{
 		ObservedAt: now,
-		Runs:       map[string]cc.RunObservation{dependent.TicketURL: {Alive: true}},
+		Runs:       map[string]cc.RunObservation{dependent.URL: {Alive: true}},
 		PRs:        map[string]gh.PR{"cc-1": {State: gh.Closed}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {

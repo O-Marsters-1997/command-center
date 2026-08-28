@@ -30,7 +30,7 @@ func renderedRows(page string) []renderedRow {
 	return rows
 }
 
-func tickets(rows []renderedRow) []string {
+func ticketRefs(rows []renderedRow) []string {
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, r.Ticket)
@@ -45,14 +45,14 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *cc.Store {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{{TicketURL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
+	tickets := []cc.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
 	for _, c := range children {
-		tasks = append(tasks, cc.Task{
-			TicketURL: c, Repo: "repo", Branch: strings.TrimPrefix(c, "sandbox://"),
+		tickets = append(tickets, cc.Ticket{
+			URL: c, Repo: "repo", Branch: strings.TrimPrefix(c, "sandbox://"),
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,7 +140,7 @@ func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
 		ticketRef("sandbox://ROOT"), ticketRef("sandbox://CC-3"),
 		ticketRef("sandbox://CC-4"), ticketRef("sandbox://CC-5"),
 	}
-	if got := tickets(renderedRows(page)); !slices.Equal(got, want) {
+	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
 		t.Errorf("row order = %v, want %v", got, want)
 	}
 	if again := boardFor(t, store); again != page {
@@ -155,15 +155,15 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
 		{
-			TicketURL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3",
+			URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3",
 			BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-2"},
 		},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -173,7 +173,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 
 	page := boardFor(t, store)
 	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-3"), ticketRef("sandbox://CC-2")}
-	if got := tickets(renderedRows(page)); !slices.Equal(got, want) {
+	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
 		t.Errorf("row order = %v, want CC-3 under CC-1 only, %v", got, want)
 	}
 	if got := rowCellAt(t, page, "sandbox://CC-3", 2); !strings.Contains(got, "sandbox://CC-2") {
@@ -181,18 +181,18 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	}
 }
 
-// TestBoardRendersATaskSetWithNoBlockersFlat covers the rest of the fourth criterion: nothing is
+// TestBoardRendersATicketSetWithNoBlockersFlat covers the rest of the fourth criterion: nothing is
 // indented and nothing carries a group line when no row waits on another.
-func TestBoardRendersATaskSetWithNoBlockersFlat(t *testing.T) {
+func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -202,7 +202,7 @@ func TestBoardRendersATaskSetWithNoBlockersFlat(t *testing.T) {
 
 	page := boardFor(t, store)
 	if strings.Contains(page, `class="group-head"`) {
-		t.Errorf("a blockerless task set rendered a group line:\n%s", page)
+		t.Errorf("a blockerless ticket set rendered a group line:\n%s", page)
 	}
 	for _, r := range renderedRows(page) {
 		if !strings.Contains(r.Attrs, `data-depth="0"`) {
@@ -221,7 +221,7 @@ func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
 	ctx := t.Context()
 	store := failedRootAndQueuedChildren(t,
 		[]string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"})
-	if err := store.UpsertTasks(ctx, []cc.Task{{TicketURL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}); err != nil {
+	if err := store.UpsertTickets(ctx, []cc.Ticket{{URL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}); err != nil {
 		t.Fatal(err)
 	}
 

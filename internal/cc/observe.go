@@ -29,16 +29,20 @@ type Observation struct {
 	// one indirection off it, and stale the moment a reviewer pushes without GitHub re-reporting.
 	BranchTips map[string]string `json:"branch_tips"`
 	// Titles is each configured repo's open issue titles, keyed by issue URL, which is what a
-	// task's own ticket_url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
+	// ticket's own url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
 	// than mis-keyed.
 	Titles map[string]string `json:"titles"`
 	// MidMerge reports whether each branch's own worktree is left mid-merge, read fresh every
 	// tick (§4a) -- never recorded, since a human resolving the conflict by hand and committing
 	// must clear it with no bookkeeping.
 	MidMerge map[string]bool `json:"mid_merge"`
+	// ConflictsWithBase reports whether origin/<branch> would conflict with origin/main, keyed
+	// by branch. It is what the launch gate refuses on: a child cut from a base that already
+	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
+	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
 }
 
-// RunObservation is one task's liveness as read this tick, keyed by task_id. Persisting it
+// RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
 // is what lets the page render pgid/elapsed/log path after a restart without a tick
 // re-probing between requests.
 type RunObservation struct {
@@ -53,7 +57,7 @@ type ObserveFunc func(ctx context.Context) (Observation, error)
 // same-named branch in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
 func NewObserver(store *Store, cfg Config) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
-		tasks, err := store.Tasks(ctx)
+		tickets, err := store.Tickets(ctx)
 		if err != nil {
 			return Observation{}, err
 		}
@@ -61,6 +65,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
+			ConflictsWithBase: map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -68,7 +73,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				return Observation{}, err
 			}
 
-			branches := branchesFor(tasks, repo.Name)
+			branches := branchesFor(tickets, repo.Name)
 			snapshot, err := gh.List(ctx, path, branches)
 			if err != nil {
 				return Observation{}, err
@@ -82,16 +87,28 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 			}
 			maps.Copy(obs.Titles, titles)
 
-			for _, branch := range branches {
-				if tip, err := RevParse(ctx, path, "origin/"+branch); err == nil {
-					obs.BranchTips[branch] = tip
-				}
-			}
 			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
-			// name: unlike a task's own branch, every repo has a "main", so the plain name would
+			// name: unlike a ticket's own branch, every repo has a "main", so the plain name would
 			// collide the moment a second repo is configured.
-			if tip, err := RevParse(ctx, path, "origin/"+defaultBaseBranch); err == nil {
-				obs.BranchTips[mainTipKey(repo.Name)] = tip
+			mainTip, mainErr := RevParse(ctx, path, "origin/"+defaultBaseBranch)
+			if mainErr == nil {
+				obs.BranchTips[mainTipKey(repo.Name)] = mainTip
+			}
+			for _, branch := range branches {
+				tip, err := RevParse(ctx, path, "origin/"+branch)
+				if err != nil {
+					continue // never pushed, so there is no remote branch to read or to cut from
+				}
+				obs.BranchTips[branch] = tip
+				if mainErr != nil {
+					continue
+				}
+				clean, err := MergesCleanly(ctx, path, mainTip, tip)
+				if err != nil {
+					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
+						branch, defaultBaseBranch, err)
+				}
+				obs.ConflictsWithBase[branch] = !clean
 			}
 
 			worktrees, err := Worktrees(ctx, path)
@@ -132,9 +149,9 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-func branchesFor(tasks []Task, repo string) []string {
+func branchesFor(tickets []Ticket, repo string) []string {
 	var branches []string
-	for _, t := range tasks {
+	for _, t := range tickets {
 		if t.Repo == repo {
 			branches = append(branches, t.Branch)
 		}

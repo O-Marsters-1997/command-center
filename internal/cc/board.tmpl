@@ -26,15 +26,15 @@
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
-      <input type="checkbox" form="launch" name="task" value="{{$row.TicketURL}}">{{.}}
+      <input type="checkbox" form="launch" name="task" value="{{$row.URL}}">{{.}}
       {{- else if destructive .}}
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <input type="hidden" name="task" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">{{.}}</button>
       </form>
       {{- else}}
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="{{$row.TicketURL}}">
+        <input type="hidden" name="task" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
         </button>

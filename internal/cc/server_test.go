@@ -116,11 +116,11 @@ func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,11 +178,11 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 
 	ctx := context.Background()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,8 +236,8 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 
 	ctx := context.Background()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,13 +369,13 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
-		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
+		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -385,7 +385,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// CC-4 is a tracked task but deliberately left out of the slice, so CC-3's blocker sits
+	// CC-4 is a tracked ticket but deliberately left out of the slice, so CC-3's blocker sits
 	// outside it with no pull request.
 	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3")
 
@@ -407,11 +407,11 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{TicketURL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
+		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -447,13 +447,13 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		"<td>now</td>", "<td>origin/parent</td>", "<td>needs_you</td>")
 }
 
-func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
+func TestPreviewRefusesATicketAlreadyInAnActiveLaunch(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -461,7 +461,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
@@ -476,7 +476,7 @@ func TestPreviewRefusesATaskAlreadyInAnActiveLaunch(t *testing.T) {
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
 }
 
-func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
+func TestPreviewRejectsEmptyOrUnknownTicket(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
@@ -486,8 +486,8 @@ func TestPreviewRejectsEmptyOrUnknownTask(t *testing.T) {
 		name string
 		path string
 	}{
-		{name: "no task at all", path: "/preview"},
-		{name: "an empty task value", path: "/preview?task="},
+		{name: "no ticket at all", path: "/preview"},
+		{name: "an empty ticket value", path: "/preview?task="},
 		{name: "an unknown ticket", path: "/preview?task=sandbox://GHOST"},
 	}
 	for _, tt := range tests {
@@ -514,18 +514,18 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
 
-	root := cc.Task{TicketURL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
-	tasks := []cc.Task{root}
-	query := "task=" + root.TicketURL
+	root := cc.Ticket{URL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
+	tickets := []cc.Ticket{root}
+	query := "task=" + root.URL
 	for i := 1; i <= fanOut; i++ {
 		ticketURL := fmt.Sprintf("sandbox://CC-%d", i)
-		tasks = append(tasks, cc.Task{
-			TicketURL: ticketURL, Repo: "cc-sandbox", Branch: fmt.Sprintf("cc-%d", i),
-			BlockedBy: []string{root.TicketURL},
+		tickets = append(tickets, cc.Ticket{
+			URL: ticketURL, Repo: "cc-sandbox", Branch: fmt.Sprintf("cc-%d", i),
+			BlockedBy: []string{root.URL},
 		})
 		query += "&task=" + ticketURL
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -564,24 +564,24 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 }
 
-// runningRowStore seeds one task with a live agent run, the state both a pgid/elapsed row and a
+// runningRowStore seeds one ticket with a live agent run, the state both a pgid/elapsed row and a
 // queued-verb row are read against.
-func runningRowStore(t *testing.T, task cc.Task, startedAt, now time.Time) *cc.Store {
+func runningRowStore(t *testing.T, ticket cc.Ticket, startedAt, now time.Time) *cc.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, task.TicketURL, "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "deadbeef", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	obs := cc.Observation{ObservedAt: now, Runs: map[string]cc.RunObservation{task.TicketURL: {Alive: true}}}
+	obs := cc.Observation{ObservedAt: now, Runs: map[string]cc.RunObservation{ticket.URL: {Alive: true}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -591,10 +591,10 @@ func runningRowStore(t *testing.T, task cc.Task, startedAt, now time.Time) *cc.S
 func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	t.Parallel()
 
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
-	store := runningRowStore(t, task, startedAt, now)
+	store := runningRowStore(t, ticket, startedAt, now)
 
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 	rec := httptest.NewRecorder()
@@ -620,8 +620,8 @@ func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -633,7 +633,7 @@ func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1")
 
-	wantPrompt := plan.Compose(plan.Task{TicketURL: task.TicketURL})
+	wantPrompt := plan.Compose(plan.Ticket{URL: ticket.URL})
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
 		"<details><summary>prompt "+plan.Hash(wantPrompt)+"</summary><pre>"+html.EscapeString(wantPrompt)+"</pre></details>")
 }
@@ -645,8 +645,8 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -675,8 +675,8 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
-	if got := hashes[task.TicketURL]; got != want {
+	want := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	if got := hashes[ticket.URL]; got != want {
 		t.Errorf("stored prompt_hash = %q, want %q", got, want)
 	}
 }
@@ -724,17 +724,17 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
-	store := runningRowStore(t, task, startedAt, now)
+	store := runningRowStore(t, ticket, startedAt, now)
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 
-	if err := store.QueueVerbIntent(ctx, task.TicketURL, "kill", now); err != nil {
+	if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
 		t.Fatal(err)
 	}
 	page := renderPage(t, server)
-	if got := rowState(t, page, task.TicketURL); got != "running · kill queued" {
+	if got := rowState(t, page, ticket.URL); got != "running · kill queued" {
 		t.Errorf("state = %q, want %q", got, "running · kill queued")
 	}
 	const killButton = `<button type="submit" name="verb" value="kill">kill</button>`
@@ -742,10 +742,10 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
 	}
 
-	if err := store.QueueVerbIntent(ctx, task.TicketURL, "close-pr", now.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(ctx, ticket.URL, "close-pr", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := rowState(t, renderPage(t, server), task.TicketURL); got != "running · kill queued · close-pr queued" {
+	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · close-pr queued" {
 		t.Errorf("state = %q, want both queued verbs", got)
 	}
 
@@ -757,7 +757,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = renderPage(t, server)
-	if got := rowState(t, page, task.TicketURL); got != "running · close-pr queued" {
+	if got := rowState(t, page, ticket.URL); got != "running · close-pr queued" {
 		t.Errorf("state = %q, want the consumed kill gone", got)
 	}
 	if !strings.Contains(page, killButton) {
@@ -795,13 +795,13 @@ func TestPreviewRendersItsPage(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
-		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
+		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -828,16 +828,16 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
-		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
-		{TicketURL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", BlockedBy: []string{"sandbox://CC-2"}},
-		{TicketURL: "sandbox://CC-5", Repo: "cc-sandbox", Branch: "cc-5", BlockedBy: []string{"sandbox://CC-3"}},
-		{TicketURL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
-		{TicketURL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
+		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", BlockedBy: []string{"sandbox://CC-2"}},
+		{URL: "sandbox://CC-5", Repo: "cc-sandbox", Branch: "cc-5", BlockedBy: []string{"sandbox://CC-3"}},
+		{URL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
+		{URL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -865,18 +865,18 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 }
 
 // TestPreviewCarriesTheHashOnEveryLaunchableRow covers issue #73's AC1: the authorise form posts
-// the hash the operator read alongside the task, and a refused row posts neither.
+// the hash the operator read alongside the ticket, and a refused row posts neither.
 func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-3"}},
-		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-3"}},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -888,7 +888,7 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 
 	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2")
 
-	want := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"}))
+	want := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"}))
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
 		`<input type="hidden" name="hash" value="sandbox://CC-1 `+want+`">`)
 	if refused := previewRowFor(t, body, "sandbox://CC-2"); strings.Contains(refused, `name="hash"`) {
@@ -897,18 +897,18 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 }
 
 // TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a submitted hash
-// that is not what the task composes to now is caught at /launch, and the whole slice is refused
-// — including the task whose hash still matched.
+// that is not what the ticket composes to now is caught at /launch, and the whole slice is refused
+// — including the ticket whose hash still matched.
 func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
@@ -919,12 +919,12 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
-	recomposed := plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"}))
+	recomposed := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"}))
 
 	form := url.Values{
 		"task": {"sandbox://CC-1", "sandbox://CC-2"},
 		"hash": {
-			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"})),
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})),
 			"sandbox://CC-2 " + previewed,
 		},
 	}
@@ -951,7 +951,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 }
 
 // TestLaunchIgnoresTheHashOfAnUncheckedRow covers what a browser actually posts when the operator
-// unchecks a row: the hidden hash still travels, its checkbox does not, and the tasks that are
+// unchecks a row: the hidden hash still travels, its checkbox does not, and the tickets that are
 // checked still launch on their own hashes.
 func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	t.Parallel()
@@ -964,8 +964,8 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	form := url.Values{
 		"task": {"sandbox://CC-1"},
 		"hash": {
-			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-1"})),
-			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Task{TicketURL: "sandbox://CC-2"})),
+			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})),
+			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"})),
 		},
 	}
 	resp, _ := postLaunchForm(t, srv, form)
@@ -983,7 +983,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	}
 }
 
-// TestLaunchRejectsAMalformedHashField covers a hash field that names no task: it is refused
+// TestLaunchRejectsAMalformedHashField covers a hash field that names no ticket: it is refused
 // rather than read as a hash that matches nothing.
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
