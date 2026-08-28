@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -37,10 +38,24 @@ func OpenStore(path string) (*Store, error) {
 	return store, nil
 }
 
+var (
+	gooseOnce     sync.Once
+	gooseSetupErr error
+)
+
+// setUpGoose configures goose once per process. goose keeps its base FS, logger and dialect in
+// package-level globals, so setting them per OpenStore races between two concurrent opens.
+func setUpGoose() error {
+	gooseOnce.Do(func() {
+		goose.SetBaseFS(migrations)
+		goose.SetLogger(goose.NopLogger())
+		gooseSetupErr = goose.SetDialect("sqlite3")
+	})
+	return gooseSetupErr
+}
+
 func (s *Store) init(ctx context.Context) error {
-	goose.SetBaseFS(migrations)
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("sqlite3"); err != nil {
+	if err := setUpGoose(); err != nil {
 		return fmt.Errorf("set goose dialect: %w", err)
 	}
 	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
