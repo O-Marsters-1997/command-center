@@ -2,7 +2,7 @@ package plan
 
 import "fmt"
 
-// PreviewLabel is what a launch preview row shows for a task: whether it would start now, on
+// PreviewLabel is what a launch preview row shows for a ticket: whether it would start now, on
 // unlock, or not at all within the requested slice.
 type PreviewLabel int
 
@@ -25,7 +25,7 @@ func (l PreviewLabel) String() string {
 	}
 }
 
-// Preview labels one task's row in a launch preview: unlocked tasks start now; a locked task
+// Preview labels one ticket's row in a launch preview: unlocked tickets start now; a locked ticket
 // starts on unlock only if every blocker is itself in the requested slice — otherwise nothing
 // in this launch will ever satisfy it, and the row is refused (docs/prds/prd-command-centre.md § A launch).
 // A non-empty conflictedBase refuses whatever the blockers say: nothing is ever cut from a base
@@ -52,8 +52,8 @@ func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflic
 // ProspectiveBase is the base an OnUnlock row would get once unlocked, computed without an
 // existing PR — the same selection rule Unlocked applies to its single-blocker, open-PR arm.
 // Kept separate from Unlock.BaseBranch, which must stay empty for a blocked row (golden-tested main page).
-func ProspectiveBase(t Task, byURL map[string]Task, stacking bool) string {
-	var sameRepo []Task
+func ProspectiveBase(t Ticket, byURL map[string]Ticket, stacking bool) string {
+	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
 		if ok && blocker.Repo == t.Repo {

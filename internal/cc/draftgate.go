@@ -17,11 +17,11 @@ const (
 // failed `gh pr ready` is never latched -- the next tick simply retries against a fresh
 // observation (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
 func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byURL := planTasksByURL(tasks)
+	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
@@ -32,7 +32,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	}
 
 	now := l.now()
-	for _, t := range tasks {
+	for _, t := range tickets {
 		pr := obs.PRs[t.Branch]
 		if pr.State != gh.Open || !pr.IsDraft {
 			continue
@@ -40,7 +40,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 
 		fact := &plan.RunFact{PROpen: true}
 		applyVerdict(fact, t, obs, vd)
-		gating := plan.GatingBlockers(byURL[t.TicketURL], byURL)
+		gating := plan.GatingBlockers(byURL[t.URL], byURL)
 		if draft, _ := plan.DraftGate(gating, prs, fact.VerdictReviewMe); draft {
 			continue
 		}
@@ -52,12 +52,12 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// readyOne calls `gh pr ready` for one task, recording either outcome as an event: a failure is
+// readyOne calls `gh pr ready` for one ticket, recording either outcome as an event: a failure is
 // never latched, so leaving the row untouched here is exactly what lets the next tick retry.
-func (l *Loop) readyOne(ctx context.Context, t Task, repoPath string, now time.Time) error {
-	event := Event{At: now, TaskURL: t.TicketURL, Kind: eventDraftReady}
+func (l *Loop) readyOne(ctx context.Context, t Ticket, repoPath string, now time.Time) error {
+	event := Event{At: now, TicketURL: t.URL, Kind: eventDraftReady}
 	if err := gh.Ready(ctx, repoPath, t.Branch); err != nil {
-		event = Event{At: now, TaskURL: t.TicketURL, Kind: eventDraftReadyFailed, Detail: err.Error()}
+		event = Event{At: now, TicketURL: t.URL, Kind: eventDraftReadyFailed, Detail: err.Error()}
 	}
 	return l.store.AppendEvent(ctx, event)
 }

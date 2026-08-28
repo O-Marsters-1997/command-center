@@ -13,7 +13,7 @@ import (
 
 // TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting covers re-run's own contract
 // (docs/prds/prd-command-centre.md § Phase 6): relaunch in the same worktree, incrementally -- a
-// second `runs` row against the same task, with no `tp new` call at all (the fake runner here
+// second `runs` row against the same ticket, with no `tp new` call at all (the fake runner here
 // never touches tp; nothing about re-run does).
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
@@ -21,13 +21,13 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", "", "hash-1")
+	firstRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "re-run", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,11 +59,11 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.spawns[0].WorktreePath, worktreePath)
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, ok := latest[task.TicketURL]
+	summary, ok := latest[ticket.URL]
 	if !ok {
 		t.Fatal("no run recorded after re-run")
 	}
@@ -91,13 +91,13 @@ func TestClosePRCallsGhPrCloseAndLogsTheEvent(t *testing.T) {
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "close-pr", at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "close-pr", at); err != nil {
 		t.Fatal(err)
 	}
 

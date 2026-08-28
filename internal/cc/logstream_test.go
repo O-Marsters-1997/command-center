@@ -22,7 +22,7 @@ import (
 const logTicket = "https://github.com/o/r/issues/77"
 
 func logStreamPath(from int64) string {
-	return fmt.Sprintf("/task/%s/log?from=%d", url.PathEscape(logTicket), from)
+	return fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(logTicket), from)
 }
 
 // runStore seeds one spawned, undisposed run against a log file the test appends to, and hands
@@ -32,11 +32,11 @@ func runStore(t *testing.T, logPath string, now time.Time) (*cc.Store, int64) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: logTicket, Repo: "repo", Branch: "cc-77"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, task.TicketURL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,8 +127,8 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	}
 }
 
-// TestLogStreamIsEmptyForATaskWithNoRun covers AC2's second half: no run, and no error either.
-func TestLogStreamIsEmptyForATaskWithNoRun(t *testing.T) {
+// TestLogStreamIsEmptyForATicketWithNoRun covers AC2's second half: no run, and no error either.
+func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -141,7 +141,7 @@ func TestLogStreamIsEmptyForATaskWithNoRun(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 	if body := rec.Body.String(); body != "event: end\ndata:\n\n" {
-		t.Errorf("stream for a task with no run is not an empty one that retires itself: %q", body)
+		t.Errorf("stream for a ticket with no run is not an empty one that retires itself: %q", body)
 	}
 }
 
@@ -278,7 +278,7 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 		t.Fatal("the handler did not return when the client went away")
 	}
 
-	runs, err := store.LatestRunsByTask(t.Context())
+	runs, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, detailPath(ticket), nil))
 	body := rec.Body.String()
 
-	stream := fmt.Sprintf("/task/%s/log?from=%d", url.PathEscape(ticket), info.Size())
+	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())
 	for _, want := range []string{
 		`hx-ext="sse"`,
 		`sse-connect="` + stream + `"`,

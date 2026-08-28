@@ -20,7 +20,7 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-const twoTasks = `
+const twoTickets = `
 max_agents = 2
 port       = 8080
 
@@ -41,25 +41,25 @@ name = "cc-sandbox"
 path = "cc-sandbox"
 `
 
-func TestLoadConfigTwoTasks(t *testing.T) {
+func TestLoadConfigTwoTickets(t *testing.T) {
 	t.Parallel()
 
-	got, err := cc.LoadConfig(writeConfig(t, twoTasks))
+	got, err := cc.LoadConfig(writeConfig(t, twoTickets))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
 	}
-	if len(got.Tasks) != 2 {
-		t.Fatalf("tasks = %d, want 2", len(got.Tasks))
+	if len(got.Tickets) != 2 {
+		t.Fatalf("tickets = %d, want 2", len(got.Tickets))
 	}
-	second := got.Tasks[1]
-	if second.TicketURL != "sandbox://CC-2" || second.Branch != "cc-2-second" {
-		t.Errorf("second task = %+v", second)
+	second := got.Tickets[1]
+	if second.URL != "sandbox://CC-2" || second.Branch != "cc-2-second" {
+		t.Errorf("second ticket = %+v", second)
 	}
 	if len(second.BlockedBy) != 1 || second.BlockedBy[0] != "sandbox://CC-1" {
-		t.Errorf("second task blocked_by = %v", second.BlockedBy)
+		t.Errorf("second ticket blocked_by = %v", second.BlockedBy)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
 		t.Errorf("repos = %+v", got.Repos)
@@ -181,7 +181,7 @@ func TestLoadConfigUnknownRepo(t *testing.T) {
 	body := "[[task]]\nticket_url = \"a\"\nrepo = \"nope\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
 	_, err := cc.LoadConfig(writeConfig(t, body))
 	if err == nil {
-		t.Fatal("want an error for a task naming a repo with no [[repo]] block")
+		t.Fatal("want an error for a ticket naming a repo with no [[repo]] block")
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the missing repo", err)

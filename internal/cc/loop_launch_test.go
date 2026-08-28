@@ -15,28 +15,28 @@ import (
 
 func noOpObserve(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
 
-func authoriseTask(t *testing.T, store *cc.Store, ticketURL, hash string, at time.Time) {
+func authoriseTicket(t *testing.T, store *cc.Store, ticketURL, hash string, at time.Time) {
 	t.Helper()
 	if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-"+ticketURL, at); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
+func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
-	authoriseTask(t, store, task.TicketURL, hash, at)
+	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	authoriseTicket(t, store, ticket.URL, hash, at)
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
@@ -57,11 +57,11 @@ func TestLoopCutsAndSpawnsAnEligibleTask(t *testing.T) {
 		t.Errorf("prompt file was not written: %v", err)
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, ok := latest[task.TicketURL]
+	summary, ok := latest[ticket.URL]
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
@@ -85,14 +85,14 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
-	authoriseTask(t, store, task.TicketURL, hash, at)
+	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	authoriseTicket(t, store, ticket.URL, hash, at)
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
@@ -111,7 +111,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 }
 
 // TestLoopNeverSpawnsOnAPromptHashMismatch covers issue #55's AC1: a member authorised against a
-// hash the task no longer composes to sits queued forever, spawning nothing, however many ticks
+// hash the ticket no longer composes to sits queued forever, spawning nothing, however many ticks
 // pass -- the tick refuses on the mismatch rather than composing around it.
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	root, _ := repoWithOrigin(t)
@@ -120,13 +120,13 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	authoriseTask(t, store, task.TicketURL, plan.Hash("a prompt this task never composed to"), at)
+	authoriseTicket(t, store, ticket.URL, plan.Hash("a prompt this ticket never composed to"), at)
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
@@ -136,15 +136,15 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 		}
 	}
 	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a hash the task no longer composes to must never be spawned", len(fake.spawns))
+		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned", len(fake.spawns))
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ran := latest[task.TicketURL]; ran {
-		t.Error("no run should ever be recorded for a task whose authorised hash no longer matches")
+	if _, ran := latest[ticket.URL]; ran {
+		t.Error("no run should ever be recorded for a ticket whose authorised hash no longer matches")
 	}
 }
 
@@ -154,14 +154,14 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
-	authoriseTask(t, store, task.TicketURL, hash, at)
+	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	authoriseTicket(t, store, ticket.URL, hash, at)
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
@@ -173,11 +173,11 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(fake.spawns))
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[task.TicketURL]
+	summary := latest[ticket.URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomeCutFailed {
 		t.Errorf("summary = %+v, want cut_failed", summary)
 	}
@@ -193,18 +193,18 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
-		{TicketURL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
 	}
-	if err := store.UpsertTasks(t.Context(), tasks); err != nil {
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, task := range tasks {
-		hash := plan.Hash(plan.Compose(plan.Task{TicketURL: task.TicketURL}))
-		authoriseTask(t, store, task.TicketURL, hash, at)
+	for _, ticket := range tickets {
+		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+		authoriseTicket(t, store, ticket.URL, hash, at)
 	}
 
 	fake := newFakeRunner()
@@ -217,7 +217,7 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(fake.spawns))
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,12 +237,12 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,11 +265,11 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[task.TicketURL]
+	summary := latest[ticket.URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
 		t.Fatalf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
@@ -283,7 +283,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	newBaseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
 
-	runID2, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", newBaseline, "hash-2")
+	runID2, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", newBaseline, "hash-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,11 +296,11 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	latest, err = store.LatestRunsByTask(t.Context())
+	latest, err = store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary = latest[task.TicketURL]
+	summary = latest[ticket.URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 		t.Fatalf("summary = %+v, want push (one commit after its own baseline)", summary)
 	}
@@ -314,12 +314,12 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTasks(t.Context(), []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), task.TicketURL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), task.TicketURL, "kill", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "kill", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,11 +357,11 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Errorf("pending kill intents = %+v, want none: consumed", pending)
 	}
 
-	latest, err := store.LatestRunsByTask(t.Context())
+	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[task.TicketURL]
+	summary := latest[ticket.URL]
 	if !summary.HasOutcome {
 		t.Fatal("the killed run was not disposed of in the same tick")
 	}

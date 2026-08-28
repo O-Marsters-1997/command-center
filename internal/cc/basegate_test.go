@@ -43,12 +43,12 @@ func TestMergesCleanly(t *testing.T) {
 func TestConflictedBase(t *testing.T) {
 	t.Parallel()
 
-	root := plan.Task{TicketURL: "sandbox://CC-1", Repo: "r", Branch: "cc-1-first"}
-	child := plan.Task{
-		TicketURL: "sandbox://CC-2", Repo: "r", Branch: "cc-2-second",
+	root := plan.Ticket{URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1-first"}
+	child := plan.Ticket{
+		URL: "sandbox://CC-2", Repo: "r", Branch: "cc-2-second",
 		BlockedBy: []string{"sandbox://CC-1"},
 	}
-	byURL := map[string]plan.Task{root.TicketURL: root, child.TicketURL: child}
+	byURL := map[string]plan.Ticket{root.URL: root, child.URL: child}
 	stacked := plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first"}
 	offMain := plan.Unlock{Unlocked: true, BaseBranch: "main"}
 	locked := plan.Unlock{Blocking: []string{"sandbox://CC-1"}}
@@ -59,7 +59,7 @@ func TestConflictedBase(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		task   plan.Task
+		task   plan.Ticket
 		unlock plan.Unlock
 		obs    Observation
 		want   string
@@ -89,12 +89,12 @@ func TestConflictedBase(t *testing.T) {
 func TestConflictedBaseIgnoresAConflictWithoutStacking(t *testing.T) {
 	t.Parallel()
 
-	root := plan.Task{TicketURL: "sandbox://CC-1", Repo: "r", Branch: "cc-1-first"}
-	child := plan.Task{
-		TicketURL: "sandbox://CC-2", Repo: "r", Branch: "cc-2-second",
+	root := plan.Ticket{URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1-first"}
+	child := plan.Ticket{
+		URL: "sandbox://CC-2", Repo: "r", Branch: "cc-2-second",
 		BlockedBy: []string{"sandbox://CC-1"},
 	}
-	byURL := map[string]plan.Task{root.TicketURL: root, child.TicketURL: child}
+	byURL := map[string]plan.Ticket{root.URL: root, child.URL: child}
 	obs := Observation{ConflictsWithBase: map[string]bool{"cc-1-first": true}}
 
 	if got := conflictedBase(child, byURL, plan.Unlock{Blocking: []string{"sandbox://CC-1"}}, false, obs); got != "" {

@@ -19,7 +19,7 @@ const (
 	eventRestacked         = "restacked"
 )
 
-// RefreshFact is a task's outstanding refused fast-forward, derived from the latest
+// RefreshFact is a ticket's outstanding refused fast-forward, derived from the latest
 // refresh_refused event since its last recorded push, so the next push clears it
 // (docs/designs/command-centre-design.md § 4a).
 type RefreshFact struct {
@@ -27,7 +27,7 @@ type RefreshFact struct {
 	Reason  string
 }
 
-// RefreshFacts returns every task's outstanding refused fast-forward, keyed by ticket URL.
+// RefreshFacts returns every ticket's outstanding refused fast-forward, keyed by ticket URL.
 // A refusal gates the automatic pass's retry; the refresh verb ignores it
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error) {
@@ -36,9 +36,9 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error
 		return nil, err
 	}
 	facts := make(map[string]RefreshFact, len(outcomes))
-	for taskID, o := range outcomes {
+	for ticketID, o := range outcomes {
 		if o.kind == eventRefreshRefused {
-			facts[taskID] = RefreshFact{Refused: true, Reason: o.detail}
+			facts[ticketID] = RefreshFact{Refused: true, Reason: o.detail}
 		}
 	}
 	return facts, nil
@@ -46,22 +46,22 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error
 
 type refreshOutcome struct{ kind, detail string }
 
-// latestRefreshOutcomes returns each task's latest refresh outcome the automatic pass never
+// latestRefreshOutcomes returns each ticket's latest refresh outcome the automatic pass never
 // retries, keyed by ticket URL, and the push that clears it
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT e.task_id, e.kind, e.detail
+		SELECT e.ticket_id, e.kind, e.detail
 		FROM events e
 		JOIN (
-			SELECT e2.task_id, MAX(e2.id) AS id
+			SELECT e2.ticket_id, MAX(e2.id) AS id
 			FROM events e2
 			LEFT JOIN (
-				SELECT task_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY task_id
-			) p ON p.task_id = e2.task_id
+				SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
+			) p ON p.ticket_id = e2.ticket_id
 			WHERE e2.kind IN (?, ?) AND e2.at > COALESCE(p.pushed_at, '')
-			GROUP BY e2.task_id
-		) latest ON latest.task_id = e.task_id AND latest.id = e.id`,
+			GROUP BY e2.ticket_id
+		) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id`,
 		eventRefreshRefused, eventRefreshConflicted)
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
@@ -70,12 +70,12 @@ func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOu
 
 	outcomes := map[string]refreshOutcome{}
 	for rows.Next() {
-		var taskID, kind string
+		var ticketID, kind string
 		var detail sql.NullString
-		if err := rows.Scan(&taskID, &kind, &detail); err != nil {
+		if err := rows.Scan(&ticketID, &kind, &detail); err != nil {
 			return nil, fmt.Errorf("scan refresh outcome: %w", err)
 		}
-		outcomes[taskID] = refreshOutcome{kind: kind, detail: detail.String}
+		outcomes[ticketID] = refreshOutcome{kind: kind, detail: detail.String}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate refresh outcomes: %w", err)
@@ -84,7 +84,7 @@ func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOu
 }
 
 type refreshContext struct {
-	byURL     map[string]plan.Task
+	byURL     map[string]plan.Ticket
 	stacking  map[string]bool
 	prs       map[string]plan.PRState
 	repoPaths map[string]string
@@ -92,13 +92,13 @@ type refreshContext struct {
 	obs       Observation
 }
 
-func (l *Loop) newRefreshContext(ctx context.Context, tasks []Task, obs Observation) (refreshContext, error) {
+func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Observation) (refreshContext, error) {
 	pushRows, err := l.store.LatestPushes(ctx)
 	if err != nil {
 		return refreshContext{}, err
 	}
 	return refreshContext{
-		byURL:     planTasksByURL(tasks),
+		byURL:     planTicketsByURL(tickets),
 		stacking:  stackingByRepo(l.cfg.Repos),
 		prs:       prsByBranch(obs),
 		repoPaths: repoPathsByName(l.cfg.Repos),
@@ -111,12 +111,12 @@ func (l *Loop) newRefreshContext(ctx context.Context, tasks []Task, obs Observat
 // retry-push bypasses PushFacts, then sweeps the eligible base-moved rows
 // (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
-	rc, err := l.newRefreshContext(ctx, tasks, obs)
+	byTicket := ticketsByURL(tickets)
+	rc, err := l.newRefreshContext(ctx, tickets, obs)
 	if err != nil {
 		return err
 	}
@@ -128,9 +128,9 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 	}
 	requested := make(map[string]bool, len(intents))
 	for _, intent := range intents {
-		requested[intent.TaskID] = true
-		if task, ok := byTicket[intent.TaskID]; ok {
-			if err := l.refreshOne(ctx, task, rc.pushRows[task.TicketURL], rc, now); err != nil {
+		requested[intent.TicketID] = true
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			if err := l.refreshOne(ctx, ticket, rc.pushRows[ticket.URL], rc, now); err != nil {
 				return err
 			}
 		}
@@ -139,16 +139,16 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 		}
 	}
 
-	return l.autoRefresh(ctx, tasks, rc, requested, now)
+	return l.autoRefresh(ctx, tickets, rc, requested, now)
 }
 
 // autoRefresh sweeps every pushed, base-moved row that no live run or unresolved merge bars
 // (inv. 4) and whose last refresh neither refused nor conflicted, so a human's abort is not
 // undone by the next tick re-running the same merge (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) autoRefresh(
-	ctx context.Context, tasks []Task, rc refreshContext, requested map[string]bool, now time.Time,
+	ctx context.Context, tickets []Ticket, rc refreshContext, requested map[string]bool, now time.Time,
 ) error {
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
@@ -157,24 +157,24 @@ func (l *Loop) autoRefresh(
 		return err
 	}
 
-	for _, t := range tasks {
-		if requested[t.TicketURL] {
+	for _, t := range tickets {
+		if requested[t.URL] {
 			continue
 		}
-		summary, ok := latest[t.TicketURL]
+		summary, ok := latest[t.URL]
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
 		if rc.obs.PRs[t.Branch].State != gh.Open {
 			continue
 		}
-		pushRow, pushed := rc.pushRows[t.TicketURL]
+		pushRow, pushed := rc.pushRows[t.URL]
 		if !pushed || !baseMoved(pushRow, rc.obs, t.Repo) {
 			continue
 		}
 		// ponytail: the gate holds until the row's next push, so a later, cleanly-mergeable base
 		// advance also waits for the refresh verb. Compare the conflict's own base tip if that bites.
-		if _, tried := outcomes[t.TicketURL]; tried {
+		if _, tried := outcomes[t.URL]; tried {
 			continue
 		}
 		if err := l.refreshOne(ctx, t, pushRow, rc, now); err != nil {
@@ -186,30 +186,30 @@ func (l *Loop) autoRefresh(
 
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
 // branch, or main once retargetMerged has pointed it there -- whose current tip differs from
-// what was recorded at the task's last push (issue #85: main counts the same as a stacked base).
+// what was recorded at the ticket's last push (issue #85: main counts the same as a stacked base).
 func baseMoved(row PushRow, obs Observation, repo string) bool {
 	return row.BaseBranch != "" && obs.BranchTips[baseTipKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
-// refreshOne fast-forwards one task's own branch, then advances it onto its base. A refused
+// refreshOne fast-forwards one ticket's own branch, then advances it onto its base. A refused
 // fast-forward records refresh_refused and stops; a conflict is left mid-merge for a human
 // (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) refreshOne(
-	ctx context.Context, task Task, row PushRow, rc refreshContext, now time.Time,
+	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time,
 ) error {
-	branch := task.Branch
+	branch := ticket.Branch
 	worktreePath, ok := rc.obs.Worktrees[branch]
-	if !ok || rc.obs.Runs[task.TicketURL].Alive || rc.obs.MidMerge[branch] {
+	if !ok || rc.obs.Runs[ticket.URL].Alive || rc.obs.MidMerge[branch] {
 		return nil
 	}
 
 	if err := MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
 		return l.store.AppendEvent(ctx, Event{
-			At: now, TaskURL: task.TicketURL, Kind: eventRefreshRefused, Detail: err.Error(),
+			At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: err.Error(),
 		})
 	}
 
-	unlock := plan.Unlocked(rc.byURL[task.TicketURL], rc.byURL, rc.prs, rc.stacking[task.Repo])
+	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
 	}
@@ -220,14 +220,14 @@ func (l *Loop) refreshOne(
 		// (issue #93). A conflicted merge rewrites nothing and earns nothing.
 		if restacked {
 			if err := l.store.AppendEvent(ctx, Event{
-				At: now, TaskURL: task.TicketURL, Kind: eventRestacked,
+				At: now, TicketURL: ticket.URL, Kind: eventRestacked,
 				Detail: detail + ", conflicted",
 			}); err != nil {
 				return err
 			}
 		}
 		return l.store.AppendEvent(ctx, Event{
-			At: now, TaskURL: task.TicketURL, Kind: eventRefreshConflicted, Detail: err.Error(),
+			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted, Detail: err.Error(),
 		})
 	}
 
@@ -236,7 +236,7 @@ func (l *Loop) refreshOne(
 		kind = eventRestacked
 	}
 	return l.store.AppendEvent(ctx, Event{
-		At: now, TaskURL: task.TicketURL, Kind: kind,
+		At: now, TicketURL: ticket.URL, Kind: kind,
 		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
 	})
 }

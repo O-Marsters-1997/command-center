@@ -1,10 +1,10 @@
 package plan
 
-// LaunchCandidate is one task's launch eligibility facts (inv. 8): unlocked, in an active
+// LaunchCandidate is one ticket's launch eligibility facts (inv. 8): unlocked, in an active
 // launch, whose recomposed prompt still hashes to what was authorised, with no prior run, off a
 // base that merges cleanly.
 type LaunchCandidate struct {
-	TicketURL         string
+	URL               string
 	Unlock            Unlock
 	Authorised        bool
 	PromptHashMatches bool
@@ -33,7 +33,7 @@ func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int) [
 			break
 		}
 		if c.eligible() {
-			selected = append(selected, c.TicketURL)
+			selected = append(selected, c.URL)
 		}
 	}
 	return selected

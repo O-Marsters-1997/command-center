@@ -20,7 +20,7 @@ const logPollInterval = 250 * time.Millisecond
 // loop owns the agent process, so a reader arriving or leaving cannot touch it (inv. 9).
 func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	taskURL := r.PathValue("task")
+	ticketURL := r.PathValue("ticket")
 	offset, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
 	// A browser that reconnects sends back the byte offset of the last event it swapped, which
 	// outranks the offset the fragment was rendered with (WHATWG HTML § server-sent events).
@@ -28,7 +28,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 		offset = resumed
 	}
 
-	path, ended, err := s.store.LatestRunLog(ctx, taskURL)
+	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -53,7 +53,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-time.After(logPollInterval):
 		}
-		if path, ended, err = s.store.LatestRunLog(ctx, taskURL); err != nil {
+		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
 			return
 		}
 	}
@@ -89,5 +89,5 @@ func sendLines(w io.Writer, path string, offset *int64) int {
 }
 
 func logStreamPath(ticketURL string, from int64) string {
-	return fmt.Sprintf("/task/%s/log?from=%d", url.PathEscape(ticketURL), from)
+	return fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
 }

@@ -14,9 +14,9 @@ import (
 const retryPushVerb = plan.VerbRetryPush
 
 // pushContext is the per-tick facts pushOne needs that are the same for every candidate,
-// computed once by pushPushable/applyRetryPushIntents rather than re-queried per task.
+// computed once by pushPushable/applyRetryPushIntents rather than re-queried per ticket.
 type pushContext struct {
-	byURL      map[string]plan.Task
+	byURL      map[string]plan.Ticket
 	stacking   map[string]bool
 	prs        map[string]plan.PRState
 	repoPaths  map[string]string
@@ -26,7 +26,7 @@ type pushContext struct {
 	obs        Observation
 }
 
-func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation) (pushContext, error) {
+func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observation) (pushContext, error) {
 	pushedTips, err := l.store.LastPushedTips(ctx)
 	if err != nil {
 		return pushContext{}, err
@@ -36,7 +36,7 @@ func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation
 		return pushContext{}, err
 	}
 	return pushContext{
-		byURL:      planTasksByURL(tasks),
+		byURL:      planTicketsByURL(tickets),
 		stacking:   stackingByRepo(l.cfg.Repos),
 		prs:        prsByBranch(obs),
 		repoPaths:  repoPathsByName(l.cfg.Repos),
@@ -47,16 +47,16 @@ func (l *Loop) newPushContext(ctx context.Context, tasks []Task, obs Observation
 	}, nil
 }
 
-// pushPushable is job 1's push step (docs/prds/prd-command-centre.md § The tick): every task whose
+// pushPushable is job 1's push step (docs/prds/prd-command-centre.md § The tick): every ticket whose
 // latest run disposed with commits gets its branch diffed against its base and either pushed
 // and PR-opened, or refused outright. A push or PR-create failure is not retried automatically
 // -- retry-push is your verb (see applyRetryPushIntents).
 func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
@@ -64,22 +64,22 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	pc, err := l.newPushContext(ctx, tasks, obs)
+	pc, err := l.newPushContext(ctx, tickets, obs)
 	if err != nil {
 		return err
 	}
 
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 	var candidates []plan.PushCandidate
 	localTips := map[string]string{}
-	for _, t := range tasks {
-		summary, ok := latest[t.TicketURL]
+	for _, t := range tickets {
+		summary, ok := latest[t.URL]
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
-		// remove worktree (verbs.go) deletes the branch along with the worktree, and a task
+		// remove worktree (verbs.go) deletes the branch along with the worktree, and a ticket
 		// that has ever run stays a push candidate forever (its latest run's outcome never
-		// changes) -- without this guard, a removed task's absence from the same tick's own
+		// changes) -- without this guard, a removed ticket's absence from the same tick's own
 		// worktree map would make every later tick's BranchTip fail on an unknown ref and
 		// abort the whole tick.
 		if pc.obs.Worktrees[t.Branch] == "" {
@@ -87,11 +87,11 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		}
 		tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
 		if err != nil {
-			return fmt.Errorf("branch tip for %s: %w", t.TicketURL, err)
+			return fmt.Errorf("branch tip for %s: %w", t.URL, err)
 		}
-		localTips[t.TicketURL] = tip
+		localTips[t.URL] = tip
 		candidates = append(candidates,
-			plan.PushCandidate{TicketURL: t.TicketURL, LocalTip: tip, LastPushedTip: lastPushed[t.TicketURL]})
+			plan.PushCandidate{URL: t.URL, LocalTip: tip, LastPushedTip: lastPushed[t.URL]})
 	}
 
 	toPush := plan.PushPlan(candidates)
@@ -128,22 +128,22 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
-	pc, err := l.newPushContext(ctx, tasks, obs)
+	byTicket := ticketsByURL(tickets)
+	pc, err := l.newPushContext(ctx, tickets, obs)
 	if err != nil {
 		return err
 	}
 
 	now := l.now()
 	for _, intent := range intents {
-		if t, ok := byTicket[intent.TaskID]; ok {
+		if t, ok := byTicket[intent.TicketID]; ok {
 			tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
 			if err != nil {
-				return fmt.Errorf("branch tip for %s: %w", t.TicketURL, err)
+				return fmt.Errorf("branch tip for %s: %w", t.URL, err)
 			}
 			if err := l.pushOne(ctx, t, tip, pc, now); err != nil {
 				return err
@@ -178,8 +178,8 @@ func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, resta
 // own snapshot), diffs the branch against it, and either records a refusal event or attempts the
 // push-and-adopt-or-create sequence. An existing open PR is adopted, never duplicated (inv. 20):
 // recording the push only after create-or-adopt is what makes a crash between them a non-event.
-func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushContext, now time.Time) error {
-	unlock := plan.Unlocked(pc.byURL[t.TicketURL], pc.byURL, pc.prs, pc.stacking[t.Repo])
+func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushContext, now time.Time) error {
+	unlock := plan.Unlocked(pc.byURL[t.URL], pc.byURL, pc.prs, pc.stacking[t.Repo])
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed between run and push; nothing sane to diff against
 	}
@@ -191,19 +191,19 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
 	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: pc.denyByRepo[t.Repo]}); refused {
-		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushRefused, Detail: path})
+		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushRefused, Detail: path})
 	}
 
-	if err := pushBranch(ctx, repoPath, t.Branch, pc.pushedTips[t.TicketURL], pc.restacked[t.TicketURL]); err != nil {
-		return l.store.AppendEvent(ctx, Event{At: now, TaskURL: t.TicketURL, Kind: eventPushFailed, Detail: err.Error()})
+	if err := pushBranch(ctx, repoPath, t.Branch, pc.pushedTips[t.URL], pc.restacked[t.URL]); err != nil {
+		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 	}
 
 	if pc.obs.PRs[t.Branch].State != gh.Open {
 		body := plan.PRBody(base, pc.obs.PRs[base].Number)
-		draft := plan.OpensAsDraft(pc.byURL[t.TicketURL], pc.byURL)
+		draft := plan.OpensAsDraft(pc.byURL[t.URL], pc.byURL)
 		if err := gh.Create(ctx, pc.obs.Worktrees[t.Branch], base, body, draft); err != nil {
 			return l.store.AppendEvent(ctx,
-				Event{At: now, TaskURL: t.TicketURL, Kind: eventPushFailed, Detail: err.Error()})
+				Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 		}
 	}
 
@@ -211,11 +211,11 @@ func (l *Loop) pushOne(ctx context.Context, t Task, localTip string, pc pushCont
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
-	if err := l.store.RecordPush(ctx, t.TicketURL, localTip, base, baseSHA, now); err != nil {
+	if err := l.store.RecordPush(ctx, t.URL, localTip, base, baseSHA, now); err != nil {
 		return err
 	}
 	return l.store.AppendEvent(ctx, Event{
-		At: now, TaskURL: t.TicketURL, Kind: eventPushed,
+		At: now, TicketURL: t.URL, Kind: eventPushed,
 		Detail: fmt.Sprintf("pushed %s to origin/%s", localTip, base),
 	})
 }

@@ -45,7 +45,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	// The config's tasks were upserted at startup and both rows derive from the stub's snapshot:
+	// The config's tickets were upserted at startup and both rows derive from the stub's snapshot:
 	// CC-1 has no blockers, CC-2's blocker now has an open PR.
 	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "ready", "0s ago"} {
 		if !strings.Contains(body, want) {
@@ -72,7 +72,7 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	}
 }
 
-// appConfig writes twoTasks beside a real checkout of the repo it names, and points CC_DATA_DIR
+// appConfig writes twoTickets beside a real checkout of the repo it names, and points CC_DATA_DIR
 // at an empty directory, so cc.New's startup checkout and workspace both resolve.
 func appConfig(t *testing.T) string {
 	t.Helper()
@@ -83,7 +83,7 @@ func appConfig(t *testing.T) string {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte(twoTasks), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(twoTickets), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return configPath

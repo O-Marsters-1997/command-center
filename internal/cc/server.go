@@ -65,7 +65,7 @@ var previewPage = template.Must(template.New("preview").Parse(previewSource))
 
 // Server is the status page plus the launch-preview and launch-authorisation routes. It never
 // writes the database directly except to queue a launch intent: every state it shows is
-// derived from tasks and the last observation at render time (§5, inv. 14).
+// derived from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
 	store             *Store
 	now               func() time.Time
@@ -91,8 +91,8 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /board", s.handleBoard)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
-	mux.HandleFunc("GET /task/{task}/detail", s.handleDetail)
-	mux.HandleFunc("GET /task/{task}/log", s.handleLog)
+	mux.HandleFunc("GET /ticket/{ticket}/detail", s.handleDetail)
+	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
@@ -128,7 +128,7 @@ func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 type row struct {
-	TicketURL string
+	URL string
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
 	Title  string
@@ -157,7 +157,7 @@ type row struct {
 	Worktree string
 	PR       string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
-	// The page) — empty for a task with no run yet.
+	// The page) — empty for a ticket with no run yet.
 	Pgid        string
 	Elapsed     string
 	LogPath     string
@@ -178,25 +178,25 @@ type check struct {
 	Conclusion string
 }
 
-func (r row) Ticket() string { return "#" + path.Base(r.TicketURL) }
+func (r row) Ticket() string { return "#" + path.Base(r.URL) }
 
 // DetailID is the row's stable DOM id. A ticket URL is neither a usable id nor a CSS selector,
 // and htmx needs both: hx-target resolves the selector, and hx-preserve matches the id to keep
 // an expanded detail mounted through the board's own five-second swap.
 func (r row) DetailID() string {
-	sum := sha256.Sum256([]byte(r.TicketURL))
+	sum := sha256.Sum256([]byte(r.URL))
 	return "detail-" + hex.EncodeToString(sum[:6])
 }
 
 // DetailPath percent-encodes the ticket URL into one path segment, "://" and all.
-func (r row) DetailPath() string { return "/task/" + url.PathEscape(r.TicketURL) + "/detail" }
+func (r row) DetailPath() string { return "/ticket/" + url.PathEscape(r.URL) + "/detail" }
 
 type tickErrorView struct {
 	Age     string
 	Message string
 }
 
-// group is one blocker and the rows waiting on it. A row with no blocker in the task set is its
+// group is one blocker and the rows waiting on it. A row with no blocker in the ticket set is its
 // own group with a nil Root (docs/prds/prd-operator-surface.md § Reading the board).
 type group struct {
 	Root     *row
@@ -236,7 +236,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *templa
 }
 
 func (s *Server) render(ctx context.Context) (pageView, error) {
-	tasks, err := s.store.Tasks(ctx)
+	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		return pageView{}, err
 	}
@@ -248,16 +248,16 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	if err != nil {
 		return pageView{}, err
 	}
-	facts, vd, err := s.loadTaskFacts(ctx)
+	facts, vd, err := s.loadTicketFacts(ctx)
 	if err != nil {
 		return pageView{}, err
 	}
 
 	now := s.now()
-	rows := derive(tasks, obs, facts, vd, s.stackingByRepo, now)
+	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
-		LiveAgents:   liveAgents(tasks, obs),
+		LiveAgents:   liveAgents(tickets, obs),
 		ObserveAge:   "never",
 		ObserveStale: true,
 		Groups:       groupRows(rows),
@@ -272,34 +272,34 @@ func (s *Server) render(ctx context.Context) (pageView, error) {
 	return view, nil
 }
 
-// loadTaskFacts gathers the taskFacts and verdictDeps both render and handlePreview need.
-func (s *Server) loadTaskFacts(ctx context.Context) (taskFacts, verdictDeps, error) {
+// loadTicketFacts gathers the ticketFacts and verdictDeps both render and handlePreview need.
+func (s *Server) loadTicketFacts(ctx context.Context) (ticketFacts, verdictDeps, error) {
 	memberships, err := s.store.LaunchMemberships(ctx)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
-	latestRuns, err := s.store.LatestRunsByTask(ctx)
+	latestRuns, err := s.store.LatestRunsByTicket(ctx)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
 	pushFacts, err := s.store.PushFacts(ctx)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
 	refreshFacts, err := s.store.RefreshFacts(ctx)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
-	pendingVerbs, err := s.store.PendingIntentsByTask(ctx)
+	pendingVerbs, err := s.store.PendingIntentsByTicket(ctx)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
 	vd, err := verdictDepsFor(ctx, s.store, s.checksByRepo, s.mergifySHAByRepo, s.compatCheckByRepo)
 	if err != nil {
-		return taskFacts{}, verdictDeps{}, err
+		return ticketFacts{}, verdictDeps{}, err
 	}
 
-	facts := taskFacts{
+	facts := ticketFacts{
 		memberships: memberships, latestRuns: latestRuns,
 		pushes: pushFacts, refreshes: refreshFacts, pendingVerbs: pendingVerbs,
 	}
@@ -337,8 +337,8 @@ func verdictDepsFor(
 	}, nil
 }
 
-// taskFacts is the durable per-task state a row is derived from, keyed by ticket URL.
-type taskFacts struct {
+// ticketFacts is the durable per-ticket state a row is derived from, keyed by ticket URL.
+type ticketFacts struct {
 	memberships  map[string]LaunchMembership
 	latestRuns   map[string]RunSummary
 	pushes       map[string]PushFact
@@ -350,23 +350,23 @@ type taskFacts struct {
 // stored: facts are stored, labels are derived every tick
 // (docs/designs/command-centre-design.md § Schema, inv. 14).
 func derive(
-	tasks []Task, obs Observation, facts taskFacts, vd verdictDeps,
+	tickets []Ticket, obs Observation, facts ticketFacts, vd verdictDeps,
 	stackingByRepo map[string]bool, now time.Time,
 ) []row {
-	byURL := planTasksByURL(tasks)
+	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(obs)
 
-	rows := make([]row, 0, len(tasks))
-	verdictLabelByBranch := make(map[string]string, len(tasks))
-	baseByBranch := make(map[string]string, len(tasks))
-	for _, t := range tasks {
-		pt := planTask(t)
+	rows := make([]row, 0, len(tickets))
+	verdictLabelByBranch := make(map[string]string, len(tickets))
+	baseByBranch := make(map[string]string, len(tickets))
+	for _, t := range tickets {
+		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
 		runFact, pgid, elapsed, logPath := runFactFor(t, obs, facts, vd, now)
-		membership := facts.memberships[t.TicketURL]
-		latestRun := facts.latestRuns[t.TicketURL]
+		membership := facts.memberships[t.URL]
+		latestRun := facts.latestRuns[t.URL]
 		state, reason := plan.Status(plan.Facts{
-			Task:            pt,
+			Ticket:          pt,
 			Unlock:          unlock,
 			Now:             now,
 			Authorised:      membership.LaunchID != 0,
@@ -378,12 +378,12 @@ func derive(
 		baseByBranch[t.Branch] = unlock.BaseBranch
 		pr := obs.PRs[t.Branch]
 		rows = append(rows, row{
-			TicketURL:    t.TicketURL,
-			Title:        obs.Titles[t.TicketURL],
+			URL:          t.URL,
+			Title:        obs.Titles[t.URL],
 			State:        state.String(),
 			Reason:       string(reason),
 			Verbs:        plan.Verbs(state),
-			PendingVerbs: facts.pendingVerbs[t.TicketURL],
+			PendingVerbs: facts.pendingVerbs[t.URL],
 			Branch:       t.Branch,
 			Base:         unlock.BaseBranch,
 			Worktree:     obs.Worktrees[t.Branch],
@@ -427,7 +427,7 @@ func groupRows(rows []row) []group {
 	byURL := make(map[string]row, len(rows))
 	childrenByRoot := make(map[string][]row, len(rows))
 	for _, r := range rows {
-		byURL[r.TicketURL] = r
+		byURL[r.URL] = r
 		if len(r.Blocking) > 0 {
 			root := r.Blocking[0]
 			childrenByRoot[root] = append(childrenByRoot[root], r)
@@ -447,7 +447,7 @@ func groupRows(rows []row) []group {
 			if a.MergeOrder != b.MergeOrder {
 				return cmp.Compare(a.MergeOrder, b.MergeOrder)
 			}
-			return cmp.Compare(a.TicketURL, b.TicketURL)
+			return cmp.Compare(a.URL, b.URL)
 		})
 		rootRow := byURL[root]
 		groups = append(groups, group{Root: &rootRow, Children: children})
@@ -456,12 +456,12 @@ func groupRows(rows []row) []group {
 	var ungrouped []row
 	for _, r := range rows {
 		if len(r.Blocking) == 0 {
-			if _, isRoot := childrenByRoot[r.TicketURL]; !isRoot {
+			if _, isRoot := childrenByRoot[r.URL]; !isRoot {
 				ungrouped = append(ungrouped, r)
 			}
 		}
 	}
-	slices.SortFunc(ungrouped, func(a, b row) int { return cmp.Compare(a.TicketURL, b.TicketURL) })
+	slices.SortFunc(ungrouped, func(a, b row) int { return cmp.Compare(a.URL, b.URL) })
 	for _, r := range ungrouped {
 		groups = append(groups, group{Children: []row{r}})
 	}
@@ -469,19 +469,19 @@ func groupRows(rows []row) []group {
 }
 
 // baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,
-// otherwise the base task's own CI verdict, exactly what the main page shows once the row has
+// otherwise the base ticket's own CI verdict, exactly what the main page shows once the row has
 // launched (docs/designs/command-centre-design.md § 4b, "you are about to build on a red parent").
 func baseVerdict(
-	base string, tasksByBranch map[string]Task, obs Observation, facts taskFacts, vd verdictDeps, now time.Time,
+	base string, ticketsByBranch map[string]Ticket, obs Observation, facts ticketFacts, vd verdictDeps, now time.Time,
 ) string {
 	if base == "" || base == defaultBaseBranch {
 		return ""
 	}
-	baseTask, ok := tasksByBranch[base]
+	baseTicket, ok := ticketsByBranch[base]
 	if !ok {
 		return ""
 	}
-	runFact, _, _, _ := runFactFor(baseTask, obs, facts, vd, now)
+	runFact, _, _, _ := runFactFor(baseTicket, obs, facts, vd, now)
 	return verdictLabel(runFact)
 }
 
@@ -500,7 +500,7 @@ func readyToMergeWarning(pr gh.PR) string {
 // when the gate says ready but pr.IsDraft is still true -- that the last `gh pr ready` call
 // failed and the next tick retries (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
 func draftReasonFor(
-	pr gh.PR, t plan.Task, byURL map[string]plan.Task, prs map[string]plan.PRState, runFact *plan.RunFact,
+	pr gh.PR, t plan.Ticket, byURL map[string]plan.Ticket, prs map[string]plan.PRState, runFact *plan.RunFact,
 ) string {
 	if !pr.IsDraft {
 		return ""
@@ -514,27 +514,27 @@ func draftReasonFor(
 	return string(reason)
 }
 
-// runFactFor builds plan.Status's LatestRun input for one task, plus the pgid, elapsed time and
+// runFactFor builds plan.Status's LatestRun input for one ticket, plus the pgid, elapsed time and
 // log path the page renders. Push facts only count once the run's outcome is push, and PROpen
 // reads this tick's PR snapshot rather than a stored column (inv. 14).
 func runFactFor(
-	t Task, obs Observation, facts taskFacts, vd verdictDeps, now time.Time,
+	t Ticket, obs Observation, facts ticketFacts, vd verdictDeps, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
-	summary, ok := facts.latestRuns[t.TicketURL]
+	summary, ok := facts.latestRuns[t.URL]
 	if !ok {
 		return nil, "", "", ""
 	}
 
-	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.TicketURL].Alive}
+	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.URL].Alive}
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
 		if summary.Outcome == plan.OutcomePush {
-			pf := facts.pushes[t.TicketURL]
+			pf := facts.pushes[t.URL]
 			fact.PushRefused = pf.Refused
 			fact.PushRefusedPath = pf.RefusedPath
 			fact.PushFailed = pf.Failed
-			rf := facts.refreshes[t.TicketURL]
+			rf := facts.refreshes[t.URL]
 			fact.RefreshRefused = rf.Refused
 			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
 			fact.MidMerge = obs.MidMerge[t.Branch]
@@ -563,7 +563,7 @@ func runFactFor(
 const defaultBaseBranch = "main"
 
 // mainTipKey names defaultBaseBranch's own tip in Observation.BranchTips. Every repo has a
-// "main", unlike a task's own branch name, so the plain name would collide the moment a second
+// "main", unlike a ticket's own branch name, so the plain name would collide the moment a second
 // repo is configured; "//" can never appear in a real git branch name, so this key never can.
 func mainTipKey(repo string) string { return repo + "//" + defaultBaseBranch }
 
@@ -580,12 +580,12 @@ func baseTipKey(repo, base string) string {
 // applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
 // unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
 // fixture reading exactly as it did before this phase (statusFromPush's own PROpen fallback).
-func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
+func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps) {
 	predicate := vd.checksByRepo[t.Repo]
 	if predicate.IsZero() {
 		return
 	}
-	pushRow, pushed := vd.pushRows[t.TicketURL]
+	pushRow, pushed := vd.pushRows[t.URL]
 	if !pushed {
 		return // disposed push-outcome this same tick, before push.go recorded the row
 	}
@@ -601,7 +601,7 @@ func applyVerdict(fact *plan.RunFact, t Task, obs Observation, vd verdictDeps) {
 		BaseSHAMatch: obs.BranchTips[baseTipKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
-		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.TicketURL]) * tickPeriod),
+		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.URL]) * tickPeriod),
 		AuthorLogin:  pr.AuthorLogin,
 		CompatCheck:  vd.compatCheckByRepo[t.Repo],
 	})
@@ -662,14 +662,14 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// previewRow is one line of a launch preview: what would happen to this task, and why. Base
+// previewRow is one line of a launch preview: what would happen to this ticket, and why. Base
 // carries the literal origin/ prefix tp new and gh pr create --base need — deliberately
 // different from the main page's Base column, which has no such prefix.
 type previewRow struct {
-	TicketURL string
-	Label     string
-	Reason    string
-	Base      string
+	URL    string
+	Label  string
+	Reason string
+	Base   string
 	// Refused is Label's own refused case, so the template renders the row without a checkbox
 	// rather than comparing the label string it prints.
 	Refused bool
@@ -690,21 +690,21 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := s.store.Tasks(ctx)
+	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	byURL := planTasksByURL(tasks)
-	tasksByBranch := make(map[string]Task, len(tasks))
-	for _, t := range tasks {
-		tasksByBranch[t.Branch] = t
+	byURL := planTicketsByURL(tickets)
+	ticketsByBranch := make(map[string]Ticket, len(tickets))
+	for _, t := range tickets {
+		ticketsByBranch[t.Branch] = t
 	}
 
 	slice := make(map[string]bool, len(requested))
 	for _, ticketURL := range requested {
 		if _, ok := byURL[ticketURL]; !ok {
-			http.Error(w, fmt.Sprintf("unknown task %q", ticketURL), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
 			return
 		}
 		slice[ticketURL] = true
@@ -716,7 +716,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prs := prsByBranch(obs)
-	facts, vd, err := s.loadTaskFacts(ctx)
+	facts, vd, err := s.loadTicketFacts(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -737,11 +737,11 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 			base = plan.ProspectiveBase(t, byURL, stacking)
 		}
 		row := previewRow{
-			TicketURL:   ticketURL,
+			URL:         ticketURL,
 			Label:       label.String(),
 			Reason:      string(reason),
 			Base:        "origin/" + base,
-			BaseVerdict: baseVerdict(base, tasksByBranch, obs, facts, vd, now),
+			BaseVerdict: baseVerdict(base, ticketsByBranch, obs, facts, vd, now),
 		}
 		composed := plan.Compose(t)
 		row.Hash = plan.Hash(composed)
@@ -756,9 +756,9 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLaunch queues one launch intent per requested task, all sharing one fresh group token
+// handleLaunch queues one launch intent per requested ticket, all sharing one fresh group token
 // so the next tick's ApplyLaunchIntents recognises them as a single authorisation. It does not
-// re-check Preview's Refused case: an authorised task whose blocker sits outside the slice
+// re-check Preview's Refused case: an authorised ticket whose blocker sits outside the slice
 // simply stays queued forever with an honest reason (§ A launch).
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -770,38 +770,38 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	}
 	requested := r.Form["task"]
 	if len(requested) == 0 {
-		http.Error(w, "at least one task is required", http.StatusBadRequest)
+		http.Error(w, "at least one ticket is required", http.StatusBadRequest)
 		return
 	}
-	// One `hash` field per launchable row, each naming its own task: an unchecked row still posts
+	// One `hash` field per launchable row, each naming its own ticket: an unchecked row still posts
 	// its hidden hash, so pairing by position would pair the survivors wrong.
 	previewed := make(map[string]string, len(r.Form["hash"]))
 	for _, field := range r.Form["hash"] {
 		ticketURL, hash, ok := strings.Cut(field, " ")
 		if !ok {
-			http.Error(w, fmt.Sprintf("malformed hash field %q, want \"<task> <hash>\"", field),
+			http.Error(w, fmt.Sprintf("malformed hash field %q, want \"<ticket> <hash>\"", field),
 				http.StatusBadRequest)
 			return
 		}
 		previewed[ticketURL] = hash
 	}
 
-	tasks, err := s.store.Tasks(ctx)
+	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	byURL := planTasksByURL(tasks)
+	byURL := planTicketsByURL(tickets)
 	hashes := make(map[string]string, len(requested))
 	for _, ticketURL := range requested {
 		t, ok := byURL[ticketURL]
 		if !ok {
-			http.Error(w, fmt.Sprintf("unknown task %q", ticketURL), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
 			return
 		}
 		hash := plan.Hash(plan.Compose(t))
 		if want, ok := previewed[ticketURL]; ok && want != hash {
-			http.Error(w, fmt.Sprintf("task %s was previewed at hash %s and now composes to %s",
+			http.Error(w, fmt.Sprintf("ticket %s was previewed at hash %s and now composes to %s",
 				ticketURL, want, hash), http.StatusConflict)
 			return
 		}
@@ -824,7 +824,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleVerb queues one verb intent against one task — a handler only ever does this single
+// handleVerb queues one verb intent against one ticket — a handler only ever does this single
 // blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
 // applyKillIntents, push.go's applyRetryPushIntents and verbs.go's re-run/close-pr/
 // remove-worktree appliers). `cancel` is Phase 2 and is not implemented.
@@ -834,9 +834,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	// (plans/command-centre-phase-1.md § Routes). It reads the query string too, which is what
 	// keeps a hand-built `POST /verb?verb=kill&task=...` working unchanged.
 	verb := r.FormValue("verb")
-	taskURL := r.FormValue("task")
-	if verb == "" || taskURL == "" {
-		http.Error(w, "verb and task are both required", http.StatusBadRequest)
+	ticketURL := r.FormValue("task")
+	if verb == "" || ticketURL == "" {
+		http.Error(w, "verb and ticket are both required", http.StatusBadRequest)
 		return
 	}
 	if !supportedVerbs[verb] {
@@ -844,17 +844,17 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := s.store.Tasks(ctx)
+	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if _, ok := planTasksByURL(tasks)[taskURL]; !ok {
-		http.Error(w, fmt.Sprintf("unknown task %q", taskURL), http.StatusBadRequest)
+	if _, ok := planTicketsByURL(tickets)[ticketURL]; !ok {
+		http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.QueueVerbIntent(ctx, taskURL, verb, s.now()); err != nil {
+	if err := s.store.QueueVerbIntent(ctx, ticketURL, verb, s.now()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -871,10 +871,10 @@ func randomGroup() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func planTasksByURL(tasks []Task) map[string]plan.Task {
-	byURL := make(map[string]plan.Task, len(tasks))
-	for _, t := range tasks {
-		byURL[t.TicketURL] = planTask(t)
+func planTicketsByURL(tickets []Ticket) map[string]plan.Ticket {
+	byURL := make(map[string]plan.Ticket, len(tickets))
+	for _, t := range tickets {
+		byURL[t.URL] = planTicket(t)
 	}
 	return byURL
 }
@@ -887,9 +887,9 @@ func prsByBranch(obs Observation) map[string]plan.PRState {
 	return prs
 }
 
-func planTask(t Task) plan.Task {
-	return plan.Task{
-		TicketURL: t.TicketURL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,
+func planTicket(t Ticket) plan.Ticket {
+	return plan.Ticket{
+		URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,
 	}
 }
 
@@ -922,10 +922,10 @@ func workspaceName(dataDir string) string {
 	return filepath.Base(dataDir)
 }
 
-func liveAgents(tasks []Task, obs Observation) int {
+func liveAgents(tickets []Ticket, obs Observation) int {
 	live := 0
-	for _, t := range tasks {
-		if obs.Runs[t.TicketURL].Alive {
+	for _, t := range tickets {
+		if obs.Runs[t.URL].Alive {
 			live++
 		}
 	}

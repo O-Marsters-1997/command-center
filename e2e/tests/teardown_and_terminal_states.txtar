@@ -34,8 +34,8 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-7
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-3
 exec cc request GET /events
-stdout -count=2 '"TaskURL":"sandbox://CC-7","Kind":"run_launched"'
-stdout '"TaskURL":"sandbox://CC-7","Kind":"pushed"'
+stdout -count=2 '"TicketURL":"sandbox://CC-7","Kind":"run_launched"'
+stdout '"TicketURL":"sandbox://CC-7","Kind":"pushed"'
 
 # Swap the fixture: CC-1's PR is now merged, CC-3's is open (which unlocks CC-4), CC-7's is open.
 cc-fake-gh teardown-mid
@@ -61,7 +61,7 @@ exec cc tick --count 1
 ! exists $WORK/repo-cc-1
 grep -count=1 'remove --force cc-1' $WORK/tp.log
 exec cc request GET /events
-stdout '"TaskURL":"sandbox://CC-1","Kind":"worktree_removed"'
+stdout '"TicketURL":"sandbox://CC-1","Kind":"worktree_removed"'
 
 # CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
 cc-fake-gh teardown-late

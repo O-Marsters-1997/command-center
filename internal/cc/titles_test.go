@@ -14,11 +14,11 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
-		{TicketURL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
+	tickets := []cc.Ticket{
+		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
+		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
@@ -27,7 +27,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 		ObservedAt: at,
 		Titles: map[string]string{
 			"https://github.com/owner/repo/issues/100": "Put each ticket's issue title on its row",
-			"https://github.com/owner/repo/issues/999": "An issue no task on the board is working on",
+			"https://github.com/owner/repo/issues/999": "An issue no ticket on the board is working on",
 		},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
@@ -36,11 +36,11 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	page := boardFor(t, store)
 
-	if got, want := rowTicket(t, page, tasks[0].TicketURL),
+	if got, want := rowTicket(t, page, tickets[0].URL),
 		"#100 Put each ticket&#39;s issue title on its row"; got != want {
 		t.Errorf("titled row's ticket cell = %q, want %q", got, want)
 	}
-	if got, want := rowTicket(t, page, tasks[1].TicketURL), "#101"; got != want {
+	if got, want := rowTicket(t, page, tickets[1].URL), "#101"; got != want {
 		t.Errorf("untitled row's ticket cell = %q, want %q (its number alone)", got, want)
 	}
 }

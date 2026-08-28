@@ -161,16 +161,16 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 		return nil
 	}
 
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
 
 	now := l.now()
 	for _, intent := range intents {
-		if run, ok := latest[intent.TaskID]; ok && run.Pgid != nil && !run.HasOutcome {
+		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
-				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TaskID, *run.Pgid, err)
+				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
 			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
@@ -192,11 +192,11 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 		return nil
 	}
 
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 
 	now := l.now()
 	for _, run := range pending {
@@ -204,11 +204,11 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 		if err != nil {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
-		obs.Runs[run.TaskID] = RunObservation{Alive: alive}
+		obs.Runs[run.TicketID] = RunObservation{Alive: alive}
 		if alive {
 			continue
 		}
-		if err := l.disposeRun(ctx, run, byTicket[run.TaskID], obs, now); err != nil {
+		if err := l.disposeRun(ctx, run, byTicket[run.TicketID], obs, now); err != nil {
 			return err
 		}
 	}
@@ -217,9 +217,9 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 
 // disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
-func (l *Loop) disposeRun(ctx context.Context, run PendingRun, task Task, obs Observation, now time.Time) error {
+func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, obs Observation, now time.Time) error {
 	commits := 0
-	if worktreePath := obs.Worktrees[task.Branch]; worktreePath != "" && run.BaselineSHA != "" {
+	if worktreePath := obs.Worktrees[ticket.Branch]; worktreePath != "" && run.BaselineSHA != "" {
 		var err error
 		commits, err = CommitsSince(ctx, worktreePath, run.BaselineSHA)
 		if err != nil {
@@ -236,14 +236,14 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, task Task, obs Ob
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
 	return l.store.AppendEvent(ctx, Event{
-		At: now, TaskURL: task.TicketURL, Kind: eventRunDisposed, Detail: outcome.String(),
+		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
 	})
 }
 
 // launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this
 // tick, under max_agents applied globally over every repo's unlock results.
 func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
@@ -251,28 +251,28 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	latest, err := l.store.LatestRunsByTask(ctx)
+	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
 	}
 
 	stacking := stackingByRepo(l.cfg.Repos)
-	byURL := planTasksByURL(tasks)
+	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
-	candidates := make([]plan.LaunchCandidate, 0, len(tasks))
-	unlocks := make(map[string]plan.Unlock, len(tasks))
-	for _, t := range tasks {
-		pt := planTask(t)
+	candidates := make([]plan.LaunchCandidate, 0, len(tickets))
+	unlocks := make(map[string]plan.Unlock, len(tickets))
+	for _, t := range tickets {
+		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stacking[t.Repo])
-		unlocks[t.TicketURL] = unlock
+		unlocks[t.URL] = unlock
 
-		hash, isAuthorised := authorisedHashes[t.TicketURL]
-		_, hasRun := latest[t.TicketURL]
+		hash, isAuthorised := authorisedHashes[t.URL]
+		_, hasRun := latest[t.URL]
 		promptHashMatches := isAuthorised && hash == plan.Hash(plan.Compose(pt))
 		candidates = append(candidates, plan.LaunchCandidate{
-			TicketURL:         t.TicketURL,
+			URL:               t.URL,
 			Unlock:            unlock,
 			Authorised:        isAuthorised,
 			PromptHashMatches: promptHashMatches,
@@ -286,14 +286,14 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		return nil
 	}
 
-	byTicket := tasksByTicket(tasks)
+	byTicket := ticketsByURL(tickets)
 	for _, ticketURL := range toLaunch {
-		task := byTicket[ticketURL]
+		ticket := byTicket[ticketURL]
 		spec := launchSpec{
-			task:       task,
+			ticket:     ticket,
 			baseBranch: unlocks[ticketURL].BaseBranch,
 			promptHash: authorisedHashes[ticketURL],
-			repoPath:   repoPaths[task.Repo],
+			repoPath:   repoPaths[ticket.Repo],
 		}
 		if err := l.cutAndSpawn(ctx, spec); err != nil {
 			return err
@@ -302,7 +302,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// currentlyRunning counts tasks with a live-or-undisposed run: the slots LaunchPlan's max_agents
+// currentlyRunning counts tickets with a live-or-undisposed run: the slots LaunchPlan's max_agents
 // cap must subtract before deciding how many more to start this tick.
 func currentlyRunning(latest map[string]RunSummary) int {
 	n := 0
@@ -314,54 +314,54 @@ func currentlyRunning(latest map[string]RunSummary) int {
 	return n
 }
 
-// tickCheckingWaits bumps every task's checking-wait tick count by one. It runs only after a
+// tickCheckingWaits bumps every ticket's checking-wait tick count by one. It runs only after a
 // successful observe (RunOnce returns before reaching it otherwise), which is what makes the
 // count track ticks whose observe phase succeeded and never wall clock (docs/designs/command-centre-design.md
 // § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.now().
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
-	tasks, err := l.store.Tasks(ctx)
+	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
 	}
-	urls := make([]string, len(tasks))
-	for i, t := range tasks {
-		urls[i] = t.TicketURL
+	urls := make([]string, len(tickets))
+	for i, t := range tickets {
+		urls[i] = t.URL
 	}
 	return l.store.IncrementCheckingTicks(ctx, urls)
 }
 
-func tasksByTicket(tasks []Task) map[string]Task {
-	byTicket := make(map[string]Task, len(tasks))
-	for _, t := range tasks {
-		byTicket[t.TicketURL] = t
+func ticketsByURL(tickets []Ticket) map[string]Ticket {
+	byURL := make(map[string]Ticket, len(tickets))
+	for _, t := range tickets {
+		byURL[t.URL] = t
 	}
-	return byTicket
+	return byURL
 }
 
 // launchSpec is one candidate's cut-and-spawn inputs, gathered so cutAndSpawn's own body reads
 // as the spawn sequence rather than a map-lookup dance.
 type launchSpec struct {
-	task       Task
+	ticket     Ticket
 	baseBranch string
 	promptHash string
 	repoPath   string
 }
 
-// cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a task with no
+// cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a ticket with no
 // worktree yet: cut, then hand off to spawnRun. tp new failing is `cut failed`, not a crash —
 // one INSERT, no pgid, ever, and move on to the next candidate rather than failing the tick.
 func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
-	branch := spec.task.Branch
+	branch := spec.ticket.Branch
 	baseRef := "origin/" + spec.baseBranch
 
 	if err := tp.New(ctx, spec.repoPath, branch, baseRef); err != nil {
-		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.task.TicketURL, spec.promptHash, l.now())
+		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.ticket.URL, spec.promptHash, l.now())
 		return insertErr
 	}
 
 	baselineSHA, err := BranchTip(ctx, spec.repoPath, branch)
 	if err != nil {
-		return fmt.Errorf("read baseline for %s: %w", spec.task.TicketURL, err)
+		return fmt.Errorf("read baseline for %s: %w", spec.ticket.URL, err)
 	}
 
 	worktrees, err := Worktrees(ctx, spec.repoPath)
@@ -373,7 +373,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.task, worktreePath, baselineSHA, spec.promptHash, "")
+	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "")
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
@@ -386,19 +386,19 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, task Task, worktreePath, baselineSHA, promptHash, oldPromptPath string,
+	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath string,
 ) error {
-	prompt := plan.Compose(planTask(task))
+	prompt := plan.Compose(planTicket(ticket))
 
-	runID, err := l.store.InsertRunSkeleton(ctx, task.TicketURL, "agent", baselineSHA, promptHash)
+	runID, err := l.store.InsertRunSkeleton(ctx, ticket.URL, "agent", baselineSHA, promptHash)
 	if err != nil {
 		return err
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	body, err := gh.IssueBody(ctx, worktreePath, task.TicketURL)
+	body, err := gh.IssueBody(ctx, worktreePath, ticket.URL)
 	if err != nil {
-		return fmt.Errorf("fetch ticket body for %s: %w", task.TicketURL, err)
+		return fmt.Errorf("fetch ticket body for %s: %w", ticket.URL, err)
 	}
 	if body != "" {
 		prompt += "\n\n## Ticket\n\n" + body
@@ -409,7 +409,7 @@ func (l *Loop) spawnRun(
 
 	spawnPrompt := prompt
 	if oldPromptPath != "" {
-		preamble, err := l.reRunDiffPreamble(ctx, task, oldPromptPath, prompt, runID)
+		preamble, err := l.reRunDiffPreamble(ctx, ticket, oldPromptPath, prompt, runID)
 		if err != nil {
 			return err
 		}
@@ -445,17 +445,17 @@ func (l *Loop) spawnRun(
 		return err
 	}
 	return l.store.AppendEvent(ctx, Event{
-		At: startedAt, TaskURL: task.TicketURL, Kind: eventRunLaunched,
+		At: startedAt, TicketURL: ticket.URL, Kind: eventRunLaunched,
 		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
 	})
 }
 
 func (l *Loop) reRunDiffPreamble(
-	ctx context.Context, task Task, oldPromptPath, newPrompt string, runID int64,
+	ctx context.Context, ticket Ticket, oldPromptPath, newPrompt string, runID int64,
 ) (string, error) {
 	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
 		return "", l.store.AppendEvent(ctx, Event{
-			At: l.now(), TaskURL: task.TicketURL, Kind: eventReRunNoDiff,
+			At: l.now(), TicketURL: ticket.URL, Kind: eventReRunNoDiff,
 			Detail: fmt.Sprintf("no prompt file at %s", oldPromptPath),
 		})
 	} else if err != nil {
@@ -464,7 +464,7 @@ func (l *Loop) reRunDiffPreamble(
 
 	diff, err := unifiedDiff(ctx, oldPromptPath, newPrompt)
 	if err != nil {
-		return "", fmt.Errorf("diff re-run prompt for %s: %w", task.TicketURL, err)
+		return "", fmt.Errorf("diff re-run prompt for %s: %w", ticket.URL, err)
 	}
 	if diff == "" {
 		return "", nil

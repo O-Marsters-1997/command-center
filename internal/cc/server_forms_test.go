@@ -57,7 +57,7 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	assertGolden(t, goldenVerbsBoard, []byte(got))
 }
 
-func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
+func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
@@ -88,6 +88,6 @@ func TestLaunchAcceptsRepeatedFormEncodedTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
-		t.Fatalf("launch memberships = %v, want both tasks authorised", memberships)
+		t.Fatalf("launch memberships = %v, want both tickets authorised", memberships)
 	}
 }

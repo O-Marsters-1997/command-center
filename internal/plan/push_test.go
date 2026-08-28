@@ -61,26 +61,26 @@ func TestPushPlan(t *testing.T) {
 	}{
 		{
 			name:       "never pushed and has a tip is selected",
-			candidates: []plan.PushCandidate{{TicketURL: "sandbox://CC-1", LocalTip: "abc"}},
+			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "abc"}},
 			want:       []string{"sandbox://CC-1"},
 		},
 		{
 			name: "tip unchanged since the last push is not re-selected",
 			candidates: []plan.PushCandidate{
-				{TicketURL: "sandbox://CC-1", LocalTip: "abc", LastPushedTip: "abc"},
+				{URL: "sandbox://CC-1", LocalTip: "abc", LastPushedTip: "abc"},
 			},
 			want: nil,
 		},
 		{
 			name: "tip moved past the last push is selected again",
 			candidates: []plan.PushCandidate{
-				{TicketURL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"},
+				{URL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"},
 			},
 			want: []string{"sandbox://CC-1"},
 		},
 		{
 			name:       "no local tip yet is never selected",
-			candidates: []plan.PushCandidate{{TicketURL: "sandbox://CC-1"}},
+			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1"}},
 			want:       nil,
 		},
 	}

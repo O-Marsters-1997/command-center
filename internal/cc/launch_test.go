@@ -17,12 +17,12 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 	ctx := t.Context()
 	dbPath := filepath.Join(t.TempDir(), "cc.db")
 	store := openStore(t, dbPath)
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
-		t.Fatalf("UpsertTasks: %v", err)
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -42,7 +42,7 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
-		t.Errorf("memberships = %+v, want both tasks active", memberships)
+		t.Errorf("memberships = %+v, want both tickets active", memberships)
 	}
 
 	events, err := store.Events(ctx)
@@ -70,12 +70,12 @@ func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
-		t.Fatalf("UpsertTasks: %v", err)
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -103,8 +103,8 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +128,7 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 	}
 }
 
-func TestLaunchMembershipsExcludesUnauthorisedTasks(t *testing.T) {
+func TestLaunchMembershipsExcludesUnauthorisedTickets(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -148,18 +148,18 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
-		{TicketURL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if err := store.QueueLaunchIntent(ctx, taskID, "hash", "group-a", at); err != nil {
+	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
+		if err := store.QueueLaunchIntent(ctx, ticketID, "hash", "group-a", at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -179,15 +179,15 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 	if err != nil {
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if !memberships[taskID].Cancelled {
+	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
+		if !memberships[ticketID].Cancelled {
 			t.Errorf("memberships = %+v, want %s cancelled too: every sibling, not just the one named",
-				memberships, taskID)
+				memberships, ticketID)
 		}
 	}
 }
 
-func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
+func TestCancelLaunchesForOnAnUnauthorisedTicketCancelsNothing(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -202,27 +202,27 @@ func TestCancelLaunchesForOnAnUnauthorisedTaskCancelsNothing(t *testing.T) {
 	}
 }
 
-func TestLaunchMembershipsExcludeARelaunchedTaskFromCancelled(t *testing.T) {
+func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	task := cc.Task{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTasks(ctx, []cc.Task{task}); err != nil {
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CancelLaunchesFor(ctx, task.TicketURL); err != nil {
+	if _, err := store.CancelLaunchesFor(ctx, ticket.URL); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueLaunchIntent(ctx, task.TicketURL, "hash-2", "group-b", at.Add(3*time.Second)); err != nil {
+	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-2", "group-b", at.Add(3*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(4*time.Second)); err != nil {
@@ -233,8 +233,8 @@ func TestLaunchMembershipsExcludeARelaunchedTaskFromCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if got := memberships[task.TicketURL]; got.Cancelled || got.LaunchID == 0 {
-		t.Errorf("membership = %+v, want %s active under its new launch, not cancelled", got, task.TicketURL)
+	if got := memberships[ticket.URL]; got.Cancelled || got.LaunchID == 0 {
+		t.Errorf("membership = %+v, want %s active under its new launch, not cancelled", got, ticket.URL)
 	}
 }
 
@@ -243,17 +243,17 @@ func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	tasks := []cc.Task{
-		{TicketURL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{TicketURL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}
-	if err := store.UpsertTasks(ctx, tasks); err != nil {
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, taskID := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
-		if err := store.QueueLaunchIntent(ctx, taskID, "hash", "group-a", at); err != nil {
+	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+		if err := store.QueueLaunchIntent(ctx, ticketID, "hash", "group-a", at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -291,7 +291,7 @@ func launchMemberHashes(t *testing.T, dbPath string) map[string]string {
 	}
 	defer func() { _ = db.Close() }()
 
-	rows, err := db.Query(`SELECT task_id, prompt_hash FROM launch_members`)
+	rows, err := db.Query(`SELECT ticket_id, prompt_hash FROM launch_members`)
 	if err != nil {
 		t.Fatalf("query launch_members: %v", err)
 	}
@@ -299,11 +299,11 @@ func launchMemberHashes(t *testing.T, dbPath string) map[string]string {
 
 	hashes := map[string]string{}
 	for rows.Next() {
-		var taskID, hash string
-		if err := rows.Scan(&taskID, &hash); err != nil {
+		var ticketID, hash string
+		if err := rows.Scan(&ticketID, &hash); err != nil {
 			t.Fatalf("scan launch_members row: %v", err)
 		}
-		hashes[taskID] = hash
+		hashes[ticketID] = hash
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate launch_members: %v", err)

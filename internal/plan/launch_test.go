@@ -22,7 +22,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "an unlocked authorised hash-matching candidate with no prior run launches",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
 			},
 			maxAgents: 1,
 			want:      []string{"sandbox://CC-1"},
@@ -30,7 +30,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "a locked candidate is excluded",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: blocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: blocked, Authorised: true, PromptHashMatches: true},
 			},
 			maxAgents: 1,
 			want:      nil,
@@ -38,7 +38,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "an unauthorised candidate is excluded",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: false, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: false, PromptHashMatches: true},
 			},
 			maxAgents: 1,
 			want:      nil,
@@ -46,7 +46,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "a mismatched prompt hash is excluded",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: false},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: false},
 			},
 			maxAgents: 1,
 			want:      nil,
@@ -54,7 +54,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "a candidate with a prior run is excluded: LaunchPlan never re-runs",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, HasRun: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true, HasRun: true},
 			},
 			maxAgents: 1,
 			want:      nil,
@@ -62,9 +62,9 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "eligible candidates are capped at maxAgents minus currentlyRunning, in input order",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
-				{TicketURL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
-				{TicketURL: "sandbox://CC-3", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-3", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
 			},
 			currentlyRunning: 1,
 			maxAgents:        2,
@@ -74,7 +74,7 @@ func TestLaunchPlan(t *testing.T) {
 			name: "a candidate whose base already carries a conflict is excluded",
 			candidates: []plan.LaunchCandidate{
 				{
-					TicketURL: "sandbox://CC-2", Unlock: unlocked, Authorised: true,
+					URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true,
 					PromptHashMatches: true, ConflictedBase: "cc-1-first",
 				},
 			},
@@ -84,7 +84,7 @@ func TestLaunchPlan(t *testing.T) {
 		{
 			name: "no free slots launches nothing",
 			candidates: []plan.LaunchCandidate{
-				{TicketURL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
 			},
 			currentlyRunning: 1,
 			maxAgents:        1,

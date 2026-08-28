@@ -32,7 +32,7 @@ var destructiveVerbs = map[string]destruction{
 }
 
 type confirmView struct {
-	TicketURL string
+	URL       string
 	Verb      string
 	Effect    string
 	RiskLabel string
@@ -41,9 +41,9 @@ type confirmView struct {
 
 func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 	verb := r.URL.Query().Get("verb")
-	taskURL := r.URL.Query().Get("task")
-	if verb == "" || taskURL == "" {
-		http.Error(w, "verb and task are both required", http.StatusBadRequest)
+	ticketURL := r.URL.Query().Get("task")
+	if verb == "" || ticketURL == "" {
+		http.Error(w, "verb and ticket are both required", http.StatusBadRequest)
 		return
 	}
 	destroys, ok := destructiveVerbs[verb]
@@ -57,15 +57,15 @@ func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	target, ok := findRow(view, taskURL)
+	target, ok := findRow(view, ticketURL)
 	if !ok {
-		http.Error(w, fmt.Sprintf("unknown task %q", taskURL), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	confirm := confirmView{
-		TicketURL: target.TicketURL,
+		URL:       target.URL,
 		Verb:      verb,
 		Effect:    destroys.effect,
 		RiskLabel: destroys.riskLabel,
@@ -76,13 +76,13 @@ func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func findRow(view pageView, taskURL string) (row, bool) {
+func findRow(view pageView, ticketURL string) (row, bool) {
 	for _, g := range view.Groups {
-		if g.Root != nil && g.Root.TicketURL == taskURL {
+		if g.Root != nil && g.Root.URL == ticketURL {
 			return *g.Root, true
 		}
 		for _, child := range g.Children {
-			if child.TicketURL == taskURL {
+			if child.URL == ticketURL {
 				return child, true
 			}
 		}
