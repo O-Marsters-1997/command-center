@@ -46,6 +46,9 @@ type Repo struct {
 	MergifySHA  string            `toml:"mergify_sha"`
 	Deny        []string          `toml:"deny"`
 	Checks      verdict.Predicate `toml:"checks"`
+	// VerifyCommand is the argv a clean refresh or restack is verified with before the row is
+	// offered as sound (issue #110); empty means the repo opted out.
+	VerifyCommand []string `toml:"verify_command"`
 	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
 	// downstream reads this and derives no path of its own. Not a config key.
 	Checkout string `toml:"-"`
@@ -171,6 +174,14 @@ func compatCheckByRepo(repos []Repo) map[string]string {
 	m := make(map[string]string, len(repos))
 	for _, r := range repos {
 		m[r.Name] = r.CompatCheck
+	}
+	return m
+}
+
+func verifyCommandByRepo(repos []Repo) map[string][]string {
+	m := make(map[string][]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.VerifyCommand
 	}
 	return m
 }

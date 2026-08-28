@@ -47,6 +47,11 @@ func TestStateDecisions(t *testing.T) {
 			tone:  "stop",
 		},
 		{
+			state: plan.VerificationFailed,
+			want:  []string{plan.VerbRetryPush, plan.VerbReRun},
+			tone:  "stop",
+		},
+		{
 			state: plan.WaitingOnProducerDeploy,
 			want:  []string{plan.VerbReCheck, plan.VerbReRun},
 			tone:  "wait",

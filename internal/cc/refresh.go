@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -13,22 +15,24 @@ import (
 const refreshVerb = plan.VerbRefresh
 
 const (
-	eventRefreshRefused    = "refresh_refused"
-	eventRefreshConflicted = "refresh_conflicted"
-	eventRefreshed         = "refreshed"
-	eventRestacked         = "restacked"
+	eventRefreshRefused     = "refresh_refused"
+	eventRefreshConflicted  = "refresh_conflicted"
+	eventRefreshed          = "refreshed"
+	eventRestacked          = "restacked"
+	eventVerificationFailed = "verification_failed"
 )
 
-// RefreshFact is a ticket's outstanding refused fast-forward, derived from the latest
-// refresh_refused event since its last recorded push, so the next push clears it
-// (docs/designs/command-centre-design.md § 4a).
+// RefreshFact is a ticket's outstanding refresh-domain problem since its last recorded push: a
+// refused fast-forward, or a clean merge/restack whose verify command then failed (issue #110).
 type RefreshFact struct {
-	Refused bool
-	Reason  string
+	Refused                  bool
+	Reason                   string
+	VerificationFailed       bool
+	VerificationFailedDetail string
 }
 
-// RefreshFacts returns every ticket's outstanding refused fast-forward, keyed by ticket URL.
-// A refusal gates the automatic pass's retry; the refresh verb ignores it
+// RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL. A
+// refusal or a verification failure gates the automatic pass's retry; the refresh verb ignores it
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error) {
 	outcomes, err := s.latestRefreshOutcomes(ctx)
@@ -37,8 +41,11 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error
 	}
 	facts := make(map[string]RefreshFact, len(outcomes))
 	for ticketID, o := range outcomes {
-		if o.kind == eventRefreshRefused {
+		switch o.kind {
+		case eventRefreshRefused:
 			facts[ticketID] = RefreshFact{Refused: true, Reason: o.detail}
+		case eventVerificationFailed:
+			facts[ticketID] = RefreshFact{VerificationFailed: true, VerificationFailedDetail: o.detail}
 		}
 	}
 	return facts, nil
@@ -46,8 +53,9 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error
 
 type refreshOutcome struct{ kind, detail string }
 
-// latestRefreshOutcomes returns each ticket's latest refresh outcome the automatic pass never
-// retries, keyed by ticket URL, and the push that clears it
+// latestRefreshOutcomes returns each ticket's latest refresh-domain event since its last recorded
+// push, keyed by ticket URL: a failure the automatic pass never retries, or a later success that
+// supersedes an earlier failure without needing its own push
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
 	rows, err := s.db.QueryContext(ctx, `
@@ -59,10 +67,10 @@ func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOu
 			LEFT JOIN (
 				SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
 			) p ON p.ticket_id = e2.ticket_id
-			WHERE e2.kind IN (?, ?) AND e2.at > COALESCE(p.pushed_at, '')
+			WHERE e2.kind IN (?, ?, ?, ?, ?) AND e2.at > COALESCE(p.pushed_at, '')
 			GROUP BY e2.ticket_id
 		) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id`,
-		eventRefreshRefused, eventRefreshConflicted)
+		eventRefreshRefused, eventRefreshConflicted, eventVerificationFailed, eventRefreshed, eventRestacked)
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}
@@ -88,6 +96,7 @@ type refreshContext struct {
 	stacking  map[string]bool
 	prs       map[string]plan.PRState
 	repoPaths map[string]string
+	verifyCmd map[string][]string
 	pushRows  map[string]PushRow
 	obs       Observation
 }
@@ -102,6 +111,7 @@ func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Obse
 		stacking:  stackingByRepo(l.cfg.Repos),
 		prs:       prsByBranch(obs),
 		repoPaths: repoPathsByName(l.cfg.Repos),
+		verifyCmd: verifyCommandByRepo(l.cfg.Repos),
 		pushRows:  pushRows,
 		obs:       obs,
 	}, nil
@@ -143,8 +153,9 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 }
 
 // autoRefresh sweeps every pushed, base-moved row that no live run or unresolved merge bars
-// (inv. 4) and whose last refresh neither refused nor conflicted, so a human's abort is not
-// undone by the next tick re-running the same merge (docs/designs/command-centre-design.md § 4a).
+// (inv. 4) and whose last refresh-domain attempt neither refused, conflicted nor failed
+// verification, so a human's abort is not undone by the next tick re-running the same merge
+// (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) autoRefresh(
 	ctx context.Context, tickets []Ticket, rc refreshContext, requested map[string]bool, now time.Time,
 ) error {
@@ -191,9 +202,9 @@ func baseMoved(row PushRow, obs Observation, repo string) bool {
 	return row.BaseBranch != "" && obs.BranchTips[baseTipKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
-// refreshOne fast-forwards one ticket's own branch, then advances it onto its base. A refused
-// fast-forward records refresh_refused and stops; a conflict is left mid-merge for a human
-// (docs/designs/command-centre-design.md § 4a).
+// refreshOne fast-forwards one ticket's own branch, advances it onto its base, then verifies the
+// result. A refused fast-forward records refresh_refused and stops; a conflict is left mid-merge
+// for a human (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) refreshOne(
 	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time,
 ) error {
@@ -235,9 +246,38 @@ func (l *Loop) refreshOne(
 	if restacked {
 		kind = eventRestacked
 	}
-	return l.store.AppendEvent(ctx, Event{
+	if err := l.store.AppendEvent(ctx, Event{
 		At: now, TicketURL: ticket.URL, Kind: kind,
 		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
+	}); err != nil {
+		return err
+	}
+	return l.verifyOne(ctx, ticket, worktreePath, rc.verifyCmd[ticket.Repo], now)
+}
+
+const maxVerifyDetail = 4000
+
+// ponytail: runs synchronously in the tick, like refresh's own git calls -- if a slow build ever
+// measurably stalls the 15s loop, move it onto the async Runner spawnRun already uses.
+func (l *Loop) verifyOne(
+	ctx context.Context, ticket Ticket, worktreePath string, argv []string, now time.Time,
+) error {
+	if len(argv) == 0 {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Dir = worktreePath
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	detail := strings.TrimSpace(string(out))
+	if len(detail) > maxVerifyDetail {
+		detail = detail[:maxVerifyDetail] + " …(truncated)"
+	}
+	return l.store.AppendEvent(ctx, Event{
+		At: now, TicketURL: ticket.URL, Kind: eventVerificationFailed,
+		Detail: fmt.Sprintf("%s: %s: %s", strings.Join(argv, " "), err, detail),
 	})
 }
 
