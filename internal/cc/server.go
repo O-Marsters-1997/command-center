@@ -91,6 +91,7 @@ type Server struct {
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
 	dataDir           string
+	spend             *spendCache
 	mux               *http.ServeMux
 }
 
@@ -99,7 +100,7 @@ type Server struct {
 // name are all per-repo config, and dataDir is the fleet the header names.
 func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, dataDir: dataDir,
+		store: store, now: now, dataDir: dataDir, spend: newSpendCache(),
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -184,6 +185,9 @@ type row struct {
 	ElapsedPercent int
 	LogPath        string
 	CancelCount    int
+	SpendTokens    int
+	SpendUSD       float64
+	SpendSettled   bool
 	// BaselineSHA and Checks are the detail fragment's, not the board's: the row is derived once
 	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
 	BaselineSHA string
@@ -310,6 +314,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 
 	now := s.now()
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
+	applySpend(rows, s.spend)
 	applyViewState(rows, params)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),

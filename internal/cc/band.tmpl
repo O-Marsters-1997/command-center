@@ -48,10 +48,12 @@
 
   <article class="card">
     <h2>spend</h2>
-    <!-- Always the written empty state: nothing accrues a run's spend yet, and only the
-         stream-json parser a later phase adds ever fills this card
-         (docs/prds/prd-fleet-view.md § Phase 4). -->
+    {{if eq .Band.Spend.Count 0}}
     <p class="empty">no runs have completed this session yet</p>
+    {{else}}
+    <p class="headline">${{printf "%.2f" .Band.Spend.Total}}</p>
+    <p>{{.Band.Spend.Count}} runs · {{.Band.Spend.Failures}} failed · avg ${{printf "%.2f" .Band.Spend.Average}}</p>
+    {{end}}
   </article>
 </section>
 {{- end}}
