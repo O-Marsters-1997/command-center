@@ -64,29 +64,31 @@ func kindShown(mode string, k agentlog.Kind) bool {
 
 // phaseView is one agentlog.Phase, its events already filtered and rendered.
 type phaseView struct {
-	Skill string
-	Note  string
-	At    string
-	Lines []template.HTML
+	Skill string          `json:"skill"`
+	Note  string          `json:"note"`
+	At    string          `json:"at"`
+	Lines []template.HTML `json:"lines"`
 }
 
 type logFilterLink struct {
-	Label  string
-	Path   string
-	Active bool
+	Label  string `json:"label"`
+	Path   string `json:"path"`
+	Active bool   `json:"active"`
 }
 
-// logDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl.
+// logDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl. It is also
+// row's own Log field, so these tags are graph.json's shape too (docs/prds/prd-fleet-view.md §
+// One derivation).
 type logDetail struct {
-	Path       string
-	Streaming  bool
-	Lines      int
-	PhaseCount int
-	Phases     []phaseView
+	Path       string      `json:"path"`
+	Streaming  bool        `json:"streaming"`
+	Lines      int         `json:"lines"`
+	PhaseCount int         `json:"phase_count"`
+	Phases     []phaseView `json:"phases"`
 	// Result is the closing line's text, empty until the run has one.
-	Result     string
-	Filters    []logFilterLink
-	StreamPath string
+	Result     string          `json:"result"`
+	Filters    []logFilterLink `json:"filters"`
+	StreamPath string          `json:"stream_path"`
 }
 
 // buildLogDetail parses path's whole run and renders it under mode, ready for the selected row's

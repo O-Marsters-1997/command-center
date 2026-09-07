@@ -107,6 +107,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /board", s.handleBoard)
+	mux.HandleFunc("GET /graph.json", s.handleGraph)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
@@ -144,78 +145,80 @@ func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// row's json tags are what GET /graph.json serves: the route marshals []group verbatim, so this
+// is the graph island's only view of the data too (docs/prds/prd-fleet-view.md § One derivation).
 type row struct {
-	URL string
+	URL string `json:"url"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
-	Title      string
-	State      string
-	Reason     string
-	Tone       string
-	Unattended bool
-	Alive      bool
+	Title      string `json:"title"`
+	State      string `json:"state"`
+	Reason     string `json:"reason"`
+	Tone       string `json:"tone"`
+	Unattended bool   `json:"unattended"`
+	Alive      bool   `json:"alive"`
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
-	Verbs        []string
-	Branch       string
-	PendingVerbs []string
-	Base         string
+	Verbs        []string `json:"verbs"`
+	Branch       string   `json:"branch"`
+	PendingVerbs []string `json:"pending_verbs"`
+	Base         string   `json:"base"`
 	// BaseVerdict is the base's own CI verdict label ("review_me"/"needs_you"/"checking"/
 	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
 	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
-	BaseVerdict string
+	BaseVerdict string `json:"base_verdict"`
 	// StackDepth and MergeOrder are the row's distance from a root and the order it merges in,
 	// bottom-up — the app never merges a PR, so this is the only place the order is shown
 	// (docs/prds/prd-command-centre.md § The page → stack order).
-	StackDepth int
-	MergeOrder int
+	StackDepth int `json:"stack_depth"`
+	MergeOrder int `json:"merge_order"`
 	// Warning is invariant 2's hazard, named on the row: a non-main-based PR carrying
 	// ready-to-merge would squash-merge into its parent branch with the parent's own checks
 	// unseen, and empty otherwise. The app never applies that label itself.
-	Warning  string
-	Blocking []string
-	Worktree string
-	PRNumber int
-	PRState  string
+	Warning  string   `json:"warning"`
+	Blocking []string `json:"blocking"`
+	Worktree string   `json:"worktree"`
+	PRNumber int      `json:"pr_number"`
+	PRState  string   `json:"pr_state"`
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a ticket with no run yet.
-	Pgid           string
-	Elapsed        string
-	ElapsedSeconds int
-	ElapsedPercent int
-	LogPath        string
-	CancelCount    int
-	SpendTokens    int
-	SpendUSD       float64
-	SpendSettled   bool
+	Pgid           string  `json:"pgid"`
+	Elapsed        string  `json:"elapsed"`
+	ElapsedSeconds int     `json:"elapsed_seconds"`
+	ElapsedPercent int     `json:"elapsed_percent"`
+	LogPath        string  `json:"log_path"`
+	CancelCount    int     `json:"cancel_count"`
+	SpendTokens    int     `json:"spend_tokens"`
+	SpendUSD       float64 `json:"spend_usd"`
+	SpendSettled   bool    `json:"spend_settled"`
 	// BaselineSHA and Checks are the detail fragment's, not the board's: the row is derived once
 	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
-	BaselineSHA string
-	Checks      []check
+	BaselineSHA string  `json:"baseline_sha"`
+	Checks      []check `json:"checks"`
 	// Draft mirrors the PR's own observed isDraft, not DraftGate's own opinion: a failed gh pr
 	// ready leaves GitHub's real state unchanged, and this must still render honestly.
-	Draft       bool
-	DraftReason string
+	Draft       bool   `json:"draft"`
+	DraftReason string `json:"draft_reason"`
 
 	// Selected is this render's ?sel= row: the only one whose detail <tr> exists at all, so an
 	// unattached hx-preserve id never lingers past the row that grew it
 	// (docs/prds/prd-fleet-view.md § The hx-preserve id is conditional on selection).
-	Selected bool
-	Checked  bool
+	Selected bool `json:"selected"`
+	Checked  bool `json:"checked"`
 	// SelectPath/SelectPush toggle Selected; TogglePath/TogglePush toggle Checked. Each pair is
 	// the board fragment to hx-get and the root path to hx-push-url.
-	SelectPath string
-	SelectPush string
-	TogglePath string
-	TogglePush string
+	SelectPath string `json:"select_path"`
+	SelectPush string `json:"select_push"`
+	TogglePath string `json:"toggle_path"`
+	TogglePush string `json:"toggle_push"`
 	// Log is the parsed run log, set only when Selected (docs/prds/prd-fleet-view.md § The run log).
-	Log logDetail
+	Log logDetail `json:"log"`
 }
 
 type check struct {
-	Name       string
-	Status     string
-	Conclusion string
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
 }
 
 func (r row) Ticket() string { return "#" + path.Base(r.URL) }
@@ -253,8 +256,8 @@ type tickErrorView struct {
 // group is one blocker and the rows waiting on it. A row with no blocker in the ticket set is its
 // own group with a nil Root (docs/prds/prd-operator-surface.md § Reading the board).
 type group struct {
-	Root     *row
-	Children []row
+	Root     *row  `json:"root"`
+	Children []row `json:"children"`
 }
 
 type pageView struct {
@@ -269,6 +272,8 @@ type pageView struct {
 	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
 	// perpetuate this render's view state without the shell being involved.
 	BoardPath string
+	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
+	View string
 }
 
 const observeStaleAfter = 20 * time.Second
@@ -279,6 +284,21 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	s.renderView(w, r, boardFragment)
+}
+
+// handleGraph serves pageView.Groups verbatim: the same []group the board template ranges over,
+// json-tagged rather than reshaped, so the graph island lays out exactly what the board renders
+// (docs/prds/prd-fleet-view.md § One derivation).
+func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
+	view, err := s.render(r.Context(), parseViewParams(r.URL.Query()))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(view.Groups); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *template.Template) {
@@ -323,6 +343,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		Groups:       groupRows(rows),
 		Band:         deriveBand(rows),
 		BoardPath:    params.boardPath(),
+		View:         params.View,
 	}
 	if observed {
 		view.ObserveAge = age(now, obs.ObservedAt)

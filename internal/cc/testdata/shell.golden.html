@@ -36,6 +36,10 @@
     
     <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: 45s ago</span>
     
+    <nav class="view-toggle">
+      <a href="/?view=board" aria-current="page">board</a>
+      <a href="/?view=graph">graph</a>
+    </nav>
     <button type="button" class="theme-toggle" onclick="toggleTheme()">theme</button>
   </header>
   
@@ -97,9 +101,11 @@
   </article>
 </section>
 
+
 <form id="launch" method="get" action="/preview"></form>
 
 <button type="submit" form="launch">launch selected</button>
+
 </main>
 </body>
 </html>
