@@ -91,6 +91,7 @@ type Server struct {
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
 	dataDir           string
+	spend             *spendCache
 	mux               *http.ServeMux
 }
 
@@ -99,7 +100,7 @@ type Server struct {
 // name are all per-repo config, and dataDir is the fleet the header names.
 func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, dataDir: dataDir,
+		store: store, now: now, dataDir: dataDir, spend: newSpendCache(),
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -181,12 +182,15 @@ type row struct {
 	PRState  string   `json:"pr_state"`
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a ticket with no run yet.
-	Pgid           string `json:"pgid"`
-	Elapsed        string `json:"elapsed"`
-	ElapsedSeconds int    `json:"elapsed_seconds"`
-	ElapsedPercent int    `json:"elapsed_percent"`
-	LogPath        string `json:"log_path"`
-	CancelCount    int    `json:"cancel_count"`
+	Pgid           string  `json:"pgid"`
+	Elapsed        string  `json:"elapsed"`
+	ElapsedSeconds int     `json:"elapsed_seconds"`
+	ElapsedPercent int     `json:"elapsed_percent"`
+	LogPath        string  `json:"log_path"`
+	CancelCount    int     `json:"cancel_count"`
+	SpendTokens    int     `json:"spend_tokens"`
+	SpendUSD       float64 `json:"spend_usd"`
+	SpendSettled   bool    `json:"spend_settled"`
 	// BaselineSHA and Checks are the detail fragment's, not the board's: the row is derived once
 	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
 	BaselineSHA string  `json:"baseline_sha"`
@@ -329,6 +333,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 
 	now := s.now()
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
+	applySpend(rows, s.spend)
 	applyViewState(rows, params)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
