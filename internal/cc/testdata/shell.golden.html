@@ -45,6 +45,56 @@
   
 </div>
 <main>
+<section class="band" aria-label="fleet analytics">
+  <article class="card">
+    <h2>state of the fleet</h2>
+    
+    <p class="headline">2/2 yours</p>
+    <div class="segbar">
+      
+      <span class="segbar-segment" data-tone="wait" style="flex-grow: 1"></span>
+      
+      <span class="segbar-segment" data-tone="idle" style="flex-grow: 1"></span>
+      
+    </div>
+    <ul class="legend">
+      
+      <li><span class="pill-disc" data-tone="wait"></span>blocked · 1</li>
+      
+      <li><span class="pill-disc" data-tone="idle"></span>ready · 1</li>
+      
+    </ul>
+    
+  </article>
+
+  <article class="card">
+    <h2>stack depth</h2>
+    
+    <p class="headline">0 deep</p>
+    <ul class="histogram">
+      
+      <li>
+        <span class="meter"><span class="meter-fill" data-tone="idle" style="width: 100%"></span></span>
+        depth 0 · 2
+      </li>
+      
+    </ul>
+    
+  </article>
+
+  <article class="card">
+    <h2>gating checks</h2>
+    
+    <p class="empty">no branch has reported a check yet</p>
+    
+  </article>
+
+  <article class="card">
+    <h2>spend</h2>
+    
+    <p class="empty">no runs have completed this session yet</p>
+  </article>
+</section>
 
 <form id="launch" method="get" action="/preview"></form>
 

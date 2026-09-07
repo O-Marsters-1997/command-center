@@ -23,13 +23,13 @@ exec cc tick --count 1
 cc-fake-gh-head verdict-review-me cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 
 # An uncommitted edit is not a config change: the hash comes from the ref, so the row holds green.
 cp mergify-v2.yml repo/.mergify.yml
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 ! stdout 'check config changed'
 
 # The recorded hash no longer matches what origin/main says -- a green result must be suppressed
@@ -37,15 +37,15 @@ stdout '<td>review_me</td>'
 cc-config verdict-single-task-stale-sha
 exec cc tick --count 1
 exec cc request GET /
-! stdout '<td>review_me</td>'
-stdout '<td>checking</td>'
+! stdout '>review_me</span>'
+stdout '>checking</span>'
 stdout 'check config changed'
 
 # Recording the hash of the file the ref actually holds brings review_me back.
 cc-config verdict-single-task
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 
 -- mergify-v1.yml --
 queue_rules: []

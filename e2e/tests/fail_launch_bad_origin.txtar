@@ -12,5 +12,5 @@ stderr '403'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout 'queued'
-stdout '<td>ready</td>'
-stdout '<td>blocked</td>'
+stdout '>ready</span>'
+stdout '>blocked</span>'

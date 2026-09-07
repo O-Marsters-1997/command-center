@@ -39,7 +39,7 @@ grep -count=2 '\-\-base origin/cc-1' $WORK/tp.log
 # also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=2 '<td>running</td>'
+stdout -count=2 '>running</span>'
 stdout -count=2 'waiting for a slot'
 ! stdout 'waiting on sandbox://CC-1'
 
@@ -54,7 +54,7 @@ grep -count=3 '\-\-base origin/cc-1' $WORK/tp.log
 
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=2 '<td>running</td>'
+stdout -count=2 '>running</span>'
 stdout -count=1 'waiting for a slot'
 
 # Kill the last two: the second kill's freed slot starts the last dependent, and nothing is ever
@@ -70,4 +70,4 @@ exec cc request POST '/verb?verb=kill&task=sandbox://CC-5'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout 'waiting for a slot'
-! stdout '<td>blocked</td>'
+! stdout '>blocked</span>'

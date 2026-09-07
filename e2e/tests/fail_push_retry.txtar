@@ -12,7 +12,7 @@ exec sleep 0.5
 exec cc tick --count 1
 
 exec cc request GET /
-stdout '<td>push_failed</td>'
+stdout '>push_failed</span>'
 
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
 grep -count=1 'pr create' $WORK/gh.log

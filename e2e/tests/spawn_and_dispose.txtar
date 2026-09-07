@@ -27,7 +27,7 @@ exec sleep 0.5
 exec cc tick --count 1
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
 exec cc request GET /
-stdout -count=1 '<td>push_pending</td>'
+stdout -count=1 '>push_pending</span>'
 stdout 'agent finished with commits, waiting to push'
 
 # Swap the agent to the one that commits nothing, and launch CC-2 under it.
@@ -41,7 +41,7 @@ exec sleep 0.5
 # the remote.
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=1 '<td>failed</td>'
+stdout -count=1 '>failed</span>'
 stdout 'no commits after this run'
 ! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2
 
@@ -53,16 +53,16 @@ exec cc tick --count 1
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it: running is derived by the tick after it.
 exec cc request GET /
-! stdout '<td>running</td>'
+! stdout '>running</span>'
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=1 '<td>running</td>'
+stdout -count=1 '>running</span>'
 stdout 'agent running'
 
 # Further ticks leave a live run alone: no second spawn, no premature disposition.
 exec cc tick --count 2
 exec cc request GET /
-stdout -count=1 '<td>running</td>'
+stdout -count=1 '>running</span>'
 grep -count=1 'sleeps.sh' $WORK/agent.log
 
 # The kill verb signals the whole process group, and the same tick's liveness pass finds the
@@ -70,8 +70,8 @@ grep -count=1 'sleeps.sh' $WORK/agent.log
 exec cc request POST '/verb?verb=kill&task=sandbox://CC-3'
 exec cc tick --count 1
 exec cc request GET /
-! stdout '<td>running</td>'
-stdout -count=2 '<td>failed</td>'
+! stdout '>running</span>'
+stdout -count=2 '>failed</span>'
 
 # Three tasks, three agents, three spawns -- the agent log is independent of both tp.log's cuts
 # and events' own count.
