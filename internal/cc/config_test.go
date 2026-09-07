@@ -80,7 +80,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if got.MaxAgents != 1 {
 		t.Errorf("max_agents = %d, want default 1", got.MaxAgents)
 	}
-	want := []string{"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5"}
+	want := []string{
+		"claude", "-p", "{prompt}",
+		"--output-format", "stream-json", "--verbose",
+		"--settings", "{settings}", "--model", "claude-sonnet-5",
+	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
 	}

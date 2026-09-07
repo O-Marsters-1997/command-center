@@ -63,7 +63,9 @@ const (
 // explicitly because the CLI's own default tracks Anthropic's latest release, so leaving it off
 // would change what every run is built by without this repo changing (§8).
 var defaultAgentCommand = []string{
-	"claude", "-p", "{prompt}", "--settings", "{settings}", "--model", "claude-sonnet-5",
+	"claude", "-p", "{prompt}",
+	"--output-format", "stream-json", "--verbose",
+	"--settings", "{settings}", "--model", "claude-sonnet-5",
 }
 
 // LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and

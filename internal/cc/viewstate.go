@@ -5,16 +5,31 @@ import (
 	"slices"
 )
 
+// logFilters names the four ?log= modes the run log accepts, in the order they render as
+// buttons. "all" is the default and is never written into a URL.
+var logFilters = []string{"all", "skills", "tools", "fails"}
+
+// normalizeLogFilter rejects anything but the four named modes, onto "all" — a query string is
+// user input, and an unrecognised mode is silently the default rather than an error.
+func normalizeLogFilter(mode string) string {
+	if slices.Contains(logFilters, mode) {
+		return mode
+	}
+	return "all"
+}
+
 type viewParams struct {
 	// Sel is the one expanded row. At most one: parseViewParams takes the first ?sel= and drops
 	// the rest.
 	Sel   string
 	Tasks []string
 	View  string
+	// Log is the selected row's run-log filter (docs/prds/prd-fleet-view.md § The run log).
+	Log string
 }
 
 func parseViewParams(q url.Values) viewParams {
-	v := viewParams{Tasks: q["task"], View: q.Get("view")}
+	v := viewParams{Tasks: q["task"], View: q.Get("view"), Log: normalizeLogFilter(q.Get("log"))}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
 	}
@@ -24,9 +39,12 @@ func parseViewParams(q url.Values) viewParams {
 	return v
 }
 
-// url.Values.Encode sorts by key, so this always renders sel/task/view in that order.
+// url.Values.Encode sorts by key, so this always renders log/sel/task/view in that order.
 func (v viewParams) query() string {
 	q := url.Values{}
+	if v.Log != "" && v.Log != "all" {
+		q.Set("log", v.Log)
+	}
 	if v.Sel != "" {
 		q.Set("sel", v.Sel)
 	}
@@ -37,6 +55,12 @@ func (v viewParams) query() string {
 		q.Set("view", v.View)
 	}
 	return q.Encode()
+}
+
+func (v viewParams) withLog(mode string) viewParams {
+	next := v
+	next.Log = mode
+	return next
 }
 
 func (v viewParams) boardPath() string { return withQuery("/board", v.query()) }
