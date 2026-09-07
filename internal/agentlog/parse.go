@@ -25,6 +25,23 @@ const (
 	Pass
 )
 
+func (k Kind) String() string {
+	switch k {
+	case Skill:
+		return "skill"
+	case File:
+		return "file"
+	case Tool:
+		return "tool"
+	case Fail:
+		return "fail"
+	case Pass:
+		return "pass"
+	default:
+		return "unknown"
+	}
+}
+
 // Event is one kept line. At is measured off the run's first kept event, so it is zero on an
 // Event from ParseLine, which has no run to measure against.
 type Event struct {

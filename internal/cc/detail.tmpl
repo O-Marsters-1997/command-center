@@ -10,9 +10,29 @@
     {{if .Draft}}<dt>draft</dt><dd>{{.DraftReason}}</dd>{{end}}
     {{if .BaseVerdict}}<dt>base verdict</dt><dd>{{.BaseVerdict}}</dd>{{end}}
     {{if .Warning}}<dt>warning</dt><dd>{{.Warning}}</dd>{{end}}
-    <dt>log</dt><dd>{{.LogPath}}</dd>
   </dl>
-  <pre hx-ext="sse" sse-connect="{{.LogStream}}" sse-swap="message" sse-close="end" hx-swap="beforeend">
-    {{- range .LogTail}}<div>{{.}}</div>{{end -}}
-  </pre>
+  <div class="run-log">
+    <div class="run-log-header">
+      <span class="run-log-path">{{.Log.Path}}</span>
+      {{if .Log.Streaming}}<span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
+      {{- else}}<span class="pill"><span class="pill-ring"></span>ended</span>{{end}}
+      <nav class="log-filters">
+        {{- range .Log.Filters}}<a href="{{.Path}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end -}}
+      </nav>
+      <a href="#first-fail" class="jump-first-fail">first failure</a>
+    </div>
+    <p class="run-log-meta">{{.Log.Lines}} lines · {{.Log.PhaseCount}} phases</p>
+    {{range .Log.Phases}}
+    <section class="phase">
+      <header class="phase-header">
+        {{if .Skill}}<span class="phase-skill">skill {{.Skill}}</span>{{with .Note}} · {{.}}{{end}}{{end}}
+        <span class="phase-at">{{.At}}</span>
+      </header>
+      {{range .Lines}}{{.}}
+      {{end -}}
+    </section>
+    {{end}}
+    <div class="run-log-live" hx-ext="sse" sse-connect="{{.Log.StreamPath}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+    {{with .Log.Result}}<p class="run-log-result">{{.}}</p>{{end}}
+  </div>
 </td>

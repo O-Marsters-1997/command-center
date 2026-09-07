@@ -4,7 +4,9 @@ import (
 	"context"
 	"html/template"
 	"strings"
+	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -36,9 +38,17 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 	return out.String(), nil
 }
 
-// TailLog exposes the log tail to the external test package: driving it through the route needs
-// a store and a run, and the window branch only shows on a file larger than the window.
-var TailLog = tailLog
+// RenderLogLine exposes the one "logline" template both the detail render and the SSE stream
+// render through, so a test can build its own expected markup rather than hand-copying it.
+func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
+	return renderLogLine(e, anchor)
+}
+
+// ReadTestdata and WriteRunLog let logstream_test.go and detail_test.go, both package cc_test,
+// share the one fixture-reading and fixture-writing helper logview_test.go already defines
+// rather than keeping a second copy under a different name.
+func ReadTestdata(name string) string              { return mustReadTestdata(name) }
+func WriteRunLog(t *testing.T, body string) string { return writeRunLog(t, body) }
 
 // Migration0001 is the initial schema, for the test that a database created before goose
 // existed is adopted rather than rebuilt.

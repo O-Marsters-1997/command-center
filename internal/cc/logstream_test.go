@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -61,6 +62,25 @@ func appendLines(t *testing.T, path string, lines ...string) {
 	}
 }
 
+// jsonToolLine is a valid stream-json line agentlog parses into a Bash tool_use event whose
+// command is text, so a test can look for text in the rendered line without hand-copying markup.
+func jsonToolLine(text string) string {
+	return fmt.Sprintf(`{"type":"assistant","timestamp":"2026-08-20T12:00:00Z",`+
+		`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":%q}}]}}`, text)
+}
+
+// renderedToolLine is the exact markup jsonToolLine's own event renders as, through the same
+// "logline" template the production code calls.
+func renderedToolLine(t *testing.T, text string) string {
+	t.Helper()
+
+	html, err := cc.RenderLogLine(agentlog.Event{Kind: agentlog.Tool, Tool: "Bash", Detail: text}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(html)
+}
+
 func endRun(t *testing.T, store *cc.Store, runID int64, at time.Time) {
 	t.Helper()
 
@@ -76,7 +96,8 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	appendLines(t, logPath, "first", `<script>alert(1)</script>`, "third")
+	first, xss, third := jsonToolLine("first"), jsonToolLine(`<script>alert(1)</script>`), jsonToolLine("third")
+	appendLines(t, logPath, first, xss, third)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
 	server := cc.NewServer(store, fixedClock(now), nil, "")
@@ -91,10 +112,14 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 		t.Errorf("Content-Type = %q, want text/event-stream", got)
 	}
 	body := rec.Body.String()
+	firstOffset := int64(len(first) + 1)
 	for _, want := range []string{
-		"id: 6\ndata: <div>first</div>\n\n",
-		"data: <div>&lt;script&gt;alert(1)&lt;/script&gt;</div>\n\n",
-		"data: <div>third</div>\n\n",
+		fmt.Sprintf("id: %d\ndata: %s\n\n", firstOffset, renderedToolLine(t, "first")),
+		// Hardcoded, not built through renderedToolLine: a regression that stopped escaping
+		// entirely would still make renderedToolLine "match itself".
+		`data: <div class="line line-tool"><span class="line-label">tool</span> Bash ` +
+			"&lt;script&gt;alert(1)&lt;/script&gt;</div>\n\n",
+		"data: " + renderedToolLine(t, "third") + "\n\n",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("stream is missing %q:\n%q", want, body)
@@ -109,20 +134,21 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	appendLines(t, logPath, "already read", "new one")
+	alreadyRead, newOne := jsonToolLine("already read"), jsonToolLine("new one")
+	appendLines(t, logPath, alreadyRead, newOne)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
-	from := int64(len("already read\n"))
+	from := int64(len(alreadyRead) + 1)
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(from), nil))
 
 	body := rec.Body.String()
 	if strings.Contains(body, "already read") {
 		t.Errorf("stream resent a line the fragment already rendered:\n%q", body)
 	}
-	if !strings.Contains(body, "data: <div>new one</div>\n\n") {
+	if want := "data: " + renderedToolLine(t, "new one") + "\n\n"; !strings.Contains(body, want) {
 		t.Errorf("stream is missing the line after the offset:\n%q", body)
 	}
 }
@@ -172,21 +198,22 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	appendLines(t, logPath, "swapped already", "not yet")
+	swappedAlready, notYet := jsonToolLine("swapped already"), jsonToolLine("not yet")
+	appendLines(t, logPath, swappedAlready, notYet)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil)
-	req.Header.Set("Last-Event-ID", strconv.Itoa(len("swapped already\n")))
+	req.Header.Set("Last-Event-ID", strconv.Itoa(len(swappedAlready)+1))
 	server.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
 	if strings.Contains(body, "swapped already") {
 		t.Errorf("a reconnect resent a line the browser had already swapped:\n%q", body)
 	}
-	if !strings.Contains(body, "<div>not yet</div>") {
+	if want := renderedToolLine(t, "not yet"); !strings.Contains(body, want) {
 		t.Errorf("a reconnect skipped the line after its last event:\n%q", body)
 	}
 }
@@ -198,7 +225,7 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	appendLines(t, logPath, "before")
+	appendLines(t, logPath, jsonToolLine("before"))
 	store, runID := runStore(t, logPath, now)
 	httpServer := httptest.NewServer(cc.NewServer(store, fixedClock(now), nil, ""))
 	defer httpServer.Close()
@@ -213,7 +240,7 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	if got := readEvent(t, events); !strings.Contains(got, "before") {
 		t.Fatalf("first event = %q, want the line already in the file", got)
 	}
-	appendLines(t, logPath, "after")
+	appendLines(t, logPath, jsonToolLine("after"))
 	if got := readEvent(t, events); !strings.Contains(got, "after") {
 		t.Fatalf("second event = %q, want the line appended while connected", got)
 	}
@@ -316,7 +343,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 		`sse-swap="message"`,
 		`sse-close="end"`,
 		`hx-swap="beforeend"`,
-		"<div>line xxx 3</div>",
+		`<div class="line line-tool"><span class="line-label">tool</span> Bash step 3</div>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail fragment is missing %q:\n%s", want, body)

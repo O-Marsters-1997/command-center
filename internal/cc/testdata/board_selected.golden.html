@@ -47,9 +47,19 @@
     
     
     
-    <dt>log</dt><dd>testdata/fixtures/run.jsonl</dd>
   </dl>
-  <pre hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76/log?from=33" sse-swap="message" sse-close="end" hx-swap="beforeend"><div>line xxx 1</div><div>line xxx 2</div><div>line xxx 3</div></pre>
+  <div class="run-log">
+    <div class="run-log-header">
+      <span class="run-log-path">testdata/fixtures/run.jsonl</span>
+      <span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
+      <nav class="log-filters"><a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="active" aria-current="true">all</a><a href="/?log=skills&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76">skills</a><a href="/?log=tools&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76">tools</a><a href="/?log=fails&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76">fails</a></nav>
+      <a href="#first-fail" class="jump-first-fail">first failure</a>
+    </div>
+    <p class="run-log-meta">3 lines · 0 phases</p>
+    
+    <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76/log?from=33" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+    
+  </div>
 </td>
 </tr>
   
