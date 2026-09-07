@@ -32,6 +32,45 @@ func TestParseViewParamsDefaultsViewToBoard(t *testing.T) {
 	}
 }
 
+func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{"absent defaults to all", "", "all"},
+		{"a named filter passes through", "log=fails", "fails"},
+		{"an unrecognised value falls back to all", "log=bogus", "all"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			q, err := url.ParseQuery(tc.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parseViewParams(q).Log; got != tc.want {
+				t.Errorf("parseViewParams(%q).Log = %q, want %q", tc.query, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestViewParamsWithLogReplacesTheFilterOnly(t *testing.T) {
+	t.Parallel()
+
+	base := viewParams{Sel: "a", Log: "all", View: "board"}
+	got := base.withLog("fails")
+	if got.Log != "fails" || got.Sel != "a" {
+		t.Errorf("withLog(fails) = %+v, want Log=fails and Sel unchanged", got)
+	}
+	if base.Log != "all" {
+		t.Errorf("withLog mutated the receiver: Log = %q", base.Log)
+	}
+}
+
 func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 	t.Parallel()
 
@@ -47,6 +86,12 @@ func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 			viewParams{Sel: "a", Tasks: []string{"b", "c"}, View: "graph"},
 			"sel=a&task=b&task=c&view=graph",
 		},
+		{
+			"a non-default log filter, alphabetically ahead of sel",
+			viewParams{Sel: "a", Log: "fails", View: "board"},
+			"log=fails&sel=a",
+		},
+		{"the default log filter is never written", viewParams{Log: "all", View: "board"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

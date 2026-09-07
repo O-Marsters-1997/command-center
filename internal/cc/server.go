@@ -204,9 +204,8 @@ type row struct {
 	SelectPush string
 	TogglePath string
 	TogglePush string
-	// LogTail and LogStream are set only when Selected.
-	LogTail   []string
-	LogStream string
+	// Log is the parsed run log, set only when Selected (docs/prds/prd-fleet-view.md § The run log).
+	Log logDetail
 }
 
 type check struct {
@@ -330,8 +329,8 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	return view, nil
 }
 
-// applyViewState reads the selected row's log tail only, not every row's: a board of
-// twenty-five rows must not open twenty-five log files to render one poll.
+// applyViewState parses the selected row's own log only, not every row's: a board of twenty-five
+// rows must not open twenty-five log files to render one poll.
 func applyViewState(rows []row, params viewParams) {
 	for i := range rows {
 		r := &rows[i]
@@ -342,9 +341,7 @@ func applyViewState(rows []row, params viewParams) {
 		toggledTask := params.toggleTask(r.URL)
 		r.TogglePath, r.TogglePush = toggledTask.boardPath(), toggledTask.pagePath()
 		if r.Selected {
-			tail, read := tailLog(r.LogPath)
-			r.LogTail = tail
-			r.LogStream = logStreamPath(r.URL, read)
+			r.Log = buildLogDetail(r.LogPath, r.Alive, r.URL, params)
 		}
 	}
 }

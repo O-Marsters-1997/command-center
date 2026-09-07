@@ -3,7 +3,6 @@ package cc
 import (
 	"bufio"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,14 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
 const logPollInterval = 250 * time.Millisecond
-
-const (
-	detailLogLines  = 50
-	detailLogWindow = 64 << 10
-)
 
 // handleLog streams the run's log as Server-Sent Events, one event per whole line, from the
 // ?from= byte the detail fragment's own tail stopped at. It reads the file and nothing else: the
@@ -32,6 +28,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil {
 		offset = resumed
 	}
+	mode := normalizeLogFilter(r.URL.Query().Get("log"))
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
@@ -44,7 +41,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	flusher := http.NewResponseController(w)
 
 	for {
-		sent := sendLines(w, path, &offset)
+		sent := sendLines(w, path, &offset, mode)
 		_ = flusher.Flush()
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
@@ -64,10 +61,10 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// sendLines writes one event per whole line from offset onwards and advances offset past them,
-// returning how many it wrote. A trailing partial line is left for the next read, and a log that
+// sendLines writes one SSE event per whole line from offset onwards through renderLogLine, and
+// returns how many it sent. A trailing partial line is left for the next read, and a log that
 // will not open yet is no lines rather than an error.
-func sendLines(w io.Writer, path string, offset *int64) int {
+func sendLines(w io.Writer, path string, offset *int64, mode string) int {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0
@@ -85,58 +82,32 @@ func sendLines(w io.Writer, path string, offset *int64) int {
 			return sent
 		}
 		*offset += int64(len(line))
-		event := html.EscapeString(strings.TrimRight(line, "\r\n"))
-		if _, err := fmt.Fprintf(w, "id: %d\ndata: <div>%s</div>\n\n", *offset, event); err != nil {
+
+		event, ok := agentlog.ParseLine([]byte(strings.TrimRight(line, "\r\n")))
+		if !ok || !kindShown(mode, event.Kind) {
+			continue
+		}
+		// ponytail: a failure streamed in live never carries id="first-fail", even when it's the
+		// run's first -- the anchor only lands on the next full re-render. Upgrade by tracking
+		// whether a Fail has already crossed this connection, once that gap is worth closing.
+		rendered, err := renderLogLine(event, false)
+		if err != nil {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", *offset, rendered); err != nil {
 			return sent
 		}
 		sent++
 	}
 }
 
-func logStreamPath(ticketURL string, from int64) string {
-	return fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
-}
-
-// tailLog returns the log's last lines and the byte the tail read up to, which the SSE stream
-// resumes from. It is empty rather than an error when the log will not open: the agent process
-// owns that file, and a ticket with no run never had one.
-func tailLog(path string) ([]string, int64) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, 0
+// logStreamPath is the ?sel= row's own SSE source: from is the byte its static render already
+// read up to, and mode is the row's current ?log= filter, carried onto the stream so a line
+// arriving live respects the same filter a full re-render would have applied to it.
+func logStreamPath(ticketURL string, from int64, mode string) string {
+	path := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
+	if mode != "" && mode != "all" {
+		path += "&log=" + url.QueryEscape(mode)
 	}
-	defer func() { _ = f.Close() }()
-
-	info, err := f.Stat()
-	if err != nil {
-		return nil, 0
-	}
-	// One byte behind the window, so the first break in it separates a clipped line from a whole
-	// one either way and the same Cut below is right for both.
-	start := max(info.Size()-detailLogWindow-1, 0)
-	buf := make([]byte, info.Size()-start)
-	if _, err := f.ReadAt(buf, start); err != nil {
-		return nil, 0
-	}
-
-	// An agent flushes mid-line, so the tail stops at the last whole one and the stream, not the
-	// fragment, carries the rest of the line it was writing.
-	tail := string(buf)
-	end := strings.LastIndexByte(tail, '\n')
-	if end < 0 {
-		return nil, start
-	}
-	read := start + int64(end) + 1
-	tail = tail[:end]
-	if start > 0 {
-		_, tail, _ = strings.Cut(tail, "\n")
-	}
-	if tail == "" {
-		return nil, read
-	}
-	lines := strings.Split(tail, "\n")
-	if len(lines) > detailLogLines {
-		lines = lines[len(lines)-detailLogLines:]
-	}
-	return lines, read
+	return path
 }
