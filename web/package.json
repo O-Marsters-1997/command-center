@@ -4,14 +4,16 @@
   "type": "module",
   "packageManager": "bun@1.4.0",
   "scripts": {
-    "build": "tailwindcss -i ./app.css -o ../internal/cc/assets/dist/app.css --minify"
+    "build": "tailwindcss -i ./app.css -o ../internal/cc/assets/dist/app.css --minify && vite build"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.0",
     "tailwindcss": "^4.1.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vite-plugin-solid": "^2.11.0"
   },
   "dependencies": {
-    "solid-element": "^1.9.1"
+    "solid-element": "^1.9.1",
+    "solid-js": "^1.9.15"
   }
 }

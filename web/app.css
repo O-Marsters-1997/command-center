@@ -450,4 +450,111 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
+
+  .view-toggle {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .view-toggle a {
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  .view-toggle a[aria-current="page"] {
+    border-color: var(--color-s-live);
+    color: var(--color-fg);
+  }
+
+  /* cc-graph is an island (noShadowDOM(), ADR 2): every rule below is page-global and also
+     styles the Go-rendered fallback banner cc-graph carries before Solid upgrades it. */
+  cc-graph {
+    display: block;
+  }
+
+  .graph-viewport {
+    position: relative;
+    overflow: hidden;
+    height: 70vh;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .graph-viewport.panning {
+    cursor: grabbing;
+  }
+
+  .graph-surface {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+  }
+
+  .graph-edge {
+    fill: none;
+    stroke: var(--color-border);
+    stroke-width: 1.5;
+  }
+
+  .graph-edge.graph-edge-lit {
+    stroke: var(--color-s-live);
+    stroke-width: 2.5;
+  }
+
+  .graph-node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: var(--graph-node-w);
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-bg);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .graph-node:focus-visible {
+    outline: 2px solid var(--color-s-live);
+    outline-offset: 1px;
+  }
+
+  .graph-node.graph-node-selected {
+    border-color: var(--color-s-live);
+    box-shadow: 0 0 0 1px var(--color-s-live);
+  }
+
+  .graph-node.graph-node-lit {
+    border-color: var(--color-s-live);
+  }
+
+  .graph-node .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85em;
+  }
+
+  .graph-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+    color: var(--color-muted);
+    font-size: 0.85em;
+  }
+
+  .graph-toolbar button {
+    margin-left: auto;
+  }
 }
