@@ -53,13 +53,15 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 	return store
 }
 
-func writeLog(t *testing.T, lines int) string {
+func writeLog(t *testing.T, n int) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "run.jsonl")
 	var b strings.Builder
-	for i := 1; i <= lines; i++ {
-		fmt.Fprintf(&b, "line xxx %d\n", i)
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, `{"type":"assistant","timestamp":"2026-08-20T12:00:%02dZ",`+
+			`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"step %d"}}]}}`+"\n",
+			i%60, i)
 	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 		t.Fatal(err)
@@ -71,8 +73,8 @@ func selPagePath(ticketURL string) string {
 	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
 }
 
-// TestDetailFragmentCarriesEveryRowFact covers issue #76 AC2: one fragment, log tail, checks,
-// base SHA, elapsed and worktree.
+// TestDetailFragmentCarriesEveryRowFact covers issue #76 AC2: one fragment, the parsed log,
+// checks, base SHA, elapsed and worktree.
 func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	t.Parallel()
 
@@ -98,15 +100,13 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 		"build",
 		"IN_PROGRESS",
 		logPath,
-		"line xxx 120",
-		"line xxx 71",
+		"120 lines",
+		"step 1",
+		"step 120",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail fragment is missing %q:\n%s", want, body)
 		}
-	}
-	if strings.Contains(body, "line xxx 70\n") {
-		t.Errorf("detail fragment tails more than fifty lines:\n%s", body)
 	}
 }
 
@@ -408,52 +408,6 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	}
 }
 
-// TestTailLogReadsBackPastItsWindow covers the branch a small log never reaches. An agent log
-// line is a whole JSON event, so a file can run past the window with fewer than fifty lines in
-// it: the tail must then be every whole line the window holds, clipping only the one it cut.
-func TestTailLogReadsBackPastItsWindow(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name       string
-		lineLength int
-	}{
-		// 65536 is a whole number of 2048-byte lines, so the window opens exactly on a line
-		// break -- where dropping "the clipped first line" drops a whole one instead.
-		{"window opens on a break", 2048},
-		{"window opens mid-line", 2000},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			const lines = 60
-			path := filepath.Join(t.TempDir(), "run.jsonl")
-			var b strings.Builder
-			for i := 1; i <= lines; i++ {
-				line := fmt.Sprintf("line %04d ", i)
-				b.WriteString(line + strings.Repeat("x", tc.lineLength-len(line)-1) + "\n")
-			}
-			if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-				t.Fatal(err)
-			}
-
-			got, _ := cc.TailLog(path)
-			for i, line := range got {
-				if len(line) != tc.lineLength-1 {
-					t.Fatalf("line %d is clipped at %d bytes: %.20q...", i, len(line), line)
-				}
-			}
-			if last := got[len(got)-1]; !strings.HasPrefix(last, "line 0060 ") {
-				t.Errorf("tail does not end at the log's own last line: %.20q...", last)
-			}
-			// 64 KiB holds this many whole lines; one fewer is the off-by-one at the boundary.
-			if want := 64 << 10 / tc.lineLength; len(got) != want {
-				t.Errorf("tail has %d lines, want %d: the window dropped a whole line", len(got), want)
-			}
-		})
-	}
-}
-
 // TestDetailSpansEveryBoardColumn keeps the fragment's colspan honest against the board's own
 // header, which lives in the other template and nothing else compares them.
 func TestDetailSpansEveryBoardColumn(t *testing.T) {
@@ -518,5 +472,103 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 	}
 	if strings.Contains(board, "hx-post") {
 		t.Error("a verb posts over htmx rather than a form")
+	}
+}
+
+func selLogPagePath(ticketURL, mode string) string {
+	return "/board?" + url.Values{"sel": {ticketURL}, "log": {mode}}.Encode()
+}
+
+// TestLogFilterIsAURLParameterActiveInItsOwnLink covers the four ?log= filters: each is a plain
+// query parameter, and the render marks its own button active.
+func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	ticket := "https://github.com/o/r/issues/76"
+	server := cc.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+
+	for _, mode := range []string{"all", "skills", "tools", "fails"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
+			rec := httptest.NewRecorder()
+			server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selLogPagePath(ticket, mode), nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET log=%s = %d, want 200: %s", mode, rec.Code, rec.Body)
+			}
+			if want := `class="active" aria-current="true">` + mode + `</a>`; !strings.Contains(rec.Body.String(), want) {
+				t.Errorf("log=%s does not mark its own filter link active:\n%s", mode, rec.Body.String())
+			}
+		})
+	}
+}
+
+// TestLogFilterSurvivesABoardSwap covers the fragment's own hx-get: the poll that swaps #board
+// every five seconds must carry the current ?log= forward, or a filtered panel would revert to
+// "all" on the very next tick.
+func TestLogFilterSurvivesABoardSwap(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	ticket := "https://github.com/o/r/issues/76"
+	server := cc.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selLogPagePath(ticket, "fails"), nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `hx-get="/board?log=fails&amp;sel=`) {
+		t.Errorf("the board's own poll does not carry log=fails forward:\n%s", body)
+	}
+}
+
+// TestJumpToFirstFailureIsAPlainAnchor covers the zero-JavaScript half of jump-to-first-failure:
+// a real <a href="#..."> against a real id, which a browser resolves with no script at all.
+func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	logPath := cc.WriteRunLog(t, cc.ReadTestdata("run_with_failure.jsonl"))
+	ticket := "https://github.com/o/r/issues/76"
+	server := cc.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	body := rec.Body.String()
+
+	if !strings.Contains(body, `<a href="#first-fail" class="jump-first-fail">first failure</a>`) {
+		t.Errorf("no plain anchor jumps to the first failure:\n%s", body)
+	}
+	if !strings.Contains(body, `id="first-fail"`) {
+		t.Errorf("no line carries the id the jump anchor targets:\n%s", body)
+	}
+}
+
+// TestDroppedKindsNeverReachTheRender covers system/rate_limit_event/thinking: agentlog already
+// refuses to parse them into an Event, and this asserts that refusal actually keeps their raw
+// text out of the page rather than merely out of some intermediate value.
+func TestDroppedKindsNeverReachTheRender(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	logPath := cc.WriteRunLog(t, cc.ReadTestdata("dropped_kinds.jsonl"))
+	ticket := "https://github.com/o/r/issues/76"
+	server := cc.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	body := rec.Body.String()
+
+	for _, dropped := range []string{"deadbeef-session", "pondering-deeply"} {
+		if strings.Contains(body, dropped) {
+			t.Errorf("a dropped kind's raw text reached the render (%q):\n%s", dropped, body)
+		}
+	}
+	if !strings.Contains(body, "echo hi") {
+		t.Errorf("the one real event was dropped along with the unrenderable ones:\n%s", body)
+	}
+	if !strings.Contains(body, "4 lines") {
+		t.Errorf("the line count does not cover the dropped lines too:\n%s", body)
 	}
 }
