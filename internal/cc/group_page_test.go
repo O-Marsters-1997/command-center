@@ -19,7 +19,7 @@ type renderedRow struct {
 	Ticket string
 }
 
-var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>\s*<td>([^<]*)</td>`)
+var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*<button[^>]*>([^<]*)</button>`)
 
 func renderedRows(page string) []renderedRow {
 	matches := rowTagRE.FindAllStringSubmatch(page, -1)
@@ -107,14 +107,14 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	if !strings.Contains(rows[0].Attrs, `class="group-head"`) {
 		t.Errorf("group line attrs = %q, want a group-head class", rows[0].Attrs)
 	}
-	if got := rowCellAt(t, page, "sandbox://ROOT", 1); got != "failed" {
+	if got := rowState(t, page, "sandbox://ROOT"); got != "failed" {
 		t.Errorf("group line state = %q, want the blocker's own failed", got)
 	}
 	for _, c := range children {
-		if got := rowCellAt(t, page, c, 1); got != "queued" {
+		if got := rowState(t, page, c); got != "queued" {
 			t.Errorf("%s state = %q, want queued", c, got)
 		}
-		if got := rowCellAt(t, page, c, 2); !strings.Contains(got, "sandbox://ROOT") {
+		if got := rowCellAt(t, page, c, 3); !strings.Contains(got, "sandbox://ROOT") {
 			t.Errorf("%s reason = %q, want it to name the blocker", c, got)
 		}
 		if !strings.Contains(page, `name="task" value="`+c+`"`) {
@@ -176,7 +176,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
 		t.Errorf("row order = %v, want CC-3 under CC-1 only, %v", got, want)
 	}
-	if got := rowCellAt(t, page, "sandbox://CC-3", 2); !strings.Contains(got, "sandbox://CC-2") {
+	if got := rowCellAt(t, page, "sandbox://CC-3", 3); !strings.Contains(got, "sandbox://CC-2") {
 		t.Errorf("CC-3 reason = %q, want it to still name both blockers", got)
 	}
 }

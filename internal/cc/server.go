@@ -36,6 +36,8 @@ var page = template.Must(template.New("page").
 		"head":        func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
 		"child":       func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
+		"percent":     func(part, total int) int { return percentOf(part, total) },
+		"rowClasses":  rowClasses,
 	}).
 	Parse(pageSource))
 
@@ -137,9 +139,12 @@ type row struct {
 	URL string
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
-	Title  string
-	State  string
-	Reason string
+	Title      string
+	State      string
+	Reason     string
+	Tone       string
+	Unattended bool
+	Alive      bool
 	// Verbs comes from internal/plan: which verbs a state offers is a decision, so it is table-
 	// tested beside plan.Status rather than spelled out per state in the template.
 	Verbs        []string
@@ -161,13 +166,16 @@ type row struct {
 	Warning  string
 	Blocking []string
 	Worktree string
-	PR       string
+	PRNumber int
+	PRState  string
 	// Pgid, Elapsed and LogPath are plain, copy-pasteable text (docs/prds/prd-command-centre.md §
 	// The page) — empty for a ticket with no run yet.
-	Pgid        string
-	Elapsed     string
-	LogPath     string
-	CancelCount int
+	Pgid           string
+	Elapsed        string
+	ElapsedSeconds int
+	ElapsedPercent int
+	LogPath        string
+	CancelCount    int
 	// BaselineSHA and Checks are the detail fragment's, not the board's: the row is derived once
 	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
 	BaselineSHA string
@@ -200,6 +208,23 @@ type check struct {
 }
 
 func (r row) Ticket() string { return "#" + path.Base(r.URL) }
+
+func (r row) Stack() string {
+	if r.Base == "" || r.Base == defaultBaseBranch {
+		return fmt.Sprintf("L%d", r.MergeOrder)
+	}
+	return fmt.Sprintf("L%d ← %s", r.MergeOrder, r.Base)
+}
+
+func (r row) ChecksPassed() int {
+	passed := 0
+	for _, c := range r.Checks {
+		if c.Conclusion == "SUCCESS" {
+			passed++
+		}
+	}
+	return passed
+}
 
 // DetailID is the row's stable DOM id. A ticket URL is neither a usable id nor a CSS selector,
 // and htmx needs both: hx-target resolves the selector, and hx-preserve matches the id to keep
@@ -404,7 +429,7 @@ func derive(
 	for _, t := range tickets {
 		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
-		runFact, pgid, elapsed, logPath := runFactFor(t, obs, facts, vd, now)
+		runFact, pgid, elapsed, elapsedSeconds, logPath := runFactFor(t, obs, facts, vd, now)
 		membership := facts.memberships[t.URL]
 		latestRun := facts.latestRuns[t.URL]
 		state, reason := plan.Status(plan.Facts{
@@ -420,29 +445,38 @@ func derive(
 		baseByBranch[t.Branch] = unlock.BaseBranch
 		pr := obs.PRs[t.Branch]
 		rows = append(rows, row{
-			URL:          t.URL,
-			Title:        obs.Titles[t.URL],
-			State:        state.String(),
-			Reason:       string(reason),
-			Verbs:        plan.Verbs(state),
-			PendingVerbs: facts.pendingVerbs[t.URL],
-			Branch:       t.Branch,
-			Base:         unlock.BaseBranch,
-			Worktree:     obs.Worktrees[t.Branch],
-			PR:           prSummary(pr),
-			Pgid:         pgid,
-			Elapsed:      elapsed,
-			LogPath:      logPath,
-			CancelCount:  membership.Members,
-			Warning:      readyToMergeWarning(pr),
-			BaselineSHA:  latestRun.BaselineSHA,
-			Checks:       sortedChecks(pr.Checks),
-			Blocking:     unlock.Blocking,
-			Draft:        pr.IsDraft,
-			DraftReason:  draftReasonFor(pr, pt, byURL, prs, runFact),
+			URL:            t.URL,
+			Title:          obs.Titles[t.URL],
+			State:          state.String(),
+			Reason:         string(reason),
+			Tone:           plan.Tone(state),
+			Unattended:     state.Unattended(),
+			Alive:          obs.Runs[t.URL].Alive,
+			Verbs:          plan.Verbs(state),
+			PendingVerbs:   facts.pendingVerbs[t.URL],
+			Branch:         t.Branch,
+			Base:           unlock.BaseBranch,
+			Worktree:       obs.Worktrees[t.Branch],
+			PRNumber:       pr.Number,
+			PRState:        pr.State.String(),
+			Pgid:           pgid,
+			Elapsed:        elapsed,
+			ElapsedSeconds: elapsedSeconds,
+			LogPath:        logPath,
+			CancelCount:    membership.Members,
+			Warning:        readyToMergeWarning(pr),
+			BaselineSHA:    latestRun.BaselineSHA,
+			Checks:         sortedChecks(pr.Checks),
+			Blocking:       unlock.Blocking,
+			Draft:          pr.IsDraft,
+			DraftReason:    draftReasonFor(pr, pt, byURL, prs, runFact),
 		})
 	}
 
+	longestElapsed := 0
+	for _, r := range rows {
+		longestElapsed = max(longestElapsed, r.ElapsedSeconds)
+	}
 	// A second pass: a row's base is another row's own branch (never main, §4a), so its verdict
 	// and its depth are only known once every row above has been built.
 	for i := range rows {
@@ -451,8 +485,27 @@ func derive(
 		}
 		rows[i].StackDepth = plan.StackDepth(rows[i].Branch, baseByBranch)
 		rows[i].MergeOrder = rows[i].StackDepth + 1
+		rows[i].ElapsedPercent = percentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
 	return rows
+}
+
+func rowClasses(head, selected bool) string {
+	var classes []string
+	if head {
+		classes = append(classes, "group-head")
+	}
+	if selected {
+		classes = append(classes, "selected")
+	}
+	return strings.Join(classes, " ")
+}
+
+func percentOf(part, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	return part * 100 / total
 }
 
 func sortedChecks(checks map[string]gh.CheckState) []check {
@@ -523,7 +576,7 @@ func baseVerdict(
 	if !ok {
 		return ""
 	}
-	runFact, _, _, _ := runFactFor(baseTicket, obs, facts, vd, now)
+	runFact, _, _, _, _ := runFactFor(baseTicket, obs, facts, vd, now)
 	return verdictLabel(runFact)
 }
 
@@ -561,10 +614,10 @@ func draftReasonFor(
 // reads this tick's PR snapshot rather than a stored column (inv. 14).
 func runFactFor(
 	t Ticket, obs Observation, facts ticketFacts, vd verdictDeps, now time.Time,
-) (runFact *plan.RunFact, pgid, elapsed, logPath string) {
+) (runFact *plan.RunFact, pgid, elapsed string, elapsedSeconds int, logPath string) {
 	summary, ok := facts.latestRuns[t.URL]
 	if !ok {
-		return nil, "", "", ""
+		return nil, "", "", 0, ""
 	}
 
 	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.URL].Alive}
@@ -602,9 +655,11 @@ func runFactFor(
 		pgid = strconv.Itoa(*summary.Pgid)
 	}
 	if fact.Alive && summary.ProcStartedAt != nil {
-		elapsed = now.Sub(*summary.ProcStartedAt).Round(time.Second).String()
+		d := now.Sub(*summary.ProcStartedAt).Round(time.Second)
+		elapsed = d.String()
+		elapsedSeconds = int(d.Seconds())
 	}
-	return fact, pgid, elapsed, logPath
+	return fact, pgid, elapsed, elapsedSeconds, logPath
 }
 
 // defaultBaseBranch mirrors internal/plan's own unexported copy: verdict's import guard (like
@@ -955,13 +1010,6 @@ func prState(s gh.PRState) plan.PRState {
 	default:
 		return plan.Absent
 	}
-}
-
-func prSummary(pr gh.PR) string {
-	if pr.Number == 0 {
-		return "none"
-	}
-	return fmt.Sprintf("#%d %s", pr.Number, pr.State)
 }
 
 func workspaceName(dataDir string) string {

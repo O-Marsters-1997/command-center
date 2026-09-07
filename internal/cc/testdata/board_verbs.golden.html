@@ -1,36 +1,32 @@
 <table id="board" hx-get="" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
-    <th>stack depth</th><th>merge order</th><th>warning</th>
-    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
-    <th>draft</th><th>draft reason</th><th>detail</th>
+    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
   
   
   <tr data-depth="0">
-    <td>#blocked</td>
-    <td>blocked</td>
-    <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://blocked"
-        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">launch</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
+        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
+      <span class="pill pill-wait pill-ring">blocked</span>
     </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell"></td>
   </tr>
   
 
@@ -39,28 +35,26 @@
   
   
   <tr data-depth="0">
-    <td>#ready</td>
-    <td>ready</td>
-    <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://ready"
-        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">launch</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
+        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
+      <span class="pill pill-idle pill-ring">ready</span>
     </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell"></td>
   </tr>
   
 
@@ -69,30 +63,28 @@
   
   
   <tr data-depth="0">
-    <td>#queued</td>
-    <td>queued</td>
     <td></td>
     <td>
+      <span class="pill pill-wait pill-disc">queued</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://queued">
         <button type="submit" name="verb" value="cancel">cancel launch (0 tickets)</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -101,30 +93,28 @@
   
   
   <tr data-depth="0">
-    <td>#running</td>
-    <td>running</td>
     <td></td>
     <td>
+      <span class="pill pill-live pill-disc">running</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -133,30 +123,28 @@
   
   
   <tr data-depth="0">
-    <td>#failed</td>
-    <td>failed</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">failed</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -165,30 +153,28 @@
   
   
   <tr data-depth="0">
-    <td>#cut_failed</td>
-    <td>cut_failed</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">cut_failed</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://cut_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -197,26 +183,24 @@
   
   
   <tr data-depth="0">
-    <td>#push_pending</td>
-    <td>push_pending</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
     <td></td>
     <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
+      <span class="pill pill-live pill-disc">push_pending</span>
     </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell"></td>
   </tr>
   
 
@@ -225,10 +209,24 @@
   
   
   <tr data-depth="0">
-    <td>#checking</td>
-    <td>checking</td>
     <td></td>
     <td>
+      <span class="pill pill-live pill-disc">checking</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://checking">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -237,22 +235,6 @@
         <input type="hidden" name="task" value="sandbox://checking">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -261,10 +243,24 @@
   
   
   <tr data-depth="0">
-    <td>#needs_you</td>
-    <td>needs_you</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">needs_you</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -277,22 +273,6 @@
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -301,10 +281,24 @@
   
   
   <tr data-depth="0">
-    <td>#push_failed</td>
-    <td>push_failed</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">push_failed</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://push_failed">
         <button type="submit" name="verb" value="retry-push">retry-push</button>
@@ -313,22 +307,6 @@
         <input type="hidden" name="task" value="sandbox://push_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -337,30 +315,28 @@
   
   
   <tr data-depth="0">
-    <td>#review_me</td>
-    <td>review_me</td>
     <td></td>
     <td>
+      <span class="pill pill-wait pill-ring">review_me</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://review_me">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -369,30 +345,28 @@
   
   
   <tr data-depth="0">
-    <td>#merged</td>
-    <td>merged</td>
     <td></td>
     <td>
+      <span class="pill pill-done pill-ring">merged</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -401,10 +375,24 @@
   
   
   <tr data-depth="0">
-    <td>#pr_closed_unmerged</td>
-    <td>pr_closed_unmerged</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">pr_closed_unmerged</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -413,22 +401,6 @@
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -437,10 +409,24 @@
   
   
   <tr data-depth="0">
-    <td>#base_gone</td>
-    <td>base_gone</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">base_gone</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -449,22 +435,6 @@
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -473,28 +443,26 @@
   
   
   <tr data-depth="0">
-    <td>#cancelled</td>
-    <td>cancelled</td>
-    <td></td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://cancelled"
-        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">launch</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
+        hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
+      <span class="pill pill-idle pill-ring">cancelled</span>
     </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell"></td>
   </tr>
   
 
@@ -503,10 +471,24 @@
   
   
   <tr data-depth="0">
-    <td>#base_moved</td>
-    <td>base_moved</td>
     <td></td>
     <td>
+      <span class="pill pill-live pill-disc">base_moved</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_moved">
         <button type="submit" name="verb" value="refresh">refresh</button>
@@ -515,22 +497,6 @@
         <input type="hidden" name="task" value="sandbox://base_moved">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -539,30 +505,28 @@
   
   
   <tr data-depth="0">
-    <td>#refresh_conflicted</td>
-    <td>refresh_conflicted</td>
     <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">refresh_conflicted</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
+    </td>
+    <td>
+      <div class="title">untitled</div>
+    </td>
+    <td>L0</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://refresh_conflicted">
         <button type="submit" name="verb" value="abort">abort</button>
       </form></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>0</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 

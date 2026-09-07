@@ -20,9 +20,11 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 	view := pageView{ObserveAge: "0s ago"}
 	for _, state := range states {
 		r := row{
-			URL:   "sandbox://" + state.String(),
-			State: state.String(),
-			Verbs: plan.Verbs(state),
+			URL:        "sandbox://" + state.String(),
+			State:      state.String(),
+			Tone:       plan.Tone(state),
+			Unattended: state.Unattended(),
+			Verbs:      plan.Verbs(state),
 		}
 		view.Groups = append(view.Groups, group{Children: []row{r}})
 	}
