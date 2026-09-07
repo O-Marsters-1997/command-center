@@ -10,7 +10,7 @@ export default defineConfig({
     outDir: "../internal/cc/assets/dist",
     emptyOutDir: false,
     lib: {
-      entry: "src/graph.jsx",
+      entry: "src/graph.tsx",
       formats: ["es"],
       fileName: () => "graph.js",
     },

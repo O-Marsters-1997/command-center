@@ -1,5 +1,6 @@
-import { customElement, noShadowDOM, getCurrentElement } from "solid-element";
-import { createSignal, createMemo, For, onCleanup, onMount } from "solid-js";
+import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
+import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
 const COL_W = 260;
@@ -10,13 +11,24 @@ const MARGIN = 24;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 
+interface GraphNode extends Row {
+  col: number;
+  x: number;
+  y: number;
+}
+
+interface Edge {
+  from: GraphNode;
+  to: GraphNode;
+}
+
 // nodeCache keeps one object per URL across polls: <For> keys its children by object identity,
 // so mutating a cached node in place (rather than spreading a fresh one every layoutGroups call)
 // is what keeps a node button's own DOM -- and its keyboard focus -- stable across a 5s poll.
-const nodeCache = new Map();
+const nodeCache = new Map<string, GraphNode>();
 
-function layoutGroups(groups) {
-  const nodes = [];
+function layoutGroups(groups: Group[]): GraphNode[] {
+  const nodes: GraphNode[] = [];
   let y = MARGIN;
   for (const g of groups) {
     if (g.root) {
@@ -37,21 +49,21 @@ function layoutGroups(groups) {
   return nodes;
 }
 
-function toNode(row, col, y) {
-  const node = nodeCache.get(row.url) ?? {};
+function toNode(row: Row, col: number, y: number): GraphNode {
+  const node = nodeCache.get(row.url) ?? ({} as GraphNode);
   Object.assign(node, row, { col, x: MARGIN + col * COL_W, y });
   nodeCache.set(row.url, node);
   return node;
 }
 
-function ticketRef(url) {
+function ticketRef(url: string): string {
   const parts = url.split("/");
-  return "#" + parts[parts.length - 1];
+  return `#${parts[parts.length - 1]}`;
 }
 
-function edgesFor(nodes) {
+function edgesFor(nodes: GraphNode[]): Edge[] {
   const byURL = new Map(nodes.map((n) => [n.url, n]));
-  const edges = [];
+  const edges: Edge[] = [];
   for (const node of nodes) {
     for (const blockerURL of node.blocking || []) {
       const from = byURL.get(blockerURL);
@@ -61,7 +73,7 @@ function edgesFor(nodes) {
   return edges;
 }
 
-function edgePath(edge) {
+function edgePath(edge: Edge): string {
   const x1 = edge.from.x + NODE_W;
   const y1 = edge.from.y + NODE_H / 2;
   const x2 = edge.to.x;
@@ -76,13 +88,13 @@ customElement("cc-graph", {}, () => {
   // fallback content (the Go-only-build message) survives an upgrade unless it goes here.
   getCurrentElement().textContent = "";
 
-  const [groups, setGroups] = createSignal([]);
-  const [selected, setSelected] = createSignal(new Set());
+  const [groups, setGroups] = createSignal<Group[]>([]);
+  const [selected, setSelected] = createSignal<Set<string>>(new Set());
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
   const [scale, setScale] = createSignal(1);
 
-  let viewport;
-  const nodeRefs = new Map();
+  let viewport: HTMLDivElement | undefined;
+  const nodeRefs = new Map<string, HTMLButtonElement>();
 
   async function load() {
     try {
@@ -92,7 +104,7 @@ customElement("cc-graph", {}, () => {
     } catch {}
   }
 
-  let timer;
+  let timer: ReturnType<typeof setInterval>;
   onMount(() => {
     load();
     timer = setInterval(load, POLL_MS);
@@ -121,7 +133,7 @@ customElement("cc-graph", {}, () => {
     return lit;
   });
 
-  function toggle(url) {
+  function toggle(url: string) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(url)) next.delete(url);
@@ -142,14 +154,14 @@ customElement("cc-graph", {}, () => {
 
   // Pan and zoom are local signals only -- neither handler below ever calls fetch, which is the
   // property this island exists to prove (docs/prds/prd-fleet-view.md § The graph).
-  let dragging = null;
-  function onPointerDown(e) {
-    if (e.target.closest(".graph-node")) return;
+  let dragging: { x: number; y: number; pan: { x: number; y: number } } | null = null;
+  function onPointerDown(e: PointerEvent) {
+    if ((e.target as HTMLElement).closest(".graph-node")) return;
     dragging = { x: e.clientX, y: e.clientY, pan: pan() };
-    viewport.setPointerCapture(e.pointerId);
-    viewport.classList.add("panning");
+    viewport?.setPointerCapture(e.pointerId);
+    viewport?.classList.add("panning");
   }
-  function onPointerMove(e) {
+  function onPointerMove(e: PointerEvent) {
     if (!dragging) return;
     setPan({ x: dragging.pan.x + (e.clientX - dragging.x), y: dragging.pan.y + (e.clientY - dragging.y) });
   }
@@ -159,8 +171,9 @@ customElement("cc-graph", {}, () => {
   }
   // Zoom to cursor (nice to have): keep the content point under the pointer fixed while scale
   // changes, by solving pan from the point's own before/after content-space coordinates.
-  function onWheel(e) {
+  function onWheel(e: WheelEvent) {
     e.preventDefault();
+    if (!viewport) return;
     const rect = viewport.getBoundingClientRect();
     const cursorX = e.clientX - rect.left;
     const cursorY = e.clientY - rect.top;
@@ -173,14 +186,17 @@ customElement("cc-graph", {}, () => {
     setPan({ x: cursorX - contentX * nextScale, y: cursorY - contentY * nextScale });
   }
 
-  function onNodeKeyDown(e, node) {
-    const dir = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+  function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
+    const dir = ({ ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] } as const)[
+      e.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
+    ];
     if (!dir) return;
     e.preventDefault();
     const [dCol] = dir;
-    const inDirection = dCol === 0
-      ? nodes().filter((n) => n.col === node.col && n.url !== node.url)
-      : nodes().filter((n) => Math.sign(n.col - node.col) === dCol);
+    const inDirection =
+      dCol === 0
+        ? nodes().filter((n) => n.col === node.col && n.url !== node.url)
+        : nodes().filter((n) => Math.sign(n.col - node.col) === dCol);
     if (inDirection.length === 0) return;
     inDirection.sort((a, b) => Math.abs(a.y - node.y) - Math.abs(b.y - node.y));
     nodeRefs.get(inDirection[0].url)?.focus();
@@ -190,7 +206,9 @@ customElement("cc-graph", {}, () => {
     <div class="graph">
       <div class="graph-toolbar">
         <span>{selected().size} selected</span>
-        <button type="button" onClick={resetView}>reset view</button>
+        <button type="button" onClick={resetView}>
+          reset view
+        </button>
         <button type="button" disabled={selected().size === 0} onClick={submit}>
           preview selection
         </button>
@@ -212,7 +230,13 @@ customElement("cc-graph", {}, () => {
             height: `${bounds().height}px`,
           }}
         >
-          <svg class="graph-edges" width={bounds().width} height={bounds().height}>
+          <svg
+            class="graph-edges"
+            width={bounds().width}
+            height={bounds().height}
+            aria-hidden="true"
+            role="presentation"
+          >
             <For each={edges()}>
               {(edge) => (
                 <path
