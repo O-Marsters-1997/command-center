@@ -1,12 +1,15 @@
-<td colspan="18" class="detail">
+<td colspan="10" class="detail">
   <dl>
     <dt>base sha</dt><dd>{{.BaselineSHA}}</dd>
-    <dt>worktree</dt><dd>{{.Worktree}}</dd>
-    <dt>elapsed</dt><dd>{{.Elapsed}}</dd>
+    <dt>worktree</dt><dd>{{if .Worktree}}{{.Worktree}}{{else}}no worktree has been cut{{end}}</dd>
+    <dt>elapsed</dt><dd>{{if .Elapsed}}{{.Elapsed}}{{else}}not started{{end}}</dd>
     <dt>checks</dt>
     <dd>
-      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{end -}}
+      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}no checks{{end -}}
     </dd>
+    {{if .Draft}}<dt>draft</dt><dd>{{.DraftReason}}</dd>{{end}}
+    {{if .BaseVerdict}}<dt>base verdict</dt><dd>{{.BaseVerdict}}</dd>{{end}}
+    {{if .Warning}}<dt>warning</dt><dd>{{.Warning}}</dd>{{end}}
   </dl>
   <div class="run-log">
     <div class="run-log-header">

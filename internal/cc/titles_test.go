@@ -36,11 +36,17 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	page := boardFor(t, store)
 
-	if got, want := rowTicket(t, page, tickets[0].URL),
-		"#100 Put each ticket&#39;s issue title on its row"; got != want {
+	if got, want := rowTicket(t, page, tickets[0].URL), "#100"; got != want {
 		t.Errorf("titled row's ticket cell = %q, want %q", got, want)
 	}
+	if got, want := rowTask(t, page, tickets[0].URL),
+		"Put each ticket&#39;s issue title on its row"; got != want {
+		t.Errorf("titled row's task cell = %q, want %q", got, want)
+	}
 	if got, want := rowTicket(t, page, tickets[1].URL), "#101"; got != want {
-		t.Errorf("untitled row's ticket cell = %q, want %q (its number alone)", got, want)
+		t.Errorf("untitled row's ticket cell = %q, want %q", got, want)
+	}
+	if got, want := rowTask(t, page, tickets[1].URL), "untitled"; got != want {
+		t.Errorf("untitled row's task cell = %q, want %q", got, want)
 	}
 }

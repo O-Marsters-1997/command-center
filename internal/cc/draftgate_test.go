@@ -300,8 +300,8 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
-	if base := rowCellAt(t, page, "sandbox://CHILD", 5); base != "parent" {
-		t.Errorf("child's base = %q, want %q: a draft PR is still OPEN for unlock purposes", base, "parent")
+	if stack := rowCellAt(t, page, "sandbox://CHILD", 4); stack != "L2 ← parent" {
+		t.Errorf("child's stack = %q, want it based on parent: a draft PR is still OPEN for unlock purposes", stack)
 	}
 	if state := rowState(t, page, "sandbox://CHILD"); state != "ready" {
 		t.Errorf("child's state = %q, want ready", state)

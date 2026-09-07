@@ -110,6 +110,20 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	}
 }
 
+const goldenBoardSelected = "testdata/board_selected.golden.html"
+
+func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
+	t.Parallel()
+
+	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := startedAt.Add(90 * time.Second)
+	server := cc.NewServer(
+		detailStore(t, "testdata/fixtures/run.jsonl", startedAt, now), fixedClock(now), nil, "")
+
+	target := "/board?" + url.Values{"sel": {"https://github.com/o/r/issues/76"}}.Encode()
+	assertGolden(t, goldenBoardSelected, []byte(renderPath(t, server, target)))
+}
+
 func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 	t.Parallel()
 
@@ -159,7 +173,7 @@ func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 	server.ServeHTTP(selected, httptest.NewRequest(
 		http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
 
-	for _, shared := range []string{"/repos/repo-cc-76", "1m30s"} {
+	for _, shared := range []string{"1m30s"} {
 		if !strings.Contains(board.Body.String(), shared) {
 			t.Fatalf("board is missing %q, so the fragment cannot be compared against it", shared)
 		}

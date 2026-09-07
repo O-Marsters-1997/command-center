@@ -60,19 +60,13 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://ROOT", 7); got != "0" {
-		t.Errorf("root stack depth = %q, want 0", got)
-	}
-	if got := rowCellAt(t, page, "sandbox://ROOT", 8); got != "1" {
-		t.Errorf("root merge order = %q, want 1", got)
+	if got := rowCellAt(t, page, "sandbox://ROOT", 4); got != "L1" {
+		t.Errorf("root stack = %q, want L1 (merge order 1, based on main)", got)
 	}
 	for _, c := range children {
 		ticket := "sandbox://" + c
-		if got := rowCellAt(t, page, ticket, 7); got != "1" {
-			t.Errorf("%s stack depth = %q, want 1", c, got)
-		}
-		if got := rowCellAt(t, page, ticket, 8); got != "2" {
-			t.Errorf("%s merge order = %q, want 2", c, got)
+		if got := rowCellAt(t, page, ticket, 4); got != "L2 ← root" {
+			t.Errorf("%s stack = %q, want L2 ← root (merge order 2, based on root)", c, got)
 		}
 	}
 }
@@ -118,11 +112,11 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://PARENT", 9); got != "" {
-		t.Errorf("root (main-based) warning = %q, want empty even with the label", got)
+	if got := rowCellAt(t, page, "sandbox://PARENT", 1); strings.Contains(got, "flag-warning") {
+		t.Errorf("root (main-based) state cell = %q, want no warning mark even with the label", got)
 	}
-	got := rowCellAt(t, page, "sandbox://CHILD", 9)
+	got := rowCellAt(t, page, "sandbox://CHILD", 1)
 	if !strings.Contains(got, "ready-to-merge") {
-		t.Errorf("child (non-main-based) warning = %q, want it to name ready-to-merge", got)
+		t.Errorf("child (non-main-based) state cell = %q, want a warning mark naming ready-to-merge", got)
 	}
 }

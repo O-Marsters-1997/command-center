@@ -24,7 +24,7 @@ exec cc tick --count 1
 # this reason). Neither run relaunches.
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=2 '<td>running</td>'
+stdout -count=2 '>running</span>'
 exec cc request GET /events
 stdout -count=2 'run_launched'
 grep -count=1 'commits_slow.sh .*services-pla-40' $WORK/agent.log
@@ -46,7 +46,7 @@ grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.
 cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 stdout 'waiting on sandbox://PLA-40'
 ! grep 'pr ready cc-1' $WORK/gh.log
 
@@ -56,9 +56,9 @@ stdout 'waiting on sandbox://PLA-40'
 cc-fake-gh-head cross-repo-open cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>waiting_on_producer_deploy</td>'
-stdout '<td>checking</td>'
-! stdout '<td>merged</td>'
+stdout '>waiting_on_producer_deploy</span>'
+stdout '>checking</span>'
+! stdout '>merged</span>'
 ! grep 'pr ready cc-1' $WORK/gh.log
 
 # The producer merges. The consumer's own compat check is still red, so it stays a draft even
@@ -67,8 +67,8 @@ stdout '<td>checking</td>'
 cc-fake-gh-head cross-repo-merged cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>merged</td>'
-stdout '<td>waiting_on_producer_deploy</td>'
+stdout '>merged</span>'
+stdout '>waiting_on_producer_deploy</span>'
 ! grep 'pr ready cc-1' $WORK/gh.log
 
 # re-check reruns the compat check's own Actions run, parsed out of its details URL (issue #56).
@@ -85,7 +85,7 @@ cc-fake-gh-head cross-repo-compat-green cc-1
 exec cc tick --count 1
 grep -count=1 'pr ready cc-1' $WORK/gh.log
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 
 # GitHub now reports the pull request as ready, as a real observe would from here on. Further
 # ticks must not call `gh pr ready` again, and the producer's own row is never drafted or
