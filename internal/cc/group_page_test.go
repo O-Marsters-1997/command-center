@@ -19,7 +19,8 @@ type renderedRow struct {
 	Ticket string
 }
 
-var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*<button[^>]*>([^<]*)</button>`)
+var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*` +
+	`<button[^>]*>([^<]*)</button>`)
 
 func renderedRows(page string) []renderedRow {
 	matches := rowTagRE.FindAllStringSubmatch(page, -1)
