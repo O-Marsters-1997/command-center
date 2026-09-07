@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -13,6 +14,7 @@ type bandView struct {
 	Fleet  fleetCard
 	Stack  stackCard
 	Checks checksCard
+	Spend  spendCard
 }
 
 type fleetCard struct {
@@ -47,8 +49,23 @@ type checksCard struct {
 	Red      int
 }
 
+type spendCard struct {
+	Total    float64
+	Count    int
+	Failures int
+	Average  float64
+}
+
+var failureFamilyStates = map[string]bool{
+	plan.Failed.String(): true, plan.CutFailed.String(): true,
+	plan.PushFailed.String(): true, plan.VerificationFailed.String(): true,
+}
+
 func deriveBand(rows []row) bandView {
-	return bandView{Fleet: deriveFleetCard(rows), Stack: deriveStackCard(rows), Checks: deriveChecksCard(rows)}
+	return bandView{
+		Fleet: deriveFleetCard(rows), Stack: deriveStackCard(rows),
+		Checks: deriveChecksCard(rows), Spend: deriveSpendCard(rows),
+	}
 }
 
 func deriveFleetCard(rows []row) fleetCard {
@@ -122,6 +139,24 @@ func deriveChecksCard(rows []row) checksCard {
 			default:
 			}
 		}
+	}
+	return card
+}
+
+func deriveSpendCard(rows []row) spendCard {
+	var card spendCard
+	for _, r := range rows {
+		if !r.SpendSettled {
+			continue
+		}
+		card.Total += r.SpendUSD
+		card.Count++
+		if failureFamilyStates[r.State] {
+			card.Failures++
+		}
+	}
+	if card.Count > 0 {
+		card.Average = card.Total / float64(card.Count)
 	}
 	return card
 }

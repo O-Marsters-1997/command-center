@@ -115,3 +115,54 @@ func TestDeriveChecksCardIsEmptyWhenNoBranchHasReported(t *testing.T) {
 		t.Errorf("deriveChecksCard with no checks = %+v, want an unreported card", got)
 	}
 }
+
+func TestDeriveSpendCardCountsOnlySettledRuns(t *testing.T) {
+	t.Parallel()
+
+	rows := []row{
+		{State: "merged", SpendSettled: true, SpendUSD: 2},
+		{State: "failed", SpendSettled: true, SpendUSD: 6},
+		{State: "running", SpendSettled: false, SpendTokens: 500},
+		{},
+	}
+	got := deriveSpendCard(rows)
+
+	if got.Count != 2 {
+		t.Errorf("Count = %d, want 2 (the two settled runs; the alive and empty rows don't count)", got.Count)
+	}
+	if got.Total != 8 {
+		t.Errorf("Total = %v, want 8", got.Total)
+	}
+	if got.Failures != 1 {
+		t.Errorf("Failures = %d, want 1 (the failed row)", got.Failures)
+	}
+	if got.Average != 4 {
+		t.Errorf("Average = %v, want 4 (8 across 2 runs)", got.Average)
+	}
+}
+
+func TestDeriveSpendCardIsEmptyWithNoSettledRuns(t *testing.T) {
+	t.Parallel()
+
+	got := deriveSpendCard([]row{{State: "running", SpendTokens: 500}, {}})
+	if got.Count != 0 || got.Total != 0 || got.Failures != 0 || got.Average != 0 {
+		t.Errorf("deriveSpendCard with no settled runs = %+v, want the zero-value card", got)
+	}
+}
+
+func TestDeriveSpendCardCountsEveryFailureFamilyState(t *testing.T) {
+	t.Parallel()
+
+	rows := []row{
+		{State: "failed", SpendSettled: true},
+		{State: "cut_failed", SpendSettled: true},
+		{State: "push_failed", SpendSettled: true},
+		{State: "verification_failed", SpendSettled: true},
+		{State: "merged", SpendSettled: true},
+	}
+	got := deriveSpendCard(rows)
+
+	if got.Failures != 4 {
+		t.Errorf("Failures = %d, want 4 (every failure-family state, not merged)", got.Failures)
+	}
+}

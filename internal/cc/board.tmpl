@@ -54,7 +54,11 @@
       {{.Elapsed}}
       {{- else}}not started{{end}}
     </td>
-    <td></td>
+    <td>
+      {{- if .SpendSettled}}${{printf "%.2f" .SpendUSD}}
+      {{- else if .SpendTokens}}{{.SpendTokens}} tok
+      {{- else}}no spend{{end}}
+    </td>
     <td class="verbs-cell">
       {{- $row := .}}
       {{- range .Verbs}}
