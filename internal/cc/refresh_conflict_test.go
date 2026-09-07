@@ -113,8 +113,10 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
 		t.Fatalf("child's state = %q, want refresh_conflicted", state)
 	}
-	if got := rowCellAt(t, page, c.f.child.URL, 10); got != c.f.childWorktree {
-		t.Errorf("child's rendered worktree = %q, want the path to shell into: %q", got, c.f.childWorktree)
+	detail := renderPath(t, c.server, selPagePath(c.f.child.URL))
+	if !strings.Contains(detail, c.f.childWorktree) {
+		t.Errorf("child's detail panel does not show its worktree, want the path to shell into: %q:\n%s",
+			c.f.childWorktree, detail)
 	}
 	if !strings.Contains(page, `value="`+plan.VerbAbort+`"`) {
 		t.Errorf("page offers no abort button:\n%s", page)

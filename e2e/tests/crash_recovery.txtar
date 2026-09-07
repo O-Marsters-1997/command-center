@@ -25,13 +25,15 @@ exists $WORK/repo-cc-1/ready
 # A fresh instance, with nothing in memory from the one that spawned it, finds the run alive.
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=1 '<td>running</td>'
+stdout -count=1 '>running</span>'
 stdout 'agent running'
 
-# And it is the same process: the pgid the page carries is the one sleeps.sh recorded for itself
-# under the previous instance, read back from the OS rather than from the app's own bookkeeping.
-# Matched as a bare word so the assertion survives the page's markup changing around it.
-exec sh -c 'pgid=$(cat $WORK/repo-cc-1/pgid) && cc request GET / | grep -qw "$pgid"'
+# And it is the same process: the pgid the confirm page carries is the one sleeps.sh recorded for
+# itself under the previous instance, read back from the OS rather than from the app's own
+# bookkeeping. The board itself no longer surfaces pgid, so the kill confirm page -- the one place
+# left that renders it -- is asked instead. Matched as a bare word so the assertion survives the
+# page's markup changing around it.
+exec sh -c 'pgid=$(cat $WORK/repo-cc-1/pgid) && cc request GET "/confirm?verb=kill&task=sandbox://CC-1" | grep -qw "$pgid"'
 
 # One spawn, ever. A relaunch would have appended a second line here and a second run_launched,
 # and would have been invisible to every assertion above.
@@ -45,6 +47,6 @@ stdout -count=1 'run_launched'
 exec cc request POST '/verb?verb=kill&task=sandbox://CC-1'
 exec cc tick --count 1
 exec cc request GET /
-! stdout '<td>running</td>'
-stdout -count=1 '<td>failed</td>'
+! stdout '>running</span>'
+stdout -count=1 '>failed</span>'
 grep -count=1 'sleeps.sh' $WORK/agent.log

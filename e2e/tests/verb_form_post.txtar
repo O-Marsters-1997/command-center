@@ -19,7 +19,7 @@ exec sleep 0.5
 # CC-1's agent committed and pushed, gh pr create failed; CC-2 waits on CC-1's PR.
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>push_failed</td>'
+stdout '>push_failed</span>'
 stdout 'waiting on sandbox://CC-1'
 
 grep -count=1 'pr create' $WORK/gh.log

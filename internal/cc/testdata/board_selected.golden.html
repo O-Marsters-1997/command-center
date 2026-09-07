@@ -1,0 +1,58 @@
+<table id="board" hx-get="/board?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" hx-trigger="every 5s" hx-swap="outerHTML">
+  <tr>
+    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
+  </tr>
+  
+  
+  
+  <tr class="selected" data-depth="0">
+    <td></td>
+    <td>
+      <span class="pill pill-live pill-disc pill-pulse">running</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
+    </td>
+    <td><div class="reason">agent running</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>
+      <span class="meter"><span class="meter-fill" style="width: 50%"></span></span>
+      1/2
+    </td>
+    <td>#76 open</td>
+    <td>
+      <span class="meter"><span class="meter-fill" style="width: 100%"></span></span>
+      1m30s
+    </td>
+    <td></td>
+    <td class="verbs-cell">
+      <form method="get" action="/confirm">
+        <input type="hidden" name="task" value="https://github.com/o/r/issues/76">
+        <button type="submit" name="verb" value="kill">kill</button>
+      </form></td>
+  </tr>
+  
+  
+  <tr id="detail-e0f89266e57a" hx-preserve="true"><td colspan="10" class="detail">
+  <dl>
+    <dt>base sha</dt><dd>basesha1234</dd>
+    <dt>worktree</dt><dd>/repos/repo-cc-76</dd>
+    <dt>elapsed</dt><dd>1m30s</dd>
+    <dt>checks</dt>
+    <dd><div>build: IN_PROGRESS</div><div>unit: COMPLETED SUCCESS</div></dd>
+    
+    
+    
+    <dt>log</dt><dd>testdata/fixtures/run.jsonl</dd>
+  </dl>
+  <pre hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76/log?from=33" sse-swap="message" sse-close="end" hx-swap="beforeend"><div>line xxx 1</div><div>line xxx 2</div><div>line xxx 3</div></pre>
+</td>
+</tr>
+  
+
+  
+  
+</table>

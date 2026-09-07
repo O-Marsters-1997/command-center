@@ -223,8 +223,8 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatalf("parent's own state = %q, want needs_you (its CI check failed)", state)
 	}
 
-	if got := rowCellAt(t, page, "sandbox://CHILD", 6); got != "needs_you" {
-		t.Errorf("child's rendered base verdict = %q, want needs_you (the parent's own verdict)", got)
+	if got := rowCellAt(t, page, "sandbox://CHILD", 1); !strings.Contains(got, `title="base verdict: needs_you"`) {
+		t.Errorf("child's rendered base verdict flag = %q, want needs_you (the parent's own verdict)", got)
 	}
 }
 
@@ -604,7 +604,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	wants := []string{"running", "4242", "1m30s", "/state/runs/1.jsonl",
+	wants := []string{"running", "1m30s",
 		`<button type="submit" name="verb" value="kill">kill</button>`}
 	for _, want := range wants {
 		if !strings.Contains(body, want) {

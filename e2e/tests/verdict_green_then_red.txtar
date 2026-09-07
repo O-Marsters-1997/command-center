@@ -24,7 +24,7 @@ exec cc tick --count 1
 cc-fake-gh-head verdict-review-me cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>review_me</td>'
+stdout '>review_me</span>'
 exec cc request GET /events
 stdout '"Kind":"verdict_transition","Detail":"review_me'
 
@@ -36,7 +36,7 @@ stdout -count=1 'verdict_transition'
 cc-fake-gh-head verdict-one-red cc-1
 exec cc tick --count 1
 exec cc request GET /
-stdout '<td>needs_you</td>'
+stdout '>needs_you</span>'
 stdout 'a required check failed'
 exec cc request GET /events
 stdout -count=2 'verdict_transition'
@@ -45,8 +45,8 @@ stdout '"Kind":"verdict_transition","Detail":"needs_you'
 cc-fake-gh verdict-foreign-head
 exec cc tick --count 1
 exec cc request GET /
-! stdout '<td>review_me</td>'
-stdout '<td>checking</td>'
+! stdout '>review_me</span>'
+stdout '>checking</span>'
 
 -- mergify-v1.yml --
 queue_rules: []

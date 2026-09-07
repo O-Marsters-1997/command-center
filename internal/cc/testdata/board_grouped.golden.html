@@ -1,151 +1,139 @@
 <table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
-    <th>stack depth</th><th>merge order</th><th>warning</th>
-    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
-    <th>draft</th><th>draft reason</th><th>detail</th>
+    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
   
   
   <tr class="group-head" data-depth="0">
-    <td>#ROOT</td>
-    <td>failed</td>
-    <td>no commits after this run&#39;s baseline; log at /state/runs/1.jsonl</td>
+    <td></td>
     <td>
+      <span class="pill pill-stop pill-ring">failed</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">#ROOT</button>
+    </td>
+    <td><div class="reason">no commits after this run&#39;s baseline; log at /state/runs/1.jsonl</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://ROOT">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
-    <td>root</td>
-    <td>main</td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td>111</td>
-    <td></td>
-    <td>/state/runs/1.jsonl</td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
   
   <tr data-depth="1">
-    <td>#CC-2</td>
-    <td>queued</td>
-    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td></td>
     <td>
+      <span class="pill pill-wait pill-disc">queued</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
+    </td>
+    <td><div class="reason">waiting on sandbox://ROOT&#39;s PR</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://CC-2">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
-    <td>CC-2</td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
   <tr data-depth="1">
-    <td>#CC-3</td>
-    <td>queued</td>
-    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td></td>
     <td>
+      <span class="pill pill-wait pill-disc">queued</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-3" hx-push-url="/?sel=sandbox%3A%2F%2FCC-3" hx-target="#board" hx-swap="outerHTML">#CC-3</button>
+    </td>
+    <td><div class="reason">waiting on sandbox://ROOT&#39;s PR</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://CC-3">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
-    <td>CC-3</td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-3" hx-push-url="/?sel=sandbox%3A%2F%2FCC-3" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
   <tr data-depth="1">
-    <td>#CC-4</td>
-    <td>queued</td>
-    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td></td>
     <td>
+      <span class="pill pill-wait pill-disc">queued</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-4" hx-push-url="/?sel=sandbox%3A%2F%2FCC-4" hx-target="#board" hx-swap="outerHTML">#CC-4</button>
+    </td>
+    <td><div class="reason">waiting on sandbox://ROOT&#39;s PR</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://CC-4">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
-    <td>CC-4</td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-4" hx-push-url="/?sel=sandbox%3A%2F%2FCC-4" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
   <tr data-depth="1">
-    <td>#CC-5</td>
-    <td>queued</td>
-    <td>waiting on sandbox://ROOT&#39;s PR</td>
+    <td></td>
     <td>
+      <span class="pill pill-wait pill-disc">queued</span>
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-5" hx-push-url="/?sel=sandbox%3A%2F%2FCC-5" hx-target="#board" hx-swap="outerHTML">#CC-5</button>
+    </td>
+    <td><div class="reason">waiting on sandbox://ROOT&#39;s PR</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://CC-5">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
-    <td>CC-5</td>
-    <td></td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
-    <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FCC-5" hx-push-url="/?sel=sandbox%3A%2F%2FCC-5" hx-target="#board" hx-swap="outerHTML">detail</button>
-    </td>
   </tr>
   
 
@@ -154,28 +142,26 @@
   
   
   <tr data-depth="0">
-    <td>#LONE</td>
-    <td>ready</td>
-    <td>no blockers</td>
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://LONE"
-        hx-get="/board?task=sandbox%3A%2F%2FLONE" hx-push-url="/?task=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">launch</td>
-    <td>lone</td>
-    <td>main</td>
-    <td></td>
-    <td>0</td>
-    <td>1</td>
-    <td></td>
-    <td></td>
-    <td>none</td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td>false</td>
-    <td></td>
+        hx-get="/board?task=sandbox%3A%2F%2FLONE" hx-push-url="/?task=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <button type="button" hx-get="/board?sel=sandbox%3A%2F%2FLONE" hx-push-url="/?sel=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">detail</button>
+      <span class="pill pill-idle pill-ring">ready</span>
     </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FLONE" hx-push-url="/?sel=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">#LONE</button>
+    </td>
+    <td><div class="reason">no blockers</div>
+      <div class="title">untitled</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td></td>
+    <td class="verbs-cell"></td>
   </tr>
   
 

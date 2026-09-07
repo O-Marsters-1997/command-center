@@ -16,7 +16,7 @@ exec cc request POST '/launch?task=sandbox://CC-1'
 exec cc tick --count 1
 
 exec cc request GET /
-stdout -count=1 '<td>cut_failed</td>'
+stdout -count=1 '>cut_failed</span>'
 stdout 'tp new failed to cut a worktree'
 grep -count=1 'new cc-1' $WORK/tp.log
 
@@ -25,7 +25,7 @@ grep -count=1 'new cc-1' $WORK/tp.log
 exec cc tick --count 3
 grep -count=1 'new cc-1' $WORK/tp.log
 exec cc request GET /
-stdout -count=1 '<td>cut_failed</td>'
+stdout -count=1 '>cut_failed</span>'
 
 # No worktree was left behind, and no run ever claimed a pgid: the agent was never spawned, so
 # there was never a process to reap.

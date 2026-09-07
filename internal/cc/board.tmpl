@@ -1,10 +1,8 @@
 {{define "board" -}}
 <table id="board" hx-get="{{.BoardPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th>ticket</th><th>state</th><th>why</th><th>verbs</th><th>branch</th><th>base</th><th>base verdict</th>
-    <th>stack depth</th><th>merge order</th><th>warning</th>
-    <th>worktree</th><th>pr</th><th>pgid</th><th>elapsed</th><th>log</th>
-    <th>draft</th><th>draft reason</th><th>detail</th>
+    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   {{range $group := .Groups}}
   {{if $group.Root}}
@@ -18,16 +16,49 @@
 {{- end}}
 
 {{define "row"}}
-  <tr{{if .Head}} class="group-head"{{end}} data-depth="{{.Depth}}">
-    <td>{{.Ticket}}{{with .Title}} {{.}}{{end}}</td>
-    <td>{{.State}}{{range .PendingVerbs}} · {{.}} queued{{end}}</td>
-    <td>{{.Reason}}</td>
+  <tr{{with rowClasses .Head .Selected}} class="{{.}}"{{end}} data-depth="{{.Depth}}">
     <td>
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
       <input type="checkbox" form="launch" name="task" value="{{$row.URL}}"{{if $row.Checked}} checked{{end}}
-        hx-get="{{$row.TogglePath}}" hx-push-url="{{$row.TogglePush}}" hx-target="#board" hx-swap="outerHTML">{{.}}
+        hx-get="{{$row.TogglePath}}" hx-push-url="{{$row.TogglePush}}" hx-target="#board" hx-swap="outerHTML">
+      {{- end}}
+      {{- end -}}
+    </td>
+    <td>
+      <span class="pill pill-{{.Tone}}{{if .Unattended}} pill-disc{{else}} pill-ring{{end}}{{if .Alive}} pill-pulse{{end}}">{{.State}}</span>
+      {{- if .Draft}} <mark class="flag" title="draft: {{.DraftReason}}">draft</mark>{{end}}
+      {{- if .BaseVerdict}} <mark class="flag" title="base verdict: {{.BaseVerdict}}">base {{.BaseVerdict}}</mark>{{end}}
+      {{- if .Warning}} <mark class="flag flag-warning" title="{{.Warning}}">⚠ ready-to-merge</mark>{{end}}
+      {{- range .PendingVerbs}} · {{.}} queued{{end}}
+    </td>
+    <td>
+      <button type="button" class="ticket-link" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
+    </td>
+    <td>
+      {{- if .Reason}}<div class="reason">{{.Reason}}</div>{{end}}
+      <div class="title">{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
+    </td>
+    <td>{{.Stack}}</td>
+    <td>
+      {{- if .Checks}}
+      <span class="meter"><span class="meter-fill" style="width: {{percent .ChecksPassed (len .Checks)}}%"></span></span>
+      {{.ChecksPassed}}/{{len .Checks}}
+      {{- else}}no checks{{end}}
+    </td>
+    <td>{{if .PRNumber}}#{{.PRNumber}} {{.PRState}}{{else}}no pr{{end}}</td>
+    <td>
+      {{- if .Elapsed}}
+      <span class="meter"><span class="meter-fill" style="width: {{.ElapsedPercent}}%"></span></span>
+      {{.Elapsed}}
+      {{- else}}not started{{end}}
+    </td>
+    <td></td>
+    <td class="verbs-cell">
+      {{- $row := .}}
+      {{- range .Verbs}}
+      {{- if eq . $row.LaunchVerb}}
       {{- else if destructive .}}
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="{{$row.URL}}">
@@ -42,22 +73,6 @@
       </form>
       {{- end}}
       {{- end -}}
-    </td>
-    <td>{{.Branch}}</td>
-    <td>{{.Base}}</td>
-    <td>{{.BaseVerdict}}</td>
-    <td>{{.StackDepth}}</td>
-    <td>{{.MergeOrder}}</td>
-    <td>{{.Warning}}</td>
-    <td>{{.Worktree}}</td>
-    <td>{{.PR}}</td>
-    <td>{{.Pgid}}</td>
-    <td>{{.Elapsed}}</td>
-    <td>{{.LogPath}}</td>
-    <td>{{.Draft}}</td>
-    <td>{{.DraftReason}}</td>
-    <td>
-      <button type="button" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">detail</button>
     </td>
   </tr>
   {{if .Selected}}
