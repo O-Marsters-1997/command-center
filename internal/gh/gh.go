@@ -160,6 +160,14 @@ func Rerun(ctx context.Context, repoPath, runID string) error {
 	return err
 }
 
+// CloseIssue closes issueURL's GitHub issue -- the post-merge cleanup verb's own bookkeeping
+// step, closing the issue tp remove --merged's worktree teardown never touches
+// (docs/prds/prd-command-centre.md § Phase 6, issue #147).
+func CloseIssue(ctx context.Context, repoPath, issueURL string) error {
+	_, err := run(ctx, repoPath, "issue", "close", issueURL)
+	return err
+}
+
 // IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
 // The URL is the join key because a task holds the whole ticket URL: reconstructing one from
 // `number` would guess at the repo's own host.

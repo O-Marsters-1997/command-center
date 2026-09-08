@@ -104,6 +104,68 @@ func TestRemoveForceDeletesSquashMergedBranch(t *testing.T) {
 	}
 }
 
+func TestRemoveMergedDeletesASquashMergedBranch(t *testing.T) {
+	repo := initRepo(t)
+	worktree := squashMergedBranch(t, repo, "feat/squashed")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"remove", "--merged", "feat/squashed"}, env(nil), &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %q)", code, stderr.String())
+	}
+	if branches := git(t, repo, "branch", "--list", "feat/squashed"); strings.TrimSpace(branches) != "" {
+		t.Errorf("branch list = %q, want the branch deleted", branches)
+	}
+	if _, err := os.Stat(worktree); !os.IsNotExist(err) {
+		t.Errorf("stat %s = %v, want the worktree removed", worktree, err)
+	}
+}
+
+func TestRemoveMergedRefusesADirtyWorktree(t *testing.T) {
+	repo := initRepo(t)
+	worktree := squashMergedBranch(t, repo, "feat/squashed")
+	if err := os.WriteFile(filepath.Join(worktree, "scratch.txt"), []byte("oops\n"), 0o600); err != nil {
+		t.Fatalf("writing scratch file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"remove", "--merged", "feat/squashed"}, env(nil), &stdout, &stderr)
+
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero for a dirty worktree (stderr: %q)", stderr.String())
+	}
+	if _, err := os.Stat(worktree); err != nil {
+		t.Errorf("stat %s = %v, want a dirty worktree left in place", worktree, err)
+	}
+}
+
+func TestRemoveMergedRefusesUnpushedCommits(t *testing.T) {
+	repo := initRepo(t)
+	remote := filepath.Join(filepath.Dir(repo), "origin.git")
+	git(t, repo, "init", "-q", "--bare", remote)
+	git(t, repo, "remote", "add", "origin", remote)
+	git(t, repo, "push", "-q", "-u", "origin", "main")
+
+	worktree := squashMergedBranch(t, repo, "feat/squashed")
+	git(t, repo, "push", "-q", "origin", "feat/squashed")
+	if err := os.WriteFile(filepath.Join(worktree, "more.txt"), []byte("more\n"), 0o600); err != nil {
+		t.Fatalf("writing file: %v", err)
+	}
+	git(t, worktree, "add", "more.txt")
+	git(t, worktree, "commit", "-q", "-m", "not yet pushed")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"remove", "--merged", "feat/squashed"}, env(nil), &stdout, &stderr)
+
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero for unpushed commits (stderr: %q)", stderr.String())
+	}
+	if branches := git(t, repo, "branch", "--list", "feat/squashed"); !strings.Contains(branches, "feat/squashed") {
+		t.Errorf("branch list = %q, want the branch to survive the refusal", branches)
+	}
+}
+
 func TestFailEnvCreatesNothing(t *testing.T) {
 	repo := initRepo(t)
 

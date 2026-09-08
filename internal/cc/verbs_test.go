@@ -26,12 +26,14 @@ type removeWorktreeFixture struct {
 	ticket                       cc.Ticket
 	runID                        int64
 	at                           time.Time
+	ghLog                        string
 }
 
-// installFakeTpRemove puts a script named tp on PATH supporting only `remove --force <branch>`:
+// installFakeTpRemove puts a script named tp on PATH supporting only `remove --merged <branch>`:
 // it looks the branch's worktree path up via `git worktree list --porcelain` (run in repoPath,
-// matching tp.Remove's cmd.Dir) and delegates to real git, so these tests never depend on, or
-// risk touching, a real treepad installation on the machine running them.
+// matching tp.Remove's cmd.Dir) and delegates to real git, refusing a dirty worktree or unpushed
+// commits the same way real tp remove --merged does, so these tests never depend on, or risk
+// touching, a real treepad installation on the machine running them.
 func installFakeTpRemove(t *testing.T) {
 	t.Helper()
 	bin := t.TempDir()
@@ -39,11 +41,19 @@ func installFakeTpRemove(t *testing.T) {
 		"set -eu\n" +
 		"[ \"$1\" = remove ] || { echo 'fake tp: only remove is supported' >&2; exit 1; }\n" +
 		"shift\n" +
-		"[ \"$1\" = --force ] && shift\n" +
+		"[ \"$1\" = --merged ] && shift\n" +
 		"branch=\"$1\"\n" +
 		"path=$(git worktree list --porcelain | awk -v b=\"branch refs/heads/$branch\" " +
 		"'/^worktree /{p=$2} $0==b{print p}')\n" +
 		"[ -n \"$path\" ] || { echo \"fake tp: no worktree for $branch\" >&2; exit 1; }\n" +
+		"dirty=$(git -C \"$path\" status --porcelain)\n" +
+		"[ -z \"$dirty\" ] || { echo 'fake tp: worktree is dirty' >&2; exit 1; }\n" +
+		"if git -C \"$path\" rev-parse --verify -q \"refs/remotes/origin/$branch\" >/dev/null 2>&1; then\n" +
+		"  local_tip=$(git -C \"$path\" rev-parse \"refs/heads/$branch\")\n" +
+		"  remote_tip=$(git -C \"$path\" rev-parse \"refs/remotes/origin/$branch\")\n" +
+		"  [ \"$local_tip\" = \"$remote_tip\" ] || " +
+		"{ echo 'fake tp: branch has unpushed commits' >&2; exit 1; }\n" +
+		"fi\n" +
 		"git worktree remove --force \"$path\"\n" +
 		"git branch -D \"$branch\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(script), 0o755); err != nil {
@@ -54,9 +64,10 @@ func installFakeTpRemove(t *testing.T) {
 
 func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture {
 	t.Helper()
-	// Not t.Parallel(): repoWithOrigin and installFakeTpRemove both use t.Setenv.
+	// Not t.Parallel(): repoWithOrigin, installFakeTpRemove and installFakeGh all use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeTpRemove(t)
+	ghLog := installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, branch)
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", branch)
@@ -90,7 +101,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 
 	return removeWorktreeFixture{
 		root: root, repoPath: repoPath, worktreePath: worktreePath,
-		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at,
+		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at, ghLog: ghLog,
 	}
 }
 
@@ -138,7 +149,7 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 		t.Errorf("worktree still exists at %s", f.worktreePath)
 	}
-	// tp remove --force deletes the *local* branch; the remote copy is GitHub's own
+	// tp remove --merged deletes the *local* branch; the remote copy is GitHub's own
 	// deleteBranchOnMerge, unrelated to this call, so it is deliberately not asserted here.
 	if err := exec.Command("git", "-C", f.repoPath, "rev-parse", "--verify", "refs/heads/cc-1").Run(); err == nil {
 		t.Error("the local branch still exists after remove-worktree")
@@ -152,6 +163,22 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	}
 	if !hasEvent(events, "worktree_removed", "") {
 		t.Error("no worktree_removed event")
+	}
+
+	ghLog, err := os.ReadFile(f.ghLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ghLog), "issue close "+f.ticket.URL) {
+		t.Errorf("gh.log = %q, want an issue close call for %s", ghLog, f.ticket.URL)
+	}
+
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 0 {
+		t.Errorf("tickets = %+v, want the merged ticket's row dropped from the fleet", tickets)
 	}
 }
 
@@ -175,6 +202,67 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	}
 	if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 		t.Error("a base_gone row must be removable too")
+	}
+
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != blocker.URL {
+		t.Errorf("tickets = %+v, want only the dependent dropped, the blocker left alone", tickets)
+	}
+}
+
+// installFakeGhFailingIssueClose overrides the fixture's fake gh with one that fails only
+// `issue close`, so a test can exercise that failure without touching any other gh call the
+// verb might make.
+func installFakeGhFailingIssueClose(t *testing.T) {
+	t.Helper()
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"if [ \"$1 $2\" = \"issue close\" ]; then\n" +
+		"  echo 'fake gh: issue close failed' >&2\n" +
+		"  exit 1\n" +
+		"fi\n" +
+		"exit 0\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestRemoveWorktreeRefusesWhenClosingTheIssueFails covers why the issue closes before
+// tp.Remove runs: tp.Remove is irreversible, so a failed `gh issue close` must refuse the whole
+// verb while the worktree is still there to retry against, rather than tearing it down and
+// dropping the row with the issue left open and no way back to it (issue #147).
+func TestRemoveWorktreeRefusesWhenClosingTheIssueFails(t *testing.T) {
+	f := newRemoveWorktreeFixture(t, "cc-1")
+	installFakeGhFailingIssueClose(t)
+	obs := cc.Observation{
+		Worktrees: map[string]string{"cc-1": f.worktreePath},
+		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+	}
+
+	if err := f.requestRemoveWorktree(t, obs); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if _, err := os.Stat(f.worktreePath); err != nil {
+		t.Errorf("the worktree must survive a failed issue close, to retry against: %v", err)
+	}
+	events, err := f.store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "remove_worktree_refused", "issue close failed") {
+		t.Error("no remove_worktree_refused event naming the issue close failure")
+	}
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 {
+		t.Errorf("tickets = %+v, want the row left in place to retry", tickets)
 	}
 }
 

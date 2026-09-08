@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -154,5 +155,43 @@ func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 	}
 	if len(got[1].BlockedBy) != 1 || got[1].BlockedBy[0] != "sandbox://CC-1" {
 		t.Errorf("blocked_by = %v, want [sandbox://CC-1]", got[1].BlockedBy)
+	}
+}
+
+// TestDeleteTicketRemovesARowThatHasRunsAndPushes covers the reason DeleteTicket cannot be a
+// plain `DELETE FROM tickets`: runs and pushes both hold a foreign key back to the ticket's url,
+// and a merged ticket -- the only ticket this verb ever targets -- always has at least a run.
+func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now()
+	if err := store.RecordSpawn(ctx, runID, 111, at, "runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordPush(ctx, ticket.URL, "deadbeef", "main", "cafebabe", at); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteTicket(ctx, ticket.URL); err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 0 {
+		t.Errorf("tickets = %+v, want none left after DeleteTicket", tickets)
 	}
 }

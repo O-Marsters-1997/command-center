@@ -172,6 +172,33 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 	return tx.Commit()
 }
 
+// DeleteTicket drops a ticket's row along with every row that holds a foreign key back to it --
+// its launch memberships, runs and pushes -- the post-merge cleanup verb's own "drop it from the
+// fleet" step (issue #147).
+func (s *Store) DeleteTicket(ctx context.Context, url string) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	for _, stmt := range []string{
+		`DELETE FROM launch_members WHERE ticket_id = ?`,
+		`DELETE FROM runs WHERE ticket_id = ?`,
+		`DELETE FROM pushes WHERE ticket_id = ?`,
+		`DELETE FROM tickets WHERE url = ?`,
+	} {
+		if _, err = tx.ExecContext(ctx, stmt, url); err != nil {
+			return fmt.Errorf("delete ticket %s: %w", url, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}

@@ -25,7 +25,7 @@ var destructiveVerbs = map[string]destruction{
 		risk:      func(r row) string { return r.Pgid },
 	},
 	removeWorktreeVerb: {
-		effect:    "deletes its worktree from disk",
+		effect:    "closes its GitHub issue, deletes its worktree from disk, and drops it from the board",
 		riskLabel: "worktree",
 		risk:      func(r row) string { return r.Worktree },
 	},

@@ -317,10 +317,10 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 	return nil
 }
 
-// applyRemoveWorktreeIntents consumes every pending remove-worktree request: `tp remove
-// --force`, called only with MERGED PR state or on a base_gone row the user clears, and never
-// on a worktree that is dirty or holds unpushed commits (inv. 3). It prunes that ticket's run
-// logs when it does remove.
+// applyRemoveWorktreeIntents consumes every pending remove-worktree request: the post-merge
+// cleanup verb, called only with MERGED PR state or on a base_gone row the user clears (inv. 3).
+// A clean pass closes the ticket's GitHub issue, tears down its worktree via `tp remove
+// --merged`, and drops its row from the fleet (issue #147).
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, removeWorktreeVerb)
 	if err != nil {
@@ -374,16 +374,19 @@ type removeWorktreeContext struct {
 	prs       map[string]plan.PRState
 	stacking  map[string]bool
 	repoPaths map[string]string
-	// lastPushed is what HasUnpushedCommits falls back to once GitHub's delete-branch-on-merge
+	// lastPushed is what UnpushedAfterPrune falls back to once GitHub's delete-branch-on-merge
 	// and our own fetch --prune have removed the remote-tracking ref a merged branch was pushed to.
 	lastPushed map[string]string
 	obs        Observation
 }
 
-// removeWorktreeOne applies inv. 3's gate, in order: is this row even eligible (merged, or
-// base_gone with hasRun) — the cheap check, no git calls — then is the worktree dirty, then
-// does it hold unpushed commits. Any refusal is recorded as an event and nothing is removed;
-// only a clean pass through every gate reaches tp.Remove.
+// removeWorktreeOne applies inv. 3's gate: is this row even eligible (merged, or base_gone with
+// hasRun) — the cheap check, no git calls — then does it hold unpushed commits from the one gap
+// tp remove --merged cannot check itself (its own dirty and unpushed checks cover the rest). Any
+// refusal is recorded as an event and nothing is removed. A clean pass closes the ticket's GitHub
+// issue first, since tp.Remove is the irreversible step: a failed close refuses the whole verb
+// while the worktree is still there to retry against, rather than tearing it down and leaving an
+// open issue with no way back to it (issue #147).
 func (l *Loop) removeWorktreeOne(
 	ctx context.Context, ticket Ticket, rc removeWorktreeContext, hasRun bool, now time.Time,
 ) error {
@@ -392,8 +395,7 @@ func (l *Loop) removeWorktreeOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
 	}
 
-	worktreePath, ok := rc.obs.Worktrees[ticket.Branch]
-	if !ok {
+	if _, ok := rc.obs.Worktrees[ticket.Branch]; !ok {
 		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
 
@@ -405,15 +407,7 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	repoPath := rc.repoPaths[ticket.Repo]
-	dirty, err := IsDirty(ctx, worktreePath)
-	if err != nil {
-		return fmt.Errorf("check dirty for %s: %w", ticket.URL, err)
-	}
-	if dirty {
-		return refuse("worktree is dirty")
-	}
-
-	unpushed, err := HasUnpushedCommits(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
+	unpushed, err := UnpushedAfterPrune(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
 	if err != nil {
 		return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 	}
@@ -421,11 +415,18 @@ func (l *Loop) removeWorktreeOne(
 		return refuse("worktree holds unpushed commits")
 	}
 
+	if err := gh.CloseIssue(ctx, repoPath, ticket.URL); err != nil {
+		return refuse(err.Error())
+	}
+
 	if err := tp.Remove(ctx, repoPath, ticket.Branch); err != nil {
 		return refuse(err.Error())
 	}
 
 	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {
+		return err
+	}
+	if err := l.store.DeleteTicket(ctx, ticket.URL); err != nil {
 		return err
 	}
 	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved})

@@ -173,38 +173,18 @@ func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, e
 	return n, nil
 }
 
-// IsDirty reports whether worktreePath has any uncommitted change, tracked or untracked --
-// `remove worktree`'s first refusal (inv. 3): the app never removes a worktree with anything
-// in it a `git status` would show.
-func IsDirty(ctx context.Context, worktreePath string) (bool, error) {
-	out, err := git(ctx, worktreePath, "status", "--porcelain")
-	if err != nil {
-		return false, err
+// UnpushedAfterPrune reports whether branch has unpushed commits in the one case tp remove
+// --merged cannot check for itself: once the remote-tracking ref is pruned after a merge, there
+// is nothing left for tp's own check to compare against (issue #147).
+func UnpushedAfterPrune(ctx context.Context, repoPath, branch, lastPushedTip string) (bool, error) {
+	if _, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch); err == nil {
+		return false, nil
 	}
-	return len(bytes.TrimSpace(out)) > 0, nil
-}
-
-// HasUnpushedCommits reports whether branch's local tip is ahead of its remote-tracking ref --
-// `remove worktree`'s second refusal (inv. 3).
-//
-// lastPushedTip is the pushed_tip this app last recorded for the branch, or "" if it never
-// pushed one. It is the fallback when the remote-tracking ref will not resolve, which covers
-// two different situations: a branch that was never pushed, and a branch that was pushed,
-// merged, deleted by GitHub's delete-branch-on-merge, and then pruned from under us by our own
-// `git fetch origin --prune`. Both real repos set delete-branch-on-merge, so without this the
-// merged-to-teardown path refuses forever on every squash-merged branch.
-// ponytail: a never-pushed branch still always reads as unpushed (lastPushedTip is "") -- a
-// deliberate conservative refusal, since remove worktree is destructive.
-func HasUnpushedCommits(ctx context.Context, repoPath, branch, lastPushedTip string) (bool, error) {
 	local, err := RevParse(ctx, repoPath, "refs/heads/"+branch)
 	if err != nil {
 		return false, err
 	}
-	remote, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch)
-	if err != nil {
-		return local != lastPushedTip, nil
-	}
-	return local != remote, nil
+	return local != lastPushedTip, nil
 }
 
 // MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing if that is not possible.

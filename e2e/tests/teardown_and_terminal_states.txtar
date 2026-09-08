@@ -1,8 +1,9 @@
 # Terminal states and teardown (docs/prds/prd-command-centre.md § Phase 6): a merged fixture derives
-# merged and remove-worktree calls faketp remove --force; a closed-unmerged fixture on a row
-# that has run derives base_gone, not blocked; remove-worktree refuses a dirty worktree; re-run
-# on a failed row creates a second runs row in the same worktree and pushes its commits through
-# the same push step; close-pr derives pr_closed_unmerged.
+# merged and remove-worktree closes the ticket's issue, calls faketp remove --merged, and drops
+# its row from the board; a closed-unmerged fixture on a row that has run derives base_gone, not
+# blocked; remove-worktree refuses a dirty worktree; re-run on a failed row creates a second runs
+# row in the same worktree and pushes its commits through the same push step; close-pr derives
+# pr_closed_unmerged.
 
 cc-init-repo
 cc-config teardown-cc7-empty
@@ -56,16 +57,25 @@ exec cc request POST '/verb?verb=remove-worktree&task=https://github.com/sandbox
 exec cc tick --count 1
 exists $WORK/repo-cc-1-x
 exec cc request GET /events
-stdout '"Kind":"remove_worktree_refused","Detail":"worktree is dirty"'
+stdout '"Kind":"remove_worktree_refused","Detail":".*untracked files'
 exec rm $WORK/repo-cc-1-x/scratch.txt
 
-# Cleaned up, the same verb now succeeds: tp remove --force, and the worktree is gone.
+# Cleaned up, the same verb now succeeds: the issue is closed, tp remove --merged tears down the
+# worktree, and the ticket's row drops off the board entirely.
 exec cc request POST '/verb?verb=remove-worktree&task=https://github.com/sandbox-org/teardown/issues/CC-1'
 exec cc tick --count 1
 ! exists $WORK/repo-cc-1-x
-grep -count=1 'remove --force cc-1-x' $WORK/tp.log
+# Twice: the dirty attempt above also reached tp remove --merged, which is what refused it --
+# dirty and unpushed are now tp's own checks, not a guard the app runs before calling it.
+grep -count=2 'remove --merged cc-1-x' $WORK/tp.log
+# Twice too: the issue closes before tp.Remove runs, so the dirty attempt above closed it as
+# well -- deliberately, since tp.Remove is the irreversible step and closing an issue twice is a
+# no-op, unlike tearing a worktree down with the issue still open and no way back to it.
+grep -count=2 'issue close https://github.com/sandbox-org/teardown/issues/CC-1' $WORK/gh.log
 exec cc request GET /events
 stdout '"TicketURL":"https://github.com/sandbox-org/teardown/issues/CC-1","Kind":"worktree_removed"'
+exec cc request GET /
+! stdout '>#CC-1</button>'
 
 # CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
 cc-fake-gh teardown-late
