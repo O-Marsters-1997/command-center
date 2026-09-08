@@ -14,13 +14,14 @@ exec git -C $WORK/repo push -q origin main
 cc-config verdict-single-task
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:single-task' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
 
-cc-fake-gh-head verdict-review-me cc-1
+cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'

@@ -4,20 +4,9 @@
 max_agents = 2
 agent_command = ["{{agents}}/commits_slow.sh", "{worktree}", "{settings}", "{prompt_file}"]
 
-[[task]]
-ticket_url = "sandbox://CC-1"
-repo       = "repo"
-branch     = "cc-1"
-blocked_by = ["sandbox://PLA-40"]
-
-[[task]]
-ticket_url = "sandbox://PLA-40"
-repo       = "services"
-branch     = "pla-40"
-
 [[repo]]
 name         = "repo"
-path         = "../repo"
+remote       = "https://github.com/sandbox-org/repo"
 stacking     = false
 compat_check = "compat"
 
@@ -28,5 +17,5 @@ compat_check = "compat"
   ]
 
 [[repo]]
-name = "services"
-path = "../services"
+name   = "services"
+remote = "https://github.com/sandbox-org/services"

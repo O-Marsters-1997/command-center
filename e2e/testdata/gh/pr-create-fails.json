@@ -1,18 +1,39 @@
 {
+  "api repos/sandbox-org/single-task/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/two-tasks/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/two-tasks/issues/2/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-1\"}]\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  },
   "issue list": {
     "stdout": "[]\n"
   },
-  "pr list": {
-    "stdout": "[]\n"
+  "issue list -R sandbox-org/single-task": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/single-task/issues/CC-1\", \"labels\": [{\"name\": \"project:single-task\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/two-tasks": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-1\", \"labels\": [{\"name\": \"project:two-tasks\"}, {\"name\": \"status:ready\"}]}, {\"number\": 2, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-2\", \"labels\": [{\"name\": \"project:two-tasks\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue view": {
+    "stdout": "fake ticket body\n"
+  },
+  "label list -R sandbox-org/single-task": {
+    "stdout": "[{\"name\": \"project:single-task\"}]\n"
+  },
+  "label list -R sandbox-org/two-tasks": {
+    "stdout": "[{\"name\": \"project:two-tasks\"}]\n"
   },
   "pr create": {
     "exit": 1,
     "stderr": "fakegh: pr create failed\n"
   },
-  "api repos/{owner}/{repo}": {
-    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
-  },
-  "issue view": {
-    "stdout": "fake ticket body\n"
+  "pr list": {
+    "stdout": "[]\n"
   }
 }

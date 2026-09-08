@@ -5,6 +5,7 @@ cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
 exec cc request GET /
 
@@ -12,4 +13,4 @@ stdout '>#CC-1</button>'
 stdout '>ready</span>'
 stdout '>#CC-2</button>'
 stdout '>blocked</span>'
-stdout 'blocked by sandbox://CC-1'
+stdout 'blocked by https://github.com/sandbox-org/two-tasks/issues/CC-1'

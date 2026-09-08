@@ -230,6 +230,10 @@ func scriptEnv(work string) []string {
 		"GIT_COMMITTER_NAME=Command Centre",
 		"GIT_COMMITTER_EMAIL=cc@example.com",
 		"CC_DATA_DIR=" + filepath.Join(work, "cc-data"),
+		// Read by e2e/register's SandboxCheckout: a remote-based [[repo]]'s checkout is
+		// symlinked to $CC_WORK_DIR/<name>, the sandbox cc-init-repo built, rather than cloned
+		// from its (undialable) configured remote.
+		"CC_WORK_DIR=" + work,
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),

@@ -5,16 +5,16 @@
   "pr list": {
     "stdout": "[]\n"
   },
-  "pr list --state all --head cc-1": {
+  "pr list --state all --head cc-1-x": {
     "stdout": "[{\"number\":9,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\"}]\n"
   },
-  "pr list --state all --head cc-3": {
+  "pr list --state all --head cc-3-x": {
     "stdout": "[{\"number\":10,\"state\":\"CLOSED\",\"baseRefName\":\"main\",\"headRefOid\":\"3333333333333333333333333333333333333333\"}]\n"
   },
-  "pr list --state all --head cc-4": {
+  "pr list --state all --head cc-4-x": {
     "stdout": "[]\n"
   },
-  "pr list --state all --head cc-7": {
+  "pr list --state all --head cc-7-x": {
     "stdout": "[{\"number\":11,\"state\":\"CLOSED\",\"baseRefName\":\"main\",\"headRefOid\":\"7777777777777777777777777777777777777777\"}]\n"
   },
   "api repos/{owner}/{repo}": {

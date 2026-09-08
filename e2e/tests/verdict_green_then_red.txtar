@@ -13,15 +13,16 @@ exec git -C $WORK/repo push -q origin main
 cc-config verdict-single-task
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:single-task' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
 exec sleep 0.5
 exec cc tick --count 1
 
-cc-fake-gh-head verdict-review-me cc-1
+cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'
@@ -33,7 +34,7 @@ exec cc tick --count 1
 exec cc request GET /events
 stdout -count=1 'verdict_transition'
 
-cc-fake-gh-head verdict-one-red cc-1
+cc-fake-gh-head verdict-one-red cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>needs_you</span>'

@@ -12,9 +12,10 @@ cc-init-repo services
 cc-config cross-repo-slice
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:cross-repo' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://PLA-40'
-exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/services/issues/PLA-40'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/repo/issues/CC-1'
 
 # Both cut and spawn on this tick.
 exec cc tick --count 1
@@ -27,8 +28,8 @@ exec cc request GET /
 stdout -count=2 '>running</span>'
 exec cc request GET /events
 stdout -count=2 'run_launched'
-grep -count=1 'commits_slow.sh .*services-pla-40' $WORK/agent.log
-grep -count=1 'commits_slow.sh .*repo-cc-1' $WORK/agent.log
+grep -count=1 'commits_slow.sh .*services-cc-40-x' $WORK/agent.log
+grep -count=1 'commits_slow.sh .*repo-cc-1-x' $WORK/agent.log
 
 # Real wall time for both agents to finish committing.
 exec sleep 1.5
@@ -43,59 +44,59 @@ grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.
 # open: DraftGate's two conditions are independent, so this alone must keep it drafted, with no
 # compat check involved at all. Without this step, deleting the gating-blocker check from
 # DraftGate entirely could still pass the rest of this script.
-cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1
+cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'
-stdout 'waiting on sandbox://PLA-40'
-! grep 'pr ready cc-1' $WORK/gh.log
+stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
+! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The consumer's compat check goes red while its gating blocker (the producer) is still open:
 # waiting_on_producer_deploy, still drafted. The producer's own row is untouched -- checking,
 # same as any row with no configured compat check.
-cc-fake-gh-head cross-repo-open cc-1
+cc-fake-gh-head cross-repo-open cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>waiting_on_producer_deploy</span>'
 stdout '>checking</span>'
 ! stdout '>merged</span>'
-! grep 'pr ready cc-1' $WORK/gh.log
+! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The producer merges. The consumer's own compat check is still red, so it stays a draft even
 # though its gating blocker has now resolved -- issue #60 AC2, the invariant this whole slice
 # exists to prove.
-cc-fake-gh-head cross-repo-merged cc-1
+cc-fake-gh-head cross-repo-merged cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>merged</span>'
 stdout '>waiting_on_producer_deploy</span>'
-! grep 'pr ready cc-1' $WORK/gh.log
+! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # re-check reruns the compat check's own Actions run, parsed out of its details URL (issue #56).
-exec cc request POST '/verb?verb=re-check&task=sandbox://CC-1'
+exec cc request POST '/verb?verb=re-check&task=https://github.com/sandbox-org/repo/issues/CC-1'
 exec cc tick --count 1
 grep -count=1 'run rerun 4242' $WORK/gh.log
 exec cc request GET /events
 stdout 're_check_requested'
-! grep 'pr ready cc-1' $WORK/gh.log
+! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The rerun comes back green: every required check has passed and the gating blocker is merged.
 # Only now -- never earlier -- does the consumer un-draft, exactly once.
-cc-fake-gh-head cross-repo-compat-green cc-1
+cc-fake-gh-head cross-repo-compat-green cc-1-x
 exec cc tick --count 1
-grep -count=1 'pr ready cc-1' $WORK/gh.log
+grep -count=1 'pr ready cc-1-x' $WORK/gh.log
 exec cc request GET /
 stdout '>review_me</span>'
 
 # GitHub now reports the pull request as ready, as a real observe would from here on. Further
 # ticks must not call `gh pr ready` again, and the producer's own row is never drafted or
 # un-drafted at any point above.
-cc-fake-gh-head cross-repo-review-me cc-1
+cc-fake-gh-head cross-repo-review-me cc-1-x
 exec cc tick --count 1
 exec cc tick --count 1
 exec cc tick --count 1
-grep -count=1 'pr ready cc-1' $WORK/gh.log
-! grep 'pr ready pla-40' $WORK/gh.log
+grep -count=1 'pr ready cc-1-x' $WORK/gh.log
+! grep 'pr ready cc-40-x' $WORK/gh.log
 
 # Across the whole slice, each pull request was created exactly once -- crashing mid-run and
 # every subsequent re-observation left both alone rather than adopting-and-recreating them.

@@ -6,8 +6,9 @@ cc-init-repo
 cc-config two-tasks-commits
 cc-fake-gh pr-create-fails
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
-exec cc request -form 'task=sandbox://CC-1&task=sandbox://CC-2' POST /launch
+exec cc request -form 'task=https://github.com/sandbox-org/two-tasks/issues/CC-1&task=https://github.com/sandbox-org/two-tasks/issues/CC-2' POST /launch
 
 # One form submission authorised the whole slice.
 exec cc tick --count 1
@@ -20,12 +21,12 @@ exec sleep 0.5
 exec cc tick --count 1
 exec cc request GET /
 stdout '>push_failed</span>'
-stdout 'waiting on sandbox://CC-1'
+stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1'
 
 grep -count=1 'pr create' $WORK/gh.log
 
 cc-fake-gh no-prs
-exec cc request -form 'verb=retry-push&task=sandbox://CC-1' POST /verb
+exec cc request -form 'verb=retry-push&task=https://github.com/sandbox-org/two-tasks/issues/CC-1' POST /verb
 exec cc tick --count 1
 
 # The push step alone ran again: one more pr create, and no second agent.

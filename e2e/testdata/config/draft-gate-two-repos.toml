@@ -4,20 +4,9 @@
 max_agents = 2
 agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}"]
 
-[[task]]
-ticket_url = "sandbox://CC-1"
-repo       = "repo"
-branch     = "cc-1"
-blocked_by = ["sandbox://PLA-40"]
-
-[[task]]
-ticket_url = "sandbox://PLA-40"
-repo       = "services"
-branch     = "pla-40"
-
 [[repo]]
 name     = "repo"
-path     = "../repo"
+remote   = "https://github.com/sandbox-org/repo"
 stacking = false
 
   [repo.checks]
@@ -26,5 +15,5 @@ stacking = false
   ]
 
 [[repo]]
-name = "services"
-path = "../services"
+name   = "services"
+remote = "https://github.com/sandbox-org/services"

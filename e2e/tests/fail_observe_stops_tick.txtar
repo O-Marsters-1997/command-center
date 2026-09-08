@@ -9,6 +9,7 @@ cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
 exec cc request GET /
 stdout '>ready</span>'

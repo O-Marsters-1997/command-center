@@ -43,7 +43,7 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 		return err
 	}
 
-	app, err := cc.New(ctx, configPath)
+	app, err := cc.New(ctx, configPath, cc.WithCheckout(SandboxCheckout))
 	if err != nil {
 		return err
 	}
