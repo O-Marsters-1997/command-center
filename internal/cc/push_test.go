@@ -34,9 +34,6 @@ func installFakeGh(t *testing.T, failCreate bool) (logPath string) {
 		"  echo 'fake gh: pr create failed' >&2\n" +
 		"  exit 1\n" +
 		"fi\n" +
-		"if [ \"$1 $2\" = \"issue view\" ]; then\n" +
-		"  echo \"${CC_FAKE_ISSUE_BODY:-fake ticket body}\"\n" +
-		"fi\n" +
 		"exit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)

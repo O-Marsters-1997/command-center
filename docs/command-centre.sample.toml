@@ -7,9 +7,9 @@
 # Where the config file sits decides nothing except what a relative [[repo]] path is relative
 # to. Where the database, run logs and checkouts live is data_dir's job, below.
 #
-# The two branch names below are invented and have no pull requests, so the page renders CC-1
-# as "ready" and CC-2 as "blocked" naming CC-1 — truthfully, off real gh output. Stacking is on,
-# so once CC-1's PR opens, CC-2 cuts and pushes off CC-1's own branch rather than main.
+# This sample carries no tickets: the fleet now comes from GET /import, which labels an issue
+# `project:<name>` and imports its group. Stacking is on, so a dependent cuts and pushes off its
+# blocker's own branch rather than main once the blocker's PR opens.
 
 # Where the app keeps everything: state/ for the database, lock, run logs and agent settings,
 # repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that, os.UserConfigDir()/command-centre.
@@ -27,18 +27,6 @@ agent_command = [
   "--output-format", "stream-json", "--verbose",
   "--settings", "{settings}", "--model", "claude-sonnet-5",
 ]
-
-[[task]]
-ticket_url = "sandbox://CC-1"
-repo       = "command-center"
-branch     = "cc-sample-first"
-blocked_by = []
-
-[[task]]
-ticket_url = "sandbox://CC-2"
-repo       = "command-center"
-branch     = "cc-sample-second"
-blocked_by = ["sandbox://CC-1"]
 
 # A repo is located by exactly one of remote and path. path points at a checkout that already
 # exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this

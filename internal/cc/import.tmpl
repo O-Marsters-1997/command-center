@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/assets/app.css">
+<title>Import</title>
+<h1>IMPORT</h1>
+{{range .}}
+<h2>{{.Group}}</h2>
+<form method="post" action="/import">
+<input type="hidden" name="group" value="{{.Group}}">
+<table>
+  <tr><th>ticket</th><th>title</th><th>status</th></tr>
+  {{range .Tickets}}
+  <tr><td>{{.URL}}</td><td>{{.Title}}</td><td>{{.Status}}</td></tr>
+  {{end}}
+</table>
+<button type="submit">[ import {{len .Tickets}} ]</button>
+</form>
+{{else}}
+<p>no project: labels found across the configured repos.</p>
+{{end}}
+<a href="/">[ back ]</a>

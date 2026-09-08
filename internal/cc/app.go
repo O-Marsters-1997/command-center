@@ -24,6 +24,7 @@ type options struct {
 	now       func() time.Time
 	observe   ObserveFunc
 	repoCheck RepoCheckFunc
+	checkout  CheckoutFunc
 	runner    Runner
 }
 
@@ -55,8 +56,28 @@ func WithRunner(runner Runner) Option {
 	return func(o *options) { o.runner = runner }
 }
 
-// New resolves the workspace, takes the flock, opens the store and upserts the configured
-// tickets. A second instance against the same workspace is refused (inv. 9).
+// CheckoutFunc ensures every configured repo has a working checkout before the loop starts. See
+// EnsureCheckout.
+type CheckoutFunc func(ctx context.Context, repos []Repo) error
+
+// WithCheckout replaces the startup checkout step, so a test can substitute its own checkout
+// preparation for a repo whose remote isn't really dialable (the e2e suite's tracker-only
+// sandbox repos, which exist so repoForTicketURL has something to match, not to be cloned).
+func WithCheckout(checkout CheckoutFunc) Option {
+	return func(o *options) { o.checkout = checkout }
+}
+
+func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
+	for _, repo := range repos {
+		if err := EnsureCheckout(ctx, repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// New resolves the workspace, takes the flock and opens the store. A second instance against the
+// same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{now: time.Now}
 	for _, opt := range opts {
@@ -71,10 +92,12 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err != nil {
 		return nil, err
 	}
-	for _, repo := range cfg.Repos {
-		if err := EnsureCheckout(ctx, repo); err != nil {
-			return nil, err
-		}
+	checkout := settings.checkout
+	if checkout == nil {
+		checkout = ensureAllCheckouts
+	}
+	if err := checkout(ctx, cfg.Repos); err != nil {
+		return nil, err
 	}
 
 	repoCheck := settings.repoCheck
@@ -104,11 +127,6 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 			err = errors.Join(err, store.Close())
 		}
 	}()
-
-	// Intake is upserted at startup only, so the tick never adds rows to its own table.
-	if err := store.UpsertTickets(ctx, cfg.Tickets); err != nil {
-		return nil, err
-	}
 
 	// Written once at startup rather than per spawn: the content never varies, and every spawn
 	// just passes the same path (inv. 17).

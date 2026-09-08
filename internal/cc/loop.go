@@ -41,25 +41,37 @@ type TickError struct {
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of the database
 // (inv. 9).
 type Loop struct {
-	store   *Store
-	observe ObserveFunc
-	now     func() time.Time
-	runner  Runner
-	cfg     Config
-	ws      Workspace
+	store      *Store
+	observe    ObserveFunc
+	now        func() time.Time
+	runner     Runner
+	cfg        Config
+	ws         Workspace
+	trackerFor TrackerSource
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
-	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws}
+	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.For}
 }
+
+// SetTrackerSource replaces the loop's tracker.For, so a test can drive applyImportIntents with a
+// fake source rather than shelling out to gh.
+func (l *Loop) SetTrackerSource(resolve TrackerSource) { l.trackerFor = resolve }
 
 // RunOnce runs one tick. A failed observe records the error and leaves the last good
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting (inv. 10).
 func (l *Loop) RunOnce(ctx context.Context) error {
+	// Runs before observe, not after like every other applyXIntents: a ticket imported this
+	// tick then has its branch and PR read in the same observe pass, rather than sitting one
+	// tick behind.
+	if err := l.applyImportIntents(ctx); err != nil {
+		return err
+	}
+
 	obs, err := l.observe(ctx)
 	if err != nil {
 		at := l.now()
@@ -147,6 +159,58 @@ func (l *Loop) Run(ctx context.Context) error {
 		case <-time.After(tickPeriod):
 		}
 	}
+}
+
+// applyImportIntents performs the actual upsert for every pending import request, keeping the
+// loop the tickets table's only writer (inv. 9) even for a row that arrived from GET /import
+// rather than a hand-authored config.
+func (l *Loop) applyImportIntents(ctx context.Context) error {
+	intents, err := l.store.PendingVerbIntents(ctx, importVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	now := l.now()
+	for _, intent := range intents {
+		if err := l.importGroup(ctx, intent.TicketID); err != nil {
+			return err
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// importGroup drops a ticket whose url matches no configured repo rather than importing it with
+// an empty repo (§ repo matches on the url's owner and name).
+func (l *Loop) importGroup(ctx context.Context, group string) error {
+	var matched []ImportedTicket
+	for _, repo := range l.cfg.Repos {
+		src, ok, err := trackerSourceFor(repo, l.trackerFor)
+		if err != nil {
+			return fmt.Errorf("import %s: %w", group, err)
+		}
+		if !ok {
+			continue
+		}
+
+		tickets, err := src.Tickets(ctx, group)
+		if err != nil {
+			return fmt.Errorf("import %s from %s: %w", group, repo.Name, err)
+		}
+		for _, t := range tickets {
+			repoName, ok := repoForTicketURL(t.URL, l.cfg.Repos)
+			if !ok {
+				continue
+			}
+			matched = append(matched, ImportedTicket{Ticket: t, Repo: repoName})
+		}
+	}
+	return l.store.ImportTickets(ctx, group, matched, l.now())
 }
 
 // applyKillIntents consumes every pending kill request synchronously: this is the loop's own
@@ -396,12 +460,8 @@ func (l *Loop) spawnRun(
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	body, err := tracker.IssueBody(ctx, ticket.URL)
-	if err != nil {
-		return fmt.Errorf("fetch ticket body for %s: %w", ticket.URL, err)
-	}
-	if body != "" {
-		prompt += "\n\n## Ticket\n\n" + body
+	if ticket.Body != "" {
+		prompt += "\n\n## Ticket\n\n" + ticket.Body
 	}
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)

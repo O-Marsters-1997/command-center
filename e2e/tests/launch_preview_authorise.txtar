@@ -9,14 +9,15 @@ cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
-exec cc request GET '/preview?task=sandbox://CC-1&task=sandbox://CC-2'
+exec cc request GET '/preview?task=https://github.com/sandbox-org/two-tasks/issues/CC-1&task=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 stdout '<td>now</td>'
 stdout '<td>on unlock</td>'
 stdout '<td>origin/main</td>'
 stdout '<button type="submit">\[ authorise \]</button>'
 
-exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/two-tasks/issues/CC-1&task=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /
 
@@ -24,4 +25,4 @@ stdout '>#CC-1</button>'
 stdout '>#CC-2</button>'
 stdout '>queued</span>'
 stdout 'waiting for a slot'
-stdout 'waiting on sandbox://CC-1&#39;s PR'
+stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'

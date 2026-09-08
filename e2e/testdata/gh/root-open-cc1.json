@@ -3,9 +3,9 @@
     "stdout": "[]\n"
   },
   "pr list": {
-    "stdout": "[{\"number\":7,\"headRefName\":\"cc-1\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
+    "stdout": "[{\"number\":7,\"headRefName\":\"cc-1-x\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"baseRefName\":\"main\",\"baseRefOid\":\"cafebabecafebabecafebabecafebabecafebabe\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
   },
-  "pr list --state all --head cc-2": {
+  "pr list --state all --head cc-2-x": {
     "stdout": "[]\n"
   },
   "pr create": {

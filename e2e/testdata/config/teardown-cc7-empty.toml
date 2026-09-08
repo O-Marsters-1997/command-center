@@ -4,13 +4,7 @@
 max_agents = 5
 agent_command = ["{{agents}}/empty.sh", "{worktree}", "{settings}", "{prompt_file}"]
 
-[[task]]
-ticket_url = "sandbox://CC-7"
-repo       = "repo"
-branch     = "cc-7"
-blocked_by = []
-
 [[repo]]
 name     = "repo"
-path     = "../repo"
+remote   = "https://github.com/sandbox-org/teardown"
 stacking = false

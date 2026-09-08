@@ -4,13 +4,7 @@
 max_agents = 1
 agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}"]
 
-[[task]]
-ticket_url = "sandbox://CC-1"
-repo       = "repo"
-branch     = "cc-1"
-blocked_by = []
-
 [[repo]]
 name     = "repo"
-path     = "../repo"
+remote   = "https://github.com/sandbox-org/single-task"
 stacking = false

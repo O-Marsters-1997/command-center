@@ -12,15 +12,16 @@ cc-init-repo
 cc-config single-task-sleeps
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:single-task' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/single-task/issues/CC-1'
 
 # This instance cuts and spawns, then exits. sleeps.sh writes its worktree files immediately but
 # needs real wall time to get there -- ready is written last, so its presence means pgid is
 # already complete.
 exec cc tick --count 1
 exec sleep 0.5
-exists $WORK/repo-cc-1/ready
+exists $WORK/repo-cc-1-x/ready
 
 # A fresh instance, with nothing in memory from the one that spawned it, finds the run alive.
 exec cc tick --count 1
@@ -33,7 +34,7 @@ stdout 'agent running'
 # bookkeeping. The board itself no longer surfaces pgid, so the kill confirm page -- the one place
 # left that renders it -- is asked instead. Matched as a bare word so the assertion survives the
 # page's markup changing around it.
-exec sh -c 'pgid=$(cat $WORK/repo-cc-1/pgid) && cc request GET "/confirm?verb=kill&task=sandbox://CC-1" | grep -qw "$pgid"'
+exec sh -c 'pgid=$(cat $WORK/repo-cc-1-x/pgid) && cc request GET "/confirm?verb=kill&task=https://github.com/sandbox-org/single-task/issues/CC-1" | grep -qw "$pgid"'
 
 # One spawn, ever. A relaunch would have appended a second line here and a second run_launched,
 # and would have been invisible to every assertion above.
@@ -44,7 +45,7 @@ stdout -count=1 'run_launched'
 # Kill the recovered run rather than leaking its `sleep 300` past the end of the script. It
 # disposes failed: no commits, and no exit code to record either, since a re-attached process
 # is not this instance's child to reap.
-exec cc request POST '/verb?verb=kill&task=sandbox://CC-1'
+exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout '>running</span>'

@@ -1,17 +1,113 @@
 {
-  "issue list": {
+  "api repos/sandbox-org/fan-out/issues/1/dependencies/blocked_by": {
     "stdout": "[]\n"
   },
-  "pr list": {
+  "api repos/sandbox-org/fan-out/issues/2/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/fan-out/issues/CC-1\"}]\n"
+  },
+  "api repos/sandbox-org/fan-out/issues/3/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/fan-out/issues/CC-1\"}]\n"
+  },
+  "api repos/sandbox-org/fan-out/issues/4/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/fan-out/issues/CC-1\"}]\n"
+  },
+  "api repos/sandbox-org/fan-out/issues/5/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/fan-out/issues/CC-1\"}]\n"
+  },
+  "api repos/sandbox-org/repo/issues/1/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/services/issues/PLA-40\"}]\n"
+  },
+  "api repos/sandbox-org/services/issues/40/dependencies/blocked_by": {
     "stdout": "[]\n"
   },
-  "pr create": {
-    "stdout": "https://example.com/owner/repo/pull/1\n"
+  "api repos/sandbox-org/single-task/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/spawn/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/spawn/issues/2/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/spawn/issues/3/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/teardown/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/teardown/issues/3/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/teardown/issues/4/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/teardown/issues/CC-3\"}]\n"
+  },
+  "api repos/sandbox-org/teardown/issues/7/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/two-tasks/issues/1/dependencies/blocked_by": {
+    "stdout": "[]\n"
+  },
+  "api repos/sandbox-org/two-tasks/issues/2/dependencies/blocked_by": {
+    "stdout": "[{\"html_url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-1\"}]\n"
   },
   "api repos/{owner}/{repo}": {
     "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
   },
+  "issue list": {
+    "stdout": "[]\n"
+  },
+  "issue list -R sandbox-org/fan-out": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/fan-out/issues/CC-1\", \"labels\": [{\"name\": \"project:fan-out\"}, {\"name\": \"status:ready\"}]}, {\"number\": 2, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/fan-out/issues/CC-2\", \"labels\": [{\"name\": \"project:fan-out\"}, {\"name\": \"status:ready\"}]}, {\"number\": 3, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/fan-out/issues/CC-3\", \"labels\": [{\"name\": \"project:fan-out\"}, {\"name\": \"status:ready\"}]}, {\"number\": 4, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/fan-out/issues/CC-4\", \"labels\": [{\"name\": \"project:fan-out\"}, {\"name\": \"status:ready\"}]}, {\"number\": 5, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/fan-out/issues/CC-5\", \"labels\": [{\"name\": \"project:fan-out\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/repo": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/repo/issues/CC-1\", \"labels\": [{\"name\": \"project:cross-repo\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/services": {
+    "stdout": "[{\"number\": 40, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/services/issues/PLA-40\", \"labels\": [{\"name\": \"project:cross-repo\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/single-task": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/single-task/issues/CC-1\", \"labels\": [{\"name\": \"project:single-task\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/spawn": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/spawn/issues/CC-1\", \"labels\": [{\"name\": \"project:spawn\"}, {\"name\": \"status:ready\"}]}, {\"number\": 2, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/spawn/issues/CC-2\", \"labels\": [{\"name\": \"project:spawn\"}, {\"name\": \"status:ready\"}]}, {\"number\": 3, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/spawn/issues/CC-3\", \"labels\": [{\"name\": \"project:spawn\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/teardown --state open --label project:teardown": {
+    "stdout": "[{\"number\": 7, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/teardown/issues/CC-7\", \"labels\": [{\"name\": \"project:teardown\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/teardown --state open --label project:teardown-more": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/teardown/issues/CC-1\", \"labels\": [{\"name\": \"project:teardown-more\"}, {\"name\": \"status:ready\"}]}, {\"number\": 3, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/teardown/issues/CC-3\", \"labels\": [{\"name\": \"project:teardown-more\"}, {\"name\": \"status:ready\"}]}, {\"number\": 4, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/teardown/issues/CC-4\", \"labels\": [{\"name\": \"project:teardown-more\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
+  "issue list -R sandbox-org/two-tasks": {
+    "stdout": "[{\"number\": 1, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-1\", \"labels\": [{\"name\": \"project:two-tasks\"}, {\"name\": \"status:ready\"}]}, {\"number\": 2, \"title\": \"x\", \"body\": \"\", \"url\": \"https://github.com/sandbox-org/two-tasks/issues/CC-2\", \"labels\": [{\"name\": \"project:two-tasks\"}, {\"name\": \"status:ready\"}]}]\n"
+  },
   "issue view": {
     "stdout": "fake ticket body\n"
+  },
+  "label list -R sandbox-org/fan-out": {
+    "stdout": "[{\"name\": \"project:fan-out\"}]\n"
+  },
+  "label list -R sandbox-org/repo": {
+    "stdout": "[{\"name\": \"project:cross-repo\"}]\n"
+  },
+  "label list -R sandbox-org/services": {
+    "stdout": "[{\"name\": \"project:cross-repo\"}]\n"
+  },
+  "label list -R sandbox-org/single-task": {
+    "stdout": "[{\"name\": \"project:single-task\"}]\n"
+  },
+  "label list -R sandbox-org/spawn": {
+    "stdout": "[{\"name\": \"project:spawn\"}]\n"
+  },
+  "label list -R sandbox-org/teardown": {
+    "stdout": "[{\"name\": \"project:teardown\"}, {\"name\": \"project:teardown-more\"}]\n"
+  },
+  "label list -R sandbox-org/two-tasks": {
+    "stdout": "[{\"name\": \"project:two-tasks\"}]\n"
+  },
+  "pr create": {
+    "stdout": "https://example.com/owner/repo/pull/1\n"
+  },
+  "pr list": {
+    "stdout": "[]\n"
   }
 }

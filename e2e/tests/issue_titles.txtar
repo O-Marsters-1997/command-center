@@ -6,6 +6,7 @@ cc-init-repo
 cc-config two-tasks
 cc-fake-gh issue-titles
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
 exec cc request GET /
 

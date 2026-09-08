@@ -8,8 +8,9 @@ cc-init-repo
 cc-config fan-out-stacked
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:fan-out' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/fan-out/issues/CC-1&task=https://github.com/sandbox-org/fan-out/issues/CC-2&task=https://github.com/sandbox-org/fan-out/issues/CC-3&task=https://github.com/sandbox-org/fan-out/issues/CC-4&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
 
 # The root alone is unlocked: it cuts and spawns, then pushes and opens its own PR against main.
 exec cc tick --count 1
@@ -17,24 +18,24 @@ exec sleep 0.5
 exec cc tick --count 1
 grep -count=1 'pr create --base main --fill --label keep-open' $WORK/gh.log
 
-# The root's PR reads open, so all four descendants cut off origin/cc-1, run, and open stacked PRs.
+# The root's PR reads open, so all four descendants cut off origin/cc-1-x, run, and open stacked PRs.
 cc-fake-gh root-open-fanout
 exec cc tick --count 1
 exec sleep 1.5
 exec cc tick --count 1
-grep -count=4 'pr create --base cc-1 --fill --label keep-open --body Merge after #42' $WORK/gh.log
+grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge after #42' $WORK/gh.log
 
-# The human merges the root: main carries cc-1's commits and GitHub deletes the branch, so
-# origin/cc-1 no longer resolves for anything downstream.
-exec git -C $WORK/repo push -q origin cc-1:main
-exec git -C $WORK/repo push -q origin --delete cc-1
+# The human merges the root: main carries cc-1-x's commits and GitHub deletes the branch, so
+# origin/cc-1-x no longer resolves for anything downstream.
+exec git -C $WORK/repo push -q origin cc-1-x:main
+exec git -C $WORK/repo push -q origin --delete cc-1-x
 cc-fake-gh fanout-root-merged
 
 exec cc tick --count 1
-grep -count=1 'pr edit cc-2 --base main' $WORK/gh.log
-grep -count=1 'pr edit cc-3 --base main' $WORK/gh.log
-grep -count=1 'pr edit cc-4 --base main' $WORK/gh.log
-grep -count=1 'pr edit cc-5 --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-2-x --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-3-x --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-4-x --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-5-x --base main' $WORK/gh.log
 exec cc request GET /events
 stdout -count=4 'retargeted'
 
@@ -44,6 +45,6 @@ grep -count=5 'pr create' $WORK/gh.log
 
 # A second tick over the same rows re-points nothing: the recorded base is already main.
 exec cc tick --count 1
-grep -count=1 'pr edit cc-2 --base main' $WORK/gh.log
+grep -count=1 'pr edit cc-2-x --base main' $WORK/gh.log
 exec cc request GET /events
 stdout -count=4 'retargeted'

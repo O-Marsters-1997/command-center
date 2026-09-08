@@ -8,8 +8,9 @@ cc-init-repo services
 cc-config draft-gate-two-repos
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:cross-repo' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/repo/issues/CC-1'
 exec cc tick --count 1
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
@@ -19,20 +20,20 @@ exec cc tick --count 1
 grep 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
 
 # The gating blocker's own PR is still open, and the consumer's own CI is red: stays drafted.
-cc-fake-gh-head draft-gate-open cc-1
+cc-fake-gh-head draft-gate-open cc-1-x
 exec cc tick --count 1
 exec cc request GET /
-stdout 'waiting on sandbox://PLA-40'
+stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 ! stdout 'pr ready'
 
 # The blocker merges and the consumer's own CI goes green: this is the tick that un-drafts it.
-cc-fake-gh-head draft-gate-merged cc-1
+cc-fake-gh-head draft-gate-merged cc-1-x
 exec cc tick --count 1
-grep -count=1 'pr ready cc-1' $WORK/gh.log
+grep -count=1 'pr ready cc-1-x' $WORK/gh.log
 
 # GitHub now reports the PR as ready, as a real observe would from here on. Nine more ticks must
 # not call `gh pr ready` again.
-cc-fake-gh-head draft-gate-ready cc-1
+cc-fake-gh-head draft-gate-ready cc-1-x
 exec cc tick --count 1
 exec cc tick --count 1
 exec cc tick --count 1
@@ -42,4 +43,4 @@ exec cc tick --count 1
 exec cc tick --count 1
 exec cc tick --count 1
 exec cc tick --count 1
-grep -count=1 'pr ready cc-1' $WORK/gh.log
+grep -count=1 'pr ready cc-1-x' $WORK/gh.log

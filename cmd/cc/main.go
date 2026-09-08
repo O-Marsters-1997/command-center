@@ -32,10 +32,15 @@ func main() {
 	}
 }
 
+// runOptions is nil in the release binary; register_e2e.go's e2e build points it at the same
+// checkout override `cc tick` uses, so `cc-daemon` doesn't try to dial a sandbox repo's
+// undialable remote either.
+var runOptions []cc.Option
+
 func run(ctx context.Context, configPath string) (err error) {
 	log.Printf("config: %s", configPath)
 
-	app, err := cc.New(ctx, configPath)
+	app, err := cc.New(ctx, configPath, runOptions...)
 	if err != nil {
 		return err
 	}

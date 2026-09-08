@@ -9,8 +9,9 @@ cc-init-repo
 cc-config fan-out-stacked-capped
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:fan-out' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/fan-out/issues/CC-1&task=https://github.com/sandbox-org/fan-out/issues/CC-2&task=https://github.com/sandbox-org/fan-out/issues/CC-3&task=https://github.com/sandbox-org/fan-out/issues/CC-4&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
 
 # Tick: only the root is unlocked yet, so the cap never even comes into play here.
 exec cc tick --count 1
@@ -29,11 +30,11 @@ cc-fake-gh root-open-fanout
 cc-config fan-out-stacked-capped-sleeps
 
 # Tick: all four dependents are now unlocked, but max_agents = 2 and nothing is currently
-# running, so only two cut and spawn off origin/cc-1.
+# running, so only two cut and spawn off origin/cc-1-x.
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=3 'run_launched'
-grep -count=2 '\-\-base origin/cc-1' $WORK/tp.log
+grep -count=2 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
@@ -41,16 +42,16 @@ exec cc tick --count 1
 exec cc request GET /
 stdout -count=2 '>running</span>'
 stdout -count=2 'waiting for a slot'
-! stdout 'waiting on sandbox://CC-1'
+! stdout 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1'
 
 # Kill one running dependent: its process group empties, the same tick's liveness pass disposes
 # it (failed, no commits from sleeps.sh), and job 3 -- run after disposition in the same tick --
 # starts the next queued dependent with the slot that just freed.
-exec cc request POST '/verb?verb=kill&task=sandbox://CC-2'
+exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=4 'run_launched'
-grep -count=3 '\-\-base origin/cc-1' $WORK/tp.log
+grep -count=3 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc tick --count 1
 exec cc request GET /
@@ -59,14 +60,14 @@ stdout -count=1 'waiting for a slot'
 
 # Kill the last two: the second kill's freed slot starts the last dependent, and nothing is ever
 # left "capped" once every task has had its turn.
-exec cc request POST '/verb?verb=kill&task=sandbox://CC-3'
+exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-3'
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=5 'run_launched'
-grep -count=4 '\-\-base origin/cc-1' $WORK/tp.log
+grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
 
-exec cc request POST '/verb?verb=kill&task=sandbox://CC-4'
-exec cc request POST '/verb?verb=kill&task=sandbox://CC-5'
+exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-4'
+exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout 'waiting for a slot'

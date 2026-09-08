@@ -7,8 +7,9 @@ cc-init-repo
 cc-config two-tasks-commits
 cc-fake-gh no-prs
 
+exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=sandbox://CC-1&task=sandbox://CC-2'
+exec cc request POST '/launch?task=https://github.com/sandbox-org/two-tasks/issues/CC-1&task=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 
 # Tick: the authorisation intent becomes one launches row with both members, the root is
 # unlocked (no blockers) and authorised so it cuts and spawns, and the dependent -- which has no
@@ -18,7 +19,7 @@ exec cc request GET /events
 stdout 'authorised with 2 member'
 stdout -count=1 'run_launched'
 exec cc request GET /
-stdout 'waiting on sandbox://CC-1'
+stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1'
 
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
@@ -27,7 +28,7 @@ exec sleep 0.5
 # Tick: the root's dead run disposes with commits, pushes and opens its PR. The dependent still
 # reads the pre-push snapshot this same tick, so it has not unlocked yet.
 exec cc tick --count 1
-exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
 grep -count=1 'pr create' $WORK/gh.log
 exec cc request GET /events
 stdout -count=1 'run_launched'
@@ -46,7 +47,7 @@ exec sleep 0.5
 
 # Tick: the dependent's dead run disposes with commits, pushes and opens its own PR.
 exec cc tick --count 1
-exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2-x
 grep -count=2 'pr create' $WORK/gh.log
 
 # Exactly two spawns, ever -- the fake agent log is independent of both tp.log's cuts and

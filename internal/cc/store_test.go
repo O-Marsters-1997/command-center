@@ -48,8 +48,8 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, path); got != 2 {
-		t.Errorf("goose version = %d, want 2", got)
+	if got := gooseVersion(t, path); got != 3 {
+		t.Errorf("goose version = %d, want 3", got)
 	}
 }
 
@@ -88,8 +88,8 @@ func TestOpenStoreAdoptsADatabaseThatPredatesGoose(t *testing.T) {
 	if len(tickets) != 1 || tickets[0].URL != "sandbox://CC-1" {
 		t.Errorf("tickets = %+v, want the pre-goose row untouched", tickets)
 	}
-	if got := gooseVersion(t, path); got != 2 {
-		t.Errorf("goose version = %d, want 2 recorded against the adopted database", got)
+	if got := gooseVersion(t, path); got != 3 {
+		t.Errorf("goose version = %d, want 3 recorded against the adopted database", got)
 	}
 }
 
@@ -115,8 +115,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, path); got != 2 {
-		t.Errorf("goose version = %d, want 2", got)
+	if got := gooseVersion(t, path); got != 3 {
+		t.Errorf("goose version = %d, want 3", got)
 	}
 }
 
