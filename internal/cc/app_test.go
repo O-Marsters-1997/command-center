@@ -45,8 +45,8 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	// The config's tickets were upserted at startup and both rows derive from the stub's snapshot:
-	// CC-1 has no blockers, CC-2's blocker now has an open PR.
+	// The two tickets seeded straight into the store before New both derive from the stub's
+	// snapshot: CC-1 has no blockers, CC-2's blocker now has an open PR.
 	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "ready", "0s ago"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
@@ -72,21 +72,51 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	}
 }
 
-// appConfig writes twoTickets beside a real checkout of the repo it names, and points CC_DATA_DIR
-// at an empty directory, so cc.New's startup checkout and workspace both resolve.
+// appConfig writes a repo-only config beside a real checkout of the repo it names, seeds two
+// tickets straight into the workspace's own database -- the loop's reconcile does not care
+// whether a row arrived by import or was seeded directly, which is what phase 7 leans on now
+// that [[task]] no longer feeds the config -- and points CC_DATA_DIR at an empty directory, so
+// cc.New's startup checkout and workspace both resolve.
 func appConfig(t *testing.T) string {
 	t.Helper()
-	t.Setenv("CC_DATA_DIR", t.TempDir())
+	dataDir := t.TempDir()
+	t.Setenv("CC_DATA_DIR", dataDir)
 
 	root, repoPath := repoWithOrigin(t)
 	if err := os.Rename(repoPath, filepath.Join(root, "cc-sandbox")); err != nil {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte(twoTickets), 0o600); err != nil {
+	body := "[[repo]]\nname = \"cc-sandbox\"\npath = \"cc-sandbox\"\n"
+	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	seedTickets(t, dataDir)
 	return configPath
+}
+
+func seedTickets(t *testing.T, dataDir string) {
+	t.Helper()
+	ws, err := cc.ResolveWorkspace(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := cc.OpenStore(ws.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	err = store.UpsertTickets(t.Context(), []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out

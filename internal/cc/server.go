@@ -22,6 +22,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -80,18 +81,25 @@ var previewSource string
 
 var previewPage = template.Must(template.New("preview").Parse(previewSource))
 
-// Server is the status page plus the launch-preview and launch-authorisation routes. It never
-// writes the database directly except to queue a launch intent: every state it shows is
-// derived from tickets and the last observation at render time (§5, inv. 14).
+//go:embed import.tmpl
+var importSource string
+
+var importPage = template.Must(template.New("import").Parse(importSource))
+
+// Server is the status page plus the launch-preview, launch-authorisation and import routes. It
+// never writes the database directly except to queue an intent: every state it shows is derived
+// from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
 	store             *Store
 	now               func() time.Time
+	repos             []Repo
 	stackingByRepo    map[string]bool
 	checksByRepo      map[string]verdict.Predicate
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
 	dataDir           string
 	spend             *spendCache
+	trackerFor        TrackerSource
 	mux               *http.ServeMux
 }
 
@@ -100,7 +108,7 @@ type Server struct {
 // name are all per-repo config, and dataDir is the fleet the header names.
 func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, dataDir: dataDir, spend: newSpendCache(),
+		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.For,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -112,13 +120,19 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
+	mux.HandleFunc("GET /import", s.handleImport)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
+	mux.HandleFunc("POST /import", requireBrowserOrigin(s.handleImportGroup))
 	s.mux = mux
 	return s
 }
+
+// SetTrackerSource replaces the server's tracker.For, so a test can drive GET /import with a
+// fake source rather than shelling out to gh.
+func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
@@ -996,6 +1010,37 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// handleImport renders every configured repo's tracker groups and the tickets each would
+// currently bring in, read fresh from the tracker on every request (§5, inv. 14): the page never
+// shows a stale preview of what an import would do.
+func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+	groups, err := ImportGroups(r.Context(), s.repos, s.trackerFor)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := importPage.Execute(w, groups); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleImportGroup queues one import intent for the named group and redirects -- the next
+// tick's applyImportIntents (loop.go) performs the sync, so the loop stays the tickets table's
+// only writer (inv. 9).
+func (s *Server) handleImportGroup(w http.ResponseWriter, r *http.Request) {
+	group := r.FormValue("group")
+	if group == "" {
+		http.Error(w, "group is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.QueueVerbIntent(r.Context(), group, importVerb, s.now()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/import", http.StatusSeeOther)
 }
 
 // randomGroup mints the token that ties every intent from one POST /launch call together —

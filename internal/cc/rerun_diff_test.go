@@ -17,12 +17,10 @@ import (
 func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
-	installFakeGh(t, false)
-	t.Setenv("CC_FAKE_ISSUE_BODY", "ticket body")
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +42,10 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	}
 	obs.Worktrees["cc-1"] = fake.spawns[0].WorktreePath
 
-	t.Setenv("CC_FAKE_ISSUE_BODY", "ticket body, edited")
+	ticket.Body = "ticket body, edited"
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,13 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-const twoTickets = `
+// TestLoadConfigIgnoresATaskBlock covers phase 7: [[task]] is no longer decoded into anything, so
+// a config still carrying one from before the tracker import lands loads exactly as if it were
+// absent, rather than refusing to start.
+func TestLoadConfigIgnoresATaskBlock(t *testing.T) {
+	t.Parallel()
+
+	body := `
 max_agents = 2
 port       = 8080
 
@@ -30,36 +36,16 @@ repo       = "cc-sandbox"
 branch     = "cc-1-first"
 blocked_by = []
 
-[[task]]
-ticket_url = "sandbox://CC-2"
-repo       = "cc-sandbox"
-branch     = "cc-2-second"
-blocked_by = ["sandbox://CC-1"]
-
 [[repo]]
 name = "cc-sandbox"
 path = "cc-sandbox"
 `
-
-func TestLoadConfigTwoTickets(t *testing.T) {
-	t.Parallel()
-
-	got, err := cc.LoadConfig(writeConfig(t, twoTickets))
+	got, err := cc.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
-	}
-	if len(got.Tickets) != 2 {
-		t.Fatalf("tickets = %d, want 2", len(got.Tickets))
-	}
-	second := got.Tickets[1]
-	if second.URL != "sandbox://CC-2" || second.Branch != "cc-2-second" {
-		t.Errorf("second ticket = %+v", second)
-	}
-	if len(second.BlockedBy) != 1 || second.BlockedBy[0] != "sandbox://CC-1" {
-		t.Errorf("second ticket blocked_by = %v", second.BlockedBy)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
 		t.Errorf("repos = %+v", got.Repos)
@@ -69,7 +55,7 @@ func TestLoadConfigTwoTickets(t *testing.T) {
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Parallel()
 
-	body := "[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
+	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
 	got, err := cc.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -114,9 +100,7 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			body := tt.line +
-				"[[task]]\nticket_url = \"a\"\nrepo = \"r\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
-			got, err := cc.LoadConfig(writeConfig(t, body))
+			got, err := cc.LoadConfig(writeConfig(t, tt.line))
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -128,11 +112,6 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 }
 
 const oneRepoWithChecks = `
-[[task]]
-ticket_url = "a"
-repo       = "r"
-branch     = "b"
-
 [[repo]]
 name        = "r"
 path        = "r"
@@ -176,19 +155,6 @@ func TestLoadConfigParsesChecks(t *testing.T) {
 	anyOf := repo.Checks.AllOf[1].AnyOf
 	if len(anyOf) != 2 || anyOf[1].Author != "dependabot[bot]" {
 		t.Errorf("all_of[1].any_of = %+v", anyOf)
-	}
-}
-
-func TestLoadConfigUnknownRepo(t *testing.T) {
-	t.Parallel()
-
-	body := "[[task]]\nticket_url = \"a\"\nrepo = \"nope\"\nbranch = \"b\"\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	_, err := cc.LoadConfig(writeConfig(t, body))
-	if err == nil {
-		t.Fatal("want an error for a ticket naming a repo with no [[repo]] block")
-	}
-	if !strings.Contains(err.Error(), "nope") {
-		t.Errorf("error %q does not name the missing repo", err)
 	}
 }
 

@@ -81,11 +81,10 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	installFakeTp(t, false)
-	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "fake ticket body"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}

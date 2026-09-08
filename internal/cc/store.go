@@ -12,6 +12,8 @@ import (
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // database/sql driver "sqlite", pure Go
+
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 //go:embed migrations/*.sql
@@ -66,8 +68,9 @@ func (s *Store) init(ctx context.Context) error {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// UpsertTickets writes the configured intake, keyed on url. Re-running with an edited
-// block must update the row, never mint a second one — inv. 8 loses its key otherwise.
+// UpsertTickets writes a ticket row directly, every column at once, keyed on url. Production no
+// longer calls this itself -- ImportTickets is the tracker's own write path -- but it stays as
+// the direct-write counterpart tests use to seed a fixture with an exact row.
 func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -85,10 +88,13 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, marshalErr)
 		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO tickets (url, repo, branch, blocked_by) VALUES (?, ?, ?, ?)
-			ON CONFLICT (url) DO UPDATE SET repo = excluded.repo, branch = excluded.branch,
-			                                       blocked_by = excluded.blocked_by`,
-			t.URL, t.Repo, t.Branch, string(blockedBy))
+			INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (url) DO UPDATE SET
+				repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
+				source = excluded.source, title = excluded.title, body = excluded.body,
+				status = excluded.status, group_key = excluded.group_key, synced_at = excluded.synced_at`,
+			t.URL, t.Repo, t.Branch, string(blockedBy), t.Source, t.Title, t.Body, t.Status, t.GroupKey, t.SyncedAt)
 		if err != nil {
 			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
 		}
@@ -96,10 +102,14 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 	return tx.Commit()
 }
 
-// Tickets returns every ticket row, ordered by url.
+// Tickets returns every ticket row, ordered by url. The tracker-owned columns read as empty
+// strings rather than NULL for a row from before 0003_ticket_fields.sql added them.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT url, repo, branch, blocked_by FROM tickets ORDER BY url`)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT url, repo, branch, blocked_by,
+		       COALESCE(source, ''), COALESCE(title, ''), COALESCE(body, ''),
+		       COALESCE(status, ''), COALESCE(group_key, ''), COALESCE(synced_at, '')
+		FROM tickets ORDER BY url`)
 	if err != nil {
 		return nil, fmt.Errorf("select tickets: %w", err)
 	}
@@ -109,7 +119,8 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	for rows.Next() {
 		var t Ticket
 		var blockedBy string
-		if err := rows.Scan(&t.URL, &t.Repo, &t.Branch, &blockedBy); err != nil {
+		if err := rows.Scan(&t.URL, &t.Repo, &t.Branch, &blockedBy,
+			&t.Source, &t.Title, &t.Body, &t.Status, &t.GroupKey, &t.SyncedAt); err != nil {
 			return nil, fmt.Errorf("scan ticket: %w", err)
 		}
 		if err := json.Unmarshal([]byte(blockedBy), &t.BlockedBy); err != nil {
@@ -121,6 +132,45 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 		return nil, fmt.Errorf("iterate tickets: %w", err)
 	}
 	return tickets, nil
+}
+
+// ImportTickets upserts one group's tracker tickets, keyed on url: every tracker- and
+// import-owned column (repo, source, group_key, title, body, status, synced_at) is refreshed on
+// every call, but a url already present keeps its own branch and blocked_by untouched -- those
+// are the app's, seeded only for a url seen for the first time.
+func (s *Store) ImportTickets(ctx context.Context, group string, tickets []ImportedTicket, now time.Time) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	syncedAt := now.UTC().Format(time.RFC3339Nano)
+	for _, t := range tickets {
+		blockedBy, marshalErr := json.Marshal(nonNil(t.BlockedBy))
+		if marshalErr != nil {
+			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, marshalErr)
+		}
+		// ponytail: source is hardcoded to "github" because tracker.Source names no other
+		// tracker today; derive it from the resolved Source once a second one exists.
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO tickets (url, repo, source, group_key, title, body, status, synced_at, branch, blocked_by)
+			VALUES (?, ?, 'github', ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (url) DO UPDATE SET
+				repo = excluded.repo, source = excluded.source, group_key = excluded.group_key,
+				title = excluded.title, body = excluded.body, status = excluded.status,
+				synced_at = excluded.synced_at`,
+			t.URL, t.Repo, group, t.Title, t.Body, t.Status, syncedAt,
+			tracker.BranchSlug(t.Number, t.Title), string(blockedBy))
+		if err != nil {
+			return fmt.Errorf("import ticket %s: %w", t.URL, err)
+		}
+	}
+	return tx.Commit()
 }
 
 func nonNil(s []string) []string {

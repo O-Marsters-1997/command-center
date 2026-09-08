@@ -21,16 +21,24 @@ type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
-	Tickets      []Ticket `toml:"task"`
 	Repos        []Repo   `toml:"repo"`
 }
 
-// Ticket is one [[task]] block: Phase 1 intake, upserted on URL at startup.
+// Ticket is one tracked issue. url, source, title, body, status, group_key and synced_at are the
+// tracker's own columns, refreshed on every import; repo is matched from url against a [[repo]]'s
+// remote at import time; branch and blocked_by are the app's own, seeded once on a url's first
+// import and left alone afterwards.
 type Ticket struct {
-	URL       string   `toml:"ticket_url"`
-	Repo      string   `toml:"repo"`
-	Branch    string   `toml:"branch"`
-	BlockedBy []string `toml:"blocked_by"`
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy []string
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	GroupKey  string
+	SyncedAt  string
 }
 
 // Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
@@ -95,16 +103,6 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, err
 		}
 		cfg.Repos[i].Checkout = checkout
-	}
-
-	byName := make(map[string]bool, len(cfg.Repos))
-	for _, r := range cfg.Repos {
-		byName[r.Name] = true
-	}
-	for _, t := range cfg.Tickets {
-		if !byName[t.Repo] {
-			return Config{}, fmt.Errorf("ticket %s names repo %q with no [[repo]] block", t.URL, t.Repo)
-		}
 	}
 	return cfg, nil
 }

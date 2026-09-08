@@ -105,11 +105,6 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	// Intake is upserted at startup only, so the tick never adds rows to its own table.
-	if err := store.UpsertTickets(ctx, cfg.Tickets); err != nil {
-		return nil, err
-	}
-
 	// Written once at startup rather than per spawn: the content never varies, and every spawn
 	// just passes the same path (inv. 17).
 	if err := WriteAgentSettings(ws.SettingsPath); err != nil {

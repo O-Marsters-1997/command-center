@@ -60,6 +60,11 @@ func Migration0001() (string, error) {
 // SameRemote is the git-URL comparison EnsureCheckout refuses on.
 func SameRemote(a, b string) bool { return sameRemote(a, b) }
 
+// RepoForTicketURL is import.go's own match of a ticket url against a [[repo]]'s remote.
+func RepoForTicketURL(ticketURL string, repos []Repo) (string, bool) {
+	return repoForTicketURL(ticketURL, repos)
+}
+
 // MergifyHash is the observe phase's read of .mergify.yml off origin's default branch.
 func MergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return mergifyHash(ctx, repoPath)
