@@ -24,18 +24,17 @@ func New(ctx context.Context, repoPath, branch, baseRef string) error {
 	return nil
 }
 
-// Remove tears down branch's worktree and deletes the branch via `tp remove --force <branch>`,
-// run inside repoPath. Always forced: the app only ever calls this once it has independently
-// established the branch is safe to force-delete — MERGED PR state, or a base_gone row the user
-// cleared (docs/designs/command-centre-design.md § 9 inv. 3) — so there is no plain, non-force caller.
+// Remove tears down branch's worktree and deletes the branch via `tp remove --merged <branch>`,
+// run inside repoPath. --merged skips only the ancestor check a squash merge always fails; tp
+// still refuses a dirty worktree or unpushed commits itself (issue #147).
 func Remove(ctx context.Context, repoPath, branch string) error {
-	cmd := exec.CommandContext(ctx, "tp", "remove", "--force", branch)
+	cmd := exec.CommandContext(ctx, "tp", "remove", "--merged", branch)
 	cmd.Dir = repoPath
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tp remove --force %s in %s: %w: %s",
+		return fmt.Errorf("tp remove --merged %s in %s: %w: %s",
 			branch, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
 	}
 	return nil

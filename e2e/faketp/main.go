@@ -84,17 +84,39 @@ func newWorktree(args []string, root string, stdout, stderr io.Writer) int {
 
 func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 	var branch string
-	force := false
+	force, merged := false, false
 	for _, arg := range args {
-		if arg == "--force" {
+		switch arg {
+		case "--force":
 			force = true
-			continue
+		case "--merged":
+			merged = true
+		default:
+			branch = arg
 		}
-		branch = arg
 	}
 	if branch == "" {
-		printf(stderr, "faketp remove: usage: faketp remove [--force] <branch>\n")
+		printf(stderr, "faketp remove: usage: faketp remove [--force | --merged] <branch>\n")
 		return 1
+	}
+
+	// --merged asserts the caller already knows branch merged upstream, so it skips only the
+	// ancestor check `git branch -d` would otherwise fail on a squash merge — it still refuses a
+	// dirty worktree (git worktree remove without --force) and unpushed commits (issue #147).
+	if merged {
+		path := siblingPath(root, branch)
+		if code := gitRun(root, stdout, stderr, "worktree", "remove", path); code != 0 {
+			return code
+		}
+		unpushed, code := hasUnpushedCommits(root, branch, stderr)
+		if code != 0 {
+			return code
+		}
+		if unpushed {
+			printf(stderr, "faketp remove: %s has unpushed commits\n", branch)
+			return 1
+		}
+		return gitRun(root, stdout, stderr, "branch", "-D", branch)
 	}
 
 	// Real tp removes the worktree first and only then deletes the branch, so a `git branch -d`
@@ -113,6 +135,28 @@ func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 		deleteFlag = "-D"
 	}
 	return gitRun(root, stdout, stderr, "branch", deleteFlag, branch)
+}
+
+// hasUnpushedCommits reads as clean when the remote-tracking ref won't resolve at all -- the
+// post-prune gap treepad's own docs describe, where there is nothing left to compare against.
+func hasUnpushedCommits(root, branch string, stderr io.Writer) (unpushed bool, code int) {
+	remote, err := gitOutput(root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch)
+	if err != nil {
+		return false, 0
+	}
+	local, err := gitOutput(root, "rev-parse", "refs/heads/"+branch)
+	if err != nil {
+		printf(stderr, "faketp remove: %v\n", err)
+		return false, 1
+	}
+	return local != remote, 0
+}
+
+func gitOutput(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	return strings.TrimSpace(string(out)), err
 }
 
 // siblingPath mirrors treepad's layout: worktrees are siblings of the repo, named

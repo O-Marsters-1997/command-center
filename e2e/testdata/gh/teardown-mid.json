@@ -19,5 +19,8 @@
   },
   "issue view": {
     "stdout": "fake ticket body\n"
+  },
+  "issue close": {
+    "stdout": ""
   }
 }

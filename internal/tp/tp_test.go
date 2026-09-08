@@ -73,7 +73,7 @@ func TestNewReturnsAWrappedErrorOnFailure(t *testing.T) {
 	}
 }
 
-func TestRemoveInvokesTpRemoveWithForce(t *testing.T) {
+func TestRemoveInvokesTpRemoveWithMerged(t *testing.T) {
 	repoPath := t.TempDir()
 	argsPath := fakeTp(t, 0)
 
@@ -86,7 +86,7 @@ func TestRemoveInvokesTpRemoveWithForce(t *testing.T) {
 		t.Fatalf("read recorded args: %v", err)
 	}
 	lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
-	if want := "remove --force cc-1-first"; strings.Join(lines[1:], " ") != want {
+	if want := "remove --merged cc-1-first"; strings.Join(lines[1:], " ") != want {
 		t.Errorf("argv = %q, want %q", strings.Join(lines[1:], " "), want)
 	}
 }

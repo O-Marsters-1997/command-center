@@ -8,7 +8,7 @@ import (
 )
 
 // initRepoWithOriginForGitTest builds a repo with a pushed origin/main, the shape
-// HasUnpushedCommits needs to resolve a remote-tracking ref against.
+// UnpushedAfterPrune needs to resolve a remote-tracking ref against.
 func initRepoWithOriginForGitTest(t *testing.T) (repoPath string) {
 	t.Helper()
 	root := t.TempDir()
@@ -32,71 +32,28 @@ func initRepoWithOriginForGitTest(t *testing.T) (repoPath string) {
 	return repoPath
 }
 
-func TestIsDirtyReportsAClean(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoForGitTest(t)
-	dirty, err := IsDirty(t.Context(), dir)
-	if err != nil {
-		t.Fatalf("IsDirty: %v", err)
-	}
-	if dirty {
-		t.Error("a freshly committed worktree reads dirty")
-	}
-}
-
-func TestIsDirtyReportsAnUntrackedFile(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoForGitTest(t)
-	if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("hi\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	dirty, err := IsDirty(t.Context(), dir)
-	if err != nil {
-		t.Fatalf("IsDirty: %v", err)
-	}
-	if !dirty {
-		t.Error("an untracked file did not read dirty")
-	}
-}
-
-func TestHasUnpushedCommitsIsFalseRightAfterAPush(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoWithOriginForGitTest(t)
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
-	if err != nil {
-		t.Fatalf("HasUnpushedCommits: %v", err)
-	}
-	if unpushed {
-		t.Error("a branch at its just-pushed tip reads as having unpushed commits")
-	}
-}
-
-func TestHasUnpushedCommitsIsTrueAfterALocalCommit(t *testing.T) {
+func TestUnpushedAfterPruneIsFalseWhileTheRemoteRefStillResolves(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoWithOriginForGitTest(t)
 	commitEmpty(t, dir, "not yet pushed")
 
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
+	unpushed, err := UnpushedAfterPrune(t.Context(), dir, "main", "")
 	if err != nil {
-		t.Fatalf("HasUnpushedCommits: %v", err)
+		t.Fatalf("UnpushedAfterPrune: %v", err)
 	}
-	if !unpushed {
-		t.Error("a commit made after the last push did not read as unpushed")
+	if unpushed {
+		t.Error("UnpushedAfterPrune should defer to tp while the remote-tracking ref still resolves")
 	}
 }
 
-func TestHasUnpushedCommitsIsTrueWithNoRemoteTrackingRefAtAll(t *testing.T) {
+func TestUnpushedAfterPruneIsTrueWithNoRemoteTrackingRefAtAll(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoForGitTest(t) // no origin remote configured at all
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", "")
+	unpushed, err := UnpushedAfterPrune(t.Context(), dir, "main", "")
 	if err != nil {
-		t.Fatalf("HasUnpushedCommits: %v", err)
+		t.Fatalf("UnpushedAfterPrune: %v", err)
 	}
 	if !unpushed {
 		t.Error("a branch with no remote-tracking ref at all should read as unpushed (conservative default)")
@@ -106,7 +63,7 @@ func TestHasUnpushedCommitsIsTrueWithNoRemoteTrackingRefAtAll(t *testing.T) {
 // The merged-and-deleted case: GitHub deletes the branch on merge, then the app's own
 // `git fetch origin --prune` drops the remote-tracking ref. The recorded push is the only
 // surviving evidence the branch ever reached the remote.
-func TestHasUnpushedCommitsIsFalseWhenTheRefIsGoneButTheTipWasRecordedAsPushed(t *testing.T) {
+func TestUnpushedAfterPruneIsFalseWhenTheRefIsGoneButTheTipWasRecordedAsPushed(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoWithOriginForGitTest(t)
@@ -116,16 +73,16 @@ func TestHasUnpushedCommitsIsFalseWhenTheRefIsGoneButTheTipWasRecordedAsPushed(t
 	}
 	pruneRemoteTrackingRef(t, dir, "main")
 
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", tip)
+	unpushed, err := UnpushedAfterPrune(t.Context(), dir, "main", tip)
 	if err != nil {
-		t.Fatalf("HasUnpushedCommits: %v", err)
+		t.Fatalf("UnpushedAfterPrune: %v", err)
 	}
 	if unpushed {
 		t.Error("a branch at its recorded pushed tip read as unpushed once the pruned ref was gone")
 	}
 }
 
-func TestHasUnpushedCommitsIsTrueWhenTheRefIsGoneAndTheTipMovedPastTheRecordedPush(t *testing.T) {
+func TestUnpushedAfterPruneIsTrueWhenTheRefIsGoneAndTheTipMovedPastTheRecordedPush(t *testing.T) {
 	t.Parallel()
 
 	dir := initRepoWithOriginForGitTest(t)
@@ -136,9 +93,9 @@ func TestHasUnpushedCommitsIsTrueWhenTheRefIsGoneAndTheTipMovedPastTheRecordedPu
 	pruneRemoteTrackingRef(t, dir, "main")
 	commitEmpty(t, dir, "committed after the merge, never pushed")
 
-	unpushed, err := HasUnpushedCommits(t.Context(), dir, "main", tip)
+	unpushed, err := UnpushedAfterPrune(t.Context(), dir, "main", tip)
 	if err != nil {
-		t.Fatalf("HasUnpushedCommits: %v", err)
+		t.Fatalf("UnpushedAfterPrune: %v", err)
 	}
 	if !unpushed {
 		t.Error("a commit made after the recorded push did not read as unpushed")

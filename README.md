@@ -92,7 +92,7 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
 | `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
 | `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
-| `internal/tp` | The two `tp` commands the app uses, `new` and `remove --force`. |
+| `internal/tp` | The two `tp` commands the app uses, `new` and `remove --merged`. |
 
 ### The tick
 
