@@ -134,10 +134,9 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	return tickets, nil
 }
 
-// ImportTickets upserts one group's tracker tickets, keyed on url: every tracker- and
-// import-owned column (repo, source, group_key, title, body, status, synced_at) is refreshed on
-// every call, but a url already present keeps its own branch and blocked_by untouched -- those
-// are the app's, seeded only for a url seen for the first time.
+// ImportTickets upserts one group's tracker tickets, keyed on url. Every tracker-owned column
+// refreshes on each call; branch and blocked_by are seeded only the first time a url is imported
+// and left alone after that -- they're the app's own, not the tracker's.
 func (s *Store) ImportTickets(ctx context.Context, group string, tickets []ImportedTicket, now time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

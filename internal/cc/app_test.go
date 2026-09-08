@@ -72,11 +72,9 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	}
 }
 
-// appConfig writes a repo-only config beside a real checkout of the repo it names, seeds two
-// tickets straight into the workspace's own database -- the loop's reconcile does not care
-// whether a row arrived by import or was seeded directly, which is what phase 7 leans on now
-// that [[task]] no longer feeds the config -- and points CC_DATA_DIR at an empty directory, so
-// cc.New's startup checkout and workspace both resolve.
+// appConfig writes a repo-only config beside a real checkout of the repo it names and seeds two
+// tickets straight into the workspace's database: the loop's reconcile doesn't care whether a
+// row arrived by import or was seeded directly, so this skips the tracker entirely.
 func appConfig(t *testing.T) string {
 	t.Helper()
 	dataDir := t.TempDir()

@@ -10,12 +10,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 )
 
-// SandboxCheckout is the e2e build's cc.CheckoutFunc, used by both `cc tick` and `cc-daemon`. A
-// path-based repo gets the real EnsureCheckout, unchanged. A remote-based repo exists only so
-// import.go's trackerSourceFor and repoForTicketURL have a real host+owner+repo string to match
-// imported tickets against -- its remote is never actually dialed. Its working copy is symlinked
-// to the sandbox repo cc-init-repo already built under $CC_WORK_DIR/<name>, whose origin already
-// points at a real local bare remote.
+// SandboxCheckout is the e2e build's cc.CheckoutFunc. A path-based repo gets the real
+// EnsureCheckout; a remote-based one exists only so import.go's repo-matching has a real
+// host+owner+repo string to check tickets against, and its checkout is a symlink, never a clone.
 func SandboxCheckout(ctx context.Context, repos []cc.Repo) error {
 	for _, repo := range repos {
 		if repo.Path != "" {
@@ -31,15 +28,15 @@ func SandboxCheckout(ctx context.Context, repos []cc.Repo) error {
 	return nil
 }
 
-// ensureSandboxSymlink links repo.Checkout to the sandbox repo, rather than cloning it, so that
-// `git rev-parse --show-toplevel` -- which resolves a symlinked cwd to its real target -- reports
-// the same path a path-based repo's checkout would. That is what keeps tp's worktree siblings,
-// and every script that asserts against $WORK/<repo> directly, unaffected by a repo becoming
-// remote-based.
+// ensureSandboxSymlink links repo.Checkout to the sandbox repo instead of cloning it. `git
+// rev-parse --show-toplevel` resolves a symlinked cwd to its real target, so tp's worktree
+// siblings and every $WORK/<repo> assertion see the same path a real checkout would.
 func ensureSandboxSymlink(ctx context.Context, repo cc.Repo) error {
-	if _, err := os.Lstat(repo.Checkout); err == nil {
+	_, err := os.Lstat(repo.Checkout)
+	if err == nil {
 		return nil
-	} else if !os.IsNotExist(err) {
+	}
+	if !os.IsNotExist(err) {
 		return fmt.Errorf("repo %s: stat %s: %w", repo.Name, repo.Checkout, err)
 	}
 

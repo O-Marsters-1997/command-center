@@ -24,10 +24,9 @@ type Config struct {
 	Repos        []Repo   `toml:"repo"`
 }
 
-// Ticket is one tracked issue. url, source, title, body, status, group_key and synced_at are the
-// tracker's own columns, refreshed on every import; repo is matched from url against a [[repo]]'s
-// remote at import time; branch and blocked_by are the app's own, seeded once on a url's first
-// import and left alone afterwards.
+// Ticket is one tracked issue. Source, Title, Body, Status, GroupKey and SyncedAt are the
+// tracker's own, refreshed on every import; Repo is matched from URL against a [[repo]]'s remote.
+// Branch and BlockedBy are the app's own, seeded once on a URL's first import, then left alone.
 type Ticket struct {
 	URL       string
 	Repo      string

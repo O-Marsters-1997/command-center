@@ -161,10 +161,9 @@ func (l *Loop) Run(ctx context.Context) error {
 	}
 }
 
-// applyImportIntents consumes every pending import request: for each, every configured repo's
-// tracker source is asked for that group's tickets, matched back to its own configured repo by
-// url, and upserted -- the loop stays the tickets table's only writer even for a row that arrived
-// from GET /import rather than a hand-authored config (inv. 9).
+// applyImportIntents performs the actual upsert for every pending import request, keeping the
+// loop the tickets table's only writer (inv. 9) even for a row that arrived from GET /import
+// rather than a hand-authored config.
 func (l *Loop) applyImportIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, importVerb)
 	if err != nil {
@@ -186,9 +185,8 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 	return nil
 }
 
-// importGroup reads group's tickets from every configured repo's tracker source and upserts
-// them in one batch. A ticket whose url matches no configured repo is dropped rather than
-// imported with an empty repo (§ repo matches on the url's owner and name).
+// importGroup drops a ticket whose url matches no configured repo rather than importing it with
+// an empty repo (§ repo matches on the url's owner and name).
 func (l *Loop) importGroup(ctx context.Context, group string) error {
 	var matched []ImportedTicket
 	for _, repo := range l.cfg.Repos {
