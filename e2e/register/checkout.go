@@ -56,7 +56,8 @@ func ensureSandboxSymlink(ctx context.Context, repo cc.Repo) error {
 	}
 
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
-		if out, err := exec.CommandContext(ctx, "git", "-C", repo.Checkout, "config", key, "true").CombinedOutput(); err != nil {
+		cmd := exec.CommandContext(ctx, "git", "-C", repo.Checkout, "config", key, "true")
+		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("repo %s: git config %s: %w: %s", repo.Name, key, err, out)
 		}
 	}
