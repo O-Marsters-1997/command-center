@@ -59,7 +59,7 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 func rowTicket(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`class="ticket-link"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
+	m := regexp.MustCompile(`<button type="button"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
 	if m == nil {
 		t.Fatalf("no ticket link found for %s in row:\n%s", ticketURL, row)
 	}
@@ -69,7 +69,7 @@ func rowTicket(t *testing.T, page, ticketURL string) string {
 func rowTask(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`(?s)<div class="title">(.*?)</div>`).FindStringSubmatch(row)
+	m := regexp.MustCompile(`(?s)<div>(.*?)</div>`).FindStringSubmatch(row)
 	if m == nil {
 		t.Fatalf("no task title found for %s in row:\n%s", ticketURL, row)
 	}

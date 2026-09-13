@@ -38,7 +38,6 @@ var page = template.Must(template.New("page").
 		"child":       func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
 		"percent":     func(part, total int) int { return percentOf(part, total) },
-		"rowClasses":  rowClasses,
 	}).
 	Parse(pageSource))
 
@@ -535,17 +534,6 @@ func derive(
 		rows[i].ElapsedPercent = percentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
 	return rows
-}
-
-func rowClasses(head, selected bool) string {
-	var classes []string
-	if head {
-		classes = append(classes, "group-head")
-	}
-	if selected {
-		classes = append(classes, "selected")
-	}
-	return strings.Join(classes, " ")
 }
 
 func percentOf(part, total int) int {

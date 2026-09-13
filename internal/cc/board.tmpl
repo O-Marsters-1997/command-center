@@ -16,7 +16,7 @@
 {{- end}}
 
 {{define "row"}}
-  <tr{{with rowClasses .Head .Selected}} class="{{.}}"{{end}} data-depth="{{.Depth}}">
+  <tr class="group{{if .Head}} group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted{{end}}{{if .Selected}} selected{{end}}" data-depth="{{.Depth}}">
     <td>
       {{- $row := .}}
       {{- range .Verbs}}
@@ -34,11 +34,11 @@
       {{- range .PendingVerbs}} · {{.}} queued{{end}}
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
     </td>
     <td>
-      {{- if .Reason}}<div class="reason">{{.Reason}}</div>{{end}}
-      <div class="title">{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
+      {{- if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
+      <div>{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
     </td>
     <td>{{.Stack}}</td>
     <td>
@@ -59,7 +59,7 @@
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
       {{- else}}no spend{{end}}
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}

@@ -6,16 +6,16 @@
   
   
   
-  <tr class="selected" data-depth="0">
+  <tr class="group selected" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-live pill-disc pill-pulse">running</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
     </td>
-    <td><div class="reason">agent running</div>
-      <div class="title">untitled</div>
+    <td><div class="text-muted text-[0.85em]">agent running</div>
+      <div>untitled</div>
     </td>
     <td>L1</td>
     <td>
@@ -29,7 +29,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="https://github.com/o/r/issues/76">
         <button type="submit" name="verb" value="kill">kill</button>
@@ -37,13 +37,13 @@
   </tr>
   
   
-  <tr id="detail-e0f89266e57a" hx-preserve="true"><td colspan="10" class="detail">
-  <dl>
-    <dt>base sha</dt><dd>basesha1234</dd>
-    <dt>worktree</dt><dd>/repos/repo-cc-76</dd>
-    <dt>elapsed</dt><dd>1m30s</dd>
-    <dt>checks</dt>
-    <dd><div>build: IN_PROGRESS</div><div>unit: COMPLETED SUCCESS</div></dd>
+  <tr id="detail-e0f89266e57a" hx-preserve="true"><td colspan="10">
+  <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-4">
+    <dt class="text-muted">base sha</dt><dd class="m-0">basesha1234</dd>
+    <dt class="text-muted">worktree</dt><dd class="m-0">/repos/repo-cc-76</dd>
+    <dt class="text-muted">elapsed</dt><dd class="m-0">1m30s</dd>
+    <dt class="text-muted">checks</dt>
+    <dd class="m-0"><div>build: IN_PROGRESS</div><div>unit: COMPLETED SUCCESS</div></dd>
     
     
     
