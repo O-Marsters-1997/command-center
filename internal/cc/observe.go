@@ -40,6 +40,8 @@ type Observation struct {
 	// by branch. It is what the launch gate refuses on: a child cut from a base that already
 	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
+	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by branch.
+	ConflictedPaths map[string][]string `json:"conflicted_paths"`
 }
 
 // RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
@@ -65,7 +67,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
-			ConflictsWithBase: map[string]bool{},
+			ConflictsWithBase: map[string]bool{}, ConflictedPaths: map[string][]string{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -103,12 +105,15 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				if mainErr != nil {
 					continue
 				}
-				clean, err := MergesCleanly(ctx, path, mainTip, tip)
+				clean, paths, err := MergesCleanly(ctx, path, mainTip, tip)
 				if err != nil {
 					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
 				}
 				obs.ConflictsWithBase[branch] = !clean
+				if !clean {
+					obs.ConflictedPaths[branch] = paths
+				}
 			}
 
 			worktrees, err := Worktrees(ctx, path)
