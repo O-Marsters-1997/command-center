@@ -1,33 +1,33 @@
 {{define "band" -}}
-<section class="band" aria-label="fleet analytics">
-  <article class="card">
-    <h2>state of the fleet</h2>
+<section class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
     {{if eq .Band.Fleet.Total 0}}
-    <p class="empty">no tickets tracked yet</p>
+    <p class="m-0 text-muted">no tickets tracked yet</p>
     {{else}}
-    <p class="headline">{{.Band.Fleet.Yours}}/{{.Band.Fleet.Total}} yours</p>
-    <div class="segbar">
+    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">{{.Band.Fleet.Yours}}/{{.Band.Fleet.Total}} yours</p>
+    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       {{range .Band.Fleet.Segments}}
       <span class="segbar-segment" data-tone="{{.Tone}}" style="flex-grow: {{.Count}}"></span>
       {{end}}
     </div>
-    <ul class="legend">
+    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
       {{range .Band.Fleet.Segments}}
-      <li><span class="pill-disc" data-tone="{{.Tone}}"></span>{{.State}} · {{.Count}}</li>
+      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="{{.Tone}}"></span>{{.State}} · {{.Count}}</li>
       {{end}}
     </ul>
     {{end}}
   </article>
 
-  <article class="card">
-    <h2>stack depth</h2>
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
     {{if not .Band.Stack.HasWorktree}}
-    <p class="empty">no worktree has been cut</p>
+    <p class="m-0 text-muted">no worktree has been cut</p>
     {{else}}
-    <p class="headline">{{.Band.Stack.Deepest}} deep</p>
-    <ul class="histogram">
+    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">{{.Band.Stack.Deepest}} deep</p>
+    <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
       {{range .Band.Stack.Bars}}
-      <li>
+      <li class="flex items-center gap-[0.4em]">
         <span class="meter"><span class="meter-fill" data-tone="idle" style="width: {{.Pct}}%"></span></span>
         depth {{.Depth}} · {{.Count}}
       </li>
@@ -36,22 +36,22 @@
     {{end}}
   </article>
 
-  <article class="card">
-    <h2>gating checks</h2>
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
     {{if eq .Band.Checks.Reported 0}}
-    <p class="empty">no branch has reported a check yet</p>
+    <p class="m-0 text-muted">no branch has reported a check yet</p>
     {{else}}
-    <p class="headline">{{.Band.Checks.Green}} green · {{.Band.Checks.Red}} red</p>
+    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">{{.Band.Checks.Green}} green · {{.Band.Checks.Red}} red</p>
     <p>{{.Band.Checks.Reported}}/{{.Band.Checks.Total}} branches reported</p>
     {{end}}
   </article>
 
-  <article class="card">
-    <h2>spend</h2>
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
     {{if eq .Band.Spend.Count 0}}
-    <p class="empty">no runs have completed this session yet</p>
+    <p class="m-0 text-muted">no runs have completed this session yet</p>
     {{else}}
-    <p class="headline">${{printf "%.2f" .Band.Spend.Total}}</p>
+    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">${{printf "%.2f" .Band.Spend.Total}}</p>
     <p>{{.Band.Spend.Count}} runs · {{.Band.Spend.Failures}} failed · avg ${{printf "%.2f" .Band.Spend.Average}}</p>
     {{end}}
   </article>
