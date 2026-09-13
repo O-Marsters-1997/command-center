@@ -74,7 +74,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 			t.Errorf("page is missing %q:\n%s", want, body)
 		}
 	}
-	if !strings.Contains(body, `<span class="workspace">fleet-hq</span>`) {
+	if !strings.Contains(body, ">fleet-hq<") {
 		t.Errorf("header does not name the workspace:\n%s", body)
 	}
 }

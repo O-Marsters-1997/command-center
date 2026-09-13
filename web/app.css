@@ -92,39 +92,6 @@
 }
 
 @layer components {
-  .skip-link {
-    position: absolute;
-    left: -100vw;
-    padding: 0.35rem 0.6rem;
-    background: var(--color-bg);
-  }
-
-  .skip-link:focus {
-    left: 0.5rem;
-    top: 0.5rem;
-  }
-
-  .masthead {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.5rem 1rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .masthead h1 {
-    margin: 0;
-  }
-
-  .workspace {
-    color: var(--color-muted);
-  }
-
-  .theme-toggle {
-    margin-left: auto;
-  }
-
   .banner {
     margin: 0;
     padding: 0.5rem 1rem;
@@ -450,24 +417,6 @@
     font-size: 0.85rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-  }
-
-  .view-toggle {
-    display: flex;
-    gap: 0.4rem;
-  }
-
-  .view-toggle a {
-    padding: 0.1rem 0.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    color: var(--color-muted);
-    text-decoration: none;
-  }
-
-  .view-toggle a[aria-current="page"] {
-    border-color: var(--color-s-live);
-    color: var(--color-fg);
   }
 
   /* cc-graph is an island (noShadowDOM(), ADR 2): every rule below is page-global and also
