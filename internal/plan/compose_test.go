@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -15,6 +16,24 @@ func TestCompose(t *testing.T) {
 	want := "/implement sandbox://CC-1"
 	if got != want {
 		t.Errorf("Compose = %q, want %q", got, want)
+	}
+}
+
+func TestComposeResolve(t *testing.T) {
+	t.Parallel()
+
+	ticket := plan.Ticket{URL: "sandbox://CC-1", Branch: "cc-1"}
+
+	got := plan.ComposeResolve(ticket)
+	for _, want := range []string{
+		"cc/skills/resolve-merge-conflict/SKILL.md", "origin/main", "cc-1", "do not commit", "do not push",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ComposeResolve = %q, want it to mention %q", got, want)
+		}
+	}
+	if got == plan.Compose(ticket) {
+		t.Error("ComposeResolve must not compose the same prompt as a launch")
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 	removeWorktreeVerb = plan.VerbRemoveWorktree
 	cancelVerb         = plan.VerbCancel
 	abortVerb          = plan.VerbAbort
+	resolveVerb        = plan.VerbResolve
 )
 
 // supportedVerbs is every verb handleVerb (server.go) accepts.
@@ -33,6 +34,7 @@ var supportedVerbs = map[string]bool{
 	cancelVerb:         true,
 	refreshVerb:        true,
 	abortVerb:          true,
+	resolveVerb:        true,
 }
 
 const (
@@ -46,6 +48,7 @@ const (
 	eventLaunchCancelled       = "launch_cancelled"
 	eventMergeAborted          = "merge_aborted"
 	eventMergeAbortFailed      = "merge_abort_failed"
+	eventResolveRefused        = "resolve_refused"
 )
 
 // applyAbortIntents consumes every pending abort request: `git merge --abort` in the worktree,
@@ -102,6 +105,59 @@ func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs Observation, now
 
 	delete(obs.MidMerge, ticket.Branch)
 	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
+}
+
+func (l *Loop) applyResolveIntents(ctx context.Context, obs Observation) error {
+	intents, err := l.store.PendingVerbIntents(ctx, resolveVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return err
+	}
+	byTicket := ticketsByURL(tickets)
+	repoPaths := repoPathsByName(l.cfg.Repos)
+
+	now := l.now()
+	for _, intent := range intents {
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			if err := l.resolveOne(ctx, ticket, repoPaths[ticket.Repo], obs, now); err != nil {
+				return err
+			}
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *Loop) resolveOne(
+	ctx context.Context, ticket Ticket, repoPath string, obs Observation, now time.Time,
+) error {
+	refuse := func(detail string) error {
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: detail})
+	}
+
+	worktreePath, ok := obs.Worktrees[ticket.Branch]
+	if !ok {
+		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
+	}
+	if obs.Runs[ticket.URL].Alive {
+		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
+	}
+
+	baselineSHA, err := BranchTip(ctx, repoPath, ticket.Branch)
+	if err != nil {
+		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
+	}
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindResolve)
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
@@ -197,7 +253,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath)
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, runKindAgent)
 }
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat
