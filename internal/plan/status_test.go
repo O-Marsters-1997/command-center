@@ -318,6 +318,34 @@ func TestStatusWithLatestRun(t *testing.T) {
 			},
 			wantState: plan.PRMerged,
 		},
+		{
+			name: "a conflicting peer derives blocked, naming the peer",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				ConflictingPeer: "cc-9-lower-ref",
+			},
+			wantState: plan.Blocked,
+			reasonHas: "cc-9-lower-ref",
+		},
+		{
+			name: "conflicts with main outranks a conflicting peer",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
+				ConflictingPeer: "cc-9-lower-ref",
+			},
+			wantState: plan.ConflictsWithMain,
+		},
+		{
+			name: "a conflicting peer outranks a review-me verdict, which it suppresses",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+				ConflictingPeer: "cc-9-lower-ref",
+				VerdictReviewMe: true, VerdictReason: "every required check passed",
+			},
+			wantState: plan.Blocked,
+			reasonHas: "cc-9-lower-ref",
+		},
 	}
 
 	for _, tt := range tests {

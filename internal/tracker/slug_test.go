@@ -37,3 +37,32 @@ func TestBranchSlug(t *testing.T) {
 		})
 	}
 }
+
+func TestBranchNumber(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		branch     string
+		wantNumber int
+		wantOK     bool
+	}{
+		{name: "a generated slug recovers its number", branch: "cc-105-eight-column-board", wantNumber: 105, wantOK: true},
+		{name: "a three-digit number the same width as a two-digit one", branch: "cc-100-x", wantNumber: 100, wantOK: true},
+		{name: "no cc- prefix", branch: "elsewhere", wantOK: false},
+		{name: "prefix with no number", branch: "cc-eight-column-board", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			n, ok := BranchNumber(tt.branch)
+			if ok != tt.wantOK {
+				t.Fatalf("BranchNumber(%q) ok = %v, want %v", tt.branch, ok, tt.wantOK)
+			}
+			if ok && n != tt.wantNumber {
+				t.Errorf("BranchNumber(%q) = %d, want %d", tt.branch, n, tt.wantNumber)
+			}
+		})
+	}
+}
