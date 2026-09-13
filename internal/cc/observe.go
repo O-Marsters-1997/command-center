@@ -40,6 +40,10 @@ type Observation struct {
 	// by branch. It is what the launch gate refuses on: a child cut from a base that already
 	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
+	// ConflictsWithPeer reports whether two branches' tips would conflict if merged together,
+	// keyed by each branch under the other. Observe only ever records the pair, never which one
+	// yields: it has no ref order to decide that (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 }
 
 // RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
@@ -65,7 +69,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
-			ConflictsWithBase: map[string]bool{},
+			ConflictsWithBase: map[string]bool{}, ConflictsWithPeer: map[string]map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -111,6 +115,24 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				obs.ConflictsWithBase[branch] = !clean
 			}
 
+			for i, branchA := range branches {
+				tipA, ok := obs.BranchTips[branchA]
+				if !ok {
+					continue
+				}
+				for _, branchB := range branches[i+1:] {
+					tipB, ok := obs.BranchTips[branchB]
+					if !ok {
+						continue
+					}
+					clean, err := MergesCleanly(ctx, path, tipA, tipB)
+					if err != nil {
+						return Observation{}, fmt.Errorf("check whether %s merges with %s: %w", branchA, branchB, err)
+					}
+					recordConflictsWithPeer(obs.ConflictsWithPeer, branchA, branchB, !clean)
+				}
+			}
+
 			worktrees, err := Worktrees(ctx, path)
 			if err != nil {
 				return Observation{}, err
@@ -147,6 +169,20 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	}
 	sum := sha256.Sum256([]byte(data))
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// recordConflictsWithPeer stores one pair's result under both branch names, so a later lookup
+// works from either side once ref order (internal/cc's decide step) says which one is "this"
+// branch and which the peer.
+func recordConflictsWithPeer(m map[string]map[string]bool, a, b string, conflicts bool) {
+	if m[a] == nil {
+		m[a] = map[string]bool{}
+	}
+	m[a][b] = conflicts
+	if m[b] == nil {
+		m[b] = map[string]bool{}
+	}
+	m[b][a] = conflicts
 }
 
 func branchesFor(tickets []Ticket, repo string) []string {

@@ -255,6 +255,10 @@ type RunFact struct {
 	// (docs/adr/0006-resolve-a-conflict-once.md). It outranks every fact below it, as MidMerge does.
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
+	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
+	// is empty when there is none. Ref order is decided in internal/cc, the one place that knows
+	// it (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	ConflictingPeer string
 	// VerificationFailed is set when a clean refresh or restack's configured verify command last
 	// failed since this ticket's last recorded push (issue #110). It outranks every push and
 	// verdict fact below, as MidMerge and ConflictsWithMain do.
@@ -349,6 +353,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
 	case run.ConflictsWithMain:
 		return ConflictsWithMain, run.ConflictsWithMainReason
+	case run.ConflictingPeer != "":
+		return Blocked, conflictingPeerReason(run.ConflictingPeer)
 	case run.VerificationFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
@@ -381,6 +387,14 @@ func statusFromPush(run RunFact) (State, Reason) {
 func conflictedBaseReason(base string) Reason {
 	return Reason(fmt.Sprintf(
 		"%s already carries an unresolved merge conflict: a branch cut from it inherits the conflict", base))
+}
+
+// conflictingPeerReason is the sentence a row shows when it is held behind a lower-ref peer it
+// conflicts with, so the two refusals -- a conflicted base and a conflicting peer -- read alike
+// (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+func conflictingPeerReason(peer string) Reason {
+	return Reason(fmt.Sprintf(
+		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))
 }
 
 // waitingOnBlockers renders the reason a queued-but-locked row is still waiting: naming a
