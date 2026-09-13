@@ -138,11 +138,6 @@
     border-left: 3px solid var(--color-border);
   }
 
-  tr.group-head {
-    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
-    color: var(--color-muted);
-  }
-
   tr[data-depth="1"] td:nth-child(3) {
     padding-left: 1.5rem;
   }
@@ -157,61 +152,6 @@
 
   tr[data-depth="4"] td:nth-child(3) {
     padding-left: 6rem;
-  }
-
-  .ticket-link {
-    border: none;
-    background: none;
-    padding: 0;
-    color: inherit;
-    font: inherit;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .reason {
-    color: var(--color-muted);
-    font-size: 0.85em;
-  }
-
-  .verbs-cell {
-    opacity: 0.35;
-    transition: opacity 120ms ease-in-out;
-  }
-
-  tr:hover .verbs-cell,
-  tr:focus-within .verbs-cell,
-  tr.selected .verbs-cell {
-    opacity: 1;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .verbs-cell {
-      transition: none;
-    }
-  }
-
-  td.detail dl {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0 1rem;
-    margin: 0;
-  }
-
-  td.detail dt {
-    color: var(--color-muted);
-  }
-
-  td.detail dd {
-    margin: 0;
-  }
-
-  td.detail pre {
-    overflow: auto;
-    max-height: 20rem;
-    margin: 0.5rem 0 0;
-    padding: 0.5rem;
-    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
   }
 
   .pill,

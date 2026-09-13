@@ -1,15 +1,15 @@
-<td colspan="10" class="detail">
-  <dl>
-    <dt>base sha</dt><dd>{{.BaselineSHA}}</dd>
-    <dt>worktree</dt><dd>{{if .Worktree}}{{.Worktree}}{{else}}no worktree has been cut{{end}}</dd>
-    <dt>elapsed</dt><dd>{{if .Elapsed}}{{.Elapsed}}{{else}}not started{{end}}</dd>
-    <dt>checks</dt>
-    <dd>
+<td colspan="10">
+  <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-4">
+    <dt class="text-muted">base sha</dt><dd class="m-0">{{.BaselineSHA}}</dd>
+    <dt class="text-muted">worktree</dt><dd class="m-0">{{if .Worktree}}{{.Worktree}}{{else}}no worktree has been cut{{end}}</dd>
+    <dt class="text-muted">elapsed</dt><dd class="m-0">{{if .Elapsed}}{{.Elapsed}}{{else}}not started{{end}}</dd>
+    <dt class="text-muted">checks</dt>
+    <dd class="m-0">
       {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}no checks{{end -}}
     </dd>
-    {{if .Draft}}<dt>draft</dt><dd>{{.DraftReason}}</dd>{{end}}
-    {{if .BaseVerdict}}<dt>base verdict</dt><dd>{{.BaseVerdict}}</dd>{{end}}
-    {{if .Warning}}<dt>warning</dt><dd>{{.Warning}}</dd>{{end}}
+    {{if .Draft}}<dt class="text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
+    {{if .BaseVerdict}}<dt class="text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}
+    {{if .Warning}}<dt class="text-muted">warning</dt><dd class="m-0">{{.Warning}}</dd>{{end}}
   </dl>
   <div class="run-log">
     <div class="run-log-header">
