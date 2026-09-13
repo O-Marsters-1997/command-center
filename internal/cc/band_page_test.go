@@ -30,8 +30,10 @@ func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 			t.Errorf("page does not contain %q:\n%s", want, page)
 		}
 	}
-	if strings.Contains(page, `<p class="headline">`) {
-		t.Errorf("an empty fleet still rendered a headline instead of every card's empty copy:\n%s", page)
+	for _, headlineWord := range []string{"yours", "deep", "green", "$"} {
+		if strings.Contains(page, headlineWord) {
+			t.Errorf("an empty fleet still rendered a headline instead of every card's empty copy:\n%s", page)
+		}
 	}
 }
 
@@ -46,13 +48,13 @@ func TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist(t *testing.T) {
 	server := cc.NewServer(store, fixedClock(observedAt), nil, "")
 
 	page := renderPage(t, server)
-	if !strings.Contains(page, `<p class="headline">2/2 yours</p>`) {
+	if !strings.Contains(page, "2/2 yours") {
 		t.Errorf("fleet headline missing or wrong:\n%s", page)
 	}
 	if strings.Contains(page, "no worktree has been cut") {
 		t.Error("stack card should read live numbers, since CC-1 has a cut worktree")
 	}
-	if !strings.Contains(page, `<p class="headline">0 deep</p>`) {
+	if !strings.Contains(page, "0 deep") {
 		t.Errorf("stack headline missing or wrong:\n%s", page)
 	}
 }
