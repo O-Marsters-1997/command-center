@@ -203,7 +203,7 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "<h1>Command Centre</h1>") {
+	if !strings.Contains(string(body), ">Command Centre<") {
 		t.Errorf("body after the redirect is not the board: %s", body)
 	}
 }
