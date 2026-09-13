@@ -38,7 +38,7 @@ exec cc request GET '/?sel=https%3A%2F%2Fgithub.com%2Fsandbox-org%2Fsingle-task%
 stdout '<div>CI: COMPLETED FAILURE</div>'
 stdout '<dt>worktree</dt><dd>.*/repo-cc-1-x</dd>'
 stdout '<dt>base sha</dt><dd>[0-9a-f]{40}</dd>'
-stdout '<span class="run-log-path">.*/runs/1\.jsonl</span>'
+stdout '<span class="run-log-path[^"]*">.*/runs/1\.jsonl</span>'
 stdout '<dt>elapsed</dt>'
 stdout 'hx-preserve="true"'
 
