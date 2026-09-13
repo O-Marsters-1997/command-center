@@ -161,6 +161,9 @@ const (
 	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
 	// (docs/designs/command-centre-design.md § 11 inv. 12).
 	WaitingOnProducerDeploy
+	// ConflictResolved is a resolve run that left the worktree's conflict resolved and staged,
+	// but nothing committed.
+	ConflictResolved
 	stateCount
 )
 
@@ -204,6 +207,8 @@ func (s State) String() string {
 		return "verification_failed"
 	case WaitingOnProducerDeploy:
 		return "waiting_on_producer_deploy"
+	case ConflictResolved:
+		return "conflict_resolved"
 	case Blocked:
 		return "blocked"
 	default:
@@ -260,6 +265,9 @@ type RunFact struct {
 	// verdict fact below, as MidMerge and ConflictsWithMain do.
 	VerificationFailed       bool
 	VerificationFailedReason Reason
+	// Resolved is set when the latest run was a resolve run that left the conflict staged in
+	// the worktree but committed nothing.
+	Resolved bool
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -330,6 +338,11 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:
+		if run.Resolved {
+			return ConflictResolved, Reason(fmt.Sprintf(
+				"resolved with nothing committed; read it in the worktree before deciding what happens next, log at %s",
+				run.LogPath)), true
+		}
 		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true

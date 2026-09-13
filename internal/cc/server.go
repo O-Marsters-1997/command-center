@@ -683,6 +683,9 @@ func runFactFor(
 				applyVerdict(fact, t, obs, vd)
 			}
 		}
+		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve {
+			fact.Resolved = true
+		}
 	}
 
 	logPath = summary.LogPath
