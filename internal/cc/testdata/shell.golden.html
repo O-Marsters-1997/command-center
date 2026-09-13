@@ -25,10 +25,10 @@
 </script>
 </head>
 <body>
-<a class="skip-link" href="#board">skip to the board</a>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
 <div id="masthead" hx-swap-oob="true">
-  <header class="masthead">
-    <h1>Command Centre</h1>
+  <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
+    <h1 class="m-0">Command Centre</h1>
     
     <span class="pill">
       <span class="pill-ring"></span>0 live
@@ -36,11 +36,11 @@
     
     <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: 45s ago</span>
     
-    <nav class="view-toggle">
-      <a href="/?view=board" aria-current="page">board</a>
-      <a href="/?view=graph">graph</a>
+    <nav class="flex gap-[0.4rem]">
+      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board" aria-current="page">board</a>
+      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph">graph</a>
     </nav>
-    <button type="button" class="theme-toggle" onclick="toggleTheme()">theme</button>
+    <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
   </header>
   
   <p class="banner ribbon" data-tone="stop" role="status">
