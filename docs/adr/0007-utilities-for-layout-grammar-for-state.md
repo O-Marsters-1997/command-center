@@ -2,8 +2,11 @@
 
 **Date:** 2026-09-13 · **Status:** accepted
 
-**Supersedes:** the styling policy in `plans/fleet-view.md` § "Tailwind, and what Go is allowed to
-emit". Depends on [ADR 1](0001-serve-the-stylesheet-instead-of-inlining-it.md) (the compiled sheet
+**Supersedes:** the styling policy in
+[`docs/prds/prd-fleet-view.md`](../prds/prd-fleet-view.md) § "Tailwind, and what Go is allowed to
+emit".
+
+**Depends on:** [ADR 1](0001-serve-the-stylesheet-instead-of-inlining-it.md) (the compiled sheet
 this rule governs) and [ADR 2](0002-islands-opt-out-of-shadow-dom.md) (the shared global grammar an
 island must also honour).
 
