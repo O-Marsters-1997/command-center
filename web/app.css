@@ -6,6 +6,7 @@
   --color-fg: oklch(25% 0.012 250);
   --color-muted: oklch(58% 0.014 250);
   --color-border: oklch(90% 0.006 250);
+  --color-track: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
 
   --color-s-done: oklch(62% 0.148 150);
   --color-s-live: oklch(60% 0.158 250);
@@ -329,48 +330,6 @@
     background: var(--tone);
   }
 
-  .band {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .card {
-    flex: 1 1 14rem;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 0.6rem 0.75rem;
-  }
-
-  .card h2 {
-    margin: 0 0 0.35rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-muted);
-  }
-
-  .card .headline {
-    margin: 0 0 0.35rem;
-    font-size: 1.1rem;
-    font-weight: 700;
-  }
-
-  .card .empty {
-    margin: 0;
-    color: var(--color-muted);
-  }
-
-  .segbar {
-    display: flex;
-    overflow: hidden;
-    height: 0.6rem;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
-  }
-
   .segbar-segment {
     display: block;
     background: var(--tone);
@@ -404,6 +363,19 @@
     display: flex;
     align-items: center;
     gap: 0.4em;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 1.25rem 0 0.35rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .line {
