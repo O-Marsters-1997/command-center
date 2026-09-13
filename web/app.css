@@ -6,6 +6,7 @@
   --color-fg: oklch(25% 0.012 250);
   --color-muted: oklch(58% 0.014 250);
   --color-border: oklch(90% 0.006 250);
+  --color-track: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
 
   --color-s-done: oklch(62% 0.148 150);
   --color-s-live: oklch(60% 0.158 250);

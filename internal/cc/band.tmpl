@@ -6,7 +6,7 @@
     <p class="m-0 text-muted">no tickets tracked yet</p>
     {{else}}
     <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">{{.Band.Fleet.Yours}}/{{.Band.Fleet.Total}} yours</p>
-    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--color-border)_70%,var(--color-bg))]">
+    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       {{range .Band.Fleet.Segments}}
       <span class="segbar-segment" data-tone="{{.Tone}}" style="flex-grow: {{.Count}}"></span>
       {{end}}
