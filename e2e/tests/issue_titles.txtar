@@ -11,7 +11,7 @@ exec cc tick --count 1
 exec cc request GET /
 
 stdout '>#CC-1</button>'
-stdout '<div class="title">Ship the first slice</div>'
+stdout '<div>Ship the first slice</div>'
 stdout '>#CC-2</button>'
 ! stdout 'An issue nobody is working on'
 ! stdout '>sandbox://CC-1<'
@@ -24,4 +24,4 @@ stderr 'gh is unavailable'
 
 exec cc request GET /
 stdout 'the last tick failed'
-stdout '<div class="title">Ship the first slice</div>'
+stdout '<div>Ship the first slice</div>'
