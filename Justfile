@@ -14,6 +14,30 @@ up:
 down:
     docker compose down
 
+db_url := env_var_or_default("CC_DATABASE_URL", "postgres://cc:cc@localhost:5432/cc?sslmode=disable")
+goose := "go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/cc/migrations postgres"
+
+migrate-status:
+    {{goose}} "{{db_url}}" status
+
+migrate-up:
+    {{goose}} "{{db_url}}" up
+
+migrate-down:
+    {{goose}} "{{db_url}}" down
+
+migrate-redo:
+    {{goose}} "{{db_url}}" redo
+
+migrate-create name:
+    go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/cc/migrations create {{name}} sql
+
+# There is no goose Down for 0001_init.sql, so a hard reset drops the volume and replays Up.
+migrate-reset:
+    docker compose down -v
+    just up
+    just migrate-up
+
 test:
     go test ./...
 

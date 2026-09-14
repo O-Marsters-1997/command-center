@@ -16,6 +16,7 @@ linters:
     - misspell # spelling
     - exhaustive # exhaustive enum switches
     - lll # line length
+    - errorlint # %w vs %v, and == comparisons on error values
   settings:
     lll:
       line-length: 120
