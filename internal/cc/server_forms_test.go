@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +47,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},

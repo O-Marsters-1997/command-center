@@ -117,7 +117,7 @@ func baseObservation(f stackedFixture, parentTip string) cc.Observation {
 func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -174,7 +174,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -211,7 +211,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -244,7 +244,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -330,7 +330,7 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

@@ -3,7 +3,6 @@ package cc_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)

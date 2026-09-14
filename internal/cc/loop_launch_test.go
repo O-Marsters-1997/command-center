@@ -28,7 +28,7 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	installFakeTp(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "fake ticket body"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	installFakeTp(t, true)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
@@ -235,7 +235,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -312,7 +312,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

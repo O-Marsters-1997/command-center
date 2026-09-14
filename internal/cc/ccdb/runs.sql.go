@@ -45,7 +45,7 @@ func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesR
 }
 
 const consumeVerbIntent = `-- name: ConsumeVerbIntent :exec
-UPDATE intents SET consumed_at = ? WHERE id = ?
+UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
 
 type ConsumeVerbIntentParams struct {
@@ -58,8 +58,9 @@ func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentPa
 	return err
 }
 
-const insertCutFailedRun = `-- name: InsertCutFailedRun :execresult
-INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?)
+const insertCutFailedRun = `-- name: InsertCutFailedRun :one
+INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
+VALUES ($1, 'agent', $2, $3, $4) RETURNING id
 `
 
 type InsertCutFailedRunParams struct {
@@ -69,17 +70,20 @@ type InsertCutFailedRunParams struct {
 	EndedAt    sql.NullString
 }
 
-func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRunParams) (sql.Result, error) {
-	return q.db.ExecContext(ctx, insertCutFailedRun,
+func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRunParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertCutFailedRun,
 		arg.TicketID,
 		arg.PromptHash,
 		arg.Outcome,
 		arg.EndedAt,
 	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
-const insertRunSkeleton = `-- name: InsertRunSkeleton :execresult
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?)
+const insertRunSkeleton = `-- name: InsertRunSkeleton :one
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id
 `
 
 type InsertRunSkeletonParams struct {
@@ -89,17 +93,20 @@ type InsertRunSkeletonParams struct {
 	PromptHash  sql.NullString
 }
 
-func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonParams) (sql.Result, error) {
-	return q.db.ExecContext(ctx, insertRunSkeleton,
+func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertRunSkeleton,
 		arg.TicketID,
 		arg.Kind,
 		arg.BaselineSHA,
 		arg.PromptHash,
 	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const latestRunLog = `-- name: LatestRunLog :one
-SELECT log_path, ended_at FROM runs WHERE ticket_id = ? ORDER BY id DESC LIMIT 1
+SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1
 `
 
 type LatestRunLogRow struct {
@@ -248,7 +255,7 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 }
 
 const pendingVerbIntents = `-- name: PendingVerbIntents :many
-SELECT id, ticket_id FROM intents WHERE verb = ? AND consumed_at IS NULL ORDER BY id
+SELECT id, ticket_id FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
 `
 
 type PendingVerbIntentsRow struct {
@@ -280,7 +287,7 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb) VALUES (?, ?, ?)
+INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3)
 `
 
 type QueueVerbIntentParams struct {
@@ -295,7 +302,7 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 }
 
 const recordDisposition = `-- name: RecordDisposition :exec
-UPDATE runs SET outcome = ?, exit_code = ?, ended_at = ? WHERE id = ?
+UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3 WHERE id = $4
 `
 
 type RecordDispositionParams struct {
@@ -316,7 +323,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 }
 
 const recordSpawn = `-- name: RecordSpawn :exec
-UPDATE runs SET pgid = ?, proc_started_at = ?, log_path = ? WHERE id = ?
+UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4
 `
 
 type RecordSpawnParams struct {
@@ -337,7 +344,7 @@ func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) error 
 }
 
 const runIDsForTicket = `-- name: RunIDsForTicket :many
-SELECT id FROM runs WHERE ticket_id = ? ORDER BY id
+SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id
 `
 
 func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {

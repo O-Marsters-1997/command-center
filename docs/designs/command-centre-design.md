@@ -585,7 +585,7 @@ There is no verify command and no per-repo verify config. `quarantined` does not
 ai-development/
   treepad/                            one small change (§10)
   command-centre/
-    cmd/cc/main.go                    flock → SQLite → ticker + HTTP
+    cmd/cc/main.go                    flock → Postgres → ticker + HTTP
     internal/plan/                    unlock, eligibility, disposition, push plan — pure
     internal/verdict/                 predicate evaluation — pure
     internal/gh/                      exec + decode + normalise; owns gh's JSON shape
@@ -596,14 +596,13 @@ plain/.claude/command-centre.toml     app config (user-edited; stays with the wo
 plain/.claude/seams/                  seam files (user-edited)
 
 ~/Library/Application Support/command-centre/plain/     mode 0700
-  command-centre.db                   SQLite; flock target
+  command-centre.lock                 flock target
   runs/<run-id>.jsonl                 agent stdout, one file per run
 ```
 
-The DB and run logs are **not** under `plain/` because the worktrees are its siblings: from
-any worktree, `../.claude/command-centre.db` was a same-uid writable path to the consent
-table, every composed prompt, and every other agent's tree. Moving two path constants now is
-cheap; the seam files stay (they are user-edited inputs; the prompt-hash binding in §4b is
+The run logs are **not** under `plain/` because the worktrees are its siblings: from any
+worktree, `../.claude/` was a same-uid writable path to every composed prompt and every other
+agent's tree. Moving the path constant is cheap; the seam files stay (they are user-edited inputs; the prompt-hash binding in §4b is
 what protects consent from their mutation).
 
 `internal/plan` and `internal/verdict` import no `os/exec`, no `database/sql`, no
@@ -718,7 +717,7 @@ the PR snapshot, re-derived each tick. `launches`, `launch_members`, `runs` and 
 record history the world cannot reconstruct — revision 3's "one table not re-derived" was
 refuted by its own crash-recovery paragraph.
 
-**SQLite**: WAL, `busy_timeout=5000`, and **only the loop goroutine writes** — HTTP verbs
+**Postgres**: **only the loop goroutine writes** — HTTP verbs
 insert `intents` the next tick consumes. That closes the race revision 3 shipped (a `cancel`
 landing between unlock and launch let the tick spawn from a launch the user had just
 cancelled — the flock is per-process and both writers shared the process), makes every verb
@@ -764,9 +763,9 @@ Numbered so each can become a test.
 8. The tick spawns a process only for a task that is unlocked, belongs to an `active`
    launch, whose recomposed prompt hash matches the hash recorded at authorisation, and has
    no prior run. Every relaunch is a user verb.
-9. One app instance per workspace (flock on a sibling lock file, not the DB file itself —
-   locking the DB deadlocks modernc.org/sqlite under SQLITE_BUSY); within it, only the loop goroutine
-   writes the DB — verbs are queued intents.
+9. One app instance per workspace (flock on a lock file in the state dir; the database is a
+   server, so there is no file to lock); within it, only the loop goroutine writes the DB —
+   verbs are queued intents.
 10. A tick whose `git fetch` or `gh` read exited non-zero applies no GitHub-derived
     transition and launches nothing; the failure is recorded and the page shows tick age.
     An empty PR list is data only from a zero-exit call. `checking`'s bounded wait advances

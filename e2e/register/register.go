@@ -59,7 +59,7 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately
 // does not take the flock: a script reads while `cc tick` or a daemon holds it. POST /launch's
-// write is a safe blind SQLite INSERT under WAL; a future verb doing more would revisit inv. 9.
+// write is one blind INSERT the server serialises; a future verb doing more would revisit inv. 9.
 func request(ctx context.Context, configPath string, args []string) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
@@ -83,7 +83,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(ws.DBPath)
+	store, err := cc.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}

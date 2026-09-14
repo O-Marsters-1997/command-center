@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -123,7 +122,7 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	url := "https://github.com/acme/alpha/issues/1"
@@ -199,7 +198,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
 		t.Fatal(err)
@@ -249,7 +248,7 @@ func TestHandleImportRendersEveryGroupAndItsTickets(t *testing.T) {
 		},
 	}
 
-	server := cc.NewServer(openStore(t, filepath.Join(t.TempDir(), "cc.db")), time.Now, repos, "")
+	server := cc.NewServer(openStore(t), time.Now, repos, "")
 	server.SetTrackerSource(resolveByURL(map[string]tracker.Source{"https://github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
@@ -268,7 +267,7 @@ func TestHandleImportRendersEveryGroupAndItsTickets(t *testing.T) {
 func TestPostImportQueuesAnIntentAndRedirects(t *testing.T) {
 	t.Parallel()
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
@@ -304,7 +303,7 @@ func TestPostImportQueuesAnIntentAndRedirects(t *testing.T) {
 func TestPostImportRequiresBrowserOrigin(t *testing.T) {
 	t.Parallel()
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 

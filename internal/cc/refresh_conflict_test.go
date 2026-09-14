@@ -2,7 +2,6 @@ package cc_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ type conflictFixture struct {
 func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) conflictFixture {
 	t.Helper()
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))

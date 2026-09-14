@@ -2,6 +2,7 @@
 # variable, so this same file runs on a laptop and on a machine with no tree on it:
 #
 #   CC_DATA_DIR        where state/ and repos/ go. Default: os.UserConfigDir()/command-centre.
+#   CC_DATABASE_URL    the Postgres to connect to. Default: the compose.yaml server.
 #   CC_AGENT_COMMAND   a JSON array replacing agent_command, for a local wrapper.
 #
 # Run it with:

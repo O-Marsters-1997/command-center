@@ -23,7 +23,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 	t.Helper()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -258,7 +258,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
@@ -378,7 +378,7 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},

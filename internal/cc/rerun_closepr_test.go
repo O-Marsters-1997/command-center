@@ -20,7 +20,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestClosePRCallsGhPrCloseAndLogsTheEvent(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

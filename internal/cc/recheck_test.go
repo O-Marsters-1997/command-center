@@ -19,7 +19,7 @@ func TestReCheckRerunsTheActionsRunParsedFromTheCompatCheckDetailsURL(t *testing
 	root, _ := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestReCheckRefusesADetailsURLWithoutARunsSegment(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	installFakeGh(t, false)
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

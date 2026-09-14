@@ -118,7 +118,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	store, err := OpenStore(ws.DBPath)
+	store, err := OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}

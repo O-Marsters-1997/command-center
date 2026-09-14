@@ -25,7 +25,7 @@ func writeVerifyScript(t *testing.T, script string) string {
 func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -82,7 +82,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -112,7 +112,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -150,7 +150,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -215,7 +215,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 	commitFile(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	f := newStackedFixture(t, repoPath, store, at)
 

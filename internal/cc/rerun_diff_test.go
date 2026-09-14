@@ -19,7 +19,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	installFakeTp(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

@@ -7,6 +7,6 @@ JOIN (
     LEFT JOIN (
         SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
     ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN (sqlc.slice('kinds')) AND e2.at > COALESCE(p.pushed_at, '')
+    WHERE e2.kind IN ($1, $2, $3, $4, $5) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
     GROUP BY e2.ticket_id
 ) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id;

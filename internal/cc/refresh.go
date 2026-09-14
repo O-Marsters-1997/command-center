@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -57,8 +58,13 @@ type refreshOutcome struct{ kind, detail string }
 // supersedes an earlier failure without needing its own push
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
-	kinds := []string{eventRefreshRefused, eventRefreshConflicted, eventVerificationFailed, eventRefreshed, eventRestacked}
-	rows, err := s.q.LatestRefreshOutcomes(ctx, kinds)
+	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
+		Kind:   eventRefreshRefused,
+		Kind_2: eventRefreshConflicted,
+		Kind_3: eventVerificationFailed,
+		Kind_4: eventRefreshed,
+		Kind_5: eventRestacked,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}

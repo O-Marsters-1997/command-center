@@ -32,7 +32,7 @@ func runStore(t *testing.T, logPath string, now time.Time) (*cc.Store, int64) {
 	t.Helper()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

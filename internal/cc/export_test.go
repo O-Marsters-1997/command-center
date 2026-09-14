@@ -50,13 +50,6 @@ func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
 func ReadTestdata(name string) string              { return mustReadTestdata(name) }
 func WriteRunLog(t *testing.T, body string) string { return writeRunLog(t, body) }
 
-// Migration0001 is the initial schema, for the test that a database created before goose
-// existed is adopted rather than rebuilt.
-func Migration0001() (string, error) {
-	b, err := migrations.ReadFile("migrations/0001_init.sql")
-	return string(b), err
-}
-
 // SameRemote is the git-URL comparison EnsureCheckout refuses on.
 func SameRemote(a, b string) bool { return sameRemote(a, b) }
 

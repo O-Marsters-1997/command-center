@@ -2,21 +2,21 @@ package cc_test
 
 import (
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 )
 
 func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	dbPath := filepath.Join(t.TempDir(), "cc.db")
-	store := openStore(t, dbPath)
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
@@ -53,7 +53,7 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 		t.Fatalf("events = %d, want exactly one launch event for the one group", len(events))
 	}
 
-	hashes := launchMemberHashes(t, dbPath)
+	hashes := launchMemberHashes(t, dsn)
 	if len(hashes) != 2 {
 		t.Fatalf("launch_members = %d, want 2", len(hashes))
 	}
@@ -69,7 +69,7 @@ func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
@@ -102,7 +102,7 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestLaunchMembershipsExcludesUnauthorisedTickets(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 
 	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
@@ -191,7 +191,7 @@ func TestCancelLaunchesForOnAnUnauthorisedTicketCancelsNothing(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 
 	members, err := store.CancelLaunchesFor(ctx, "sandbox://GHOST")
 	if err != nil {
@@ -206,7 +206,7 @@ func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -242,7 +242,7 @@ func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
@@ -282,10 +282,10 @@ func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 
 // launchMemberHashes reads launch_members directly: the store's own methods expose only
 // membership, and asserting distinct, non-empty prompt hashes needs the column itself.
-func launchMemberHashes(t *testing.T, dbPath string) map[string]string {
+func launchMemberHashes(t *testing.T, dsn string) map[string]string {
 	t.Helper()
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("open db directly: %v", err)
 	}

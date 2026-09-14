@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,7 +12,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
 		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
@@ -89,17 +90,15 @@ func appConfig(t *testing.T) string {
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	seedTickets(t, dataDir)
+	dsn := cctest.DSN(t)
+	t.Setenv("CC_DATABASE_URL", dsn)
+	seedTickets(t, dsn)
 	return configPath
 }
 
-func seedTickets(t *testing.T, dataDir string) {
+func seedTickets(t *testing.T, dsn string) {
 	t.Helper()
-	ws, err := cc.ResolveWorkspace(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	store, err := cc.OpenStore(ws.DBPath)
+	store, err := cc.OpenStore(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

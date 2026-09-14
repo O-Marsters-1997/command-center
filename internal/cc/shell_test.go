@@ -3,7 +3,6 @@ package cc_test
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 	t.Helper()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -228,7 +227,7 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 
 	ctx := t.Context()
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	blocker := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	dependent := cc.Ticket{
 		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},

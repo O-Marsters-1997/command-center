@@ -14,7 +14,7 @@ const activeLaunchMemberCount = `-- name: ActiveLaunchMemberCount :one
 SELECT COUNT(*) FROM launch_members WHERE launch_id IN (
     SELECT lm.launch_id FROM launch_members lm
     JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = ?
+    WHERE l.state = 'active' AND lm.ticket_id = $1
 )
 `
 
@@ -29,7 +29,7 @@ const cancelActiveLaunches = `-- name: CancelActiveLaunches :exec
 UPDATE launches SET state = 'cancelled' WHERE id IN (
     SELECT lm.launch_id FROM launch_members lm
     JOIN launches l ON l.id = lm.launch_id
-    WHERE l.state = 'active' AND lm.ticket_id = ?
+    WHERE l.state = 'active' AND lm.ticket_id = $1
 )
 `
 
@@ -39,7 +39,7 @@ func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) err
 }
 
 const consumeLaunchIntent = `-- name: ConsumeLaunchIntent :exec
-UPDATE intents SET consumed_at = ? WHERE id = ?
+UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
 
 type ConsumeLaunchIntentParams struct {
@@ -52,16 +52,19 @@ func (q *Queries) ConsumeLaunchIntent(ctx context.Context, arg ConsumeLaunchInte
 	return err
 }
 
-const insertLaunch = `-- name: InsertLaunch :execresult
-INSERT INTO launches (created_at, state) VALUES (?, 'active')
+const insertLaunch = `-- name: InsertLaunch :one
+INSERT INTO launches (created_at, state) VALUES ($1, 'active') RETURNING id
 `
 
-func (q *Queries) InsertLaunch(ctx context.Context, createdAt string) (sql.Result, error) {
-	return q.db.ExecContext(ctx, insertLaunch, createdAt)
+func (q *Queries) InsertLaunch(ctx context.Context, createdAt string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertLaunch, createdAt)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertLaunchEvent = `-- name: InsertLaunchEvent :exec
-INSERT INTO events (at, ticket_id, kind, detail) VALUES (?, NULL, 'launch', ?)
+INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'launch', $2)
 `
 
 type InsertLaunchEventParams struct {
@@ -75,7 +78,7 @@ func (q *Queries) InsertLaunchEvent(ctx context.Context, arg InsertLaunchEventPa
 }
 
 const insertLaunchMember = `-- name: InsertLaunchMember :exec
-INSERT INTO launch_members (launch_id, ticket_id, prompt_hash) VALUES (?, ?, ?)
+INSERT INTO launch_members (launch_id, ticket_id, prompt_hash) VALUES ($1, $2, $3)
 `
 
 type InsertLaunchMemberParams struct {
@@ -168,7 +171,7 @@ func (q *Queries) PendingLaunchIntents(ctx context.Context) ([]PendingLaunchInte
 }
 
 const queueLaunchIntent = `-- name: QueueLaunchIntent :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES (?, ?, 'launch', ?)
+INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
 `
 
 type QueueLaunchIntentParams struct {

@@ -1,6 +1,5 @@
-# Inv. 9: one instance per workspace. The flock is on command-centre.lock, a file beside the
-# database rather than the database itself — an flock on the DB deadlocks the SQLite driver —
-# so the refusal must name that file.
+# Inv. 9: one instance per workspace. The flock is on command-centre.lock in the state dir, so
+# the refusal must name that file.
 
 cc-init-repo
 cc-config two-tasks

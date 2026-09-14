@@ -1,14 +1,15 @@
--- name: InsertRunSkeleton :execresult
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?);
+-- name: InsertRunSkeleton :one
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id;
 
 -- name: RecordSpawn :exec
-UPDATE runs SET pgid = ?, proc_started_at = ?, log_path = ? WHERE id = ?;
+UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
 
 -- name: RecordDisposition :exec
-UPDATE runs SET outcome = ?, exit_code = ?, ended_at = ? WHERE id = ?;
+UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3 WHERE id = $4;
 
--- name: InsertCutFailedRun :execresult
-INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?);
+-- name: InsertCutFailedRun :one
+INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
+VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
 SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
@@ -22,16 +23,16 @@ JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id;
 
 -- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb) VALUES (?, ?, ?);
+INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3);
 
 -- name: PendingVerbIntents :many
-SELECT id, ticket_id FROM intents WHERE verb = ? AND consumed_at IS NULL ORDER BY id;
+SELECT id, ticket_id FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
 
 -- name: ConsumeVerbIntent :exec
-UPDATE intents SET consumed_at = ? WHERE id = ?;
+UPDATE intents SET consumed_at = $1 WHERE id = $2;
 
 -- name: ActiveLaunchHashes :many
 SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
@@ -39,7 +40,7 @@ JOIN launches l ON l.id = lm.launch_id
 WHERE l.state = 'active';
 
 -- name: RunIDsForTicket :many
-SELECT id FROM runs WHERE ticket_id = ? ORDER BY id;
+SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
 
 -- name: LatestRunLog :one
-SELECT log_path, ended_at FROM runs WHERE ticket_id = ? ORDER BY id DESC LIMIT 1;
+SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1;

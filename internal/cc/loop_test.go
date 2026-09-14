@@ -3,7 +3,6 @@ package cc_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	observed := cc.Observation{
@@ -48,7 +47,7 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
@@ -77,7 +76,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	good := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	bad := good.Add(15 * time.Second)
 

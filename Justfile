@@ -7,6 +7,13 @@ build:
 run *args:
     go run ./cmd/cc {{args}}
 
+# Start the Postgres the app and the tests connect to.
+up:
+    docker compose up -d --wait
+
+down:
+    docker compose down
+
 test:
     go test ./...
 
