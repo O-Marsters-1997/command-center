@@ -1,6 +1,6 @@
 # 3. A repo is a remote, not a path
 
-**Date:** 2026-08-27 · **Status:** accepted, not implemented
+**Date:** 2026-08-27 · **Status:** accepted
 
 ## Context
 
