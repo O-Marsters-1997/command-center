@@ -5,6 +5,8 @@ import type { Group, Row } from "./types";
 const POLL_MS = 5000;
 const COL_W = 260;
 const ROW_H = 64;
+// Tailwind's static scanner needs a literal class, so the node button's `w-[200px]` below
+// can't reference this constant and must be kept in sync with it by hand.
 const NODE_W = 200;
 const NODE_H = 40;
 const MARGIN = 24;
@@ -156,10 +158,10 @@ customElement("cc-graph", {}, () => {
   // property this island exists to prove (docs/prds/prd-fleet-view.md § The graph).
   let dragging: { x: number; y: number; pan: { x: number; y: number } } | null = null;
   function onPointerDown(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest(".graph-node")) return;
+    if ((e.target as HTMLElement).closest("[data-node]")) return;
     dragging = { x: e.clientX, y: e.clientY, pan: pan() };
     viewport?.setPointerCapture(e.pointerId);
-    viewport?.classList.add("panning");
+    viewport?.classList.replace("cursor-grab", "cursor-grabbing");
   }
   function onPointerMove(e: PointerEvent) {
     if (!dragging) return;
@@ -167,7 +169,7 @@ customElement("cc-graph", {}, () => {
   }
   function endDrag() {
     dragging = null;
-    viewport?.classList.remove("panning");
+    viewport?.classList.replace("cursor-grabbing", "cursor-grab");
   }
   // Zoom to cursor (nice to have): keep the content point under the pointer fixed while scale
   // changes, by solving pan from the point's own before/after content-space coordinates.
@@ -203,18 +205,18 @@ customElement("cc-graph", {}, () => {
   }
 
   return (
-    <div class="graph">
-      <div class="graph-toolbar">
+    <div>
+      <div class="mb-[0.4rem] flex items-center gap-[0.6rem] text-[0.85em] text-muted">
         <span>{selected().size} selected</span>
-        <button type="button" onClick={resetView}>
+        <button type="button" class="ml-auto" onClick={resetView}>
           reset view
         </button>
-        <button type="button" disabled={selected().size === 0} onClick={submit}>
+        <button type="button" class="ml-auto" disabled={selected().size === 0} onClick={submit}>
           preview selection
         </button>
       </div>
       <div
-        class="graph-viewport"
+        class="relative h-[70vh] cursor-grab touch-none select-none overflow-hidden rounded border border-border"
         ref={viewport}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -223,57 +225,61 @@ customElement("cc-graph", {}, () => {
         onWheel={onWheel}
       >
         <div
-          class="graph-surface"
+          class="absolute left-0 top-0 origin-top-left"
           style={{
             transform: `translate(${pan().x}px, ${pan().y}px) scale(${scale()})`,
             width: `${bounds().width}px`,
             height: `${bounds().height}px`,
           }}
         >
-          <svg
-            class="graph-edges"
-            width={bounds().width}
-            height={bounds().height}
-            aria-hidden="true"
-            role="presentation"
-          >
+          <svg width={bounds().width} height={bounds().height} aria-hidden="true" role="presentation">
             <For each={edges()}>
-              {(edge) => (
-                <path
-                  class="graph-edge"
-                  classList={{
-                    "graph-edge-lit": selected().has(edge.from.url) || selected().has(edge.to.url),
-                  }}
-                  d={edgePath(edge)}
-                />
-              )}
+              {(edge) => {
+                const lit = () => selected().has(edge.from.url) || selected().has(edge.to.url);
+                return (
+                  <path
+                    class="fill-none"
+                    classList={{
+                      "stroke-border stroke-[1.5]": !lit(),
+                      "stroke-s-live stroke-[2.5]": lit(),
+                    }}
+                    d={edgePath(edge)}
+                  />
+                );
+              }}
             </For>
           </svg>
           <For each={nodes()}>
-            {(node) => (
-              <button
-                type="button"
-                class="graph-node"
-                classList={{
-                  "graph-node-selected": selected().has(node.url),
-                  "graph-node-lit": litURLs().has(node.url) && !selected().has(node.url),
-                }}
-                style={{ left: `${node.x}px`, top: `${node.y}px`, "--graph-node-w": `${NODE_W}px` }}
-                ref={(el) => nodeRefs.set(node.url, el)}
-                aria-pressed={selected().has(node.url)}
-                onClick={() => toggle(node.url)}
-                onKeyDown={(e) => onNodeKeyDown(e, node)}
-              >
-                <span
-                  class={`pill pill-${node.tone}${node.unattended ? " pill-disc" : " pill-ring"}${node.alive ? " pill-pulse" : ""}`}
+            {(node) => {
+              const isSelected = () => selected().has(node.url);
+              const isLit = () => isSelected() || litURLs().has(node.url);
+              return (
+                <button
+                  type="button"
+                  data-node
+                  class="absolute flex w-[200px] cursor-pointer items-center gap-[0.4rem] rounded border bg-bg px-2 py-[0.3rem] text-left [font:inherit] text-inherit"
+                  classList={{
+                    "border-border": !isLit(),
+                    "border-s-live": isLit(),
+                    "shadow-[0_0_0_1px_var(--color-s-live)]": isSelected(),
+                  }}
+                  style={{ left: `${node.x}px`, top: `${node.y}px` }}
+                  ref={(el) => nodeRefs.set(node.url, el)}
+                  aria-pressed={isSelected()}
+                  onClick={() => toggle(node.url)}
+                  onKeyDown={(e) => onNodeKeyDown(e, node)}
                 >
-                  {node.state}
-                </span>
-                <span class="title">
-                  {ticketRef(node.url)} {node.title || "untitled"}
-                </span>
-              </button>
-            )}
+                  <span
+                    class={`pill pill-${node.tone}${node.unattended ? " pill-disc" : " pill-ring"}${node.alive ? " pill-pulse" : ""}`}
+                  >
+                    {node.state}
+                  </span>
+                  <span class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.85em]">
+                    {ticketRef(node.url)} {node.title || "untitled"}
+                  </span>
+                </button>
+              );
+            }}
           </For>
         </div>
       </div>
