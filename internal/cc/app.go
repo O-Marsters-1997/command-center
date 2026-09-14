@@ -174,7 +174,8 @@ func (a *App) Run(ctx context.Context) error {
 	go func() {
 		err := srv.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
+			errs <- nil
+			return
 		}
 		errs <- fmt.Errorf("serve %s: %w", srv.Addr, err)
 	}()

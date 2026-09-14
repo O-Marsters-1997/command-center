@@ -86,7 +86,7 @@ func appConfig(t *testing.T) string {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
-	body := "[[repo]]\nname = \"cc-sandbox\"\npath = \"cc-sandbox\"\n"
+	body := "port = 0\n[[repo]]\nname = \"cc-sandbox\"\npath = \"cc-sandbox\"\n"
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -168,5 +168,33 @@ func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
+// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main calls log.Fatalf on any
+// non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
+// exit status 1.
+func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
+	configPath := appConfig(t)
+
+	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	ctx, cancel := context.WithCancel(t.Context())
+	app, err := cc.New(ctx, configPath, cc.WithObserver(stub), stubSquashOnly)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+
+	done := make(chan error, 1)
+	go func() { done <- app.Run(ctx) }()
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Run after cancellation = %v, want nil", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Run did not return within the shutdown budget")
 	}
 }
