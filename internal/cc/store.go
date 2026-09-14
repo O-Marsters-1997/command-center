@@ -169,34 +169,11 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 	return tx.Commit()
 }
 
-// DeleteTicket drops a ticket's row along with every row that holds a foreign key back to it --
-// its launch memberships, runs and pushes -- the post-merge cleanup verb's own "drop it from the
-// fleet" step (issue #147).
-func (s *Store) DeleteTicket(ctx context.Context, url string) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-
-	qtx := s.q.WithTx(tx)
-	if err = qtx.DeleteLaunchMembersForTicket(ctx, url); err != nil {
+func (s *Store) DeleteTicket(ctx context.Context, url string) error {
+	if err := s.q.DeleteTicket(ctx, url); err != nil {
 		return fmt.Errorf("delete ticket %s: %w", url, err)
 	}
-	if err = qtx.DeleteRunsForTicket(ctx, url); err != nil {
-		return fmt.Errorf("delete ticket %s: %w", url, err)
-	}
-	if err = qtx.DeletePushesForTicket(ctx, url); err != nil {
-		return fmt.Errorf("delete ticket %s: %w", url, err)
-	}
-	if err = qtx.DeleteTicket(ctx, url); err != nil {
-		return fmt.Errorf("delete ticket %s: %w", url, err)
-	}
-	return tx.Commit()
+	return nil
 }
 
 func nonNil(s []string) []string {
