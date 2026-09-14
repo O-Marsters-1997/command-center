@@ -2,19 +2,13 @@ package cc
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
-)
 
-// dbTx is the subset of *sql.Tx the helpers below need, so they take an interface rather than
-// a concrete transaction type.
-type dbTx interface {
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
+	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+)
 
 // launchPayload is an intent's free-form payload for verb "launch". group ties every intent
 // from one POST /launch call together, without a batch-key column: the frozen v1 schema's
@@ -31,9 +25,11 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 	if err != nil {
 		return fmt.Errorf("encode launch intent payload for %s: %w", ticketID, err)
 	}
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO intents (at, ticket_id, verb, payload) VALUES (?, ?, 'launch', ?)`,
-		at.UTC().Format(time.RFC3339Nano), ticketID, string(payload))
+	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
+		At:       at.UTC().Format(time.RFC3339Nano),
+		TicketID: ticketID,
+		Payload:  notNull(string(payload)),
+	})
 	if err != nil {
 		return fmt.Errorf("queue launch intent for %s: %w", ticketID, err)
 	}
@@ -54,14 +50,15 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err erro
 		}
 	}()
 
-	groups, order, err := pendingLaunchIntents(ctx, tx)
+	qtx := s.q.WithTx(tx)
+	groups, order, err := pendingLaunchIntents(ctx, qtx)
 	if err != nil {
 		return err
 	}
 
 	nowStr := now.UTC().Format(time.RFC3339Nano)
 	for _, group := range order {
-		if err := insertLaunch(ctx, tx, nowStr, groups[group]); err != nil {
+		if err := insertLaunch(ctx, qtx, nowStr, groups[group]); err != nil {
 			return fmt.Errorf("apply launch group %s: %w", group, err)
 		}
 	}
@@ -76,40 +73,30 @@ type pendingIntent struct {
 
 // pendingLaunchIntents reads every unconsumed launch intent and groups it by its payload's
 // group field. order preserves first-seen group order, so launches are created deterministically.
-func pendingLaunchIntents(ctx context.Context, tx dbTx) (map[string][]pendingIntent, []string, error) {
-	rows, err := tx.QueryContext(ctx,
-		`SELECT id, ticket_id, payload FROM intents WHERE verb = 'launch' AND consumed_at IS NULL ORDER BY id`)
+func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pendingIntent, []string, error) {
+	rows, err := q.PendingLaunchIntents(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("select launch intents: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	groups := map[string][]pendingIntent{}
 	var order []string
-	for rows.Next() {
-		var id int64
-		var ticketID, payloadRaw string
-		if err := rows.Scan(&id, &ticketID, &payloadRaw); err != nil {
-			return nil, nil, fmt.Errorf("scan launch intent: %w", err)
-		}
+	for _, row := range rows {
 		var payload launchPayload
-		if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
-			return nil, nil, fmt.Errorf("decode launch intent payload for %s: %w", ticketID, err)
+		if err := json.Unmarshal([]byte(row.Payload.String), &payload); err != nil {
+			return nil, nil, fmt.Errorf("decode launch intent payload for %s: %w", row.TicketID, err)
 		}
 		if _, seen := groups[payload.Group]; !seen {
 			order = append(order, payload.Group)
 		}
 		groups[payload.Group] = append(groups[payload.Group],
-			pendingIntent{id: id, ticketID: ticketID, promptHash: payload.PromptHash})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("iterate launch intents: %w", err)
+			pendingIntent{id: row.ID, ticketID: row.TicketID, promptHash: payload.PromptHash})
 	}
 	return groups, order, nil
 }
 
-func insertLaunch(ctx context.Context, tx dbTx, at string, members []pendingIntent) error {
-	res, err := tx.ExecContext(ctx, `INSERT INTO launches (created_at, state) VALUES (?, 'active')`, at)
+func insertLaunch(ctx context.Context, q *ccdb.Queries, at string, members []pendingIntent) error {
+	res, err := q.InsertLaunch(ctx, at)
 	if err != nil {
 		return fmt.Errorf("insert launch: %w", err)
 	}
@@ -119,20 +106,20 @@ func insertLaunch(ctx context.Context, tx dbTx, at string, members []pendingInte
 	}
 
 	for _, m := range members {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO launch_members (launch_id, ticket_id, prompt_hash) VALUES (?, ?, ?)`,
-			launchID, m.ticketID, m.promptHash); err != nil {
+		if err := q.InsertLaunchMember(ctx, ccdb.InsertLaunchMemberParams{
+			LaunchID: launchID, TicketID: m.ticketID, PromptHash: m.promptHash,
+		}); err != nil {
 			return fmt.Errorf("insert launch member %s: %w", m.ticketID, err)
 		}
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE intents SET consumed_at = ? WHERE id = ?`, at, m.id); err != nil {
+		if err := q.ConsumeLaunchIntent(ctx, ccdb.ConsumeLaunchIntentParams{
+			ConsumedAt: notNull(at), ID: m.id,
+		}); err != nil {
 			return fmt.Errorf("consume intent %d: %w", m.id, err)
 		}
 	}
 
 	detail := fmt.Sprintf("launch %d authorised with %d member(s)", launchID, len(members))
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO events (at, ticket_id, kind, detail) VALUES (?, NULL, 'launch', ?)`, at, detail); err != nil {
+	if err := q.InsertLaunchEvent(ctx, ccdb.InsertLaunchEventParams{At: at, Detail: notNull(detail)}); err != nil {
 		return fmt.Errorf("append launch event: %w", err)
 	}
 	return nil
@@ -148,33 +135,23 @@ type LaunchMembership struct {
 // LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus that
 // launch's member count — and Cancelled for a ticket whose launch was cancelled and not relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembership, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
-		       COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
-		FROM launch_members lm
-		JOIN launches l ON l.id = lm.launch_id
-		WHERE l.state IN ('active', 'cancelled')`)
+	rows, err := s.q.LaunchMemberships(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	memberships := map[string]LaunchMembership{}
 	cancelled := map[string]bool{}
-	for rows.Next() {
-		var ticketID, state string
-		var m LaunchMembership
-		if err := rows.Scan(&ticketID, &m.LaunchID, &state, &m.PromptHash, &m.Members); err != nil {
-			return nil, fmt.Errorf("scan launch membership: %w", err)
-		}
-		if state == "cancelled" {
-			cancelled[ticketID] = true
+	for _, row := range rows {
+		if row.State == "cancelled" {
+			cancelled[row.TicketID] = true
 			continue
 		}
-		memberships[ticketID] = m
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate launch memberships: %w", err)
+		memberships[row.TicketID] = LaunchMembership{
+			LaunchID:   row.LaunchID,
+			Members:    int(row.Members),
+			PromptHash: row.PromptHash,
+		}
 	}
 	for ticketID := range cancelled {
 		if _, active := memberships[ticketID]; !active {
@@ -197,22 +174,16 @@ func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (members
 		}
 	}()
 
-	const activeLaunches = `
-		SELECT lm.launch_id FROM launch_members lm
-		JOIN launches l ON l.id = lm.launch_id
-		WHERE l.state = 'active' AND lm.ticket_id = ?`
-
-	err = tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM launch_members WHERE launch_id IN (`+activeLaunches+`)`, ticketID).Scan(&members)
+	qtx := s.q.WithTx(tx)
+	count, err := qtx.ActiveLaunchMemberCount(ctx, ticketID)
 	if err != nil {
 		return 0, fmt.Errorf("count members of active launches for %s: %w", ticketID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE launches SET state = 'cancelled' WHERE id IN (`+activeLaunches+`)`, ticketID); err != nil {
+	if err := qtx.CancelActiveLaunches(ctx, ticketID); err != nil {
 		return 0, fmt.Errorf("cancel launches for %s: %w", ticketID, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
-	return members, nil
+	return int(count), nil
 }
