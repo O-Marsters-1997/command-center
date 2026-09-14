@@ -8,7 +8,7 @@ CREATE TABLE tickets (
     url        text PRIMARY KEY,
     repo       text NOT NULL,
     branch     text NOT NULL,
-    blocked_by text NOT NULL DEFAULT '[]',
+    blocked_by jsonb NOT NULL DEFAULT '[]'::jsonb,
     source     text NOT NULL DEFAULT '',
     title      text NOT NULL DEFAULT '',
     body       text NOT NULL DEFAULT '',
