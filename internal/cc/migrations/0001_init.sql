@@ -26,14 +26,14 @@ CREATE TABLE launches (
 -- prompt_hash binds consent to content (§4b): a launch authorises a prompt, not a ticket.
 CREATE TABLE launch_members (
     launch_id   bigint NOT NULL REFERENCES launches (id),
-    ticket_id   text   NOT NULL REFERENCES tickets (url),
+    ticket_id   text   NOT NULL REFERENCES tickets (url) ON DELETE CASCADE,
     prompt_hash text   NOT NULL,
     PRIMARY KEY (launch_id, ticket_id)
 );
 
 CREATE TABLE runs (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    ticket_id       text NOT NULL REFERENCES tickets (url),
+    ticket_id       text NOT NULL REFERENCES tickets (url) ON DELETE CASCADE,
     kind            text NOT NULL,
     pgid            bigint,
     proc_started_at text,
@@ -47,7 +47,7 @@ CREATE TABLE runs (
 
 CREATE TABLE pushes (
     id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    ticket_id        text NOT NULL REFERENCES tickets (url),
+    ticket_id        text NOT NULL REFERENCES tickets (url) ON DELETE CASCADE,
     pushed_tip       text NOT NULL,
     base_branch      text NOT NULL,
     base_sha_at_push text NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE pushes (
 CREATE TABLE events (
     id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     at        text NOT NULL,
-    ticket_id text,
+    ticket_id text REFERENCES tickets (url) ON DELETE CASCADE,
     kind      text NOT NULL,
     detail    text
 );

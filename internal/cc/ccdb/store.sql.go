@@ -32,33 +32,6 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error 
 	return err
 }
 
-const deleteLaunchMembersForTicket = `-- name: DeleteLaunchMembersForTicket :exec
-DELETE FROM launch_members WHERE ticket_id = $1
-`
-
-func (q *Queries) DeleteLaunchMembersForTicket(ctx context.Context, ticketID string) error {
-	_, err := q.db.ExecContext(ctx, deleteLaunchMembersForTicket, ticketID)
-	return err
-}
-
-const deletePushesForTicket = `-- name: DeletePushesForTicket :exec
-DELETE FROM pushes WHERE ticket_id = $1
-`
-
-func (q *Queries) DeletePushesForTicket(ctx context.Context, ticketID string) error {
-	_, err := q.db.ExecContext(ctx, deletePushesForTicket, ticketID)
-	return err
-}
-
-const deleteRunsForTicket = `-- name: DeleteRunsForTicket :exec
-DELETE FROM runs WHERE ticket_id = $1
-`
-
-func (q *Queries) DeleteRunsForTicket(ctx context.Context, ticketID string) error {
-	_, err := q.db.ExecContext(ctx, deleteRunsForTicket, ticketID)
-	return err
-}
-
 const deleteTicket = `-- name: DeleteTicket :exec
 DELETE FROM tickets WHERE url = $1
 `

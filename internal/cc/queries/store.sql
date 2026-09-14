@@ -18,15 +18,6 @@ ON CONFLICT (url) DO UPDATE SET
     title = excluded.title, body = excluded.body, status = excluded.status,
     synced_at = excluded.synced_at;
 
--- name: DeleteLaunchMembersForTicket :exec
-DELETE FROM launch_members WHERE ticket_id = $1;
-
--- name: DeleteRunsForTicket :exec
-DELETE FROM runs WHERE ticket_id = $1;
-
--- name: DeletePushesForTicket :exec
-DELETE FROM pushes WHERE ticket_id = $1;
-
 -- name: DeleteTicket :exec
 DELETE FROM tickets WHERE url = $1;
 

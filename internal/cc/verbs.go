@@ -482,10 +482,12 @@ func (l *Loop) removeWorktreeOne(
 	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {
 		return err
 	}
-	if err := l.store.DeleteTicket(ctx, ticket.URL); err != nil {
+	// ticket_id is left NULL: DeleteTicket's cascade would otherwise take this event down
+	// with the row it is meant to outlive. The URL survives in Detail instead.
+	if err := l.store.AppendEvent(ctx, Event{At: now, Kind: eventWorktreeRemoved, Detail: ticket.URL}); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved})
+	return l.store.DeleteTicket(ctx, ticket.URL)
 }
 
 // pruneRunLogs deletes every runs/<id>.jsonl, runs/<id>.prompt and runs/<id>.diff a ticket's runs
