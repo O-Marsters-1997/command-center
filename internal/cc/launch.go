@@ -2,7 +2,6 @@ package cc
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -109,7 +108,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 			return fmt.Errorf("insert launch member %s: %w", m.ticketID, err)
 		}
 		if err := q.ConsumeLaunchIntent(ctx, ccdb.ConsumeLaunchIntentParams{
-			ConsumedAt: sql.NullTime{Time: at, Valid: true}, ID: m.id,
+			ConsumedAt: notNullTime(at), ID: m.id,
 		}); err != nil {
 			return fmt.Errorf("consume intent %d: %w", m.id, err)
 		}

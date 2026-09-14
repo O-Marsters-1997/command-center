@@ -32,7 +32,7 @@ func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineS
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
 	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
-		ProcStartedAt: sql.NullTime{Time: startedAt.UTC(), Valid: true},
+		ProcStartedAt: notNullTime(startedAt.UTC()),
 		LogPath:       notNull(logPath),
 		ID:            runID,
 	})
@@ -54,7 +54,7 @@ func (s *Store) RecordDisposition(
 	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(outcome.String()),
 		ExitCode: exitCodeParam,
-		EndedAt:  sql.NullTime{Time: endedAt.UTC(), Valid: true},
+		EndedAt:  notNullTime(endedAt.UTC()),
 		ID:       runID,
 	})
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 		TicketID:   ticketID,
 		PromptHash: notNull(promptHash),
 		Outcome:    notNull(plan.OutcomeCutFailed.String()),
-		EndedAt:    sql.NullTime{Time: at.UTC(), Valid: true},
+		EndedAt:    notNullTime(at.UTC()),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
@@ -226,7 +226,7 @@ func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
 	err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
-		ConsumedAt: sql.NullTime{Time: at.UTC(), Valid: true},
+		ConsumedAt: notNullTime(at.UTC()),
 		ID:         id,
 	})
 	if err != nil {

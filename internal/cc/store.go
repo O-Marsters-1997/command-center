@@ -220,6 +220,11 @@ func notNull(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
+// notNullTime is notNull's sql.NullTime counterpart.
+func notNullTime(t time.Time) sql.NullTime {
+	return sql.NullTime{Time: t, Valid: true}
+}
+
 const (
 	metaObservation   = "observation"
 	metaLastError     = "last_error"
