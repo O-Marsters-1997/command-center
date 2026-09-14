@@ -6,6 +6,7 @@ package ccdb
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -70,7 +71,7 @@ type Ticket struct {
 	URL       string
 	Repo      string
 	Branch    string
-	BlockedBy string
+	BlockedBy json.RawMessage
 	Source    string
 	Title     string
 	Body      string

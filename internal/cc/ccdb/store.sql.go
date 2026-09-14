@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -136,7 +137,7 @@ type ImportTicketParams struct {
 	Status    string
 	SyncedAt  string
 	Branch    string
-	BlockedBy string
+	BlockedBy json.RawMessage
 }
 
 func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) error {
@@ -221,7 +222,7 @@ type UpsertTicketParams struct {
 	URL       string
 	Repo      string
 	Branch    string
-	BlockedBy string
+	BlockedBy json.RawMessage
 	Source    string
 	Title     string
 	Body      string
