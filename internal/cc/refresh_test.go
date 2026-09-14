@@ -356,3 +356,210 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 		t.Errorf("facts[%s] = %+v, want Refused with reason %q", ticket.URL, got, "conflict")
 	}
 }
+
+// advanceParentPastTheConflict rewrites parent back to parentTip0 and adds a later commit that
+// never touches shared.txt, standing in for someone rewriting the base to drop the change that
+// conflicted -- a later merge of it is genuinely a different one from the failed attempt.
+func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixture) string {
+	t.Helper()
+	runGit(t, "-C", f.parentWorktree, "reset", "-q", "--hard", f.parentTip0)
+	commitFile(t, f.parentWorktree, "parent-fix2.txt", "a later fix that carries none of the clash\n")
+	runGit(t, "-C", repoPath, "push", "-q", "--force", "origin", "parent")
+	return strings.TrimSpace(runGitOutput(t, "-C", f.parentWorktree, "rev-parse", "refs/heads/parent"))
+}
+
+// TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp is issue #188's repro: a
+// conflict resolved and pushed with plain git, from entirely outside the app-managed worktree,
+// must not leave the row parked at base_moved forever once abort clears the stale MERGE_HEAD.
+func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
+
+	obs := baseObservation(f, parentTip1)
+	obs.BranchTips["child"] = strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	observe := func(context.Context) (cc.Observation, error) {
+		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		obs.MidMerge["child"] = mid
+		return obs, nil
+	}
+
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+		t.Fatalf("RunOnce: %v", err)
+	}
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "refresh_conflicted", "") {
+		t.Fatalf("events = %+v, want a refresh_conflicted event", events)
+	}
+
+	// Resolve the conflict and push it from a separate clone, entirely outside the app-managed
+	// worktree: a human fixing it by hand with plain git rather than through the app.
+	clone := filepath.Join(t.TempDir(), "outside-clone")
+	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	runGit(t, "-C", clone, "checkout", "-q", "child")
+	runGit(t, "-C", clone, "merge", "-q", "-X", "ours", "-m", "resolved by hand", "origin/parent")
+	runGit(t, "-C", clone, "push", "-q", "origin", "child")
+	// The push went straight to the bare remote, so repoPath's own tracking ref -- what
+	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
+	// same as advanceMain's (retarget_test.go).
+	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
+	obs.BranchTips["child"] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+		t.Fatalf("abort RunOnce: %v", err)
+	}
+
+	eventsAfter, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(eventsAfter, "refreshed", "") {
+		t.Errorf("events = %+v, want a refreshed event once the branch was resolved and pushed "+
+			"outside the app, with no refresh verb", eventsAfter)
+	}
+}
+
+// TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge covers the ponytail comment's own
+// named case: a base that advances again after a conflict, past the tip the failed merge
+// attempted, is a genuinely different merge and must not wait for the refresh verb either.
+func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
+	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+
+	obs := baseObservation(f, parentTip1)
+	obs.BranchTips["child"] = childTip0
+	observe := func(context.Context) (cc.Observation, error) {
+		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		obs.MidMerge["child"] = mid
+		return obs, nil
+	}
+
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+		t.Fatalf("abort RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasEvent(events, "refreshed", "") {
+		t.Fatalf("events = %+v, want no refreshed event yet: the base has not moved past the failed merge", events)
+	}
+
+	parentTip2 := advanceParentPastTheConflict(t, repoPath, f)
+	obs.BranchTips["parent"] = parentTip2
+
+	if err := loop.RunOnce(t.Context()); err != nil { // the base moved past the failed attempt
+		t.Fatalf("retry RunOnce: %v", err)
+	}
+
+	eventsAfter, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(eventsAfter, "refreshed", "") {
+		t.Errorf("events = %+v, want a refreshed event once the base moved past the failed merge, "+
+			"with no refresh verb", eventsAfter)
+	}
+	if _, err := os.Stat(filepath.Join(f.childWorktree, "parent-fix2.txt")); err != nil {
+		t.Errorf("child worktree does not contain the base's later fix after auto-refresh: %v", err)
+	}
+}
+
+// TestAutoRefreshDoesNotRetryAnUnchangedConflict is the control: nothing about the failed merge's
+// two tips has moved, so autoRefresh must still leave it for the refresh verb -- otherwise every
+// tick would spin re-attempting the same failing merge.
+func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
+	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+
+	obs := baseObservation(f, parentTip1)
+	obs.BranchTips["child"] = childTip0
+	observe := func(context.Context) (cc.Observation, error) {
+		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		obs.MidMerge["child"] = mid
+		return obs, nil
+	}
+
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+		t.Fatalf("abort RunOnce: %v", err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil { // neither tip has moved since the conflict
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts := 0
+	for _, e := range events {
+		if e.Kind == "refresh_conflicted" {
+			conflicts++
+		}
+	}
+	if conflicts != 1 {
+		t.Errorf("refresh_conflicted events = %d, want still 1: nothing has moved, so autoRefresh "+
+			"must not retry the same merge", conflicts)
+	}
+}
