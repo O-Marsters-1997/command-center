@@ -48,7 +48,7 @@ Three things turned up while reading the code that are not migrations at all:
 ### The policy is promoted from a plan to an ADR
 
 The rule currently lives in a shipped plan file, which is where decisions go to be forgotten. It
-now governs ongoing work, so it becomes `docs/adr/0008-utilities-for-layout-grammar-for-state.md`,
+now governs ongoing work, so it becomes `docs/adr/0007-utilities-for-layout-grammar-for-state.md`,
 joining ADR 1 (serve the stylesheet) and ADR 2 (islands opt out of shadow DOM), both of which it
 depends on.
 
@@ -178,7 +178,7 @@ ADR. The derivation layer (`internal/plan`), the store, and every verb are out o
 
 ### What to build
 
-Write `docs/adr/0008-utilities-for-layout-grammar-for-state.md` stating the rule from
+Write `docs/adr/0007-utilities-for-layout-grammar-for-state.md` stating the rule from
 `plans/fleet-view.md`, the purge reason behind it, and the `data-depth` exception. Reference ADR 1
 and ADR 2.
 
@@ -198,7 +198,7 @@ policy shows up here rather than in the middle of the board.
 
 ### Acceptance criteria
 
-- [ ] `docs/adr/0008-*.md` exists, is accepted, and states the rule, the purge reason and the
+- [ ] `docs/adr/0007-*.md` exists, is accepted, and states the rule, the purge reason and the
       `data-depth` exception
 - [ ] A utility used only in a `.tmpl` file appears in the built `internal/cc/assets/dist/app.css`
 - [ ] The seven shell selectors are gone from `@layer components`

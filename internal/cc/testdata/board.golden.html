@@ -6,7 +6,7 @@
   
   
   
-  <tr class="group-head" data-depth="0">
+  <tr class="group group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted" data-depth="0">
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://CC-1"
         hx-get="/board?task=sandbox%3A%2F%2FCC-1" hx-push-url="/?task=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
@@ -14,10 +14,10 @@
       <span class="pill pill-idle pill-ring">ready</span> · launch queued
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
     </td>
-    <td><div class="reason">no blockers</div>
-      <div class="title">untitled</div>
+    <td><div class="text-muted text-[0.85em]">no blockers</div>
+      <div>untitled</div>
     </td>
     <td>L1</td>
     <td>no checks
@@ -27,12 +27,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
   
-  <tr data-depth="1">
+  <tr class="group" data-depth="1">
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://CC-2"
         hx-get="/board?task=sandbox%3A%2F%2FCC-2" hx-push-url="/?task=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
@@ -40,10 +40,10 @@
       <span class="pill pill-wait pill-ring">blocked</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
     </td>
-    <td><div class="reason">blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</div>
-      <div class="title">untitled</div>
+    <td><div class="text-muted text-[0.85em]">blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</div>
+      <div>untitled</div>
     </td>
     <td>L1</td>
     <td>no checks
@@ -53,7 +53,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 

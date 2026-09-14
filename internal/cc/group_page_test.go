@@ -105,8 +105,8 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	if rows[0].Ticket != ticketRef("sandbox://ROOT") {
 		t.Errorf("first row = %q, want the blocker's group line", rows[0].Ticket)
 	}
-	if !strings.Contains(rows[0].Attrs, `class="group-head"`) {
-		t.Errorf("group line attrs = %q, want a group-head class", rows[0].Attrs)
+	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
+		t.Errorf("group line attrs = %q, want the blocker's own depth of 0", rows[0].Attrs)
 	}
 	if got := rowState(t, page, "sandbox://ROOT"); got != "failed" {
 		t.Errorf("group line state = %q, want the blocker's own failed", got)
@@ -202,10 +202,11 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	}
 
 	page := boardFor(t, store)
-	if strings.Contains(page, `class="group-head"`) {
-		t.Errorf("a blockerless ticket set rendered a group line:\n%s", page)
+	rows := renderedRows(page)
+	if got, want := len(rows), len(tickets); got != want {
+		t.Errorf("rendered %d rows for %d tickets, want no extra group line:\n%s", got, want, page)
 	}
-	for _, r := range renderedRows(page) {
+	for _, r := range rows {
 		if !strings.Contains(r.Attrs, `data-depth="0"`) {
 			t.Errorf("%s attrs = %q, want data-depth=0", r.Ticket, r.Attrs)
 		}

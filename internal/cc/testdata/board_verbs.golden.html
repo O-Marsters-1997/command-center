@@ -6,7 +6,7 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://blocked"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
@@ -14,10 +14,10 @@
       <span class="pill pill-wait pill-ring">blocked</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -27,7 +27,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -35,7 +35,7 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://ready"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
@@ -43,10 +43,10 @@
       <span class="pill pill-idle pill-ring">ready</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -56,7 +56,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -64,16 +64,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-wait pill-disc">queued</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -83,7 +83,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://queued">
         <button type="submit" name="verb" value="cancel">cancel launch (0 tickets)</button>
@@ -95,16 +95,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-live pill-disc">running</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -114,7 +114,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
@@ -126,16 +126,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">failed</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -145,7 +145,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -157,16 +157,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">cut_failed</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -176,7 +176,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://cut_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -188,16 +188,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-live pill-disc">push_pending</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -207,7 +207,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -215,16 +215,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-live pill-disc">checking</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -234,7 +234,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://checking">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -250,16 +250,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">needs_you</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -269,7 +269,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -289,16 +289,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">push_failed</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -308,7 +308,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://push_failed">
         <button type="submit" name="verb" value="retry-push">retry-push</button>
@@ -324,16 +324,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-wait pill-ring">review_me</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -343,7 +343,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://review_me">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
@@ -355,16 +355,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-done pill-ring">merged</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -374,7 +374,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
@@ -386,16 +386,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">pr_closed_unmerged</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -405,7 +405,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -421,16 +421,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">base_gone</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -440,7 +440,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -456,7 +456,7 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td>
       <input type="checkbox" form="launch" name="task" value="sandbox://cancelled"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
@@ -464,10 +464,10 @@
       <span class="pill pill-idle pill-ring">cancelled</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -477,7 +477,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -485,16 +485,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-live pill-disc">base_moved</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -504,7 +504,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_moved">
         <button type="submit" name="verb" value="refresh">refresh</button>
@@ -520,16 +520,16 @@
   
   
   
-  <tr data-depth="0">
+  <tr class="group" data-depth="0">
     <td></td>
     <td>
       <span class="pill pill-stop pill-ring">refresh_conflicted</span>
     </td>
     <td>
-      <button type="button" class="ticket-link" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
     </td>
     <td>
-      <div class="title">untitled</div>
+      <div>untitled</div>
     </td>
     <td>L0</td>
     <td>no checks
@@ -539,7 +539,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="verbs-cell">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://refresh_conflicted">
         <button type="submit" name="verb" value="abort">abort</button>
