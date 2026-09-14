@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 const appendEvent = `-- name: AppendEvent :exec
@@ -16,7 +17,7 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, $2, $3, $4)
 `
 
 type AppendEventParams struct {
-	At       string
+	At       time.Time
 	TicketID sql.NullString
 	Kind     string
 	Detail   sql.NullString
@@ -46,7 +47,7 @@ SELECT at, ticket_id, kind, detail FROM events ORDER BY id
 `
 
 type EventsRow struct {
-	At       string
+	At       time.Time
 	TicketID sql.NullString
 	Kind     string
 	Detail   sql.NullString

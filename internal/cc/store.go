@@ -146,7 +146,7 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 	}()
 
 	qtx := s.q.WithTx(tx)
-	syncedAt := now.UTC().Format(time.RFC3339Nano)
+	syncedAt := now.UTC().Format(time.RFC3339)
 	for _, t := range tickets {
 		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
 		// ponytail: source is hardcoded to "github" because tracker.Source names no other
@@ -187,6 +187,11 @@ func nonNil(s []string) []string {
 // writes a real value into, never an explicit NULL.
 func notNull(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
+}
+
+// notNullTime is notNull's sql.NullTime counterpart.
+func notNullTime(t time.Time) sql.NullTime {
+	return sql.NullTime{Time: t, Valid: true}
 }
 
 const (
@@ -290,7 +295,7 @@ type Event struct {
 
 func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	err := s.q.AppendEvent(ctx, ccdb.AppendEventParams{
-		At:       e.At.UTC().Format(time.RFC3339Nano),
+		At:       e.At.UTC(),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
 		Kind:     e.Kind,
 		Detail:   notNull(e.Detail),
@@ -310,11 +315,7 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 
 	var events []Event
 	for _, row := range rows {
-		var e Event
-		if e.At, err = time.Parse(time.RFC3339Nano, row.At); err != nil {
-			return nil, fmt.Errorf("decode event time %q: %w", row.At, err)
-		}
-		e.Kind = row.Kind
+		e := Event{At: row.At, Kind: row.Kind}
 		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
 		events = append(events, e)
 	}
