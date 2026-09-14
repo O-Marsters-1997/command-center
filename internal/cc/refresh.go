@@ -2,7 +2,6 @@ package cc
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -58,35 +57,18 @@ type refreshOutcome struct{ kind, detail string }
 // supersedes an earlier failure without needing its own push
 // (docs/designs/command-centre-design.md § 4a).
 func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT e.ticket_id, e.kind, e.detail
-		FROM events e
-		JOIN (
-			SELECT e2.ticket_id, MAX(e2.id) AS id
-			FROM events e2
-			LEFT JOIN (
-				SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
-			) p ON p.ticket_id = e2.ticket_id
-			WHERE e2.kind IN (?, ?, ?, ?, ?) AND e2.at > COALESCE(p.pushed_at, '')
-			GROUP BY e2.ticket_id
-		) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id`,
-		eventRefreshRefused, eventRefreshConflicted, eventVerificationFailed, eventRefreshed, eventRestacked)
+	kinds := []string{eventRefreshRefused, eventRefreshConflicted, eventVerificationFailed, eventRefreshed, eventRestacked}
+	rows, err := s.q.LatestRefreshOutcomes(ctx, kinds)
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	outcomes := map[string]refreshOutcome{}
-	for rows.Next() {
-		var ticketID, kind string
-		var detail sql.NullString
-		if err := rows.Scan(&ticketID, &kind, &detail); err != nil {
-			return nil, fmt.Errorf("scan refresh outcome: %w", err)
+	for _, row := range rows {
+		if !row.TicketID.Valid {
+			continue
 		}
-		outcomes[ticketID] = refreshOutcome{kind: kind, detail: detail.String}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate refresh outcomes: %w", err)
+		outcomes[row.TicketID.String] = refreshOutcome{kind: row.Kind, detail: row.Detail.String}
 	}
 	return outcomes, nil
 }

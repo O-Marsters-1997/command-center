@@ -415,3 +415,63 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 		t.Fatalf("second RunOnce: %v", err)
 	}
 }
+
+func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "restacked"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}); err != nil {
+		t.Fatal(err)
+	}
+
+	restacked, err := store.RestackedSinceLastPush(ctx)
+	if err != nil {
+		t.Fatalf("RestackedSinceLastPush: %v", err)
+	}
+	if restacked[""] {
+		t.Errorf("restacked = %+v, want no entry for a NULL-ticket event", restacked)
+	}
+	if !restacked[ticket.URL] {
+		t.Errorf("restacked = %+v, want %s present", restacked, ticket.URL)
+	}
+}
+
+func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendEvent(ctx, cc.Event{
+		At: time.Now(), TicketURL: ticket.URL, Kind: "push_refused", Detail: "policy hit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	facts, err := store.PushFacts(ctx)
+	if err != nil {
+		t.Fatalf("PushFacts: %v", err)
+	}
+	if _, ok := facts[""]; ok {
+		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
+	}
+	if got := facts[ticket.URL]; !got.Refused || got.RefusedPath != "policy hit" {
+		t.Errorf("facts[%s] = %+v, want Refused with path %q", ticket.URL, got, "policy hit")
+	}
+}

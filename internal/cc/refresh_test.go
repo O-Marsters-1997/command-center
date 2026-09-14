@@ -325,3 +325,34 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 		t.Errorf("pending refresh intents = %+v, want none: consumed", pending)
 	}
 }
+
+func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendEvent(ctx, cc.Event{
+		At: time.Now(), TicketURL: ticket.URL, Kind: "refresh_refused", Detail: "conflict",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	facts, err := store.RefreshFacts(ctx)
+	if err != nil {
+		t.Fatalf("RefreshFacts: %v", err)
+	}
+	if _, ok := facts[""]; ok {
+		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
+	}
+	if got := facts[ticket.URL]; !got.Refused || got.Reason != "conflict" {
+		t.Errorf("facts[%s] = %+v, want Refused with reason %q", ticket.URL, got, "conflict")
+	}
+}
