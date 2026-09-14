@@ -19,7 +19,7 @@ CREATE TABLE tickets (
 
 CREATE TABLE launches (
     id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    created_at text NOT NULL,
+    created_at timestamptz NOT NULL,
     state      text NOT NULL CHECK (state IN ('active', 'done', 'cancelled'))
 );
 
@@ -36,13 +36,13 @@ CREATE TABLE runs (
     ticket_id       text NOT NULL REFERENCES tickets (url),
     kind            text NOT NULL,
     pgid            bigint,
-    proc_started_at text,
+    proc_started_at timestamptz,
     baseline_sha    text,
     prompt_hash     text,
     log_path        text,
     outcome         text,
     exit_code       bigint,
-    ended_at        text
+    ended_at        timestamptz
 );
 
 CREATE TABLE pushes (
@@ -51,13 +51,13 @@ CREATE TABLE pushes (
     pushed_tip       text NOT NULL,
     base_branch      text NOT NULL,
     base_sha_at_push text NOT NULL,
-    pushed_at        text NOT NULL
+    pushed_at        timestamptz NOT NULL
 );
 
 -- ticket_id is nullable: a launch event belongs to a whole launch, not to one ticket.
 CREATE TABLE events (
     id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    at        text NOT NULL,
+    at        timestamptz NOT NULL,
     ticket_id text,
     kind      text NOT NULL,
     detail    text
@@ -65,9 +65,9 @@ CREATE TABLE events (
 
 CREATE TABLE intents (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    at          text NOT NULL,
+    at          timestamptz NOT NULL,
     ticket_id   text NOT NULL,
     verb        text NOT NULL,
     payload     text,
-    consumed_at text
+    consumed_at timestamptz
 );

@@ -6,11 +6,12 @@ package ccdb
 
 import (
 	"database/sql"
+	"time"
 )
 
 type Event struct {
 	ID       int64
-	At       string
+	At       time.Time
 	TicketID sql.NullString
 	Kind     string
 	Detail   sql.NullString
@@ -18,16 +19,16 @@ type Event struct {
 
 type Intent struct {
 	ID         int64
-	At         string
+	At         time.Time
 	TicketID   string
 	Verb       string
 	Payload    sql.NullString
-	ConsumedAt sql.NullString
+	ConsumedAt sql.NullTime
 }
 
 type Launch struct {
 	ID        int64
-	CreatedAt string
+	CreatedAt time.Time
 	State     string
 }
 
@@ -48,7 +49,7 @@ type Push struct {
 	PushedTip     string
 	BaseBranch    string
 	BaseSHAAtPush string
-	PushedAt      string
+	PushedAt      time.Time
 }
 
 type Run struct {
@@ -56,13 +57,13 @@ type Run struct {
 	TicketID      string
 	Kind          string
 	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullString
+	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
 	PromptHash    sql.NullString
 	LogPath       sql.NullString
 	Outcome       sql.NullString
 	ExitCode      sql.NullInt64
-	EndedAt       sql.NullString
+	EndedAt       sql.NullTime
 }
 
 type Ticket struct {

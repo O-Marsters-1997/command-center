@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const activeLaunchMemberCount = `-- name: ActiveLaunchMemberCount :one
@@ -43,7 +44,7 @@ UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
 
 type ConsumeLaunchIntentParams struct {
-	ConsumedAt sql.NullString
+	ConsumedAt sql.NullTime
 	ID         int64
 }
 
@@ -56,7 +57,7 @@ const insertLaunch = `-- name: InsertLaunch :one
 INSERT INTO launches (created_at, state) VALUES ($1, 'active') RETURNING id
 `
 
-func (q *Queries) InsertLaunch(ctx context.Context, createdAt string) (int64, error) {
+func (q *Queries) InsertLaunch(ctx context.Context, createdAt time.Time) (int64, error) {
 	row := q.db.QueryRowContext(ctx, insertLaunch, createdAt)
 	var id int64
 	err := row.Scan(&id)
@@ -68,7 +69,7 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'launch', $2)
 `
 
 type InsertLaunchEventParams struct {
-	At     string
+	At     time.Time
 	Detail sql.NullString
 }
 
@@ -175,7 +176,7 @@ INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
 `
 
 type QueueLaunchIntentParams struct {
-	At       string
+	At       time.Time
 	TicketID string
 	Payload  sql.NullString
 }

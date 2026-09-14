@@ -32,7 +32,7 @@ func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineS
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
 	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
-		ProcStartedAt: notNull(startedAt.UTC().Format(time.RFC3339Nano)),
+		ProcStartedAt: sql.NullTime{Time: startedAt.UTC(), Valid: true},
 		LogPath:       notNull(logPath),
 		ID:            runID,
 	})
@@ -54,7 +54,7 @@ func (s *Store) RecordDisposition(
 	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(outcome.String()),
 		ExitCode: exitCodeParam,
-		EndedAt:  notNull(endedAt.UTC().Format(time.RFC3339Nano)),
+		EndedAt:  sql.NullTime{Time: endedAt.UTC(), Valid: true},
 		ID:       runID,
 	})
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 		TicketID:   ticketID,
 		PromptHash: notNull(promptHash),
 		Outcome:    notNull(plan.OutcomeCutFailed.String()),
-		EndedAt:    notNull(at.UTC().Format(time.RFC3339Nano)),
+		EndedAt:    sql.NullTime{Time: at.UTC(), Valid: true},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
@@ -98,9 +98,9 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 
 	var pending []PendingRun
 	for _, row := range rows {
-		p := PendingRun{ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64)}
-		if p.ProcStartedAt, err = time.Parse(time.RFC3339Nano, row.ProcStartedAt.String); err != nil {
-			return nil, fmt.Errorf("decode proc_started_at %q: %w", row.ProcStartedAt.String, err)
+		p := PendingRun{
+			ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64),
+			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
 		pending = append(pending, p)
@@ -143,18 +143,10 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, 
 			summary.Pgid = &v
 		}
 		if row.ProcStartedAt.Valid {
-			t, err := time.Parse(time.RFC3339Nano, row.ProcStartedAt.String)
-			if err != nil {
-				return nil, fmt.Errorf("decode proc_started_at %q: %w", row.ProcStartedAt.String, err)
-			}
-			summary.ProcStartedAt = &t
+			summary.ProcStartedAt = &row.ProcStartedAt.Time
 		}
 		if row.EndedAt.Valid {
-			t, err := time.Parse(time.RFC3339Nano, row.EndedAt.String)
-			if err != nil {
-				return nil, fmt.Errorf("decode ended_at %q: %w", row.EndedAt.String, err)
-			}
-			summary.EndedAt = &t
+			summary.EndedAt = &row.EndedAt.Time
 		}
 		if row.ExitCode.Valid {
 			v := int(row.ExitCode.Int64)
@@ -193,7 +185,7 @@ type VerbIntent struct {
 // blind INSERT; the loop is the sole reader and actor (inv. 9).
 func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at time.Time) error {
 	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-		At:       at.UTC().Format(time.RFC3339Nano),
+		At:       at.UTC(),
 		TicketID: ticketID,
 		Verb:     verb,
 	})
@@ -234,7 +226,7 @@ func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
 	err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
-		ConsumedAt: notNull(at.UTC().Format(time.RFC3339Nano)),
+		ConsumedAt: sql.NullTime{Time: at.UTC(), Valid: true},
 		ID:         id,
 	})
 	if err != nil {

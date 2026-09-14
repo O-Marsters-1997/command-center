@@ -2,6 +2,7 @@ package cc
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +27,7 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 		return fmt.Errorf("encode launch intent payload for %s: %w", ticketID, err)
 	}
 	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
-		At:       at.UTC().Format(time.RFC3339Nano),
+		At:       at.UTC(),
 		TicketID: ticketID,
 		Payload:  notNull(string(payload)),
 	})
@@ -56,9 +57,9 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err erro
 		return err
 	}
 
-	nowStr := now.UTC().Format(time.RFC3339Nano)
+	nowUTC := now.UTC()
 	for _, group := range order {
-		if err := insertLaunch(ctx, qtx, nowStr, groups[group]); err != nil {
+		if err := insertLaunch(ctx, qtx, nowUTC, groups[group]); err != nil {
 			return fmt.Errorf("apply launch group %s: %w", group, err)
 		}
 	}
@@ -95,7 +96,7 @@ func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pe
 	return groups, order, nil
 }
 
-func insertLaunch(ctx context.Context, q *ccdb.Queries, at string, members []pendingIntent) error {
+func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []pendingIntent) error {
 	launchID, err := q.InsertLaunch(ctx, at)
 	if err != nil {
 		return fmt.Errorf("insert launch: %w", err)
@@ -108,7 +109,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at string, members []pen
 			return fmt.Errorf("insert launch member %s: %w", m.ticketID, err)
 		}
 		if err := q.ConsumeLaunchIntent(ctx, ccdb.ConsumeLaunchIntentParams{
-			ConsumedAt: notNull(at), ID: m.id,
+			ConsumedAt: sql.NullTime{Time: at, Valid: true}, ID: m.id,
 		}); err != nil {
 			return fmt.Errorf("consume intent %d: %w", m.id, err)
 		}

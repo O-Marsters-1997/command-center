@@ -17,7 +17,7 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 		PushedTip:     pushedTip,
 		BaseBranch:    baseBranch,
 		BaseSHAAtPush: baseSHA,
-		PushedAt:      at.UTC().Format(time.RFC3339Nano),
+		PushedAt:      at.UTC(),
 	})
 	if err != nil {
 		return fmt.Errorf("record push for %s: %w", ticketID, err)
@@ -79,11 +79,12 @@ func (s *Store) LatestPushes(ctx context.Context) (map[string]PushRow, error) {
 
 	pushes := map[string]PushRow{}
 	for _, r := range rows {
-		row := PushRow{PushedTip: r.PushedTip, BaseBranch: r.BaseBranch, BaseSHAAtPush: r.BaseSHAAtPush}
-		if row.PushedAt, err = time.Parse(time.RFC3339Nano, r.PushedAt); err != nil {
-			return nil, fmt.Errorf("decode pushed_at %q: %w", r.PushedAt, err)
+		pushes[r.TicketID] = PushRow{
+			PushedTip:     r.PushedTip,
+			BaseBranch:    r.BaseBranch,
+			BaseSHAAtPush: r.BaseSHAAtPush,
+			PushedAt:      r.PushedAt,
 		}
-		pushes[r.TicketID] = row
 	}
 	return pushes, nil
 }

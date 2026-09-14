@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const activeLaunchHashes = `-- name: ActiveLaunchHashes :many
@@ -49,7 +50,7 @@ UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
 
 type ConsumeVerbIntentParams struct {
-	ConsumedAt sql.NullString
+	ConsumedAt sql.NullTime
 	ID         int64
 }
 
@@ -67,7 +68,7 @@ type InsertCutFailedRunParams struct {
 	TicketID   string
 	PromptHash sql.NullString
 	Outcome    sql.NullString
-	EndedAt    sql.NullString
+	EndedAt    sql.NullTime
 }
 
 func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRunParams) (int64, error) {
@@ -111,7 +112,7 @@ SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 
 
 type LatestRunLogRow struct {
 	LogPath sql.NullString
-	EndedAt sql.NullString
+	EndedAt sql.NullTime
 }
 
 func (q *Queries) LatestRunLog(ctx context.Context, ticketID string) (LatestRunLogRow, error) {
@@ -133,12 +134,12 @@ type LatestRunsByTicketRow struct {
 	ID            int64
 	TicketID      string
 	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullString
+	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
 	LogPath       sql.NullString
 	Outcome       sql.NullString
 	ExitCode      sql.NullInt64
-	EndedAt       sql.NullString
+	EndedAt       sql.NullTime
 	PromptHash    sql.NullString
 	Kind          string
 }
@@ -219,7 +220,7 @@ type PendingRunsAwaitingDispositionRow struct {
 	ID            int64
 	TicketID      string
 	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullString
+	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
 	LogPath       sql.NullString
 }
@@ -291,7 +292,7 @@ INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3)
 `
 
 type QueueVerbIntentParams struct {
-	At       string
+	At       time.Time
 	TicketID string
 	Verb     string
 }
@@ -308,7 +309,7 @@ UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3 WHERE id = $4
 type RecordDispositionParams struct {
 	Outcome  sql.NullString
 	ExitCode sql.NullInt64
-	EndedAt  sql.NullString
+	EndedAt  sql.NullTime
 	ID       int64
 }
 
@@ -328,7 +329,7 @@ UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4
 
 type RecordSpawnParams struct {
 	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullString
+	ProcStartedAt sql.NullTime
 	LogPath       sql.NullString
 	ID            int64
 }

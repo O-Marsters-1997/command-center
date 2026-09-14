@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const lastPushedTips = `-- name: LastPushedTips :many
@@ -55,7 +56,7 @@ type LatestPushesRow struct {
 	PushedTip     string
 	BaseBranch    string
 	BaseSHAAtPush string
-	PushedAt      string
+	PushedAt      time.Time
 }
 
 func (q *Queries) LatestPushes(ctx context.Context) ([]LatestPushesRow, error) {
@@ -145,7 +146,7 @@ type RecordPushParams struct {
 	PushedTip     string
 	BaseBranch    string
 	BaseSHAAtPush string
-	PushedAt      string
+	PushedAt      time.Time
 }
 
 func (q *Queries) RecordPush(ctx context.Context, arg RecordPushParams) error {
