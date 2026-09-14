@@ -2,10 +2,13 @@
 
 **Date:** 2026-08-22 · **Revision 4** · **Status:** built, and normative
 
-The mechanism this document specifies is implemented. §6, the seam mechanism, is the one
-exception: `docs/adr/0004-seams-are-removed.md` deleted it on 2026-08-27, and it is kept here
-only so the shape is recoverable if a second repo ever wants shared prompt text. Where the
-code and this document disagree anywhere else, the disagreement is a bug in the code.
+The mechanism this document specifies is implemented, with two exceptions where an ADR has
+overruled it. §6, the seam mechanism, was deleted by
+`docs/adr/0004-seams-are-removed.md` on 2026-08-27, and is kept here only so the shape is
+recoverable if a second repo ever wants shared prompt text. A launch's `done` state was
+refused by `docs/adr/0009-exhaustion-is-derived.md` on 2026-09-13; exhaustion is derived every
+tick and never written, so §4b and §8 are annotated rather than describing live behaviour.
+Where the code and this document disagree anywhere else, the disagreement is a bug in the code.
 
 **Supersedes:** `.claude/handoffs/treepad__command-centre-architecture.md`, and revisions 1–3
 of this document. Revision 1 was reviewed in
@@ -338,7 +341,9 @@ launch can sit `queued` for hours; without the hash, the user's yes would attach
 the seam files and ticket say *later* (and the seam files sit on the same filesystem the
 agents run on).
 
-A launch is `active` until every member is terminal or the user cancels it. **Cancelling
+A launch is `active` until the user cancels it. It is never marked finished: a launch is
+**exhausted** once every ticket it covers has a pull request, and the tick derives that fresh
+each pass rather than writing it down (`docs/adr/0009-exhaustion-is-derived.md`). **Cancelling
 stops the tick starting anything further from that slice and leaves running agents alone**;
 the tick still pushes and reads CI for work already in flight — cancel withdraws consent for
 *future* work, it does not orphan finished work. Killing is per-row and separate. A
@@ -703,7 +708,8 @@ stresses (a `refresh` is a push with no run; a `re-run` is a second run against 
 tasks           ticket_url PK · repo · branch · blocked_by[] · seams[]
                 (intake upserts on ticket_url — re-running to-tickets must not mint rows,
                  or invariant 8 loses its key and double-launches)
-launches        id · created_at · state (active/done/cancelled)
+launches        id · created_at · state (active/cancelled)
+                (no `done`: exhaustion is derived every tick, never stored. ADR 9)
 launch_members  launch_id · task_id · prompt_hash        ← consent, bound to content (§4b)
 runs            id · task_id · kind · pgid · proc_started_at · baseline_sha ·
                 prompt_hash · log_path · outcome · exit_code · ended_at

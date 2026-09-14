@@ -2,6 +2,10 @@
 
 **Date:** 2026-08-26 · **Status:** accepted
 
+**Note:** the class names cited below (`.st`, `.tl`, `.seg-h`) never existed. The current
+grammar is listed in [ADR 7](0007-utilities-for-layout-grammar-for-state.md); `CONTEXT.md`
+records the resolution. The decision itself is unchanged.
+
 ## Context
 
 Islands are Solid components compiled to custom elements with `solid-element`, so the browser drives
