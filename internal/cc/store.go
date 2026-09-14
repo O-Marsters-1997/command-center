@@ -85,7 +85,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 
 	qtx := s.q.WithTx(tx)
 	for _, t := range tickets {
-		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy))
+		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
 		err = qtx.UpsertTicket(ctx, ccdb.UpsertTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
@@ -125,7 +125,7 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			GroupKey: row.GroupKey,
 			SyncedAt: row.SyncedAt,
 		}
-		_ = json.Unmarshal(row.BlockedBy, &t.BlockedBy)
+		_ = json.Unmarshal(row.BlockedBy, &t.BlockedBy) // jsonb rejects malformed JSON at write, so this can't fail
 		tickets = append(tickets, t)
 	}
 	return tickets, nil
@@ -148,7 +148,7 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 	qtx := s.q.WithTx(tx)
 	syncedAt := now.UTC().Format(time.RFC3339Nano)
 	for _, t := range tickets {
-		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy))
+		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
 		// ponytail: source is hardcoded to "github" because tracker.Source names no other
 		// tracker today; derive it from the resolved Source once a second one exists.
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
