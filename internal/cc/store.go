@@ -95,12 +95,12 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 			Repo:      t.Repo,
 			Branch:    t.Branch,
 			BlockedBy: string(blockedBy),
-			Source:    sql.NullString{String: t.Source, Valid: true},
-			Title:     sql.NullString{String: t.Title, Valid: true},
-			Body:      sql.NullString{String: t.Body, Valid: true},
-			Status:    sql.NullString{String: t.Status, Valid: true},
-			GroupKey:  sql.NullString{String: t.GroupKey, Valid: true},
-			SyncedAt:  sql.NullString{String: t.SyncedAt, Valid: true},
+			Source:    notNull(t.Source),
+			Title:     notNull(t.Title),
+			Body:      notNull(t.Body),
+			Status:    notNull(t.Status),
+			GroupKey:  notNull(t.GroupKey),
+			SyncedAt:  notNull(t.SyncedAt),
 		})
 		if err != nil {
 			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
@@ -164,11 +164,11 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
-			GroupKey:  sql.NullString{String: group, Valid: true},
-			Title:     sql.NullString{String: t.Title, Valid: true},
-			Body:      sql.NullString{String: t.Body, Valid: true},
-			Status:    sql.NullString{String: t.Status, Valid: true},
-			SyncedAt:  sql.NullString{String: syncedAt, Valid: true},
+			GroupKey:  notNull(group),
+			Title:     notNull(t.Title),
+			Body:      notNull(t.Body),
+			Status:    notNull(t.Status),
+			SyncedAt:  notNull(syncedAt),
 			Branch:    tracker.BranchSlug(t.Number, t.Title),
 			BlockedBy: string(blockedBy),
 		})
@@ -214,6 +214,12 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// notNull wraps s as an always-valid sql.NullString, for a nullable column this package always
+// writes a real value into, never an explicit NULL.
+func notNull(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: true}
 }
 
 const (
@@ -320,7 +326,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 		At:       e.At.UTC().Format(time.RFC3339Nano),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
 		Kind:     e.Kind,
-		Detail:   sql.NullString{String: e.Detail, Valid: true},
+		Detail:   notNull(e.Detail),
 	})
 	if err != nil {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
