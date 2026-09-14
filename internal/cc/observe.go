@@ -40,6 +40,12 @@ type Observation struct {
 	// by branch. It is what the launch gate refuses on: a child cut from a base that already
 	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
+	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by branch.
+	ConflictedPaths map[string][]string `json:"conflicted_paths"`
+	// ConflictsWithPeer reports whether two branches' tips would conflict if merged together,
+	// keyed by each branch under the other. Observe only ever records the pair, never which one
+	// yields: it has no ref order to decide that (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 }
 
 // RunObservation is one ticket's liveness as read this tick, keyed by ticket_id. Persisting it
@@ -61,11 +67,16 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		if err != nil {
 			return Observation{}, err
 		}
+		prevObs, _, err := store.LastObservation(ctx)
+		if err != nil {
+			return Observation{}, err
+		}
 
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
-			ConflictsWithBase: map[string]bool{},
+			ConflictsWithBase: map[string]bool{}, ConflictedPaths: map[string][]string{},
+			ConflictsWithPeer: map[string]map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -103,12 +114,21 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				if mainErr != nil {
 					continue
 				}
-				clean, err := MergesCleanly(ctx, path, mainTip, tip)
+				clean, paths, err := MergesCleanly(ctx, path, mainTip, tip)
 				if err != nil {
 					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
 				}
 				obs.ConflictsWithBase[branch] = !clean
+				if !clean {
+					obs.ConflictedPaths[branch] = paths
+				}
+			}
+
+			if err := recordPeerConflicts(
+				ctx, path, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, MergesCleanly,
+			); err != nil {
+				return Observation{}, err
 			}
 
 			worktrees, err := Worktrees(ctx, path)
@@ -147,6 +167,68 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	}
 	sum := sha256.Sum256([]byte(data))
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// peerReader is MergesCleanly's shape, the seam a test replaces to count calls instead of
+// shelling out to git.
+type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []string, error)
+
+// recordPeerConflicts fills in ConflictsWithPeer for one repo's branches, reusing the prior
+// tick's read for any pair whose two tips have not moved since (#180,
+// docs/adr/0010-one-conflicting-peer-at-a-time.md): a pair's answer only changes when one of
+// its two tips moves, and BranchTips already carries them, so an unmoved pair costs no
+// merge-tree call at all. A zero-value prev (nothing observed yet) never matches a real tip,
+// so a cold start falls through to merges for every pair without special-casing it.
+func recordPeerConflicts(
+	ctx context.Context, repoPath string, branches []string, tips map[string]string,
+	prev Observation, into map[string]map[string]bool, merges peerReader,
+) error {
+	for i, branchA := range branches {
+		tipA, ok := tips[branchA]
+		if !ok {
+			continue
+		}
+		for _, branchB := range branches[i+1:] {
+			tipB, ok := tips[branchB]
+			if !ok {
+				continue
+			}
+			if conflicts, ok := cachedPeerConflict(prev, branchA, tipA, branchB, tipB); ok {
+				recordConflictsWithPeer(into, branchA, branchB, conflicts)
+				continue
+			}
+			clean, _, err := merges(ctx, repoPath, tipA, tipB)
+			if err != nil {
+				return fmt.Errorf("check whether %s merges with %s: %w", branchA, branchB, err)
+			}
+			recordConflictsWithPeer(into, branchA, branchB, !clean)
+		}
+	}
+	return nil
+}
+
+// cachedPeerConflict returns the prior tick's read for (branchA, branchB), valid only when both
+// tips still match what that tick observed.
+func cachedPeerConflict(prev Observation, branchA, tipA, branchB, tipB string) (conflicts, ok bool) {
+	if prev.BranchTips[branchA] != tipA || prev.BranchTips[branchB] != tipB {
+		return false, false
+	}
+	conflicts, ok = prev.ConflictsWithPeer[branchA][branchB]
+	return conflicts, ok
+}
+
+// recordConflictsWithPeer stores one pair's result under both branch names, so a later lookup
+// works from either side once ref order (internal/cc's decide step) says which one is "this"
+// branch and which the peer.
+func recordConflictsWithPeer(m map[string]map[string]bool, a, b string, conflicts bool) {
+	if m[a] == nil {
+		m[a] = map[string]bool{}
+	}
+	m[a][b] = conflicts
+	if m[b] == nil {
+		m[b] = map[string]bool{}
+	}
+	m[b][a] = conflicts
 }
 
 func branchesFor(tickets []Ticket, repo string) []string {

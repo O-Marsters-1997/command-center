@@ -125,6 +125,8 @@ type RunSummary struct {
 	// changed comparison for a row that has already run compares a fresh recomposition against
 	// this, never the launch membership's hash, which a later re-run or relaunch supersedes.
 	PromptHash string
+	// Kind is runs.kind: "agent" for a launch or re-run, "resolve" for a conflict-resolution run.
+	Kind string
 }
 
 // LatestRunsByTicket returns each ticket's single most recent run (highest id). Its presence alone
@@ -132,7 +134,7 @@ type RunSummary struct {
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-		       r.outcome, r.exit_code, r.ended_at, r.prompt_hash
+		       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
 		FROM runs r
 		JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
 		  ON latest.ticket_id = r.ticket_id AND latest.id = r.id`)
@@ -146,10 +148,10 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, 
 		var ticketID string
 		var summary RunSummary
 		var pgid sql.NullInt64
-		var procStartedAt, baselineSHA, logPath, outcome, endedAt, promptHash sql.NullString
+		var procStartedAt, baselineSHA, logPath, outcome, endedAt, promptHash, kind sql.NullString
 		var exitCode sql.NullInt64
 		if err := rows.Scan(&summary.ID, &ticketID, &pgid, &procStartedAt, &baselineSHA, &logPath,
-			&outcome, &exitCode, &endedAt, &promptHash); err != nil {
+			&outcome, &exitCode, &endedAt, &promptHash, &kind); err != nil {
 			return nil, fmt.Errorf("scan latest run: %w", err)
 		}
 		if pgid.Valid {
@@ -180,6 +182,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, 
 		}
 		summary.BaselineSHA, summary.LogPath = baselineSHA.String, logPath.String
 		summary.PromptHash = promptHash.String
+		summary.Kind = kind.String
 		summaries[ticketID] = summary
 	}
 	if err := rows.Err(); err != nil {
