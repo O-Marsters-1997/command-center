@@ -8,7 +8,7 @@ cc-fake-gh pr-open-cc1
 
 exec cc request -form 'group=project:single-task' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1

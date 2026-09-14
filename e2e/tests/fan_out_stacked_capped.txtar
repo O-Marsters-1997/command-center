@@ -11,7 +11,7 @@ cc-fake-gh no-prs
 
 exec cc request -form 'group=project:fan-out' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/fan-out/issues/CC-1&task=https://github.com/sandbox-org/fan-out/issues/CC-2&task=https://github.com/sandbox-org/fan-out/issues/CC-3&task=https://github.com/sandbox-org/fan-out/issues/CC-4&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 
 # Tick: only the root is unlocked yet, so the cap never even comes into play here.
 exec cc tick --count 1
@@ -47,7 +47,7 @@ stdout -count=2 'waiting for a slot'
 # Kill one running dependent: its process group empties, the same tick's liveness pass disposes
 # it (failed, no commits from sleeps.sh), and job 3 -- run after disposition in the same tick --
 # starts the next queued dependent with the slot that just freed.
-exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-2'
+exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=4 'run_launched'
@@ -60,14 +60,14 @@ stdout -count=1 'waiting for a slot'
 
 # Kill the last two: the second kill's freed slot starts the last dependent, and nothing is ever
 # left "capped" once every task has had its turn.
-exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-3'
+exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3'
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=5 'run_launched'
 grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
 
-exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-4'
-exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
+exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4'
+exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout 'waiting for a slot'

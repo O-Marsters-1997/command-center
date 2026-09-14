@@ -11,7 +11,7 @@
   </tr>
   {{range .}}
   <tr>
-    <td>{{if not .Refused}}<input type="checkbox" name="task" value="{{.URL}}" checked><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
+    <td>{{if not .Refused}}<input type="checkbox" name="ticket" value="{{.URL}}" checked><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
     <td>{{.Label}}</td>
     <td>{{.URL}}</td>
     <td>{{.Base}}</td>

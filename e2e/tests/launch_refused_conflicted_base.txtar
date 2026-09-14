@@ -26,11 +26,11 @@ exec cc tick --count 1
 exec cc request GET /
 stdout 'cc-1-x already carries an unresolved merge conflict'
 
-exec cc request GET '/preview?task=https://github.com/sandbox-org/fan-out/issues/CC-2'
+exec cc request GET '/preview?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 stdout '<td>refused</td>'
 stdout 'cc-1-x already carries an unresolved merge conflict'
 
-exec cc request POST '/launch?task=https://github.com/sandbox-org/fan-out/issues/CC-2'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout '<td>running</td>'

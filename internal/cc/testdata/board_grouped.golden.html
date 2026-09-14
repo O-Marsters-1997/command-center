@@ -1,6 +1,6 @@
 <table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
@@ -27,7 +27,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://ROOT">
+        <input type="hidden" name="ticket" value="sandbox://ROOT">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
@@ -55,7 +55,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://CC-2">
+        <input type="hidden" name="ticket" value="sandbox://CC-2">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
@@ -82,7 +82,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://CC-3">
+        <input type="hidden" name="ticket" value="sandbox://CC-3">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
@@ -109,7 +109,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://CC-4">
+        <input type="hidden" name="ticket" value="sandbox://CC-4">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
@@ -136,7 +136,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://CC-5">
+        <input type="hidden" name="ticket" value="sandbox://CC-5">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
@@ -148,8 +148,8 @@
   
   <tr class="group" data-depth="0">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://LONE"
-        hx-get="/board?task=sandbox%3A%2F%2FLONE" hx-push-url="/?task=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://LONE"
+        hx-get="/board?ticket=sandbox%3A%2F%2FLONE" hx-push-url="/?ticket=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-idle pill-ring">ready</span>
     </td>

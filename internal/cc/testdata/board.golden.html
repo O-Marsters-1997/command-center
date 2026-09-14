@@ -1,6 +1,6 @@
 <table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
@@ -8,8 +8,8 @@
   
   <tr class="group group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted" data-depth="0">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://CC-1"
-        hx-get="/board?task=sandbox%3A%2F%2FCC-1" hx-push-url="/?task=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"
+        hx-get="/board?ticket=sandbox%3A%2F%2FCC-1" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-idle pill-ring">ready</span> · launch queued
     </td>
@@ -34,8 +34,8 @@
   
   <tr class="group" data-depth="1">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://CC-2"
-        hx-get="/board?task=sandbox%3A%2F%2FCC-2" hx-push-url="/?task=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"
+        hx-get="/board?ticket=sandbox%3A%2F%2FCC-2" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-wait pill-ring">blocked</span>
     </td>

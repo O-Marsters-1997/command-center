@@ -12,7 +12,7 @@ exec cc request -form 'group=project:teardown' POST /import
 
 # CC-7 fails with the empty-commit fake agent: no commits, no push, a plain failed row.
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/teardown/issues/CC-7'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
@@ -27,8 +27,8 @@ cc-config teardown-commits
 # left alone.
 exec cc request -form 'group=project:teardown-more' POST /import
 exec cc tick --count 1
-exec cc request POST '/verb?verb=re-run&task=https://github.com/sandbox-org/teardown/issues/CC-7'
-exec cc request POST '/launch?task=https://github.com/sandbox-org/teardown/issues/CC-1&task=https://github.com/sandbox-org/teardown/issues/CC-3&task=https://github.com/sandbox-org/teardown/issues/CC-4'
+exec cc request POST '/verb?verb=re-run&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-1&ticket=https://github.com/sandbox-org/teardown/issues/CC-3&ticket=https://github.com/sandbox-org/teardown/issues/CC-4'
 exec cc tick --count 1
 grep -count=1 'new cc-7-x' $WORK/tp.log
 exec sleep 0.5
@@ -53,7 +53,7 @@ stdout '>merged</span>[\s\S]*?>#CC-1</button>'
 
 # remove-worktree refuses a dirty worktree: the file is left, nothing is removed.
 cp scratch.txt $WORK/repo-cc-1-x/scratch.txt
-exec cc request POST '/verb?verb=remove-worktree&task=https://github.com/sandbox-org/teardown/issues/CC-1'
+exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'
 exec cc tick --count 1
 exists $WORK/repo-cc-1-x
 exec cc request GET /events
@@ -62,7 +62,7 @@ exec rm $WORK/repo-cc-1-x/scratch.txt
 
 # Cleaned up, the same verb now succeeds: the issue is closed, tp remove --merged tears down the
 # worktree, and the ticket's row drops off the board entirely.
-exec cc request POST '/verb?verb=remove-worktree&task=https://github.com/sandbox-org/teardown/issues/CC-1'
+exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'
 exec cc tick --count 1
 ! exists $WORK/repo-cc-1-x
 # Twice: the dirty attempt above also reached tp remove --merged, which is what refused it --
@@ -79,7 +79,7 @@ exec cc request GET /
 
 # CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
 cc-fake-gh teardown-late
-exec cc request POST '/verb?verb=close-pr&task=https://github.com/sandbox-org/teardown/issues/CC-7'
+exec cc request POST '/verb?verb=close-pr&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc tick --count 1
 grep -count=1 'pr close' $WORK/gh.log
 

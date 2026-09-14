@@ -9,7 +9,7 @@ cc-fake-gh no-prs
 
 exec cc request -form 'group=project:fan-out' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/fan-out/issues/CC-1&task=https://github.com/sandbox-org/fan-out/issues/CC-2&task=https://github.com/sandbox-org/fan-out/issues/CC-3&task=https://github.com/sandbox-org/fan-out/issues/CC-4&task=https://github.com/sandbox-org/fan-out/issues/CC-5'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 
 # Tick: the root has no blockers, so it alone is unlocked and authorised -- cuts and spawns.
 # Every dependent is locked, naming the root as what it is waiting on.

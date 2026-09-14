@@ -1,6 +1,6 @@
 <table id="board" hx-get="" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
@@ -8,7 +8,7 @@
   
   <tr class="group" data-depth="0">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://blocked"
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://blocked"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-wait pill-ring">blocked</span>
@@ -37,7 +37,7 @@
   
   <tr class="group" data-depth="0">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://ready"
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://ready"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-idle pill-ring">ready</span>
@@ -85,7 +85,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://queued">
+        <input type="hidden" name="ticket" value="sandbox://queued">
         <button type="submit" name="verb" value="cancel">cancel launch (0 tickets)</button>
       </form></td>
   </tr>
@@ -116,7 +116,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="sandbox://running">
+        <input type="hidden" name="ticket" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
   </tr>
@@ -147,7 +147,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://failed">
+        <input type="hidden" name="ticket" value="sandbox://failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
@@ -178,7 +178,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://cut_failed">
+        <input type="hidden" name="ticket" value="sandbox://cut_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
@@ -236,11 +236,11 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://checking">
+        <input type="hidden" name="ticket" value="sandbox://checking">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://checking">
+        <input type="hidden" name="ticket" value="sandbox://checking">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
@@ -271,15 +271,15 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://needs_you">
+        <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="sandbox://needs_you">
+        <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="kill">kill</button>
       </form>
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://needs_you">
+        <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
@@ -310,11 +310,11 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://push_failed">
+        <input type="hidden" name="ticket" value="sandbox://push_failed">
         <button type="submit" name="verb" value="retry-push">retry-push</button>
       </form>
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://push_failed">
+        <input type="hidden" name="ticket" value="sandbox://push_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
@@ -345,7 +345,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://review_me">
+        <input type="hidden" name="ticket" value="sandbox://review_me">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
@@ -376,7 +376,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="sandbox://merged">
+        <input type="hidden" name="ticket" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
   </tr>
@@ -407,11 +407,11 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
+        <input type="hidden" name="ticket" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
+        <input type="hidden" name="ticket" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
   </tr>
@@ -442,11 +442,11 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://base_gone">
+        <input type="hidden" name="ticket" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="sandbox://base_gone">
+        <input type="hidden" name="ticket" value="sandbox://base_gone">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
   </tr>
@@ -458,7 +458,7 @@
   
   <tr class="group" data-depth="0">
     <td>
-      <input type="checkbox" form="launch" name="task" value="sandbox://cancelled"
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://cancelled"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="pill pill-idle pill-ring">cancelled</span>
@@ -506,11 +506,11 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://base_moved">
+        <input type="hidden" name="ticket" value="sandbox://base_moved">
         <button type="submit" name="verb" value="refresh">refresh</button>
       </form>
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://base_moved">
+        <input type="hidden" name="ticket" value="sandbox://base_moved">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
@@ -541,7 +541,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="sandbox://refresh_conflicted">
+        <input type="hidden" name="ticket" value="sandbox://refresh_conflicted">
         <button type="submit" name="verb" value="abort">abort</button>
       </form></td>
   </tr>

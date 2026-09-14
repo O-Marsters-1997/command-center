@@ -14,8 +14,8 @@ cc-fake-gh no-prs
 
 exec cc request -form 'group=project:cross-repo' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/services/issues/PLA-40'
-exec cc request POST '/launch?task=https://github.com/sandbox-org/repo/issues/CC-1'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/services/issues/PLA-40'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 
 # Both cut and spawn on this tick.
 exec cc tick --count 1
@@ -73,7 +73,7 @@ stdout '>waiting_on_producer_deploy</span>'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # re-check reruns the compat check's own Actions run, parsed out of its details URL (issue #56).
-exec cc request POST '/verb?verb=re-check&task=https://github.com/sandbox-org/repo/issues/CC-1'
+exec cc request POST '/verb?verb=re-check&ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 exec cc tick --count 1
 grep -count=1 'run rerun 4242' $WORK/gh.log
 exec cc request GET /events

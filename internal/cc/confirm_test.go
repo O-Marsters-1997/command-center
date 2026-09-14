@@ -66,7 +66,7 @@ func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 
 			server := cc.NewServer(tt.store(t), fixedClock(now), nil, "")
 			rec := httptest.NewRecorder()
-			target := "/confirm?verb=" + tt.verb + "&task=sandbox://CC-1"
+			target := "/confirm?verb=" + tt.verb + "&ticket=sandbox://CC-1"
 			server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -75,7 +75,7 @@ func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 			body := rec.Body.String()
 			wants := []string{"sandbox://CC-1", tt.verb, tt.want,
 				`<form method="post" action="/verb">`,
-				`<input type="hidden" name="task" value="sandbox://CC-1">`,
+				`<input type="hidden" name="ticket" value="sandbox://CC-1">`,
 				`<input type="hidden" name="verb" value="` + tt.verb + `">`,
 				`<a href="/">`,
 			}
@@ -96,7 +96,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 	store := seededStore(t, time.Now())
 	server := cc.NewServer(store, time.Now, nil, "")
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/confirm?verb=remove-worktree&task=sandbox://CC-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/confirm?verb=remove-worktree&ticket=sandbox://CC-1", nil)
 	server.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -118,10 +118,10 @@ func TestConfirmRejectsNonDestructiveVerbsAndUnknownTickets(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{
-		{name: "a non-destructive verb needs no confirmation", query: "?verb=re-run&task=sandbox://CC-1"},
-		{name: "an unsupported verb", query: "?verb=nope&task=sandbox://CC-1"},
-		{name: "an unknown ticket", query: "?verb=kill&task=sandbox://NOPE"},
-		{name: "a missing verb", query: "?task=sandbox://CC-1"},
+		{name: "a non-destructive verb needs no confirmation", query: "?verb=re-run&ticket=sandbox://CC-1"},
+		{name: "an unsupported verb", query: "?verb=nope&ticket=sandbox://CC-1"},
+		{name: "an unknown ticket", query: "?verb=kill&ticket=sandbox://NOPE"},
+		{name: "a missing verb", query: "?ticket=sandbox://CC-1"},
 		{name: "a missing ticket", query: "?verb=kill"},
 	}
 	for _, tt := range tests {

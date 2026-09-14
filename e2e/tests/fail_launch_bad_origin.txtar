@@ -7,7 +7,7 @@ cc-fake-gh no-prs
 
 exec cc request -form 'group=project:two-tasks' POST /import
 exec cc tick --count 1
-! exec cc request -origin http://evil.example POST '/launch?task=https://github.com/sandbox-org/two-tasks/issues/CC-1'
+! exec cc request -origin http://evil.example POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1'
 stderr '403'
 
 exec cc tick --count 1

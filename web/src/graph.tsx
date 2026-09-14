@@ -145,7 +145,7 @@ customElement("cc-graph", {}, () => {
   }
 
   function submit() {
-    const params = [...selected()].map((u) => `task=${encodeURIComponent(u)}`).join("&");
+    const params = [...selected()].map((u) => `ticket=${encodeURIComponent(u)}`).join("&");
     window.location.href = params ? `/preview?${params}` : "/preview";
   }
 

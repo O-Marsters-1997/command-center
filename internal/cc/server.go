@@ -374,11 +374,11 @@ func applyViewState(rows []row, params viewParams) {
 	for i := range rows {
 		r := &rows[i]
 		r.Selected = params.Sel == r.URL
-		r.Checked = slices.Contains(params.Tasks, r.URL)
+		r.Checked = slices.Contains(params.Tickets, r.URL)
 		toggledSel := params.toggleSel(r.URL)
 		r.SelectPath, r.SelectPush = toggledSel.boardPath(), toggledSel.pagePath()
-		toggledTask := params.toggleTask(r.URL)
-		r.TogglePath, r.TogglePush = toggledTask.boardPath(), toggledTask.pagePath()
+		toggledTicket := params.toggleTicket(r.URL)
+		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		if r.Selected {
 			r.Log = buildLogDetail(r.LogPath, r.Alive, r.URL, params)
 		}
@@ -829,9 +829,9 @@ type previewRow struct {
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	requested := r.URL.Query()["task"]
+	requested := r.URL.Query()["ticket"]
 	if len(requested) == 0 {
-		http.Error(w, "at least one ?task= is required", http.StatusBadRequest)
+		http.Error(w, "at least one ?ticket= is required", http.StatusBadRequest)
 		return
 	}
 
@@ -908,12 +908,12 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// ParseForm merges the posted body with the query string, so one checkbox per launchable row
-	// and a hand-built `POST /launch?task=...&task=...` are the same repeated field to r.Form.
+	// and a hand-built `POST /launch?ticket=...&ticket=...` are the same repeated field to r.Form.
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	requested := r.Form["task"]
+	requested := r.Form["ticket"]
 	if len(requested) == 0 {
 		http.Error(w, "at least one ticket is required", http.StatusBadRequest)
 		return
@@ -977,9 +977,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// FormValue, not URL.Query: the page's per-row form posts both fields in the body, and
 	// reading the form falls back to the query string, which keeps a hand-built
-	// `POST /verb?verb=kill&task=...` working unchanged.
+	// `POST /verb?verb=kill&ticket=...` working unchanged.
 	verb := r.FormValue("verb")
-	ticketURL := r.FormValue("task")
+	ticketURL := r.FormValue("ticket")
 	if verb == "" || ticketURL == "" {
 		http.Error(w, "verb and ticket are both required", http.StatusBadRequest)
 		return

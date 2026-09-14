@@ -7,7 +7,7 @@
 <p class="banner ribbon mb-2" data-tone="stop">{{.Verb}} on {{.URL}} {{.Effect}}. It cannot be undone.</p>
 <p class="mb-3 text-muted">{{.RiskLabel}} at risk: {{or .Risk "none recorded"}}</p>
 <form method="post" action="/verb">
-  <input type="hidden" name="task" value="{{.URL}}">
+  <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="verb" value="{{.Verb}}">
   <button type="submit">[ confirm ]</button>
 </form>

@@ -82,7 +82,7 @@ var defaultAgentCommand = []string{
 }
 
 // LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and
-// rejects a task whose repo has no [[repo]] block. Where the config file sits decides one thing
+// rejects a ticket whose repo has no [[repo]] block. Where the config file sits decides one thing
 // only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
