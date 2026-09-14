@@ -343,6 +343,38 @@ cut, `launch` to re-authorise).
 `launches` and `launch_members` record decisions no amount of reading the world can
 reconstruct — as does `runs` (§8); revision 3's "one table not re-derived" undercounted.
 
+### 4c · One conflicting peer proceeds at a time
+
+When two open main-based branches conflict, only one is ready at a time. The higher-ref one
+is held at `blocked` and its reason names the peer. Nothing here stops a merge conflicting a
+peer, which is git rather than policy; what it stops is the peer being offered as ready
+before its turn, which is what makes a resolution get thrown away by the next merge. The
+hold still offers `launch`, and merging the held PR yourself re-derives on the next tick, so
+nothing deadlocks.
+
+**Observe compares peer tips with the call it already makes.** Every tick, `MergesCleanly`
+runs `git merge-tree --write-tree --name-only` per open branch against `origin/main`. The
+peer sweep calls it again per pair of open tips, keyed on the pair, so a tick where no one
+pushed makes zero peer calls. One push recomputes that branch's n−1 pairs; only a cold
+start pays the full C(n,2).
+
+**The sweep runs in ref order and holds only behind a ready peer.** Where A conflicts with
+B and B with C but A and C do not, that order holds C behind a B which is itself about to
+be held. Sweeping in ref order while carrying the ready set leaves A ready, holds B behind
+A, and lets C go, because C's only conflict is no longer ready.
+
+**A generated-only conflict needs no agent.** A conflict confined to paths the build
+regenerates (config keys `generated` and `build_command`, §8) merges, runs the build, stages
+and commits, then offers the row without agent work. A conflict touching any hand-written
+path is left alone, even when every other conflicted path is generated.
+
+**`resolve` is the verb for everything else.** `conflicts_with_main` offers `resolve`, which
+spawns an agent composed against `cc/skills/resolve-merge-conflict/SKILL.md` rather than
+`/implement` — the skill ADR 6 named and left unwired. The agent resolves in the worktree
+and stops. It commits nothing and pushes nothing, so the row lands at `conflict_resolved`,
+offering no verbs and reading "resolved with nothing committed; read it in the worktree
+before deciding what happens next". Go decides what may commit, not the agent (§7).
+
 ## 5 · State machine
 
 Two independent facts decide where a task sits before it runs: is it **unlocked** (§4), and
@@ -381,7 +413,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 
 | State | Means | Verbs |
 |---|---|---|
-| `blocked` | a stacking blocker has no OPEN or MERGED PR; unauthorised | launch (authorises; starts on unlock) |
+| `blocked` | a stacking blocker has no OPEN or MERGED PR, or a ready peer conflicts with this branch and has a higher ref; unauthorised | launch (authorises; starts on unlock) |
 | `queued` | authorised, waiting — the row says for what: its base, or a slot under `max_agents` | cancel |
 | `ready` | unlocked, unauthorised — the row a human acts on | **launch** |
 | `running` | agent process alive | kill |
@@ -389,6 +421,8 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
 | `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
+| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 6) | **resolve**, refresh, close PR |
+| `conflict resolved` | a `resolve` run left the conflict staged in the worktree and committed nothing; read it before deciding | none |
 | `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
 | `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |
@@ -585,6 +619,10 @@ deny = [                              # on top of the default set (§7)
   "scripts/**", "codegen.yml", "next.config.js",
   "vite.config.ts", "eslint-ci.config.ts",
 ]
+generated     = [                     # paths the build regenerates; empty opts out
+  "dist/**", "types/**",
+]
+build_command = ["npm", "run", "build"]  # argv to regenerate; empty opts out
   [repo.checks]
   all_of = [
     { success = "Lint" },
@@ -603,6 +641,17 @@ deny = [                              # on top of the default set (§7)
 # "sst.config.ts", ".pnpmfile.mjs", "patches/**", "vitest/**", "vitest.config.js";
 # its predicate needs the full grammar below — write it as a fixture in Phase 1.
 ```
+
+**`generated` and `build_command` drive generated-file auto-resolution (§4c).** `generated`
+is a glob list of paths the repo's build regenerates: `dist/**` for a bundle directory,
+`testdata/*.golden.html` for golden fixtures. A `dir/**` entry covers every path under `dir`
+at any depth; anything else is matched with `filepath.Match`, whose `*` never crosses a
+separator.
+
+`build_command` is the argv that regenerates them, and an empty one opts the repo out.
+`plan.AllGenerated` returns false when it is empty, so a repo that names `generated` paths
+but no `build_command` auto-resolves nothing — every conflict waits for `resolve` instead.
+Naming both is what turns the feature on.
 
 **The predicate grammar** is `all_of` / `any_of` / **`not`** / `success` / `skipped` /
 `absent_ok`. Verified against both files:
