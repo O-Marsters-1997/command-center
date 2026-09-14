@@ -120,9 +120,6 @@ func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 	}
 }
 
-// TestDeleteTicketRemovesARowThatHasRunsAndPushes covers the reason DeleteTicket cannot be a
-// plain `DELETE FROM tickets`: runs and pushes both hold a foreign key back to the ticket's url,
-// and a merged ticket -- the only ticket this verb ever targets -- always has at least a run.
 func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
 	t.Parallel()
 
@@ -133,11 +130,18 @@ func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	at := time.Now()
+	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Now()
 	if err := store.RecordSpawn(ctx, runID, 111, at, "runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
@@ -155,5 +159,44 @@ func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
 	}
 	if len(tickets) != 0 {
 		t.Errorf("tickets = %+v, want none left after DeleteTicket", tickets)
+	}
+
+	memberships, err := store.LaunchMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := memberships[ticket.URL]; ok {
+		t.Errorf("memberships = %+v, want no membership left for %s", memberships, ticket.URL)
+	}
+}
+
+func TestDeleteTicketLeavesFleetEventsAlone(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Now()
+	if err := store.AppendEvent(ctx, cc.Event{At: at, TicketURL: ticket.URL, Kind: "ticket_event"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendEvent(ctx, cc.Event{At: at, Kind: "fleet_event"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteTicket(ctx, ticket.URL); err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	events, err := store.Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Kind != "fleet_event" {
+		t.Errorf("events = %+v, want only the NULL-ticket_id fleet event left", events)
 	}
 }
