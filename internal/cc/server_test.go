@@ -325,7 +325,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(tt.method, srv.URL+"/launch?task=sandbox://CC-1", nil)
+			req, err := http.NewRequest(tt.method, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -350,7 +350,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
 
 	// CC-4 is a tracked ticket but deliberately left out of the slice, so CC-3's blocker sits
 	// outside it with no pull request.
-	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3")
+	body := fetchPreview(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
 
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>now</td>", "<td>origin/main</td>")
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-2"), "<td>on unlock</td>", "<td>origin/main</td>")
@@ -439,7 +439,7 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 
-	body := fetchPreview(t, srv, "task=sandbox://CHILD")
+	body := fetchPreview(t, srv, "ticket=sandbox://CHILD")
 
 	// now because the parent's PR is open, origin/parent because stacking is on, and needs_you
 	// because that parent's own CI is red.
@@ -471,7 +471,7 @@ func TestPreviewRefusesATicketAlreadyInAnActiveLaunch(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := fetchPreview(t, srv, "task=sandbox://CC-1")
+	body := fetchPreview(t, srv, "ticket=sandbox://CC-1")
 
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
 }
@@ -487,8 +487,8 @@ func TestPreviewRejectsEmptyOrUnknownTicket(t *testing.T) {
 		path string
 	}{
 		{name: "no ticket at all", path: "/preview"},
-		{name: "an empty ticket value", path: "/preview?task="},
-		{name: "an unknown ticket", path: "/preview?task=sandbox://GHOST"},
+		{name: "an empty ticket value", path: "/preview?ticket="},
+		{name: "an unknown ticket", path: "/preview?ticket=sandbox://GHOST"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -516,14 +516,14 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 
 	root := cc.Ticket{URL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
 	tickets := []cc.Ticket{root}
-	query := "task=" + root.URL
+	query := "ticket=" + root.URL
 	for i := 1; i <= fanOut; i++ {
 		ticketURL := fmt.Sprintf("sandbox://CC-%d", i)
 		tickets = append(tickets, cc.Ticket{
 			URL: ticketURL, Repo: "cc-sandbox", Branch: fmt.Sprintf("cc-%d", i),
 			BlockedBy: []string{root.URL},
 		})
-		query += "&task=" + ticketURL
+		query += "&ticket=" + ticketURL
 	}
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
@@ -631,7 +631,7 @@ func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := fetchPreview(t, srv, "task=sandbox://CC-1")
+	body := fetchPreview(t, srv, "ticket=sandbox://CC-1")
 
 	wantPrompt := plan.Compose(plan.Ticket{URL: ticket.URL})
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
@@ -656,7 +656,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?task=sandbox://CC-1", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -811,7 +811,7 @@ func TestPreviewRendersItsPage(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	server := cc.NewServer(store, fixedClock(at), nil, "")
 	rec := httptest.NewRecorder()
-	target := "/preview?task=sandbox://CC-1&task=sandbox://CC-2&task=sandbox://CC-3"
+	target := "/preview?ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -848,7 +848,7 @@ func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testin
 	t.Cleanup(srv.Close)
 
 	body := fetchPreview(t, srv,
-		"task=sandbox://CC-3&task=sandbox://CC-4&task=sandbox://CC-5&task=sandbox://CC-6&task=sandbox://CC-7")
+		"ticket=sandbox://CC-3&ticket=sandbox://CC-4&ticket=sandbox://CC-5&ticket=sandbox://CC-6&ticket=sandbox://CC-7")
 
 	for _, ticketURL := range []string{"sandbox://CC-3", "sandbox://CC-4"} {
 		assertCells(t, previewRowFor(t, body, ticketURL), "<td>refused</td>", "sandbox://CC-2")
@@ -886,7 +886,7 @@ func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := fetchPreview(t, srv, "task=sandbox://CC-1&task=sandbox://CC-2")
+	body := fetchPreview(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2")
 
 	want := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"}))
 	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
@@ -922,7 +922,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	recomposed := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"}))
 
 	form := url.Values{
-		"task": {"sandbox://CC-1", "sandbox://CC-2"},
+		"ticket": {"sandbox://CC-1", "sandbox://CC-2"},
 		"hash": {
 			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})),
 			"sandbox://CC-2 " + previewed,
@@ -962,7 +962,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	form := url.Values{
-		"task": {"sandbox://CC-1"},
+		"ticket": {"sandbox://CC-1"},
 		"hash": {
 			"sandbox://CC-1 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})),
 			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"})),
@@ -991,7 +991,7 @@ func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	form := url.Values{"task": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
+	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
 	resp, body := postLaunchForm(t, srv, form)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)

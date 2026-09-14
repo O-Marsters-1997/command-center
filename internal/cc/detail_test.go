@@ -464,7 +464,7 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 		`<form method="post" action="/verb">`,
 		`<form method="get" action="/confirm">`,
 		`<form id="launch" method="get" action="/preview"></form>`,
-		`<input type="checkbox" form="launch" name="task"`,
+		`<input type="checkbox" form="launch" name="ticket"`,
 	} {
 		if !strings.Contains(board, want) {
 			t.Errorf("the board is missing the scriptless path %q", want)

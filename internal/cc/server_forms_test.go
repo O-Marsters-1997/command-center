@@ -29,8 +29,8 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	body := rec.Body.String()
 	wants := []string{
 		`<form id="launch" method="get" action="/preview"></form>`,
-		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-1"`,
-		`<input type="checkbox" form="launch" name="task" value="sandbox://CC-2"`,
+		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"`,
+		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"`,
 		`<button type="submit" form="launch">launch selected</button>`,
 	}
 	for _, want := range wants {
@@ -44,7 +44,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 }
 
 // A third launchable row proves "exactly" those two, not just "at least".
-func TestQueryChecksExactlyTheNamedTasks(t *testing.T) {
+func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -63,7 +63,7 @@ func TestQueryChecksExactlyTheNamedTasks(t *testing.T) {
 	}
 	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
 
-	target := "/?" + url.Values{"task": {"sandbox://A", "sandbox://B"}}.Encode()
+	target := "/?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	body := rec.Body.String()
@@ -77,7 +77,7 @@ func TestQueryChecksExactlyTheNamedTasks(t *testing.T) {
 		}
 	}
 	if strings.Contains(body, `value="sandbox://C" checked`) {
-		t.Errorf("sandbox://C is checked but was not named in ?task=:\n%s", body)
+		t.Errorf("sandbox://C is checked but was not named in ?ticket=:\n%s", body)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := url.Values{"task": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()
+	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)

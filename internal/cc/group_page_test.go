@@ -118,7 +118,7 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 		if got := rowCellAt(t, page, c, 3); !strings.Contains(got, "sandbox://ROOT") {
 			t.Errorf("%s reason = %q, want it to name the blocker", c, got)
 		}
-		if !strings.Contains(page, `name="task" value="`+c+`"`) {
+		if !strings.Contains(page, `name="ticket" value="`+c+`"`) {
 			t.Errorf("%s lost its verb buttons:\n%s", c, page)
 		}
 	}

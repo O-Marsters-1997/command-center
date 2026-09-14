@@ -1,6 +1,6 @@
 <table id="board" hx-get="/board?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
@@ -31,7 +31,7 @@
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="https://github.com/o/r/issues/76">
+        <input type="hidden" name="ticket" value="https://github.com/o/r/issues/76">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
   </tr>

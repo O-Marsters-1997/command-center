@@ -34,7 +34,7 @@ func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(tt.method, srv.URL+"/verb?verb=kill&task=sandbox://CC-1", nil)
+			req, err := http.NewRequest(tt.method, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -60,7 +60,7 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&task=sandbox://CC-1", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&task=sandbox://CC-1", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&ticket=sandbox://CC-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,9 +118,9 @@ func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{
-		{name: "unknown ticket", query: "verb=kill&task=sandbox://GHOST"},
-		{name: "unsupported verb", query: "verb=bogus-verb&task=sandbox://CC-1"},
-		{name: "missing verb", query: "task=sandbox://CC-1"},
+		{name: "unknown ticket", query: "verb=kill&ticket=sandbox://GHOST"},
+		{name: "unsupported verb", query: "verb=bogus-verb&ticket=sandbox://CC-1"},
+		{name: "missing verb", query: "ticket=sandbox://CC-1"},
 		{name: "missing ticket", query: "verb=kill"},
 	}
 	for _, tt := range tests {
@@ -150,7 +150,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	// A handler reading only the query string sees neither of these.
-	body := url.Values{"verb": {"kill"}, "task": {"sandbox://CC-1"}}.Encode()
+	body := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&task=sandbox://CC-1", nil)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

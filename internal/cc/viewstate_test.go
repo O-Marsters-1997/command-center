@@ -8,14 +8,14 @@ import (
 func TestParseViewParamsTakesTheFirstSel(t *testing.T) {
 	t.Parallel()
 
-	q, err := url.ParseQuery("sel=a&sel=b&task=x&task=y&view=graph")
+	q, err := url.ParseQuery("sel=a&sel=b&ticket=x&ticket=y&view=graph")
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := parseViewParams(q)
-	want := viewParams{Sel: "a", Tasks: []string{"x", "y"}, View: "graph"}
-	if got.Sel != want.Sel || got.View != want.View || len(got.Tasks) != 2 ||
-		got.Tasks[0] != "x" || got.Tasks[1] != "y" {
+	want := viewParams{Sel: "a", Tickets: []string{"x", "y"}, View: "graph"}
+	if got.Sel != want.Sel || got.View != want.View || len(got.Tickets) != 2 ||
+		got.Tickets[0] != "x" || got.Tickets[1] != "y" {
 		t.Errorf("parseViewParams(%q) = %+v, want %+v", q, got, want)
 	}
 }
@@ -27,7 +27,7 @@ func TestParseViewParamsDefaultsViewToBoard(t *testing.T) {
 	if got.View != "board" {
 		t.Errorf("View = %q, want board", got.View)
 	}
-	if got.Sel != "" || got.Tasks != nil {
+	if got.Sel != "" || got.Tickets != nil {
 		t.Errorf("parseViewParams({}) = %+v, want the zero selection", got)
 	}
 }
@@ -82,9 +82,9 @@ func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 		{"empty", viewParams{View: "board"}, ""},
 		{"sel only", viewParams{Sel: "https://x/1", View: "board"}, "sel=https%3A%2F%2Fx%2F1"},
 		{
-			"sel, tasks and a non-default view",
-			viewParams{Sel: "a", Tasks: []string{"b", "c"}, View: "graph"},
-			"sel=a&task=b&task=c&view=graph",
+			"sel, tickets and a non-default view",
+			viewParams{Sel: "a", Tickets: []string{"b", "c"}, View: "graph"},
+			"sel=a&ticket=b&ticket=c&view=graph",
 		},
 		{
 			"a non-default log filter, alphabetically ahead of sel",
@@ -140,20 +140,20 @@ func TestViewParamsToggleSelSelectsThenCollapses(t *testing.T) {
 	}
 }
 
-func TestViewParamsToggleTaskAddsThenRemoves(t *testing.T) {
+func TestViewParamsToggleTicketAddsThenRemoves(t *testing.T) {
 	t.Parallel()
 
-	base := viewParams{Tasks: []string{"a", "b"}, View: "board"}
-	added := base.toggleTask("c")
-	if want := []string{"a", "b", "c"}; !equalStrings(added.Tasks, want) {
-		t.Errorf("toggleTask(c) = %v, want %v", added.Tasks, want)
+	base := viewParams{Tickets: []string{"a", "b"}, View: "board"}
+	added := base.toggleTicket("c")
+	if want := []string{"a", "b", "c"}; !equalStrings(added.Tickets, want) {
+		t.Errorf("toggleTicket(c) = %v, want %v", added.Tickets, want)
 	}
-	removed := base.toggleTask("a")
-	if want := []string{"b"}; !equalStrings(removed.Tasks, want) {
-		t.Errorf("toggleTask(a) = %v, want %v", removed.Tasks, want)
+	removed := base.toggleTicket("a")
+	if want := []string{"b"}; !equalStrings(removed.Tickets, want) {
+		t.Errorf("toggleTicket(a) = %v, want %v", removed.Tickets, want)
 	}
-	if want := []string{"a", "b"}; !equalStrings(base.Tasks, want) {
-		t.Errorf("toggleTask mutated the receiver's own slice: Tasks = %v", base.Tasks)
+	if want := []string{"a", "b"}; !equalStrings(base.Tickets, want) {
+		t.Errorf("toggleTicket mutated the receiver's own slice: Tickets = %v", base.Tickets)
 	}
 }
 

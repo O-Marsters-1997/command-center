@@ -1,7 +1,7 @@
 {{define "board" -}}
 <table id="board" hx-get="{{.BoardPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
-    <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   {{range $group := .Groups}}
@@ -21,7 +21,7 @@
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
-      <input type="checkbox" form="launch" name="task" value="{{$row.URL}}"{{if $row.Checked}} checked{{end}}
+      <input type="checkbox" form="launch" name="ticket" value="{{$row.URL}}"{{if $row.Checked}} checked{{end}}
         hx-get="{{$row.TogglePath}}" hx-push-url="{{$row.TogglePush}}" hx-target="#board" hx-swap="outerHTML">
       {{- end}}
       {{- end -}}
@@ -65,12 +65,12 @@
       {{- if eq . $row.LaunchVerb}}
       {{- else if destructive .}}
       <form method="get" action="/confirm">
-        <input type="hidden" name="task" value="{{$row.URL}}">
+        <input type="hidden" name="ticket" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">{{.}}</button>
       </form>
       {{- else}}
       <form method="post" action="/verb">
-        <input type="hidden" name="task" value="{{$row.URL}}">
+        <input type="hidden" name="ticket" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
         </button>

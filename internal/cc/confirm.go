@@ -41,7 +41,7 @@ type confirmView struct {
 
 func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 	verb := r.URL.Query().Get("verb")
-	ticketURL := r.URL.Query().Get("task")
+	ticketURL := r.URL.Query().Get("ticket")
 	if verb == "" || ticketURL == "" {
 		http.Error(w, "verb and ticket are both required", http.StatusBadRequest)
 		return

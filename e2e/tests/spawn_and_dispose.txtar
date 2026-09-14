@@ -17,7 +17,7 @@ cc-fake-gh no-prs
 # tickets, on the tick right after.
 exec cc request -form 'group=project:spawn' POST /import
 exec cc tick --count 1
-exec cc request POST '/launch?task=https://github.com/sandbox-org/spawn/issues/CC-1'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
 exec cc tick --count 1
 
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
@@ -34,7 +34,7 @@ stdout 'agent finished with commits, waiting to push'
 
 # Swap the agent to the one that commits nothing, and launch CC-2 under it.
 cc-config spawn-empty
-exec cc request POST '/launch?task=https://github.com/sandbox-org/spawn/issues/CC-2'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-2'
 exec cc tick --count 1
 exec sleep 0.5
 
@@ -49,7 +49,7 @@ stdout 'no commits after this run'
 
 # Swap to the agent that never exits on its own, and launch CC-3 under it.
 cc-config spawn-sleeps
-exec cc request POST '/launch?task=https://github.com/sandbox-org/spawn/issues/CC-3'
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
 exec cc tick --count 1
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
@@ -69,7 +69,7 @@ grep -count=1 'sleeps.sh' $WORK/agent.log
 
 # The kill verb signals the whole process group, and the same tick's liveness pass finds the
 # group empty and disposes the run: nothing left running, and no commits means failed.
-exec cc request POST '/verb?verb=kill&task=https://github.com/sandbox-org/spawn/issues/CC-3'
+exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
 exec cc tick --count 1
 exec cc request GET /
 ! stdout '>running</span>'
