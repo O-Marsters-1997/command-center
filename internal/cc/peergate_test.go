@@ -81,6 +81,35 @@ func TestConflictingPeerHold(t *testing.T) {
 		}
 	})
 
+	t.Run("a chain does not serialise a ticket past the peer that holds it", func(t *testing.T) {
+		t.Parallel()
+		a := Ticket{URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1-a"}
+		b := Ticket{URL: "sandbox://CC-2", Repo: "r", Branch: "cc-2-b"}
+		c := Ticket{URL: "sandbox://CC-3", Repo: "r", Branch: "cc-3-c"}
+		byURL := map[string]plan.Ticket{
+			a.URL: {URL: a.URL, Repo: a.Repo, Branch: a.Branch},
+			b.URL: {URL: b.URL, Repo: b.Repo, Branch: b.Branch},
+			c.URL: {URL: c.URL, Repo: c.Repo, Branch: c.Branch},
+		}
+		prs := map[string]plan.PRState{a.Branch: plan.Open, b.Branch: plan.Open, c.Branch: plan.Open}
+		stacking := map[string]bool{"r": false}
+		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+			a.Branch: {b.Branch: true, c.Branch: false},
+			b.Branch: {a.Branch: true, c.Branch: true},
+			c.Branch: {a.Branch: false, b.Branch: true},
+		}}
+		held := conflictingPeerHold([]Ticket{c, b, a}, byURL, prs, stacking, obs)
+		if held[b.URL] != a.Branch {
+			t.Errorf("held[b] = %q, want %q", held[b.URL], a.Branch)
+		}
+		if _, ok := held[a.URL]; ok {
+			t.Errorf("held[a] = %q, want unheld", held[a.URL])
+		}
+		if _, ok := held[c.URL]; ok {
+			t.Errorf("held[c] = %q, want unheld: its only conflicting peer is itself held", held[c.URL])
+		}
+	})
+
 	t.Run("ref order is by ticket number, not branch string, across a digit-count boundary", func(t *testing.T) {
 		t.Parallel()
 		nine := Ticket{URL: "sandbox://CC-9", Repo: "r", Branch: "cc-9-nine"}
