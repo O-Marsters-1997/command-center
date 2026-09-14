@@ -305,6 +305,60 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	}
 }
 
+func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := filepath.Join(t.TempDir(), "wt")
+	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	// The agent's commit reaches origin (via its own push, or a prior tick's pushPushable)
+	// before the worktree disappears -- issue #189's race.
+	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	runGit(t, "-C", worktreePath, "push", "-q", "origin", "cc-1")
+	originTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/cc-1"))
+	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+
+	// No entry for "cc-1" in Worktrees: the worktree is gone by the time this tick disposes
+	// the run. BranchTips is what observe would have read from origin/cc-1 this tick.
+	obs := cc.Observation{BranchTips: map[string]string{"cc-1": originTip}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	fake.canReap[999] = true
+	fake.reapCode[999] = 0
+
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	latest, err := store.LatestRunsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := latest[ticket.URL]
+	if !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
+		t.Fatalf("summary = %+v, want push: origin/cc-1 is ahead of baseline though the worktree is gone", summary)
+	}
+}
+
 func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)

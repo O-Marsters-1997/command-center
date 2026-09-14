@@ -159,10 +159,10 @@ func PushRestacked(ctx context.Context, repoPath, branch, expectedRemote string)
 	return err
 }
 
-// CommitsSince counts commits reachable from worktreePath's HEAD but not from baselineSHA — a
+// CommitsSince counts commits reachable from ref but not from baselineSHA, run in repoPath — a
 // dead run's disposition rests on this count, never on missing events (inv. 7).
-func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, error) {
-	out, err := git(ctx, worktreePath, "rev-list", "--count", baselineSHA+"..HEAD")
+func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, error) {
+	out, err := git(ctx, repoPath, "rev-list", "--count", baselineSHA+".."+ref)
 	if err != nil {
 		return 0, err
 	}
