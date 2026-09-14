@@ -182,6 +182,47 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	}
 }
 
+// TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone covers issue #196: a worktree removed by
+// something other than this verb must not leave a merged row stuck refusing forever.
+func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
+	f := newRemoveWorktreeFixture(t, "cc-1")
+	obs := cc.Observation{
+		Worktrees: map[string]string{},
+		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+	}
+
+	if err := f.requestRemoveWorktree(t, obs); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	events, err := f.store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasEvent(events, "remove_worktree_refused", "no worktree for cc-1") {
+		t.Error("a merged ticket with no observed worktree must not refuse")
+	}
+	if !hasEvent(events, "worktree_removed", "") {
+		t.Error("no worktree_removed event")
+	}
+
+	ghLog, err := os.ReadFile(f.ghLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ghLog), "issue close "+f.ticket.URL) {
+		t.Errorf("gh.log = %q, want an issue close call for %s", ghLog, f.ticket.URL)
+	}
+
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 0 {
+		t.Errorf("tickets = %+v, want the row dropped even though the worktree was already gone", tickets)
+	}
+}
+
 func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	// A dependent whose blocker's PR closed unmerged after it ran: base_gone, not merged --
 	// remove-worktree's other eligible state.
