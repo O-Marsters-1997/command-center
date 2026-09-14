@@ -32,6 +32,10 @@ tidy:
 assets:
     cd web && bun install && bun run build
 
+# Regenerate the committed internal/cc/ccdb from internal/cc/queries and the schema.
+sqlc:
+    go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+
 clean:
     rm -rf bin
 
