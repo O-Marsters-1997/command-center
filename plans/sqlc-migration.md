@@ -201,5 +201,6 @@ When this lands, `internal/cc` contains no SQL string literals.
 - **Postgres.** Nothing in this plan assumes SQLite beyond `engine: "sqlite"` and the pinned
   driver. If the app ever needs a server database, the queries move and the mapping code does not.
   ADR 11 took that bet up and found it broadly right: the five query files are close to portable,
-  and only `sqlc.slice('kinds')` and the `COALESCE(pushed_at, '')` comparisons have to change.
+  and three things have to change -- `sqlc.slice('kinds')`, the `COALESCE(pushed_at, '')`
+  comparisons, and the three `:execresult` inserts that read `LastInsertId`.
   The migration itself is `docs/adr/0011-postgres-replaces-sqlite.md`.

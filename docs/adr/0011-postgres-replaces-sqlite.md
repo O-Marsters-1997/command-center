@@ -30,8 +30,9 @@ stable, first-class one.
 Unpinning is cheaper than it sounds, and cheaper now than later. The five query files are close to
 portable already. `ON CONFLICT ... DO UPDATE SET ... excluded.` is Postgres syntax that SQLite
 copied, and nothing reaches for `strftime`, `INSERT OR REPLACE`, `julianday` or `group_concat`.
-Two things genuinely break: `sqlc.slice('kinds')` in `refresh.sql` becomes a Postgres array, and
-the three `COALESCE(pushed_at, '')` comparisons stop making sense once the column is `timestamptz`.
+Three things genuinely break: `sqlc.slice('kinds')` in `refresh.sql` has no Postgres equivalent,
+the three `COALESCE(pushed_at, '')` comparisons stop making sense once the column is `timestamptz`,
+and the three `:execresult` inserts read `LastInsertId`, which Postgres has nothing to answer with.
 Concentrating every SQL string into five files is what made the move this small, and the bill only
 grows as queries accumulate.
 
@@ -72,4 +73,5 @@ Both are deny-listed for agent pushes (`CLAUDE.md` § Constraints an agent will 
 migration is hand-driven. Isolating it as the first of two steps keeps the un-agentable part
 small; the feature work that follows is ordinary fleet work.
 
-The pure-Go, no-cgo property the README advertises is gone. The README says so.
+The no-cgo property survives. pgx is pure Go, so `CGO_ENABLED=0 go build ./cmd/cc` still succeeds.
+What the README loses is the self-containment claim above it, not the build property.
