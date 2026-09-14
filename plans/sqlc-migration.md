@@ -55,8 +55,10 @@ before writing any of this down.
 
 ## What does not change
 
-**The schema.** I went looking for a reason to add migration 0004 and there isn't one. The six
-nullable `tickets` columns keep their `COALESCE`. The nullable columns on `runs` stay nullable
+**The schema.** This migration adds no migration of its own. Other work will: phase 8 of
+`plans/repo-and-ticket-model.md` adds `0004_withdrawal.sql`, and sqlc reads whatever
+`internal/cc/migrations` holds, so landing either order is fine. The six nullable `tickets` columns
+keep their `COALESCE`. The nullable columns on `runs` stay nullable
 because NULL is load-bearing there: `WHERE pgid IS NOT NULL AND outcome IS NULL` is the predicate
 for a run that is still alive, and `RunSummary` already models it with `*int` and `*time.Time`.
 

@@ -1,6 +1,11 @@
 # Command Centre — design
 
-**Date:** 2026-08-22 · **Revision 4** · **Status:** designed, not built
+**Date:** 2026-08-22 · **Revision 4** · **Status:** built, and normative
+
+The mechanism this document specifies is implemented. §6, the seam mechanism, is the one
+exception: `docs/adr/0004-seams-are-removed.md` deleted it on 2026-08-27, and it is kept here
+only so the shape is recoverable if a second repo ever wants shared prompt text. Where the
+code and this document disagree anywhere else, the disagreement is a bug in the code.
 
 **Supersedes:** `.claude/handoffs/treepad__command-centre-architecture.md`, and revisions 1–3
 of this document. Revision 1 was reviewed in

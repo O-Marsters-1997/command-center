@@ -18,9 +18,14 @@ the first one learned.
 
 Nothing is removed. The DAG, the unlock rule, the authorisation gate, the board, the peer
 conflict gate and the verdicts are all untouched, because none of them care who typed the
-commits. Observe reads `origin/<branch>` and `gh`, not worktrees — only `obs.Worktrees` and
-`obs.MidMerge` are worktree-derived — which is why the app tolerates work arriving from somewhere
+commits. Observe reads `origin/<branch>` and `gh`, not worktrees. Only `obs.Worktrees` and
+`obs.MidMerge` are worktree-derived, which is why the app tolerates work arriving from somewhere
 it did not spawn.
+
+Two things are local-derived rather than worktree-derived, and both need answering before a cloud
+run kind is designed rather than sketched. `obs.Runs[ticket].Alive` comes from `runner.Alive(pgid)`,
+and a hosted run has no pgid, so liveness is the first thing the tick cannot read about it.
+`disposeRun` then guards on `obs.Worktrees[branch] != ""` before counting commits, which is §8.3.
 
 The split that matters is not local against cloud. It is **who owns the working copy while
 commits exist but are not yet pushed**. That window is the only place the app can refuse
@@ -222,7 +227,9 @@ distrust.
    Distinguishing them is an annotation from `to-tickets`, not app machinery.
 3. **`disposeRun` mis-reads a cloud run today.** It guards on `obs.Worktrees[branch] != ""`, so no
    worktree means zero commits means `OutcomeFailed`. A cloud agent that did perfect work would
-   land on the board as failed. Counting `baseline..origin/<branch>` is the change.
+   land on the board as failed. Counting `baseline..origin/<branch>` is the change. This is not
+   cloud-specific: any run whose worktree goes before the tick disposes it reads the same way, so
+   it is filed as issue #189 and does not wait on this design.
 4. **Whether to rent the runner at all.** A small always-on host gets the overnight goal on its
    own, with no design change and no gate lost. The cloud runner earns its place only if its
    shared context and its interface beat a cold local agent, and that is measured by using it.
