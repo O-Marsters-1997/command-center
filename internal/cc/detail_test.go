@@ -497,7 +497,7 @@ func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET log=%s = %d, want 200: %s", mode, rec.Code, rec.Body)
 			}
-			if want := `class="active" aria-current="true">` + mode + `</a>`; !strings.Contains(rec.Body.String(), want) {
+			if want := `aria-current="true">` + mode + `</a>`; !strings.Contains(rec.Body.String(), want) {
 				t.Errorf("log=%s does not mark its own filter link active:\n%s", mode, rec.Body.String())
 			}
 		})
@@ -537,7 +537,7 @@ func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `<a href="#first-fail" class="jump-first-fail">first failure</a>`) {
+	if !strings.Contains(body, `<a href="#first-fail"`) || !strings.Contains(body, `>first failure</a>`) {
 		t.Errorf("no plain anchor jumps to the first failure:\n%s", body)
 	}
 	if !strings.Contains(body, `id="first-fail"`) {

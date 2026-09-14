@@ -275,6 +275,36 @@
     background: var(--tone);
   }
 
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.6rem;
+    margin: 0.35rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+  }
+
+  .histogram {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .histogram li {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+
   .phase-header {
     display: flex;
     align-items: baseline;
@@ -287,6 +317,28 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
+
+  .line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+  }
+
+  .line-label {
+    flex: none;
+    min-width: 3em;
+    font-size: 0.85em;
+    text-transform: uppercase;
+  }
+
+  .line-skill,
+  .line-file,
+  .line-tool,
+  .line-fail,
+  .line-pass {
+    --tone: var(--color-s-idle);
+  }
+
 
   /* cc-graph is an island (noShadowDOM(), ADR 2): every rule below is page-global and also
      styles the Go-rendered fallback banner cc-graph carries before Solid upgrades it. */
