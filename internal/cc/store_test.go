@@ -120,6 +120,55 @@ func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 	}
 }
 
+func TestUpsertTicketWithNoBlockersRoundTripsAsEmptyArray(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+
+	if err := store.UpsertTickets(ctx, []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var raw string
+	if err := db.QueryRow(`SELECT blocked_by::text FROM tickets WHERE url = $1`, "sandbox://CC-1").Scan(&raw); err != nil {
+		t.Fatalf("read blocked_by: %v", err)
+	}
+	if raw != "[]" {
+		t.Errorf("blocked_by = %q, want the empty array literal, not JSON null", raw)
+	}
+}
+
+func TestBlockedByRejectsInvalidJSONAtTheDatabase(t *testing.T) {
+	t.Parallel()
+
+	dsn := cctest.DSN(t)
+	openStoreAt(t, dsn) // migrate the database before writing to it directly
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec(
+		`INSERT INTO tickets (url, repo, branch, blocked_by) VALUES ($1, $2, $3, $4)`,
+		"sandbox://CC-1", "cc-sandbox", "cc-1", "not json",
+	)
+	if err == nil {
+		t.Fatal("insert with invalid JSON in blocked_by succeeded, want a database error")
+	}
+}
+
 // TestDeleteTicketRemovesARowThatHasRunsAndPushes covers the reason DeleteTicket cannot be a
 // plain `DELETE FROM tickets`: runs and pushes both hold a foreign key back to the ticket's url,
 // and a merged ticket -- the only ticket this verb ever targets -- always has at least a run.
