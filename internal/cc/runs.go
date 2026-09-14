@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -14,9 +15,12 @@ import (
 // and prompt_hash are known at cut time, but pgid and log_path are named after the row's own id
 // (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES (?, ?, ?, ?)`,
-		ticketID, kind, baselineSHA, promptHash)
+	res, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+		TicketID:    ticketID,
+		Kind:        kind,
+		BaselineSHA: notNull(baselineSHA),
+		PromptHash:  notNull(promptHash),
+	})
 	if err != nil {
 		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
 	}
@@ -30,9 +34,12 @@ func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineS
 // RecordSpawn writes the pgid, its process start time and the log path onto a reserved run row,
 // in the one UPDATE that must happen immediately after Spawn returns and nothing else.
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE runs SET pgid = ?, proc_started_at = ?, log_path = ? WHERE id = ?`,
-		pgid, startedAt.UTC().Format(time.RFC3339Nano), logPath, runID)
+	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
+		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
+		ProcStartedAt: notNull(startedAt.UTC().Format(time.RFC3339Nano)),
+		LogPath:       notNull(logPath),
+		ID:            runID,
+	})
 	if err != nil {
 		return fmt.Errorf("record spawn for run %d: %w", runID, err)
 	}
@@ -44,9 +51,16 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
 ) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE runs SET outcome = ?, exit_code = ?, ended_at = ? WHERE id = ?`,
-		outcome.String(), exitCode, endedAt.UTC().Format(time.RFC3339Nano), runID)
+	var exitCodeParam sql.NullInt64
+	if exitCode != nil {
+		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
+	}
+	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+		Outcome:  notNull(outcome.String()),
+		ExitCode: exitCodeParam,
+		EndedAt:  notNull(endedAt.UTC().Format(time.RFC3339Nano)),
+		ID:       runID,
+	})
 	if err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", runID, err)
 	}
@@ -56,9 +70,12 @@ func (s *Store) RecordDisposition(
 // InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no
 // pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at) VALUES (?, 'agent', ?, ?, ?)`,
-		ticketID, promptHash, plan.OutcomeCutFailed.String(), at.UTC().Format(time.RFC3339Nano))
+	res, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
+		TicketID:   ticketID,
+		PromptHash: notNull(promptHash),
+		Outcome:    notNull(plan.OutcomeCutFailed.String()),
+		EndedAt:    notNull(at.UTC().Format(time.RFC3339Nano)),
+	})
 	if err != nil {
 		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
 	}
@@ -82,30 +99,19 @@ type PendingRun struct {
 // PendingRunsAwaitingDisposition returns every run with a pgid but no outcome yet: the exact
 // set the loop's liveness+disposition pass must check, every tick, restart or not.
 func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRun, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
-		WHERE pgid IS NOT NULL AND outcome IS NULL`)
+	rows, err := s.q.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select pending runs: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	var pending []PendingRun
-	for rows.Next() {
-		var p PendingRun
-		var startedAt string
-		var baselineSHA, logPath sql.NullString
-		if err := rows.Scan(&p.ID, &p.TicketID, &p.Pgid, &startedAt, &baselineSHA, &logPath); err != nil {
-			return nil, fmt.Errorf("scan pending run: %w", err)
+	for _, row := range rows {
+		p := PendingRun{ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64)}
+		if p.ProcStartedAt, err = time.Parse(time.RFC3339Nano, row.ProcStartedAt.String); err != nil {
+			return nil, fmt.Errorf("decode proc_started_at %q: %w", row.ProcStartedAt.String, err)
 		}
-		if p.ProcStartedAt, err = time.Parse(time.RFC3339Nano, startedAt); err != nil {
-			return nil, fmt.Errorf("decode proc_started_at %q: %w", startedAt, err)
-		}
-		p.BaselineSHA, p.LogPath = baselineSHA.String, logPath.String
+		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
 		pending = append(pending, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending runs: %w", err)
 	}
 	return pending, nil
 }
@@ -132,61 +138,43 @@ type RunSummary struct {
 // LatestRunsByTicket returns each ticket's single most recent run (highest id). Its presence alone
 // is what LaunchPlan's "no prior run" rule and the page's pgid/elapsed/log-path columns need.
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-		       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
-		FROM runs r
-		JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
-		  ON latest.ticket_id = r.ticket_id AND latest.id = r.id`)
+	rows, err := s.q.LatestRunsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	summaries := map[string]RunSummary{}
-	for rows.Next() {
-		var ticketID string
-		var summary RunSummary
-		var pgid sql.NullInt64
-		var procStartedAt, baselineSHA, logPath, outcome, endedAt, promptHash, kind sql.NullString
-		var exitCode sql.NullInt64
-		if err := rows.Scan(&summary.ID, &ticketID, &pgid, &procStartedAt, &baselineSHA, &logPath,
-			&outcome, &exitCode, &endedAt, &promptHash, &kind); err != nil {
-			return nil, fmt.Errorf("scan latest run: %w", err)
-		}
-		if pgid.Valid {
-			v := int(pgid.Int64)
+	for _, row := range rows {
+		summary := RunSummary{ID: row.ID, Kind: row.Kind}
+		if row.Pgid.Valid {
+			v := int(row.Pgid.Int64)
 			summary.Pgid = &v
 		}
-		if procStartedAt.Valid {
-			t, err := time.Parse(time.RFC3339Nano, procStartedAt.String)
+		if row.ProcStartedAt.Valid {
+			t, err := time.Parse(time.RFC3339Nano, row.ProcStartedAt.String)
 			if err != nil {
-				return nil, fmt.Errorf("decode proc_started_at %q: %w", procStartedAt.String, err)
+				return nil, fmt.Errorf("decode proc_started_at %q: %w", row.ProcStartedAt.String, err)
 			}
 			summary.ProcStartedAt = &t
 		}
-		if endedAt.Valid {
-			t, err := time.Parse(time.RFC3339Nano, endedAt.String)
+		if row.EndedAt.Valid {
+			t, err := time.Parse(time.RFC3339Nano, row.EndedAt.String)
 			if err != nil {
-				return nil, fmt.Errorf("decode ended_at %q: %w", endedAt.String, err)
+				return nil, fmt.Errorf("decode ended_at %q: %w", row.EndedAt.String, err)
 			}
 			summary.EndedAt = &t
 		}
-		if exitCode.Valid {
-			v := int(exitCode.Int64)
+		if row.ExitCode.Valid {
+			v := int(row.ExitCode.Int64)
 			summary.ExitCode = &v
 		}
-		if outcome.Valid {
+		if row.Outcome.Valid {
 			summary.HasOutcome = true
-			summary.Outcome = outcomeFromString(outcome.String)
+			summary.Outcome = outcomeFromString(row.Outcome.String)
 		}
-		summary.BaselineSHA, summary.LogPath = baselineSHA.String, logPath.String
-		summary.PromptHash = promptHash.String
-		summary.Kind = kind.String
-		summaries[ticketID] = summary
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate latest runs: %w", err)
+		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
+		summary.PromptHash = row.PromptHash.String
+		summaries[row.TicketID] = summary
 	}
 	return summaries, nil
 }
@@ -212,9 +200,11 @@ type VerbIntent struct {
 // QueueVerbIntent records one requested verb against a ticket. A handler only ever does this one
 // blind INSERT; the loop is the sole reader and actor (inv. 9).
 func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at time.Time) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO intents (at, ticket_id, verb) VALUES (?, ?, ?)`,
-		at.UTC().Format(time.RFC3339Nano), ticketID, verb)
+	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
+		At:       at.UTC().Format(time.RFC3339Nano),
+		TicketID: ticketID,
+		Verb:     verb,
+	})
 	if err != nil {
 		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
 	}
@@ -223,54 +213,38 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 
 // PendingVerbIntents returns every unconsumed intent for verb, oldest first.
 func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbIntent, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, ticket_id FROM intents WHERE verb = ? AND consumed_at IS NULL ORDER BY id`, verb)
+	rows, err := s.q.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return nil, fmt.Errorf("select %s intents: %w", verb, err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	var intents []VerbIntent
-	for rows.Next() {
-		var v VerbIntent
-		if err := rows.Scan(&v.ID, &v.TicketID); err != nil {
-			return nil, fmt.Errorf("scan %s intent: %w", verb, err)
-		}
-		intents = append(intents, v)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate %s intents: %w", verb, err)
+	for _, row := range rows {
+		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID})
 	}
 	return intents, nil
 }
 
 // PendingIntentsByTicket is every unconsumed intent, keyed by ticket, most recent last.
 func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id`)
+	rows, err := s.q.PendingIntentsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select pending intents: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	byTicket := map[string][]string{}
-	for rows.Next() {
-		var ticketID, verb string
-		if err := rows.Scan(&ticketID, &verb); err != nil {
-			return nil, fmt.Errorf("scan pending intent: %w", err)
-		}
-		byTicket[ticketID] = append(byTicket[ticketID], verb)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending intents: %w", err)
+	for _, row := range rows {
+		byTicket[row.TicketID] = append(byTicket[row.TicketID], row.Verb)
 	}
 	return byTicket, nil
 }
 
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE intents SET consumed_at = ? WHERE id = ?`, at.UTC().Format(time.RFC3339Nano), id)
+	err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
+		ConsumedAt: notNull(at.UTC().Format(time.RFC3339Nano)),
+		ID:         id,
+	})
 	if err != nil {
 		return fmt.Errorf("consume intent %d: %w", id, err)
 	}
@@ -280,25 +254,14 @@ func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) e
 // ActiveLaunchHashes returns the authorised prompt hash per ticket, for every ticket in an active
 // launch — what the loop's launch-eligibility check compares the recomposed hash against.
 func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
-		JOIN launches l ON l.id = lm.launch_id
-		WHERE l.state = 'active'`)
+	rows, err := s.q.ActiveLaunchHashes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select active launch hashes: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	hashes := map[string]string{}
-	for rows.Next() {
-		var ticketID, hash string
-		if err := rows.Scan(&ticketID, &hash); err != nil {
-			return nil, fmt.Errorf("scan active launch hash: %w", err)
-		}
-		hashes[ticketID] = hash
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate active launch hashes: %w", err)
+	for _, row := range rows {
+		hashes[row.TicketID] = row.PromptHash
 	}
 	return hashes, nil
 }
@@ -307,22 +270,9 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 // remove-worktree's log pruning needs to find every runs/<id>.jsonl, runs/<id>.prompt and
 // runs/<id>.diff it left behind (docs/prds/prd-command-centre.md § Phase 6).
 func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE ticket_id = ? ORDER BY id`, ticketID)
+	ids, err := s.q.RunIDsForTicket(ctx, ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan run id: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate run ids for %s: %w", ticketID, err)
 	}
 	return ids, nil
 }
@@ -331,15 +281,13 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 // ticket with no run at all reads as ended with no path, so a caller tailing the log streams
 // nothing rather than failing.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
-	var logPath, endedAt sql.NullString
-	row := s.db.QueryRowContext(ctx,
-		`SELECT log_path, ended_at FROM runs WHERE ticket_id = ? ORDER BY id DESC LIMIT 1`, ticketURL)
-	switch err := row.Scan(&logPath, &endedAt); {
+	row, err := s.q.LatestRunLog(ctx, ticketURL)
+	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", true, nil
 	case err != nil:
 		return "", false, fmt.Errorf("select latest run log for %s: %w", ticketURL, err)
 	default:
-		return logPath.String, endedAt.Valid, nil
+		return row.LogPath.String, row.EndedAt.Valid, nil
 	}
 }
