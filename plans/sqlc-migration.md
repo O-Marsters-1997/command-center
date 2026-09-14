@@ -1,5 +1,9 @@
 # Plan: the sqlc migration
 
+> **Delivered.** Phases 0 to 4 landed in #192, #193, #194 and #195. All 39 queries generate from
+> `internal/cc/queries` into `internal/cc/ccdb`, and no SQL string remains in `internal/cc`'s
+> non-test Go. Kept for the reasoning, not as work to do.
+>
 > Source: the `Next` card in `ideas/roadmap.html`. Both of its open questions were settled in a
 > grilling session on 2026-09-13, recorded in `docs/adr/0008-sql-is-generated-from-the-schema.md`.
 > No PRD; this plan is the design document.
@@ -196,3 +200,6 @@ When this lands, `internal/cc` contains no SQL string literals.
   `store_test.go` opens a real SQLite file and should carry on doing so.
 - **Postgres.** Nothing in this plan assumes SQLite beyond `engine: "sqlite"` and the pinned
   driver. If the app ever needs a server database, the queries move and the mapping code does not.
+  ADR 11 took that bet up and found it broadly right: the five query files are close to portable,
+  and only `sqlc.slice('kinds')` and the `COALESCE(pushed_at, '')` comparisons have to change.
+  The migration itself is `docs/adr/0011-postgres-replaces-sqlite.md`.

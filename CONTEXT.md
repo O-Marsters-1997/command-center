@@ -29,6 +29,12 @@ milestone, slice
 The set of tickets a single authorisation covers.
 _Avoid_: Batch, group (group means something else here), selection, feature
 
+**Foreign**:
+A property of a ticket on a board scoped to a feature: it blocks a ticket in that feature but
+belongs to another, so it renders in its group and is marked as not belonging. Scoping to a
+feature never hides a blocker.
+_Avoid_: External, outside, borrowed, orphan
+
 **Exhausted**:
 A property of a slice: every ticket it covers has produced a pull request, so the loop has nothing
 further to start from it. It says the agents are finished, not that you are — an exhausted slice is
@@ -127,6 +133,7 @@ _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 - A **grammar** has one definition and many use sites, in templates and **islands** alike
 - A **group** has one blocker **ticket** and zero or more waiting **tickets**
 - A **ticket** has zero or more **peers**; peership crosses **slice** and **feature** alike
+- A **ticket** is **foreign** only relative to the **feature** the **board** is scoped to
 - A **ticket** has exactly one **ref**
 - A **ticket** has zero or more **runs**; only the latest one renders
 - A **run** produces a log of **run phases**, and one **spend** figure
