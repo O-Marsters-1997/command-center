@@ -107,6 +107,15 @@ func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
 	return RevParse(ctx, repoPath, "refs/heads/"+branch)
 }
 
+// DeleteBranchIfExists removes branch's local ref, doing nothing if it has none.
+func DeleteBranchIfExists(ctx context.Context, repoPath, branch string) error {
+	if _, err := RevParse(ctx, repoPath, "refs/heads/"+branch); err != nil {
+		return nil
+	}
+	_, err := git(ctx, repoPath, "branch", "-D", branch)
+	return err
+}
+
 // RevParse resolves any ref to its commit SHA -- BranchTip's underlying primitive, reused for
 // pushes.base_sha_at_push, whose ref is a remote-tracking branch (origin/<base>), not a local
 // one.
