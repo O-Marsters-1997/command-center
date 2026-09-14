@@ -212,6 +212,19 @@ func Merge(ctx context.Context, worktreePath, ref string) error {
 	return err
 }
 
+// UnmergedPaths lists worktreePath's currently unresolved merge conflicts.
+func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := git(ctx, worktreePath, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
+}
+
 func Add(ctx context.Context, worktreePath string, paths []string) error {
 	_, err := git(ctx, worktreePath, append([]string{"add", "--"}, paths...)...)
 	return err
