@@ -41,35 +41,43 @@ func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs Observation) e
 			continue
 		}
 		policy := plan.GeneratedPolicy{Paths: generated[t.Repo], BuildCommand: buildCommand[t.Repo]}
-		paths := obs.ConflictedPaths[t.Branch]
-		if !plan.AllGenerated(paths, policy) {
+		if !plan.AllGenerated(obs.ConflictedPaths[t.Branch], policy) {
 			continue
 		}
-		if err := l.regenerateAndCommit(ctx, t, worktreePath, paths, policy.BuildCommand, now); err != nil {
+		if err := l.regenerateAndCommit(ctx, t, worktreePath, policy, now); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// regenerateAndCommit merges origin/main -- which plan.AllGenerated has already established
-// conflicts only on paths -- reruns the repo's build command to regenerate them, and completes
-// the merge over the result. gitSucceeds's exit-1 case is that same conflict, not a failure; any
-// other error is a real one and is returned rather than silently built and committed over.
 func (l *Loop) regenerateAndCommit(
-	ctx context.Context, t Ticket, worktreePath string, paths, buildCommand []string, now time.Time,
+	ctx context.Context, t Ticket, worktreePath string, policy plan.GeneratedPolicy, now time.Time,
 ) error {
+	if err := MergeFFOnly(ctx, worktreePath, "origin/"+t.Branch); err != nil {
+		return nil
+	}
+
+	// gitSucceeds's exit-1 case is git merge's own conflict exit status, not a failure.
 	if _, err := gitSucceeds(ctx, worktreePath, "merge", "origin/"+defaultBaseBranch); err != nil {
 		return fmt.Errorf("merge origin/%s into %s for %s: %w", defaultBaseBranch, t.Branch, t.URL, err)
 	}
 
-	cmd := exec.CommandContext(ctx, buildCommand[0], buildCommand[1:]...)
-	cmd.Dir = worktreePath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("run build command %q for %s: %w: %s", strings.Join(buildCommand, " "), t.URL, err, out)
+	unmerged, err := UnmergedPaths(ctx, worktreePath)
+	if err != nil {
+		return err
+	}
+	if !plan.AllGenerated(unmerged, policy) {
+		return MergeAbort(ctx, worktreePath)
 	}
 
-	if err := Add(ctx, worktreePath, paths); err != nil {
+	cmd := exec.CommandContext(ctx, policy.BuildCommand[0], policy.BuildCommand[1:]...)
+	cmd.Dir = worktreePath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("run build command %q for %s: %w: %s", strings.Join(policy.BuildCommand, " "), t.URL, err, out)
+	}
+
+	if err := Add(ctx, worktreePath, unmerged); err != nil {
 		return err
 	}
 	if err := Commit(ctx, worktreePath, "Regenerate after merging origin/"+defaultBaseBranch); err != nil {
@@ -77,6 +85,6 @@ func (l *Loop) regenerateAndCommit(
 	}
 	return l.store.AppendEvent(ctx, Event{
 		At: now, TicketURL: t.URL, Kind: eventGeneratedConflictResolved,
-		Detail: fmt.Sprintf("merged origin/%s, ran %s, committed", defaultBaseBranch, strings.Join(buildCommand, " ")),
+		Detail: fmt.Sprintf("merged origin/%s, ran %s, committed", defaultBaseBranch, strings.Join(policy.BuildCommand, " ")),
 	})
 }

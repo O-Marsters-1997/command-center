@@ -292,3 +292,214 @@ func TestAConflictOnABranchNeverPushedIsLeftAlone(t *testing.T) {
 		t.Errorf("events = %+v, want no generated_conflict_resolved event", events)
 	}
 }
+
+// TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict covers issue #187: a worktree
+// behind origin/cc-1 must be caught up before the real merge runs, so it conflicts on the same
+// path observe named rather than on whatever the stale HEAD happens to disagree with main about.
+func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	store := openStore(t)
+	ctx := context.Background()
+	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	root, repoPath := repoWithOrigin(t)
+	commitFile(t, repoPath, "handwritten.go", "package x\n\nconst n = 1\n")
+	commitFile(t, repoPath, "dist/app.css", "base\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
+	mainSHA0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+	commitFile(t, worktreePath, "handwritten.go", "package x\n\nconst n = 2\n")
+	staleTip := strings.TrimSpace(runGitOutput(t, "-C", worktreePath, "rev-parse", "HEAD"))
+
+	commitFile(t, worktreePath, "handwritten.go", "package x\n\nconst n = 1\n")
+	commitFile(t, worktreePath, "dist/app.css", "the branch's own regenerated output\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
+	pushedTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	runGit(t, "-C", worktreePath, "reset", "--hard", staleTip)
+
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+	dispositionAsPushed(t, store, ticket.URL, at)
+	if err := store.RecordPush(ctx, ticket.URL, pushedTip, "main", mainSHA0, at); err != nil {
+		t.Fatal(err)
+	}
+
+	advanceMain(t, root, "dist/app.css", "main's own regenerated output\n")
+	advanceMainFile(t, root, "handwritten.go", "package x\n\nconst n = 3\n")
+	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
+
+	observe := func(ctx context.Context) (cc.Observation, error) {
+		mainTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/main")
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		branchTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/cc-1")
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		clean, paths, err := cc.MergesCleanly(ctx, repoPath, mainTip, branchTip)
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		mid, err := cc.MidMerge(ctx, worktreePath)
+		if err != nil {
+			return cc.Observation{}, err
+		}
+		return cc.Observation{
+			Worktrees: map[string]string{"cc-1": worktreePath},
+			PRs: map[string]gh.PR{
+				"cc-1": {
+					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
+					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+				},
+			},
+			BranchTips:        map[string]string{"repo//main": mainTip, "cc-1": branchTip},
+			Runs:              map[string]cc.RunObservation{},
+			MidMerge:          map[string]bool{"cc-1": mid},
+			ConflictsWithBase: map[string]bool{"cc-1": !clean},
+			ConflictedPaths:   map[string][]string{"cc-1": paths},
+		}, nil
+	}
+
+	cfg := cc.Config{
+		Repos: []cc.Repo{{
+			Name: "repo", Checkout: repoPath,
+			Checks:       verdict.Predicate{Success: "CI"},
+			Generated:    []string{"dist/**"},
+			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+		}},
+	}
+	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(worktreePath, "dist", "app.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != regeneratedContent {
+		t.Errorf("dist/app.css = %q, want the build command's own output", got)
+	}
+	gotHandwritten, err := os.ReadFile(filepath.Join(worktreePath, "handwritten.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotHandwritten) != "package x\n\nconst n = 3\n" {
+		t.Errorf("handwritten.go = %q, want main's own version merged in cleanly", gotHandwritten)
+	}
+
+	mid, err := cc.MidMerge(t.Context(), worktreePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mid {
+		t.Error("worktree is mid-merge: fast-forwarding first should let the merge complete cleanly")
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "generated_conflict_resolved", "") {
+		t.Errorf("events = %+v, want a generated_conflict_resolved event", events)
+	}
+
+	remoteTip := strings.TrimSpace(
+		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/cc-1"))
+	head := strings.TrimSpace(runGitOutput(t, "-C", worktreePath, "rev-parse", "HEAD"))
+	if remoteTip != head {
+		t.Errorf("remote cc-1 tip = %s, want %s: the regenerated commit must be pushed the same tick", remoteTip, head)
+	}
+}
+
+// TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts covers issue #187's second
+// requirement: a merge whose real, post-run unmerged set reaches outside the generated paths
+// must be aborted rather than left for MidMerge to find and skip forever.
+func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	store := openStore(t)
+	ctx := context.Background()
+	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+
+	root, repoPath := repoWithOrigin(t)
+	commitFile(t, repoPath, "handwritten.go", "package x\n\nconst n = 1\n")
+	commitFile(t, repoPath, "dist/app.css", "base\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
+	mainSHA0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+	commitFile(t, worktreePath, "handwritten.go", "package x\n\nconst n = 2\n")
+	commitFile(t, worktreePath, "dist/app.css", "the branch's own regenerated output\n")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
+	branchTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordPush(ctx, ticket.URL, branchTip, "main", mainSHA0, at); err != nil {
+		t.Fatal(err)
+	}
+
+	advanceMain(t, root, "dist/app.css", "main's own regenerated output\n")
+	advanceMainFile(t, root, "handwritten.go", "package x\n\nconst n = 3\n")
+	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
+
+	// Deliberately wrong: the real merge below conflicts on handwritten.go too.
+	observe := func(ctx context.Context) (cc.Observation, error) {
+		return cc.Observation{
+			Worktrees: map[string]string{"cc-1": worktreePath},
+			PRs: map[string]gh.PR{
+				"cc-1": {
+					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
+					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+				},
+			},
+			Runs:              map[string]cc.RunObservation{},
+			MidMerge:          map[string]bool{"cc-1": false},
+			ConflictsWithBase: map[string]bool{"cc-1": true},
+			ConflictedPaths:   map[string][]string{"cc-1": {"dist/app.css"}},
+		}, nil
+	}
+
+	cfg := cc.Config{
+		Repos: []cc.Repo{{
+			Name: "repo", Checkout: repoPath,
+			Checks:       verdict.Predicate{Success: "CI"},
+			Generated:    []string{"dist/**"},
+			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+		}},
+	}
+	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	mid, err := cc.MidMerge(t.Context(), worktreePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mid {
+		t.Error("worktree is mid-merge: a merge landing outside the generated set must be aborted, not left")
+	}
+
+	head := strings.TrimSpace(runGitOutput(t, "-C", worktreePath, "rev-parse", "HEAD"))
+	if head != branchTip {
+		t.Errorf("worktree HEAD = %s, want unchanged %s: the aborted merge must not leave a commit", head, branchTip)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasEvent(events, "generated_conflict_resolved", "") {
+		t.Errorf("events = %+v, want no generated_conflict_resolved event: nothing was actually merged", events)
+	}
+}
