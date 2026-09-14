@@ -171,9 +171,7 @@ func (l *Loop) autoRefresh(
 		if !pushed || !baseMoved(pushRow, rc.obs, t.Repo) {
 			continue
 		}
-		// ponytail: the gate holds until the row's next push, so a later, cleanly-mergeable base
-		// advance also waits for the refresh verb. Compare the conflict's own base tip if that bites.
-		if _, tried := outcomes[t.URL]; tried {
+		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, rc.obs) {
 			continue
 		}
 		if err := l.refreshOne(ctx, t, pushRow, rc, now); err != nil {
@@ -181,6 +179,37 @@ func (l *Loop) autoRefresh(
 		}
 	}
 	return nil
+}
+
+// conflictDetail packs the two tips a failed refresh's merge step attempted into
+// eventRefreshConflicted's Detail: the branch's own origin tip it had just fast-forwarded to, and
+// the base's origin tip it tried to merge in. parseConflictDetail reads them back.
+func conflictDetail(branchTip, baseTip string, mergeErr error) string {
+	return fmt.Sprintf("%s %s %s", branchTip, baseTip, mergeErr)
+}
+
+func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
+	fields := strings.SplitN(detail, " ", 3)
+	if len(fields) < 3 {
+		return "", "", false
+	}
+	return fields[0], fields[1], true
+}
+
+// supersededConflict reports whether a stale refresh_conflicted outcome still describes the merge
+// autoRefresh is about to retry. Either tip moving since the failed attempt -- the branch's own,
+// pushed by a human outside the app, or the base's, advanced again with a later fix -- makes it a
+// different merge from the one that failed, so the gate no longer applies to it (issue #188). Any
+// other refresh-domain outcome keeps gating until the refresh verb clears it.
+func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs Observation) bool {
+	if o.kind != eventRefreshConflicted {
+		return false
+	}
+	branchTip, baseTip, ok := parseConflictDetail(o.detail)
+	if !ok {
+		return false
+	}
+	return obs.BranchTips[t.Branch] != branchTip || obs.BranchTips[baseTipKey(t.Repo, row.BaseBranch)] != baseTip
 }
 
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
@@ -225,8 +254,10 @@ func (l *Loop) refreshOne(
 				return err
 			}
 		}
+		baseTip := rc.obs.BranchTips[baseTipKey(ticket.Repo, unlock.BaseBranch)]
 		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted, Detail: err.Error(),
+			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted,
+			Detail: conflictDetail(rc.obs.BranchTips[branch], baseTip, err),
 		})
 	}
 
