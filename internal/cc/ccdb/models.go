@@ -68,14 +68,15 @@ type Run struct {
 }
 
 type Ticket struct {
-	URL       string
-	Repo      string
-	Branch    string
-	BlockedBy json.RawMessage
-	Source    string
-	Title     string
-	Body      string
-	Status    string
-	GroupKey  string
-	SyncedAt  string
+	URL         string
+	Repo        string
+	Branch      string
+	BlockedBy   json.RawMessage
+	Source      string
+	Title       string
+	Body        string
+	Status      string
+	GroupKey    string
+	SyncedAt    string
+	WithdrawnAt sql.NullTime
 }

@@ -194,6 +194,73 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	}
 }
 
+// TestImportTicketsWithdrawsAndRestoresOnReimport simulates relabelling an issue to
+// status:backlog (withdrawn on reimport, run history intact) and back to status:ready
+// (restored on reimport, same history).
+func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	kept := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}
+	withdrawn := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Add y"}
+
+	both := []cc.ImportedTicket{{Ticket: kept, Repo: "alpha"}, {Ticket: withdrawn, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", both, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	runID, err := store.InsertRunSkeleton(ctx, withdrawn.URL, "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// withdrawn.URL is relabelled to status:backlog, so the next import of project:x omits it.
+	onlyKept := []cc.ImportedTicket{{Ticket: kept, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", onlyKept, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets after relabelling to backlog: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != kept.URL {
+		t.Fatalf("tickets = %+v, want only %s left on the board", tickets, kept.URL)
+	}
+
+	runIDs, err := store.RunIDsForTicket(ctx, withdrawn.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runIDs) != 1 || runIDs[0] != runID {
+		t.Errorf("run ids for %s = %v, want the run to survive withdrawal", withdrawn.URL, runIDs)
+	}
+
+	// withdrawn.URL is relabelled back to status:ready: the next import returns it again.
+	if err := store.ImportTickets(ctx, "project:x", both, at.Add(2*time.Hour)); err != nil {
+		t.Fatalf("ImportTickets after relabelling back: %v", err)
+	}
+
+	tickets, err = store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 2 {
+		t.Fatalf("tickets = %+v, want %s restored alongside %s", tickets, withdrawn.URL, kept.URL)
+	}
+
+	runIDs, err = store.RunIDsForTicket(ctx, withdrawn.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runIDs) != 1 || runIDs[0] != runID {
+		t.Errorf("run ids for %s = %v, want the restored ticket's run history intact", withdrawn.URL, runIDs)
+	}
+}
+
 func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	t.Parallel()
 
