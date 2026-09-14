@@ -11,7 +11,7 @@ import (
 func TestLockRefusesASecondInstance(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "cc.db")
+	path := filepath.Join(t.TempDir(), "command-centre.lock")
 	held, err := cc.Lock(path)
 	if err != nil {
 		t.Fatalf("first Lock: %v", err)

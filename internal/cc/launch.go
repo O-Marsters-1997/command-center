@@ -96,13 +96,9 @@ func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pe
 }
 
 func insertLaunch(ctx context.Context, q *ccdb.Queries, at string, members []pendingIntent) error {
-	res, err := q.InsertLaunch(ctx, at)
+	launchID, err := q.InsertLaunch(ctx, at)
 	if err != nil {
 		return fmt.Errorf("insert launch: %w", err)
-	}
-	launchID, err := res.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("launch id: %w", err)
 	}
 
 	for _, m := range members {

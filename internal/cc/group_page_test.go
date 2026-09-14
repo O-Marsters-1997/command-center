@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -45,7 +44,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *cc.Store {
 	t.Helper()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
 	for _, c := range children {
 		tickets = append(tickets, cc.Ticket{
@@ -155,7 +154,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
@@ -188,7 +187,7 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},

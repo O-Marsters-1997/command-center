@@ -22,7 +22,7 @@ func spendRowStore(t *testing.T, ticket cc.Ticket, logPath string, alive bool, a
 	t.Helper()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}

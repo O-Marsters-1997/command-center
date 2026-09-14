@@ -1,66 +1,73 @@
 -- +goose Up
-CREATE TABLE IF NOT EXISTS meta (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
+CREATE TABLE meta (
+    key   text PRIMARY KEY,
+    value text NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS tasks (
-    ticket_url TEXT PRIMARY KEY,
-    repo       TEXT NOT NULL,
-    branch     TEXT NOT NULL,
-    blocked_by TEXT NOT NULL DEFAULT '[]'
+CREATE TABLE tickets (
+    url        text PRIMARY KEY,
+    repo       text NOT NULL,
+    branch     text NOT NULL,
+    blocked_by text NOT NULL DEFAULT '[]',
+    source     text NOT NULL DEFAULT '',
+    title      text NOT NULL DEFAULT '',
+    body       text NOT NULL DEFAULT '',
+    status     text NOT NULL DEFAULT '',
+    group_key  text NOT NULL DEFAULT '',
+    synced_at  text NOT NULL DEFAULT ''
 );
 
-CREATE TABLE IF NOT EXISTS launches (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL,
-    state      TEXT NOT NULL CHECK (state IN ('active', 'done', 'cancelled'))
+CREATE TABLE launches (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at text NOT NULL,
+    state      text NOT NULL CHECK (state IN ('active', 'done', 'cancelled'))
 );
 
--- prompt_hash binds consent to content (§4b): a launch authorises a prompt, not a task.
-CREATE TABLE IF NOT EXISTS launch_members (
-    launch_id   INTEGER NOT NULL REFERENCES launches (id),
-    task_id     TEXT    NOT NULL REFERENCES tasks (ticket_url),
-    prompt_hash TEXT    NOT NULL,
-    PRIMARY KEY (launch_id, task_id)
+-- prompt_hash binds consent to content (§4b): a launch authorises a prompt, not a ticket.
+CREATE TABLE launch_members (
+    launch_id   bigint NOT NULL REFERENCES launches (id),
+    ticket_id   text   NOT NULL REFERENCES tickets (url),
+    prompt_hash text   NOT NULL,
+    PRIMARY KEY (launch_id, ticket_id)
 );
 
-CREATE TABLE IF NOT EXISTS runs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id         TEXT NOT NULL REFERENCES tasks (ticket_url),
-    kind            TEXT NOT NULL,
-    pgid            INTEGER,
-    proc_started_at TEXT,
-    baseline_sha    TEXT,
-    prompt_hash     TEXT,
-    log_path        TEXT,
-    outcome         TEXT,
-    exit_code       INTEGER,
-    ended_at        TEXT
+CREATE TABLE runs (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ticket_id       text NOT NULL REFERENCES tickets (url),
+    kind            text NOT NULL,
+    pgid            bigint,
+    proc_started_at text,
+    baseline_sha    text,
+    prompt_hash     text,
+    log_path        text,
+    outcome         text,
+    exit_code       bigint,
+    ended_at        text
 );
 
-CREATE TABLE IF NOT EXISTS pushes (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id          TEXT NOT NULL REFERENCES tasks (ticket_url),
-    pushed_tip       TEXT NOT NULL,
-    base_branch      TEXT NOT NULL,
-    base_sha_at_push TEXT NOT NULL,
-    pushed_at        TEXT NOT NULL
+CREATE TABLE pushes (
+    id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ticket_id        text NOT NULL REFERENCES tickets (url),
+    pushed_tip       text NOT NULL,
+    base_branch      text NOT NULL,
+    base_sha_at_push text NOT NULL,
+    pushed_at        text NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    at      TEXT NOT NULL,
-    task_id TEXT,
-    kind    TEXT NOT NULL,
-    detail  TEXT
+-- ticket_id is nullable: a launch event belongs to a whole launch, not to one ticket.
+CREATE TABLE events (
+    id        bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    at        text NOT NULL,
+    ticket_id text,
+    kind      text NOT NULL,
+    detail    text
 );
 
-CREATE TABLE IF NOT EXISTS intents (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    at          TEXT NOT NULL,
-    task_id     TEXT NOT NULL,
-    verb        TEXT NOT NULL,
-    payload     TEXT,
-    consumed_at TEXT
+CREATE TABLE intents (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    at          text NOT NULL,
+    ticket_id   text NOT NULL,
+    verb        text NOT NULL,
+    payload     text,
+    consumed_at text
 );

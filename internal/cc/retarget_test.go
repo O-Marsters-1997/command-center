@@ -41,7 +41,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 			root, repoPath := repoWithOrigin(t)
 			ghLog := installFakeGh(t, false)
-			store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+			store := openStore(t)
 			at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 			f := newStackedFixture(t, repoPath, store, at)
@@ -96,7 +96,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -133,7 +133,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -178,7 +178,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -251,7 +251,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
 		t.Helper()
 		ctx := t.Context()
-		store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+		store := openStore(t)
 		if err := store.UpsertTickets(ctx, tickets); err != nil {
 			t.Fatal(err)
 		}
@@ -322,7 +322,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -405,7 +405,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -469,7 +469,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -512,7 +512,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -551,7 +551,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -620,7 +620,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)

@@ -72,7 +72,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", branch)
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

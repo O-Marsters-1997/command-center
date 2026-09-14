@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +14,7 @@ import (
 func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	t.Parallel()
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 

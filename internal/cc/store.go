@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
 	"github.com/pressly/goose/v3"
-	_ "modernc.org/sqlite" // database/sql driver "sqlite", pure Go
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -20,19 +20,18 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Store is the SQLite database. Only the loop goroutine writes it (inv. 9).
+// Store is the Postgres database. Only the loop goroutine writes it (inv. 9).
 type Store struct {
 	db *sql.DB
 	q  *ccdb.Queries
 }
 
-// OpenStore opens (creating if needed) the database at path and migrates it up to the latest
-// embedded migration.
-func OpenStore(path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
-	db, err := sql.Open("sqlite", dsn)
+// OpenStore connects to the database dsn names and migrates it up to the latest embedded
+// migration.
+func OpenStore(dsn string) (*Store, error) {
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", path, err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 
 	store := &Store{db: db, q: ccdb.New(db)}
@@ -53,7 +52,7 @@ func setUpGoose() error {
 	gooseOnce.Do(func() {
 		goose.SetBaseFS(migrations)
 		goose.SetLogger(goose.NopLogger())
-		gooseSetupErr = goose.SetDialect("sqlite3")
+		gooseSetupErr = goose.SetDialect("postgres")
 	})
 	return gooseSetupErr
 }
@@ -95,12 +94,12 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 			Repo:      t.Repo,
 			Branch:    t.Branch,
 			BlockedBy: string(blockedBy),
-			Source:    notNull(t.Source),
-			Title:     notNull(t.Title),
-			Body:      notNull(t.Body),
-			Status:    notNull(t.Status),
-			GroupKey:  notNull(t.GroupKey),
-			SyncedAt:  notNull(t.SyncedAt),
+			Source:    t.Source,
+			Title:     t.Title,
+			Body:      t.Body,
+			Status:    t.Status,
+			GroupKey:  t.GroupKey,
+			SyncedAt:  t.SyncedAt,
 		})
 		if err != nil {
 			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
@@ -109,8 +108,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 	return tx.Commit()
 }
 
-// Tickets returns every ticket row, ordered by url. The tracker-owned columns read as empty
-// strings rather than NULL for a row from before 0003_ticket_fields.sql added them.
+// Tickets returns every ticket row, ordered by url.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	rows, err := s.q.Tickets(ctx)
 	if err != nil {
@@ -164,11 +162,11 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
-			GroupKey:  notNull(group),
-			Title:     notNull(t.Title),
-			Body:      notNull(t.Body),
-			Status:    notNull(t.Status),
-			SyncedAt:  notNull(syncedAt),
+			GroupKey:  group,
+			Title:     t.Title,
+			Body:      t.Body,
+			Status:    t.Status,
+			SyncedAt:  syncedAt,
 			Branch:    tracker.BranchSlug(t.Number, t.Title),
 			BlockedBy: string(blockedBy),
 		})

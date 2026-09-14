@@ -5,6 +5,7 @@ using agents, one worktree per ticket. It launches agents, watches them, pushes
 what they produced, reads CI, and shows one page. It never merges.
 
 ```
+just up
 just run --config docs/command-centre.sample.toml
 ```
 
@@ -42,6 +43,8 @@ stale-close behaviour stays inspection-only.
 ## Requirements
 
 - Go 1.26.6, the toolchain pinned in `go.mod`.
+- Docker, for the Postgres the store runs on. `just up` starts it from
+  `compose.yaml`; `database_url` points at any other server instead.
 - `git`.
 - `gh`, authenticated. Every PR read and write shells out to it.
 - `tp`, the treepad CLI. It cuts and removes the per-ticket worktrees.
@@ -61,6 +64,7 @@ environment variable:
 | Variable | What |
 |---|---|
 | `CC_DATA_DIR` | Where `state/` and `repos/` go. |
+| `CC_DATABASE_URL` | The Postgres to connect to, overriding the compose default. |
 | `CC_AGENT_COMMAND` | A JSON array replacing `agent_command`, for a local wrapper. |
 
 ```
@@ -88,7 +92,7 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 
 | Package | What |
 |---|---|
-| `internal/cc` | The imperative shell. Config, workspace and state dir, SQLite store, the tick, the page, push, verbs, observe, the process runner, the flock. |
+| `internal/cc` | The imperative shell. Config, workspace and state dir, Postgres store, the tick, the page, push, verbs, observe, the process runner, the flock. |
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
 | `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
 | `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
@@ -191,12 +195,14 @@ the label is derived on every render.
 
 ### Where state lives
 
-Under `data_dir`, which is the `data_dir` config key, else `CC_DATA_DIR`, else
-`$UserConfigDir/command-centre`. It splits in two, so no agent's worktree is one
-`../` away from the database:
+The database is a Postgres server, named by the `database_url` config key, else
+`CC_DATABASE_URL`, else `postgres://cc:cc@localhost:5432/cc?sslmode=disable` —
+the server `compose.yaml` stands up and `just up` starts.
+
+Everything else lives under `data_dir`, which is the `data_dir` config key, else
+`CC_DATA_DIR`, else `$UserConfigDir/command-centre`:
 
 ```
-state/command-centre.db      SQLite
 state/command-centre.lock    flock, one instance per data dir
 state/runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
 state/runs/<id>.prompt       the prompt that run was given
@@ -204,11 +210,11 @@ state/settings/agent.json    the app-owned deny settings passed to every spawn
 repos/<name>/                a repo's checkout, with the worktrees tp cuts beside it
 ```
 
-The driver is `modernc.org/sqlite`, so no cgo. goose owns the schema from
-`internal/cc/migrations/`, embedded in the binary and applied at `OpenStore`.
-`0001_init.sql` creates `meta`, `tasks`, `launches`, `launch_members`, `runs`,
-`pushes`, `events` and `intents`, all `IF NOT EXISTS`, so a database that
-predates goose is adopted rather than rebuilt.
+The driver is `github.com/jackc/pgx/v5/stdlib`, which is pure Go, so `CGO_ENABLED=0`
+still builds. What the binary is not is self-contained: it needs a database to be
+up. goose owns the schema from `internal/cc/migrations/`, embedded in the binary
+and applied at `OpenStore`. `0001_init.sql` creates `meta`, `tickets`, `launches`,
+`launch_members`, `runs`, `pushes`, `events` and `intents`.
 
 ## Configuration
 
@@ -263,6 +269,11 @@ restack that itself verifies clean, clears it.
 `cc.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
 test sleeps.
 
+Every test that touches the store gets a database of its own from
+`internal/cctest`, dropped when the test ends. It needs a Postgres: set
+`CC_TEST_DATABASE_URL` at one, or leave it unset and testcontainers starts a
+`postgres:17` once per test binary, which is why the suite needs Docker.
+
 `e2e/` is a `rogpeppe/go-internal` testscript harness behind `-tags=e2e`,
 driving the real `cc` binary against a fake `gh`, a fake `tp` and fake agent
 scripts. `cc tick --count N` and `cc request` are its two e2e-only subcommands,
@@ -273,6 +284,8 @@ kept out of the release binary by the build tag. See
 
 ```
 just build       # go build -o bin/cc ./cmd/cc
+just up          # docker compose up -d --wait, the Postgres the store runs on
+just down        # docker compose down
 just run *args   # go run ./cmd/cc
 just test        # go test ./...
 just test-e2e    # go test -tags=e2e ./e2e/...

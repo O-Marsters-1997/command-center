@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/rogpeppe/go-internal/testscript"
+
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 )
 
 // testdataDir is absolute because the harness commands run with the script's work directory as
@@ -190,7 +192,8 @@ func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 
 	daemon := exec.Command("cc")
 	daemon.Dir = work
-	daemon.Env = append(scriptEnv(work), "PATH="+ts.Getenv("PATH"), "TMPDIR="+ts.Getenv("TMPDIR"))
+	daemon.Env = append(scriptEnv(work, ts.Getenv("CC_DATABASE_URL")),
+		"PATH="+ts.Getenv("PATH"), "TMPDIR="+ts.Getenv("TMPDIR"))
 	daemon.Stdout = logFile
 	daemon.Stderr = logFile
 	ts.Check(daemon.Start())
@@ -211,7 +214,16 @@ func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 }
 
 func setup(env *testscript.Env) error {
-	env.Vars = append(env.Vars, scriptEnv(env.WorkDir)...)
+	dsn, drop, err := cctest.Create()
+	if err != nil {
+		return err
+	}
+	env.Defer(func() {
+		if err := drop(); err != nil {
+			env.T().Log("drop test database:", err)
+		}
+	})
+	env.Vars = append(env.Vars, scriptEnv(env.WorkDir, dsn)...)
 	return nil
 }
 
@@ -221,7 +233,7 @@ func setup(env *testscript.Env) error {
 //
 // The git identity is passed by environment, and the system config suppressed, so cc-init-repo
 // can commit on a CI runner with no gitconfig at all.
-func scriptEnv(work string) []string {
+func scriptEnv(work, databaseURL string) []string {
 	return []string{
 		"HOME=" + work,
 		"GIT_CONFIG_NOSYSTEM=1",
@@ -230,6 +242,9 @@ func scriptEnv(work string) []string {
 		"GIT_COMMITTER_NAME=Command Centre",
 		"GIT_COMMITTER_EMAIL=cc@example.com",
 		"CC_DATA_DIR=" + filepath.Join(work, "cc-data"),
+		// One database per script, exactly as each script gets its own CC_DATA_DIR: scripts
+		// run in parallel against one server.
+		"CC_DATABASE_URL=" + databaseURL,
 		// Read by e2e/register's SandboxCheckout: a remote-based [[repo]]'s checkout is
 		// symlinked to $CC_WORK_DIR/<name>, the sandbox cc-init-repo built, rather than cloned
 		// from its (undialable) configured remote.

@@ -70,10 +70,10 @@ type Ticket struct {
 	Repo      string
 	Branch    string
 	BlockedBy string
-	Source    sql.NullString
-	Title     sql.NullString
-	Body      sql.NullString
-	Status    sql.NullString
-	GroupKey  sql.NullString
-	SyncedAt  sql.NullString
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	GroupKey  string
+	SyncedAt  string
 }

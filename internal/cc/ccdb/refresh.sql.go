@@ -8,7 +8,6 @@ package ccdb
 import (
 	"context"
 	"database/sql"
-	"strings"
 )
 
 const latestRefreshOutcomes = `-- name: LatestRefreshOutcomes :many
@@ -20,10 +19,18 @@ JOIN (
     LEFT JOIN (
         SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
     ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN (/*SLICE:kinds*/?) AND e2.at > COALESCE(p.pushed_at, '')
+    WHERE e2.kind IN ($1, $2, $3, $4, $5) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
     GROUP BY e2.ticket_id
 ) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id
 `
+
+type LatestRefreshOutcomesParams struct {
+	Kind   string
+	Kind_2 string
+	Kind_3 string
+	Kind_4 string
+	Kind_5 string
+}
 
 type LatestRefreshOutcomesRow struct {
 	TicketID sql.NullString
@@ -31,18 +38,14 @@ type LatestRefreshOutcomesRow struct {
 	Detail   sql.NullString
 }
 
-func (q *Queries) LatestRefreshOutcomes(ctx context.Context, kinds []string) ([]LatestRefreshOutcomesRow, error) {
-	query := latestRefreshOutcomes
-	var queryParams []interface{}
-	if len(kinds) > 0 {
-		for _, v := range kinds {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:kinds*/?", strings.Repeat(",?", len(kinds))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:kinds*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+func (q *Queries) LatestRefreshOutcomes(ctx context.Context, arg LatestRefreshOutcomesParams) ([]LatestRefreshOutcomesRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestRefreshOutcomes,
+		arg.Kind,
+		arg.Kind_2,
+		arg.Kind_3,
+		arg.Kind_4,
+		arg.Kind_5,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,6 @@ func TestResolveWorkspaceLaysOutTheDataDir(t *testing.T) {
 	for _, tt := range []struct{ name, got, want string }{
 		{"state dir", ws.StateDir, state},
 		{"repos dir", ws.ReposDir, filepath.Join(dataDir, "repos")},
-		{"db path", ws.DBPath, filepath.Join(state, "command-centre.db")},
 		{"lock path", ws.LockPath, filepath.Join(state, "command-centre.lock")},
 		{"runs dir", ws.RunsDir, filepath.Join(state, "runs")},
 		{"settings path", ws.SettingsPath, filepath.Join(state, "settings", "agent.json")},

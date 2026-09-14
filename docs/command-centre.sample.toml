@@ -11,10 +11,15 @@
 # `project:<name>` and imports its group. Stacking is on, so a dependent cuts and pushes off its
 # blocker's own branch rather than main once the blocker's PR opens.
 
-# Where the app keeps everything: state/ for the database, lock, run logs and agent settings,
-# repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that, os.UserConfigDir()/command-centre.
+# Where the app keeps everything except the database: state/ for the lock, run logs and agent
+# settings, repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that,
+# os.UserConfigDir()/command-centre.
 # Commented out here so running the sample does not collide with a real instance's data.
 # data_dir = "~/cc-sample-data"
+
+# The Postgres the store runs on. Absent, CC_DATABASE_URL answers; absent that, the compose.yaml
+# server in this repo, which `just up` starts.
+# database_url = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
 
 max_agents = 2
 port       = 7777

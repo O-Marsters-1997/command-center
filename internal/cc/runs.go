@@ -15,7 +15,7 @@ import (
 // and prompt_hash are known at cut time, but pgid and log_path are named after the row's own id
 // (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
-	res, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    ticketID,
 		Kind:        kind,
 		BaselineSHA: notNull(baselineSHA),
@@ -23,10 +23,6 @@ func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineS
 	})
 	if err != nil {
 		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("run id for %s: %w", ticketID, err)
 	}
 	return id, nil
 }
@@ -70,7 +66,7 @@ func (s *Store) RecordDisposition(
 // InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no
 // pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
-	res, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
+	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
 		TicketID:   ticketID,
 		PromptHash: notNull(promptHash),
 		Outcome:    notNull(plan.OutcomeCutFailed.String()),
@@ -78,10 +74,6 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 	})
 	if err != nil {
 		return 0, fmt.Errorf("insert cut-failed run for %s: %w", ticketID, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("cut-failed run id for %s: %w", ticketID, err)
 	}
 	return id, nil
 }

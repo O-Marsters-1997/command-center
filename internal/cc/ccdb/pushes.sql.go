@@ -96,7 +96,7 @@ JOIN (
     LEFT JOIN (
         SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
     ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN (?, ?) AND e2.at > COALESCE(p.pushed_at, '')
+    WHERE e2.kind IN ($1, $2) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
     GROUP BY e2.ticket_id
 ) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id
 `
@@ -137,7 +137,7 @@ func (q *Queries) PushFacts(ctx context.Context, arg PushFactsParams) ([]PushFac
 
 const recordPush = `-- name: RecordPush :exec
 INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
-VALUES (?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type RecordPushParams struct {
@@ -165,7 +165,7 @@ FROM events e
 LEFT JOIN (
     SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
 ) p ON p.ticket_id = e.ticket_id
-WHERE e.kind = ? AND e.at >= COALESCE(p.pushed_at, '')
+WHERE e.kind = $1 AND (p.pushed_at IS NULL OR e.at >= p.pushed_at)
 `
 
 func (q *Queries) RestackedSinceLastPush(ctx context.Context, kind string) ([]sql.NullString, error) {

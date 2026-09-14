@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -111,7 +110,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 
 	ticketURLs := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
 	tickets := make([]cc.Ticket, len(ticketURLs))

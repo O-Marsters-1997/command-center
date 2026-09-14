@@ -60,7 +60,7 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 		t.Fatal(err)
 	}
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	consumer := cc.Ticket{
 		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
@@ -278,7 +278,7 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	t.Parallel()
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
@@ -318,7 +318,7 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	consumer := cc.Ticket{
 		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
@@ -358,7 +358,7 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
 		t.Fatal(err)

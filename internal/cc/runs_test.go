@@ -2,7 +2,6 @@ package cc_test
 
 import (
 	"maps"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -23,7 +22,7 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 
 	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
@@ -76,7 +75,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 
 	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
@@ -122,7 +121,7 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -152,7 +151,7 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -185,7 +184,7 @@ func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTicket(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -209,7 +208,7 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	seedOneTicket(t, store)
 	second := cc.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
 	if err := store.UpsertTickets(ctx, []cc.Ticket{second}); err != nil {

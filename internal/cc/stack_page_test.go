@@ -1,7 +1,6 @@
 package cc_test
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 
 	tickets := []cc.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
 	children := []string{"CC-2", "CC-3", "CC-4", "CC-5"}
@@ -78,7 +77,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	tickets := []cc.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},

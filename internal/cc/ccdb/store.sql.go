@@ -11,7 +11,7 @@ import (
 )
 
 const appendEvent = `-- name: AppendEvent :exec
-INSERT INTO events (at, ticket_id, kind, detail) VALUES (?, ?, ?, ?)
+INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, $2, $3, $4)
 `
 
 type AppendEventParams struct {
@@ -32,7 +32,7 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error 
 }
 
 const deleteLaunchMembersForTicket = `-- name: DeleteLaunchMembersForTicket :exec
-DELETE FROM launch_members WHERE ticket_id = ?
+DELETE FROM launch_members WHERE ticket_id = $1
 `
 
 func (q *Queries) DeleteLaunchMembersForTicket(ctx context.Context, ticketID string) error {
@@ -41,7 +41,7 @@ func (q *Queries) DeleteLaunchMembersForTicket(ctx context.Context, ticketID str
 }
 
 const deletePushesForTicket = `-- name: DeletePushesForTicket :exec
-DELETE FROM pushes WHERE ticket_id = ?
+DELETE FROM pushes WHERE ticket_id = $1
 `
 
 func (q *Queries) DeletePushesForTicket(ctx context.Context, ticketID string) error {
@@ -50,7 +50,7 @@ func (q *Queries) DeletePushesForTicket(ctx context.Context, ticketID string) er
 }
 
 const deleteRunsForTicket = `-- name: DeleteRunsForTicket :exec
-DELETE FROM runs WHERE ticket_id = ?
+DELETE FROM runs WHERE ticket_id = $1
 `
 
 func (q *Queries) DeleteRunsForTicket(ctx context.Context, ticketID string) error {
@@ -59,7 +59,7 @@ func (q *Queries) DeleteRunsForTicket(ctx context.Context, ticketID string) erro
 }
 
 const deleteTicket = `-- name: DeleteTicket :exec
-DELETE FROM tickets WHERE url = ?
+DELETE FROM tickets WHERE url = $1
 `
 
 func (q *Queries) DeleteTicket(ctx context.Context, url string) error {
@@ -107,7 +107,7 @@ func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
 }
 
 const getMeta = `-- name: GetMeta :one
-SELECT value FROM meta WHERE key = ?
+SELECT value FROM meta WHERE key = $1
 `
 
 func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
@@ -119,7 +119,7 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 
 const importTicket = `-- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, group_key, title, body, status, synced_at, branch, blocked_by)
-VALUES (?, ?, 'github', ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, 'github', $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, source = excluded.source, group_key = excluded.group_key,
     title = excluded.title, body = excluded.body, status = excluded.status,
@@ -129,11 +129,11 @@ ON CONFLICT (url) DO UPDATE SET
 type ImportTicketParams struct {
 	URL       string
 	Repo      string
-	GroupKey  sql.NullString
-	Title     sql.NullString
-	Body      sql.NullString
-	Status    sql.NullString
-	SyncedAt  sql.NullString
+	GroupKey  string
+	Title     string
+	Body      string
+	Status    string
+	SyncedAt  string
 	Branch    string
 	BlockedBy string
 }
@@ -154,7 +154,7 @@ func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) erro
 }
 
 const putMeta = `-- name: PutMeta :exec
-INSERT INTO meta (key, value) VALUES (?, ?)
+INSERT INTO meta (key, value) VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET value = excluded.value
 `
 
@@ -169,34 +169,19 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 }
 
 const tickets = `-- name: Tickets :many
-SELECT url, repo, branch, blocked_by,
-       COALESCE(source, '') AS source, COALESCE(title, '') AS title, COALESCE(body, '') AS body,
-       COALESCE(status, '') AS status, COALESCE(group_key, '') AS group_key, COALESCE(synced_at, '') AS synced_at
+SELECT url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at
 FROM tickets ORDER BY url
 `
 
-type TicketsRow struct {
-	URL       string
-	Repo      string
-	Branch    string
-	BlockedBy string
-	Source    string
-	Title     string
-	Body      string
-	Status    string
-	GroupKey  string
-	SyncedAt  string
-}
-
-func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
+func (q *Queries) Tickets(ctx context.Context) ([]Ticket, error) {
 	rows, err := q.db.QueryContext(ctx, tickets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketsRow
+	var items []Ticket
 	for rows.Next() {
-		var i TicketsRow
+		var i Ticket
 		if err := rows.Scan(
 			&i.URL,
 			&i.Repo,
@@ -224,7 +209,7 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 
 const upsertTicket = `-- name: UpsertTicket :exec
 INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
     source = excluded.source, title = excluded.title, body = excluded.body,
@@ -236,12 +221,12 @@ type UpsertTicketParams struct {
 	Repo      string
 	Branch    string
 	BlockedBy string
-	Source    sql.NullString
-	Title     sql.NullString
-	Body      sql.NullString
-	Status    sql.NullString
-	GroupKey  sql.NullString
-	SyncedAt  sql.NullString
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	GroupKey  string
+	SyncedAt  string
 }
 
 func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) error {

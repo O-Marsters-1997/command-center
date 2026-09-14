@@ -147,7 +147,7 @@ func (f generatedConflictFixture) configAndWorkspace(
 
 func TestAConflictConfinedToGeneratedPathsMergesRebuildsCommitsAndPushes(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	f := newGeneratedConflictFixture(t, store, at, false, true)
 
@@ -202,7 +202,7 @@ func TestAConflictConfinedToGeneratedPathsMergesRebuildsCommitsAndPushes(t *test
 
 func TestAConflictTouchingAHandWrittenPathIsLeftUntouched(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	f := newGeneratedConflictFixture(t, store, at, true, true)
 
@@ -242,7 +242,7 @@ func TestAConflictTouchingAHandWrittenPathIsLeftUntouched(t *testing.T) {
 // rather than run the build command and commit over a merge that never happened.
 func TestAGenuineMergeFailureIsReportedRatherThanBuiltOver(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	f := newGeneratedConflictFixture(t, store, at, false, true)
 
@@ -271,7 +271,7 @@ func TestAGenuineMergeFailureIsReportedRatherThanBuiltOver(t *testing.T) {
 // itself does.
 func TestAConflictOnABranchNeverPushedIsLeftAlone(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
-	store := openStore(t, filepath.Join(t.TempDir(), "cc.db"))
+	store := openStore(t)
 	at := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
 	f := newGeneratedConflictFixture(t, store, at, false, false)
 

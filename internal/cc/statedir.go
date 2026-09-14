@@ -8,17 +8,14 @@ import (
 )
 
 // Workspace is the tree under the data directory: state/ for everything the app owns and
-// repos/ for the checkouts, with the worktrees tp cuts beside them. The two are siblings so
-// a database is never one "../" from an agent's own worktree (§8).
+// repos/ for the checkouts, with the worktrees tp cuts beside them.
 type Workspace struct {
 	// DataDir is the root the whole layout hangs off, and the name the page's header shows.
 	DataDir  string
 	StateDir string
 	// ReposDir holds one checkout per configured repo, named after the repo.
 	ReposDir string
-	DBPath   string
-	// LockPath is a file beside the database rather than the database itself: SQLite takes
-	// its own locks on the DB, and an flock on the same file deadlocks the driver.
+	// LockPath is the file the one-instance-per-workspace flock is taken on (inv. 9).
 	LockPath string
 	// RunsDir holds one <run-id>.jsonl per run: agent stdout and stderr, redirected, never
 	// piped, outside any checkout so a crash never loses it.
@@ -29,6 +26,24 @@ type Workspace struct {
 
 // dataDirEnv names the data directory when the config file does not.
 const dataDirEnv = "CC_DATA_DIR"
+
+// databaseURLEnv names the database when the config file does not.
+const (
+	databaseURLEnv     = "CC_DATABASE_URL"
+	defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
+)
+
+// resolveDatabaseURL answers which database the app connects to: the config's own database_url,
+// else CC_DATABASE_URL, else the local compose server.
+func resolveDatabaseURL(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	if fromEnv := os.Getenv(databaseURLEnv); fromEnv != "" {
+		return fromEnv
+	}
+	return defaultDatabaseURL
+}
 
 // ResolveDataDir answers where the app keeps everything: the config's own data_dir, else
 // CC_DATA_DIR, else os.UserConfigDir()/command-centre. A leading ~ expands.
@@ -70,7 +85,6 @@ func ResolveWorkspace(dataDir string) (Workspace, error) {
 		DataDir:      dataDir,
 		StateDir:     state,
 		ReposDir:     filepath.Join(dataDir, "repos"),
-		DBPath:       filepath.Join(state, "command-centre.db"),
 		LockPath:     filepath.Join(state, "command-centre.lock"),
 		RunsDir:      filepath.Join(state, "runs"),
 		SettingsPath: filepath.Join(state, "settings", "agent.json"),
