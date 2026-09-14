@@ -25,11 +25,11 @@
 </script>
 </head>
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+<a class="absolute left-[-100vw] px-2.5 py-1.5 bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
 <div id="masthead" hx-swap-oob="true">
-  <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
+  <header class="flex flex-wrap items-center gap-3 py-2 px-4 border-b border-border">
     <h1 class="m-0">Command Centre</h1>
-    {{with .Workspace}}<span class="text-muted">{{.}}</span>{{end}}
+    {{with .Workspace}}<span class="text-muted text-sm">{{.}}</span>{{end}}
     <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
       <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
     </span>
@@ -38,9 +38,9 @@
     {{else}}
     <span class="pill"><span class="pill-disc"></span>observed {{.ObserveAge}}</span>
     {{end}}
-    <nav class="flex gap-[0.4rem]">
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board"{{if eq .View "board"}} aria-current="page"{{end}}>board</a>
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph"{{if eq .View "graph"}} aria-current="page"{{end}}>graph</a>
+    <nav class="flex gap-1.5">
+      <a class="py-0.5 px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg aria-[current=page]:font-semibold" href="/?view=board"{{if eq .View "board"}} aria-current="page"{{end}}>board</a>
+      <a class="py-0.5 px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg aria-[current=page]:font-semibold" href="/?view=graph"{{if eq .View "graph"}} aria-current="page"{{end}}>graph</a>
     </nav>
     <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
   </header>

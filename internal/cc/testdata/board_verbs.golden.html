@@ -1,5 +1,9 @@
 <table id="board" hx-get="" hx-trigger="every 5s" hx-swap="outerHTML">
-  <tr>
+  <colgroup>
+    <col class="w-8"><col class="w-40"><col class="w-16"><col><col class="w-20">
+    <col class="w-24"><col class="w-20"><col class="w-24"><col class="w-20"><col class="w-28">
+  </colgroup>
+  <tr class="text-xs font-semibold uppercase tracking-wide text-muted">
     <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
@@ -7,27 +11,29 @@
   
   
   <tr class="group" data-depth="0">
-    <td>
+    <td class="px-2 py-2 text-center">
       <input type="checkbox" form="launch" name="task" value="sandbox://blocked"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
-    <td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-wait pill-ring">blocked</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -36,27 +42,29 @@
   
   
   <tr class="group" data-depth="0">
-    <td>
+    <td class="px-2 py-2 text-center">
       <input type="checkbox" form="launch" name="task" value="sandbox://ready"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
-    <td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-idle pill-ring">ready</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -65,25 +73,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-wait pill-disc">queued</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://queued">
         <button type="submit" name="verb" value="cancel">cancel launch (0 tickets)</button>
@@ -96,25 +106,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-live pill-disc">running</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
@@ -127,25 +139,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">failed</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -158,25 +172,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">cut_failed</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://cut_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -189,25 +205,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-live pill-disc">push_pending</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -216,25 +234,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-live pill-disc">checking</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://checking">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -251,25 +271,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">needs_you</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -290,25 +312,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">push_failed</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://push_failed">
         <button type="submit" name="verb" value="retry-push">retry-push</button>
@@ -325,25 +349,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-wait pill-ring">review_me</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://review_me">
         <button type="submit" name="verb" value="close-pr">close-pr</button>
@@ -356,25 +382,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-done pill-ring">merged</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
@@ -387,25 +415,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">pr_closed_unmerged</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -422,25 +452,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">base_gone</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
@@ -457,27 +489,29 @@
   
   
   <tr class="group" data-depth="0">
-    <td>
+    <td class="px-2 py-2 text-center">
       <input type="checkbox" form="launch" name="task" value="sandbox://cancelled"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
-    <td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-idle pill-ring">cancelled</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -486,25 +520,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-live pill-disc">base_moved</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://base_moved">
         <button type="submit" name="verb" value="refresh">refresh</button>
@@ -521,25 +557,27 @@
   
   
   <tr class="group" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-stop pill-ring">refresh_conflicted</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
     </td>
-    <td>
+    <td class="px-3 py-2 break-words">
       <div>untitled</div>
     </td>
-    <td>L0</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L0</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="post" action="/verb">
         <input type="hidden" name="task" value="sandbox://refresh_conflicted">
         <button type="submit" name="verb" value="abort">abort</button>

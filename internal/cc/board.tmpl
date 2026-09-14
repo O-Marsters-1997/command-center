@@ -1,6 +1,10 @@
 {{define "board" -}}
 <table id="board" hx-get="{{.BoardPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
-  <tr>
+  <colgroup>
+    <col class="w-8"><col class="w-40"><col class="w-16"><col><col class="w-20">
+    <col class="w-24"><col class="w-20"><col class="w-24"><col class="w-20"><col class="w-28">
+  </colgroup>
+  <tr class="text-xs font-semibold uppercase tracking-wide text-muted">
     <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
@@ -17,7 +21,7 @@
 
 {{define "row"}}
   <tr class="group{{if .Head}} group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted{{end}}{{if .Selected}} selected{{end}}" data-depth="{{.Depth}}">
-    <td>
+    <td class="px-2 py-2 text-center">
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
@@ -26,40 +30,46 @@
       {{- end}}
       {{- end -}}
     </td>
-    <td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-{{.Tone}}{{if .Unattended}} pill-disc{{else}} pill-ring{{end}}{{if .Alive}} pill-pulse{{end}}">{{.State}}</span>
       {{- if .Draft}} <mark class="flag" title="draft: {{.DraftReason}}">draft</mark>{{end}}
       {{- if .BaseVerdict}} <mark class="flag" title="base verdict: {{.BaseVerdict}}">base {{.BaseVerdict}}</mark>{{end}}
       {{- if .Warning}} <mark class="flag flag-warning" title="{{.Warning}}">⚠ ready-to-merge</mark>{{end}}
-      {{- range .PendingVerbs}} · {{.}} queued{{end}}
+      {{- range .PendingVerbs}} <span class="text-xs text-muted">· {{.}} queued</span>{{end}}
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
     </td>
-    <td>
-      {{- if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
+    <td class="px-3 py-2 break-words">
+      {{- if .Reason}}<div class="mb-0.5 text-xs text-muted">{{.Reason}}</div>{{end}}
       <div>{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
     </td>
-    <td>{{.Stack}}</td>
-    <td>
+    <td class="px-3 py-2 break-words text-xs">{{.Stack}}</td>
+    <td class="px-3 py-2">
       {{- if .Checks}}
+      <div class="flex flex-col items-start gap-0.5 text-xs">
       <span class="meter"><span class="meter-fill" style="width: {{percent .ChecksPassed (len .Checks)}}%"></span></span>
-      {{.ChecksPassed}}/{{len .Checks}}
-      {{- else}}no checks{{end}}
+      <span>{{.ChecksPassed}}/{{len .Checks}}</span>
+      </div>
+      {{- else}}<span class="text-xs text-muted">no checks</span>{{end}}
     </td>
-    <td>{{if .PRNumber}}#{{.PRNumber}} {{.PRState}}{{else}}no pr{{end}}</td>
-    <td>
+    <td class="px-3 py-2 text-xs">{{if .PRNumber}}#{{.PRNumber}} {{.PRState}}{{else}}<span class="text-muted">no pr</span>{{end}}</td>
+    <td class="px-3 py-2">
       {{- if .Elapsed}}
+      <div class="flex flex-col items-start gap-0.5 text-xs">
       <span class="meter"><span class="meter-fill" style="width: {{.ElapsedPercent}}%"></span></span>
-      {{.Elapsed}}
-      {{- else}}not started{{end}}
+      <span>{{.Elapsed}}</span>
+      </div>
+      {{- else}}<span class="text-xs text-muted">not started</span>{{end}}
     </td>
-    <td>
+    <td class="px-3 py-2 break-words text-xs">
       {{- if .SpendSettled}}${{printf "%.2f" .SpendUSD}}
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
-      {{- else}}no spend{{end}}
+      {{- else}}<span class="text-muted">no spend</span>{{end}}
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}

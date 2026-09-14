@@ -1,5 +1,9 @@
 <table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
-  <tr>
+  <colgroup>
+    <col class="w-8"><col class="w-40"><col class="w-16"><col><col class="w-20">
+    <col class="w-24"><col class="w-20"><col class="w-24"><col class="w-20"><col class="w-28">
+  </colgroup>
+  <tr class="text-xs font-semibold uppercase tracking-wide text-muted">
     <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
@@ -7,53 +11,57 @@
   
   
   <tr class="group group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted" data-depth="0">
-    <td>
+    <td class="px-2 py-2 text-center">
       <input type="checkbox" form="launch" name="task" value="sandbox://CC-1"
         hx-get="/board?task=sandbox%3A%2F%2FCC-1" hx-push-url="/?task=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
-    <td>
-      <span class="pill pill-idle pill-ring">ready</span> · launch queued
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
+      <span class="pill pill-idle pill-ring">ready</span> <span class="text-xs text-muted">· launch queued</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
     </td>
-    <td><div class="text-muted text-[0.85em]">no blockers</div>
+    <td class="px-3 py-2 break-words"><div class="mb-0.5 text-xs text-muted">no blockers</div>
       <div>untitled</div>
     </td>
-    <td>L1</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L1</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
   
   <tr class="group" data-depth="1">
-    <td>
+    <td class="px-2 py-2 text-center">
       <input type="checkbox" form="launch" name="task" value="sandbox://CC-2"
         hx-get="/board?task=sandbox%3A%2F%2FCC-2" hx-push-url="/?task=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
-    <td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-wait pill-ring">blocked</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
     </td>
-    <td><div class="text-muted text-[0.85em]">blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</div>
+    <td class="px-3 py-2 break-words"><div class="mb-0.5 text-xs text-muted">blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</div>
       <div>untitled</div>
     </td>
-    <td>L1</td>
-    <td>no checks
+    <td class="px-3 py-2 break-words text-xs">L1</td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">no checks</span>
     </td>
-    <td>no pr</td>
-    <td>not started
+    <td class="px-3 py-2 text-xs"><span class="text-muted">no pr</span></td>
+    <td class="px-3 py-2"><span class="text-xs text-muted">not started</span>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 

@@ -1,38 +1,40 @@
-<td colspan="10">
-  <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-4">
-    <dt class="text-muted">base sha</dt><dd class="m-0">{{.BaselineSHA}}</dd>
-    <dt class="text-muted">worktree</dt><dd class="m-0">{{if .Worktree}}{{.Worktree}}{{else}}no worktree has been cut{{end}}</dd>
-    <dt class="text-muted">elapsed</dt><dd class="m-0">{{if .Elapsed}}{{.Elapsed}}{{else}}not started{{end}}</dd>
-    <dt class="text-muted">checks</dt>
+<td colspan="10" class="px-3 py-3">
+  <dl class="m-0 mb-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+    <dt class="text-2xs uppercase tracking-wide text-muted">base sha</dt><dd class="m-0 break-all">{{.BaselineSHA}}</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">worktree</dt><dd class="m-0 break-all">{{if .Worktree}}{{.Worktree}}{{else}}<span class="text-muted">no worktree has been cut</span>{{end}}</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">elapsed</dt><dd class="m-0">{{if .Elapsed}}{{.Elapsed}}{{else}}<span class="text-muted">not started</span>{{end}}</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">checks</dt>
     <dd class="m-0">
-      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}no checks{{end -}}
+      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}<span class="text-muted">no checks</span>{{end -}}
     </dd>
-    {{if .Draft}}<dt class="text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
-    {{if .BaseVerdict}}<dt class="text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}
-    {{if .Warning}}<dt class="text-muted">warning</dt><dd class="m-0">{{.Warning}}</dd>{{end}}
+    {{if .Draft}}<dt class="text-2xs uppercase tracking-wide text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
+    {{if .BaseVerdict}}<dt class="text-2xs uppercase tracking-wide text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}
+    {{if .Warning}}<dt class="text-2xs uppercase tracking-wide text-muted">warning</dt><dd class="m-0 text-s-stop">{{.Warning}}</dd>{{end}}
   </dl>
-  <div class="run-log">
-    <div class="run-log-header flex flex-wrap items-center gap-2">
-      <span class="run-log-path font-medium">{{.Log.Path}}</span>
+  <div class="run-log border-t border-border pt-3">
+    <div class="run-log-header flex flex-wrap items-center gap-2 mb-1">
+      <span class="run-log-path font-medium break-all">{{.Log.Path}}</span>
       {{if .Log.Streaming}}<span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
       {{- else}}<span class="pill"><span class="pill-ring"></span>ended</span>{{end}}
-      <nav class="log-filters flex gap-2">
-        {{- range .Log.Filters}}<a href="{{.Path}}" class="px-1{{if .Active}} active font-semibold{{end}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end -}}
+      <nav class="log-filters flex gap-1">
+        {{- range .Log.Filters}}<a href="{{.Path}}" class="rounded px-2 py-0.5 text-muted hover:text-fg hover:bg-surface-hover{{if .Active}} active font-semibold text-fg bg-surface-active{{end}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end -}}
       </nav>
-      <a href="#first-fail" class="jump-first-fail ml-auto">first failure</a>
+      <a href="#first-fail" class="jump-first-fail ml-auto text-s-stop font-medium">first failure</a>
     </div>
-    <p class="run-log-meta text-muted">{{.Log.Lines}} lines · {{.Log.PhaseCount}} phases</p>
+    <p class="run-log-meta mb-2 text-xs text-muted">{{.Log.Lines}} lines · {{.Log.PhaseCount}} phases</p>
     {{range .Log.Phases}}
     <section class="phase">
-      <header class="flex items-baseline gap-2 mt-5 mb-1 pb-1 border-b border-border text-muted text-xs tracking-wide uppercase">
+      <header class="flex items-baseline gap-2 mt-4 mb-1.5 pb-1 border-b border-border text-muted text-xs tracking-wide uppercase">
         {{if .Skill}}<span class="phase-skill font-semibold">skill {{.Skill}}</span>{{with .Note}} · {{.}}{{end}}{{end}}
         <span class="phase-at ml-auto normal-case">{{.At}}</span>
       </header>
+      <div class="flex flex-col gap-0.5">
       {{range .Lines}}{{.}}
       {{end -}}
+      </div>
     </section>
     {{end}}
     <div class="run-log-live" hx-ext="sse" sse-connect="{{.Log.StreamPath}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
-    {{with .Log.Result}}<p class="run-log-result mt-2">{{.}}</p>{{end}}
+    {{with .Log.Result}}<p class="run-log-result mt-2 font-medium">{{.}}</p>{{end}}
   </div>
 </td>

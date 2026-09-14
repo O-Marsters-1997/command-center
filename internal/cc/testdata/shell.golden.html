@@ -25,9 +25,9 @@
 </script>
 </head>
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+<a class="absolute left-[-100vw] px-2.5 py-1.5 bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
 <div id="masthead" hx-swap-oob="true">
-  <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
+  <header class="flex flex-wrap items-center gap-3 py-2 px-4 border-b border-border">
     <h1 class="m-0">Command Centre</h1>
     
     <span class="pill">
@@ -36,9 +36,9 @@
     
     <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: 45s ago</span>
     
-    <nav class="flex gap-[0.4rem]">
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board" aria-current="page">board</a>
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph">graph</a>
+    <nav class="flex gap-1.5">
+      <a class="py-0.5 px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg aria-[current=page]:font-semibold" href="/?view=board" aria-current="page">board</a>
+      <a class="py-0.5 px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg aria-[current=page]:font-semibold" href="/?view=graph">graph</a>
     </nav>
     <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
   </header>
@@ -49,35 +49,35 @@
   
 </div>
 <main>
-<section class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
+<section class="mb-3 flex flex-wrap gap-3" aria-label="fleet analytics">
+  <article class="flex-[1_1_14rem] rounded-card border border-border bg-surface-raised px-3 py-2">
+    <h2 class="m-0 mb-1 text-2xs font-semibold uppercase tracking-wider text-muted">state of the fleet</h2>
     
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/2 yours</p>
-    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
+    <p class="m-0 mb-1 text-headline font-medium">2/2 yours</p>
+    <div class="flex h-2 overflow-hidden rounded-full bg-track">
       
       <span class="segbar-segment" data-tone="wait" style="flex-grow: 1"></span>
       
       <span class="segbar-segment" data-tone="idle" style="flex-grow: 1"></span>
       
     </div>
-    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
+    <ul class="m-0 mt-1.5 flex flex-wrap list-none gap-x-3 gap-y-1 p-0 text-xs text-muted">
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="wait"></span>blocked · 1</li>
+      <li class="flex items-center gap-1"><span class="pill-disc" data-tone="wait"></span>blocked · 1</li>
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="idle"></span>ready · 1</li>
+      <li class="flex items-center gap-1"><span class="pill-disc" data-tone="idle"></span>ready · 1</li>
       
     </ul>
     
   </article>
 
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
+  <article class="flex-[1_1_14rem] rounded-card border border-border bg-surface-raised px-3 py-2">
+    <h2 class="m-0 mb-1 text-2xs font-semibold uppercase tracking-wider text-muted">stack depth</h2>
     
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">0 deep</p>
-    <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
+    <p class="m-0 mb-1 text-headline font-medium">0 deep</p>
+    <ul class="m-0 flex flex-col list-none gap-1 p-0 text-xs text-muted">
       
-      <li class="flex items-center gap-[0.4em]">
+      <li class="flex items-center gap-1.5">
         <span class="meter"><span class="meter-fill" data-tone="idle" style="width: 100%"></span></span>
         depth 0 · 2
       </li>
@@ -86,15 +86,15 @@
     
   </article>
 
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
+  <article class="flex-[1_1_14rem] rounded-card border border-border bg-surface-raised px-3 py-2">
+    <h2 class="m-0 mb-1 text-2xs font-semibold uppercase tracking-wider text-muted">gating checks</h2>
     
     <p class="m-0 text-muted">no branch has reported a check yet</p>
     
   </article>
 
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
+  <article class="flex-[1_1_14rem] rounded-card border border-border bg-surface-raised px-3 py-2">
+    <h2 class="m-0 mb-1 text-2xs font-semibold uppercase tracking-wider text-muted">spend</h2>
     
     <p class="m-0 text-muted">no runs have completed this session yet</p>
     

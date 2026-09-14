@@ -1,5 +1,9 @@
 <table id="board" hx-get="/board?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" hx-trigger="every 5s" hx-swap="outerHTML">
-  <tr>
+  <colgroup>
+    <col class="w-8"><col class="w-40"><col class="w-16"><col><col class="w-20">
+    <col class="w-24"><col class="w-20"><col class="w-24"><col class="w-20"><col class="w-28">
+  </colgroup>
+  <tr class="text-xs font-semibold uppercase tracking-wide text-muted">
     <th></th><th>state</th><th>ticket</th><th>task</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
@@ -7,29 +11,35 @@
   
   
   <tr class="group selected" data-depth="0">
-    <td></td>
-    <td>
+    <td class="px-2 py-2 text-center"></td>
+    <td class="px-3 py-2">
+      <div class="flex flex-wrap items-center gap-1">
       <span class="pill pill-live pill-disc pill-pulse">running</span>
+      </div>
     </td>
-    <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
+    <td class="px-3 py-2">
+      <button type="button" class="border-none bg-transparent p-0 font-semibold text-inherit underline underline-offset-2" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
     </td>
-    <td><div class="text-muted text-[0.85em]">agent running</div>
+    <td class="px-3 py-2 break-words"><div class="mb-0.5 text-xs text-muted">agent running</div>
       <div>untitled</div>
     </td>
-    <td>L1</td>
-    <td>
+    <td class="px-3 py-2 break-words text-xs">L1</td>
+    <td class="px-3 py-2">
+      <div class="flex flex-col items-start gap-0.5 text-xs">
       <span class="meter"><span class="meter-fill" style="width: 50%"></span></span>
-      1/2
+      <span>1/2</span>
+      </div>
     </td>
-    <td>#76 open</td>
-    <td>
+    <td class="px-3 py-2 text-xs">#76 open</td>
+    <td class="px-3 py-2">
+      <div class="flex flex-col items-start gap-0.5 text-xs">
       <span class="meter"><span class="meter-fill" style="width: 100%"></span></span>
-      1m30s
+      <span>1m30s</span>
+      </div>
     </td>
-    <td>no spend
+    <td class="px-3 py-2 break-words text-xs"><span class="text-muted">no spend</span>
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="flex flex-col items-start gap-1 px-3 py-2 opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
       <form method="get" action="/confirm">
         <input type="hidden" name="task" value="https://github.com/o/r/issues/76">
         <button type="submit" name="verb" value="kill">kill</button>
@@ -37,25 +47,25 @@
   </tr>
   
   
-  <tr id="detail-e0f89266e57a" hx-preserve="true"><td colspan="10">
-  <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-4">
-    <dt class="text-muted">base sha</dt><dd class="m-0">basesha1234</dd>
-    <dt class="text-muted">worktree</dt><dd class="m-0">/repos/repo-cc-76</dd>
-    <dt class="text-muted">elapsed</dt><dd class="m-0">1m30s</dd>
-    <dt class="text-muted">checks</dt>
+  <tr id="detail-e0f89266e57a" hx-preserve="true"><td colspan="10" class="px-3 py-3">
+  <dl class="m-0 mb-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+    <dt class="text-2xs uppercase tracking-wide text-muted">base sha</dt><dd class="m-0 break-all">basesha1234</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">worktree</dt><dd class="m-0 break-all">/repos/repo-cc-76</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">elapsed</dt><dd class="m-0">1m30s</dd>
+    <dt class="text-2xs uppercase tracking-wide text-muted">checks</dt>
     <dd class="m-0"><div>build: IN_PROGRESS</div><div>unit: COMPLETED SUCCESS</div></dd>
     
     
     
   </dl>
-  <div class="run-log">
-    <div class="run-log-header flex flex-wrap items-center gap-2">
-      <span class="run-log-path font-medium">testdata/fixtures/run.jsonl</span>
+  <div class="run-log border-t border-border pt-3">
+    <div class="run-log-header flex flex-wrap items-center gap-2 mb-1">
+      <span class="run-log-path font-medium break-all">testdata/fixtures/run.jsonl</span>
       <span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
-      <nav class="log-filters flex gap-2"><a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1 active font-semibold" aria-current="true">all</a><a href="/?log=skills&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">skills</a><a href="/?log=tools&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">tools</a><a href="/?log=fails&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">fails</a></nav>
-      <a href="#first-fail" class="jump-first-fail ml-auto">first failure</a>
+      <nav class="log-filters flex gap-1"><a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="rounded px-2 py-0.5 text-muted hover:text-fg hover:bg-surface-hover active font-semibold text-fg bg-surface-active" aria-current="true">all</a><a href="/?log=skills&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="rounded px-2 py-0.5 text-muted hover:text-fg hover:bg-surface-hover">skills</a><a href="/?log=tools&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="rounded px-2 py-0.5 text-muted hover:text-fg hover:bg-surface-hover">tools</a><a href="/?log=fails&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="rounded px-2 py-0.5 text-muted hover:text-fg hover:bg-surface-hover">fails</a></nav>
+      <a href="#first-fail" class="jump-first-fail ml-auto text-s-stop font-medium">first failure</a>
     </div>
-    <p class="run-log-meta text-muted">3 lines · 0 phases</p>
+    <p class="run-log-meta mb-2 text-xs text-muted">3 lines · 0 phases</p>
     
     <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76/log?from=33" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     

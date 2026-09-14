@@ -9,9 +9,9 @@
 <form method="post" action="/import">
 <input type="hidden" name="group" value="{{.Group}}">
 <table class="w-full max-w-3xl">
-  <tr><th>ticket</th><th>title</th><th>status</th></tr>
+  <tr class="text-xs font-semibold uppercase tracking-wide text-muted"><th class="px-3 py-2">ticket</th><th class="px-3 py-2">title</th><th class="px-3 py-2">status</th></tr>
   {{range .Tickets}}
-  <tr><td class="break-all">{{.URL}}</td><td>{{.Title}}</td><td>{{.Status}}</td></tr>
+  <tr><td class="px-3 py-2 break-all">{{.URL}}</td><td class="px-3 py-2">{{.Title}}</td><td class="px-3 py-2">{{.Status}}</td></tr>
   {{end}}
 </table>
 <button type="submit" class="mt-2">[ import {{len .Tickets}} ]</button>
