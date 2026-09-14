@@ -13,6 +13,7 @@ const (
 	VerbCancel         = "cancel"
 	VerbRefresh        = "refresh"
 	VerbAbort          = "abort"
+	VerbResolve        = "resolve"
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
@@ -44,7 +45,9 @@ func Verbs(s State) []string {
 	case RefreshConflicted:
 		return []string{VerbAbort}
 	case ConflictsWithMain:
-		return []string{VerbRefresh, VerbClosePR}
+		return []string{VerbResolve, VerbRefresh, VerbClosePR}
+	case ConflictResolved:
+		return nil
 	case VerificationFailed:
 		return []string{VerbRetryPush, VerbReRun}
 	case WaitingOnProducerDeploy:
@@ -73,7 +76,7 @@ func Tone(s State) string {
 		return "done"
 	case Running, PushPending, Checking, BaseMoved:
 		return "live"
-	case Blocked, Queued, ReviewMe, WaitingOnProducerDeploy:
+	case Blocked, Queued, ReviewMe, WaitingOnProducerDeploy, ConflictResolved:
 		return "wait"
 	case Ready, Cancelled:
 		return "idle"

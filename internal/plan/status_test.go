@@ -147,6 +147,16 @@ func TestStatusWithLatestRun(t *testing.T) {
 			reasonHasA: "/state/runs/7.jsonl",
 		},
 		{
+			name: "a resolve run with no commits derives conflict resolved, naming the log path",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, LogPath: "/state/runs/9.jsonl",
+				Resolved: true,
+			},
+			wantState:  plan.ConflictResolved,
+			reasonHas:  "nothing committed",
+			reasonHasA: "/state/runs/9.jsonl",
+		},
+		{
 			name: "a dead run with commits derives push pending",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, LogPath: "/state/runs/8.jsonl",

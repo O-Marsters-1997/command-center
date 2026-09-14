@@ -43,7 +43,7 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
 			state: plan.ConflictsWithMain,
-			want:  []string{plan.VerbRefresh, plan.VerbClosePR},
+			want:  []string{plan.VerbResolve, plan.VerbRefresh, plan.VerbClosePR},
 			tone:  "stop",
 		},
 		{
@@ -56,6 +56,7 @@ func TestStateDecisions(t *testing.T) {
 			want:  []string{plan.VerbReCheck, plan.VerbReRun},
 			tone:  "wait",
 		},
+		{state: plan.ConflictResolved, want: nil, tone: "wait"},
 	}
 
 	if len(tests) != plan.StateCount {
