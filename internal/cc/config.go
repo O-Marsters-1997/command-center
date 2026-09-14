@@ -56,6 +56,12 @@ type Repo struct {
 	// VerifyCommand is the argv a clean refresh or restack is verified with before the row is
 	// offered as sound (issue #110); empty means the repo opted out.
 	VerifyCommand []string `toml:"verify_command"`
+	// Generated names the paths this repo's build regenerates, glob-matched against a conflict
+	// with origin/main; empty means the repo opted out.
+	Generated []string `toml:"generated"`
+	// BuildCommand is the argv that regenerates Generated's paths, run in the ticket's own
+	// worktree before they are staged and committed; empty means the repo opted out.
+	BuildCommand []string `toml:"build_command"`
 	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
 	// downstream reads this and derives no path of its own. Not a config key.
 	Checkout string `toml:"-"`
@@ -181,6 +187,22 @@ func verifyCommandByRepo(repos []Repo) map[string][]string {
 	m := make(map[string][]string, len(repos))
 	for _, r := range repos {
 		m[r.Name] = r.VerifyCommand
+	}
+	return m
+}
+
+func generatedByRepo(repos []Repo) map[string][]string {
+	m := make(map[string][]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.Generated
+	}
+	return m
+}
+
+func buildCommandByRepo(repos []Repo) map[string][]string {
+	m := make(map[string][]string, len(repos))
+	for _, r := range repos {
+		m[r.Name] = r.BuildCommand
 	}
 	return m
 }

@@ -31,6 +31,11 @@ remote   = "git@github.com:O-Marsters-1997/command-center.git"
 stacking = true
 deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
 
+# The one conflict shape the app resolves without an agent: a conflict with origin/main confined
+# to these paths merges, rebuilds and commits itself (issue #177).
+generated     = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"]
+build_command = ["just", "assets"]
+
   [[repo.checks.all_of]]
   success = "test (ubuntu-latest)"
   [[repo.checks.all_of]]
