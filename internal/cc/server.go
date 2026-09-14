@@ -468,6 +468,7 @@ func derive(
 ) []row {
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(obs)
+	conflictingPeer := conflictingPeerHold(tickets, byURL, prs, stackingByRepo, obs)
 
 	rows := make([]row, 0, len(tickets))
 	verdictLabelByBranch := make(map[string]string, len(tickets))
@@ -475,7 +476,7 @@ func derive(
 	for _, t := range tickets {
 		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stackingByRepo[t.Repo])
-		runFact, pgid, elapsed, elapsedSeconds, logPath := runFactFor(t, obs, facts, vd, now)
+		runFact, pgid, elapsed, elapsedSeconds, logPath := runFactFor(t, obs, facts, vd, conflictingPeer, now)
 		membership := facts.memberships[t.URL]
 		latestRun := facts.latestRuns[t.URL]
 		state, reason := plan.Status(plan.Facts{
@@ -611,7 +612,8 @@ func baseVerdict(
 	if !ok {
 		return ""
 	}
-	runFact, _, _, _, _ := runFactFor(baseTicket, obs, facts, vd, now)
+	// nil: this preview label never reflects a peer hold, only the base's own run and verdict.
+	runFact, _, _, _, _ := runFactFor(baseTicket, obs, facts, vd, nil, now)
 	return verdictLabel(runFact)
 }
 
@@ -648,7 +650,7 @@ func draftReasonFor(
 // log path the page renders. Push facts only count once the run's outcome is push, and PROpen
 // reads this tick's PR snapshot rather than a stored column (inv. 14).
 func runFactFor(
-	t Ticket, obs Observation, facts ticketFacts, vd verdictDeps, now time.Time,
+	t Ticket, obs Observation, facts ticketFacts, vd verdictDeps, conflictingPeer map[string]string, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed string, elapsedSeconds int, logPath string) {
 	summary, ok := facts.latestRuns[t.URL]
 	if !ok {
@@ -675,6 +677,7 @@ func runFactFor(
 				fact.ConflictsWithMainReason = plan.Reason(
 					fmt.Sprintf("%s no longer merges cleanly into main", t.Branch))
 			}
+			fact.ConflictingPeer = conflictingPeer[t.URL]
 			ownState := obs.PRs[t.Branch].State
 			fact.PROpen = ownState == gh.Open
 			fact.PRMerged = ownState == gh.Merged
@@ -682,6 +685,9 @@ func runFactFor(
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
 				applyVerdict(fact, t, obs, vd)
 			}
+		}
+		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve {
+			fact.Resolved = true
 		}
 	}
 

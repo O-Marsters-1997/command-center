@@ -161,6 +161,9 @@ const (
 	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
 	// (docs/designs/command-centre-design.md § 11 inv. 12).
 	WaitingOnProducerDeploy
+	// ConflictResolved is a resolve run that left the worktree's conflict resolved and staged,
+	// but nothing committed.
+	ConflictResolved
 	stateCount
 )
 
@@ -204,6 +207,8 @@ func (s State) String() string {
 		return "verification_failed"
 	case WaitingOnProducerDeploy:
 		return "waiting_on_producer_deploy"
+	case ConflictResolved:
+		return "conflict_resolved"
 	case Blocked:
 		return "blocked"
 	default:
@@ -255,11 +260,18 @@ type RunFact struct {
 	// (docs/adr/0006-resolve-a-conflict-once.md). It outranks every fact below it, as MidMerge does.
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
+	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
+	// is empty when there is none. Ref order is decided in internal/cc, the one place that knows
+	// it (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	ConflictingPeer string
 	// VerificationFailed is set when a clean refresh or restack's configured verify command last
 	// failed since this ticket's last recorded push (issue #110). It outranks every push and
 	// verdict fact below, as MidMerge and ConflictsWithMain do.
 	VerificationFailed       bool
 	VerificationFailedReason Reason
+	// Resolved is set when the latest run was a resolve run that left the conflict staged in
+	// the worktree but committed nothing.
+	Resolved bool
 }
 
 // Facts is everything Status derives from. Now is passed in because this package never calls
@@ -330,6 +342,11 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:
+		if run.Resolved {
+			return ConflictResolved, Reason(fmt.Sprintf(
+				"resolved with nothing committed; read it in the worktree before deciding what happens next, log at %s",
+				run.LogPath)), true
+		}
 		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
@@ -349,6 +366,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return RefreshConflicted, "refresh's merge conflicted: the worktree is left mid-merge, resolve it there or abort"
 	case run.ConflictsWithMain:
 		return ConflictsWithMain, run.ConflictsWithMainReason
+	case run.ConflictingPeer != "":
+		return Blocked, conflictingPeerReason(run.ConflictingPeer)
 	case run.VerificationFailed:
 		return VerificationFailed, run.VerificationFailedReason
 	case run.PushRefused:
@@ -381,6 +400,14 @@ func statusFromPush(run RunFact) (State, Reason) {
 func conflictedBaseReason(base string) Reason {
 	return Reason(fmt.Sprintf(
 		"%s already carries an unresolved merge conflict: a branch cut from it inherits the conflict", base))
+}
+
+// conflictingPeerReason is the sentence a row shows when it is held behind a lower-ref peer it
+// conflicts with, so the two refusals -- a conflicted base and a conflicting peer -- read alike
+// (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+func conflictingPeerReason(peer string) Reason {
+	return Reason(fmt.Sprintf(
+		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))
 }
 
 // waitingOnBlockers renders the reason a queued-but-locked row is still waiting: naming a

@@ -3,11 +3,23 @@ package plan
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 )
 
 // Compose renders the prompt a launch authorises: the implement instruction for the ticket.
 func Compose(t Ticket) string {
 	return "/implement " + t.URL
+}
+
+const resolveSkillPath = "cc/skills/resolve-merge-conflict/SKILL.md"
+
+// ComposeResolve renders the prompt a resolve run authorises: merge origin/main into the branch
+// and follow the conflict-resolution skill, stopping short of its own final commit step.
+func ComposeResolve(t Ticket) string {
+	return fmt.Sprintf(
+		"Merge origin/main into %s and follow %s to resolve every conflict. "+
+			"Stage the resolution but stop before its own step 5: do not commit, and do not push.",
+		t.Branch, resolveSkillPath)
 }
 
 // Hash fingerprints a composed prompt. Consent is bound to content (docs/command-centre-
