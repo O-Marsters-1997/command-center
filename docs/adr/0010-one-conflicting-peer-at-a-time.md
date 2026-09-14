@@ -49,11 +49,25 @@ and resolves it once instead of at a surprise merge.
 
 The peer sweep is pairwise: every tracked branch in a repo is checked against every other tracked
 branch, not only open, `main`-based ones, which costs more `git merge-tree` calls per tick than
-`ConflictsWithBase`'s one-per-branch read costs. Filtering the sweep itself to open, `main`-based
-candidates is a lazy win available whenever that cost is measured and found to matter; it does not
-change what any row shows, since `conflictingPeerHold` already ignores every pair it does not ask
-for.
+`ConflictsWithBase`'s one-per-branch read costs. #180 answered that by keying each read on the
+ordered tip pair, so a tick where no tip moved spends nothing on peers, one push recomputes that
+branch's `n−1` pairs, and only a cold start pays the full `C(n,2)`. Filtering the sweep to open,
+`main`-based candidates remains available on top and would change no row.
 
-The refinement that skips a peer which is itself held is a separate ticket: today, a three-way
-conflicting chain holds every ticket but the lowest ref behind the next-lowest, even where the
-next-lowest is itself held behind another.
+The refinement that skips a peer which is itself held landed as #179. Where A conflicts with B and
+B with C but A and C do not, only B is held: the sweep carries the set already ready, so C's only
+conflict has left it by the time C is decided.
+
+A conflict confined to paths the build regenerates gets no agent at all (#177). The app merges,
+runs the repo's `build_command`, stages and commits, and `pushPushable` delivers it. A repo that
+names no `build_command` has opted out, and every conflict there waits for `resolve` instead.
+
+`resolve` (#178) is what handles the rest. It spawns an agent against
+`cc/skills/resolve-merge-conflict/SKILL.md`, the skill ADR 6 named and left unwired, and that run
+commits nothing: the row lands at `conflict_resolved` with the resolution staged in the worktree
+for a human to read. Go decides what may commit, from the path alone, so a resolution reaches the
+remote only once something other than the agent commits it.
+
+None of this stops a merge conflicting a peer, which is git rather than policy. What it stops is a
+peer being offered as ready before its turn, which is what made a resolution get thrown away by the
+next merge.
