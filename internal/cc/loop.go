@@ -121,6 +121,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyAbortIntents(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.resolveGeneratedConflicts(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.applyResolveIntents(ctx, obs); err != nil {
 		return err
 	}

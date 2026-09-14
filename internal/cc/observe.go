@@ -40,6 +40,8 @@ type Observation struct {
 	// by branch. It is what the launch gate refuses on: a child cut from a base that already
 	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
+	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by branch.
+	ConflictedPaths map[string][]string `json:"conflicted_paths"`
 	// ConflictsWithPeer reports whether two branches' tips would conflict if merged together,
 	// keyed by each branch under the other. Observe only ever records the pair, never which one
 	// yields: it has no ref order to decide that (docs/adr/0010-one-conflicting-peer-at-a-time.md).
@@ -73,7 +75,8 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 		obs := Observation{
 			PRs: map[string]gh.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, MidMerge: map[string]bool{}, Titles: map[string]string{},
-			ConflictsWithBase: map[string]bool{}, ConflictsWithPeer: map[string]map[string]bool{},
+			ConflictsWithBase: map[string]bool{}, ConflictedPaths: map[string][]string{},
+			ConflictsWithPeer: map[string]map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
@@ -111,12 +114,15 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				if mainErr != nil {
 					continue
 				}
-				clean, err := MergesCleanly(ctx, path, mainTip, tip)
+				clean, paths, err := MergesCleanly(ctx, path, mainTip, tip)
 				if err != nil {
 					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
 				}
 				obs.ConflictsWithBase[branch] = !clean
+				if !clean {
+					obs.ConflictedPaths[branch] = paths
+				}
 			}
 
 			if err := recordPeerConflicts(
@@ -165,7 +171,7 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 
 // peerReader is MergesCleanly's shape, the seam a test replaces to count calls instead of
 // shelling out to git.
-type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, error)
+type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []string, error)
 
 // recordPeerConflicts fills in ConflictsWithPeer for one repo's branches, reusing the prior
 // tick's read for any pair whose two tips have not moved since (#180,
@@ -191,7 +197,7 @@ func recordPeerConflicts(
 				recordConflictsWithPeer(into, branchA, branchB, conflicts)
 				continue
 			}
-			clean, err := merges(ctx, repoPath, tipA, tipB)
+			clean, _, err := merges(ctx, repoPath, tipA, tipB)
 			if err != nil {
 				return fmt.Errorf("check whether %s merges with %s: %w", branchA, branchB, err)
 			}

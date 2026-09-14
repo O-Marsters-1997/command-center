@@ -31,6 +31,9 @@ func conflictingPeerHold(
 	held := make(map[string]string, len(candidates))
 	for i, t := range candidates {
 		for _, peer := range candidates[:i] {
+			if _, peerHeld := held[peer.URL]; peerHeld {
+				continue
+			}
 			if obs.ConflictsWithPeer[t.Branch][peer.Branch] {
 				held[t.URL] = peer.Branch
 				break

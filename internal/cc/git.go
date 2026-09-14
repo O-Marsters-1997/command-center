@@ -203,6 +203,16 @@ func Merge(ctx context.Context, worktreePath, ref string) error {
 	return err
 }
 
+func Add(ctx context.Context, worktreePath string, paths []string) error {
+	_, err := git(ctx, worktreePath, append([]string{"add", "--"}, paths...)...)
+	return err
+}
+
+func Commit(ctx context.Context, worktreePath, message string) error {
+	_, err := git(ctx, worktreePath, "commit", "-m", message)
+	return err
+}
+
 // Rebase replays worktreePath's own branch onto onto, dropping every commit reachable from
 // upstream. That is the shape a squash-merged base needs: the squash carries the base's work
 // under a commit with no ancestry, so replaying the branch's own copies conflicts against it
@@ -258,16 +268,37 @@ func midRebase(ctx context.Context, worktreePath string) (bool, error) {
 	return false, nil
 }
 
-// MergesCleanly reports whether merging branch into base would conflict. --write-tree is the
-// modern form of merge-tree, whose exit status is the answer: 0 clean, 1 conflicted, anything
-// else a real failure. The deprecated three-argument form reports a conflict only in its diff
-// output, which is what made `just check-conflicts` a no-op (issue #131).
+// MergesCleanly reports whether merging branch into base would conflict, naming every conflicted
+// path when it would not. --write-tree is the modern form of merge-tree, whose exit status is
+// the answer: 0 clean, 1 conflicted, anything else a real failure. --name-only lists each
+// conflicted path on its own line, right after the result tree's oid and before the blank line
+// that separates them from its diagnostic messages. The deprecated three-argument form reports a
+// conflict only in its diff output, which is what made `just check-conflicts` a no-op (issue
+// #131).
 //
 // Both arguments must already resolve. git exits 1 for a ref it cannot merge just as it does
 // for a conflict, so an unresolved ref would come back as a conflicted one: callers pass the
 // SHAs they read this tick, never a name they have not resolved.
-func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, error) {
-	return gitSucceeds(ctx, repoPath, "merge-tree", "--write-tree", "--name-only", base, branch)
+func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, []string, error) {
+	out, ok, err := gitRun(ctx, repoPath, "merge-tree", "--write-tree", "--name-only", base, branch)
+	if err != nil || ok {
+		return ok, nil, err
+	}
+	return false, conflictedPaths(out), nil
+}
+
+// conflictedPaths reads --name-only's own output shape: the result tree's oid on the first
+// line, then one conflicted path per line up to the blank line before its diagnostic messages.
+func conflictedPaths(out []byte) []string {
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	var paths []string
+	for _, line := range lines[1:] {
+		if line == "" {
+			break
+		}
+		paths = append(paths, line)
+	}
+	return paths
 }
 
 // Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
@@ -284,19 +315,25 @@ func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
 // a failure. Every other exit -- 128 for a ref that does not resolve, most of all -- stays an
 // error, because a missing commit is not the same answer as a negative one.
 func gitSucceeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
+	_, ok, err := gitRun(ctx, repoPath, args...)
+	return ok, err
+}
+
+func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte, ok bool, err error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
-	var stderr bytes.Buffer
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return false, nil
+			return out.Bytes(), false, nil
 		}
-		return false, fmt.Errorf("git %s in %s: %w: %s",
+		return nil, false, fmt.Errorf("git %s in %s: %w: %s",
 			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
 	}
-	return true, nil
+	return out.Bytes(), true, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
