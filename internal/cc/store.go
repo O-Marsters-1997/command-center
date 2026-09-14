@@ -13,6 +13,7 @@ import (
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // database/sql driver "sqlite", pure Go
 
+	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -22,6 +23,7 @@ var migrations embed.FS
 // Store is the SQLite database. Only the loop goroutine writes it (inv. 9).
 type Store struct {
 	db *sql.DB
+	q  *ccdb.Queries
 }
 
 // OpenStore opens (creating if needed) the database at path and migrates it up to the latest
@@ -33,7 +35,7 @@ func OpenStore(path string) (*Store, error) {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 
-	store := &Store{db: db}
+	store := &Store{db: db, q: ccdb.New(db)}
 	if err := store.init(context.Background()); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
@@ -82,19 +84,24 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 		}
 	}()
 
+	qtx := s.q.WithTx(tx)
 	for _, t := range tickets {
 		blockedBy, marshalErr := json.Marshal(nonNil(t.BlockedBy))
 		if marshalErr != nil {
 			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, marshalErr)
 		}
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (url) DO UPDATE SET
-				repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
-				source = excluded.source, title = excluded.title, body = excluded.body,
-				status = excluded.status, group_key = excluded.group_key, synced_at = excluded.synced_at`,
-			t.URL, t.Repo, t.Branch, string(blockedBy), t.Source, t.Title, t.Body, t.Status, t.GroupKey, t.SyncedAt)
+		err = qtx.UpsertTicket(ctx, ccdb.UpsertTicketParams{
+			URL:       t.URL,
+			Repo:      t.Repo,
+			Branch:    t.Branch,
+			BlockedBy: string(blockedBy),
+			Source:    notNull(t.Source),
+			Title:     notNull(t.Title),
+			Body:      notNull(t.Body),
+			Status:    notNull(t.Status),
+			GroupKey:  notNull(t.GroupKey),
+			SyncedAt:  notNull(t.SyncedAt),
+		})
 		if err != nil {
 			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
 		}
@@ -105,31 +112,28 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 // Tickets returns every ticket row, ordered by url. The tracker-owned columns read as empty
 // strings rather than NULL for a row from before 0003_ticket_fields.sql added them.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT url, repo, branch, blocked_by,
-		       COALESCE(source, ''), COALESCE(title, ''), COALESCE(body, ''),
-		       COALESCE(status, ''), COALESCE(group_key, ''), COALESCE(synced_at, '')
-		FROM tickets ORDER BY url`)
+	rows, err := s.q.Tickets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select tickets: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	var tickets []Ticket
-	for rows.Next() {
-		var t Ticket
-		var blockedBy string
-		if err := rows.Scan(&t.URL, &t.Repo, &t.Branch, &blockedBy,
-			&t.Source, &t.Title, &t.Body, &t.Status, &t.GroupKey, &t.SyncedAt); err != nil {
-			return nil, fmt.Errorf("scan ticket: %w", err)
+	for _, row := range rows {
+		t := Ticket{
+			URL:      row.URL,
+			Repo:     row.Repo,
+			Branch:   row.Branch,
+			Source:   row.Source,
+			Title:    row.Title,
+			Body:     row.Body,
+			Status:   row.Status,
+			GroupKey: row.GroupKey,
+			SyncedAt: row.SyncedAt,
 		}
-		if err := json.Unmarshal([]byte(blockedBy), &t.BlockedBy); err != nil {
+		if err := json.Unmarshal([]byte(row.BlockedBy), &t.BlockedBy); err != nil {
 			return nil, fmt.Errorf("decode blocked_by for %s: %w", t.URL, err)
 		}
 		tickets = append(tickets, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate tickets: %w", err)
 	}
 	return tickets, nil
 }
@@ -148,6 +152,7 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		}
 	}()
 
+	qtx := s.q.WithTx(tx)
 	syncedAt := now.UTC().Format(time.RFC3339Nano)
 	for _, t := range tickets {
 		blockedBy, marshalErr := json.Marshal(nonNil(t.BlockedBy))
@@ -156,15 +161,17 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		}
 		// ponytail: source is hardcoded to "github" because tracker.Source names no other
 		// tracker today; derive it from the resolved Source once a second one exists.
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO tickets (url, repo, source, group_key, title, body, status, synced_at, branch, blocked_by)
-			VALUES (?, ?, 'github', ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (url) DO UPDATE SET
-				repo = excluded.repo, source = excluded.source, group_key = excluded.group_key,
-				title = excluded.title, body = excluded.body, status = excluded.status,
-				synced_at = excluded.synced_at`,
-			t.URL, t.Repo, group, t.Title, t.Body, t.Status, syncedAt,
-			tracker.BranchSlug(t.Number, t.Title), string(blockedBy))
+		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
+			URL:       t.URL,
+			Repo:      t.Repo,
+			GroupKey:  notNull(group),
+			Title:     notNull(t.Title),
+			Body:      notNull(t.Body),
+			Status:    notNull(t.Status),
+			SyncedAt:  notNull(syncedAt),
+			Branch:    tracker.BranchSlug(t.Number, t.Title),
+			BlockedBy: string(blockedBy),
+		})
 		if err != nil {
 			return fmt.Errorf("import ticket %s: %w", t.URL, err)
 		}
@@ -186,15 +193,18 @@ func (s *Store) DeleteTicket(ctx context.Context, url string) (err error) {
 		}
 	}()
 
-	for _, stmt := range []string{
-		`DELETE FROM launch_members WHERE ticket_id = ?`,
-		`DELETE FROM runs WHERE ticket_id = ?`,
-		`DELETE FROM pushes WHERE ticket_id = ?`,
-		`DELETE FROM tickets WHERE url = ?`,
-	} {
-		if _, err = tx.ExecContext(ctx, stmt, url); err != nil {
-			return fmt.Errorf("delete ticket %s: %w", url, err)
-		}
+	qtx := s.q.WithTx(tx)
+	if err = qtx.DeleteLaunchMembersForTicket(ctx, url); err != nil {
+		return fmt.Errorf("delete ticket %s: %w", url, err)
+	}
+	if err = qtx.DeleteRunsForTicket(ctx, url); err != nil {
+		return fmt.Errorf("delete ticket %s: %w", url, err)
+	}
+	if err = qtx.DeletePushesForTicket(ctx, url); err != nil {
+		return fmt.Errorf("delete ticket %s: %w", url, err)
+	}
+	if err = qtx.DeleteTicket(ctx, url); err != nil {
+		return fmt.Errorf("delete ticket %s: %w", url, err)
 	}
 	return tx.Commit()
 }
@@ -204,6 +214,12 @@ func nonNil(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// notNull wraps s as an always-valid sql.NullString, for a nullable column this package always
+// writes a real value into, never an explicit NULL.
+func notNull(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: true}
 }
 
 const (
@@ -306,13 +322,12 @@ type Event struct {
 }
 
 func (s *Store) AppendEvent(ctx context.Context, e Event) error {
-	var ticketID any
-	if e.TicketURL != "" {
-		ticketID = e.TicketURL
-	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO events (at, ticket_id, kind, detail) VALUES (?, ?, ?, ?)`,
-		e.At.UTC().Format(time.RFC3339Nano), ticketID, e.Kind, e.Detail)
+	err := s.q.AppendEvent(ctx, ccdb.AppendEventParams{
+		At:       e.At.UTC().Format(time.RFC3339Nano),
+		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
+		Kind:     e.Kind,
+		Detail:   notNull(e.Detail),
+	})
 	if err != nil {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
 	}
@@ -321,28 +336,20 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 
 // Events returns every audit row, oldest first.
 func (s *Store) Events(ctx context.Context) ([]Event, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT at, ticket_id, kind, detail FROM events ORDER BY id`)
+	rows, err := s.q.Events(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select events: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	var events []Event
-	for rows.Next() {
+	for _, row := range rows {
 		var e Event
-		var at string
-		var ticketID, detail sql.NullString
-		if err := rows.Scan(&at, &ticketID, &e.Kind, &detail); err != nil {
-			return nil, fmt.Errorf("scan event: %w", err)
+		if e.At, err = time.Parse(time.RFC3339Nano, row.At); err != nil {
+			return nil, fmt.Errorf("decode event time %q: %w", row.At, err)
 		}
-		if e.At, err = time.Parse(time.RFC3339Nano, at); err != nil {
-			return nil, fmt.Errorf("decode event time %q: %w", at, err)
-		}
-		e.TicketURL, e.Detail = ticketID.String, detail.String
+		e.Kind = row.Kind
+		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
 		events = append(events, e)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate events: %w", err)
 	}
 	return events, nil
 }
@@ -352,18 +359,14 @@ func (s *Store) putMeta(ctx context.Context, key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("encode %s: %w", key, err)
 	}
-	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO meta (key, value) VALUES (?, ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, string(encoded))
-	if err != nil {
+	if err := s.q.PutMeta(ctx, ccdb.PutMetaParams{Key: key, Value: string(encoded)}); err != nil {
 		return fmt.Errorf("write %s: %w", key, err)
 	}
 	return nil
 }
 
 func (s *Store) getMeta(ctx context.Context, key string, into any) (bool, error) {
-	var encoded string
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, key).Scan(&encoded)
+	encoded, err := s.q.GetMeta(ctx, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

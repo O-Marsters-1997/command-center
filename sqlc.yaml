@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "internal/cc/migrations"
+    queries: "internal/cc/queries"
+    gen:
+      go:
+        package: "ccdb"
+        out: "internal/cc/ccdb"
+        rename:
+          url: "URL"
+          baseline_sha: "BaselineSHA"
+          base_sha_at_push: "BaseSHAAtPush"

@@ -1,6 +1,6 @@
 # 8. SQL is generated from the schema
 
-**Date:** 2026-09-13 · **Status:** proposed
+**Date:** 2026-09-13 · **Status:** accepted
 
 ## Context
 
