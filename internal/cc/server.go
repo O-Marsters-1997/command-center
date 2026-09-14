@@ -178,7 +178,7 @@ type row struct {
 	Base         string   `json:"base"`
 	// BaseVerdict is the base's own CI verdict label ("review_me"/"needs_you"/"checking"/
 	// "base_moved"), empty for a root row: a red check on a descendant whose base moved may not
-	// be its own fault (plans/command-centre-phase-2.md § Phase 5).
+	// be its own fault (docs/designs/command-centre-design.md § 4a).
 	BaseVerdict string `json:"base_verdict"`
 	// StackDepth and MergeOrder are the row's distance from a root and the order it merges in,
 	// bottom-up — the app never merges a PR, so this is the only place the order is shown
@@ -972,12 +972,12 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 // handleVerb queues one verb intent against one ticket — a handler only ever does this single
 // blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
 // applyKillIntents, push.go's applyRetryPushIntents and verbs.go's re-run/close-pr/
-// remove-worktree appliers). `cancel` is Phase 2 and is not implemented.
+// remove-worktree appliers).
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	// FormValue, not URL.Query: the page's per-row form posts both fields in the body
-	// (plans/command-centre-phase-1.md § Routes). It reads the query string too, which is what
-	// keeps a hand-built `POST /verb?verb=kill&task=...` working unchanged.
+	// FormValue, not URL.Query: the page's per-row form posts both fields in the body, and
+	// reading the form falls back to the query string, which keeps a hand-built
+	// `POST /verb?verb=kill&task=...` working unchanged.
 	verb := r.FormValue("verb")
 	ticketURL := r.FormValue("task")
 	if verb == "" || ticketURL == "" {

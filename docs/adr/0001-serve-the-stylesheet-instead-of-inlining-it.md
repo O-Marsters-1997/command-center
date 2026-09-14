@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-26 · **Status:** accepted
 
-**Supersedes:** the CSS decision in [`plans/operator-surface.md`](../../plans/operator-surface.md)
-§ "CSS, and how much".
+**Supersedes:** the CSS decision in `plans/operator-surface.md` § "CSS, and how much". That plan
+was deleted once its phases shipped; `git log -- plans/operator-surface.md` has it.
 
 ## Context
 
