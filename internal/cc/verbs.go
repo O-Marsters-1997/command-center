@@ -38,7 +38,6 @@ var supportedVerbs = map[string]bool{
 }
 
 const (
-	eventReRunRefused          = "re_run_refused"
 	eventReCheckRequested      = "re_check_requested"
 	eventReCheckRefused        = "re_check_refused"
 	eventClosePRRequested      = "close_pr_requested"
@@ -204,6 +203,9 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
+	byURL := planTicketsByURL(tickets)
+	prs := prsByBranch(obs)
+	stacking := stackingByRepo(l.cfg.Repos)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
@@ -221,8 +223,12 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 			if run, ok := latest[ticket.URL]; ok {
 				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
 			}
+			baseBranch := plan.Unlocked(byURL[ticket.URL], byURL, prs, stacking[ticket.Repo]).BaseBranch
+			if baseBranch == "" {
+				baseBranch = defaultBaseBranch
+			}
 			err := l.reRunOne(
-				ctx, ticket, repoPaths[ticket.Repo], obs, authorisedHashes[ticket.URL], now, oldPromptPath,
+				ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, authorisedHashes[ticket.URL], now, oldPromptPath,
 			)
 			if err != nil {
 				return err
@@ -235,17 +241,20 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// reRunOne spawns a new run in a ticket's existing worktree, baselined off its current tip so
-// disposition counts only the commits this new run itself produces, never a previous run's.
+// reRunOne spawns a new run against ticket, baselined off its current tip so disposition counts
+// only the commits this new run itself produces, never a previous run's. A worktree that's gone
+// is cut fresh off baseBranch instead of refusing.
 func (l *Loop) reRunOne(
-	ctx context.Context, ticket Ticket, repoPath string, obs Observation, promptHash string, now time.Time,
-	oldPromptPath string,
+	ctx context.Context, ticket Ticket, repoPath, baseBranch string, obs Observation, promptHash string,
+	now time.Time, oldPromptPath string,
 ) error {
 	worktreePath, ok := obs.Worktrees[ticket.Branch]
 	if !ok {
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventReRunRefused,
-			Detail: fmt.Sprintf("no worktree for %s", ticket.Branch),
+		if err := DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
+			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
+		}
+		return l.cutAndSpawn(ctx, launchSpec{
+			ticket: ticket, baseBranch: baseBranch, promptHash: promptHash, repoPath: repoPath,
 		})
 	}
 

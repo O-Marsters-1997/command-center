@@ -162,7 +162,84 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	if !strings.Contains(row, "nothing committed") {
 		t.Errorf("row does not name the resolution as unread, want a reason about nothing committed:\n%s", row)
 	}
-	if strings.Contains(row, `name="verb"`) {
-		t.Errorf("row offers a verb, want none: resolve's parked state has nothing to press yet:\n%s", row)
+	if !strings.Contains(row, `value="`+plan.VerbReRun+`"`) {
+		t.Errorf("row does not offer re-run, want an escape once the worktree it names is gone (issue #198):\n%s", row)
+	}
+}
+
+// TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt covers issue #198:
+// ConflictResolved's own escape once its worktree is gone, relaunched as a plain agent run
+// rather than another resolve attempt.
+func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *testing.T) {
+	root, repoPath := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	resolveRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "resolve", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(t.Context(), resolveRunID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 0
+	if err := store.RecordDisposition(t.Context(), resolveRunID, plan.OutcomeFailed, &exitCode, at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbReRun, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{Worktrees: map[string]string{}, PRs: map[string]gh.PR{}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	}
+	if !strings.HasSuffix(fake.spawns[0].WorktreePath, "wt-cc-1") {
+		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.spawns[0].WorktreePath)
+	}
+
+	latest, err := store.LatestRunsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, ok := latest[ticket.URL]
+	if !ok || summary.ID == resolveRunID {
+		t.Fatalf("summary = %+v, want a second run row distinct from the resolve run", summary)
+	}
+	if summary.Kind != "agent" {
+		t.Errorf("kind = %q, want agent: the fresh relaunch is sourced fresh, not another resolve attempt", summary.Kind)
+	}
+
+	pid := fake.nextPid
+	fake.alive[pid] = false
+	fake.canReap[pid] = true
+	fake.reapCode[pid] = 1
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+
+	server := cc.NewServer(store, fixedClock(at.Add(time.Second)), cfg.Repos, "")
+	page := renderPage(t, server)
+	if state := rowState(t, page, ticket.URL); state == "conflict_resolved" {
+		t.Fatalf("state = %q, want the row to have left conflict_resolved once the fresh run disposed", state)
 	}
 }

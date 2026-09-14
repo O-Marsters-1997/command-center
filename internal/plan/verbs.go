@@ -26,7 +26,7 @@ func Verbs(s State) []string {
 		return []string{VerbCancel}
 	case Running:
 		return []string{VerbKill}
-	case Failed, CutFailed:
+	case Failed, CutFailed, ConflictResolved:
 		return []string{VerbReRun}
 	case Checking:
 		return []string{VerbReRun, VerbClosePR}
@@ -46,8 +46,6 @@ func Verbs(s State) []string {
 		return []string{VerbAbort}
 	case ConflictsWithMain:
 		return []string{VerbResolve, VerbRefresh, VerbClosePR}
-	case ConflictResolved:
-		return nil
 	case VerificationFailed:
 		return []string{VerbRetryPush, VerbReRun}
 	case WaitingOnProducerDeploy:
