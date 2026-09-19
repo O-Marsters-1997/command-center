@@ -26,10 +26,15 @@ type viewParams struct {
 	View    string
 	// Log is the selected row's run-log filter (docs/prds/prd-fleet-view.md § The run log).
 	Log string
+	// Repo is the board's repo scope, raw off the query string. render blanks it against the
+	// configured repo names, since that list is not available at parse time (CONTEXT.md § Scope).
+	Repo string
 }
 
 func parseViewParams(q url.Values) viewParams {
-	v := viewParams{Tickets: q["ticket"], View: q.Get("view"), Log: normalizeLogFilter(q.Get("log"))}
+	v := viewParams{
+		Tickets: q["ticket"], View: q.Get("view"), Log: normalizeLogFilter(q.Get("log")), Repo: q.Get("repo"),
+	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
 	}
@@ -39,11 +44,25 @@ func parseViewParams(q url.Values) viewParams {
 	return v
 }
 
-// url.Values.Encode sorts by key, so this always renders log/sel/ticket/view in that order.
+// normalizeRepoScope blanks a ?repo= value unrecognised against the configured repos, following
+// normalizeLogFilter: a query string is user input, and an unknown scope shows the unscoped board
+// rather than an error. configuredRepos is keyed by repo name; the caller passes stackingByRepo
+// since it is already indexed that way, though this reads it purely as a membership set.
+func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
+	if _, ok := configuredRepos[repo]; ok {
+		return repo
+	}
+	return ""
+}
+
+// url.Values.Encode sorts by key, so this always renders log/repo/sel/ticket/view in that order.
 func (v viewParams) query() string {
 	q := url.Values{}
 	if v.Log != "" && v.Log != "all" {
 		q.Set("log", v.Log)
+	}
+	if v.Repo != "" {
+		q.Set("repo", v.Repo)
 	}
 	if v.Sel != "" {
 		q.Set("sel", v.Sel)
@@ -60,6 +79,12 @@ func (v viewParams) query() string {
 func (v viewParams) withLog(mode string) viewParams {
 	next := v
 	next.Log = mode
+	return next
+}
+
+func (v viewParams) withRepo(repo string) viewParams {
+	next := v
+	next.Repo = repo
 	return next
 }
 

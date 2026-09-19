@@ -34,6 +34,7 @@ export interface LogDetail {
 
 export interface Row {
   url: string;
+  repo: string;
   title: string;
   state: string;
   reason: string;

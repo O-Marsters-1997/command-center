@@ -58,6 +58,41 @@ func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
 	}
 }
 
+func TestParseViewParamsReadsRepoRaw(t *testing.T) {
+	t.Parallel()
+
+	q, err := url.ParseQuery("repo=support-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseViewParams(q).Repo; got != "support-app" {
+		t.Errorf("parseViewParams(%q).Repo = %q, want support-app", q, got)
+	}
+}
+
+func TestNormalizeRepoScope(t *testing.T) {
+	t.Parallel()
+
+	stacking := map[string]bool{"support-app": true, "services": false}
+	for _, tc := range []struct {
+		name string
+		repo string
+		want string
+	}{
+		{"absent stays blank", "", ""},
+		{"a configured repo passes through", "support-app", "support-app"},
+		{"an unconfigured repo falls back to blank", "bogus", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := normalizeRepoScope(tc.repo, stacking); got != tc.want {
+				t.Errorf("normalizeRepoScope(%q) = %q, want %q", tc.repo, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestViewParamsWithLogReplacesTheFilterOnly(t *testing.T) {
 	t.Parallel()
 
@@ -92,6 +127,11 @@ func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 			"log=fails&sel=a",
 		},
 		{"the default log filter is never written", viewParams{Log: "all", View: "board"}, ""},
+		{
+			"a repo scope sits between log and sel",
+			viewParams{Sel: "a", Log: "fails", Repo: "support-app", View: "board"},
+			"log=fails&repo=support-app&sel=a",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -120,6 +160,19 @@ func TestViewParamsBoardPathAndPagePathOmitTheQuestionMarkWhenEmpty(t *testing.T
 	}
 	if got := selected.pagePath(); got != "/?sel=a" {
 		t.Errorf("pagePath() = %q, want /?sel=a", got)
+	}
+}
+
+func TestViewParamsWithRepoReplacesTheScopeOnly(t *testing.T) {
+	t.Parallel()
+
+	base := viewParams{Sel: "a", Repo: "support-app", View: "board"}
+	got := base.withRepo("services")
+	if got.Repo != "services" || got.Sel != "a" {
+		t.Errorf("withRepo(services) = %+v, want Repo=services and Sel unchanged", got)
+	}
+	if base.Repo != "support-app" {
+		t.Errorf("withRepo mutated the receiver: Repo = %q", base.Repo)
 	}
 }
 
