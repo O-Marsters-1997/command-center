@@ -33,6 +33,8 @@ func Verbs(s State) []string {
 		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
 	case NeedsYou:
 		return []string{VerbReRun, VerbFollowUp, VerbKill, VerbClosePR}
+	case CIFailed:
+		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
 	case PushFailed:
 		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case ReviewMe:

@@ -56,6 +56,7 @@ func TestStateDecisions(t *testing.T) {
 			want:       []string{plan.VerbRefresh, plan.VerbReRun, plan.VerbFollowUp},
 			unattended: true, tone: "live",
 		},
+		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbClosePR}, tone: "stop"},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
 			state: plan.ConflictsWithMain,

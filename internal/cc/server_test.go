@@ -245,12 +245,12 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
-	if state := rowState(t, page, "sandbox://PARENT"); state != "needs_you" {
-		t.Fatalf("parent's own state = %q, want needs_you (its CI check failed)", state)
+	if state := rowState(t, page, "sandbox://PARENT"); state != "ci_failed" {
+		t.Fatalf("parent's own state = %q, want ci_failed (its CI check failed)", state)
 	}
 
-	if got := rowCellAt(t, page, "sandbox://CHILD", 1); !strings.Contains(got, `title="base verdict: needs_you"`) {
-		t.Errorf("child's rendered base verdict flag = %q, want needs_you (the parent's own verdict)", got)
+	if got := rowCellAt(t, page, "sandbox://CHILD", 1); !strings.Contains(got, `title="base verdict: ci_failed"`) {
+		t.Errorf("child's rendered base verdict flag = %q, want ci_failed (the parent's own verdict)", got)
 	}
 }
 
@@ -467,10 +467,10 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 
 	body := fetchPreview(t, srv, "ticket=sandbox://CHILD")
 
-	// now because the parent's PR is open, origin/parent because stacking is on, and needs_you
+	// now because the parent's PR is open, origin/parent because stacking is on, and ci_failed
 	// because that parent's own CI is red.
 	assertCells(t, previewRowFor(t, body, "sandbox://CHILD"),
-		"<td>now</td>", "<td>origin/parent</td>", "<td>needs_you</td>")
+		"<td>now</td>", "<td>origin/parent</td>", "<td>ci_failed</td>")
 }
 
 func TestPreviewRefusesATicketAlreadyInAnActiveLaunch(t *testing.T) {

@@ -135,6 +135,158 @@ func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
 	}
 }
 
+// threeFeatureStore seeds a same-feature fan-out -- ROOT and CHILD both in "board-scope", CHILD
+// blocked by ROOT -- plus LONE, an unrelated ticket in "sqlc-migration", following
+// threeRepoStore (issue #220).
+func threeFeatureStore(t *testing.T) *cc.Store {
+	t.Helper()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://ROOT", Feature: "board-scope", Branch: "root"},
+		{URL: "sandbox://CHILD", Feature: "board-scope", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
+		{URL: "sandbox://LONE", Feature: "sqlc-migration", Branch: "lone"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+func threeFeatureServer(t *testing.T) *cc.Server {
+	t.Helper()
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	return cc.NewServer(threeFeatureStore(t), fixedClock(at), nil, "")
+}
+
+// TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne covers issue #220 AC1: a scope keeps a
+// group with a member in scope and drops a group with none.
+func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
+	t.Parallel()
+
+	server := threeFeatureServer(t)
+
+	underFeature := renderPath(t, server, "/?feature=board-scope")
+	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
+		if !strings.Contains(underFeature, want) {
+			t.Errorf("?feature=board-scope dropped %s from its own group:\n%s", want, underFeature)
+		}
+	}
+	if strings.Contains(underFeature, ticketRef("sandbox://LONE")) {
+		t.Errorf("?feature=board-scope rendered the unrelated LONE ticket:\n%s", underFeature)
+	}
+
+	underOther := renderPath(t, server, "/?feature=sqlc-migration")
+	if !strings.Contains(underOther, ticketRef("sandbox://LONE")) {
+		t.Errorf("?feature=sqlc-migration dropped its own LONE ticket:\n%s", underOther)
+	}
+	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
+		if strings.Contains(underOther, want) {
+			t.Errorf("?feature=sqlc-migration rendered %s, from a group with no member in it:\n%s", want, underOther)
+		}
+	}
+}
+
+// TestFeatureScopeUnknownFallsBackToUnscoped covers issue #220 AC1's other half.
+func TestFeatureScopeUnknownFallsBackToUnscoped(t *testing.T) {
+	t.Parallel()
+
+	page := renderPath(t, threeFeatureServer(t), "/?feature=bogus")
+	for _, want := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
+		if !strings.Contains(page, ticketRef(want)) {
+			t.Errorf("?feature=bogus dropped %s, want the unscoped board:\n%s", want, page)
+		}
+	}
+}
+
+// TestFeatureAndRepoScopeComposeNeitherOverridingTheOther covers issue #220 AC3.
+func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	ctx := t.Context()
+	tickets := []cc.Ticket{
+		{URL: "sandbox://MATCH", Repo: "repo", Feature: "board-scope", Branch: "match"},
+		{URL: "sandbox://WRONG-REPO", Repo: "other", Feature: "board-scope", Branch: "wrong-repo"},
+		{URL: "sandbox://WRONG-FEATURE", Repo: "repo", Feature: "sqlc-migration", Branch: "wrong-feature"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	repos := []cc.Repo{{Name: "repo"}, {Name: "other"}}
+	server := cc.NewServer(store, fixedClock(at), repos, "")
+
+	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
+	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {
+		t.Errorf("?feature=board-scope&repo=repo dropped the ticket matching both:\n%s", page)
+	}
+	for _, want := range []string{ticketRef("sandbox://WRONG-REPO"), ticketRef("sandbox://WRONG-FEATURE")} {
+		if strings.Contains(page, want) {
+			t.Errorf("?feature=board-scope&repo=repo rendered %s, matching only one axis:\n%s", want, page)
+		}
+	}
+}
+
+// TestClearingOneScopeAxisLeavesTheOtherApplied covers issue #220 AC4.
+func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
+	t.Parallel()
+
+	server := threeRepoServer(t)
+
+	page := renderPath(t, server, "/?repo=repo&feature=")
+	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
+		if !strings.Contains(page, want) {
+			t.Errorf("?repo=repo&feature= dropped %s though the repo scope should still apply:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, ticketRef("sandbox://LONE")) {
+		t.Errorf("?repo=repo&feature= rendered the out-of-repo LONE ticket:\n%s", page)
+	}
+}
+
+// TestMastheadFeatureLinksNameTheFleetsOwnFeaturesAndTheCurrentScope covers issue #220's masthead
+// nav row: "all" plus one pill per feature in the fleet, not every feature the tracker knows.
+func TestMastheadFeatureLinksNameTheFleetsOwnFeaturesAndTheCurrentScope(t *testing.T) {
+	t.Parallel()
+
+	server := threeFeatureServer(t)
+
+	unscoped := renderPath(t, server, "/")
+	for _, want := range []string{`href="/"`, `href="/?feature=board-scope"`, `href="/?feature=sqlc-migration"`} {
+		if !strings.Contains(unscoped, want) {
+			t.Errorf("masthead missing feature link %s:\n%s", want, unscoped)
+		}
+	}
+
+	scoped := renderPath(t, server, "/?feature=sqlc-migration")
+	if !strings.Contains(scoped, `href="/?feature=sqlc-migration" aria-current="page"`) {
+		t.Errorf("?feature=sqlc-migration should mark its own pill current:\n%s", scoped)
+	}
+	if strings.Contains(scoped, `href="/" aria-current="page"`) {
+		t.Errorf("?feature=sqlc-migration should not also mark \"all\" current:\n%s", scoped)
+	}
+}
+
+// TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature protects the many fixtures across this
+// package's other tests that never set Feature on a ticket.
+func TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
+	t.Parallel()
+
+	page := renderPage(t, seededServer(t))
+	if strings.Contains(page, "feature=") {
+		t.Errorf("masthead rendered a feature link though no ticket carries one:\n%s", page)
+	}
+}
+
 type scopeJSONGroup struct {
 	Root *struct {
 		URL string `json:"url"`

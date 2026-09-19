@@ -12,7 +12,7 @@ FROM tickets WHERE withdrawn_at IS NULL ORDER BY url;
 
 -- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
-VALUES ($1, $2, 'github', $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, source = excluded.source, feature = excluded.feature,
     title = excluded.title, body = excluded.body, status = excluded.status,

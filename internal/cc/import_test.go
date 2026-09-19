@@ -30,14 +30,14 @@ func (f fakeTrackerSource) Tickets(_ context.Context, feature string) ([]tracker
 	return f.tickets[feature], nil
 }
 
-// resolveByURL builds a TrackerSource that dispatches on the pseudo-url trackerSourceFor
-// constructs from a repo's own remote (https://<host>/<owner>/<repo>), so a multi-repo test can
-// give each repo its own fixed answers.
-func resolveByURL(byURL map[string]tracker.Source) cc.TrackerSource {
-	return func(ticketURL string) (tracker.Source, error) {
-		src, ok := byURL[ticketURL]
+// resolveByRemote builds a TrackerSource that dispatches on the normalised remote
+// trackerSourceFor passes it (host/owner/repo, e.g. github.com/acme/alpha), so a multi-repo test
+// can give each repo its own fixed answers.
+func resolveByRemote(byRemote map[string]tracker.Source) cc.TrackerSource {
+	return func(_ tracker.Kind, remote string) (tracker.Source, error) {
+		src, ok := byRemote[remote]
 		if !ok {
-			return nil, fmt.Errorf("resolveByURL: no source for %q", ticketURL)
+			return nil, fmt.Errorf("resolveByRemote: no source for %q", remote)
 		}
 		return src, nil
 	}
@@ -67,9 +67,9 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 			"project:y": {betaYTicket},
 		},
 	}
-	resolve := resolveByURL(map[string]tracker.Source{
-		"https://github.com/acme/alpha": alpha,
-		"https://github.com/acme/beta":  beta,
+	resolve := resolveByRemote(map[string]tracker.Source{
+		"github.com/acme/alpha": alpha,
+		"github.com/acme/beta":  beta,
 	})
 
 	got, err := cc.ImportFeatures(t.Context(), repos, resolve)
@@ -90,33 +90,29 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 	}
 }
 
-func TestRepoForTicketURL(t *testing.T) {
+// TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind pins the leak issue #223 closes:
+// alpha and beta share a github.com remote, so a resolve keyed on the host alone would send them
+// to the same tracker. Only their own Tracker config may decide that.
+func TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind(t *testing.T) {
 	t.Parallel()
 
 	repos := []cc.Repo{
-		{Name: "command-center", Remote: "git@github.com:O-Marsters-1997/command-center.git"},
+		{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "github"},
+		{Name: "beta", Remote: "git@github.com:acme/beta.git", Tracker: "linear"},
 	}
 
-	tests := []struct {
-		name string
-		url  string
-		want string
-		ok   bool
-	}{
-		{"https form", "https://github.com/O-Marsters-1997/command-center/issues/105", "command-center", true},
-		{"different case", "https://GitHub.com/O-Marsters-1997/Command-Center/issues/1", "command-center", true},
-		{"unrelated repo", "https://github.com/other/repo/issues/1", "", false},
-		{"unparseable", "not a url \x7f", "", false},
+	var gotKinds []tracker.Kind
+	resolve := func(kind tracker.Kind, _ string) (tracker.Source, error) {
+		gotKinds = append(gotKinds, kind)
+		return fakeTrackerSource{}, nil
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 
-			got, ok := cc.RepoForTicketURL(tt.url, repos)
-			if ok != tt.ok || (ok && got != tt.want) {
-				t.Errorf("repoForTicketURL(%q) = %q, %v; want %q, %v", tt.url, got, ok, tt.want, tt.ok)
-			}
-		})
+	if _, err := cc.ImportFeatures(t.Context(), repos, resolve); err != nil {
+		t.Fatalf("ImportFeatures: %v", err)
+	}
+	want := []tracker.Kind{"github", "linear"}
+	if !slices.Equal(gotKinds, want) {
+		t.Errorf("kinds passed to resolve = %v, want %v", gotKinds, want)
 	}
 }
 
@@ -133,7 +129,8 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 			URL: url, Number: 1, Title: "Add x", Body: "body one", Status: "ready",
 			BlockedBy: []string{"https://github.com/acme/alpha/issues/2"},
 		},
-		Repo: "alpha",
+		Repo:   "alpha",
+		Source: "github",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
 		t.Fatalf("ImportTickets: %v", err)
@@ -170,7 +167,8 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 			URL: url, Number: 1, Title: "Add x, renamed", Body: "body two", Status: "in-progress",
 			BlockedBy: []string{"https://github.com/acme/alpha/issues/3"},
 		},
-		Repo: "alpha",
+		Repo:   "alpha",
+		Source: "github",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", second, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets again: %v", err)
@@ -284,7 +282,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, cc.ProcessRunner{})
-	loop.SetTrackerSource(resolveByURL(map[string]tracker.Source{"https://github.com/acme/alpha": src}))
+	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -306,6 +304,45 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 }
 
+// TestLoopSetsTicketSourceFromTheReposConfiguredTracker pins issue #223's third leak: the loop
+// must carry the repo's own configured tracker into the stored ticket, not a literal "github".
+func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
+		t.Fatal(err)
+	}
+
+	src := fakeTrackerSource{
+		features: []tracker.Feature{"project:x"},
+		tickets: map[string][]tracker.Ticket{
+			"project:x": {{
+				URL: "https://linear.app/acme/issue/eng-1", Number: 1, Title: "Add x", Status: "ready",
+			}},
+		},
+	}
+	cfg := cc.Config{
+		Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
+	}
+
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].Source != "linear" {
+		t.Fatalf("tickets = %+v, want source linear from the repo's own configured tracker", tickets)
+	}
+}
+
 func TestHandleImportRendersEveryFeatureAndItsTickets(t *testing.T) {
 	t.Parallel()
 
@@ -318,7 +355,7 @@ func TestHandleImportRendersEveryFeatureAndItsTickets(t *testing.T) {
 	}
 
 	server := cc.NewServer(openStore(t), time.Now, repos, "")
-	server.SetTrackerSource(resolveByURL(map[string]tracker.Source{"https://github.com/acme/alpha": src}))
+	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/import", nil))

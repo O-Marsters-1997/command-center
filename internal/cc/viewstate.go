@@ -29,11 +29,16 @@ type viewParams struct {
 	// Repo is the board's repo scope, raw off the query string. render blanks it against the
 	// configured repo names, since that list is not available at parse time (CONTEXT.md § Scope).
 	Repo string
+	// Feature is the board's feature scope, raw off the query string. render blanks it against the
+	// distinct features among the loaded tickets, since that set is not available at parse time
+	// (CONTEXT.md § Feature).
+	Feature string
 }
 
 func parseViewParams(q url.Values) viewParams {
 	v := viewParams{
-		Tickets: q["ticket"], View: q.Get("view"), Log: normalizeLogFilter(q.Get("log")), Repo: q.Get("repo"),
+		Tickets: q["ticket"], View: q.Get("view"), Log: normalizeLogFilter(q.Get("log")),
+		Repo: q.Get("repo"), Feature: q.Get("feature"),
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
@@ -55,9 +60,23 @@ func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
 	return ""
 }
 
-// url.Values.Encode sorts by key, so this always renders log/repo/sel/ticket/view in that order.
+// normalizeFeatureScope blanks a ?feature= value unrecognised against the features currently in
+// the fleet, following normalizeLogFilter -- features are the tracker's own and unconfigured, so
+// the membership set is the distinct Feature values render already read off store.Tickets.
+func normalizeFeatureScope(feature string, fleetFeatures []string) string {
+	if slices.Contains(fleetFeatures, feature) {
+		return feature
+	}
+	return ""
+}
+
+// url.Values.Encode sorts by key, so this always renders feature/log/repo/sel/ticket/view in that
+// order.
 func (v viewParams) query() string {
 	q := url.Values{}
+	if v.Feature != "" {
+		q.Set("feature", v.Feature)
+	}
 	if v.Log != "" && v.Log != "all" {
 		q.Set("log", v.Log)
 	}
@@ -85,6 +104,12 @@ func (v viewParams) withLog(mode string) viewParams {
 func (v viewParams) withRepo(repo string) viewParams {
 	next := v
 	next.Repo = repo
+	return next
+}
+
+func (v viewParams) withFeature(feature string) viewParams {
+	next := v
+	next.Feature = feature
 	return next
 }
 
