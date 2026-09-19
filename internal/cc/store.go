@@ -95,7 +95,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 			Title:     t.Title,
 			Body:      t.Body,
 			Status:    t.Status,
-			GroupKey:  t.GroupKey,
+			Feature:   t.Feature,
 			SyncedAt:  t.SyncedAt,
 		})
 		if err != nil {
@@ -122,7 +122,7 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			Title:    row.Title,
 			Body:     row.Body,
 			Status:   row.Status,
-			GroupKey: row.GroupKey,
+			Feature:  row.Feature,
 			SyncedAt: row.SyncedAt,
 		}
 		_ = json.Unmarshal(row.BlockedBy, &t.BlockedBy) // jsonb rejects malformed JSON at write, so this can't fail
@@ -131,10 +131,11 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	return tickets, nil
 }
 
-// ImportTickets upserts one group's tracker tickets, keyed on url, withdrawing (and later
-// restoring) any row the tracker stops (or resumes) returning for that group. Every tracker-owned
-// column refreshes each call; branch and blocked_by are seeded once and never touched again.
-func (s *Store) ImportTickets(ctx context.Context, group string, tickets []ImportedTicket, now time.Time) (err error) {
+// ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing (and later
+// restoring) any row the tracker stops (or resumes) returning for that feature. Every
+// tracker-owned column refreshes each call; branch and blocked_by are seeded once and never
+// touched again.
+func (s *Store) ImportTickets(ctx context.Context, feature string, tickets []ImportedTicket, now time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
@@ -156,7 +157,7 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
-			GroupKey:  group,
+			Feature:   feature,
 			Title:     t.Title,
 			Body:      t.Body,
 			Status:    t.Status,
@@ -169,9 +170,9 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 		}
 	}
 
-	previous, err := qtx.TicketURLsInGroup(ctx, group)
+	previous, err := qtx.TicketURLsInFeature(ctx, feature)
 	if err != nil {
-		return fmt.Errorf("list existing tickets for %s: %w", group, err)
+		return fmt.Errorf("list existing tickets for %s: %w", feature, err)
 	}
 	for _, url := range previous {
 		if returned[url] {

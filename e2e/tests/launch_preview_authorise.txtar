@@ -9,7 +9,7 @@ cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
-exec cc request -form 'group=project:two-tasks' POST /import
+exec cc request -form 'feature=project:two-tasks' POST /import
 exec cc tick --count 1
 exec cc request GET '/preview?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 stdout '<td>now</td>'

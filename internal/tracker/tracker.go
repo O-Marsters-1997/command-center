@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// Group is a project:-prefixed label naming one fleet.
-type Group string
+// Feature is a project:-prefixed label naming one fleet.
+type Feature string
 
 // Ticket is one in-flight issue as the tracker reports it. It is deliberately not cc.Ticket:
 // this package never learns the app's columns.
@@ -25,10 +25,10 @@ type Ticket struct {
 
 // Source reads one repo's tracker.
 type Source interface {
-	// Groups lists the repo's project:-prefixed labels.
-	Groups(ctx context.Context) ([]Group, error)
-	// Tickets lists group's open issues carrying status:ready or beyond.
-	Tickets(ctx context.Context, group string) ([]Ticket, error)
+	// Features lists the repo's project:-prefixed labels.
+	Features(ctx context.Context) ([]Feature, error)
+	// Tickets lists feature's open issues carrying status:ready or beyond.
+	Tickets(ctx context.Context, feature string) ([]Ticket, error)
 }
 
 // For dispatches on ticketURL's host and returns the Source that reads it.

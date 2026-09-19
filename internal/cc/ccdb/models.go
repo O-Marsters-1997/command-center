@@ -76,7 +76,7 @@ type Ticket struct {
 	Title       string
 	Body        string
 	Status      string
-	GroupKey    string
+	Feature     string
 	SyncedAt    string
 	WithdrawnAt sql.NullTime
 }

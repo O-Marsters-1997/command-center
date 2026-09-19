@@ -138,7 +138,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	mux.HandleFunc("POST /ticket", requireBrowserOrigin(s.handleTicket))
-	mux.HandleFunc("POST /import", requireBrowserOrigin(s.handleImportGroup))
+	mux.HandleFunc("POST /import", requireBrowserOrigin(s.handleImportFeature))
 	s.mux = mux
 	return s
 }
@@ -1102,31 +1102,31 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleImport renders every configured repo's tracker groups and the tickets each would
+// handleImport renders every configured repo's tracker features and the tickets each would
 // currently bring in, read fresh from the tracker on every request (§5, inv. 14): the page never
 // shows a stale preview of what an import would do.
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
-	groups, err := ImportGroups(r.Context(), s.repos, s.trackerFor)
+	features, err := ImportFeatures(r.Context(), s.repos, s.trackerFor)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := importPage.Execute(w, groups); err != nil {
+	if err := importPage.Execute(w, features); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-// handleImportGroup queues one import intent for the named group and redirects -- the next
+// handleImportFeature queues one import intent for the named feature and redirects -- the next
 // tick's applyImportIntents (loop.go) performs the sync, so the loop stays the tickets table's
 // only writer (inv. 9).
-func (s *Server) handleImportGroup(w http.ResponseWriter, r *http.Request) {
-	group := r.FormValue("group")
-	if group == "" {
-		http.Error(w, "group is required", http.StatusBadRequest)
+func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
+	feature := r.FormValue("feature")
+	if feature == "" {
+		http.Error(w, "feature is required", http.StatusBadRequest)
 		return
 	}
-	if err := s.store.QueueVerbIntent(r.Context(), group, importVerb, s.now()); err != nil {
+	if err := s.store.QueueVerbIntent(r.Context(), feature, importVerb, s.now()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

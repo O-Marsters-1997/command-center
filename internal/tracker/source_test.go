@@ -29,18 +29,18 @@ func fakeRun(t *testing.T) func(ctx context.Context, args ...string) ([]byte, er
 	}
 }
 
-func TestGithubSourceGroups(t *testing.T) {
+func TestGithubSourceFeatures(t *testing.T) {
 	t.Parallel()
 
 	src := &githubSource{owner: "O-Marsters-1997", repo: "command-center", run: fakeRun(t)}
-	got, err := src.Groups(context.Background())
+	got, err := src.Features(context.Background())
 	if err != nil {
-		t.Fatalf("Groups: %v", err)
+		t.Fatalf("Features: %v", err)
 	}
 
-	want := []Group{"project:repo-and-ticket-model", "project:fleet-view"}
+	want := []Feature{"project:repo-and-ticket-model", "project:fleet-view"}
 	if !slices.Equal(got, want) {
-		t.Errorf("Groups() = %v, want %v", got, want)
+		t.Errorf("Features() = %v, want %v", got, want)
 	}
 }
 

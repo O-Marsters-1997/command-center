@@ -12,7 +12,7 @@ import (
 
 // importVerb is the intent verb POST /import queues and the loop's applyImportIntents consumes.
 // It is not in supportedVerbs (verbs.go): that map is for verbs against an existing ticket, and
-// an import intent's own "ticket" id is a group label, not a url.
+// an import intent's own "ticket" id is a feature label, not a url.
 const importVerb = "import"
 
 // TrackerSource resolves the tracker.Source that reads ticketURL's issue tracker. tracker.For in
@@ -26,17 +26,17 @@ type ImportedTicket struct {
 	Repo string
 }
 
-// ImportGroup is one project: label available to import, plus the tickets it would currently
+// ImportFeature is one project: label available to import, plus the tickets it would currently
 // bring in.
-type ImportGroup struct {
-	Group   string
+type ImportFeature struct {
+	Feature string
 	Tickets []tracker.Ticket
 }
 
-// ImportGroups reads every configured repo's tracker groups and, for each, the tickets it would
-// bring in right now -- GET /import's whole view, gathered fresh on every render (inv. 14). A
-// repo with no remote has no tracker to dispatch to and is silently skipped.
-func ImportGroups(ctx context.Context, repos []Repo, resolve TrackerSource) ([]ImportGroup, error) {
+// ImportFeatures reads every configured repo's tracker features and, for each, the tickets it
+// would bring in right now -- GET /import's whole view, gathered fresh on every render (inv. 14).
+// A repo with no remote has no tracker to dispatch to and is silently skipped.
+func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([]ImportFeature, error) {
 	var names []string
 	seen := map[string]bool{}
 	var sources []tracker.Source
@@ -50,20 +50,20 @@ func ImportGroups(ctx context.Context, repos []Repo, resolve TrackerSource) ([]I
 		}
 		sources = append(sources, src)
 
-		groups, err := src.Groups(ctx)
+		features, err := src.Features(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("list groups for %s: %w", r.Name, err)
+			return nil, fmt.Errorf("list features for %s: %w", r.Name, err)
 		}
-		for _, g := range groups {
-			if !seen[string(g)] {
-				seen[string(g)] = true
-				names = append(names, string(g))
+		for _, f := range features {
+			if !seen[string(f)] {
+				seen[string(f)] = true
+				names = append(names, string(f))
 			}
 		}
 	}
 	sort.Strings(names)
 
-	result := make([]ImportGroup, 0, len(names))
+	result := make([]ImportFeature, 0, len(names))
 	for _, name := range names {
 		var tickets []tracker.Ticket
 		for _, src := range sources {
@@ -73,14 +73,14 @@ func ImportGroups(ctx context.Context, repos []Repo, resolve TrackerSource) ([]I
 			}
 			tickets = append(tickets, ts...)
 		}
-		result = append(result, ImportGroup{Group: name, Tickets: tickets})
+		result = append(result, ImportFeature{Feature: name, Tickets: tickets})
 	}
 	return result, nil
 }
 
 // trackerSourceFor builds the tracker.Source a remote-carrying repo reads from, treating its own
 // remote as the url tracker.For dispatches on. A path-only repo has no remote to dispatch with,
-// so it answers ok=false rather than an error: it simply has no groups to offer.
+// so it answers ok=false rather than an error: it simply has no features to offer.
 func trackerSourceFor(r Repo, resolve TrackerSource) (tracker.Source, bool, error) {
 	if r.Remote == "" {
 		return nil, false, nil
