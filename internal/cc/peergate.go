@@ -34,7 +34,7 @@ func conflictingPeerHold(
 			if _, peerHeld := held[peer.URL]; peerHeld {
 				continue
 			}
-			if obs.ConflictsWithPeer[t.Branch][peer.Branch] {
+			if obs.ConflictsWithPeer[branchKey(t.Repo, t.Branch)][branchKey(peer.Repo, peer.Branch)] {
 				held[t.URL] = peer.Branch
 				break
 			}

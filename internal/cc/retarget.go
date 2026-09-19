@@ -32,7 +32,8 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		if !pushed || row.BaseBranch == "" || row.BaseBranch == defaultBaseBranch {
 			continue
 		}
-		if obs.PRs[t.Branch].State != gh.Open || obs.PRs[row.BaseBranch].State != gh.Merged {
+		if obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open ||
+			obs.PRs[branchKey(t.Repo, row.BaseBranch)].State != gh.Merged {
 			continue
 		}
 		if err := l.retargetOne(ctx, t, row, rc, now); err != nil {

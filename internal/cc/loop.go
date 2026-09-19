@@ -348,10 +348,10 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, ob
 func (l *Loop) commitsSinceBaseline(
 	ctx context.Context, ticket Ticket, obs Observation, baselineSHA string,
 ) (int, error) {
-	if worktreePath := obs.Worktrees[ticket.Branch]; worktreePath != "" {
+	if worktreePath := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
 		return CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
 	}
-	tip, ok := obs.BranchTips[ticket.Branch]
+	tip, ok := obs.BranchTips[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return 0, nil
 	}
@@ -377,7 +377,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 
 	stacking := stackingByRepo(l.cfg.Repos)
 	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(obs)
+	prs := prsByBranch(tickets, obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	candidates := make([]plan.LaunchCandidate, 0, len(tickets))

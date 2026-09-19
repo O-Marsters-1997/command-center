@@ -27,9 +27,9 @@ func mergeParentIntoMain(t *testing.T, repoPath string) {
 
 func mergedObservation(f stackedFixture, childBaseRef string) cc.Observation {
 	obs := baseObservation(f, "")
-	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged}
-	obs.PRs["child"] = gh.PR{Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: gh.Open}
-	delete(obs.BranchTips, "parent")
+	obs.PRs[cc.BranchKey("repo", "parent")] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged}
+	obs.PRs[cc.BranchKey("repo", "child")] = gh.PR{Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: gh.Open}
+	delete(obs.BranchTips, cc.BranchKey("repo", "parent"))
 	return obs
 }
 
@@ -240,8 +240,8 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	prs := map[string]gh.PR{
-		"parent": {Number: 1, State: gh.Merged, BaseRef: "main"},
-		"child": {
+		cc.BranchKey("repo", "parent"): {Number: 1, State: gh.Merged, BaseRef: "main"},
+		cc.BranchKey("repo", "child"): {
 			Number: 2, State: gh.Open, HeadOid: childTip, BaseRef: "main",
 			Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
@@ -265,8 +265,8 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			}
 		}
 		obs := cc.Observation{
-			Worktrees:  map[string]string{"child": "/repos/child"},
-			BranchTips: map[string]string{"repo//main": observedMainTip},
+			Worktrees:  map[string]string{cc.BranchKey("repo", "child"): "/repos/child"},
+			BranchTips: map[string]string{cc.MainTipKey("repo"): observedMainTip},
 			PRs:        prs,
 		}
 		if err := store.SaveObservation(ctx, obs); err != nil {
@@ -339,7 +339,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.BranchTips["repo//main"] = mainSHA
+	obs.BranchTips[cc.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -414,8 +414,10 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
-	obs.BranchTips["repo//main"] = mainSHA
+	obs.PRs[cc.BranchKey("repo", "parent")] = gh.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0,
+	}
+	obs.BranchTips[cc.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -568,8 +570,10 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
-	obs.BranchTips["repo//main"] = mainSHA
+	obs.PRs[cc.BranchKey("repo", "parent")] = gh.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0,
+	}
+	obs.BranchTips[cc.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -643,9 +647,11 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	}
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs["parent"] = gh.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0}
-	obs.BranchTips["repo//main"] = mainSHA
-	obs.MidMerge["child"] = true
+	obs.PRs[cc.BranchKey("repo", "parent")] = gh.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: gh.Merged, HeadOid: f.parentTip0,
+	}
+	obs.BranchTips[cc.MainTipKey("repo")] = mainSHA
+	obs.MidMerge[cc.BranchKey("repo", "child")] = true
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -664,7 +670,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
 	// it was: still built on the parent's own commit, still needing main.
 	runGit(t, "-C", f.childWorktree, "rebase", "--abort")
-	obs.MidMerge["child"] = false
+	obs.MidMerge[cc.BranchKey("repo", "child")] = false
 
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)

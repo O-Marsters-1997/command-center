@@ -91,7 +91,7 @@ func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs Observation, now
 			Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
 	}
 
-	worktreePath, ok := obs.Worktrees[ticket.Branch]
+	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return fail(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
@@ -102,7 +102,7 @@ func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs Observation, now
 		return fail(err.Error())
 	}
 
-	delete(obs.MidMerge, ticket.Branch)
+	delete(obs.MidMerge, branchKey(ticket.Repo, ticket.Branch))
 	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
 }
 
@@ -144,7 +144,7 @@ func (l *Loop) resolveOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: detail})
 	}
 
-	worktreePath, ok := obs.Worktrees[ticket.Branch]
+	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
@@ -204,7 +204,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	}
 	byTicket := ticketsByURL(tickets)
 	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(obs)
+	prs := prsByBranch(tickets, obs)
 	stacking := stackingByRepo(l.cfg.Repos)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
@@ -248,7 +248,7 @@ func (l *Loop) reRunOne(
 	ctx context.Context, ticket Ticket, repoPath, baseBranch string, obs Observation, promptHash string,
 	now time.Time, oldPromptPath string,
 ) error {
-	worktreePath, ok := obs.Worktrees[ticket.Branch]
+	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		if err := DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
@@ -312,7 +312,7 @@ func (l *Loop) reCheckOne(
 		return refuse("no compat check configured for this repo")
 	}
 
-	detailsURL := obs.PRs[ticket.Branch].Checks[compatCheck].DetailsURL
+	detailsURL := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].Checks[compatCheck].DetailsURL
 	runID, err := runIDFromDetailsURL(detailsURL)
 	if err != nil {
 		return refuse(err.Error())
@@ -409,7 +409,7 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 	}
 	rc := removeWorktreeContext{
 		byURL:      planTicketsByURL(tickets),
-		prs:        prsByBranch(obs),
+		prs:        prsByBranch(tickets, obs),
 		stacking:   stackingByRepo(l.cfg.Repos),
 		repoPaths:  repoPathsByName(l.cfg.Repos),
 		lastPushed: lastPushed,
@@ -463,7 +463,7 @@ func (l *Loop) removeWorktreeOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
 	}
 
-	merged := rc.obs.PRs[ticket.Branch].State == gh.Merged
+	merged := rc.obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State == gh.Merged
 	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
 	baseGone := hasRun && unlock.BlockerClosed
 	if !merged && !baseGone {
@@ -471,7 +471,7 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	repoPath := rc.repoPaths[ticket.Repo]
-	worktreePath, worktreePresent := rc.obs.Worktrees[ticket.Branch]
+	worktreePath, worktreePresent := rc.obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 
 	mode := tp.RemoveMerged
 	if worktreePresent {

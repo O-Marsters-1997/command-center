@@ -22,7 +22,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(obs)
+	prs := prsByBranch(tickets, obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	vd, err := verdictDepsFor(
@@ -33,7 +33,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 
 	now := l.now()
 	for _, t := range tickets {
-		pr := obs.PRs[t.Branch]
+		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 		if pr.State != gh.Open || !pr.IsDraft {
 			continue
 		}

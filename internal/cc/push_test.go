@@ -140,7 +140,9 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -198,7 +200,9 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -257,8 +261,8 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {Number: 7, HeadRef: "cc-1", State: gh.Open}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: gh.Open}},
 	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
@@ -300,7 +304,9 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)

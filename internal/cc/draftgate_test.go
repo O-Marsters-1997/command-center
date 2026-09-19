@@ -91,10 +91,10 @@ func ciCheck(conclusion string) map[string]gh.CheckState {
 func draftConsumerPR(blockerState gh.PRState, consumerChecks map[string]gh.CheckState, tip string) cc.Observation {
 	return cc.Observation{
 		PRs: map[string]gh.PR{
-			"cc-1":   {Number: 1, State: gh.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks},
-			"pla-40": {State: blockerState},
+			cc.BranchKey("repo", "cc-1"):       {Number: 1, State: gh.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks},
+			cc.BranchKey("services", "pla-40"): {State: blockerState},
 		},
-		BranchTips: map[string]string{"repo//main": "main-tip"},
+		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
 	}
 }
 
@@ -186,7 +186,9 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// GitHub now reports the PR as ready, as a real observe would from here on.
-	obs.PRs["cc-1"] = gh.PR{Number: 1, State: gh.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS")}
+	obs.PRs[cc.BranchKey("repo", "cc-1")] = gh.PR{
+		Number: 1, State: gh.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS"),
+	}
 	for i := range 9 {
 		if err := loop.RunOnce(t.Context()); err != nil {
 			t.Fatalf("tick %d: %v", i+4, err)
@@ -289,8 +291,8 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	obs := cc.Observation{
-		Worktrees: map[string]string{"parent": "/repos/parent"},
-		PRs:       map[string]gh.PR{"parent": {Number: 1, State: gh.Open, IsDraft: true}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "parent"): "/repos/parent"},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "parent"): {Number: 1, State: gh.Open, IsDraft: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
@@ -330,7 +332,9 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -366,7 +370,9 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)

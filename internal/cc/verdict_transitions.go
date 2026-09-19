@@ -49,7 +49,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 			continue
 		}
 		pf := pushFacts[t.URL]
-		if pf.Refused || pf.Failed || obs.PRs[t.Branch].State != gh.Open {
+		if pf.Refused || pf.Failed || obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
 			continue
 		}
 

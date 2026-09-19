@@ -33,15 +33,16 @@ func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs Observation) e
 		if _, ok := pushed[t.URL]; !ok {
 			continue // nothing under review yet for pushPushable to deliver this to
 		}
-		if !obs.ConflictsWithBase[t.Branch] || obs.MidMerge[t.Branch] || obs.Runs[t.URL].Alive {
+		key := branchKey(t.Repo, t.Branch)
+		if !obs.ConflictsWithBase[key] || obs.MidMerge[key] || obs.Runs[t.URL].Alive {
 			continue
 		}
-		worktreePath, ok := obs.Worktrees[t.Branch]
+		worktreePath, ok := obs.Worktrees[key]
 		if !ok {
 			continue
 		}
 		policy := plan.GeneratedPolicy{Paths: generated[t.Repo], BuildCommand: buildCommand[t.Repo]}
-		if !plan.AllGenerated(obs.ConflictedPaths[t.Branch], policy) {
+		if !plan.AllGenerated(obs.ConflictedPaths[key], policy) {
 			continue
 		}
 		if err := l.regenerateAndCommit(ctx, t, worktreePath, policy, now); err != nil {

@@ -21,8 +21,10 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	observed := cc.Observation{
-		PRs:       map[string]gh.PR{"cc-1-first": {Number: 41, HeadRef: "cc-1-first", State: gh.Open}},
-		Worktrees: map[string]string{"cc-1-first": "/tmp/cc-1-first"},
+		PRs: map[string]gh.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: gh.Open},
+		},
+		Worktrees: map[string]string{cc.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
 	loop := cc.NewLoop(store,
 		func(context.Context) (cc.Observation, error) { return observed, nil },
@@ -38,7 +40,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	if !got.ObservedAt.Equal(at) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
-	if got.PRs["cc-1-first"].State != gh.Open {
+	if got.PRs[cc.BranchKey("cc-sandbox", "cc-1-first")].State != gh.Open {
 		t.Errorf("prs = %+v", got.PRs)
 	}
 }
@@ -85,7 +87,9 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}
+	observed := cc.Observation{
+		PRs: map[string]gh.PR{cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Open}},
+	}
 	ok := cc.NewLoop(store,
 		func(context.Context) (cc.Observation, error) { return observed, nil },
 		fixedClock(good), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})

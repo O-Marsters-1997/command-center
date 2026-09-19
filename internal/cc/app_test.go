@@ -21,7 +21,9 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	configPath := appConfig(t)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	observed := cc.Observation{PRs: map[string]gh.PR{"cc-1-first": {Number: 41, State: gh.Open}}}
+	observed := cc.Observation{
+		PRs: map[string]gh.PR{cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Open}},
+	}
 	stub := func(context.Context) (cc.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
