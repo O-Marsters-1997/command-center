@@ -320,9 +320,9 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
 func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, obs Observation, now time.Time) error {
 	commits := 0
-	if worktreePath := obs.Worktrees[ticket.Branch]; worktreePath != "" && run.BaselineSHA != "" {
+	if run.BaselineSHA != "" {
 		var err error
-		commits, err = CommitsSince(ctx, worktreePath, run.BaselineSHA)
+		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
 		if err != nil {
 			return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
 		}
@@ -339,6 +339,24 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, ob
 	return l.store.AppendEvent(ctx, Event{
 		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
 	})
+}
+
+// commitsSinceBaseline counts commits after baseline from the ticket's own worktree while it
+// still exists, and from origin/<branch> in the repo's own checkout once it does not (issue
+// #189): a remove-worktree racing a tick's disposal must not read as zero commits when
+// obs.BranchTips already carries that same tip from this tick's own fetch.
+func (l *Loop) commitsSinceBaseline(
+	ctx context.Context, ticket Ticket, obs Observation, baselineSHA string,
+) (int, error) {
+	if worktreePath := obs.Worktrees[ticket.Branch]; worktreePath != "" {
+		return CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
+	}
+	tip, ok := obs.BranchTips[ticket.Branch]
+	if !ok {
+		return 0, nil
+	}
+	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
+	return CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
 // launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this

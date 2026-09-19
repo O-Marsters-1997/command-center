@@ -63,7 +63,7 @@ func TestCommitsSinceCountsCommitsAfterBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n, err := CommitsSince(t.Context(), dir, baseline)
+	n, err := CommitsSince(t.Context(), dir, baseline, "HEAD")
 	if err != nil {
 		t.Fatalf("CommitsSince: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestCommitsSinceCountsCommitsAfterBaseline(t *testing.T) {
 	}
 
 	commitEmpty(t, dir, "agent commit")
-	n, err = CommitsSince(t.Context(), dir, baseline)
+	n, err = CommitsSince(t.Context(), dir, baseline, "HEAD")
 	if err != nil {
 		t.Fatalf("CommitsSince: %v", err)
 	}

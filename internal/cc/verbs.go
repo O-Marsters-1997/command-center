@@ -38,7 +38,6 @@ var supportedVerbs = map[string]bool{
 }
 
 const (
-	eventReRunRefused          = "re_run_refused"
 	eventReCheckRequested      = "re_check_requested"
 	eventReCheckRefused        = "re_check_refused"
 	eventClosePRRequested      = "close_pr_requested"
@@ -204,6 +203,9 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
+	byURL := planTicketsByURL(tickets)
+	prs := prsByBranch(obs)
+	stacking := stackingByRepo(l.cfg.Repos)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
@@ -221,8 +223,12 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 			if run, ok := latest[ticket.URL]; ok {
 				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
 			}
+			baseBranch := plan.Unlocked(byURL[ticket.URL], byURL, prs, stacking[ticket.Repo]).BaseBranch
+			if baseBranch == "" {
+				baseBranch = defaultBaseBranch
+			}
 			err := l.reRunOne(
-				ctx, ticket, repoPaths[ticket.Repo], obs, authorisedHashes[ticket.URL], now, oldPromptPath,
+				ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, authorisedHashes[ticket.URL], now, oldPromptPath,
 			)
 			if err != nil {
 				return err
@@ -235,17 +241,20 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	return nil
 }
 
-// reRunOne spawns a new run in a ticket's existing worktree, baselined off its current tip so
-// disposition counts only the commits this new run itself produces, never a previous run's.
+// reRunOne spawns a new run against ticket, baselined off its current tip so disposition counts
+// only the commits this new run itself produces, never a previous run's. A worktree that's gone
+// is cut fresh off baseBranch instead of refusing.
 func (l *Loop) reRunOne(
-	ctx context.Context, ticket Ticket, repoPath string, obs Observation, promptHash string, now time.Time,
-	oldPromptPath string,
+	ctx context.Context, ticket Ticket, repoPath, baseBranch string, obs Observation, promptHash string,
+	now time.Time, oldPromptPath string,
 ) error {
 	worktreePath, ok := obs.Worktrees[ticket.Branch]
 	if !ok {
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventReRunRefused,
-			Detail: fmt.Sprintf("no worktree for %s", ticket.Branch),
+		if err := DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
+			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
+		}
+		return l.cutAndSpawn(ctx, launchSpec{
+			ticket: ticket, baseBranch: baseBranch, promptHash: promptHash, repoPath: repoPath,
 		})
 	}
 
@@ -437,22 +446,20 @@ type removeWorktreeContext struct {
 }
 
 // removeWorktreeOne applies inv. 3's gate: is this row even eligible (merged, or base_gone with
-// hasRun) — the cheap check, no git calls — then does it hold unpushed commits from the one gap
-// tp remove --merged cannot check itself (its own dirty and unpushed checks cover the rest). Any
-// refusal is recorded as an event and nothing is removed. A clean pass closes the ticket's GitHub
-// issue first, since tp.Remove is the irreversible step: a failed close refuses the whole verb
-// while the worktree is still there to retry against, rather than tearing it down and leaving an
-// open issue with no way back to it (issue #147).
+// hasRun) — the cheap check, no git calls. Eligibility is decided before the worktree is even
+// looked at, because a missing worktree is not a failure for an eligible ticket -- it's the state
+// this verb is trying to reach (issue #196). Only when the worktree is still there does it hold
+// unpushed commits from the one gap tp remove --merged cannot check itself (its own dirty and
+// unpushed checks cover the rest). Any refusal is recorded as an event and nothing is removed. A
+// clean pass closes the ticket's GitHub issue first, since tp.Remove is the irreversible step: a
+// failed close refuses the whole verb while the worktree is still there to retry against, rather
+// than tearing it down and leaving an open issue with no way back to it (issue #147).
 func (l *Loop) removeWorktreeOne(
 	ctx context.Context, ticket Ticket, rc removeWorktreeContext, hasRun bool, now time.Time,
 ) error {
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
 			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
-	}
-
-	if _, ok := rc.obs.Worktrees[ticket.Branch]; !ok {
-		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
 	}
 
 	merged := rc.obs.PRs[ticket.Branch].State == gh.Merged
@@ -463,20 +470,26 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	repoPath := rc.repoPaths[ticket.Repo]
-	unpushed, err := UnpushedAfterPrune(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
-	if err != nil {
-		return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
-	}
-	if unpushed {
-		return refuse("worktree holds unpushed commits")
+	_, worktreePresent := rc.obs.Worktrees[ticket.Branch]
+
+	if worktreePresent {
+		unpushed, err := UnpushedAfterPrune(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
+		if err != nil {
+			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
+		}
+		if unpushed {
+			return refuse("worktree holds unpushed commits")
+		}
 	}
 
 	if err := gh.CloseIssue(ctx, repoPath, ticket.URL); err != nil {
 		return refuse(err.Error())
 	}
 
-	if err := tp.Remove(ctx, repoPath, ticket.Branch); err != nil {
-		return refuse(err.Error())
+	if worktreePresent {
+		if err := tp.Remove(ctx, repoPath, ticket.Branch); err != nil {
+			return refuse(err.Error())
+		}
 	}
 
 	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {

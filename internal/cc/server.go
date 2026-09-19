@@ -45,14 +45,27 @@ var page = template.Must(template.New("page").
 var bandSource string
 
 // The blank identifier is deliberate, not dead code: this registers "band" into page's own tree,
-// and page.tmpl calls it by name via {{template "band" .}}. It is never registered into
-// boardFragment's tree, which is what keeps it out of the board's own five-second swap.
+// and page.tmpl and boardswap.tmpl both call it by name via {{template "band" .}}.
 var _ = template.Must(page.New("band").Parse(bandSource))
 
 //go:embed board.tmpl
 var boardSource string
 
 var boardFragment = template.Must(page.New("board").Parse(boardSource))
+
+//go:embed masthead.tmpl
+var mastheadSource string
+
+// The blank identifier is deliberate, not dead code: this registers "masthead" into the shared
+// tree that page.tmpl and boardSwap both call it from.
+var _ = template.Must(page.New("masthead").Parse(mastheadSource))
+
+//go:embed boardswap.tmpl
+var boardSwapSource string
+
+// boardSwap answers every poll and every verb: the table htmx swaps into the target, plus the
+// masthead and band as out-of-band swaps.
+var boardSwap = template.Must(page.New("boardSwap").Parse(boardSwapSource))
 
 //go:embed detail.tmpl
 var detailSource string
@@ -225,6 +238,9 @@ type row struct {
 	SelectPush string `json:"select_push"`
 	TogglePath string `json:"toggle_path"`
 	TogglePush string `json:"toggle_push"`
+	// VerbPath is /verb carrying this render's view state, so the swap handleVerb answers with
+	// rebuilds the board the operator was looking at rather than the default one.
+	VerbPath string `json:"verb_path"`
 	// Log is the parsed run log, set only when Selected (docs/prds/prd-fleet-view.md § The run log).
 	Log logDetail `json:"log"`
 }
@@ -262,8 +278,15 @@ func (r row) DetailID() string {
 	return "detail-" + hex.EncodeToString(sum[:6])
 }
 
+// ageView is a relative time the server renders and the page's clock keeps current. Stamp is the
+// instant the browser counts from, and is empty when there is none to count from.
+type ageView struct {
+	Age   string
+	Stamp string
+}
+
 type tickErrorView struct {
-	Age     string
+	Age     ageView
 	Message string
 }
 
@@ -277,7 +300,7 @@ type group struct {
 type pageView struct {
 	Workspace  string
 	LiveAgents int
-	ObserveAge string
+	Observe    ageView
 	// ObserveStale is decided here rather than in the template, which cannot compare durations.
 	ObserveStale bool
 	LastError    *tickErrorView
@@ -297,7 +320,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
-	s.renderView(w, r, boardFragment)
+	s.renderView(w, r, boardSwap)
 }
 
 // handleGraph serves pageView.Groups verbatim: the same []group the board template ranges over,
@@ -352,7 +375,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
-		ObserveAge:   "never",
+		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
 		Groups:       groupRows(rows),
 		Band:         deriveBand(rows),
@@ -360,11 +383,11 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		View:         params.View,
 	}
 	if observed {
-		view.ObserveAge = age(now, obs.ObservedAt)
+		view.Observe = relative(now, obs.ObservedAt)
 		view.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
-		view.LastError = &tickErrorView{Age: age(now, lastErr.At), Message: lastErr.Message}
+		view.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
 	}
 	return view, nil
 }
@@ -380,6 +403,7 @@ func applyViewState(rows []row, params viewParams) {
 		r.SelectPath, r.SelectPush = toggledSel.boardPath(), toggledSel.pagePath()
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
+		r.VerbPath = params.verbPath()
 		if r.Selected {
 			r.Log = buildLogDetail(r.LogPath, r.Alive, r.URL, params)
 		}
@@ -1004,7 +1028,13 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	// The swap shows the row's "<verb> queued" pill: the loop's next tick applies the intent, so
+	// there is nothing further to render yet.
+	if r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	s.renderView(w, r, boardSwap)
 }
 
 // handleTicket edits one ticket's app-owned fields, branch and blocked_by. It writes an intent
@@ -1152,6 +1182,9 @@ func liveAgents(tickets []Ticket, obs Observation) int {
 	return live
 }
 
-func age(now, then time.Time) string {
-	return now.Sub(then).Round(time.Second).String() + " ago"
+func relative(now, then time.Time) ageView {
+	return ageView{
+		Age:   now.Sub(then).Round(time.Second).String() + " ago",
+		Stamp: then.UTC().Format(time.RFC3339),
+	}
 }

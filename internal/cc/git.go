@@ -107,6 +107,15 @@ func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
 	return RevParse(ctx, repoPath, "refs/heads/"+branch)
 }
 
+// DeleteBranchIfExists removes branch's local ref, doing nothing if it has none.
+func DeleteBranchIfExists(ctx context.Context, repoPath, branch string) error {
+	if _, err := RevParse(ctx, repoPath, "refs/heads/"+branch); err != nil {
+		return nil
+	}
+	_, err := git(ctx, repoPath, "branch", "-D", branch)
+	return err
+}
+
 // RevParse resolves any ref to its commit SHA -- BranchTip's underlying primitive, reused for
 // pushes.base_sha_at_push, whose ref is a remote-tracking branch (origin/<base>), not a local
 // one.
@@ -159,10 +168,10 @@ func PushRestacked(ctx context.Context, repoPath, branch, expectedRemote string)
 	return err
 }
 
-// CommitsSince counts commits reachable from worktreePath's HEAD but not from baselineSHA — a
+// CommitsSince counts commits reachable from ref but not from baselineSHA, run in repoPath — a
 // dead run's disposition rests on this count, never on missing events (inv. 7).
-func CommitsSince(ctx context.Context, worktreePath, baselineSHA string) (int, error) {
-	out, err := git(ctx, worktreePath, "rev-list", "--count", baselineSHA+"..HEAD")
+func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, error) {
+	out, err := git(ctx, repoPath, "rev-list", "--count", baselineSHA+".."+ref)
 	if err != nil {
 		return 0, err
 	}
@@ -201,6 +210,19 @@ func MergeFFOnly(ctx context.Context, worktreePath, ref string) error {
 func Merge(ctx context.Context, worktreePath, ref string) error {
 	_, err := git(ctx, worktreePath, "merge", ref)
 	return err
+}
+
+// UnmergedPaths lists worktreePath's currently unresolved merge conflicts.
+func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := git(ctx, worktreePath, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
 }
 
 func Add(ctx context.Context, worktreePath string, paths []string) error {

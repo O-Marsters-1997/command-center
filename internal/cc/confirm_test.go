@@ -27,7 +27,7 @@ func TestBoardSendsOnlyDestructiveVerbsToConfirm(t *testing.T) {
 		`<form method="get" action="/confirm">`,
 		`<button type="submit" name="verb" value="kill">kill</button>`,
 		`<button type="submit" name="verb" value="remove-worktree">remove-worktree</button>`,
-		`<form method="post" action="/verb">`,
+		`<form method="post" action="/verb" hx-post=`,
 		`<button type="submit" name="verb" value="re-run">re-run</button>`,
 		`<button type="submit" name="verb" value="close-pr">close-pr</button>`,
 	}
