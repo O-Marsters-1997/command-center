@@ -1,6 +1,6 @@
-# GET /board serves the table on its own. The five-second poll swaps this fragment into the
-# shell, so anything above the table -- the header, the liveness banner, the launch form --
-# must not come back down with it.
+# GET /board serves the table htmx swaps into the target, then the masthead and the band as
+# out-of-band swaps, so the numbers above the board never outlive the rows beneath it. The shell
+# itself -- the document, the launch form -- must still not come back down with it.
 
 cc-init-repo
 cc-config two-tasks
@@ -14,8 +14,10 @@ stdout '^<table id="board"'
 stdout '>#CC-1</button>'
 stdout '>#CC-2</button>'
 
-! stdout '<h1>Command Centre</h1>'
-! stdout 'id="masthead"'
+stdout 'id="masthead" hx-swap-oob="true"'
+stdout 'id="band" hx-swap-oob="true"'
+
 ! stdout '<form id="launch"'
 ! stdout 'launch selected'
 ! stdout '<!doctype html>'
+! stdout '<body>'

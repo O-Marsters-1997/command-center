@@ -450,10 +450,13 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		tag, attrs := m[1], m[2]
-		if tag == "table" || tag == "div" || tag == "tr" {
+		if tag == "table" || tag == "div" || tag == "tr" || tag == "section" {
 			continue
 		}
 		if (tag == "input" || tag == "button") && strings.Contains(attrs, `hx-target="#board"`) {
+			continue
+		}
+		if tag == "form" && strings.Contains(attrs, `method="post" action="/verb"`) {
 			continue
 		}
 		t.Errorf("a verb control carries htmx and so needs JavaScript: <%s%s>", tag, attrs)
@@ -461,7 +464,7 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 
 	// Every verb still reaches the server the way it did before htmx: a form the browser submits.
 	for _, want := range []string{
-		`<form method="post" action="/verb">`,
+		`<form method="post" action="/verb" hx-post=`,
 		`<form method="get" action="/confirm">`,
 		`<form id="launch" method="get" action="/preview"></form>`,
 		`<input type="checkbox" form="launch" name="ticket"`,
@@ -470,8 +473,12 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 			t.Errorf("the board is missing the scriptless path %q", want)
 		}
 	}
-	if strings.Contains(board, "hx-post") {
-		t.Error("a verb posts over htmx rather than a form")
+	// hx-post is allowed only where the form would still post on its own with JavaScript off.
+	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
+		attrs := m[2]
+		if strings.Contains(attrs, "hx-post") && !strings.Contains(attrs, `method="post" action="/verb"`) {
+			t.Errorf("a verb posts over htmx rather than a form: <%s%s>", m[1], attrs)
+		}
 	}
 }
 

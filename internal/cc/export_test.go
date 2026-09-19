@@ -19,7 +19,7 @@ func RenderStatesBoard(states []plan.State) (string, error) {
 }
 
 func renderStates(tmpl *template.Template, states []plan.State) (string, error) {
-	view := pageView{ObserveAge: "0s ago"}
+	view := pageView{Observe: ageView{Age: "0s ago"}}
 	for _, state := range states {
 		r := row{
 			URL:        "sandbox://" + state.String(),

@@ -69,7 +69,7 @@
         <button type="submit" name="verb" value="{{.}}">{{.}}</button>
       </form>
       {{- else}}
-      <form method="post" action="/verb">
+      <form method="post" action="/verb" hx-post="{{or $row.VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}

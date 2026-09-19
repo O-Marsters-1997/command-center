@@ -1,5 +1,5 @@
 {{define "band" -}}
-<section class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
+<section id="band" hx-swap-oob="true" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
   <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
     <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
     {{if eq .Band.Fleet.Total 0}}

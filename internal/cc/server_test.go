@@ -157,16 +157,41 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 
 	server := seededServer(t)
 	full := renderPage(t, server)
-	board := renderBoard(t, server)
+	swap := renderBoard(t, server)
 
-	if !strings.HasPrefix(board, `<table id="board"`) {
-		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", board)
+	if !strings.HasPrefix(swap, `<table id="board"`) {
+		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", swap)
 	}
-	if !strings.Contains(full, board) {
-		t.Errorf("GET / does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s", board, full)
+	rest := full
+	for _, part := range splitBoardSwap(t, swap) {
+		if !strings.Contains(rest, part.html) {
+			t.Errorf("GET / does not nest the GET /board %s bytes verbatim\n--- %s ---\n%s\n--- page ---\n%s",
+				part.name, part.name, part.html, full)
+			continue
+		}
+		rest = strings.Replace(rest, part.html, "", 1)
 	}
-	assertGolden(t, goldenBoard, []byte(board))
-	assertGolden(t, goldenShell, []byte(strings.Replace(full, board, "", 1)))
+	assertGolden(t, goldenBoard, []byte(swap))
+	assertGolden(t, goldenShell, []byte(rest))
+}
+
+type swapPart struct{ name, html string }
+
+// splitBoardSwap carves GET /board into the table htmx swaps into its target and the two
+// out-of-band fragments riding along with it, so each can be pinned against the first paint.
+func splitBoardSwap(t *testing.T, swap string) []swapPart {
+	t.Helper()
+
+	masthead := strings.Index(swap, `<div id="masthead"`)
+	band := strings.Index(swap, `<section id="band"`)
+	if masthead < 0 || band < masthead {
+		t.Fatalf("GET /board is not the table, then the masthead, then the band:\n%s", swap)
+	}
+	return []swapPart{
+		{"board", strings.TrimSpace(swap[:masthead])},
+		{"masthead", strings.TrimSpace(swap[masthead:band])},
+		{"band", strings.TrimSpace(swap[band:])},
+	}
 }
 
 // TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":
