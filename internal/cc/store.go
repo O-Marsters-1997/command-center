@@ -334,7 +334,9 @@ type ImportError struct {
 }
 
 // RecordImportRefusal stores conflict as the last import failure and appends its audit event against the named ticket.
-func (s *Store) RecordImportRefusal(ctx context.Context, feature string, conflict *FeatureConflictError, now time.Time) error {
+func (s *Store) RecordImportRefusal(
+	ctx context.Context, feature string, conflict *FeatureConflictError, now time.Time,
+) error {
 	importErr := ImportError{At: now, Feature: feature, Message: conflict.Error()}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
 		return err
