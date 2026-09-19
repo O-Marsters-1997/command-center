@@ -887,7 +887,8 @@ func runFactFor(
 				applyVerdict(fact, t, obs, vd)
 			}
 		}
-		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve {
+		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve &&
+			obs.MidMerge[branchKey(t.Repo, t.Branch)] {
 			fact.Resolved = true
 		}
 	}
