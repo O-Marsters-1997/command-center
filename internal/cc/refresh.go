@@ -213,21 +213,6 @@ func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs Observation
 		obs.BranchTips[branchKey(t.Repo, row.BaseBranch)] != baseTip
 }
 
-// refreshGuardReason names which of refreshOne's three pre-merge guards blocked a manual refresh,
-// so refresh_refused's detail tells the human something more useful than "nothing happened".
-func refreshGuardReason(hasWorktree, alive, midMerge bool) string {
-	switch {
-	case !hasWorktree:
-		return "no worktree for this branch"
-	case alive:
-		return "a run is alive"
-	case midMerge:
-		return "the worktree is mid-merge"
-	default:
-		return "not eligible right now"
-	}
-}
-
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
 // branch, or main once retargetMerged has pointed it there -- whose current tip differs from
 // what was recorded at the ticket's last push (issue #85: main counts the same as a stacked base).
@@ -238,25 +223,26 @@ func baseMoved(row PushRow, obs Observation, repo string) bool {
 // refreshOne fast-forwards one ticket's own branch, advances it onto its base, then verifies the
 // result. A refused fast-forward records refresh_refused and stops; a conflict is left mid-merge
 // for a human (docs/designs/command-centre-design.md § 4a).
-//
-// autoRefresh's own sweep already filters out a live run, a mid-merge worktree or a still-locked
-// blocker before calling in, so those guards below are its normal "not eligible this tick, try
-// again next tick" path and stay silent for it. The refresh verb has no such pre-filter -- a
-// human clicked it -- so the same guards record refresh_refused for manual, naming which one
-// tripped, rather than leaving the row reverting with no trace of why (issue #249's follow-up).
 func (l *Loop) refreshOne(
-	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time, manual bool,
+	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time, requested bool,
 ) error {
 	branch := ticket.Branch
-	worktreePath, ok := rc.obs.Worktrees[branchKey(ticket.Repo, branch)]
-	if !ok || rc.obs.Runs[ticket.URL].Alive || rc.obs.MidMerge[branchKey(ticket.Repo, branch)] {
-		if !manual {
+	refuse := func(detail string) error {
+		if !requested {
 			return nil
 		}
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused,
-			Detail: refreshGuardReason(ok, rc.obs.Runs[ticket.URL].Alive, rc.obs.MidMerge[branchKey(ticket.Repo, branch)]),
-		})
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: detail})
+	}
+
+	worktreePath, ok := rc.obs.Worktrees[branchKey(ticket.Repo, branch)]
+	switch {
+	case !ok:
+		return refuse(fmt.Sprintf("no worktree for %s", branch))
+	case rc.obs.Runs[ticket.URL].Alive:
+		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
+	case rc.obs.MidMerge[branchKey(ticket.Repo, branch)]:
+		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
 	if err := MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
@@ -267,13 +253,7 @@ func (l *Loop) refreshOne(
 
 	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
 	if !unlock.Unlocked {
-		if !manual {
-			return nil // its blocker's PR closed since the base moved; nothing sane to merge against
-		}
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused,
-			Detail: "its blocker's PR closed since the base moved; nothing sane to merge against",
-		})
+		return refuse(string(unlock.Reason))
 	}
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, rc.obs)
 	if err != nil {

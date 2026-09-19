@@ -126,6 +126,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 
 	obs := cc.Observation{
 		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+		MidMerge: map[string]bool{cc.BranchKey("repo", "cc-1"): true},
 	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
@@ -168,6 +169,15 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	}
 	if !strings.Contains(row, `value="`+plan.VerbCommitResolution+`"`) {
 		t.Errorf("row does not offer commit-resolution, want the verb that commits and pushes it:\n%s", row)
+	}
+
+	obs.MidMerge[cc.BranchKey("repo", "cc-1")] = false
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("third RunOnce: %v", err)
+	}
+	page = renderPage(t, server)
+	if state := rowState(t, page, ticket.URL); state == "conflict_resolved" {
+		t.Errorf("state = %q, want the row to leave conflict_resolved once the merge is committed", state)
 	}
 }
 

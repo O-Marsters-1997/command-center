@@ -10,6 +10,9 @@ ON CONFLICT (url) DO UPDATE SET
 SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at
 FROM tickets WHERE withdrawn_at IS NULL ORDER BY url;
 
+-- name: TicketFeature :one
+SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL;
+
 -- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

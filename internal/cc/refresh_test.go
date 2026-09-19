@@ -602,3 +602,54 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 			"must not retry the same merge", conflicts)
 	}
 }
+
+func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := advanceParent(t, repoPath, f)
+
+	obs := baseObservation(f, parentTip1)
+	delete(obs.PRs, cc.BranchKey("repo", "parent"))
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("automatic RunOnce: %v", err)
+	}
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasEvent(events, "refresh_refused", "") {
+		t.Errorf("events = %+v, want no refresh_refused from an automatic tick", events)
+	}
+
+	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("verb RunOnce: %v", err)
+	}
+
+	events, err = store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "refresh_refused", f.parent.URL) {
+		t.Errorf("events = %+v, want a refresh_refused naming the blocker %s", events, f.parent.URL)
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), plan.VerbRefresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending refresh intents = %+v, want none: consumed", pending)
+	}
+}

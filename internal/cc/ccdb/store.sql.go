@@ -136,6 +136,17 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
+const ticketFeature = `-- name: TicketFeature :one
+SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
+`
+
+func (q *Queries) TicketFeature(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRowContext(ctx, ticketFeature, url)
+	var feature string
+	err := row.Scan(&feature)
+	return feature, err
+}
+
 const ticketURLsInFeature = `-- name: TicketURLsInFeature :many
 SELECT url FROM tickets WHERE feature = $1
 `
