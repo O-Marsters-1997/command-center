@@ -3,6 +3,7 @@ package cc_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -139,7 +140,7 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 			}
 			now := observedAt.Add(tt.age)
 			server := cc.NewServer(shellStore(t, at, ""), fixedClock(now), nil, "")
-			body := renderPage(t, server)
+			body := flattenTimes(renderPage(t, server))
 
 			if !strings.Contains(body, tt.wantChip) {
 				t.Errorf("chip does not read %q:\n%s", tt.wantChip, body)
@@ -164,7 +165,7 @@ func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	}
 
 	failed := cc.NewServer(shellStore(t, &observedAt, "gh is unavailable"), fixedClock(now), nil, "")
-	body := renderPage(t, failed)
+	body := flattenTimes(renderPage(t, failed))
 	for _, want := range []string{
 		"the last tick failed 44s ago",
 		"nothing below has been re-derived since",
@@ -190,7 +191,7 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPage(t, cc.NewServer(store, fixedClock(now), nil, ""))
+	body := flattenTimes(renderPage(t, cc.NewServer(store, fixedClock(now), nil, "")))
 	if strings.Contains(body, "banner") {
 		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
 	}
@@ -271,3 +272,9 @@ func TestHeaderRefreshesWithTheBoard(t *testing.T) {
 		t.Errorf("the masthead is not an out-of-band swap target:\n%s", got)
 	}
 }
+
+// timeTag matches a relative time the page's clock owns at runtime. The server still renders the
+// wording inside it, so flattening the wrapper lets an assertion read the chip as one string.
+var timeTag = regexp.MustCompile(`<time datetime="[^"]*">([^<]*)</time>`)
+
+func flattenTimes(s string) string { return timeTag.ReplaceAllString(s, "$1") }
