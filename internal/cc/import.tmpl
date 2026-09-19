@@ -5,9 +5,9 @@
 <main class="p-4">
 <h1 class="mb-3">IMPORT</h1>
 {{range .}}
-<h2 class="mt-4 mb-2 text-base font-bold">{{.Group}}</h2>
+<h2 class="mt-4 mb-2 text-base font-bold">{{.Feature}}</h2>
 <form method="post" action="/import">
-<input type="hidden" name="group" value="{{.Group}}">
+<input type="hidden" name="feature" value="{{.Feature}}">
 <table class="w-full max-w-3xl">
   <tr><th>ticket</th><th>title</th><th>status</th></tr>
   {{range .Tickets}}

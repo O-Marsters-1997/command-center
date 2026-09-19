@@ -15,17 +15,19 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// fakeTrackerSource answers Groups and Tickets from fixed data, so a test drives import.go's
+// fakeTrackerSource answers Features and Tickets from fixed data, so a test drives import.go's
 // consumers without shelling out to gh.
 type fakeTrackerSource struct {
-	groups  []tracker.Group
-	tickets map[string][]tracker.Ticket
+	features []tracker.Feature
+	tickets  map[string][]tracker.Ticket
 }
 
-func (f fakeTrackerSource) Groups(context.Context) ([]tracker.Group, error) { return f.groups, nil }
+func (f fakeTrackerSource) Features(context.Context) ([]tracker.Feature, error) {
+	return f.features, nil
+}
 
-func (f fakeTrackerSource) Tickets(_ context.Context, group string) ([]tracker.Ticket, error) {
-	return f.tickets[group], nil
+func (f fakeTrackerSource) Tickets(_ context.Context, feature string) ([]tracker.Ticket, error) {
+	return f.tickets[feature], nil
 }
 
 // resolveByURL builds a TrackerSource that dispatches on the pseudo-url trackerSourceFor
@@ -41,7 +43,7 @@ func resolveByURL(byURL map[string]tracker.Source) cc.TrackerSource {
 	}
 }
 
-func TestImportGroupsListsLabelsAcrossRepos(t *testing.T) {
+func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 	t.Parallel()
 
 	repos := []cc.Repo{
@@ -55,11 +57,11 @@ func TestImportGroupsListsLabelsAcrossRepos(t *testing.T) {
 	betaYTicket := tracker.Ticket{URL: "https://github.com/acme/beta/issues/3", Number: 3, Title: "Add z"}
 
 	alpha := fakeTrackerSource{
-		groups:  []tracker.Group{"project:x"},
-		tickets: map[string][]tracker.Ticket{"project:x": {alphaTicket}},
+		features: []tracker.Feature{"project:x"},
+		tickets:  map[string][]tracker.Ticket{"project:x": {alphaTicket}},
 	}
 	beta := fakeTrackerSource{
-		groups: []tracker.Group{"project:x", "project:y"},
+		features: []tracker.Feature{"project:x", "project:y"},
 		tickets: map[string][]tracker.Ticket{
 			"project:x": {betaXTicket},
 			"project:y": {betaYTicket},
@@ -70,15 +72,15 @@ func TestImportGroupsListsLabelsAcrossRepos(t *testing.T) {
 		"https://github.com/acme/beta":  beta,
 	})
 
-	got, err := cc.ImportGroups(t.Context(), repos, resolve)
+	got, err := cc.ImportFeatures(t.Context(), repos, resolve)
 	if err != nil {
-		t.Fatalf("ImportGroups: %v", err)
+		t.Fatalf("ImportFeatures: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("groups = %+v, want 2", got)
+		t.Fatalf("features = %+v, want 2", got)
 	}
-	if got[0].Group != "project:x" || got[1].Group != "project:y" {
-		t.Errorf("group order = %q, %q, want project:x then project:y", got[0].Group, got[1].Group)
+	if got[0].Feature != "project:x" || got[1].Feature != "project:y" {
+		t.Errorf("feature order = %q, %q, want project:x then project:y", got[0].Feature, got[1].Feature)
 	}
 	if len(got[0].Tickets) != 2 {
 		t.Fatalf("project:x tickets = %+v, want one from each of alpha and beta", got[0].Tickets)
@@ -151,8 +153,8 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	if !slices.Equal(seeded.BlockedBy, []string{"https://github.com/acme/alpha/issues/2"}) {
 		t.Errorf("blocked_by = %v", seeded.BlockedBy)
 	}
-	if seeded.Repo != "alpha" || seeded.Source != "github" || seeded.GroupKey != "project:x" {
-		t.Errorf("repo/source/group_key = %q/%q/%q", seeded.Repo, seeded.Source, seeded.GroupKey)
+	if seeded.Repo != "alpha" || seeded.Source != "github" || seeded.Feature != "project:x" {
+		t.Errorf("repo/source/feature = %q/%q/%q", seeded.Repo, seeded.Source, seeded.Feature)
 	}
 
 	// An operator hand-edits the branch and clears the blockers before the next import lands.
@@ -272,7 +274,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 
 	src := fakeTrackerSource{
-		groups: []tracker.Group{"project:x"},
+		features: []tracker.Feature{"project:x"},
 		tickets: map[string][]tracker.Ticket{
 			"project:x": {{
 				URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x", Body: "b", Status: "ready",
@@ -304,12 +306,12 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 }
 
-func TestHandleImportRendersEveryGroupAndItsTickets(t *testing.T) {
+func TestHandleImportRendersEveryFeatureAndItsTickets(t *testing.T) {
 	t.Parallel()
 
 	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{
-		groups: []tracker.Group{"project:x"},
+		features: []tracker.Feature{"project:x"},
 		tickets: map[string][]tracker.Ticket{
 			"project:x": {{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}},
 		},
@@ -338,7 +340,7 @@ func TestPostImportQueuesAnIntentAndRedirects(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := url.Values{"group": {"project:x"}}.Encode()
+	body := url.Values{"feature": {"project:x"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/import", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +376,7 @@ func TestPostImportRequiresBrowserOrigin(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := url.Values{"group": {"project:x"}}.Encode()
+	body := url.Values{"feature": {"project:x"}}.Encode()
 	resp, err := http.Post(srv.URL+"/import", "application/x-www-form-urlencoded", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)

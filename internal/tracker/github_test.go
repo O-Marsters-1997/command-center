@@ -5,23 +5,23 @@ import (
 	"testing"
 )
 
-func TestDecodeGroups(t *testing.T) {
+func TestDecodeFeatures(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name string
 		raw  []byte
-		want []Group
+		want []Feature
 	}{
 		{
 			name: "no labels",
 			raw:  []byte("[]"),
-			want: []Group{},
+			want: []Feature{},
 		},
 		{
 			name: "only project: labels come back, nothing else",
 			raw:  readFixture(t, "label_list.json"),
-			want: []Group{"project:repo-and-ticket-model", "project:fleet-view"},
+			want: []Feature{"project:repo-and-ticket-model", "project:fleet-view"},
 		},
 	}
 
@@ -29,22 +29,22 @@ func TestDecodeGroups(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := decodeGroups(tt.raw)
+			got, err := decodeFeatures(tt.raw)
 			if err != nil {
-				t.Fatalf("decodeGroups: %v", err)
+				t.Fatalf("decodeFeatures: %v", err)
 			}
 			if !slices.Equal(got, tt.want) {
-				t.Errorf("groups = %v, want %v", got, tt.want)
+				t.Errorf("features = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestDecodeGroupsRejectsGarbage(t *testing.T) {
+func TestDecodeFeaturesRejectsGarbage(t *testing.T) {
 	t.Parallel()
 
-	if _, err := decodeGroups([]byte("not json")); err == nil {
-		t.Fatal("decodeGroups accepted non-JSON output")
+	if _, err := decodeFeatures([]byte("not json")); err == nil {
+		t.Fatal("decodeFeatures accepted non-JSON output")
 	}
 }
 

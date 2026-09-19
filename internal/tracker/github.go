@@ -30,17 +30,17 @@ func newGithubSource(owner, repo string) *githubSource {
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 
-func (s *githubSource) Groups(ctx context.Context) ([]Group, error) {
+func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", "100")
 	if err != nil {
 		return nil, err
 	}
-	return decodeGroups(out)
+	return decodeFeatures(out)
 }
 
-func (s *githubSource) Tickets(ctx context.Context, group string) ([]Ticket, error) {
+func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, error) {
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
-		"--label", group, "--json", "number,title,body,url,labels", "--limit", "100")
+		"--label", feature, "--json", "number,title,body,url,labels", "--limit", "100")
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +106,18 @@ type rawLabel struct {
 	Name string `json:"name"`
 }
 
-func decodeGroups(raw []byte) ([]Group, error) {
+func decodeFeatures(raw []byte) ([]Feature, error) {
 	var decoded []rawLabel
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return nil, fmt.Errorf("unmarshal label list: %w", err)
 	}
-	groups := make([]Group, 0, len(decoded))
+	features := make([]Feature, 0, len(decoded))
 	for _, label := range decoded {
 		if strings.HasPrefix(label.Name, "project:") {
-			groups = append(groups, Group(label.Name))
+			features = append(features, Feature(label.Name))
 		}
 	}
-	return groups, nil
+	return features, nil
 }
 
 // rawIssue mirrors gh issue list's JSON exactly.
