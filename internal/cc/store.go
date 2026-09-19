@@ -174,11 +174,10 @@ func (s *Store) ImportTickets(
 
 		returned[t.URL] = true
 		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
-		// ponytail: source is hardcoded to "github" because tracker.Source names no other
-		// tracker today; derive it from the resolved Source once a second one exists.
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
+			Source:    t.Source,
 			Feature:   feature,
 			Title:     t.Title,
 			Body:      t.Body,

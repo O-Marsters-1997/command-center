@@ -130,7 +130,7 @@ type Server struct {
 // name are all per-repo config, and dataDir is the fleet the header names.
 func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.For,
+		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.New,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -153,7 +153,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	return s
 }
 
-// SetTrackerSource replaces the server's tracker.For, so a test can drive GET /import with a
+// SetTrackerSource replaces the server's tracker.New, so a test can drive GET /import with a
 // fake source rather than shelling out to gh.
 func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
 

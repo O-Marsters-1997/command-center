@@ -3,9 +3,7 @@ package cc
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"sort"
-	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -17,15 +15,16 @@ const importVerb = "import"
 
 const eventImportRefused = "import_refused"
 
-// TrackerSource resolves the tracker.Source that reads ticketURL's issue tracker. tracker.For in
+// TrackerSource resolves the tracker.Source that reads one repo's tracker. tracker.New in
 // production; a test substitutes a fake here rather than shelling out to gh.
-type TrackerSource func(ticketURL string) (tracker.Source, error)
+type TrackerSource func(kind tracker.Kind, remote string) (tracker.Source, error)
 
-// ImportedTicket is one tracker.Ticket paired with the configured repo its url resolves to --
-// Store.ImportTickets's own upsert unit.
+// ImportedTicket is one tracker.Ticket paired with the configured repo it came from and that
+// repo's tracker kind -- Store.ImportTickets's own upsert unit.
 type ImportedTicket struct {
 	tracker.Ticket
-	Repo string
+	Repo   string
+	Source string
 }
 
 // ImportFeature is one project: label available to import, plus the tickets it would currently
@@ -80,37 +79,13 @@ func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([
 	return result, nil
 }
 
-// trackerSourceFor builds the tracker.Source a remote-carrying repo reads from, treating its own
-// remote as the url tracker.For dispatches on. A path-only repo has no remote to dispatch with,
-// so it answers ok=false rather than an error: it simply has no features to offer.
 func trackerSourceFor(r Repo, resolve TrackerSource) (tracker.Source, bool, error) {
 	if r.Remote == "" {
 		return nil, false, nil
 	}
-	src, err := resolve("https://" + normaliseRemote(r.Remote))
+	src, err := resolve(tracker.Kind(r.Tracker), normaliseRemote(r.Remote))
 	if err != nil {
 		return nil, false, err
 	}
 	return src, true, nil
-}
-
-// repoForTicketURL matches ticketURL's own owner and repo against every configured repo's
-// remote, the same normalised form EnsureCheckout compares origins with (checkout.go), so the
-// ssh and https forms of one repository resolve to the same configured name.
-func repoForTicketURL(ticketURL string, repos []Repo) (string, bool) {
-	u, err := url.Parse(ticketURL)
-	if err != nil {
-		return "", false
-	}
-	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(segments) < 2 {
-		return "", false
-	}
-	target := strings.ToLower(u.Host + "/" + segments[0] + "/" + segments[1])
-	for _, r := range repos {
-		if r.Remote != "" && normaliseRemote(r.Remote) == target {
-			return r.Name, true
-		}
-	}
-	return "", false
 }

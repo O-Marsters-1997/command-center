@@ -100,6 +100,22 @@ func clone(ctx context.Context, repo Repo) error {
 	return nil
 }
 
+// RepoNameForDir answers which configured repo dir belongs to, using dir's git origin normalised
+// and compared the same way EnsureCheckout compares an existing checkout's origin. No origin, or
+// no configured repo matching it, answers ok=false rather than an error.
+func RepoNameForDir(ctx context.Context, dir string, repos []Repo) (name string, ok bool) {
+	origin, err := originURL(ctx, dir)
+	if err != nil {
+		return "", false
+	}
+	for _, r := range repos {
+		if r.Remote != "" && sameRemote(origin, r.Remote) {
+			return r.Name, true
+		}
+	}
+	return "", false
+}
+
 func originURL(ctx context.Context, repoPath string) (string, error) {
 	out, err := git(ctx, repoPath, "remote", "get-url", "origin")
 	if err != nil {
