@@ -166,8 +166,8 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	if !strings.Contains(row, "nothing committed") {
 		t.Errorf("row does not name the resolution as unread, want a reason about nothing committed:\n%s", row)
 	}
-	if !strings.Contains(row, `value="`+plan.VerbReRun+`"`) {
-		t.Errorf("row does not offer re-run, want an escape once the worktree it names is gone (issue #198):\n%s", row)
+	if !strings.Contains(row, `value="`+plan.VerbCommitResolution+`"`) {
+		t.Errorf("row does not offer commit-resolution, want the verb that commits and pushes it:\n%s", row)
 	}
 }
 

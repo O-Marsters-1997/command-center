@@ -83,8 +83,8 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	t.Parallel()
 
-	states := make([]plan.State, 0, int(plan.RefreshConflicted)+1)
-	for s := plan.Blocked; s <= plan.RefreshConflicted; s++ {
+	states := make([]plan.State, 0, int(plan.ConflictResolved)+1)
+	for s := plan.Blocked; s <= plan.ConflictResolved; s++ {
 		states = append(states, s)
 	}
 

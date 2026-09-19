@@ -138,6 +138,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.applyCommitResolutionIntents(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.pushPushable(ctx, obs); err != nil {
 		return err
 	}

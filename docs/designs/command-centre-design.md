@@ -382,8 +382,9 @@ path is left alone, even when every other conflicted path is generated.
 spawns an agent composed against `cc/skills/resolve-merge-conflict/SKILL.md` rather than
 `/implement` — the skill ADR 6 named and left unwired. The agent resolves in the worktree
 and stops. It commits nothing and pushes nothing, so the row lands at `conflict_resolved`,
-offering no verbs and reading "resolved with nothing committed; read it in the worktree
-before deciding what happens next". Go decides what may commit, not the agent (§7).
+reading "resolved with nothing committed; read it in the worktree before deciding what
+happens next". Go decides what may commit, not the agent (§7): `commit-resolution` is the
+verb that commits the staged resolution with git's own merge message and pushes it.
 
 ## 5 · State machine
 
@@ -432,7 +433,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
 | `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
 | `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 6) | **resolve**, refresh, close PR |
-| `conflict resolved` | a `resolve` run left the conflict staged in the worktree and committed nothing; read it before deciding | none |
+| `conflict resolved` | a `resolve` run left the conflict staged in the worktree and committed nothing; read it before deciding | **commit-resolution** |
 | `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
 | `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |
