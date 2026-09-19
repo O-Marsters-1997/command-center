@@ -73,10 +73,8 @@ grep -count=2 'remove --merged cc-1-x' $WORK/tp.log
 # no-op, unlike tearing a worktree down with the issue still open and no way back to it.
 grep -count=2 'issue close https://github.com/sandbox-org/teardown/issues/CC-1' $WORK/gh.log
 exec cc request GET /events
-# ticket_id is NULL here: CC-1's row is gone by the time this event is appended, and the
-# cascade this ticket adds would delete the event too if it still carried the FK. The URL
-# survives in Detail instead.
-stdout '"Kind":"worktree_removed","Detail":"https://github.com/sandbox-org/teardown/issues/CC-1"'
+# CC-1's row is withdrawn, not deleted, so this event keeps its real ticket_id FK.
+stdout '"TicketURL":"https://github.com/sandbox-org/teardown/issues/CC-1","Kind":"worktree_removed"'
 exec cc request GET /
 ! stdout '>#CC-1</button>'
 

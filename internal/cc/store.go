@@ -105,7 +105,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 	return tx.Commit()
 }
 
-// Tickets returns every ticket row, ordered by url.
+// Tickets returns every ticket row not withdrawn, ordered by url.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	rows, err := s.q.Tickets(ctx)
 	if err != nil {
@@ -131,9 +131,9 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	return tickets, nil
 }
 
-// ImportTickets upserts one group's tracker tickets, keyed on url. Every tracker-owned column
-// refreshes on each call; branch and blocked_by are seeded only the first time a url is imported
-// and left alone after that -- they're the app's own, not the tracker's.
+// ImportTickets upserts one group's tracker tickets, keyed on url, withdrawing (and later
+// restoring) any row the tracker stops (or resumes) returning for that group. Every tracker-owned
+// column refreshes each call; branch and blocked_by are seeded once and never touched again.
 func (s *Store) ImportTickets(ctx context.Context, group string, tickets []ImportedTicket, now time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -147,7 +147,9 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 
 	qtx := s.q.WithTx(tx)
 	syncedAt := now.UTC().Format(time.RFC3339)
+	returned := make(map[string]bool, len(tickets))
 	for _, t := range tickets {
+		returned[t.URL] = true
 		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
 		// ponytail: source is hardcoded to "github" because tracker.Source names no other
 		// tracker today; derive it from the resolved Source once a second one exists.
@@ -166,12 +168,27 @@ func (s *Store) ImportTickets(ctx context.Context, group string, tickets []Impor
 			return fmt.Errorf("import ticket %s: %w", t.URL, err)
 		}
 	}
+
+	previous, err := qtx.TicketURLsInGroup(ctx, group)
+	if err != nil {
+		return fmt.Errorf("list existing tickets for %s: %w", group, err)
+	}
+	for _, url := range previous {
+		if returned[url] {
+			continue
+		}
+		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
+			return fmt.Errorf("withdraw ticket %s: %w", url, err)
+		}
+	}
 	return tx.Commit()
 }
 
-func (s *Store) DeleteTicket(ctx context.Context, url string) error {
-	if err := s.q.DeleteTicket(ctx, url); err != nil {
-		return fmt.Errorf("delete ticket %s: %w", url, err)
+// WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
+// their foreign key to it.
+func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time) error {
+	if err := s.q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
+		return fmt.Errorf("withdraw ticket %s: %w", url, err)
 	}
 	return nil
 }

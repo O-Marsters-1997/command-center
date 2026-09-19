@@ -51,8 +51,8 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, dsn); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, dsn); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, dsn); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, dsn); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
@@ -169,10 +169,9 @@ func TestBlockedByRejectsInvalidJSONAtTheDatabase(t *testing.T) {
 	}
 }
 
-// TestDeleteTicketRemovesARowThatHasRunsAndPushes covers the reason DeleteTicket cannot be a
-// plain `DELETE FROM tickets`: runs and pushes both hold a foreign key back to the ticket's url,
-// and a merged ticket -- the only ticket this verb ever targets -- always has at least a run.
-func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
+// TestWithdrawTicketHidesItButKeepsItsHistory covers why withdrawal is a flag, not a delete:
+// runs and pushes both hold a foreign key back to the ticket's url.
+func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -201,8 +200,8 @@ func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.DeleteTicket(ctx, ticket.URL); err != nil {
-		t.Fatalf("DeleteTicket: %v", err)
+	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour)); err != nil {
+		t.Fatalf("WithdrawTicket: %v", err)
 	}
 
 	tickets, err := store.Tickets(ctx)
@@ -210,19 +209,35 @@ func TestDeleteTicketRemovesARowThatHasRunsAndPushes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(tickets) != 0 {
-		t.Errorf("tickets = %+v, want none left after DeleteTicket", tickets)
+		t.Errorf("tickets = %+v, want none left after WithdrawTicket", tickets)
+	}
+
+	runIDs, err := store.RunIDsForTicket(ctx, ticket.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runIDs) != 1 || runIDs[0] != runID {
+		t.Errorf("run ids = %v, want the run to survive withdrawal", runIDs)
+	}
+
+	tips, err := store.LastPushedTips(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tips[ticket.URL] != "deadbeef" {
+		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
 	}
 
 	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := memberships[ticket.URL]; ok {
-		t.Errorf("memberships = %+v, want no membership left for %s", memberships, ticket.URL)
+	if _, ok := memberships[ticket.URL]; !ok {
+		t.Errorf("memberships = %+v, want the launch membership to survive withdrawal", memberships)
 	}
 }
 
-func TestDeleteTicketLeavesFleetEventsAlone(t *testing.T) {
+func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -240,15 +255,15 @@ func TestDeleteTicketLeavesFleetEventsAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.DeleteTicket(ctx, ticket.URL); err != nil {
-		t.Fatalf("DeleteTicket: %v", err)
+	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour)); err != nil {
+		t.Fatalf("WithdrawTicket: %v", err)
 	}
 
 	events, err := store.Events(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].Kind != "fleet_event" {
-		t.Errorf("events = %+v, want only the NULL-ticket_id fleet event left", events)
+	if len(events) != 2 {
+		t.Errorf("events = %+v, want both the ticket-scoped and the fleet event left", events)
 	}
 }
