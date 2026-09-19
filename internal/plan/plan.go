@@ -146,6 +146,9 @@ const (
 	// verdict checks its expiry ahead of the predicate so a red descendant whose base moved is
 	// not read as needs_you (docs/designs/command-centre-design.md § 4a).
 	BaseMoved
+	// CIFailed is derived from RunFact.VerdictCIFailed: a required check resolved red, as opposed
+	// to needs_you's other three causes (docs/designs/command-centre-design.md § 4a).
+	CIFailed
 	// RefreshConflicted is derived from RunFact.MidMerge, read from the worktree's MERGE_HEAD
 	// every tick, so a human who resolves the conflict by hand and commits clears the state with
 	// no verb (docs/designs/command-centre-design.md § 4a).
@@ -199,6 +202,8 @@ func (s State) String() string {
 		return "cancelled"
 	case BaseMoved:
 		return "base_moved"
+	case CIFailed:
+		return "ci_failed"
 	case RefreshConflicted:
 		return "refresh_conflicted"
 	case ConflictsWithMain:
@@ -243,6 +248,7 @@ type RunFact struct {
 	// checked ahead of the predicate, so it can be true however the other two read.
 	VerdictReviewMe          bool
 	VerdictNeedsYou          bool
+	VerdictCIFailed          bool
 	VerdictBaseMoved         bool
 	VerdictWaitingOnProducer bool
 	VerdictReason            Reason
@@ -382,6 +388,8 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return WaitingOnProducerDeploy, run.VerdictReason
 	case run.VerdictReviewMe:
 		return ReviewMe, run.VerdictReason
+	case run.VerdictCIFailed:
+		return CIFailed, run.VerdictReason
 	case run.VerdictNeedsYou:
 		return NeedsYou, run.VerdictReason
 	case run.PROpen:

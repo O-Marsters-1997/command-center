@@ -11,8 +11,9 @@ import (
 const eventVerdictTransition = "verdict_transition"
 
 // recordVerdictTransitions logs one event per ticket whose CI verdict label ("checking",
-// "review_me", "needs_you", "base_moved" or "waiting_on_producer_deploy") differs from what the
-// previous tick recorded -- the last category of what `events` needs to reconstruct the whole run
+// "review_me", "needs_you", "ci_failed", "base_moved" or "waiting_on_producer_deploy") differs
+// from what the previous tick recorded -- the last category of what `events` needs to reconstruct
+// the whole run
 // (docs/prds/prd-command-centre.md § Phase 6).
 // It computes the verdict the exact way the page does (applyVerdict, server.go), over this same
 // tick's observation, so a transition an operator would see on the next page load is exactly
@@ -90,6 +91,8 @@ func verdictLabel(fact *plan.RunFact) string {
 		return "waiting_on_producer_deploy"
 	case fact.VerdictReviewMe:
 		return "review_me"
+	case fact.VerdictCIFailed:
+		return "ci_failed"
 	case fact.VerdictNeedsYou:
 		return "needs_you"
 	case fact.VerdictReason != "":
