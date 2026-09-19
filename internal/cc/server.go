@@ -137,6 +137,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
+	mux.HandleFunc("POST /ticket", requireBrowserOrigin(s.handleTicket))
 	mux.HandleFunc("POST /import", requireBrowserOrigin(s.handleImportGroup))
 	s.mux = mux
 	return s
@@ -1034,6 +1035,56 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderView(w, r, boardSwap)
+}
+
+// handleTicket edits one ticket's app-owned fields, branch and blocked_by. It writes an intent
+// row and redirects, like every other write handler (inv. 9): the next tick's
+// applyEditTicketIntents (loop.go) performs the actual write.
+func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ticketURL := r.FormValue("ticket")
+	branch := r.FormValue("branch")
+	if ticketURL == "" || branch == "" {
+		http.Error(w, "ticket and branch are both required", http.StatusBadRequest)
+		return
+	}
+	blockedBy := r.Form["blocked_by"]
+
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	ticket, ok := ticketsByURL(tickets)[ticketURL]
+	if !ok {
+		http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
+		return
+	}
+
+	// Refused here rather than queued: applying it would leave the worktree and the row
+	// disagreeing on the ticket's branch.
+	if branch != ticket.Branch {
+		obs, _, err := s.store.LastObservation(ctx)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if worktreePath, ok := obs.Worktrees[ticket.Branch]; ok {
+			http.Error(w, fmt.Sprintf("branch %s already has a worktree at %s, remove it before changing branch",
+				ticket.Branch, worktreePath), http.StatusConflict)
+			return
+		}
+	}
+
+	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.now()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handleImport renders every configured repo's tracker groups and the tickets each would

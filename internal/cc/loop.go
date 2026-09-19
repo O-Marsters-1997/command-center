@@ -76,6 +76,11 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyImportIntents(ctx); err != nil {
 		return err
 	}
+	// Same reasoning as the import step above: an edited branch is read by this tick's own
+	// worktree lookup and unlock decision, not next tick's.
+	if err := l.applyEditTicketIntents(ctx); err != nil {
+		return err
+	}
 
 	obs, err := l.observe(ctx)
 	if err != nil {
@@ -222,6 +227,27 @@ func (l *Loop) importGroup(ctx context.Context, group string) error {
 		}
 	}
 	return l.store.ImportTickets(ctx, group, matched, l.now())
+}
+
+// applyEditTicketIntents performs the actual write for every pending POST /ticket request,
+// keeping the loop the tickets table's only writer (inv. 9) even for a branch or blocked_by
+// edit made from the page.
+func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
+	intents, err := l.store.PendingEditTicketIntents(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := l.now()
+	for _, intent := range intents {
+		if err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy); err != nil {
+			return err
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applyKillIntents consumes every pending kill request synchronously: this is the loop's own
