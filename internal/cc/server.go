@@ -953,7 +953,11 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 	case verdict.WaitingOnProducerDeploy:
 		fact.VerdictWaitingOnProducer = true
 	case verdict.NeedsYou:
-		fact.VerdictNeedsYou = true
+		if checkActuallyFailed := len(result.RedLeaves) > 0; checkActuallyFailed {
+			fact.VerdictCIFailed = true
+		} else {
+			fact.VerdictNeedsYou = true
+		}
 	case verdict.BaseMoved:
 		fact.VerdictBaseMoved = true
 	case verdict.Checking:

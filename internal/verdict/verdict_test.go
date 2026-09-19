@@ -1,6 +1,7 @@
 package verdict_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -348,6 +349,60 @@ func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	in.Now = pushedAt.Add(verdict.BoundedWait)
 	if got := verdict.Evaluate(p, in).Verdict; got != verdict.NeedsYou {
 		t.Fatalf("verdict = %v once the wait elapses over successful ticks, want needs_you", got)
+	}
+}
+
+// TestNeedsYouNamesTheRedLeaf covers issue #228: the shell discriminates ci_failed from
+// needs_you on whether Result carries a red leaf's name, so a resolved-red predicate must name
+// the check that failed, and a needs_you derived only from the bounded wait elapsing must not.
+func TestNeedsYouNamesTheRedLeaf(t *testing.T) {
+	t.Parallel()
+
+	pushedAt, now := freshInput()
+	p := verdict.Predicate{Success: "CI"}
+
+	got := verdict.Evaluate(p, verdict.Input{
+		Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
+		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+	})
+	if got.Verdict != verdict.NeedsYou {
+		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+	}
+	if want := []string{"CI"}; !slices.Equal(got.RedLeaves, want) {
+		t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, want)
+	}
+
+	waitedPushedAt, waitedNow := waitedInput()
+	elapsed := verdict.Evaluate(p, verdict.Input{
+		Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
+		PushedAt: waitedPushedAt, Now: waitedNow,
+	})
+	if elapsed.Verdict != verdict.NeedsYou {
+		t.Fatalf("verdict = %v, want needs_you", elapsed.Verdict)
+	}
+	if len(elapsed.RedLeaves) != 0 {
+		t.Errorf("RedLeaves = %v, want none: no check ever resolved red, the wait just elapsed", elapsed.RedLeaves)
+	}
+}
+
+// TestAllOfNamesEveryRedLeaf covers issue #228: allOf must not stop naming red leaves after the
+// first one it finds, or a required-check failure sitting behind an earlier failed sibling in
+// the same all_of goes unnamed in Reason.
+func TestAllOfNamesEveryRedLeaf(t *testing.T) {
+	t.Parallel()
+
+	pushedAt, now := freshInput()
+	p := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
+
+	got := verdict.Evaluate(p, verdict.Input{
+		Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
+		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+	})
+	if got.Verdict != verdict.NeedsYou {
+		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+	}
+	if want := []string{"Lint", "Tests"}; !slices.Equal(got.RedLeaves, want) {
+		t.Errorf("RedLeaves = %v, want %v: both required checks failed", got.RedLeaves, want)
 	}
 }
 
