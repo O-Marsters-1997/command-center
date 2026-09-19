@@ -4,7 +4,9 @@
 package verdict
 
 import (
+	"fmt"
 	"maps"
+	"strings"
 	"time"
 )
 
@@ -91,10 +93,13 @@ type Input struct {
 	CompatCheck string
 }
 
-// Result is Evaluate's answer plus the sentence the page renders alongside it.
+// Result is Evaluate's answer plus the sentence the page renders alongside it. RedLeaves is
+// empty unless Verdict is NeedsYou because a leaf actually resolved red, as opposed to the
+// bounded wait elapsing (docs/designs/command-centre-design.md § 4a).
 type Result struct {
-	Verdict Verdict
-	Reason  string
+	Verdict   Verdict
+	Reason    string
+	RedLeaves []string
 }
 
 // triState is a predicate node's resolution before Evaluate turns it into a Result: still
@@ -118,7 +123,7 @@ const (
 // the compat check was never the whole story, and the first verdict stands.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
-		return Result{BaseMoved, "base moved: the parent advanced past what this branch was cut from"}
+		return Result{Verdict: BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"}
 	}
 	if !in.HeadOidMatch {
 		in.Checks = nil
@@ -132,7 +137,7 @@ func Evaluate(p Predicate, in Input) Result {
 	in.Checks = forcedGreen(in.Checks, in.CompatCheck)
 	switch forced := evaluate(p, in); forced.Verdict {
 	case ReviewMe:
-		return Result{WaitingOnProducerDeploy, "every required check passed except the compat check"}
+		return Result{Verdict: WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"}
 	case Checking:
 		return forced
 	default: // needs_you: the compat check was not the sole red one
@@ -141,19 +146,24 @@ func Evaluate(p Predicate, in Input) Result {
 }
 
 func evaluate(p Predicate, in Input) Result {
-	switch resolve(p, in) {
+	state, redLeaves := resolve(p, in)
+	switch state {
 	case red:
-		return Result{NeedsYou, "a required check failed"}
+		return Result{
+			Verdict:   NeedsYou,
+			Reason:    fmt.Sprintf("required check failed: %s", strings.Join(redLeaves, ", ")),
+			RedLeaves: redLeaves,
+		}
 	case green:
 		if !in.ConfigHashOK {
-			return Result{Checking, "check config changed"}
+			return Result{Verdict: Checking, Reason: "check config changed"}
 		}
-		return Result{ReviewMe, "every required check passed"}
+		return Result{Verdict: ReviewMe, Reason: "every required check passed"}
 	default: // pending
 		if waited(in) {
-			return Result{NeedsYou, "no matching rollup within the wait"}
+			return Result{Verdict: NeedsYou, Reason: "no matching rollup within the wait"}
 		}
-		return Result{Checking, "waiting on checks"}
+		return Result{Verdict: Checking, Reason: "waiting on checks"}
 	}
 }
 
@@ -173,51 +183,64 @@ func waited(in Input) bool {
 
 // resolve walks one predicate node. A node is exactly one of a combinator (AllOf/AnyOf/Not) or
 // a leaf; encoding/toml only ever produces that shape from [repo.checks].
-func resolve(p Predicate, in Input) triState {
+func resolve(p Predicate, in Input) (triState, []string) {
 	switch {
 	case len(p.AllOf) > 0:
 		return allOf(p.AllOf, in)
 	case len(p.AnyOf) > 0:
 		return anyOf(p.AnyOf, in)
 	case p.Not != nil:
-		return not(resolve(*p.Not, in))
+		t, _ := resolve(*p.Not, in)
+		return not(t), nil
 	default:
 		return leaf(p, in)
 	}
 }
 
-// allOf is red the moment any child is red (no point waiting out the rest), pending while
-// nothing is red but something still is, and green only once every child is.
-func allOf(ps []Predicate, in Input) triState {
+// allOf is red once any child is, pending while nothing is red but something still is, and green
+// only once every child is. It walks every child rather than stopping at the first red, so a red
+// Reason names every leaf that failed, not just one.
+func allOf(ps []Predicate, in Input) (triState, []string) {
 	result := green
+	var redLeaves []string
 	for _, p := range ps {
-		switch resolve(p, in) {
+		state, leaves := resolve(p, in)
+		switch state {
 		case red:
-			return red
+			result = red
+			redLeaves = append(redLeaves, leaves...)
 		case pending:
-			result = pending
+			if result == green {
+				result = pending
+			}
 		case green:
 			// no-op: result only ever downgrades from its green start
 		}
 	}
-	return result
+	return result, redLeaves
 }
 
 // anyOf is green the moment any child is, red only once every child is, and pending otherwise —
-// a still-pending arm could yet turn the whole thing green.
-func anyOf(ps []Predicate, in Input) triState {
+// a still-pending arm could yet turn the whole thing green. A red result names every arm's own
+// red leaves, since every one of them had to fail for the whole to.
+func anyOf(ps []Predicate, in Input) (triState, []string) {
 	result := red
+	var redLeaves []string
 	for _, p := range ps {
-		switch resolve(p, in) {
+		state, leaves := resolve(p, in)
+		switch state {
 		case green:
-			return green
+			return green, nil
 		case pending:
 			result = pending
 		case red:
-			// no-op: result only ever upgrades from its red start
+			redLeaves = append(redLeaves, leaves...)
 		}
 	}
-	return result
+	if result != red {
+		return result, nil
+	}
+	return red, redLeaves
 }
 
 func not(t triState) triState {
@@ -233,19 +256,28 @@ func not(t triState) triState {
 
 // leaf resolves one non-combinator node: a named check's required conclusion, or the author
 // escape hatch. Exactly one of these fields is set by construction (see Predicate's doc).
-func leaf(p Predicate, in Input) triState {
+func leaf(p Predicate, in Input) (triState, []string) {
 	switch {
 	case p.Success != "":
-		return requireConclusion(in.Checks[p.Success], Success)
+		return leafResult(requireConclusion(in.Checks[p.Success], Success), p.Success)
 	case p.Skipped != "":
-		return requireConclusion(in.Checks[p.Skipped], Skipped)
+		return leafResult(requireConclusion(in.Checks[p.Skipped], Skipped), p.Skipped)
 	case p.AbsentOK != "":
-		return absentOK(in.Checks, p.AbsentOK, in)
+		return leafResult(absentOK(in.Checks, p.AbsentOK, in), p.AbsentOK)
 	case p.Author != "":
-		return author(in.AuthorLogin, p.Author)
+		return leafResult(author(in.AuthorLogin, p.Author), p.Author)
 	default:
-		return pending // an empty leaf (misconfigured [repo.checks]) asks forever, never lies green
+		return pending, nil // an empty leaf (misconfigured [repo.checks]) asks forever, never lies green
 	}
+}
+
+// leafResult names a leaf that resolved red, so a combinator walking back up can recover which
+// check actually failed.
+func leafResult(t triState, name string) (triState, []string) {
+	if t != red {
+		return t, nil
+	}
+	return red, []string{name}
 }
 
 // requireConclusion resolves a plain success/skipped leaf: green once the check reports exactly

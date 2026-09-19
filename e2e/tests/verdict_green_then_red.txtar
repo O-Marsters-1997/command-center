@@ -1,8 +1,9 @@
 # An all-green rollup at the commit the app actually pushed derives review_me; swapping one
-# check to failure derives needs_you on the next tick; a rollup at a foreign head SHA derives
-# checking, never green (docs/designs/command-centre-design.md § 11 inv. 11). Each of those is also a
-# verdict_transition event -- the last category events needs to reconstruct the whole run
-# (Phase 6) -- logged once per change, never repeated while the verdict holds steady.
+# check to failure derives ci_failed on the next tick, naming the check that failed; a rollup at
+# a foreign head SHA derives checking, never green (docs/designs/command-centre-design.md § 11
+# inv. 11). Each of those is also a verdict_transition event -- the last category events needs to
+# reconstruct the whole run (Phase 6) -- logged once per change, never repeated while the verdict
+# holds steady.
 
 cc-init-repo
 cp mergify-v1.yml repo/.mergify.yml
@@ -37,11 +38,11 @@ stdout -count=1 'verdict_transition'
 cc-fake-gh-head verdict-one-red cc-1-x
 exec cc tick --count 1
 exec cc request GET /
-stdout '>needs_you</span>'
-stdout 'a required check failed'
+stdout '>ci_failed</span>'
+stdout 'required check failed: CI'
 exec cc request GET /events
 stdout -count=2 'verdict_transition'
-stdout '"Kind":"verdict_transition","Detail":"needs_you'
+stdout '"Kind":"verdict_transition","Detail":"ci_failed'
 
 cc-fake-gh verdict-foreign-head
 exec cc tick --count 1

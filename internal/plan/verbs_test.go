@@ -40,6 +40,7 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.BaseGone, want: []string{plan.VerbReRun, plan.VerbRemoveWorktree}, tone: "stop"},
 		{state: plan.Cancelled, want: []string{plan.VerbLaunch}, tone: "idle"},
 		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}, unattended: true, tone: "live"},
+		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbClosePR}, tone: "stop"},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
 			state: plan.ConflictsWithMain,
