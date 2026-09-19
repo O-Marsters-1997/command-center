@@ -136,7 +136,7 @@ func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
 }
 
 type scopeJSONGroup struct {
-	Root     *struct {
+	Root *struct {
 		URL string `json:"url"`
 	} `json:"root"`
 	Children []struct {

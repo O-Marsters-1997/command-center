@@ -73,7 +73,9 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 
 	root := row{URL: "sandbox://ROOT", Repo: "repo", State: "ready", Tone: "idle"}
 	child := row{URL: "sandbox://CHILD", Repo: "services", State: "ready", Tone: "idle", Blocking: []string{root.URL}}
-	view := pageView{Groups: []group{{Root: &root, Children: []row{child}}}, RepoScope: "repo", BoardPath: "/board?repo=repo"}
+	view := pageView{
+		Groups: []group{{Root: &root, Children: []row{child}}}, RepoScope: "repo", BoardPath: "/board?repo=repo",
+	}
 
 	var buf bytes.Buffer
 	if err := boardFragment.Execute(&buf, view); err != nil {
