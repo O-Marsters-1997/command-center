@@ -6,10 +6,10 @@
   </tr>
   {{range $group := .Groups}}
   {{if $group.Root}}
-  {{template "row" (head $group.Root $.RepoScope)}}
-  {{range $group.Children}}{{template "row" (child . 1 $.RepoScope)}}{{end}}
+  {{template "row" (head $group.Root $.RepoScope $.FeatureScope)}}
+  {{range $group.Children}}{{template "row" (child . 1 $.RepoScope $.FeatureScope)}}{{end}}
   {{else}}
-  {{range $group.Children}}{{template "row" (child . 0 $.RepoScope)}}{{end}}
+  {{range $group.Children}}{{template "row" (child . 0 $.RepoScope $.FeatureScope)}}{{end}}
   {{end}}
   {{end}}
 </table>
@@ -36,6 +36,7 @@
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
       {{- if and .Scope (ne .Repo .Scope)}} <span class="text-muted text-[0.85em]">{{.Repo}}</span>{{end}}
+      {{- if and .FeatureScope (ne .Feature .FeatureScope)}} <span class="text-muted text-[0.85em]">{{.Feature}}</span>{{end}}
     </td>
     <td>
       {{- if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
