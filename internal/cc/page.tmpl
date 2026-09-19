@@ -14,6 +14,23 @@
     document.documentElement.dataset.theme = next;
     localStorage.setItem("theme", next);
   }
+  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
+  // wording goes stale the moment it is sent and a swap is not what keeps it current.
+  function ago(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
+    var h = Math.floor(m / 60);
+    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
+  }
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      var at = Date.parse(el.dateTime);
+      if (!isNaN(at)) el.textContent = ago(now - at);
+    });
+  }, 1000);
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
@@ -26,30 +43,7 @@
 </head>
 <body>
 <a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
-<div id="masthead" hx-swap-oob="true">
-  <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
-    <h1 class="m-0">Command Centre</h1>
-    {{with .Workspace}}<span class="text-muted">{{.}}</span>{{end}}
-    <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
-      <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
-    </span>
-    {{if .ObserveStale}}
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: {{.ObserveAge}}</span>
-    {{else}}
-    <span class="pill"><span class="pill-disc"></span>observed {{.ObserveAge}}</span>
-    {{end}}
-    <nav class="flex gap-[0.4rem]">
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board"{{if eq .View "board"}} aria-current="page"{{end}}>board</a>
-      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph"{{if eq .View "graph"}} aria-current="page"{{end}}>graph</a>
-    </nav>
-    <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
-  </header>
-  {{with .LastError}}
-  <p class="banner ribbon" data-tone="stop" role="status">
-    the last tick failed {{.Age}} and nothing below has been re-derived since. {{.Message}}
-  </p>
-  {{end}}
-</div>
+{{template "masthead" .}}
 <main>
 {{template "band" .}}
 {{if eq .View "graph"}}

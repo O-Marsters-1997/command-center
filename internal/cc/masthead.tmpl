@@ -1,0 +1,28 @@
+{{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
+
+{{define "masthead" -}}
+<div id="masthead" hx-swap-oob="true">
+  <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
+    <h1 class="m-0">Command Centre</h1>
+    {{with .Workspace}}<span class="text-muted">{{.}}</span>{{end}}
+    <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
+      <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
+    </span>
+    {{if .ObserveStale}}
+    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: {{template "age" .Observe}}</span>
+    {{else}}
+    <span class="pill"><span class="pill-disc"></span>observed {{template "age" .Observe}}</span>
+    {{end}}
+    <nav class="flex gap-[0.4rem]">
+      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board"{{if eq .View "board"}} aria-current="page"{{end}}>board</a>
+      <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph"{{if eq .View "graph"}} aria-current="page"{{end}}>graph</a>
+    </nav>
+    <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
+  </header>
+  {{with .LastError}}
+  <p class="banner ribbon" data-tone="stop" role="status">
+    the last tick failed {{template "age" .Age}} and nothing below has been re-derived since. {{.Message}}
+  </p>
+  {{end}}
+</div>
+{{- end}}

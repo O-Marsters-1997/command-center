@@ -64,6 +64,7 @@ func (v viewParams) withLog(mode string) viewParams {
 }
 
 func (v viewParams) boardPath() string { return withQuery("/board", v.query()) }
+func (v viewParams) verbPath() string  { return withQuery("/verb", v.query()) }
 func (v viewParams) pagePath() string  { return withQuery("/", v.query()) }
 
 func withQuery(path, query string) string {
