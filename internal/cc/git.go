@@ -182,18 +182,45 @@ func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, 
 	return n, nil
 }
 
-// UnpushedAfterPrune reports whether branch has unpushed commits in the one case tp remove
-// --merged cannot check for itself: once the remote-tracking ref is pruned after a merge, there
-// is nothing left for tp's own check to compare against (issue #147).
-func UnpushedAfterPrune(ctx context.Context, repoPath, branch, lastPushedTip string) (bool, error) {
+// RemovalState is which of tp's own removal checks a branch has left to run, or -- once
+// GitHub's delete-branch-on-merge has pruned the remote-tracking ref tp would check against --
+// whether cc can prove the same thing in tp's place (issue #147).
+type RemovalState int
+
+const (
+	// RemovableByMerged: the remote-tracking ref still resolves, so tp remove --merged can
+	// still check the branch itself.
+	RemovableByMerged RemovalState = iota
+	// RemovableByForce: the ref is gone, but the branch sits exactly where this app last
+	// pushed it (docs/adr/0012-cc-proves-what-tp-cannot.md).
+	RemovableByForce
+	// NotRemovable: the ref is gone and the branch has moved past the last recorded push.
+	NotRemovable
+)
+
+// RemovalStateFor resolves branch's RemovalState.
+func RemovalStateFor(ctx context.Context, repoPath, branch, lastPushedTip string) (RemovalState, error) {
 	if _, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch); err == nil {
-		return false, nil
+		return RemovableByMerged, nil
 	}
 	local, err := RevParse(ctx, repoPath, "refs/heads/"+branch)
 	if err != nil {
+		return NotRemovable, err
+	}
+	if local != lastPushedTip {
+		return NotRemovable, nil
+	}
+	return RemovableByForce, nil
+}
+
+// Dirty reports whether worktreePath has any uncommitted change -- checked before cc forces a
+// removal past tp's own dirty-worktree guard, which --force also bypasses (issue #147).
+func Dirty(ctx context.Context, worktreePath string) (bool, error) {
+	out, err := git(ctx, worktreePath, "status", "--porcelain")
+	if err != nil {
 		return false, err
 	}
-	return local != lastPushedTip, nil
+	return len(strings.TrimSpace(string(out))) > 0, nil
 }
 
 // MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing if that is not possible.

@@ -119,3 +119,48 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Errorf("child (non-main-based) state cell = %q, want a warning mark naming ready-to-merge", got)
 	}
 }
+
+// TestPageWarnsOnARemoveWorktreeRefusal covers the fix
+// (docs/adr/0012-cc-proves-what-tp-cannot.md): a remove-worktree refusal was write-only, an
+// event with nothing reading it back, so pressing the verb again looked like nothing happened.
+// The row now carries its own last refusal as a warning, worded for whichever verb it names
+// rather than the ready-to-merge flag's own fixed label.
+func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://MERGED", Repo: "repo", Branch: "merged"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, ticket.URL, at)
+	if err := store.RecordPush(ctx, ticket.URL, "merged-tip", "main", "main-tip", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AppendEvent(ctx, cc.Event{
+		At: at, TicketURL: ticket.URL, Kind: "remove_worktree_refused", Detail: "worktree is dirty",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		PRs: map[string]gh.PR{"merged": {Number: 1, State: gh.Merged, HeadOid: "merged-tip"}},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, "")
+	page := renderPage(t, server)
+
+	got := rowCellAt(t, page, ticket.URL, 1)
+	if !strings.Contains(got, "worktree removal refused: worktree is dirty") {
+		t.Errorf("state cell = %q, want the refusal's own detail in the warning", got)
+	}
+	if strings.Contains(got, "ready-to-merge") {
+		t.Errorf("state cell = %q, want the generic warning label, not the ready-to-merge one", got)
+	}
+}

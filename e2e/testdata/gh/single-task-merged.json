@@ -1,0 +1,20 @@
+{
+  "issue list": {
+    "stdout": "[]\n"
+  },
+  "pr list": {
+    "stdout": "[]\n"
+  },
+  "pr list --state all --head cc-1-x": {
+    "stdout": "[{\"number\":1,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\"}]\n"
+  },
+  "api repos/{owner}/{repo}": {
+    "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
+  },
+  "issue view": {
+    "stdout": "fake ticket body\n"
+  },
+  "issue close": {
+    "stdout": ""
+  }
+}

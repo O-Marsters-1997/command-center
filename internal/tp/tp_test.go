@@ -77,7 +77,7 @@ func TestRemoveInvokesTpRemoveWithMerged(t *testing.T) {
 	repoPath := t.TempDir()
 	argsPath := fakeTp(t, 0)
 
-	if err := tp.Remove(t.Context(), repoPath, "cc-1-first"); err != nil {
+	if err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
@@ -91,11 +91,29 @@ func TestRemoveInvokesTpRemoveWithMerged(t *testing.T) {
 	}
 }
 
+func TestRemoveInvokesTpRemoveWithForce(t *testing.T) {
+	repoPath := t.TempDir()
+	argsPath := fakeTp(t, 0)
+
+	if err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveForced); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	got, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read recorded args: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
+	if want := "remove --force cc-1-first"; strings.Join(lines[1:], " ") != want {
+		t.Errorf("argv = %q, want %q", strings.Join(lines[1:], " "), want)
+	}
+}
+
 func TestRemoveReturnsAWrappedErrorOnFailure(t *testing.T) {
 	repoPath := t.TempDir()
 	fakeTp(t, 1)
 
-	err := tp.Remove(t.Context(), repoPath, "cc-1-first")
+	err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged)
 	if err == nil {
 		t.Fatal("Remove returned nil for a failing tp remove")
 	}

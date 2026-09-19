@@ -384,8 +384,8 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 
 // applyRemoveWorktreeIntents consumes every pending remove-worktree request: the post-merge
 // cleanup verb, called only with MERGED PR state or on a base_gone row the user clears (inv. 3).
-// A clean pass closes the ticket's GitHub issue, tears down its worktree via `tp remove
-// --merged`, and drops its row from the fleet (issue #147).
+// A clean pass tears down its worktree via `tp remove`, closes the ticket's GitHub issue, and
+// drops its row from the fleet (issue #147).
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, removeWorktreeVerb)
 	if err != nil {
@@ -448,12 +448,13 @@ type removeWorktreeContext struct {
 // removeWorktreeOne applies inv. 3's gate: is this row even eligible (merged, or base_gone with
 // hasRun) — the cheap check, no git calls. Eligibility is decided before the worktree is even
 // looked at, because a missing worktree is not a failure for an eligible ticket -- it's the state
-// this verb is trying to reach (issue #196). Only when the worktree is still there does it hold
-// unpushed commits from the one gap tp remove --merged cannot check itself (its own dirty and
-// unpushed checks cover the rest). Any refusal is recorded as an event and nothing is removed. A
-// clean pass closes the ticket's GitHub issue first, since tp.Remove is the irreversible step: a
-// failed close refuses the whole verb while the worktree is still there to retry against, rather
-// than tearing it down and leaving an open issue with no way back to it (issue #147).
+// this verb is trying to reach (issue #196). Only when the worktree is still there does cc check
+// what tp's own removal check cannot: a dirty worktree, and -- once GitHub's delete-branch-on-merge
+// has pruned the remote ref tp would check against -- unpushed commits, forcing past tp's own
+// check only once cc has proven the same fact itself (docs/adr/0012-cc-proves-what-tp-cannot.md).
+// The worktree comes down before the GitHub issue closes: tp.Remove finding no worktree is the
+// state this verb is trying to reach (issue #196), so a close failure after a real teardown is
+// still retryable, and a refusal before either step leaves both untouched.
 func (l *Loop) removeWorktreeOne(
 	ctx context.Context, ticket Ticket, rc removeWorktreeContext, hasRun bool, now time.Time,
 ) error {
@@ -470,15 +471,33 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	repoPath := rc.repoPaths[ticket.Repo]
-	_, worktreePresent := rc.obs.Worktrees[ticket.Branch]
+	worktreePath, worktreePresent := rc.obs.Worktrees[ticket.Branch]
 
+	mode := tp.RemoveMerged
 	if worktreePresent {
-		unpushed, err := UnpushedAfterPrune(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
+		dirty, err := Dirty(ctx, worktreePath)
+		if err != nil {
+			return fmt.Errorf("check worktree dirty for %s: %w", ticket.URL, err)
+		}
+		if dirty {
+			return refuse("worktree is dirty")
+		}
+
+		state, err := RemovalStateFor(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}
-		if unpushed {
+		if state == NotRemovable {
 			return refuse("worktree holds unpushed commits")
+		}
+		if state == RemovableByForce {
+			mode = tp.RemoveForced
+		}
+	}
+
+	if worktreePresent {
+		if err := tp.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
+			return refuse(err.Error())
 		}
 	}
 
@@ -486,16 +505,15 @@ func (l *Loop) removeWorktreeOne(
 		return refuse(err.Error())
 	}
 
-	if worktreePresent {
-		if err := tp.Remove(ctx, repoPath, ticket.Branch); err != nil {
-			return refuse(err.Error())
-		}
-	}
-
 	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {
 		return err
 	}
-	if err := l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved}); err != nil {
+	var detail string
+	if mode == tp.RemoveForced {
+		detail = "forced: origin ref pruned, branch at last pushed tip"
+	}
+	if err := l.store.AppendEvent(ctx,
+		Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved, Detail: detail}); err != nil {
 		return err
 	}
 	return l.store.WithdrawTicket(ctx, ticket.URL, now)
