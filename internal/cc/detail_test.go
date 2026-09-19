@@ -43,7 +43,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 			Number: 76, State: gh.Open, HeadRef: "cc-76",
 			Checks: map[string]gh.CheckState{
 				"unit":  {Status: "COMPLETED", Conclusion: "SUCCESS"},
-				"build": {Status: "IN_PROGRESS"},
+				"build": {Status: "IN_PROGRESS", DetailsURL: "https://github.com/o/r/actions/runs/1"},
 			},
 		}},
 	}
@@ -107,6 +107,16 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail fragment is missing %q:\n%s", want, body)
 		}
+	}
+
+	if want := `<a href="https://github.com/o/r/actions/runs/1" target="_blank" rel="noopener">build</a>`; !strings.Contains(body, want) {
+		t.Errorf("build's check name is not linked to its DetailsURL:\n%s", body)
+	}
+	if strings.Contains(body, `<a href=""`) {
+		t.Errorf("a check with no DetailsURL rendered an empty anchor:\n%s", body)
+	}
+	if !strings.Contains(body, "<div>unit:") {
+		t.Errorf("unit has no DetailsURL and should render as plain text:\n%s", body)
 	}
 }
 

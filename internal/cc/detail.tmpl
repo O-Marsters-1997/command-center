@@ -5,7 +5,7 @@
     <dt class="text-muted">elapsed</dt><dd class="m-0">{{if .Elapsed}}{{.Elapsed}}{{else}}not started{{end}}</dd>
     <dt class="text-muted">checks</dt>
     <dd class="m-0">
-      {{- range .Checks}}<div>{{.Name}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}no checks{{end -}}
+      {{- range .Checks}}<div>{{if .DetailsURL}}<a href="{{.DetailsURL}}" target="_blank" rel="noopener">{{.Name}}</a>{{else}}{{.Name}}{{end}}: {{.Status}}{{with .Conclusion}} {{.}}{{end}}</div>{{else}}no checks{{end -}}
     </dd>
     {{if .Draft}}<dt class="text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
     {{if .BaseVerdict}}<dt class="text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}

@@ -256,6 +256,7 @@ type check struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	DetailsURL string `json:"details_url"`
 }
 
 func (r row) Ticket() string { return "#" + path.Base(r.URL) }
@@ -603,7 +604,8 @@ func percentOf(part, total int) int {
 func sortedChecks(checks map[string]gh.CheckState) []check {
 	out := make([]check, 0, len(checks))
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
-		out = append(out, check{Name: name, Status: checks[name].Status, Conclusion: checks[name].Conclusion})
+		cs := checks[name]
+		out = append(out, check{Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL})
 	}
 	return out
 }
