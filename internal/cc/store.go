@@ -135,7 +135,9 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 // restoring) any row the tracker stops (or resumes) returning for that feature. Every
 // tracker-owned column refreshes each call; branch and blocked_by are seeded once and never
 // touched again.
-func (s *Store) ImportTickets(ctx context.Context, feature string, tickets []ImportedTicket, now time.Time) (err error) {
+func (s *Store) ImportTickets(
+	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
+) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
