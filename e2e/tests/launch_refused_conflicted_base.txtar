@@ -5,7 +5,7 @@
 cc-init-repo
 cc-config fan-out-stacked
 cc-fake-gh pr-open-cc1
-exec cc request -form 'group=project:fan-out' POST /import
+exec cc request -form 'feature=project:fan-out' POST /import
 
 cp base.txt $WORK/repo/f.txt
 exec git -C $WORK/repo add f.txt

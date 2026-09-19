@@ -11,7 +11,7 @@ exec git -C $WORK/repo push -q origin main
 cc-config verdict-single-task
 cc-fake-gh no-prs
 
-exec cc request -form 'group=project:single-task' POST /import
+exec cc request -form 'feature=project:single-task' POST /import
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1

@@ -191,7 +191,7 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 
 	now := l.now()
 	for _, intent := range intents {
-		if err := l.importGroup(ctx, intent.TicketID); err != nil {
+		if err := l.importFeature(ctx, intent.TicketID); err != nil {
 			return err
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
@@ -201,22 +201,22 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 	return nil
 }
 
-// importGroup drops a ticket whose url matches no configured repo rather than importing it with
-// an empty repo (§ repo matches on the url's owner and name).
-func (l *Loop) importGroup(ctx context.Context, group string) error {
+// importFeature drops a ticket whose url matches no configured repo rather than importing it
+// with an empty repo (§ repo matches on the url's owner and name).
+func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	var matched []ImportedTicket
 	for _, repo := range l.cfg.Repos {
 		src, ok, err := trackerSourceFor(repo, l.trackerFor)
 		if err != nil {
-			return fmt.Errorf("import %s: %w", group, err)
+			return fmt.Errorf("import %s: %w", feature, err)
 		}
 		if !ok {
 			continue
 		}
 
-		tickets, err := src.Tickets(ctx, group)
+		tickets, err := src.Tickets(ctx, feature)
 		if err != nil {
-			return fmt.Errorf("import %s from %s: %w", group, repo.Name, err)
+			return fmt.Errorf("import %s from %s: %w", feature, repo.Name, err)
 		}
 		for _, t := range tickets {
 			repoName, ok := repoForTicketURL(t.URL, l.cfg.Repos)
@@ -226,7 +226,7 @@ func (l *Loop) importGroup(ctx context.Context, group string) error {
 			matched = append(matched, ImportedTicket{Ticket: t, Repo: repoName})
 		}
 	}
-	return l.store.ImportTickets(ctx, group, matched, l.now())
+	return l.store.ImportTickets(ctx, feature, matched, l.now())
 }
 
 // applyEditTicketIntents performs the actual write for every pending POST /ticket request,

@@ -15,7 +15,7 @@ cc-fake-gh no-prs
 
 # The import intent is only queued here -- applyImportIntents is what actually upserts the
 # tickets, on the tick right after.
-exec cc request -form 'group=project:spawn' POST /import
+exec cc request -form 'feature=project:spawn' POST /import
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
 exec cc tick --count 1

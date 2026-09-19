@@ -84,10 +84,10 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 }
 
 const importTicket = `-- name: ImportTicket :exec
-INSERT INTO tickets (url, repo, source, group_key, title, body, status, synced_at, branch, blocked_by)
+INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
 VALUES ($1, $2, 'github', $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (url) DO UPDATE SET
-    repo = excluded.repo, source = excluded.source, group_key = excluded.group_key,
+    repo = excluded.repo, source = excluded.source, feature = excluded.feature,
     title = excluded.title, body = excluded.body, status = excluded.status,
     synced_at = excluded.synced_at, withdrawn_at = NULL
 `
@@ -95,7 +95,7 @@ ON CONFLICT (url) DO UPDATE SET
 type ImportTicketParams struct {
 	URL       string
 	Repo      string
-	GroupKey  string
+	Feature   string
 	Title     string
 	Body      string
 	Status    string
@@ -108,7 +108,7 @@ func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) erro
 	_, err := q.db.ExecContext(ctx, importTicket,
 		arg.URL,
 		arg.Repo,
-		arg.GroupKey,
+		arg.Feature,
 		arg.Title,
 		arg.Body,
 		arg.Status,
@@ -134,12 +134,12 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
-const ticketURLsInGroup = `-- name: TicketURLsInGroup :many
-SELECT url FROM tickets WHERE group_key = $1
+const ticketURLsInFeature = `-- name: TicketURLsInFeature :many
+SELECT url FROM tickets WHERE feature = $1
 `
 
-func (q *Queries) TicketURLsInGroup(ctx context.Context, groupKey string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, ticketURLsInGroup, groupKey)
+func (q *Queries) TicketURLsInFeature(ctx context.Context, feature string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, ticketURLsInFeature, feature)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (q *Queries) TicketURLsInGroup(ctx context.Context, groupKey string) ([]str
 }
 
 const tickets = `-- name: Tickets :many
-SELECT url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at
+SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at
 FROM tickets WHERE withdrawn_at IS NULL ORDER BY url
 `
 
@@ -175,7 +175,7 @@ type TicketsRow struct {
 	Title     string
 	Body      string
 	Status    string
-	GroupKey  string
+	Feature   string
 	SyncedAt  string
 }
 
@@ -197,7 +197,7 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 			&i.Title,
 			&i.Body,
 			&i.Status,
-			&i.GroupKey,
+			&i.Feature,
 			&i.SyncedAt,
 		); err != nil {
 			return nil, err
@@ -214,12 +214,12 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 }
 
 const upsertTicket = `-- name: UpsertTicket :exec
-INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at)
+INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, feature, synced_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
     source = excluded.source, title = excluded.title, body = excluded.body,
-    status = excluded.status, group_key = excluded.group_key, synced_at = excluded.synced_at
+    status = excluded.status, feature = excluded.feature, synced_at = excluded.synced_at
 `
 
 type UpsertTicketParams struct {
@@ -231,7 +231,7 @@ type UpsertTicketParams struct {
 	Title     string
 	Body      string
 	Status    string
-	GroupKey  string
+	Feature   string
 	SyncedAt  string
 }
 
@@ -245,7 +245,7 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) erro
 		arg.Title,
 		arg.Body,
 		arg.Status,
-		arg.GroupKey,
+		arg.Feature,
 		arg.SyncedAt,
 	)
 	return err

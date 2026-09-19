@@ -12,7 +12,7 @@ cc-init-repo services
 cc-config cross-repo-slice
 cc-fake-gh no-prs
 
-exec cc request -form 'group=project:cross-repo' POST /import
+exec cc request -form 'feature=project:cross-repo' POST /import
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/services/issues/PLA-40'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'

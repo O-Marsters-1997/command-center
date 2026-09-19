@@ -26,7 +26,7 @@ type Config struct {
 	Repos        []Repo   `toml:"repo"`
 }
 
-// Ticket is one tracked issue. Source, Title, Body, Status, GroupKey and SyncedAt are the
+// Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
 // tracker's own, refreshed on every import; Repo is matched from URL against a [[repo]]'s remote.
 // Branch and BlockedBy are the app's own, seeded once on a URL's first import, then left alone.
 type Ticket struct {
@@ -38,7 +38,7 @@ type Ticket struct {
 	Title     string
 	Body      string
 	Status    string
-	GroupKey  string
+	Feature   string
 	SyncedAt  string
 }
 

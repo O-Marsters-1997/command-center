@@ -100,7 +100,9 @@ customElement("cc-graph", {}, () => {
 
   async function load() {
     try {
-      const res = await fetch("/graph.json");
+      // Carries the page's own scope (e.g. ?repo=X) so /graph.json answers the same groups the
+      // board renders (CONTEXT.md § Scope).
+      const res = await fetch("/graph.json" + window.location.search);
       if (!res.ok) return;
       setGroups(await res.json());
     } catch {}
