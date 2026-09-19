@@ -59,10 +59,10 @@ type Loop struct {
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
-	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.For}
+	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New}
 }
 
-// SetTrackerSource replaces the loop's tracker.For, so a test can drive applyImportIntents with a
+// SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
 func (l *Loop) SetTrackerSource(resolve TrackerSource) { l.trackerFor = resolve }
 
@@ -138,6 +138,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.applyCommitResolutionIntents(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.pushPushable(ctx, obs); err != nil {
 		return err
 	}
@@ -201,8 +204,6 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 	return nil
 }
 
-// importFeature drops a ticket whose url matches no configured repo rather than importing it
-// with an empty repo (§ repo matches on the url's owner and name).
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	var matched []ImportedTicket
 	for _, repo := range l.cfg.Repos {
@@ -219,14 +220,16 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			return fmt.Errorf("import %s from %s: %w", feature, repo.Name, err)
 		}
 		for _, t := range tickets {
-			repoName, ok := repoForTicketURL(t.URL, l.cfg.Repos)
-			if !ok {
-				continue
-			}
-			matched = append(matched, ImportedTicket{Ticket: t, Repo: repoName})
+			matched = append(matched, ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
 		}
 	}
-	return l.store.ImportTickets(ctx, feature, matched, l.now())
+
+	err := l.store.ImportTickets(ctx, feature, matched, l.now())
+	var conflict *FeatureConflictError
+	if errors.As(err, &conflict) {
+		return l.store.RecordImportRefusal(ctx, feature, conflict, l.now())
+	}
+	return err
 }
 
 // applyEditTicketIntents performs the actual write for every pending POST /ticket request,
@@ -535,7 +538,7 @@ func (l *Loop) spawnRun(
 			return err
 		}
 		if preamble != "" {
-			spawnPrompt = preamble + "\n\n" + prompt
+			spawnPrompt = "The previous run's prompt differed from this one:\n\n" + preamble + "\n\n" + prompt
 		}
 	}
 

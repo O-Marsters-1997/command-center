@@ -4,7 +4,12 @@
 <title>Import</title>
 <main class="p-4">
 <h1 class="mb-3">IMPORT</h1>
-{{range .}}
+{{with .LastImportError}}
+<p class="banner ribbon mb-2" data-tone="stop" role="status">
+  import of {{.Feature}} refused {{.Age}}. {{.Message}}
+</p>
+{{end}}
+{{range .Features}}
 <h2 class="mt-4 mb-2 text-base font-bold">{{.Feature}}</h2>
 <form method="post" action="/import">
 <input type="hidden" name="feature" value="{{.Feature}}">

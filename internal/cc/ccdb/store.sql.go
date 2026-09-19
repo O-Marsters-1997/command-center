@@ -85,7 +85,7 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 
 const importTicket = `-- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
-VALUES ($1, $2, 'github', $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, source = excluded.source, feature = excluded.feature,
     title = excluded.title, body = excluded.body, status = excluded.status,
@@ -95,6 +95,7 @@ ON CONFLICT (url) DO UPDATE SET
 type ImportTicketParams struct {
 	URL       string
 	Repo      string
+	Source    string
 	Feature   string
 	Title     string
 	Body      string
@@ -108,6 +109,7 @@ func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) erro
 	_, err := q.db.ExecContext(ctx, importTicket,
 		arg.URL,
 		arg.Repo,
+		arg.Source,
 		arg.Feature,
 		arg.Title,
 		arg.Body,
@@ -132,6 +134,17 @@ type PutMetaParams struct {
 func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	_, err := q.db.ExecContext(ctx, putMeta, arg.Key, arg.Value)
 	return err
+}
+
+const ticketFeature = `-- name: TicketFeature :one
+SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
+`
+
+func (q *Queries) TicketFeature(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRowContext(ctx, ticketFeature, url)
+	var feature string
+	err := row.Scan(&feature)
+	return feature, err
 }
 
 const ticketURLsInFeature = `-- name: TicketURLsInFeature :many

@@ -128,7 +128,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 	for _, intent := range intents {
 		requested[intent.TicketID] = true
 		if ticket, ok := byTicket[intent.TicketID]; ok {
-			if err := l.refreshOne(ctx, ticket, rc.pushRows[ticket.URL], rc, now); err != nil {
+			if err := l.refreshOne(ctx, ticket, rc.pushRows[ticket.URL], rc, now, true); err != nil {
 				return err
 			}
 		}
@@ -174,7 +174,7 @@ func (l *Loop) autoRefresh(
 		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, rc.obs) {
 			continue
 		}
-		if err := l.refreshOne(ctx, t, pushRow, rc, now); err != nil {
+		if err := l.refreshOne(ctx, t, pushRow, rc, now, false); err != nil {
 			return err
 		}
 	}
@@ -224,12 +224,25 @@ func baseMoved(row PushRow, obs Observation, repo string) bool {
 // result. A refused fast-forward records refresh_refused and stops; a conflict is left mid-merge
 // for a human (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) refreshOne(
-	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time,
+	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time, requested bool,
 ) error {
 	branch := ticket.Branch
+	refuse := func(detail string) error {
+		if !requested {
+			return nil
+		}
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: detail})
+	}
+
 	worktreePath, ok := rc.obs.Worktrees[branchKey(ticket.Repo, branch)]
-	if !ok || rc.obs.Runs[ticket.URL].Alive || rc.obs.MidMerge[branchKey(ticket.Repo, branch)] {
-		return nil
+	switch {
+	case !ok:
+		return refuse(fmt.Sprintf("no worktree for %s", branch))
+	case rc.obs.Runs[ticket.URL].Alive:
+		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
+	case rc.obs.MidMerge[branchKey(ticket.Repo, branch)]:
+		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
 	if err := MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
@@ -240,7 +253,7 @@ func (l *Loop) refreshOne(
 
 	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
 	if !unlock.Unlocked {
-		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
+		return refuse(string(unlock.Reason))
 	}
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, rc.obs)
 	if err != nil {

@@ -86,6 +86,9 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if !strings.HasSuffix(reRunSpawn.Prompt, string(newPrompt)) {
 		t.Errorf("re-run's spawned prompt = %q, want the fresh composition after the diff preamble", reRunSpawn.Prompt)
 	}
+	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
+		t.Errorf("re-run's spawned prompt = %q, starts with '-': the CLI will parse it as a flag", reRunSpawn.Prompt)
+	}
 
 	diffPath := filepath.Join(ws.RunsDir, fmt.Sprintf("%d.diff", newRunID))
 	diffOnDisk, err := os.ReadFile(diffPath)

@@ -25,16 +25,17 @@ const (
 
 // supportedVerbs is every verb handleVerb (server.go) accepts.
 var supportedVerbs = map[string]bool{
-	killVerb:           true,
-	retryPushVerb:      true,
-	reRunVerb:          true,
-	reCheckVerb:        true,
-	closePRVerb:        true,
-	removeWorktreeVerb: true,
-	cancelVerb:         true,
-	refreshVerb:        true,
-	abortVerb:          true,
-	resolveVerb:        true,
+	killVerb:             true,
+	retryPushVerb:        true,
+	reRunVerb:            true,
+	reCheckVerb:          true,
+	closePRVerb:          true,
+	removeWorktreeVerb:   true,
+	cancelVerb:           true,
+	refreshVerb:          true,
+	abortVerb:            true,
+	resolveVerb:          true,
+	commitResolutionVerb: true,
 }
 
 const (

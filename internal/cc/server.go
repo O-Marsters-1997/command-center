@@ -130,7 +130,7 @@ type Server struct {
 // name are all per-repo config, and dataDir is the fleet the header names.
 func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.For,
+		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.New,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 	}
@@ -153,7 +153,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	return s
 }
 
-// SetTrackerSource replaces the server's tracker.For, so a test can drive GET /import with a
+// SetTrackerSource replaces the server's tracker.New, so a test can drive GET /import with a
 // fake source rather than shelling out to gh.
 func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
 
@@ -910,7 +910,8 @@ func runFactFor(
 				applyVerdict(fact, t, obs, vd)
 			}
 		}
-		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve {
+		if summary.Outcome == plan.OutcomeFailed && summary.Kind == runKindResolve &&
+			obs.MidMerge[branchKey(t.Repo, t.Branch)] {
 			fact.Resolved = true
 		}
 	}
@@ -1286,17 +1287,41 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+type importErrorView struct {
+	Age     string
+	Feature string
+	Message string
+}
+
+type importPageView struct {
+	Features        []ImportFeature
+	LastImportError *importErrorView
+}
+
 // handleImport renders every configured repo's tracker features and the tickets each would
 // currently bring in, read fresh from the tracker on every request (§5, inv. 14): the page never
 // shows a stale preview of what an import would do.
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
-	features, err := ImportFeatures(r.Context(), s.repos, s.trackerFor)
+	ctx := r.Context()
+	features, err := ImportFeatures(ctx, s.repos, s.trackerFor)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	lastErr, failed, err := s.store.LastImportError(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	view := importPageView{Features: features}
+	if failed {
+		view.LastImportError = &importErrorView{
+			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := importPage.Execute(w, features); err != nil {
+	if err := importPage.Execute(w, view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
