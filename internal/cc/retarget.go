@@ -72,5 +72,5 @@ func (l *Loop) retargetOne(ctx context.Context, t Ticket, row PushRow, rc refres
 	}); err != nil {
 		return err
 	}
-	return l.refreshOne(ctx, t, row, rc, now)
+	return l.refreshOne(ctx, t, row, rc, now, false)
 }
