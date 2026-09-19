@@ -171,6 +171,57 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	}
 }
 
+// TestReRunAfterAResolveRunReachesTheAgent covers issue #249: a resolve run's stored prompt is
+// nothing like a fresh implement composition, so the diff between them is the largest a re-run
+// ever produces. That diff's unified format begins "--- before", and prepending it to the new
+// prompt unguarded left the spawned argument starting with '-', which every CLI flag parser
+// takes for an option instead of prompt text.
+func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbResolve, at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce (resolve): %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns after resolve = %d, want 1", len(fake.spawns))
+	}
+
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbReRun, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce (re-run): %v", err)
+	}
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns after re-run = %d, want 2: the re-run must still reach the agent", len(fake.spawns))
+	}
+
+	reRunSpawn := fake.spawns[1]
+	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
+		t.Errorf("re-run's spawned prompt = %q, starts with '-': a CLI flag parser will refuse it and the run never starts", reRunSpawn.Prompt)
+	}
+}
+
 // TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt covers issue #198:
 // ConflictResolved's own escape once its worktree is gone, relaunched as a plain agent run
 // rather than another resolve attempt.

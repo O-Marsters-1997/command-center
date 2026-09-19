@@ -532,7 +532,7 @@ func (l *Loop) spawnRun(
 			return err
 		}
 		if preamble != "" {
-			spawnPrompt = preamble + "\n\n" + prompt
+			spawnPrompt = "The previous run's prompt differed from this one:\n\n" + preamble + "\n\n" + prompt
 		}
 	}
 
