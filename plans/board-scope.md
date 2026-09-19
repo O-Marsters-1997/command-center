@@ -20,10 +20,9 @@ loaded tickets, which `render` already has in hand from `store.Tickets`.
 Scope is URL state only. Nothing is remembered between sessions, matching every other view
 parameter. `cc open` is what makes it sticky in practice.
 
-**Schema.** Migration `0002` renames `tickets.group_key` to `tickets.feature`. Note the numbering:
-`plans/repo-and-ticket-model.md` calls phase 8's migration `0004_withdrawal.sql`, but phases 2 and
-3 landed without migrations, so `0001_init.sql` is still the only one and `0002` is next. Phase 8
-takes `0003`.
+**Schema.** Migration `0003` renames `tickets.group_key` to `tickets.feature`. `0002_withdrawal.sql`
+landed on main first (#214), so this phase's migration takes `0003` rather than the `0002` the
+phase originally assumed.
 
 No other schema change. Scope stores nothing.
 
@@ -112,7 +111,7 @@ the board's layout of a blocker and its waiters.
 A rename with no behaviour change. `tracker.Group` becomes `tracker.Feature`, `Source.Groups`
 becomes `Source.Features`, `ImportGroup` and `ImportGroups` become `ImportFeature` and
 `ImportFeatures`, and `POST /import`'s form field changes from `group` to `feature`. Migration
-`0002` renames the column, and sqlc regenerates.
+`0003` renames the column, and sqlc regenerates.
 
 `groupRows`, `[]group`, `board.tmpl`'s `.Groups` and the graph island's `Group` type all stay: they
 name the board layout, which is the usage CONTEXT.md keeps.
@@ -123,7 +122,7 @@ renamed. That is the bulk of the diff and none of the risk.
 ### Acceptance criteria
 
 - [ ] No identifier in `internal/tracker` or the import path calls a feature a group
-- [ ] `tickets.feature` replaces `tickets.group_key`, via migration `0002`
+- [ ] `tickets.feature` replaces `tickets.group_key`, via migration `0003`
 - [ ] `POST /import` takes `feature=`
 - [ ] The board layout is still called a group, in Go, in the templates and in `web/src`
 - [ ] Golden files and e2e tests pass with no change other than the renamed field
