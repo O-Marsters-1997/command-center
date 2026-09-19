@@ -74,6 +74,22 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
 	}
+	if got.Repos[0].Tracker != "github" {
+		t.Errorf("tracker = %q, want default github for a [[repo]] naming none", got.Repos[0].Tracker)
+	}
+}
+
+func TestLoadConfigKeepsAnExplicitTracker(t *testing.T) {
+	t.Parallel()
+
+	body := "[[repo]]\nname = \"r\"\npath = \"r\"\ntracker = \"linear\"\n"
+	got, err := cc.LoadConfig(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.Repos[0].Tracker != "linear" {
+		t.Errorf("tracker = %q, want the configured linear left untouched", got.Repos[0].Tracker)
+	}
 }
 
 func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {

@@ -61,8 +61,7 @@ func WithRunner(runner Runner) Option {
 type CheckoutFunc func(ctx context.Context, repos []Repo) error
 
 // WithCheckout replaces the startup checkout step, so a test can substitute its own checkout
-// preparation for a repo whose remote isn't really dialable (the e2e suite's tracker-only
-// sandbox repos, which exist so repoForTicketURL has something to match, not to be cloned).
+// preparation for a repo whose remote isn't really dialable.
 func WithCheckout(checkout CheckoutFunc) Option {
 	return func(o *options) { o.checkout = checkout }
 }
