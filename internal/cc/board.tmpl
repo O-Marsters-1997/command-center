@@ -39,7 +39,9 @@
       {{- if and .FeatureScope (ne .Feature .FeatureScope)}} <span class="text-muted text-[0.85em]">{{.Feature}}</span>{{end}}
     </td>
     <td>
-      {{- if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
+      {{- if .RedChecks}}
+      <div class="text-muted text-[0.85em]">required check failed: {{range $i, $c := .RedChecks}}{{if $i}}, {{end}}{{if $c.DetailsURL}}<a href="{{$c.DetailsURL}}" target="_blank" rel="noopener">{{$c.Name}}</a>{{else}}{{$c.Name}}{{end}}{{end}}</div>
+      {{- else if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
       <div>{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
     </td>
     <td>{{.Stack}}</td>

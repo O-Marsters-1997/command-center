@@ -238,6 +238,7 @@ type row struct {
 	// and every island reads it (docs/prds/prd-operator-surface.md § One derivation).
 	BaselineSHA string  `json:"baseline_sha"`
 	Checks      []check `json:"checks"`
+	RedChecks   []check `json:"red_checks"`
 	// Draft mirrors the PR's own observed isDraft, not DraftGate's own opinion: a failed gh pr
 	// ready leaves GitHub's real state unchanged, and this must still render honestly.
 	Draft       bool   `json:"draft"`
@@ -564,6 +565,10 @@ func derive(
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		baseByBranch[t.Branch] = unlock.BaseBranch
 		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
+		var redLeaves []string
+		if runFact != nil {
+			redLeaves = runFact.RedLeaves
+		}
 		rows = append(rows, row{
 			URL:            t.URL,
 			Repo:           t.Repo,
@@ -589,6 +594,7 @@ func derive(
 			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(state, facts.removals[t.URL])),
 			BaselineSHA:    latestRun.BaselineSHA,
 			Checks:         sortedChecks(pr.Checks),
+			RedChecks:      redChecksFor(redLeaves, pr.Checks),
 			Blocking:       unlock.Blocking,
 			Draft:          pr.IsDraft,
 			DraftReason:    draftReasonFor(pr, pt, byURL, prs, runFact),
@@ -624,6 +630,23 @@ func sortedChecks(checks map[string]gh.CheckState) []check {
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
 		cs := checks[name]
 		out = append(out, check{Name: name, Status: cs.Status, Conclusion: cs.Conclusion, DetailsURL: cs.DetailsURL})
+	}
+	return out
+}
+
+func redChecksFor(redLeaves []string, checks map[string]gh.CheckState) []check {
+	if len(redLeaves) == 0 {
+		return nil
+	}
+	red := make(map[string]bool, len(redLeaves))
+	for _, name := range redLeaves {
+		red[name] = true
+	}
+	out := make([]check, 0, len(redLeaves))
+	for _, c := range sortedChecks(checks) {
+		if red[c.Name] {
+			out = append(out, c)
+		}
 	}
 	return out
 }
@@ -955,6 +978,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 	case verdict.NeedsYou:
 		if checkActuallyFailed := len(result.RedLeaves) > 0; checkActuallyFailed {
 			fact.VerdictCIFailed = true
+			fact.RedLeaves = result.RedLeaves
 		} else {
 			fact.VerdictNeedsYou = true
 		}
