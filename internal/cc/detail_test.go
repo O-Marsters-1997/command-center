@@ -109,7 +109,8 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 		}
 	}
 
-	if want := `<a href="https://github.com/o/r/actions/runs/1" target="_blank" rel="noopener">build</a>`; !strings.Contains(body, want) {
+	linked := `<a href="https://github.com/o/r/actions/runs/1" target="_blank" rel="noopener">build</a>`
+	if !strings.Contains(body, linked) {
 		t.Errorf("build's check name is not linked to its DetailsURL:\n%s", body)
 	}
 	if strings.Contains(body, `<a href=""`) {
