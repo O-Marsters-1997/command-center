@@ -228,7 +228,8 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 
 	reRunSpawn := fake.spawns[1]
 	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
-		t.Errorf("re-run's spawned prompt = %q, starts with '-': a CLI flag parser will refuse it and the run never starts", reRunSpawn.Prompt)
+		t.Errorf("re-run's spawned prompt = %q, starts with '-': a CLI flag parser will refuse it "+
+			"and the run never starts", reRunSpawn.Prompt)
 	}
 }
 
