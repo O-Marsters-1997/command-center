@@ -126,6 +126,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 
 	obs := cc.Observation{
 		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+		MidMerge: map[string]bool{cc.BranchKey("repo", "cc-1"): true},
 	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
@@ -166,8 +167,69 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	if !strings.Contains(row, "nothing committed") {
 		t.Errorf("row does not name the resolution as unread, want a reason about nothing committed:\n%s", row)
 	}
-	if !strings.Contains(row, `value="`+plan.VerbReRun+`"`) {
-		t.Errorf("row does not offer re-run, want an escape once the worktree it names is gone (issue #198):\n%s", row)
+	if !strings.Contains(row, `value="`+plan.VerbCommitResolution+`"`) {
+		t.Errorf("row does not offer commit-resolution, want the verb that commits and pushes it:\n%s", row)
+	}
+
+	obs.MidMerge[cc.BranchKey("repo", "cc-1")] = false
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("third RunOnce: %v", err)
+	}
+	page = renderPage(t, server)
+	if state := rowState(t, page, ticket.URL); state == "conflict_resolved" {
+		t.Errorf("state = %q, want the row to leave conflict_resolved once the merge is committed", state)
+	}
+}
+
+// TestReRunAfterAResolveRunReachesTheAgent covers issue #249: a resolve run's stored prompt is
+// nothing like a fresh implement composition, so the diff between them is the largest a re-run
+// ever produces. That diff's unified format begins "--- before", and prepending it to the new
+// prompt unguarded left the spawned argument starting with '-', which every CLI flag parser
+// takes for an option instead of prompt text.
+func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbResolve, at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce (resolve): %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns after resolve = %d, want 1", len(fake.spawns))
+	}
+
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbReRun, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce (re-run): %v", err)
+	}
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns after re-run = %d, want 2: the re-run must still reach the agent", len(fake.spawns))
+	}
+
+	reRunSpawn := fake.spawns[1]
+	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
+		t.Errorf("re-run's spawned prompt = %q, starts with '-': a CLI flag parser will refuse it "+
+			"and the run never starts", reRunSpawn.Prompt)
 	}
 }
 

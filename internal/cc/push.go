@@ -3,6 +3,7 @@ package cc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -12,6 +13,10 @@ import (
 // retryPushVerb is the only verb push failed offers a human: the push step alone, no agent
 // (docs/prds/prd-command-centre.md § The states).
 const retryPushVerb = plan.VerbRetryPush
+
+const commitResolutionVerb = plan.VerbCommitResolution
+
+const eventCommitResolutionRefused = "commit_resolution_refused"
 
 // pushContext is the per-tick facts pushOne needs that are the same for every candidate,
 // computed once by pushPushable/applyRetryPushIntents rather than re-queried per ticket.
@@ -158,6 +163,85 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		}
 	}
 	return nil
+}
+
+func (l *Loop) applyCommitResolutionIntents(ctx context.Context, obs Observation) error {
+	intents, err := l.store.PendingVerbIntents(ctx, commitResolutionVerb)
+	if err != nil {
+		return err
+	}
+	if len(intents) == 0 {
+		return nil
+	}
+
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return err
+	}
+	byTicket := ticketsByURL(tickets)
+	pc, err := l.newPushContext(ctx, tickets, obs)
+	if err != nil {
+		return err
+	}
+
+	now := l.now()
+	for _, intent := range intents {
+		if ticket, ok := byTicket[intent.TicketID]; ok {
+			if err := l.commitResolutionOne(ctx, ticket, pc, now); err != nil {
+				return err
+			}
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *Loop) commitResolutionOne(ctx context.Context, ticket Ticket, pc pushContext, now time.Time) error {
+	refuse := func(detail string) error {
+		return l.store.AppendEvent(ctx,
+			Event{At: now, TicketURL: ticket.URL, Kind: eventCommitResolutionRefused, Detail: detail})
+	}
+
+	worktreePath, ok := pc.obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
+	if !ok {
+		return refuse(fmt.Sprintf("no worktree for %s", ticket.Branch))
+	}
+	if pc.obs.Runs[ticket.URL].Alive {
+		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
+	}
+
+	unmerged, err := UnmergedPaths(ctx, worktreePath)
+	if err != nil {
+		return fmt.Errorf("read unmerged paths for %s: %w", ticket.URL, err)
+	}
+	if len(unmerged) > 0 {
+		return refuse(fmt.Sprintf("still unmerged: %s", strings.Join(unmerged, ", ")))
+	}
+
+	midMerge, err := MidMerge(ctx, worktreePath)
+	if err != nil {
+		return fmt.Errorf("read merge state for %s: %w", ticket.URL, err)
+	}
+	if midMerge {
+		staged, err := StagedPaths(ctx, worktreePath)
+		if err != nil {
+			return fmt.Errorf("read staged paths for %s: %w", ticket.URL, err)
+		}
+		if len(staged) == 0 {
+			return refuse("nothing staged to commit")
+		}
+		if err := CommitNoEdit(ctx, worktreePath); err != nil {
+			return refuse(err.Error())
+		}
+	}
+
+	tip, err := BranchTip(ctx, pc.repoPaths[ticket.Repo], ticket.Branch)
+	if err != nil {
+		return fmt.Errorf("read tip after commit resolution for %s: %w", ticket.URL, err)
+	}
+	return l.pushOne(ctx, ticket, tip, pc, now)
 }
 
 // pushBranch pushes branch, leasing on recordedTip only when the app's own restack is what left

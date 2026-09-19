@@ -3,18 +3,19 @@ package plan
 // The verbs a row can offer. These are the wire values the page's forms post and internal/cc's
 // handler accepts, so they are spelled exactly as the route's `verb` field, not prettified.
 const (
-	VerbLaunch         = "launch"
-	VerbKill           = "kill"
-	VerbReRun          = "re-run"
-	VerbReCheck        = "re-check"
-	VerbRetryPush      = "retry-push"
-	VerbClosePR        = "close-pr"
-	VerbRemoveWorktree = "remove-worktree"
-	VerbCancel         = "cancel"
-	VerbRefresh        = "refresh"
-	VerbAbort          = "abort"
-	VerbResolve        = "resolve"
-	VerbFollowUp       = "follow-up"
+	VerbLaunch           = "launch"
+	VerbKill             = "kill"
+	VerbReRun            = "re-run"
+	VerbReCheck          = "re-check"
+	VerbRetryPush        = "retry-push"
+	VerbClosePR          = "close-pr"
+	VerbRemoveWorktree   = "remove-worktree"
+	VerbCancel           = "cancel"
+	VerbRefresh          = "refresh"
+	VerbAbort            = "abort"
+	VerbResolve          = "resolve"
+	VerbFollowUp         = "follow-up"
+	VerbCommitResolution = "commit-resolution"
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
@@ -27,8 +28,10 @@ func Verbs(s State) []string {
 		return []string{VerbCancel}
 	case Running:
 		return []string{VerbKill}
-	case Failed, CutFailed, ConflictResolved:
+	case Failed, CutFailed:
 		return []string{VerbReRun, VerbFollowUp}
+	case ConflictResolved:
+		return []string{VerbCommitResolution}
 	case Checking:
 		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
 	case NeedsYou:

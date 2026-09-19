@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -261,6 +262,82 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	}
 }
 
+func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	contested := "https://github.com/acme/alpha/issues/1"
+	first := []cc.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha",
+	}}
+	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	fresh := "https://github.com/acme/alpha/issues/2"
+	second := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: fresh, Number: 2, Title: "Add y"}, Repo: "alpha"},
+		{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"},
+	}
+	err := store.ImportTickets(ctx, "project:y", second, at.Add(time.Hour))
+	if err == nil {
+		t.Fatal("ImportTickets: want an error, got nil")
+	}
+	var conflict *cc.FeatureConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("ImportTickets error = %v, want a *FeatureConflictError", err)
+	}
+	if conflict.URL != contested || conflict.Existing != "project:x" || conflict.Importing != "project:y" {
+		t.Errorf("conflict = %+v, want %s naming project:x and project:y", conflict, contested)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].Feature != "project:x" {
+		t.Fatalf("tickets = %+v, want only the original row, still under project:x, and fresh rolled back", tickets)
+	}
+}
+
+func TestImportTicketsAllowsAWithdrawnTicketIntoANewFeature(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	relabelled := "https://github.com/acme/alpha/issues/1"
+	first := []cc.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: relabelled, Number: 1, Title: "Add x"}, Repo: "alpha",
+	}}
+	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	if err := store.ImportTickets(ctx, "project:x", nil, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets withdrawing: %v", err)
+	}
+
+	second := []cc.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: relabelled, Number: 1, Title: "Add x"}, Repo: "alpha",
+	}}
+	if err := store.ImportTickets(ctx, "project:y", second, at.Add(2*time.Hour)); err != nil {
+		t.Fatalf("ImportTickets into project:y: want a withdrawn ticket to import cleanly, got %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].Feature != "project:y" {
+		t.Fatalf("tickets = %+v, want the relabelled ticket restored under project:y", tickets)
+	}
+}
+
 func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	t.Parallel()
 
@@ -301,6 +378,75 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending import intents = %+v, want the applied one consumed", pending)
+	}
+}
+
+func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	contested := "https://github.com/acme/alpha/issues/1"
+	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
+		t.Fatal(err)
+	}
+	src := fakeTrackerSource{
+		features: []tracker.Feature{"project:y"},
+		tickets: map[string][]tracker.Ticket{
+			"project:y": {{URL: contested, Number: 1, Title: "Add x"}},
+		},
+	}
+	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].Feature != "project:x" {
+		t.Fatalf("tickets = %+v, want the contested ticket to stay under project:x", tickets)
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending import intents = %+v, want the refused one consumed rather than retried", pending)
+	}
+
+	lastErr, failed, err := store.LastImportError(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, contested) {
+		t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, contested)
+	}
+
+	events, err := store.Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range events {
+		if e.Kind == "import_refused" && e.TicketURL == contested {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("events = %+v, want an import_refused event against %s", events, contested)
 	}
 }
 
@@ -364,6 +510,36 @@ func TestHandleImportRendersEveryFeatureAndItsTickets(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{"project:x", "https://github.com/acme/alpha/issues/1", "Add x"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page does not contain %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestHandleImportShowsTheLastRefusalWithoutEvents(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	url := "https://github.com/acme/alpha/issues/1"
+	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	conflict := &cc.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
+	if err := store.RecordImportRefusal(ctx, "project:y", conflict, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, time.Now, nil, "")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/import", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"project:y", url, "already belongs to feature"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}

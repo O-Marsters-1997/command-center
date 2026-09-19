@@ -139,6 +139,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.applyCommitResolutionIntents(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.pushPushable(ctx, obs); err != nil {
 		return err
 	}
@@ -224,7 +227,13 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			matched = append(matched, ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
 		}
 	}
-	return l.store.ImportTickets(ctx, feature, matched, l.now())
+
+	err := l.store.ImportTickets(ctx, feature, matched, l.now())
+	var conflict *FeatureConflictError
+	if errors.As(err, &conflict) {
+		return l.store.RecordImportRefusal(ctx, feature, conflict, l.now())
+	}
+	return err
 }
 
 // applyEditTicketIntents performs the actual write for every pending POST /ticket request,
@@ -536,7 +545,7 @@ func (l *Loop) spawnRun(
 			return err
 		}
 		if preamble != "" {
-			spawnPrompt = preamble + "\n\n" + prompt
+			spawnPrompt = "The previous run's prompt differed from this one:\n\n" + preamble + "\n\n" + prompt
 		}
 	}
 

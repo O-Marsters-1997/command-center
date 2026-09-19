@@ -75,7 +75,7 @@ func TestStateDecisions(t *testing.T) {
 		},
 		{
 			state: plan.ConflictResolved,
-			want:  []string{plan.VerbReRun, plan.VerbFollowUp},
+			want:  []string{plan.VerbCommitResolution},
 			tone:  "wait",
 		},
 	}

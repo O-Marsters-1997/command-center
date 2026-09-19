@@ -262,6 +262,25 @@ func Commit(ctx context.Context, worktreePath, message string) error {
 	return err
 }
 
+func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
+	out, err := git(ctx, worktreePath, "diff", "--cached", "--name-only")
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil, nil
+	}
+	return strings.Split(trimmed, "\n"), nil
+}
+
+// CommitNoEdit commits worktreePath's staged changes under the message git already wrote for
+// them, via --no-edit.
+func CommitNoEdit(ctx context.Context, worktreePath string) error {
+	_, err := git(ctx, worktreePath, "commit", "--no-edit")
+	return err
+}
+
 // Rebase replays worktreePath's own branch onto onto, dropping every commit reachable from
 // upstream. That is the shape a squash-merged base needs: the squash carries the base's work
 // under a commit with no ancestry, so replaying the branch's own copies conflicts against it
