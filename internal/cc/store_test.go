@@ -51,8 +51,8 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, dsn); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, dsn); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, dsn); got != 1 {
-		t.Errorf("goose version = %d, want 1", got)
+	if got := gooseVersion(t, dsn); got != 2 {
+		t.Errorf("goose version = %d, want 2", got)
 	}
 }
 
