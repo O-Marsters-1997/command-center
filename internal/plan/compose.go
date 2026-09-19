@@ -22,6 +22,14 @@ func ComposeResolve(t Ticket) string {
 		t.Branch, resolveSkillPath)
 }
 
+const followUpSkillPath = "cc/skills/follow-up/SKILL.md"
+
+// ComposeFollowUp renders the prompt a follow-up run authorises: the follow-up skill invocation
+// plus the operator's own typed instruction.
+func ComposeFollowUp(text string) string {
+	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
+}
+
 // Hash fingerprints a composed prompt. Consent is bound to content (docs/command-centre-
 // v1.md § 4b): a launch stores this at authorisation and the tick recomputes it at spawn
 // time, refusing on mismatch.

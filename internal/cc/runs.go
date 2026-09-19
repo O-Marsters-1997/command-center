@@ -175,10 +175,11 @@ func outcomeFromString(s string) plan.Outcome {
 }
 
 // VerbIntent is one queued action against a ticket — the loop's own read-then-act sequence, never
-// a handler's (see server.go's handleVerb).
+// a handler's (see server.go's handleVerb). Payload is empty for every verb that carries none.
 type VerbIntent struct {
 	ID       int64
 	TicketID string
+	Payload  string
 }
 
 // QueueVerbIntent records one requested verb against a ticket. A handler only ever does this one
@@ -195,6 +196,21 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 	return nil
 }
 
+// QueueVerbIntentWithPayload is QueueVerbIntent's sibling for a verb that carries its own
+// argument, such as follow-up's typed prompt text.
+func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, payload string, at time.Time) error {
+	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
+		At:       at.UTC(),
+		TicketID: ticketID,
+		Verb:     verb,
+		Payload:  notNull(payload),
+	})
+	if err != nil {
+		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
+	}
+	return nil
+}
+
 // PendingVerbIntents returns every unconsumed intent for verb, oldest first.
 func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbIntent, error) {
 	rows, err := s.q.PendingVerbIntents(ctx, verb)
@@ -204,7 +220,7 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 
 	var intents []VerbIntent
 	for _, row := range rows {
-		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID})
+		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: row.Payload.String})
 	}
 	return intents, nil
 }

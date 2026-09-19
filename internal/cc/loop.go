@@ -24,8 +24,9 @@ const tickPeriod = 15 * time.Second
 const killVerb = plan.VerbKill
 
 const (
-	runKindAgent   = "agent"
-	runKindResolve = "resolve"
+	runKindAgent    = "agent"
+	runKindResolve  = "resolve"
+	runKindFollowUp = "follow_up"
 )
 
 // Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
@@ -151,6 +152,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return err
 	}
 	if err := l.applyReRunIntents(ctx, obs); err != nil {
+		return err
+	}
+	if err := l.applyFollowUpIntents(ctx, obs); err != nil {
 		return err
 	}
 	if err := l.applyReCheckIntents(ctx, obs); err != nil {
@@ -495,26 +499,29 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent)
+	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "")
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
-// cut (cutAndSpawn) or already existed (verbs.go's re-run and resolveOne): reserve a run
-// skeleton to get a run id, then name the prompt file and the log file after it (they cannot be
-// named before it exists), spawn, and record the process's identity in the one UPDATE that is
-// its only record.
+// cut (cutAndSpawn) or already existed (verbs.go's re-run, resolveOne and followUpOne): reserve
+// a run skeleton to get a run id, then name the prompt file and the log file after it (they
+// cannot be named before it exists), spawn, and record the process's identity in the one UPDATE
+// that is its only record.
 //
 // A failure to spawn is recorded as `failed` on the reserved row — the process never existed,
 // so there is nothing to reap. On success, nothing may run between Spawn returning and the
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
+	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind, followUpText string,
 ) error {
 	var prompt string
-	if kind == runKindResolve {
+	switch kind {
+	case runKindResolve:
 		prompt = plan.ComposeResolve(planTicket(ticket))
-	} else {
+	case runKindFollowUp:
+		prompt = plan.ComposeFollowUp(followUpText)
+	default:
 		prompt = plan.Compose(planTicket(ticket))
 		if ticket.Body != "" {
 			prompt += "\n\n## Ticket\n\n" + ticket.Body

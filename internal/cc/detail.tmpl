@@ -35,4 +35,12 @@
     <div class="run-log-live" hx-ext="sse" sse-connect="{{.Log.StreamPath}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     {{with .Log.Result}}<p class="run-log-result mt-2">{{.}}</p>{{end}}
   </div>
+  {{- if .FollowUpAvailable}}
+  <form method="post" action="/verb" hx-post="{{or .VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML" class="follow-up mt-3 flex flex-col gap-2">
+    <input type="hidden" name="ticket" value="{{.URL}}">
+    <input type="hidden" name="verb" value="{{.FollowUpVerb}}">
+    <textarea name="prompt" rows="3" placeholder="Send this run a follow-up prompt…" class="w-full"></textarea>
+    <button type="submit" class="self-end">send</button>
+  </form>
+  {{- end}}
 </td>

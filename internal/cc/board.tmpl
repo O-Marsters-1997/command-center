@@ -65,6 +65,7 @@
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
+      {{- else if eq . $row.FollowUpVerb -}}
       {{- else if destructive .}}
       <form method="get" action="/confirm">
         <input type="hidden" name="ticket" value="{{$row.URL}}">

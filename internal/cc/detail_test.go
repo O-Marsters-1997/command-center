@@ -121,6 +121,57 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	}
 }
 
+func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 1
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+		t.Fatal(err)
+	}
+	obs := cc.Observation{
+		ObservedAt: at,
+		Worktrees:  map[string]string{cc.BranchKey("repo", "cc-1"): "/repos/repo-cc-1"},
+		PRs:        map[string]gh.PR{},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, "")
+	page := renderPage(t, server)
+	if state := rowState(t, page, ticket.URL); state != "failed" {
+		t.Fatalf("state = %q, want failed", state)
+	}
+
+	row := rowHTML(t, page, ticket.URL)
+	if strings.Contains(row, `value="follow-up"`) {
+		t.Errorf("the row itself must never offer a follow-up button, want it only in the detail:\n%s", row)
+	}
+
+	selected := renderPath(t, server, selPagePath(ticket.URL))
+	if !strings.Contains(selected, `<textarea name="prompt"`) {
+		t.Errorf("selected page has no follow-up textarea:\n%s", selected)
+	}
+	if !strings.Contains(selected, `<input type="hidden" name="verb" value="follow-up">`) {
+		t.Errorf("selected page has no follow-up form:\n%s", selected)
+	}
+}
+
 const goldenBoardSelected = "testdata/board_selected.golden.html"
 
 func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
