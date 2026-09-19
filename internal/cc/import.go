@@ -15,6 +15,8 @@ import (
 // an import intent's own "ticket" id is a feature label, not a url.
 const importVerb = "import"
 
+const eventImportRefused = "import_refused"
+
 // TrackerSource resolves the tracker.Source that reads ticketURL's issue tracker. tracker.For in
 // production; a test substitutes a fake here rather than shelling out to gh.
 type TrackerSource func(ticketURL string) (tracker.Source, error)

@@ -131,6 +131,17 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	return tickets, nil
 }
 
+// FeatureConflictError reports a ticket already stored under a different feature than the one
+// being imported.
+type FeatureConflictError struct {
+	URL, Existing, Importing string
+}
+
+func (e *FeatureConflictError) Error() string {
+	return fmt.Sprintf("ticket %s already belongs to feature %q, refusing to import it into %q",
+		e.URL, e.Existing, e.Importing)
+}
+
 // ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing (and later
 // restoring) any row the tracker stops (or resumes) returning for that feature. Every
 // tracker-owned column refreshes each call; branch and blocked_by are seeded once and never
@@ -152,6 +163,15 @@ func (s *Store) ImportTickets(
 	syncedAt := now.UTC().Format(time.RFC3339)
 	returned := make(map[string]bool, len(tickets))
 	for _, t := range tickets {
+		var existing string
+		existing, err = qtx.TicketFeature(ctx, t.URL)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("read feature for %s: %w", t.URL, err)
+		}
+		if existing != "" && existing != feature {
+			return &FeatureConflictError{URL: t.URL, Existing: existing, Importing: feature}
+		}
+
 		returned[t.URL] = true
 		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
 		// ponytail: source is hardcoded to "github" because tracker.Source names no other
@@ -217,6 +237,7 @@ func notNullTime(t time.Time) sql.NullTime {
 const (
 	metaObservation   = "observation"
 	metaLastError     = "last_error"
+	metaImportError   = "import_error"
 	metaCheckingTicks = "checking_ticks"
 	metaLastVerdicts  = "last_verdicts"
 )
@@ -303,6 +324,29 @@ func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
 	return tickErr, found, err
+}
+
+// ImportError is the last feature-conflict import refusal, rendered on GET /import.
+type ImportError struct {
+	At      time.Time `json:"at"`
+	Feature string    `json:"feature"`
+	Message string    `json:"message"`
+}
+
+// RecordImportRefusal stores conflict as the last import failure and appends its audit event against the named ticket.
+func (s *Store) RecordImportRefusal(ctx context.Context, feature string, conflict *FeatureConflictError, now time.Time) error {
+	importErr := ImportError{At: now, Feature: feature, Message: conflict.Error()}
+	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
+		return err
+	}
+	return s.AppendEvent(ctx, Event{At: now, TicketURL: conflict.URL, Kind: eventImportRefused, Detail: conflict.Error()})
+}
+
+// LastImportError returns the last import refusal, if any; it is not cleared by a later success.
+func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) {
+	var importErr ImportError
+	found, err := s.getMeta(ctx, metaImportError, &importErr)
+	return importErr, found, err
 }
 
 // Event is one append-only audit row.

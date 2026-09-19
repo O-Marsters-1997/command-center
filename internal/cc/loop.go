@@ -226,7 +226,13 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			matched = append(matched, ImportedTicket{Ticket: t, Repo: repoName})
 		}
 	}
-	return l.store.ImportTickets(ctx, feature, matched, l.now())
+
+	err := l.store.ImportTickets(ctx, feature, matched, l.now())
+	var conflict *FeatureConflictError
+	if errors.As(err, &conflict) {
+		return l.store.RecordImportRefusal(ctx, feature, conflict, l.now())
+	}
+	return err
 }
 
 // applyEditTicketIntents performs the actual write for every pending POST /ticket request,
