@@ -34,8 +34,8 @@ var assetsDir embed.FS
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
-		"head":        func(r *row) rowSlot { return newRowSlot(*r, true, 0) },
-		"child":       func(r row, depth int) rowSlot { return newRowSlot(r, false, depth) },
+		"head":        func(r *row, scope string) rowSlot { return newRowSlot(*r, true, 0, scope) },
+		"child":       func(r row, depth int, scope string) rowSlot { return newRowSlot(r, false, depth, scope) },
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
 		"percent":     func(part, total int) int { return percentOf(part, total) },
 	}).
@@ -74,18 +74,22 @@ var detailSource string
 // own tree, and board.tmpl calls it by name via {{template "detail" .}}.
 var _ = template.Must(boardFragment.New("detail").Parse(detailSource))
 
-// rowSlot carries LaunchVerb and CancelVerb because html/template resets $ to the invoked
-// subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies.
+// rowSlot carries LaunchVerb, CancelVerb and Scope because html/template resets $ to the invoked
+// subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies -- Scope is
+// board.tmpl's own RepoScope, needed to name a row whose repo differs from it.
 type rowSlot struct {
 	row
 	Head       bool
 	Depth      int
 	LaunchVerb string
 	CancelVerb string
+	Scope      string
 }
 
-func newRowSlot(r row, head bool, depth int) rowSlot {
-	return rowSlot{row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel}
+func newRowSlot(r row, head bool, depth int, scope string) rowSlot {
+	return rowSlot{
+		row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, Scope: scope,
+	}
 }
 
 //go:embed preview.tmpl
@@ -176,6 +180,9 @@ func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
 // is the graph island's only view of the data too (docs/prds/prd-fleet-view.md § One derivation).
 type row struct {
 	URL string `json:"url"`
+	// Repo names the row's own configured repo, so a group kept whole by a member in scope can
+	// still name where an out-of-scope sibling lives (CONTEXT.md § Scope, ADR 11).
+	Repo string `json:"repo"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
 	Title      string `json:"title"`
@@ -311,6 +318,19 @@ type pageView struct {
 	BoardPath string
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
+	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
+	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
+	RepoScope string
+	// RepoLinks is the masthead's own repo nav row (CONTEXT.md § Scope), empty when no repo is
+	// configured so the masthead renders no such row at all.
+	RepoLinks []scopeLink
+}
+
+// scopeLink is one masthead nav pill for a scope axis: "all" plus one per configured repo.
+type scopeLink struct {
+	Name    string
+	Path    string
+	Current bool
 }
 
 const observeStaleAfter = 20 * time.Second
@@ -351,6 +371,8 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *templa
 }
 
 func (s *Server) render(ctx context.Context, params viewParams) (pageView, error) {
+	params.Repo = normalizeRepoScope(params.Repo, s.stackingByRepo)
+
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		return pageView{}, err
@@ -372,15 +394,18 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
 	applyViewState(rows, params)
+	groups := filterGroupsByRepo(groupRows(rows), params.Repo)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
-		Groups:       groupRows(rows),
-		Band:         deriveBand(rows),
+		Groups:       groups,
+		Band:         deriveBand(rowsIn(groups)),
 		BoardPath:    params.boardPath(),
 		View:         params.View,
+		RepoScope:    params.Repo,
+		RepoLinks:    repoLinksFor(s.repos, params),
 	}
 	if observed {
 		view.Observe = relative(now, obs.ObservedAt)
@@ -523,6 +548,7 @@ func derive(
 		pr := obs.PRs[t.Branch]
 		rows = append(rows, row{
 			URL:            t.URL,
+			Repo:           t.Repo,
 			Title:          obs.Titles[t.URL],
 			State:          state.String(),
 			Reason:         string(reason),
@@ -627,6 +653,62 @@ func groupRows(rows []row) []group {
 		groups = append(groups, group{Children: []row{r}})
 	}
 	return groups
+}
+
+// filterGroupsByRepo narrows groups to a repo scope, admitting a matching group whole: keeping a
+// group's root or any child out of it would leave groupRows' unchecked byURL[root] lookup
+// pointing at nothing (ADR 11 "a scope admits a group whole"). An empty repo is unscoped.
+func filterGroupsByRepo(groups []group, repo string) []group {
+	if repo == "" {
+		return groups
+	}
+	filtered := make([]group, 0, len(groups))
+	for _, g := range groups {
+		if groupInRepo(g, repo) {
+			filtered = append(filtered, g)
+		}
+	}
+	return filtered
+}
+
+func groupInRepo(g group, repo string) bool {
+	if g.Root != nil && g.Root.Repo == repo {
+		return true
+	}
+	for _, c := range g.Children {
+		if c.Repo == repo {
+			return true
+		}
+	}
+	return false
+}
+
+// rowsIn flattens groups back to the rows they render, which is what deriveBand counts: a scoped
+// group still shows its out-of-scope members, so the band counts them too (ADR 11).
+func rowsIn(groups []group) []row {
+	rows := make([]row, 0, len(groups))
+	for _, g := range groups {
+		if g.Root != nil {
+			rows = append(rows, *g.Root)
+		}
+		rows = append(rows, g.Children...)
+	}
+	return rows
+}
+
+// repoLinksFor is the masthead's repo nav row: "all" plus one pill per configured repo, nil when
+// none are configured so a single-repo fixture's masthead renders no extra row at all.
+func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
+	if len(repos) == 0 {
+		return nil
+	}
+	links := make([]scopeLink, 0, len(repos)+1)
+	links = append(links, scopeLink{Name: "all", Path: params.withRepo("").pagePath(), Current: params.Repo == ""})
+	for _, r := range repos {
+		links = append(links,
+			scopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
+	}
+	return links
 }
 
 // baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,
