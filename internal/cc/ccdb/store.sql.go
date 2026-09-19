@@ -33,15 +33,6 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error 
 	return err
 }
 
-const deleteTicket = `-- name: DeleteTicket :exec
-DELETE FROM tickets WHERE url = $1
-`
-
-func (q *Queries) DeleteTicket(ctx context.Context, url string) error {
-	_, err := q.db.ExecContext(ctx, deleteTicket, url)
-	return err
-}
-
 const events = `-- name: Events :many
 SELECT at, ticket_id, kind, detail FROM events ORDER BY id
 `
@@ -98,7 +89,7 @@ VALUES ($1, $2, 'github', $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, source = excluded.source, group_key = excluded.group_key,
     title = excluded.title, body = excluded.body, status = excluded.status,
-    synced_at = excluded.synced_at
+    synced_at = excluded.synced_at, withdrawn_at = NULL
 `
 
 type ImportTicketParams struct {
@@ -143,20 +134,60 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
-const tickets = `-- name: Tickets :many
-SELECT url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at
-FROM tickets ORDER BY url
+const ticketURLsInGroup = `-- name: TicketURLsInGroup :many
+SELECT url FROM tickets WHERE group_key = $1
 `
 
-func (q *Queries) Tickets(ctx context.Context) ([]Ticket, error) {
+func (q *Queries) TicketURLsInGroup(ctx context.Context, groupKey string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, ticketURLsInGroup, groupKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, err
+		}
+		items = append(items, url)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const tickets = `-- name: Tickets :many
+SELECT url, repo, branch, blocked_by, source, title, body, status, group_key, synced_at
+FROM tickets WHERE withdrawn_at IS NULL ORDER BY url
+`
+
+type TicketsRow struct {
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy json.RawMessage
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	GroupKey  string
+	SyncedAt  string
+}
+
+func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 	rows, err := q.db.QueryContext(ctx, tickets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Ticket
+	var items []TicketsRow
 	for rows.Next() {
-		var i Ticket
+		var i TicketsRow
 		if err := rows.Scan(
 			&i.URL,
 			&i.Repo,
@@ -217,5 +248,19 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) erro
 		arg.GroupKey,
 		arg.SyncedAt,
 	)
+	return err
+}
+
+const withdrawTicket = `-- name: WithdrawTicket :exec
+UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL
+`
+
+type WithdrawTicketParams struct {
+	WithdrawnAt sql.NullTime
+	URL         string
+}
+
+func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) error {
+	_, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
 	return err
 }
