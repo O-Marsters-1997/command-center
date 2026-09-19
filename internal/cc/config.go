@@ -11,6 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -47,8 +48,11 @@ type Ticket struct {
 // Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
 // the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
 type Repo struct {
-	Name        string            `toml:"name"`
-	Remote      string            `toml:"remote"`
+	Name   string `toml:"name"`
+	Remote string `toml:"remote"`
+	// Tracker names which issue tracker this repo's tickets live in. Absent, LoadConfig defaults
+	// it to "github".
+	Tracker     string            `toml:"tracker"`
 	Path        string            `toml:"path"`
 	Stacking    bool              `toml:"stacking"`
 	CompatCheck string            `toml:"compat_check"`
@@ -106,6 +110,9 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, err
 	}
 	for i, r := range cfg.Repos {
+		if r.Tracker == "" {
+			cfg.Repos[i].Tracker = string(tracker.GitHub)
+		}
 		checkout, err := r.CheckoutPath(dataDir, configDir)
 		if err != nil {
 			return Config{}, err
