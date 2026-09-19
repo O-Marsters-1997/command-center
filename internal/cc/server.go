@@ -79,16 +79,19 @@ var _ = template.Must(boardFragment.New("detail").Parse(detailSource))
 // board.tmpl's own RepoScope, needed to name a row whose repo differs from it.
 type rowSlot struct {
 	row
-	Head       bool
-	Depth      int
-	LaunchVerb string
-	CancelVerb string
-	Scope      string
+	Head         bool
+	Depth        int
+	LaunchVerb   string
+	CancelVerb   string
+	FollowUpVerb string
+	Scope        string
 }
 
 func newRowSlot(r row, head bool, depth int, scope string) rowSlot {
 	return rowSlot{
-		row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, Scope: scope,
+		row: r, Head: head, Depth: depth,
+		LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, FollowUpVerb: plan.VerbFollowUp,
+		Scope: scope,
 	}
 }
 
@@ -259,6 +262,9 @@ type check struct {
 }
 
 func (r row) Ticket() string { return "#" + path.Base(r.URL) }
+
+// FollowUpAvailable reports whether this row's state offers follow-up.
+func (r row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
 func (r row) Stack() string {
 	if r.Base == "" || r.Base == defaultBaseBranch {
@@ -1106,6 +1112,15 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var prompt string
+	if verb == followUpVerb {
+		prompt = strings.TrimSpace(r.FormValue("prompt"))
+		if prompt == "" {
+			http.Error(w, "prompt is required for follow-up", http.StatusBadRequest)
+			return
+		}
+	}
+
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1116,7 +1131,12 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.QueueVerbIntent(ctx, ticketURL, verb, s.now()); err != nil {
+	if verb == followUpVerb {
+		err = s.store.QueueVerbIntentWithPayload(ctx, ticketURL, verb, prompt, s.now())
+	} else {
+		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.now())
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

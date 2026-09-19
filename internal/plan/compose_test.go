@@ -37,6 +37,20 @@ func TestComposeResolve(t *testing.T) {
 	}
 }
 
+func TestComposeFollowUp(t *testing.T) {
+	t.Parallel()
+
+	got := plan.ComposeFollowUp("fix the flaky assertion in TestThing")
+	for _, want := range []string{"cc/skills/follow-up/SKILL.md", "fix the flaky assertion in TestThing"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ComposeFollowUp = %q, want it to mention %q", got, want)
+		}
+	}
+	if strings.Contains(got, "/implement") {
+		t.Errorf("ComposeFollowUp = %q, want it never to compose the implement instruction", got)
+	}
+}
+
 func TestHashIsStableAndSensitiveToInput(t *testing.T) {
 	t.Parallel()
 

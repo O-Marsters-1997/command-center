@@ -20,26 +20,42 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.Ready, want: []string{plan.VerbLaunch}, tone: "idle"},
 		{state: plan.Queued, want: []string{plan.VerbCancel}, unattended: true, tone: "wait"},
 		{state: plan.Running, want: []string{plan.VerbKill}, unattended: true, tone: "live"},
-		{state: plan.Failed, want: []string{plan.VerbReRun}, tone: "stop"},
-		{state: plan.CutFailed, want: []string{plan.VerbReRun}, tone: "stop"},
+		{state: plan.Failed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
+		{state: plan.CutFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
 		{state: plan.PushPending, want: nil, unattended: true, tone: "live"},
-		{state: plan.Checking, want: []string{plan.VerbReRun, plan.VerbClosePR}, unattended: true, tone: "live"},
+		{
+			state:      plan.Checking,
+			want:       []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbClosePR},
+			unattended: true, tone: "live",
+		},
 		{
 			state: plan.NeedsYou,
-			want:  []string{plan.VerbReRun, plan.VerbKill, plan.VerbClosePR},
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill, plan.VerbClosePR},
 			tone:  "stop",
 		},
-		{state: plan.PushFailed, want: []string{plan.VerbRetryPush, plan.VerbReRun}, tone: "stop"},
+		{
+			state: plan.PushFailed,
+			want:  []string{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp},
+			tone:  "stop",
+		},
 		{state: plan.ReviewMe, want: []string{plan.VerbClosePR}, tone: "wait"},
 		{state: plan.PRMerged, want: []string{plan.VerbRemoveWorktree}, tone: "done"},
 		{
 			state: plan.PRClosedUnmerged,
-			want:  []string{plan.VerbReRun, plan.VerbRemoveWorktree},
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree},
 			tone:  "stop",
 		},
-		{state: plan.BaseGone, want: []string{plan.VerbReRun, plan.VerbRemoveWorktree}, tone: "stop"},
+		{
+			state: plan.BaseGone,
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree},
+			tone:  "stop",
+		},
 		{state: plan.Cancelled, want: []string{plan.VerbLaunch}, tone: "idle"},
-		{state: plan.BaseMoved, want: []string{plan.VerbRefresh, plan.VerbReRun}, unattended: true, tone: "live"},
+		{
+			state:      plan.BaseMoved,
+			want:       []string{plan.VerbRefresh, plan.VerbReRun, plan.VerbFollowUp},
+			unattended: true, tone: "live",
+		},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
 			state: plan.ConflictsWithMain,
@@ -48,17 +64,17 @@ func TestStateDecisions(t *testing.T) {
 		},
 		{
 			state: plan.VerificationFailed,
-			want:  []string{plan.VerbRetryPush, plan.VerbReRun},
+			want:  []string{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp},
 			tone:  "stop",
 		},
 		{
 			state: plan.WaitingOnProducerDeploy,
-			want:  []string{plan.VerbReCheck, plan.VerbReRun},
+			want:  []string{plan.VerbReCheck, plan.VerbReRun, plan.VerbFollowUp},
 			tone:  "wait",
 		},
 		{
 			state: plan.ConflictResolved,
-			want:  []string{plan.VerbReRun},
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp},
 			tone:  "wait",
 		},
 	}
@@ -83,8 +99,14 @@ func TestStateDecisions(t *testing.T) {
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Verbs(%s) = %v, want %v", tt.state, got, tt.want)
 			}
-			if len(got) > 3 {
-				t.Errorf("Verbs(%s) offers %d verbs, the board has room for 3", tt.state, len(got))
+			rowButtons := 0
+			for _, v := range got {
+				if v != plan.VerbFollowUp {
+					rowButtons++
+				}
+			}
+			if rowButtons > 3 {
+				t.Errorf("Verbs(%s) renders %d row buttons, the board has room for 3", tt.state, rowButtons)
 			}
 			if got := tt.state.Unattended(); got != tt.unattended {
 				t.Errorf("%s.Unattended() = %t, want %t", tt.state, got, tt.unattended)

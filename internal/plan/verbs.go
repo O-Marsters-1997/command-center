@@ -14,6 +14,7 @@ const (
 	VerbRefresh        = "refresh"
 	VerbAbort          = "abort"
 	VerbResolve        = "resolve"
+	VerbFollowUp       = "follow-up"
 )
 
 // Verbs is the verbs a row in this state offers, in the order the page renders them
@@ -27,29 +28,29 @@ func Verbs(s State) []string {
 	case Running:
 		return []string{VerbKill}
 	case Failed, CutFailed, ConflictResolved:
-		return []string{VerbReRun}
+		return []string{VerbReRun, VerbFollowUp}
 	case Checking:
-		return []string{VerbReRun, VerbClosePR}
+		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
 	case NeedsYou:
-		return []string{VerbReRun, VerbKill, VerbClosePR}
+		return []string{VerbReRun, VerbFollowUp, VerbKill, VerbClosePR}
 	case PushFailed:
-		return []string{VerbRetryPush, VerbReRun}
+		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case ReviewMe:
 		return []string{VerbClosePR}
 	case PRMerged:
 		return []string{VerbRemoveWorktree}
 	case PRClosedUnmerged, BaseGone:
-		return []string{VerbReRun, VerbRemoveWorktree}
+		return []string{VerbReRun, VerbFollowUp, VerbRemoveWorktree}
 	case BaseMoved:
-		return []string{VerbRefresh, VerbReRun}
+		return []string{VerbRefresh, VerbReRun, VerbFollowUp}
 	case RefreshConflicted:
 		return []string{VerbAbort}
 	case ConflictsWithMain:
 		return []string{VerbResolve, VerbRefresh, VerbClosePR}
 	case VerificationFailed:
-		return []string{VerbRetryPush, VerbReRun}
+		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case WaitingOnProducerDeploy:
-		return []string{VerbReCheck, VerbReRun}
+		return []string{VerbReCheck, VerbReRun, VerbFollowUp}
 	default:
 		return nil
 	}

@@ -207,3 +207,86 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 		t.Errorf("body after the redirect is not the board: %s", body)
 	}
 }
+
+func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	tests := []struct {
+		name   string
+		prompt string
+	}{
+		{name: "missing prompt field", prompt: ""},
+		{name: "whitespace-only prompt", prompt: "   \n\t  "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
+			if tt.prompt != "" {
+				body.Set("prompt", tt.prompt)
+			}
+			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body.Encode()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Origin", srv.URL)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", resp.StatusCode)
+			}
+		})
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending follow-up intents = %+v, want none queued", pending)
+	}
+}
+
+func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	body := url.Values{
+		"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"},
+	}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+
+	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+		t.Fatalf("pending follow-up intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+	if pending[0].Payload != "fix the flaky test" {
+		t.Errorf("payload = %q, want the typed prompt text", pending[0].Payload)
+	}
+}

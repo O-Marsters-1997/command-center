@@ -256,12 +256,13 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 }
 
 const pendingVerbIntents = `-- name: PendingVerbIntents :many
-SELECT id, ticket_id FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
+SELECT id, ticket_id, payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
 `
 
 type PendingVerbIntentsRow struct {
 	ID       int64
 	TicketID string
+	Payload  sql.NullString
 }
 
 func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]PendingVerbIntentsRow, error) {
@@ -273,7 +274,7 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 	var items []PendingVerbIntentsRow
 	for rows.Next() {
 		var i PendingVerbIntentsRow
-		if err := rows.Scan(&i.ID, &i.TicketID); err != nil {
+		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -299,6 +300,27 @@ type QueueVerbIntentParams struct {
 
 func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams) error {
 	_, err := q.db.ExecContext(ctx, queueVerbIntent, arg.At, arg.TicketID, arg.Verb)
+	return err
+}
+
+const queueVerbIntentWithPayload = `-- name: QueueVerbIntentWithPayload :exec
+INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, $3, $4)
+`
+
+type QueueVerbIntentWithPayloadParams struct {
+	At       time.Time
+	TicketID string
+	Verb     string
+	Payload  sql.NullString
+}
+
+func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbIntentWithPayloadParams) error {
+	_, err := q.db.ExecContext(ctx, queueVerbIntentWithPayload,
+		arg.At,
+		arg.TicketID,
+		arg.Verb,
+		arg.Payload,
+	)
 	return err
 }
 
