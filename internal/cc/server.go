@@ -432,6 +432,10 @@ func (s *Server) loadTicketFacts(ctx context.Context) (ticketFacts, verdictDeps,
 	if err != nil {
 		return ticketFacts{}, verdictDeps{}, err
 	}
+	removals, err := s.store.RemovalRefusals(ctx)
+	if err != nil {
+		return ticketFacts{}, verdictDeps{}, err
+	}
 	vd, err := verdictDepsFor(ctx, s.store, s.checksByRepo, s.mergifySHAByRepo, s.compatCheckByRepo)
 	if err != nil {
 		return ticketFacts{}, verdictDeps{}, err
@@ -439,7 +443,7 @@ func (s *Server) loadTicketFacts(ctx context.Context) (ticketFacts, verdictDeps,
 
 	facts := ticketFacts{
 		memberships: memberships, latestRuns: latestRuns,
-		pushes: pushFacts, refreshes: refreshFacts, pendingVerbs: pendingVerbs,
+		pushes: pushFacts, refreshes: refreshFacts, pendingVerbs: pendingVerbs, removals: removals,
 	}
 	return facts, vd, nil
 }
@@ -482,6 +486,7 @@ type ticketFacts struct {
 	pushes       map[string]PushFact
 	refreshes    map[string]RefreshFact
 	pendingVerbs map[string][]string
+	removals     map[string]string
 }
 
 // derive labels every row from the stored facts plus this tick's observation. No status is
@@ -536,7 +541,7 @@ func derive(
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        logPath,
 			CancelCount:    membership.Members,
-			Warning:        readyToMergeWarning(pr),
+			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(state, facts.removals[t.URL])),
 			BaselineSHA:    latestRun.BaselineSHA,
 			Checks:         sortedChecks(pr.Checks),
 			Blocking:       unlock.Blocking,
@@ -651,6 +656,16 @@ func readyToMergeWarning(pr gh.PR) string {
 	}
 	return fmt.Sprintf(
 		"ready-to-merge on a non-main base (%s): would squash into the parent branch, checks unseen", pr.BaseRef)
+}
+
+// removalWarning surfaces the row's own remove-worktree refusal, only while its state still
+// offers the verb -- once the row leaves that state (removed, or no longer eligible), a refusal
+// from before must never render as if it were today's (docs/adr/0012-cc-proves-what-tp-cannot.md).
+func removalWarning(s plan.State, detail string) string {
+	if detail == "" || !slices.Contains(plan.Verbs(s), plan.VerbRemoveWorktree) {
+		return ""
+	}
+	return "worktree removal refused: " + detail
 }
 
 // draftReasonFor names why a drafted row is still a draft: plan.DraftGate's own reason, or --

@@ -1,0 +1,36 @@
+# A squash-merged PR's branch is gone from GitHub before a human ever presses remove-worktree
+# (docs/adr/0012-cc-proves-what-tp-cannot.md): both repos this app drives delete the head branch
+# on merge, and this app's own fetch --prune then drops the remote-tracking ref tp remove
+# --merged would otherwise check unpushed commits against. cc proves the same fact itself --
+# the branch sits exactly where it last pushed it -- and forces past tp's own check instead of
+# refusing forever on a ref GitHub already deleted.
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh no-prs
+
+exec cc request -form 'group=project:single-task' POST /import
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
+
+# The human merges (squash) and GitHub deletes the branch; the next fetch --prune drops
+# origin/cc-1-x from this app's own checkout, exactly as it would after a real squash merge.
+exec git -C $WORK/repo push -q origin --delete cc-1-x
+cc-fake-gh single-task-merged
+exec cc tick --count 1
+
+exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+
+! exists $WORK/repo-cc-1-x
+grep -count=1 'remove --force cc-1-x' $WORK/tp.log
+! grep 'remove --merged cc-1-x' $WORK/tp.log
+exec cc request GET /events
+stdout '"TicketURL":"https://github.com/sandbox-org/single-task/issues/CC-1","Kind":"worktree_removed","Detail":"forced.*pushed tip"'
+exec cc request GET /
+! stdout '>#CC-1</button>'

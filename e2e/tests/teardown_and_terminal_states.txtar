@@ -1,9 +1,9 @@
 # Terminal states and teardown (docs/prds/prd-command-centre.md § Phase 6): a merged fixture derives
-# merged and remove-worktree closes the ticket's issue, calls faketp remove --merged, and drops
-# its row from the board; a closed-unmerged fixture on a row that has run derives base_gone, not
-# blocked; remove-worktree refuses a dirty worktree; re-run on a failed row creates a second runs
-# row in the same worktree and pushes its commits through the same push step; close-pr derives
-# pr_closed_unmerged.
+# merged and remove-worktree tears down its worktree via faketp remove --merged, closes the
+# ticket's issue, and drops its row from the board; a closed-unmerged fixture on a row that has
+# run derives base_gone, not blocked; remove-worktree refuses a dirty worktree, before tp is ever
+# called; re-run on a failed row creates a second runs row in the same worktree and pushes its
+# commits through the same push step; close-pr derives pr_closed_unmerged.
 
 cc-init-repo
 cc-config teardown-cc7-empty
@@ -51,27 +51,26 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
 exec cc request GET /
 stdout '>merged</span>[\s\S]*?>#CC-1</button>'
 
-# remove-worktree refuses a dirty worktree: the file is left, nothing is removed.
+# remove-worktree refuses a dirty worktree: cc's own check (docs/adr/0012-cc-proves-what-tp-cannot.md)
+# catches it before tp is ever called, so the file is left, nothing is removed.
 cp scratch.txt $WORK/repo-cc-1-x/scratch.txt
 exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'
 exec cc tick --count 1
 exists $WORK/repo-cc-1-x
 exec cc request GET /events
-stdout '"Kind":"remove_worktree_refused","Detail":".*untracked files'
+stdout '"Kind":"remove_worktree_refused","Detail":"worktree is dirty"'
 exec rm $WORK/repo-cc-1-x/scratch.txt
 
-# Cleaned up, the same verb now succeeds: the issue is closed, tp remove --merged tears down the
-# worktree, and the ticket's row drops off the board entirely.
+# Cleaned up, the same verb now succeeds: tp remove --merged tears the worktree down, the issue
+# closes, and the ticket's row drops off the board entirely.
 exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'
 exec cc tick --count 1
 ! exists $WORK/repo-cc-1-x
-# Twice: the dirty attempt above also reached tp remove --merged, which is what refused it --
-# dirty and unpushed are now tp's own checks, not a guard the app runs before calling it.
-grep -count=2 'remove --merged cc-1-x' $WORK/tp.log
-# Twice too: the issue closes before tp.Remove runs, so the dirty attempt above closed it as
-# well -- deliberately, since tp.Remove is the irreversible step and closing an issue twice is a
-# no-op, unlike tearing a worktree down with the issue still open and no way back to it.
-grep -count=2 'issue close https://github.com/sandbox-org/teardown/issues/CC-1' $WORK/gh.log
+# Once: the dirty attempt above never reached tp at all -- cc's own dirty check refused first.
+grep -count=1 'remove --merged cc-1-x' $WORK/tp.log
+# Once too: teardown now runs before the issue closes (the reverse of the original order), so the
+# dirty attempt above -- refused before either step ran -- never reached gh issue close either.
+grep -count=1 'issue close https://github.com/sandbox-org/teardown/issues/CC-1' $WORK/gh.log
 exec cc request GET /events
 # CC-1's row is withdrawn, not deleted, so this event keeps its real ticket_id FK.
 stdout '"TicketURL":"https://github.com/sandbox-org/teardown/issues/CC-1","Kind":"worktree_removed"'
