@@ -24,8 +24,8 @@ func TestConflictingPeerHold(t *testing.T) {
 	t.Run("a conflicting pair holds the higher ref behind the lower", func(t *testing.T) {
 		t.Parallel()
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			lower.Branch:  {higher.Branch: true},
-			higher.Branch: {lower.Branch: true},
+			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
+			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
 		held := conflictingPeerHold(tickets, byURL, prs, stacking, obs)
 		if held[higher.URL] != lower.Branch {
@@ -39,8 +39,8 @@ func TestConflictingPeerHold(t *testing.T) {
 	t.Run("a clean pair holds neither", func(t *testing.T) {
 		t.Parallel()
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			lower.Branch:  {higher.Branch: false},
-			higher.Branch: {lower.Branch: false},
+			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): false},
+			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): false},
 		}}
 		held := conflictingPeerHold(tickets, byURL, prs, stacking, obs)
 		if len(held) != 0 {
@@ -59,8 +59,8 @@ func TestConflictingPeerHold(t *testing.T) {
 		}
 		stackingOn := map[string]bool{"r": true}
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			lower.Branch:  {higher.Branch: true},
-			higher.Branch: {lower.Branch: true},
+			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
+			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
 		held := conflictingPeerHold(tickets, stackedByURL, prs, stackingOn, obs)
 		if len(held) != 0 {
@@ -72,8 +72,8 @@ func TestConflictingPeerHold(t *testing.T) {
 		t.Parallel()
 		noPR := map[string]plan.PRState{lower.Branch: plan.Open}
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			lower.Branch:  {higher.Branch: true},
-			higher.Branch: {lower.Branch: true},
+			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
+			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
 		held := conflictingPeerHold(tickets, byURL, noPR, stacking, obs)
 		if len(held) != 0 {
@@ -94,9 +94,9 @@ func TestConflictingPeerHold(t *testing.T) {
 		prs := map[string]plan.PRState{a.Branch: plan.Open, b.Branch: plan.Open, c.Branch: plan.Open}
 		stacking := map[string]bool{"r": false}
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			a.Branch: {b.Branch: true, c.Branch: false},
-			b.Branch: {a.Branch: true, c.Branch: true},
-			c.Branch: {a.Branch: false, b.Branch: true},
+			branchKey("r", a.Branch): {branchKey("r", b.Branch): true, branchKey("r", c.Branch): false},
+			branchKey("r", b.Branch): {branchKey("r", a.Branch): true, branchKey("r", c.Branch): true},
+			branchKey("r", c.Branch): {branchKey("r", a.Branch): false, branchKey("r", b.Branch): true},
 		}}
 		held := conflictingPeerHold([]Ticket{c, b, a}, byURL, prs, stacking, obs)
 		if held[b.URL] != a.Branch {
@@ -120,8 +120,8 @@ func TestConflictingPeerHold(t *testing.T) {
 		}
 		prs := map[string]plan.PRState{nine.Branch: plan.Open, hundred.Branch: plan.Open}
 		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
-			nine.Branch:    {hundred.Branch: true},
-			hundred.Branch: {nine.Branch: true},
+			branchKey("r", nine.Branch):    {branchKey("r", hundred.Branch): true},
+			branchKey("r", hundred.Branch): {branchKey("r", nine.Branch): true},
 		}}
 		held := conflictingPeerHold([]Ticket{hundred, nine}, byURL, prs, stacking, obs)
 		if held[hundred.URL] != nine.Branch {

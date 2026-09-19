@@ -38,8 +38,8 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 	obs := cc.Observation{
 		ObservedAt: now,
 		Runs:       map[string]cc.RunObservation{ticket.URL: {Alive: true}},
-		Worktrees:  map[string]string{"cc-76": "/repos/repo-cc-76"},
-		PRs: map[string]gh.PR{"cc-76": {
+		Worktrees:  map[string]string{cc.BranchKey("repo", "cc-76"): "/repos/repo-cc-76"},
+		PRs: map[string]gh.PR{cc.BranchKey("repo", "cc-76"): {
 			Number: 76, State: gh.Open, HeadRef: "cc-76",
 			Checks: map[string]gh.CheckState{
 				"unit":  {Status: "COMPLETED", Conclusion: "SUCCESS"},

@@ -1,0 +1,15 @@
+# cc-config prepends `port = 0`, so this file must not set it.
+# {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
+
+max_agents = 2
+agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}"]
+
+[[repo]]
+name     = "repo"
+remote   = "https://github.com/sandbox-org/repo"
+stacking = false
+
+[[repo]]
+name     = "peer"
+remote   = "https://github.com/sandbox-org/peer"
+stacking = false

@@ -30,7 +30,9 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
@@ -83,7 +85,7 @@ func TestResolveNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": worktreePath},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
 		Runs:      map[string]cc.RunObservation{ticket.URL: {Alive: true}},
 	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
@@ -122,7 +124,9 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()

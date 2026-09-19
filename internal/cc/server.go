@@ -497,7 +497,7 @@ func derive(
 	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(obs)
+	prs := prsByBranch(tickets, obs)
 	conflictingPeer := conflictingPeerHold(tickets, byURL, prs, stackingByRepo, obs)
 
 	rows := make([]row, 0, len(tickets))
@@ -520,7 +520,7 @@ func derive(
 		})
 		verdictLabelByBranch[t.Branch] = verdictLabel(runFact)
 		baseByBranch[t.Branch] = unlock.BaseBranch
-		pr := obs.PRs[t.Branch]
+		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 		rows = append(rows, row{
 			URL:            t.URL,
 			Title:          obs.Titles[t.URL],
@@ -533,7 +533,7 @@ func derive(
 			PendingVerbs:   facts.pendingVerbs[t.URL],
 			Branch:         t.Branch,
 			Base:           unlock.BaseBranch,
-			Worktree:       obs.Worktrees[t.Branch],
+			Worktree:       obs.Worktrees[branchKey(t.Repo, t.Branch)],
 			PRNumber:       pr.Number,
 			PRState:        pr.State.String(),
 			Pgid:           pgid,
@@ -711,14 +711,14 @@ func runFactFor(
 			fact.RefreshRefusedReason = plan.Reason(rf.Reason)
 			fact.VerificationFailed = rf.VerificationFailed
 			fact.VerificationFailedReason = plan.Reason(rf.VerificationFailedDetail)
-			fact.MidMerge = obs.MidMerge[t.Branch]
-			if obs.ConflictsWithBase[t.Branch] {
+			fact.MidMerge = obs.MidMerge[branchKey(t.Repo, t.Branch)]
+			if obs.ConflictsWithBase[branchKey(t.Repo, t.Branch)] {
 				fact.ConflictsWithMain = true
 				fact.ConflictsWithMainReason = plan.Reason(
 					fmt.Sprintf("%s no longer merges cleanly into main", t.Branch))
 			}
 			fact.ConflictingPeer = conflictingPeer[t.URL]
-			ownState := obs.PRs[t.Branch].State
+			ownState := obs.PRs[branchKey(t.Repo, t.Branch)].State
 			fact.PROpen = ownState == gh.Open
 			fact.PRMerged = ownState == gh.Merged
 			fact.PRClosedUnmerged = ownState == gh.Closed
@@ -747,20 +747,15 @@ func runFactFor(
 // plan's) forbids depending on that package for one string constant.
 const defaultBaseBranch = "main"
 
-// mainTipKey names defaultBaseBranch's own tip in Observation.BranchTips. Every repo has a
-// "main", unlike a ticket's own branch name, so the plain name would collide the moment a second
-// repo is configured; "//" can never appear in a real git branch name, so this key never can.
-func mainTipKey(repo string) string { return repo + "//" + defaultBaseBranch }
+// branchKey names one branch in every branch-keyed map on Observation. Two configured repos can
+// hold the same branch name, and "//" can never appear in a real git branch name, so this key
+// never collides across repos the way the plain name would.
+func branchKey(repo, branch string) string { return repo + "//" + branch }
 
-// baseTipKey is the Observation.BranchTips key a recorded base resolves to: mainTipKey when it's
-// main, the plain branch name otherwise (issue #85: main's own tip is checked exactly like a
-// still-stacked base's, not exempted, since retargetOne can re-point a row onto it).
-func baseTipKey(repo, base string) string {
-	if base == defaultBaseBranch {
-		return mainTipKey(repo)
-	}
-	return base
-}
+// mainTipKey names defaultBaseBranch's own tip in Observation.BranchTips, main being every
+// unstacked ticket's base (issue #85: main's own tip is checked exactly like a still-stacked
+// base's, not exempted, since retargetOne can re-point a row onto it).
+func mainTipKey(repo string) string { return branchKey(repo, defaultBaseBranch) }
 
 // applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
 // unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
@@ -775,7 +770,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 		return // disposed push-outcome this same tick, before push.go recorded the row
 	}
 
-	pr := obs.PRs[t.Branch]
+	pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 	hasRecordedBase := pushRow.BaseBranch != ""
 	mergifySHA := vd.mergifySHAByRepo[t.Repo]
 
@@ -783,7 +778,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
 		StackedBase:  hasRecordedBase,
-		BaseSHAMatch: obs.BranchTips[baseTipKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
+		BaseSHAMatch: obs.BranchTips[branchKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.URL]) * tickPeriod),
@@ -900,7 +895,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	prs := prsByBranch(obs)
+	prs := prsByBranch(tickets, obs)
 	facts, vd, err := s.loadTicketFacts(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1088,7 +1083,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if worktreePath, ok := obs.Worktrees[ticket.Branch]; ok {
+		if worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; ok {
 			http.Error(w, fmt.Sprintf("branch %s already has a worktree at %s, remove it before changing branch",
 				ticket.Branch, worktreePath), http.StatusConflict)
 			return
@@ -1151,10 +1146,13 @@ func planTicketsByURL(tickets []Ticket) map[string]plan.Ticket {
 	return byURL
 }
 
-func prsByBranch(obs Observation) map[string]plan.PRState {
-	prs := make(map[string]plan.PRState, len(obs.PRs))
-	for branch, pr := range obs.PRs {
-		prs[branch] = prState(pr.State)
+// prsByBranch reads each ticket's own PR state back out under its own bare branch name, which is
+// what internal/plan indexes by: plan.Ticket carries no repo-qualified key of its own, and this
+// map's whole job is bridging Observation's repo-qualified storage back to plan's shape.
+func prsByBranch(tickets []Ticket, obs Observation) map[string]plan.PRState {
+	prs := make(map[string]plan.PRState, len(tickets))
+	for _, t := range tickets {
+		prs[t.Branch] = prState(obs.PRs[branchKey(t.Repo, t.Branch)].State)
 	}
 	return prs
 }

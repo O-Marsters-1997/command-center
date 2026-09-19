@@ -1,0 +1,31 @@
+# Two configured repos each holding a ticket cut to the identical branch name -- "cc-1-x", since
+# both are issue #1 titled "x" -- stop contaminating each other's Observation facts (issue #217,
+# docs/adr/0004-seams-are-removed.md's prerequisite: "the plain name would collide the moment a
+# second repo is configured"). Before the fix, Observation's branch-keyed maps are indexed by the
+# bare branch name, so the second repo's own per-tick write clobbers the first's. This script pins
+# the fix: each ticket's own row must report its own repo's worktree, never its neighbour's.
+
+cc-init-repo
+cc-init-repo peer
+cc-config same-branch-two-repos
+cc-fake-gh same-branch-two-repos
+
+exec cc request -form 'group=project:same-branch' POST /import
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1&ticket=https://github.com/sandbox-org/peer/issues/CC-1'
+
+# Both cut and spawn this tick, onto the identical branch name in their own separate checkouts.
+exec cc tick --count 1
+grep -count=2 'new cc-1-x --base origin/main' $WORK/tp.log
+
+exec sleep 0.5
+
+# A fresh observe reads both repos' own worktree back under the same bare branch name.
+exec cc tick --count 1
+
+# Each ticket's own detail must name its own repo's worktree, never the other repo's.
+exec cc request GET '/?sel=https%3A%2F%2Fgithub.com%2Fsandbox-org%2Frepo%2Fissues%2FCC-1'
+stdout '<dt[^>]*>worktree</dt><dd[^>]*>[^<]*/repo-cc-1-x</dd>'
+
+exec cc request GET '/?sel=https%3A%2F%2Fgithub.com%2Fsandbox-org%2Fpeer%2Fissues%2FCC-1'
+stdout '<dt[^>]*>worktree</dt><dd[^>]*>[^<]*/peer-cc-1-x</dd>'

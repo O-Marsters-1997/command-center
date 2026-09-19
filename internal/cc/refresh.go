@@ -97,7 +97,7 @@ func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Obse
 	return refreshContext{
 		byURL:     planTicketsByURL(tickets),
 		stacking:  stackingByRepo(l.cfg.Repos),
-		prs:       prsByBranch(obs),
+		prs:       prsByBranch(tickets, obs),
 		repoPaths: repoPathsByName(l.cfg.Repos),
 		verifyCmd: verifyCommandByRepo(l.cfg.Repos),
 		pushRows:  pushRows,
@@ -164,7 +164,7 @@ func (l *Loop) autoRefresh(
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
-		if rc.obs.PRs[t.Branch].State != gh.Open {
+		if rc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
 			continue
 		}
 		pushRow, pushed := rc.pushRows[t.URL]
@@ -209,14 +209,15 @@ func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs Observation
 	if !ok {
 		return false
 	}
-	return obs.BranchTips[t.Branch] != branchTip || obs.BranchTips[baseTipKey(t.Repo, row.BaseBranch)] != baseTip
+	return obs.BranchTips[branchKey(t.Repo, t.Branch)] != branchTip ||
+		obs.BranchTips[branchKey(t.Repo, row.BaseBranch)] != baseTip
 }
 
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
 // branch, or main once retargetMerged has pointed it there -- whose current tip differs from
 // what was recorded at the ticket's last push (issue #85: main counts the same as a stacked base).
 func baseMoved(row PushRow, obs Observation, repo string) bool {
-	return row.BaseBranch != "" && obs.BranchTips[baseTipKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
+	return row.BaseBranch != "" && obs.BranchTips[branchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
 // refreshOne fast-forwards one ticket's own branch, advances it onto its base, then verifies the
@@ -226,8 +227,8 @@ func (l *Loop) refreshOne(
 	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time,
 ) error {
 	branch := ticket.Branch
-	worktreePath, ok := rc.obs.Worktrees[branch]
-	if !ok || rc.obs.Runs[ticket.URL].Alive || rc.obs.MidMerge[branch] {
+	worktreePath, ok := rc.obs.Worktrees[branchKey(ticket.Repo, branch)]
+	if !ok || rc.obs.Runs[ticket.URL].Alive || rc.obs.MidMerge[branchKey(ticket.Repo, branch)] {
 		return nil
 	}
 
@@ -241,7 +242,7 @@ func (l *Loop) refreshOne(
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed since the base moved; nothing sane to merge against
 	}
-	restacked, detail, err := advanceOnto(ctx, worktreePath, unlock.BaseBranch, row, rc.obs)
+	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, rc.obs)
 	if err != nil {
 		// A rebase that stops on a conflict has already rewritten the branch, so the push after
 		// whoever resolves it still needs the lease the completed restack would have earned
@@ -254,10 +255,10 @@ func (l *Loop) refreshOne(
 				return err
 			}
 		}
-		baseTip := rc.obs.BranchTips[baseTipKey(ticket.Repo, unlock.BaseBranch)]
+		baseTip := rc.obs.BranchTips[branchKey(ticket.Repo, unlock.BaseBranch)]
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted,
-			Detail: conflictDetail(rc.obs.BranchTips[branch], baseTip, err),
+			Detail: conflictDetail(rc.obs.BranchTips[branchKey(ticket.Repo, branch)], baseTip, err),
 		})
 	}
 
@@ -307,10 +308,10 @@ func (l *Loop) verifyOne(
 // either side touched. It reports which of the two it did, because only a restack licenses the
 // push step to lease-force, and what the event should say.
 func advanceOnto(
-	ctx context.Context, worktreePath, base string, row PushRow, obs Observation,
+	ctx context.Context, worktreePath, repo, base string, row PushRow, obs Observation,
 ) (bool, string, error) {
 	ref := "origin/" + base
-	boundary := restackBoundary(row, obs)
+	boundary := restackBoundary(repo, row, obs)
 	if boundary == "" {
 		return false, ref, Merge(ctx, worktreePath, ref)
 	}
@@ -329,11 +330,11 @@ func advanceOnto(
 // top of, so a restack drops exactly the work the base already carries. A merged base is read
 // from its pull request's head, not from base_sha_at_push, because a base that advanced after
 // this branch's last push has those later commits in the squash too (issue #89).
-func restackBoundary(row PushRow, obs Observation) string {
+func restackBoundary(repo string, row PushRow, obs Observation) string {
 	if row.BaseBranch == "" {
 		return ""
 	}
-	if pr := obs.PRs[row.BaseBranch]; pr.State == gh.Merged && pr.HeadOid != "" {
+	if pr := obs.PRs[branchKey(repo, row.BaseBranch)]; pr.State == gh.Merged && pr.HeadOid != "" {
 		return pr.HeadOid
 	}
 	return row.BaseSHAAtPush

@@ -34,16 +34,17 @@ func TestParseWorktrees(t *testing.T) {
 	}
 }
 
-// TestBaseTipKeyDisambiguatesMainPerRepo covers issue #85's fourth incident's own regression: two
-// repos both fetch a "main" tip, so the plain branch name would let one repo's tip stomp the
-// other's the moment both are configured (draft_gate.txtar is the same collision end to end).
-func TestBaseTipKeyDisambiguatesMainPerRepo(t *testing.T) {
+// TestBranchKeyDisambiguatesPerRepo covers issue #85's fourth incident's own regression, generalised
+// to every ticket branch, not just main: two repos can hold the same branch name, so the plain name
+// would let one repo's fact stomp the other's the moment both are configured (draft_gate.txtar and
+// ADR 4 are the same collision end to end).
+func TestBranchKeyDisambiguatesPerRepo(t *testing.T) {
 	t.Parallel()
 
-	if got, want := baseTipKey("repo", "main"), baseTipKey("services", "main"); got == want {
-		t.Errorf("baseTipKey(%q) == baseTipKey(%q) == %q, want distinct keys per repo", "repo", "services", got)
+	if got, want := branchKey("repo", "main"), branchKey("services", "main"); got == want {
+		t.Errorf("branchKey(%q) == branchKey(%q) == %q, want distinct keys per repo", "repo", "services", got)
 	}
-	if got := baseTipKey("repo", "parent"); got != "parent" {
-		t.Errorf(`baseTipKey("repo", "parent") = %q, want "parent" unchanged: only main is repo-scoped`, got)
+	if got, want := branchKey("repo", "cc-1-x"), branchKey("peer", "cc-1-x"); got == want {
+		t.Errorf("branchKey(%q) == branchKey(%q) == %q, want distinct keys per repo", "repo", "peer", got)
 	}
 }

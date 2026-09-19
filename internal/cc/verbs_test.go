@@ -143,8 +143,8 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs cc.Observ
 func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -193,7 +193,7 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := cc.Observation{
 		Worktrees: map[string]string{},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -239,8 +239,8 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-2": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Closed}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-2"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Closed}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -286,8 +286,8 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	installFakeGhFailingIssueClose(t)
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -319,8 +319,8 @@ func TestRemoveWorktreeRefusesADirtyWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -342,8 +342,8 @@ func TestRemoveWorktreeRefusesUnpushedCommits(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -375,8 +375,8 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 	runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -414,8 +414,8 @@ func TestRemoveWorktreeRefusesWhenTheRefIsPrunedAndTheTipHasDiverged(t *testing.
 	runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
 
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Merged}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
 	}
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -438,8 +438,8 @@ func TestRemoveWorktreeRefusesANonEligibleRow(t *testing.T) {
 	// Open, not merged and not base_gone: still under review, nothing about it says it may
 	// be torn down.
 	obs := cc.Observation{
-		Worktrees: map[string]string{"cc-1": f.worktreePath},
-		PRs:       map[string]gh.PR{"cc-1": {State: gh.Open}},
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Open}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {

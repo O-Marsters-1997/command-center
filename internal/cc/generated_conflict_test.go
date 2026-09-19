@@ -113,18 +113,20 @@ func (f generatedConflictFixture) observe(t *testing.T) cc.ObserveFunc {
 			return cc.Observation{}, err
 		}
 		return cc.Observation{
-			Worktrees: map[string]string{"cc-1": f.worktreePath},
+			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
 			PRs: map[string]gh.PR{
-				"cc-1": {
+				cc.BranchKey("repo", "cc-1"): {
 					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
 					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
-			BranchTips:        map[string]string{"repo//main": mainTip, "cc-1": branchTip},
+			BranchTips: map[string]string{
+				cc.MainTipKey("repo"): mainTip, cc.BranchKey("repo", "cc-1"): branchTip,
+			},
 			Runs:              map[string]cc.RunObservation{},
-			MidMerge:          map[string]bool{"cc-1": mid},
-			ConflictsWithBase: map[string]bool{"cc-1": !clean},
-			ConflictedPaths:   map[string][]string{"cc-1": paths},
+			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): mid},
+			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): !clean},
+			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): paths},
 		}, nil
 	}
 }
@@ -350,18 +352,20 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 			return cc.Observation{}, err
 		}
 		return cc.Observation{
-			Worktrees: map[string]string{"cc-1": worktreePath},
+			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
 			PRs: map[string]gh.PR{
-				"cc-1": {
+				cc.BranchKey("repo", "cc-1"): {
 					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
 					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
-			BranchTips:        map[string]string{"repo//main": mainTip, "cc-1": branchTip},
+			BranchTips: map[string]string{
+				cc.MainTipKey("repo"): mainTip, cc.BranchKey("repo", "cc-1"): branchTip,
+			},
 			Runs:              map[string]cc.RunObservation{},
-			MidMerge:          map[string]bool{"cc-1": mid},
-			ConflictsWithBase: map[string]bool{"cc-1": !clean},
-			ConflictedPaths:   map[string][]string{"cc-1": paths},
+			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): mid},
+			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): !clean},
+			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): paths},
 		}, nil
 	}
 
@@ -454,17 +458,17 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 	// Deliberately wrong: the real merge below conflicts on handwritten.go too.
 	observe := func(ctx context.Context) (cc.Observation, error) {
 		return cc.Observation{
-			Worktrees: map[string]string{"cc-1": worktreePath},
+			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
 			PRs: map[string]gh.PR{
-				"cc-1": {
+				cc.BranchKey("repo", "cc-1"): {
 					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
 					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
 			Runs:              map[string]cc.RunObservation{},
-			MidMerge:          map[string]bool{"cc-1": false},
-			ConflictsWithBase: map[string]bool{"cc-1": true},
-			ConflictedPaths:   map[string][]string{"cc-1": {"dist/app.css"}},
+			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): false},
+			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): true},
+			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): {"dist/app.css"}},
 		}, nil
 	}
 

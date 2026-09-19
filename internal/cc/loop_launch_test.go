@@ -250,7 +250,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}}
+	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
@@ -336,7 +336,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 
 	// No entry for "cc-1" in Worktrees: the worktree is gone by the time this tick disposes
 	// the run. BranchTips is what observe would have read from origin/cc-1 this tick.
-	obs := cc.Observation{BranchTips: map[string]string{"cc-1": originTip}}
+	obs := cc.Observation{BranchTips: map[string]string{cc.BranchKey("repo", "cc-1"): originTip}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
@@ -384,7 +384,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}}
+	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()

@@ -24,27 +24,30 @@ type Observation struct {
 	// A repo with no predicate configured is never read, so an untracked repo's missing file
 	// never fails a tick.
 	MergifyHash map[string]string `json:"mergify_hash"`
-	// BranchTips is git rev-parse origin/<branch>, post-fetch, keyed by branch (§4a): the git
-	// fact a stacked base's tip is compared against, rather than the PR snapshot's headRefOid --
-	// one indirection off it, and stale the moment a reviewer pushes without GitHub re-reporting.
+	// BranchTips is git rev-parse origin/<branch>, post-fetch, keyed by branchKey(repo, branch)
+	// (§4a): the git fact a stacked base's tip is compared against, rather than the PR snapshot's
+	// headRefOid -- one indirection off it, and stale the moment a reviewer pushes without GitHub
+	// re-reporting.
 	BranchTips map[string]string `json:"branch_tips"`
 	// Titles is each configured repo's open issue titles, keyed by issue URL, which is what a
 	// ticket's own url holds. `gh issue list`'s 100-row limit leaves a ticket absent rather
 	// than mis-keyed.
 	Titles map[string]string `json:"titles"`
-	// MidMerge reports whether each branch's own worktree is left mid-merge, read fresh every
-	// tick (§4a) -- never recorded, since a human resolving the conflict by hand and committing
-	// must clear it with no bookkeeping.
+	// MidMerge reports whether each branch's own worktree is left mid-merge, keyed by
+	// branchKey(repo, branch) and read fresh every tick (§4a) -- never recorded, since a human
+	// resolving the conflict by hand and committing must clear it with no bookkeeping.
 	MidMerge map[string]bool `json:"mid_merge"`
-	// ConflictsWithBase reports whether origin/<branch> would conflict with origin/main, keyed
-	// by branch. It is what the launch gate refuses on: a child cut from a base that already
-	// conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
+	// ConflictsWithBase reports whether origin/<branch> would conflict with origin/main, keyed by
+	// branchKey(repo, branch). It is what the launch gate refuses on: a child cut from a base that
+	// already conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
-	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by branch.
+	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by
+	// branchKey(repo, branch).
 	ConflictedPaths map[string][]string `json:"conflicted_paths"`
 	// ConflictsWithPeer reports whether two branches' tips would conflict if merged together,
-	// keyed by each branch under the other. Observe only ever records the pair, never which one
-	// yields: it has no ref order to decide that (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	// keyed by branchKey(repo, branch) at both levels. Observe only ever records the pair, never
+	// which one yields: it has no ref order to decide that
+	// (docs/adr/0010-one-conflicting-peer-at-a-time.md).
 	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 }
 
@@ -59,8 +62,8 @@ type RunObservation struct {
 type ObserveFunc func(ctx context.Context) (Observation, error)
 
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
-// then the worktree map, per configured repo. Branches are keyed globally, not per repo — a
-// same-named branch in two repos would collide; key by (repo, branch) when Phase 2 adds a second repo.
+// then the worktree map, per configured repo. Every branch-keyed map is written under
+// branchKey(repo.Name, branch), since two configured repos can hold the same branch name.
 func NewObserver(store *Store, cfg Config) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
 		tickets, err := store.Tickets(ctx)
@@ -90,7 +93,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				return Observation{}, err
 			}
 			for branch, pr := range snapshot.ByBranch {
-				obs.PRs[branch] = pr
+				obs.PRs[branchKey(repo.Name, branch)] = pr
 			}
 			titles, err := gh.IssueTitles(ctx, path)
 			if err != nil {
@@ -110,7 +113,7 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				if err != nil {
 					continue // never pushed, so there is no remote branch to read or to cut from
 				}
-				obs.BranchTips[branch] = tip
+				obs.BranchTips[branchKey(repo.Name, branch)] = tip
 				if mainErr != nil {
 					continue
 				}
@@ -119,14 +122,14 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 					return Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
 				}
-				obs.ConflictsWithBase[branch] = !clean
+				obs.ConflictsWithBase[branchKey(repo.Name, branch)] = !clean
 				if !clean {
-					obs.ConflictedPaths[branch] = paths
+					obs.ConflictedPaths[branchKey(repo.Name, branch)] = paths
 				}
 			}
 
 			if err := recordPeerConflicts(
-				ctx, path, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, MergesCleanly,
+				ctx, path, repo.Name, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, MergesCleanly,
 			); err != nil {
 				return Observation{}, err
 			}
@@ -136,12 +139,12 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 				return Observation{}, err
 			}
 			for branch, wtPath := range worktrees {
-				obs.Worktrees[branch] = wtPath
+				obs.Worktrees[branchKey(repo.Name, branch)] = wtPath
 				mid, err := MidMerge(ctx, wtPath)
 				if err != nil {
 					return Observation{}, fmt.Errorf("check mid-merge for %s: %w", branch, err)
 				}
-				obs.MidMerge[branch] = mid
+				obs.MidMerge[branchKey(repo.Name, branch)] = mid
 			}
 
 			if repo.MergifySHA == "" {
@@ -180,28 +183,28 @@ type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []
 // merge-tree call at all. A zero-value prev (nothing observed yet) never matches a real tip,
 // so a cold start falls through to merges for every pair without special-casing it.
 func recordPeerConflicts(
-	ctx context.Context, repoPath string, branches []string, tips map[string]string,
+	ctx context.Context, repoPath, repo string, branches []string, tips map[string]string,
 	prev Observation, into map[string]map[string]bool, merges peerReader,
 ) error {
 	for i, branchA := range branches {
-		tipA, ok := tips[branchA]
+		tipA, ok := tips[branchKey(repo, branchA)]
 		if !ok {
 			continue
 		}
 		for _, branchB := range branches[i+1:] {
-			tipB, ok := tips[branchB]
+			tipB, ok := tips[branchKey(repo, branchB)]
 			if !ok {
 				continue
 			}
-			if conflicts, ok := cachedPeerConflict(prev, branchA, tipA, branchB, tipB); ok {
-				recordConflictsWithPeer(into, branchA, branchB, conflicts)
+			if conflicts, ok := cachedPeerConflict(prev, repo, branchA, tipA, branchB, tipB); ok {
+				recordConflictsWithPeer(into, repo, branchA, branchB, conflicts)
 				continue
 			}
 			clean, _, err := merges(ctx, repoPath, tipA, tipB)
 			if err != nil {
 				return fmt.Errorf("check whether %s merges with %s: %w", branchA, branchB, err)
 			}
-			recordConflictsWithPeer(into, branchA, branchB, !clean)
+			recordConflictsWithPeer(into, repo, branchA, branchB, !clean)
 		}
 	}
 	return nil
@@ -209,26 +212,27 @@ func recordPeerConflicts(
 
 // cachedPeerConflict returns the prior tick's read for (branchA, branchB), valid only when both
 // tips still match what that tick observed.
-func cachedPeerConflict(prev Observation, branchA, tipA, branchB, tipB string) (conflicts, ok bool) {
-	if prev.BranchTips[branchA] != tipA || prev.BranchTips[branchB] != tipB {
+func cachedPeerConflict(prev Observation, repo, branchA, tipA, branchB, tipB string) (conflicts, ok bool) {
+	if prev.BranchTips[branchKey(repo, branchA)] != tipA || prev.BranchTips[branchKey(repo, branchB)] != tipB {
 		return false, false
 	}
-	conflicts, ok = prev.ConflictsWithPeer[branchA][branchB]
+	conflicts, ok = prev.ConflictsWithPeer[branchKey(repo, branchA)][branchKey(repo, branchB)]
 	return conflicts, ok
 }
 
 // recordConflictsWithPeer stores one pair's result under both branch names, so a later lookup
 // works from either side once ref order (internal/cc's decide step) says which one is "this"
 // branch and which the peer.
-func recordConflictsWithPeer(m map[string]map[string]bool, a, b string, conflicts bool) {
-	if m[a] == nil {
-		m[a] = map[string]bool{}
+func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, conflicts bool) {
+	keyA, keyB := branchKey(repo, a), branchKey(repo, b)
+	if m[keyA] == nil {
+		m[keyA] = map[string]bool{}
 	}
-	m[a][b] = conflicts
-	if m[b] == nil {
-		m[b] = map[string]bool{}
+	m[keyA][keyB] = conflicts
+	if m[keyB] == nil {
+		m[keyB] = map[string]bool{}
 	}
-	m[b][a] = conflicts
+	m[keyB][keyA] = conflicts
 }
 
 func branchesFor(tickets []Ticket, repo string) []string {

@@ -38,7 +38,7 @@ func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observa
 	return pushContext{
 		byURL:      planTicketsByURL(tickets),
 		stacking:   stackingByRepo(l.cfg.Repos),
-		prs:        prsByBranch(obs),
+		prs:        prsByBranch(tickets, obs),
 		repoPaths:  repoPathsByName(l.cfg.Repos),
 		denyByRepo: denyByRepo(l.cfg.Repos),
 		pushedTips: pushedTips,
@@ -82,7 +82,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		// changes) -- without this guard, a removed ticket's absence from the same tick's own
 		// worktree map would make every later tick's BranchTip fail on an unknown ref and
 		// abort the whole tick.
-		if pc.obs.Worktrees[t.Branch] == "" {
+		if pc.obs.Worktrees[branchKey(t.Repo, t.Branch)] == "" {
 			continue
 		}
 		tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
@@ -202,10 +202,10 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 	}
 
-	if pc.obs.PRs[t.Branch].State != gh.Open {
-		body := plan.PRBody(base, pc.obs.PRs[base].Number)
+	if pc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
+		body := plan.PRBody(base, pc.obs.PRs[branchKey(t.Repo, base)].Number)
 		draft := plan.OpensAsDraft(pc.byURL[t.URL], pc.byURL)
-		if err := gh.Create(ctx, pc.obs.Worktrees[t.Branch], base, body, draft); err != nil {
+		if err := gh.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {
 			return l.store.AppendEvent(ctx,
 				Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 		}

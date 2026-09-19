@@ -20,7 +20,7 @@ func conflictedBase(
 	if base == defaultBaseBranch {
 		return ""
 	}
-	if obs.ConflictsWithBase[base] || obs.MidMerge[base] {
+	if obs.ConflictsWithBase[branchKey(t.Repo, base)] || obs.MidMerge[branchKey(t.Repo, base)] {
 		return base
 	}
 	return ""

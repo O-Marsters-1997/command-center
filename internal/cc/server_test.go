@@ -126,7 +126,7 @@ func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	obs := cc.Observation{
 		ObservedAt: observedAt,
 		PRs:        map[string]gh.PR{},
-		Worktrees:  map[string]string{"cc-1-first": "/repos/cc-sandbox-cc-1-first"},
+		Worktrees:  map[string]string{cc.BranchKey("cc-sandbox", "cc-1-first"): "/repos/cc-sandbox-cc-1-first"},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
@@ -222,14 +222,16 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		Worktrees:  map[string]string{"parent": "/repos/parent", "child": "/repos/child"},
-		BranchTips: map[string]string{"parent": parentTip, "repo//main": "main-tip"},
+		Worktrees: map[string]string{
+			cc.BranchKey("repo", "parent"): "/repos/parent", cc.BranchKey("repo", "child"): "/repos/child",
+		},
+		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): parentTip, cc.MainTipKey("repo"): "main-tip"},
 		PRs: map[string]gh.PR{
-			"parent": {
+			cc.BranchKey("repo", "parent"): {
 				Number: 1, State: gh.Open, HeadOid: parentTip,
 				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},
-			"child": {
+			cc.BranchKey("repo", "child"): {
 				Number: 2, State: gh.Open, HeadOid: childTip,
 				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 			},
@@ -273,10 +275,10 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	}
 
 	obs := cc.Observation{
-		Worktrees:  map[string]string{"cc-1": "/repos/cc-1"},
-		BranchTips: map[string]string{"repo//main": "main-tip"},
+		Worktrees:  map[string]string{cc.BranchKey("repo", "cc-1"): "/repos/cc-1"},
+		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
 		PRs: map[string]gh.PR{
-			"cc-1": {
+			cc.BranchKey("repo", "cc-1"): {
 				Number: 1, State: gh.Open, HeadOid: tip,
 				Checks: map[string]gh.CheckState{
 					"GraphQL production compatibility": {Status: "COMPLETED", Conclusion: "FAILURE"},
@@ -447,9 +449,9 @@ func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		BranchTips: map[string]string{"parent": parentTip, "repo//main": "main-tip"},
+		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): parentTip, cc.MainTipKey("repo"): "main-tip"},
 		PRs: map[string]gh.PR{
-			"parent": {
+			cc.BranchKey("repo", "parent"): {
 				Number: 1, State: gh.Open, HeadOid: parentTip,
 				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},

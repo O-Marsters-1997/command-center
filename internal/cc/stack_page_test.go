@@ -36,7 +36,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	if err := store.RecordPush(ctx, "sandbox://ROOT", "root-tip", "main", "main-tip", at); err != nil {
 		t.Fatal(err)
 	}
-	prs["root"] = gh.PR{Number: 1, State: gh.Open, HeadOid: "root-tip"}
+	prs[cc.BranchKey("repo", "root")] = gh.PR{Number: 1, State: gh.Open, HeadOid: "root-tip"}
 
 	for _, c := range children {
 		branch := strings.ToLower(c)
@@ -45,11 +45,11 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		if err := store.RecordPush(ctx, ticket, branch+"-tip", "root", "root-tip", at); err != nil {
 			t.Fatal(err)
 		}
-		prs[branch] = gh.PR{Number: 2, State: gh.Open, HeadOid: branch + "-tip"}
+		prs[cc.BranchKey("repo", branch)] = gh.PR{Number: 2, State: gh.Open, HeadOid: branch + "-tip"}
 	}
 
 	if err := store.SaveObservation(ctx, cc.Observation{
-		BranchTips: map[string]string{"root": "root-tip"},
+		BranchTips: map[string]string{cc.BranchKey("repo", "root"): "root-tip"},
 		PRs:        prs,
 	}); err != nil {
 		t.Fatal(err)
@@ -97,10 +97,14 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		BranchTips: map[string]string{"parent": "parent-tip"},
+		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): "parent-tip"},
 		PRs: map[string]gh.PR{
-			"parent": {Number: 1, State: gh.Open, HeadOid: "parent-tip", BaseRef: "main", Labels: []string{"ready-to-merge"}},
-			"child":  {Number: 2, State: gh.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"}},
+			cc.BranchKey("repo", "parent"): {
+				Number: 1, State: gh.Open, HeadOid: "parent-tip", BaseRef: "main", Labels: []string{"ready-to-merge"},
+			},
+			cc.BranchKey("repo", "child"): {
+				Number: 2, State: gh.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"},
+			},
 		},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
@@ -147,7 +151,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	}
 
 	obs := cc.Observation{
-		PRs: map[string]gh.PR{"merged": {Number: 1, State: gh.Merged, HeadOid: "merged-tip"}},
+		PRs: map[string]gh.PR{cc.BranchKey("repo", "merged"): {Number: 1, State: gh.Merged, HeadOid: "merged-tip"}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

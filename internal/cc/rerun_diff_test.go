@@ -40,7 +40,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if len(fake.spawns) != 1 {
 		t.Fatalf("spawns after first run = %d, want 1", len(fake.spawns))
 	}
-	obs.Worktrees["cc-1"] = fake.spawns[0].WorktreePath
+	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.spawns[0].WorktreePath
 
 	ticket.Body = "ticket body, edited"
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
@@ -124,7 +124,9 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{"cc-1": worktreePath}, PRs: map[string]gh.PR{}}
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	}
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
