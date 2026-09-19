@@ -34,8 +34,12 @@ var assetsDir embed.FS
 
 var page = template.Must(template.New("page").
 	Funcs(template.FuncMap{
-		"head":        func(r *row, scope string) rowSlot { return newRowSlot(*r, true, 0, scope) },
-		"child":       func(r row, depth int, scope string) rowSlot { return newRowSlot(r, false, depth, scope) },
+		"head": func(r *row, scope, featureScope string) rowSlot {
+			return newRowSlot(*r, true, 0, scope, featureScope)
+		},
+		"child": func(r row, depth int, scope, featureScope string) rowSlot {
+			return newRowSlot(r, false, depth, scope, featureScope)
+		},
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
 		"percent":     func(part, total int) int { return percentOf(part, total) },
 	}).
@@ -74,21 +78,23 @@ var detailSource string
 // own tree, and board.tmpl calls it by name via {{template "detail" .}}.
 var _ = template.Must(boardFragment.New("detail").Parse(detailSource))
 
-// rowSlot carries LaunchVerb, CancelVerb and Scope because html/template resets $ to the invoked
-// subtemplate's own argument, so the "row" subtemplate cannot see pageView's copies -- Scope is
-// board.tmpl's own RepoScope, needed to name a row whose repo differs from it.
+// rowSlot carries LaunchVerb, CancelVerb, Scope and FeatureScope because html/template resets $ to
+// the invoked subtemplate's own argument, so "row" cannot see pageView's copies -- Scope and
+// FeatureScope are board.tmpl's own RepoScope and FeatureScope, to name a row that differs from them.
 type rowSlot struct {
 	row
-	Head       bool
-	Depth      int
-	LaunchVerb string
-	CancelVerb string
-	Scope      string
+	Head         bool
+	Depth        int
+	LaunchVerb   string
+	CancelVerb   string
+	Scope        string
+	FeatureScope string
 }
 
-func newRowSlot(r row, head bool, depth int, scope string) rowSlot {
+func newRowSlot(r row, head bool, depth int, scope, featureScope string) rowSlot {
 	return rowSlot{
-		row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, Scope: scope,
+		row: r, Head: head, Depth: depth, LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel,
+		Scope: scope, FeatureScope: featureScope,
 	}
 }
 
@@ -183,6 +189,9 @@ type row struct {
 	// Repo names the row's own configured repo, so a group kept whole by a member in scope can
 	// still name where an out-of-scope sibling lives (CONTEXT.md § Scope, ADR 11).
 	Repo string `json:"repo"`
+	// Feature names the row's own tracker feature, so a group kept whole by a member in scope can
+	// still name where an out-of-scope sibling lives (CONTEXT.md § Feature).
+	Feature string `json:"feature"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
 	Title      string `json:"title"`
@@ -325,6 +334,11 @@ type pageView struct {
 	// RepoLinks is the masthead's own repo nav row (CONTEXT.md § Scope), empty when no repo is
 	// configured so the masthead renders no such row at all.
 	RepoLinks []scopeLink
+	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
+	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
+	FeatureScope string
+	// FeatureLinks is the masthead's own feature nav row, empty when no ticket carries a feature.
+	FeatureLinks []scopeLink
 }
 
 // scopeLink is one masthead nav pill for a scope axis: "all" plus one per configured repo.
@@ -378,6 +392,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	if err != nil {
 		return pageView{}, err
 	}
+	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 	obs, observed, err := s.store.LastObservation(ctx)
 	if err != nil {
 		return pageView{}, err
@@ -395,7 +410,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
 	applyViewState(rows, params)
-	groups := filterGroupsByRepo(groupRows(rows), params.Repo)
+	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
@@ -407,6 +422,8 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		View:         params.View,
 		RepoScope:    params.Repo,
 		RepoLinks:    repoLinksFor(s.repos, params),
+		FeatureScope: params.Feature,
+		FeatureLinks: featureLinksFor(tickets, params),
 	}
 	if observed {
 		view.Observe = relative(now, obs.ObservedAt)
@@ -550,6 +567,7 @@ func derive(
 		rows = append(rows, row{
 			URL:            t.URL,
 			Repo:           t.Repo,
+			Feature:        t.Feature,
 			Title:          obs.Titles[t.URL],
 			State:          state.String(),
 			Reason:         string(reason),
@@ -685,6 +703,35 @@ func groupInRepo(g group, repo string) bool {
 	return false
 }
 
+// filterGroupsByFeature narrows groups to a feature scope, following filterGroupsByRepo: it
+// admits a matching group whole, and an empty feature is unscoped. Composed with
+// filterGroupsByRepo in render, so both axes narrow independently rather than one overriding the
+// other.
+func filterGroupsByFeature(groups []group, feature string) []group {
+	if feature == "" {
+		return groups
+	}
+	filtered := make([]group, 0, len(groups))
+	for _, g := range groups {
+		if groupInFeature(g, feature) {
+			filtered = append(filtered, g)
+		}
+	}
+	return filtered
+}
+
+func groupInFeature(g group, feature string) bool {
+	if g.Root != nil && g.Root.Feature == feature {
+		return true
+	}
+	for _, c := range g.Children {
+		if c.Feature == feature {
+			return true
+		}
+	}
+	return false
+}
+
 // rowsIn flattens groups back to the rows they render, which is what deriveBand counts: a scoped
 // group still shows its out-of-scope members, so the band counts them too (ADR 11).
 func rowsIn(groups []group) []row {
@@ -711,6 +758,36 @@ func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
 			scopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
 	}
 	return links
+}
+
+// featureLinksFor is the masthead's feature nav row: "all" plus one pill per feature currently in
+// the fleet, following repoLinksFor -- but features are the tracker's own and unconfigured, so the
+// set comes from the loaded tickets rather than config, and nil when none carry one.
+func featureLinksFor(tickets []Ticket, params viewParams) []scopeLink {
+	features := distinctFeatures(tickets)
+	if len(features) == 0 {
+		return nil
+	}
+	links := make([]scopeLink, 0, len(features)+1)
+	links = append(links,
+		scopeLink{Name: "all", Path: params.withFeature("").pagePath(), Current: params.Feature == ""})
+	for _, f := range features {
+		links = append(links,
+			scopeLink{Name: f, Path: params.withFeature(f).pagePath(), Current: params.Feature == f})
+	}
+	return links
+}
+
+// distinctFeatures is the sorted set of non-blank Feature values among tickets, which render also
+// uses to blank an unrecognised ?feature=.
+func distinctFeatures(tickets []Ticket) []string {
+	seen := make(map[string]bool)
+	for _, t := range tickets {
+		if t.Feature != "" {
+			seen[t.Feature] = true
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,

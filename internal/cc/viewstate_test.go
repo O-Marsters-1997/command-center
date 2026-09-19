@@ -70,6 +70,41 @@ func TestParseViewParamsReadsRepoRaw(t *testing.T) {
 	}
 }
 
+func TestParseViewParamsReadsFeatureRaw(t *testing.T) {
+	t.Parallel()
+
+	q, err := url.ParseQuery("feature=cc-220")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseViewParams(q).Feature; got != "cc-220" {
+		t.Errorf("parseViewParams(%q).Feature = %q, want cc-220", q, got)
+	}
+}
+
+func TestNormalizeFeatureScope(t *testing.T) {
+	t.Parallel()
+
+	fleet := []string{"board-scope", "sqlc-migration"}
+	for _, tc := range []struct {
+		name    string
+		feature string
+		want    string
+	}{
+		{"absent stays blank", "", ""},
+		{"a feature in the fleet passes through", "board-scope", "board-scope"},
+		{"a feature not in the fleet falls back to blank", "bogus", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := normalizeFeatureScope(tc.feature, fleet); got != tc.want {
+				t.Errorf("normalizeFeatureScope(%q) = %q, want %q", tc.feature, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeRepoScope(t *testing.T) {
 	t.Parallel()
 
@@ -132,6 +167,11 @@ func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 			viewParams{Sel: "a", Log: "fails", Repo: "support-app", View: "board"},
 			"log=fails&repo=support-app&sel=a",
 		},
+		{
+			"a feature scope sorts ahead of log and repo, neither overriding the other",
+			viewParams{Sel: "a", Log: "fails", Repo: "support-app", Feature: "board-scope", View: "board"},
+			"feature=board-scope&log=fails&repo=support-app&sel=a",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -173,6 +213,19 @@ func TestViewParamsWithRepoReplacesTheScopeOnly(t *testing.T) {
 	}
 	if base.Repo != "support-app" {
 		t.Errorf("withRepo mutated the receiver: Repo = %q", base.Repo)
+	}
+}
+
+func TestViewParamsWithFeatureReplacesTheScopeOnly(t *testing.T) {
+	t.Parallel()
+
+	base := viewParams{Sel: "a", Feature: "board-scope", View: "board"}
+	got := base.withFeature("sqlc-migration")
+	if got.Feature != "sqlc-migration" || got.Sel != "a" {
+		t.Errorf("withFeature(sqlc-migration) = %+v, want Feature=sqlc-migration and Sel unchanged", got)
+	}
+	if base.Feature != "board-scope" {
+		t.Errorf("withFeature mutated the receiver: Feature = %q", base.Feature)
 	}
 }
 
