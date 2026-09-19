@@ -38,16 +38,16 @@ generated     = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.ht
 build_command = ["just", "assets"]
 
   [[repo.checks.all_of]]
-  success = "test (ubuntu-latest)"
+  success = "test"
   [[repo.checks.all_of]]
-  success = "test (macos-latest)"
-  [[repo.checks.all_of]]
-  success = "e2e (ubuntu-latest)"
-  [[repo.checks.all_of]]
-  success = "e2e (macos-latest)"
+  success = "e2e"
   [[repo.checks.all_of]]
   success = "lint"
   [[repo.checks.all_of]]
-  success = "build"
+  success = "build (ubuntu-latest)"
+  [[repo.checks.all_of]]
+  success = "build (macos-latest)"
   [[repo.checks.all_of]]
   success = "tidy"
+  [[repo.checks.all_of]]
+  success = "assets"

@@ -80,12 +80,26 @@ One pass of the reconcile loop: observe, derive, act.
 The grouped table of tickets. Also `#board`, the element htmx swaps.
 _Avoid_: Table, list, grid, dashboard
 
+**Scope**:
+The narrowing applied to the board, by feature or by repo. It decides which tickets render and
+what the band counts, never what the loop reconciles: every ticket is still observed, derived and
+acted on whatever the scope. A group is admitted whole when any of its tickets is in scope, so a
+blocker outside the scope stays visible.
+_Avoid_: Filter (that is the run log's four log modes), view, selection, narrowing
+
+**Repo**:
+One configured repository, named by its remote and cloned by the app. A ticket belongs to exactly
+one repo, matched from its URL. The second scope axis, and the one a working directory can imply.
+_Avoid_: Project (that is the tracker's label prefix for a feature), codebase, checkout (that is
+where a repo's working copy sits)
+
 **Detail**:
 The panel that expands under a selected row, carrying the run log and the flag prose.
 _Avoid_: Drawer, expansion, panel
 
 **Band**:
-The row of analytics cards above the board, counted off the current tick.
+The row of analytics cards above the board, counted off the current tick over the tickets the
+board's scope admits. Narrowing the scope narrows the band with it.
 _Avoid_: Stats, summary, header cards
 
 **Pill**:
@@ -128,6 +142,8 @@ _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 - A **group** has one blocker **ticket** and zero or more waiting **tickets**
 - A **ticket** has zero or more **peers**; peership crosses **slice** and **feature** alike
 - A **ticket** has exactly one **ref**
+- A **ticket** belongs to exactly one **repo**; a **feature** spans one or more **repos**
+- A **scope** admits a **group** whole when any of its **tickets** matches
 - A **ticket** has zero or more **runs**; only the latest one renders
 - A **run** produces a log of **run phases**, and one **spend** figure
 - The **board** contains **groups**; a **detail** belongs to exactly one **ticket**
