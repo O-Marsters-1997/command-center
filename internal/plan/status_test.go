@@ -376,6 +376,68 @@ func TestStatusWithLatestRun(t *testing.T) {
 	}
 }
 
+// TestStatusDerivesPRMergedOverALaterRunsOwnDisposition covers issues #234 and #251: a merged
+// pull request outranks the latest run's own outcome, whether that run is a later no-op re-run
+// or one with no push row at all.
+func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
+	t.Parallel()
+
+	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+
+	tests := []struct {
+		name      string
+		latestRun *plan.RunFact
+	}{
+		{
+			name: "a later failed run with no push row (#251)",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, PRMerged: true,
+			},
+		},
+		{
+			name: "a later failed cut (#251)",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed, PRMerged: true,
+			},
+		},
+		{
+			name: "a failed run whose branch was pushed and merged outside the daemon (#234)",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, LogPath: "/state/runs/4.jsonl",
+				PRMerged: true,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			state, reason := plan.Status(plan.Facts{Unlock: unlocked, Authorised: false, LatestRun: tt.latestRun})
+			if state != plan.PRMerged {
+				t.Errorf("state = %v, want merged", state)
+			}
+			if reason != "pull request merged" {
+				t.Errorf("reason = %q, want %q", reason, "pull request merged")
+			}
+		})
+	}
+}
+
+// TestStatusStillDerivesFailedWithoutAMergedPR is the control for #234/#251: a failed run with
+// no push row and no merged PR still reads failed, unchanged.
+func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
+	t.Parallel()
+
+	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	state, _ := plan.Status(plan.Facts{
+		Unlock: unlocked, Authorised: false,
+		LatestRun: &plan.RunFact{Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed},
+	})
+	if state != plan.Failed {
+		t.Errorf("state = %v, want failed", state)
+	}
+}
+
 func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	t.Parallel()
 
