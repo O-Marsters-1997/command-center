@@ -77,7 +77,7 @@ func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 				`<form method="post" action="/verb">`,
 				`<input type="hidden" name="ticket" value="sandbox://CC-1">`,
 				`<input type="hidden" name="verb" value="` + tt.verb + `">`,
-				`<a href="/">`,
+				`id="masthead" hx-swap-oob="true"`,
 			}
 			for _, want := range wants {
 				if !strings.Contains(body, want) {

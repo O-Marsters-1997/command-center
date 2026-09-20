@@ -3,6 +3,7 @@ package cc_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -66,6 +67,84 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	}
 	if len(pending) != 1 || pending[0].TicketID != "project:x" {
 		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)
+	}
+}
+
+func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, time.Now, nil, "")
+	var nudged atomic.Bool
+	server.SetNudge(func() { nudged.Store(true) })
+	srv := httptest.NewServer(server)
+	t.Cleanup(srv.Close)
+
+	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", srv.URL)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got := readBody(t, resp)
+	want := `<cc-launch-modal tickets="ticket=sandbox%3A%2F%2FCC-1&amp;ticket=sandbox%3A%2F%2FCC-2">`
+	if !strings.Contains(got, want) {
+		t.Errorf("open response = %q, want it to mount the island by ticket:\n%s", want, got)
+	}
+	if strings.Contains(got, "importing") {
+		t.Errorf("a ticket-based open must not queue an import:\n%s", got)
+	}
+	if nudged.Load() {
+		t.Error("a ticket-based open must not nudge the loop -- nothing needs importing")
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending import intents = %+v, want none", pending)
+	}
+}
+
+func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("ticket=sandbox://GHOST"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", srv.URL)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }
 
@@ -141,6 +220,47 @@ func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 	}
 	if strings.Contains(body, "hx-get=") {
 		t.Errorf("terminal candidate fragment must not keep polling:\n%s", body)
+	}
+}
+
+func TestHandleCandidatesFragmentMountsATicketSlice(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2")
+	defer func() { _ = resp.Body.Close() }()
+	body := readBody(t, resp)
+	want := `<cc-launch-modal tickets="ticket=sandbox%3A%2F%2FCC-1&amp;ticket=sandbox%3A%2F%2FCC-2">`
+	if !strings.Contains(body, want) {
+		t.Errorf("ready fragment = %q, want it to mount the island by ticket:\n%s", want, body)
+	}
+	if strings.Contains(body, "hx-get=") {
+		t.Errorf("terminal candidate fragment must not keep polling:\n%s", body)
+	}
+}
+
+func TestHandleCandidatesFragmentRejectsAnUnknownTicket(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FGHOST")
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }
 

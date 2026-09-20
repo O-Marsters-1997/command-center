@@ -14,6 +14,13 @@
     document.documentElement.dataset.theme = next;
     localStorage.setItem("theme", next);
   }
+  if (localStorage.getItem("nav") === "rail") document.documentElement.dataset.nav = "rail";
+  function toggleNav() {
+    var next = document.documentElement.dataset.nav === "rail" ? "" : "rail";
+    document.documentElement.dataset.nav = next;
+    localStorage.setItem("nav", next);
+    document.getElementById("nav-toggle").setAttribute("aria-expanded", next === "rail" ? "false" : "true");
+  }
   
   
   function ago(ms) {
@@ -31,6 +38,12 @@
       if (!isNaN(at)) el.textContent = ago(now - at);
     });
   }, 1000);
+  document.addEventListener("beforetoggle", function (e) {
+    if (e.target.id !== "repo-switcher" || e.newState !== "open") return;
+    var r = document.querySelector('[popovertarget="repo-switcher"]').getBoundingClientRect();
+    e.target.style.top = r.bottom + 4 + "px";
+    e.target.style.left = r.left + "px";
+  }, true);
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
@@ -42,16 +55,31 @@
 </script>
 </head>
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
+<header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
+  
+  
+  
+  <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
+</header>
 
-<main>
+<div class="shell">
+<nav class="sidebar" id="sidebar-nav" aria-label="sections">
+  <a class="sidebar-item" href="/?view=board" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span class="sidebar-label">board</span></a>
+  <a class="sidebar-item" href="/?view=graph"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg><span class="sidebar-label">graph</span></a>
+  <a class="sidebar-item" href="/features"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span class="sidebar-label">features</span></a>
+  <button type="button" id="nav-toggle" class="sidebar-item sidebar-toggle" onclick="toggleNav()" aria-expanded="true" aria-controls="sidebar-nav"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="6" y1="2.5" x2="6" y2="13.5"/></svg><span class="sidebar-label">collapse</span></button>
+</nav>
+<main id="main">
 
 
 
-<form id="launch" method="get" action="/preview"></form>
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 
 <button type="submit" form="launch">launch selected</button>
 
+<div id="launch-modal"></div>
 </main>
+</div>
 </body>
 </html>

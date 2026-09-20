@@ -1,6 +1,6 @@
 # A base that already conflicts with main is never cut from. cc-1 and main both rewrite the same
 # line, so origin/cc-1 no longer merges into origin/main; cc-2, which stacks on cc-1, is blocked
-# saying so, its preview is refused, and authorising it anyway still cuts nothing.
+# saying so, its candidate is refused, and authorising it anyway still cuts nothing.
 
 cc-init-repo
 cc-config fan-out-stacked
@@ -26,8 +26,8 @@ exec cc tick --count 1
 exec cc request GET /
 stdout 'cc-1-x already carries an unresolved merge conflict'
 
-exec cc request GET '/preview?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
-stdout '<td>refused</td>'
+exec cc request GET '/launch/candidates?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
+stdout '"label":"refused"'
 stdout 'cc-1-x already carries an unresolved merge conflict'
 
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'

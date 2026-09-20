@@ -15,7 +15,7 @@ exec cc request GET /features
 stdout 'project:two-tasks</a></td>\s*<td>yes</td>'
 
 exec cc request GET '/features?q=nope'
-! stdout 'project:two-tasks'
+! stdout 'project:two-tasks</a></td>'
 
 exec cc request GET '/features/project:two-tasks'
 stdout 'href="/\?feature=project%3Atwo-tasks"'

@@ -10,12 +10,12 @@
      a Go-only build with no Node -- assets/dist/launch-modal.js never built, the script below
      404s -- renders: a custom element the browser never upgrades still shows its light-DOM
      children. -->
-<cc-launch-modal feature="{{.Feature}}">
+<cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}}>
   <p class="banner ribbon" data-tone="wait" role="status">
     the launch modal needs the built assets: run `just assets`.
   </p>
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
-<a href="/features">[ cancel ]</a>
+<a href="{{if .Feature}}/features{{else}}/{{end}}">[ cancel ]</a>
 </dialog>

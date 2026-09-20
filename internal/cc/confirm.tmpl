@@ -1,8 +1,11 @@
-<!doctype html>
-<meta charset="utf-8">
-<link rel="stylesheet" href="/assets/app.css">
-<title>Confirm {{.Verb}}</title>
-<main class="max-w-xl p-4">
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+{{template "topbar" .}}
+{{template "masthead" .}}
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="max-w-xl p-4">
 <h1 class="mb-3">Confirm {{.Verb}}</h1>
 <p class="banner ribbon mb-2" data-tone="stop">{{.Verb}} on {{.URL}} {{.Effect}}. It cannot be undone.</p>
 <p class="mb-3 text-muted">{{.RiskLabel}} at risk: {{or .Risk "none recorded"}}</p>
@@ -11,7 +14,7 @@
   <input type="hidden" name="verb" value="{{.Verb}}">
   <button type="submit">[ confirm ]</button>
 </form>
-<div class="mt-2">
-<a href="/">back to the board</a>
-</div>
 </main>
+</div>
+</body>
+</html>
