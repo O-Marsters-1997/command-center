@@ -123,9 +123,6 @@ func TestGeneratePasswordDrawsWithoutDetectableBias(t *testing.T) {
 		diff := float64(counts[c]) - expected
 		chiSquared += diff * diff / expected
 	}
-	// Critical value for a chi-squared goodness-of-fit test with 61 degrees of freedom
-	// (62 alphabet symbols) is ~99.6 at p=0.001. 200 stays far above chance noise while still
-	// catching a real bias such as modulo bias from naive rejection-free sampling.
 	const chiSquaredCeiling = 200.0
 	if chiSquared > chiSquaredCeiling {
 		t.Errorf("chi-squared = %.1f over %d draws, want <= %.1f (no detectable bias)", chiSquared, draws, chiSquaredCeiling)

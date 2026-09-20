@@ -64,7 +64,7 @@ func VerifyPassword(password, encoded string) bool {
 }
 
 // GeneratePassword returns a 24-character password drawn uniformly from a 62-character
-// alphanumeric alphabet, rejecting biased byte values so no character is over-represented.
+// alphanumeric alphabet.
 func GeneratePassword() (string, error) {
 	password := make([]byte, passwordLength)
 	for i := range password {
