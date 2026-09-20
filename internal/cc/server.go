@@ -155,6 +155,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /features", s.handleFeatures)
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
+	mux.HandleFunc("POST /features/{feature}/import", requireBrowserOrigin(s.handleImportFeature))
 	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
@@ -363,6 +364,9 @@ type pageView struct {
 	FeatureScope string
 	// FeatureLinks is the masthead's own feature nav row, empty when no ticket carries a feature.
 	FeatureLinks []scopeLink
+	// FeatureImportPath is the masthead's reimport action, set only when FeatureScope names one
+	// feature to reimport.
+	FeatureImportPath string
 }
 
 // scopeLink is one masthead nav pill for a scope axis: "all" plus one per configured repo.
@@ -455,6 +459,9 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
 		view.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
+	}
+	if params.Feature != "" {
+		view.FeatureImportPath = params.featureImportPath()
 	}
 	return view, nil
 }
@@ -1213,12 +1220,6 @@ type launchModalView struct {
 	Pending      bool
 	Refused      string
 	Empty        bool
-	Candidates   []modalCandidate
-}
-
-type modalCandidate struct {
-	URL, Ref, Title, Label, Reason, Base, BaseVerdict, Hash string
-	Refused                                                 bool
 }
 
 func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
@@ -1261,14 +1262,6 @@ func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (laun
 		return view, nil
 	}
 
-	view.Candidates = make([]modalCandidate, 0, len(candidates))
-	for _, c := range candidates {
-		view.Candidates = append(view.Candidates, modalCandidate{
-			URL: c.URL, Ref: c.Ref, Title: c.Title, Label: c.Label, Reason: c.Reason,
-			Base: c.Base, BaseVerdict: c.BaseVerdict, Hash: c.PromptHash,
-			Refused: c.Label == plan.Refused.String(),
-		})
-	}
 	return view, nil
 }
 
@@ -1623,6 +1616,22 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
 	feature := r.PathValue("feature")
 	http.Redirect(w, r, "/?feature="+url.QueryEscape(feature), http.StatusSeeOther)
+}
+
+func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
+	feature := r.PathValue("feature")
+	ctx := r.Context()
+	if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.nudge()
+
+	if r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	s.renderView(w, r, boardSwap)
 }
 
 // randomGroup mints the token that ties every intent from one POST /launch call together —
