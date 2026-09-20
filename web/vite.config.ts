@@ -10,7 +10,7 @@ export default defineConfig({
     outDir: "../internal/cc/assets/dist",
     emptyOutDir: false,
     lib: {
-      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx" },
+      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx", insights: "src/insights.tsx" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
