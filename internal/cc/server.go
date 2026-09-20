@@ -371,6 +371,9 @@ type chrome struct {
 	// FeatureImportPath is the breadcrumb's reimport action, set only when FeatureScope names one
 	// feature to reimport.
 	FeatureImportPath string
+	// FeatureQuery is FeatureScope, url.QueryEscape'd for the sidebar's board/graph links to carry
+	// the scope across views; empty whenever FeatureScope is.
+	FeatureQuery string
 }
 
 type pageView struct {
@@ -488,6 +491,7 @@ func (s *Server) buildChrome(
 	}
 	if params.Feature != "" {
 		c.FeatureImportPath = params.featureImportPath()
+		c.FeatureQuery = url.QueryEscape(params.Feature)
 	}
 	return c
 }
