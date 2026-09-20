@@ -1,14 +1,49 @@
 package cc_test
 
 import (
+	"database/sql"
 	"maps"
 	"slices"
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
+
+// runMetricsRow reads a run's metrics columns straight from Postgres: no product code reads them
+// yet (the field set is frozen ahead of any panel, per docs/adr), so a test is the only reader.
+type runMetricsRow struct {
+	TokensIn, TokensOut, Turns, DurationMS, ToolCalls, ToolFailures sql.NullInt64
+	CostUSD                                                         sql.NullFloat64
+	Model                                                           sql.NullString
+	MetricsSettled                                                  sql.NullBool
+}
+
+func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var row runMetricsRow
+	query := `SELECT tokens_in, tokens_out, turns, duration_ms, cost_usd, tool_calls, tool_failures,
+		model, metrics_settled FROM runs WHERE id = $1`
+	err = db.QueryRow(query, runID).Scan(
+		&row.TokensIn, &row.TokensOut, &row.Turns, &row.DurationMS, &row.CostUSD,
+		&row.ToolCalls, &row.ToolFailures, &row.Model, &row.MetricsSettled,
+	)
+	if err != nil {
+		t.Fatalf("read run metrics for run %d: %v", runID, err)
+	}
+	return row
+}
 
 func seedOneTicket(t *testing.T, store *cc.Store) {
 	t.Helper()
@@ -89,7 +124,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 
 	endedAt := startedAt.Add(30 * time.Second)
 	exitCode := 0
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, endedAt); err != nil {
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, endedAt, nil); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -114,6 +149,72 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 	}
 	if summary.EndedAt == nil || !summary.EndedAt.Equal(endedAt) {
 		t.Errorf("ended_at = %v, want %s", summary.EndedAt, endedAt)
+	}
+}
+
+func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	seedOneTicket(t, store)
+
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+
+	cost := 0.42
+	metrics := agentlog.RunMetrics{
+		TokensIn: 100, TokensOut: 50, Turns: 3, Duration: 2500 * time.Millisecond,
+		CostUSD: &cost, ToolCalls: 4, ToolFailures: 1, Model: "claude-sonnet-5", Settled: true,
+	}
+	exitCode := 0
+	endedAt := startedAt.Add(30 * time.Second)
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, &exitCode, endedAt, &metrics); err != nil {
+		t.Fatalf("RecordDisposition: %v", err)
+	}
+
+	row := readRunMetrics(t, dsn, runID)
+	if row.TokensIn.Int64 != 100 || row.TokensOut.Int64 != 50 || row.Turns.Int64 != 3 {
+		t.Errorf("token/turn columns = %+v, want 100/50/3", row)
+	}
+	if row.DurationMS.Int64 != 2500 || row.CostUSD.Float64 != 0.42 {
+		t.Errorf("duration/cost columns = %+v, want 2500ms/0.42", row)
+	}
+	if row.ToolCalls.Int64 != 4 || row.ToolFailures.Int64 != 1 {
+		t.Errorf("tool columns = %+v, want 4/1", row)
+	}
+	if row.Model.String != "claude-sonnet-5" || !row.MetricsSettled.Bool {
+		t.Errorf("model/settled columns = %+v, want claude-sonnet-5/true", row)
+	}
+}
+
+func TestRecordDispositionLeavesMetricsNullWithoutAParse(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	seedOneTicket(t, store)
+
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, endedAt, nil); err != nil {
+		t.Fatalf("RecordDisposition: %v", err)
+	}
+
+	row := readRunMetrics(t, dsn, runID)
+	if row.TokensIn.Valid || row.CostUSD.Valid || row.MetricsSettled.Valid {
+		t.Errorf("metrics = %+v, want every column NULL when there was no log to parse", row)
 	}
 }
 

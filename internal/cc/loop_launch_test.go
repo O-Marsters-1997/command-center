@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -305,6 +307,65 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	summary = latest[ticket.URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 		t.Fatalf("summary = %+v, want push (one commit after its own baseline)", summary)
+	}
+}
+
+// TestLoopDisposesAKilledRunWithUnsettledPartials drives disposeRun's metrics write with a fake
+// MetricsParser rather than a real agent log on disk (WithMetricsParser's whole point): a killed
+// run's own parse would report partial totals with Settled false, and that shape must reach
+// Postgres exactly as RecordDisposition would store it.
+func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := filepath.Join(t.TempDir(), "wt")
+	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	fake.canReap[999] = true
+	fake.reapCode[999] = 137 // killed
+
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+
+	var parsedPath string
+	loop.SetMetricsParser(func(logPath string) (agentlog.RunMetrics, error) {
+		parsedPath = logPath
+		return agentlog.RunMetrics{TokensIn: 12, TokensOut: 8, ToolCalls: 2, Settled: false}, nil
+	})
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if parsedPath != "/state/runs/1.jsonl" {
+		t.Errorf("parsed path = %q, want the run's own log path", parsedPath)
+	}
+
+	row := readRunMetrics(t, dsn, runID)
+	if row.TokensIn.Int64 != 12 || row.TokensOut.Int64 != 8 || row.ToolCalls.Int64 != 2 {
+		t.Errorf("metrics = %+v, want the fake parser's partial totals", row)
+	}
+	if !row.MetricsSettled.Valid || row.MetricsSettled.Bool {
+		t.Errorf("metrics_settled = %+v, want false (a killed run's log never reached a result line)", row.MetricsSettled)
 	}
 }
 

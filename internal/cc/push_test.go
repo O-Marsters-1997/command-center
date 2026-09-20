@@ -77,7 +77,7 @@ func dispositionAsPushed(t *testing.T, store *cc.Store, ticketURL string, at tim
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 }

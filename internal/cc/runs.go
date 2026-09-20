@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -42,23 +43,108 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 	return nil
 }
 
-// RecordDisposition writes a dead run's outcome. exitCode is nil when there is none to report —
-// a spawn that never started a process, or one this instance could not reap.
+// RecordDisposition writes a dead run's outcome and its metrics in the same UPDATE. exitCode and
+// metrics are both nil when there is nothing to report: a spawn failure, an unreapable process,
+// or no log to parse.
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
+	metrics *agentlog.RunMetrics,
 ) error {
 	var exitCodeParam sql.NullInt64
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
+	m := runMetricsColumns(metrics)
 	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Outcome:  notNull(outcome.String()),
-		ExitCode: exitCodeParam,
-		EndedAt:  notNullTime(endedAt.UTC()),
-		ID:       runID,
+		Outcome:        notNull(outcome.String()),
+		ExitCode:       exitCodeParam,
+		EndedAt:        notNullTime(endedAt.UTC()),
+		TokensIn:       m.TokensIn,
+		TokensOut:      m.TokensOut,
+		Turns:          m.Turns,
+		DurationMs:     m.DurationMs,
+		CostUsd:        m.CostUsd,
+		ToolCalls:      m.ToolCalls,
+		ToolFailures:   m.ToolFailures,
+		Model:          m.Model,
+		MetricsSettled: m.MetricsSettled,
+		ID:             runID,
 	})
 	if err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", runID, err)
+	}
+	return nil
+}
+
+type runMetricsCols struct {
+	TokensIn, TokensOut, Turns, DurationMs, ToolCalls, ToolFailures sql.NullInt64
+	CostUsd                                                         sql.NullFloat64
+	Model                                                           sql.NullString
+	MetricsSettled                                                  sql.NullBool
+}
+
+// runMetricsColumns zero-values every field when metrics is nil, which database/sql writes as NULL.
+func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
+	if metrics == nil {
+		return runMetricsCols{}
+	}
+	var costUSD sql.NullFloat64
+	if metrics.CostUSD != nil {
+		costUSD = sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
+	}
+	return runMetricsCols{
+		TokensIn:       sql.NullInt64{Int64: metrics.TokensIn, Valid: true},
+		TokensOut:      sql.NullInt64{Int64: metrics.TokensOut, Valid: true},
+		Turns:          sql.NullInt64{Int64: int64(metrics.Turns), Valid: true},
+		DurationMs:     sql.NullInt64{Int64: metrics.Duration.Milliseconds(), Valid: true},
+		CostUsd:        costUSD,
+		ToolCalls:      sql.NullInt64{Int64: int64(metrics.ToolCalls), Valid: true},
+		ToolFailures:   sql.NullInt64{Int64: int64(metrics.ToolFailures), Valid: true},
+		Model:          sql.NullString{String: metrics.Model, Valid: metrics.Model != ""},
+		MetricsSettled: sql.NullBool{Bool: metrics.Settled, Valid: true},
+	}
+}
+
+// RunAwaitingMetricsBackfill is one disposed run a backfill pass must try: it has a log path but
+// no metrics written yet.
+type RunAwaitingMetricsBackfill struct {
+	ID      int64
+	LogPath string
+}
+
+// RunsAwaitingMetricsBackfill returns every run with a log_path but no metrics written yet. A run
+// already resolved -- settled true or false -- is excluded, which is what makes a second backfill
+// pass safe to run.
+func (s *Store) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunAwaitingMetricsBackfill, error) {
+	rows, err := s.q.RunsAwaitingMetricsBackfill(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select runs awaiting metrics backfill: %w", err)
+	}
+	var runs []RunAwaitingMetricsBackfill
+	for _, row := range rows {
+		runs = append(runs, RunAwaitingMetricsBackfill{ID: row.ID, LogPath: row.LogPath.String})
+	}
+	return runs, nil
+}
+
+// BackfillRunMetrics writes one run's metrics columns alone, leaving outcome, exit_code and
+// ended_at -- already written at disposition -- untouched.
+func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics agentlog.RunMetrics) error {
+	m := runMetricsColumns(&metrics)
+	err := s.q.BackfillRunMetrics(ctx, ccdb.BackfillRunMetricsParams{
+		TokensIn:       m.TokensIn,
+		TokensOut:      m.TokensOut,
+		Turns:          m.Turns,
+		DurationMs:     m.DurationMs,
+		CostUsd:        m.CostUsd,
+		ToolCalls:      m.ToolCalls,
+		ToolFailures:   m.ToolFailures,
+		Model:          m.Model,
+		MetricsSettled: m.MetricsSettled,
+		ID:             runID,
+	})
+	if err != nil {
+		return fmt.Errorf("backfill metrics for run %d: %w", runID, err)
 	}
 	return nil
 }

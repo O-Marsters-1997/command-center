@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,9 +13,13 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func TestNewRunsATickAndServesThePage(t *testing.T) {
@@ -170,6 +175,75 @@ func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
+	}
+}
+
+// TestNewBackfillsMetricsUsingTheInjectedParser: a run disposed before this instance ever started
+// -- the shape every pre-migration run is in -- gets its metrics written during New() itself,
+// from whatever parser WithMetricsParser named, before the loop ticks even once.
+func TestNewBackfillsMetricsUsingTheInjectedParser(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("CC_DATA_DIR", dataDir)
+
+	root, repoPath := repoWithOrigin(t)
+	if err := os.Rename(repoPath, filepath.Join(root, "cc-sandbox")); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "command-centre.toml")
+	body := "port = 0\n[[repo]]\nname = \"cc-sandbox\"\npath = \"cc-sandbox\"\n"
+	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dsn := cctest.DSN(t)
+	t.Setenv("CC_DATABASE_URL", dsn)
+
+	store, err := cc.OpenStore(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runID, err := store.InsertRunSkeleton(t.Context(), "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := func(string) (agentlog.RunMetrics, error) {
+		return agentlog.RunMetrics{TokensIn: 77, Settled: true}, nil
+	}
+	stub := cc.WithObserver(func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil })
+	app, err := cc.New(t.Context(), configPath, stub, stubSquashOnly, cc.WithMetricsParser(fake))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var tokensIn int64
+	var settled bool
+	if err := db.QueryRow(`SELECT tokens_in, metrics_settled FROM runs WHERE id = $1`, runID).
+		Scan(&tokensIn, &settled); err != nil {
+		t.Fatalf("read backfilled metrics: %v", err)
+	}
+	if tokensIn != 77 || !settled {
+		t.Errorf("tokens_in/settled = %d/%v, want 77/true from the injected parser", tokensIn, settled)
 	}
 }
 

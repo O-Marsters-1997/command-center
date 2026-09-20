@@ -54,17 +54,26 @@ type Push struct {
 }
 
 type Run struct {
-	ID            int64
-	TicketID      string
-	Kind          string
-	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullTime
-	BaselineSHA   sql.NullString
-	PromptHash    sql.NullString
-	LogPath       sql.NullString
-	Outcome       sql.NullString
-	ExitCode      sql.NullInt64
-	EndedAt       sql.NullTime
+	ID             int64
+	TicketID       string
+	Kind           string
+	Pgid           sql.NullInt64
+	ProcStartedAt  sql.NullTime
+	BaselineSHA    sql.NullString
+	PromptHash     sql.NullString
+	LogPath        sql.NullString
+	Outcome        sql.NullString
+	ExitCode       sql.NullInt64
+	EndedAt        sql.NullTime
+	TokensIn       sql.NullInt64
+	TokensOut      sql.NullInt64
+	Turns          sql.NullInt64
+	DurationMs     sql.NullInt64
+	CostUsd        sql.NullFloat64
+	ToolCalls      sql.NullInt64
+	ToolFailures   sql.NullInt64
+	Model          sql.NullString
+	MetricsSettled sql.NullBool
 }
 
 type Ticket struct {

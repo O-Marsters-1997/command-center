@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
@@ -21,11 +23,12 @@ type App struct {
 }
 
 type options struct {
-	now       func() time.Time
-	observe   ObserveFunc
-	repoCheck RepoCheckFunc
-	checkout  CheckoutFunc
-	runner    Runner
+	now           func() time.Time
+	observe       ObserveFunc
+	repoCheck     RepoCheckFunc
+	checkout      CheckoutFunc
+	runner        Runner
+	metricsParser MetricsParser
 }
 
 // Option configures New.
@@ -64,6 +67,12 @@ type CheckoutFunc func(ctx context.Context, repos []Repo) error
 // preparation for a repo whose remote isn't really dialable.
 func WithCheckout(checkout CheckoutFunc) Option {
 	return func(o *options) { o.checkout = checkout }
+}
+
+// WithMetricsParser replaces the run-log metrics parser, so a test can substitute a fake without
+// touching the filesystem.
+func WithMetricsParser(p MetricsParser) Option {
+	return func(o *options) { o.metricsParser = p }
 }
 
 func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
@@ -144,7 +153,16 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if runner == nil {
 		runner = ProcessRunner{}
 	}
+	metricsParser := settings.metricsParser
+	if metricsParser == nil {
+		metricsParser = agentlog.ParseMetrics
+	}
+	if err := BackfillMetrics(ctx, store, metricsParser); err != nil {
+		return nil, err
+	}
+
 	loop := NewLoop(store, observe, settings.now, cfg, ws, runner)
+	loop.SetMetricsParser(metricsParser)
 	server := NewServer(store, settings.now, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 

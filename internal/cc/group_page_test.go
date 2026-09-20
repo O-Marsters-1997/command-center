@@ -66,7 +66,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *cc.Store {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range children {
@@ -271,7 +271,7 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 

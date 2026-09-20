@@ -84,7 +84,7 @@ func renderedToolLine(t *testing.T, text string) string {
 func endRun(t *testing.T, store *cc.Store, runID int64, at time.Time) {
 	t.Helper()
 
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at); err != nil {
+	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {
 		t.Fatal(err)
 	}
 }
