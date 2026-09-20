@@ -221,7 +221,6 @@ func (s *Store) ImportTickets(
 		return violation
 	}
 
-	mergedWithdrawn := make(map[string]bool)
 	for _, t := range previous {
 		if returned[t.URL] {
 			continue
@@ -229,12 +228,16 @@ func (s *Store) ImportTickets(
 		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: t.URL}); err != nil {
 			return fmt.Errorf("withdraw ticket %s: %w", t.URL, err)
 		}
-		// A withdrawal merely dropped from the tracker's open, labelled results (project label
-		// removed, or the issue closed) is reversible and must not touch anyone's blocked_by;
-		// only a withdrawal behind a merged pull request is the terminal "this blocker is gone
-		// for good" the issue describes.
-		if obs.PRs[branchKey(t.Repo, t.Branch)].State == gh.Merged {
-			mergedWithdrawn[t.URL] = true
+	}
+
+	withdrawnRows, err := qtx.WithdrawnTickets(ctx)
+	if err != nil {
+		return fmt.Errorf("list withdrawn tickets for blocker repair: %w", err)
+	}
+	mergedWithdrawn := make(map[string]bool)
+	for _, row := range withdrawnRows {
+		if obs.PRs[branchKey(row.Repo, row.Branch)].State == gh.Merged {
+			mergedWithdrawn[row.URL] = true
 		}
 	}
 	if err = repairBlockedBy(ctx, qtx, mergedWithdrawn); err != nil {
