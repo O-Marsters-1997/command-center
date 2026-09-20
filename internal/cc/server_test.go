@@ -387,9 +387,6 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	}
 }
 
-// TestNewPOSTRouteIsProtectedWithoutBeingWrapped proves cross-origin protection applies to the
-// whole mux (issue #293): a route registered after NewServer, never itself wrapped, is still
-// refused a cross-origin POST.
 func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
 	t.Parallel()
 

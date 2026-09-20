@@ -1070,8 +1070,6 @@ func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 	}
 }
 
-// TestHandleImportFeatureAllowsAMissingOrigin covers the layer's own fail-open: a request carrying
-// neither Origin nor Sec-Fetch-Site is how a non-browser client like `cc request` keeps working.
 func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 

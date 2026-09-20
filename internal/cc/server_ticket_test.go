@@ -37,8 +37,6 @@ func TestPostTicketRejectsAForeignOrigin(t *testing.T) {
 	}
 }
 
-// TestPostTicketAllowsAMissingOrigin covers the layer's own fail-open: a request carrying neither
-// Origin nor Sec-Fetch-Site is how a non-browser client like `cc request` keeps working.
 func TestPostTicketAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
