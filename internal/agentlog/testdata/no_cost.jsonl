@@ -1,0 +1,2 @@
+{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1","message":{"model":"free-dialect-1","usage":{"output_tokens":3},"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo hi"}}]}}
+{"type":"result","subtype":"success","duration_ms":500,"num_turns":1,"usage":{"input_tokens":5,"output_tokens":3}}
