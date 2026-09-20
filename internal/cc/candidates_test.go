@@ -157,6 +157,38 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 }
 
+// TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused covers relaunching a feature with an
+// active launch: a member already authorised labels refused, naming the launch, so the launch
+// modal island never offers it a checkbox to re-launch (candidate.Label feeds that guard).
+func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	if err := store.UpsertTickets(ctx, []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now()
+	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	candidates := fetchCandidates(t, srv, "feature=project%3Ax")
+
+	cc1 := candidateFor(t, candidates, "sandbox://CC-1")
+	if cc1.Label != "refused" || !strings.Contains(cc1.Reason, "already authorised in launch") {
+		t.Errorf("CC-1 = %+v, want label refused naming the launch", cc1)
+	}
+}
+
 func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 	t.Parallel()
 

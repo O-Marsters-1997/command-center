@@ -6,22 +6,16 @@
 {{- else if .Empty -}}
 <p class="text-muted">{{.Feature}} has no tickets to launch.</p>
 {{- else -}}
-<form method="post" action="/launch">
-<table class="w-full max-w-4xl mb-3">
-  <tr><th></th><th>label</th><th>ticket</th><th>base</th><th>base verdict</th><th>why</th></tr>
-  {{range .Candidates}}
-  <tr>
-    <td>{{if not .Refused}}<input type="hidden" name="ticket" value="{{.URL}}"><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
-    <td>{{.Label}}</td>
-    <td>{{.Ref}} {{.Title}}</td>
-    <td>{{.Base}}</td>
-    <td>{{.BaseVerdict}}</td>
-    <td class="text-muted">{{.Reason}}</td>
-  </tr>
-  {{end}}
-</table>
-<button type="submit">[ confirm ]</button>
-</form>
+<!-- noShadowDOM() is cc-launch-modal's first statement (ADR 2), so this fallback content is what
+     a Go-only build with no Node -- assets/dist/launch-modal.js never built, the script below
+     404s -- renders: a custom element the browser never upgrades still shows its light-DOM
+     children. -->
+<cc-launch-modal feature="{{.Feature}}">
+  <p class="banner ribbon" data-tone="wait" role="status">
+    the launch modal needs the built assets: run `just assets`.
+  </p>
+</cc-launch-modal>
+<script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
 <a href="/features">[ cancel ]</a>
 </dialog>
