@@ -9,9 +9,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 )
 
-// waitForTicks polls count for up to two seconds, failing the test if it never reaches want.
-// tickPeriod is fifteen seconds, so a bounded, sub-second wait is itself proof that whatever
-// caused count to advance was not the loop's own ticker.
 func waitForTicks(t *testing.T, count *atomic.Int32, want int32) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -24,11 +21,6 @@ func waitForTicks(t *testing.T, count *atomic.Int32, want int32) {
 	t.Fatalf("ticks = %d after 2s, want at least %d", count.Load(), want)
 }
 
-// TestLoopNudgeTicksImmediatelyAndCoalescesMidTick drives Run for real, over the real tickPeriod
-// ticker, and proves both nudge behaviours ADR 14 specifies: a nudge wakes an immediate tick
-// rather than waiting out tickPeriod, and several nudges arriving while a tick is already running
-// coalesce into the one tick the buffered-by-one, non-blocking channel can carry rather than
-// queuing one tick per nudge.
 func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +30,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	observe := func(context.Context) (cc.Observation, error) {
 		n := ticks.Add(1)
 		if n == 2 {
-			<-proceed // hold tick 2 "in flight" so the nudges below land mid-tick.
+			<-proceed
 		}
 		return cc.Observation{}, nil
 	}
@@ -49,13 +41,13 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	done := make(chan struct{})
 	go func() { _ = loop.Run(ctx); close(done) }()
 
-	waitForTicks(t, &ticks, 1) // Run's own first tick, before it ever waits.
+	waitForTicks(t, &ticks, 1)
 
 	loop.Nudge()
-	waitForTicks(t, &ticks, 2) // well under the 15s tickPeriod, or this times out.
+	waitForTicks(t, &ticks, 2)
 
 	for range 5 {
-		loop.Nudge() // every one of these lands while tick 2 sits blocked on proceed.
+		loop.Nudge()
 	}
 	close(proceed)
 

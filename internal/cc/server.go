@@ -132,9 +132,7 @@ type Server struct {
 	spend             *spendCache
 	trackerFor        TrackerSource
 	mux               *http.ServeMux
-	// nudge wakes the loop for an immediate tick. A no-op until App.New wires it to Loop.Nudge,
-	// which is how the server stays ignorant of the loop it runs alongside (ADR 14).
-	nudge func()
+	nudge             func()
 }
 
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
@@ -1209,9 +1207,6 @@ func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
 	return requested, nil
 }
 
-// launchModalView is the launch modal's own states: still pending; refused by name; imported but
-// empty (a tracker label with no tickets); or ready, naming the feature the island fetches its own
-// candidate set for. Mutually exclusive — Pending short-circuits the rest.
 type launchModalView struct {
 	Feature      string
 	FeatureQuery string
@@ -1220,9 +1215,6 @@ type launchModalView struct {
 	Empty        bool
 }
 
-// buildLaunchModalView answers the launch modal's own question for feature: still pending,
-// because an import intent for it is unconsumed; refused, reading store.LastImportError for a
-// refusal that names it, once there is no candidate to show instead; or ready.
 func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
 	view := launchModalView{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
@@ -1273,10 +1265,6 @@ func (s *Server) renderLaunchModal(w http.ResponseWriter, view launchModalView) 
 	}
 }
 
-// handleLaunchOpen queues an import intent for feature and nudges the loop, so the tick that
-// picks it up runs now rather than up to tickPeriod from now (ADR 14). It answers with the same
-// modal fragment GET /launch/candidates polls, which for a fresh feature is Pending: the intent
-// this call just queued is by definition still unconsumed.
 func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1303,9 +1291,6 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 	s.renderLaunchModal(w, view)
 }
 
-// handleCandidates answers the launch modal's own poll with the HTML fragment it swaps into
-// itself (an htmx request always carries HX-Request), and answers everyone else — a plain fetch,
-// a future JS island, an e2e script — with the JSON candidate set #257 already serves.
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if r.Header.Get("HX-Request") != "" {

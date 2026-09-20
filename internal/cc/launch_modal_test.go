@@ -26,9 +26,6 @@ func getModalFragment(t *testing.T, srv *httptest.Server, target string) *http.R
 	return resp
 }
 
-// TestHandleLaunchOpenQueuesImportAndNudgesTheLoop covers ADR 14's opening step: the intent lands
-// as an unconsumed "import" verb intent named after the feature, the loop is nudged, and the
-// response is the modal's own pending fragment rather than the JSON candidate set.
 func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	t.Parallel()
 
@@ -72,8 +69,6 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	}
 }
 
-// TestHandleLaunchOpenRejectsAMissingOrigin covers requireBrowserOrigin: opening the modal
-// writes, so it is gated exactly like every other mutating handler.
 func TestHandleLaunchOpenRejectsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
@@ -90,8 +85,6 @@ func TestHandleLaunchOpenRejectsAMissingOrigin(t *testing.T) {
 	}
 }
 
-// TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed covers the poll's first answer:
-// an intent queued but not yet applied by a tick.
 func TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed(t *testing.T) {
 	t.Parallel()
 
@@ -115,10 +108,6 @@ func TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed(t *testing.T)
 	}
 }
 
-// TestHandleCandidatesFragmentMountsTheIslandOnceImported covers the poll's terminal success
-// answer, once the loop has applied the import: the fragment stops polling and mounts the island
-// that fetches the candidate set itself, rather than embedding it as HTML (#259 deletes phase 3's
-// candidate table).
 func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 	t.Parallel()
 
@@ -155,8 +144,6 @@ func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 	}
 }
 
-// TestHandleCandidatesFragmentShowsARefusalNamingTheFeature covers the poll's other terminal
-// answer: a closure or two-feature refusal that left no ticket imported.
 func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
 	t.Parallel()
 
@@ -188,10 +175,6 @@ func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
 	}
 }
 
-// TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal covers a feature that failed to
-// reimport but already had tickets from an earlier successful import: LastImportError is not
-// cleared by a later success (store.go), so the fragment must prefer the real candidate set it
-// can show over a refusal that may no longer describe the feature's current state.
 func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T) {
 	t.Parallel()
 
@@ -221,8 +204,6 @@ func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T
 	}
 }
 
-// TestHandleCandidatesDefaultsToJSONWithoutHtmx covers content negotiation: everyone but the
-// modal's own poll, including a plain http client, still gets #257's JSON.
 func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
@@ -247,9 +228,6 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 	}
 }
 
-// TestHandleCandidatesFragmentShowsAnEmptyFeatureWithoutOfferingConfirm covers a feature that
-// imported cleanly but has no tickets: the poll must not fall into a fourth, unhandled state that
-// renders a confirm button with no ticket fields for POST /launch to reject.
 func TestHandleCandidatesFragmentShowsAnEmptyFeatureWithoutOfferingConfirm(t *testing.T) {
 	t.Parallel()
 
