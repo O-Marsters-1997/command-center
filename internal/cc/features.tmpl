@@ -1,8 +1,11 @@
 {{template "docHead" .}}
 <body>
+{{template "skipLink" .}}
 {{template "topbar" .}}
 {{template "masthead" .}}
-<main class="p-4">
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="p-4">
 <h1 class="mb-3">FEATURES</h1>
 {{with .LastImportError}}
 <p class="banner ribbon mb-2" data-tone="stop" role="status">
@@ -37,5 +40,6 @@
 <a href="/" class="mt-2 inline-block">[ back ]</a>
 <div id="launch-modal"></div>
 </main>
+</div>
 </body>
 </html>

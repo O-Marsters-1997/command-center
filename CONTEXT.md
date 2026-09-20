@@ -140,6 +140,23 @@ _Avoid_: Section, stage, step
 What a run cost. Accruing tokens while alive, dollars from the `result` event once ended.
 _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 
+**Sidebar**:
+The nav naming the app's three destinations, board, graph and features. Renders once per page
+load, outside every `hx-swap` target, so tabbing it never loses focus to a poll.
+_Avoid_: Nav (ambiguous with the board/graph pair it replaced), menu, drawer
+
+**Rail**:
+The sidebar's collapsed state: icons only, no labels. A CSS state kept in `localStorage` and
+applied before first paint, the same way the theme is; forced below 900px regardless of what
+`localStorage` says.
+_Avoid_: Collapsed nav, mini sidebar, icon bar
+
+**Breadcrumb**:
+The static row reading workspace, then the repo switcher, then the scoped feature, each segment
+present only when that axis applies. Sits beside the sidebar outside every `hx-swap` target.
+_Avoid_: Masthead (that is the swapping half: the live pill, the observe pill and the last-error
+banner), header, nav
+
 ## Relationships
 
 - A **feature** contains zero or more **tickets**; a **ticket** belongs to at most one **feature**

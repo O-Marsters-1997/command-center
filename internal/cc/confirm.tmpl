@@ -1,8 +1,11 @@
 {{template "docHead" .}}
 <body>
+{{template "skipLink" .}}
 {{template "topbar" .}}
 {{template "masthead" .}}
-<main class="max-w-xl p-4">
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="max-w-xl p-4">
 <h1 class="mb-3">Confirm {{.Verb}}</h1>
 <p class="banner ribbon mb-2" data-tone="stop">{{.Verb}} on {{.URL}} {{.Effect}}. It cannot be undone.</p>
 <p class="mb-3 text-muted">{{.RiskLabel}} at risk: {{or .Risk "none recorded"}}</p>
@@ -12,5 +15,6 @@
   <button type="submit">[ confirm ]</button>
 </form>
 </main>
+</div>
 </body>
 </html>

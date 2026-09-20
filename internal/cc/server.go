@@ -67,9 +67,10 @@ var _ = template.Must(page.New("masthead").Parse(mastheadSource))
 //go:embed layout.tmpl
 var layoutSource string
 
-// The blank identifier is deliberate, not dead code: this registers "docHead" and "topbar" into
-// the shared tree every page renders through -- page.tmpl, features.tmpl, preview.tmpl and
-// confirm.tmpl all call them by name, so the doctype, head and static chrome are written once.
+// The blank identifier is deliberate, not dead code: this registers "docHead", "topbar",
+// "sidebar" and the icon-* templates into the shared tree every page renders through --
+// page.tmpl, features.tmpl, preview.tmpl and confirm.tmpl all call them by name, so the doctype,
+// head and the chrome outside every hx-swap target are written once.
 var _ = template.Must(page.New("layout").Parse(layoutSource))
 
 //go:embed boardswap.tmpl
@@ -361,18 +362,19 @@ type chrome struct {
 	LastError    *tickErrorView
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
+	// Section names the sidebar's current destination: "board", "graph" or "features". It tracks
+	// View except on /features, which has no ?view= of its own.
+	Section string
 	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
 	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
 	RepoScope string
-	// RepoLinks is the topbar's own repo nav row (CONTEXT.md § Scope), empty when no repo is
-	// configured so the topbar renders no such row at all.
+	// RepoLinks is the breadcrumb's own repo switcher (CONTEXT.md § Scope), empty when no repo is
+	// configured so the breadcrumb renders no switcher at all.
 	RepoLinks []scopeLink
 	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
 	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
 	FeatureScope string
-	// FeatureLinks is the topbar's own feature nav row, empty when no ticket carries a feature.
-	FeatureLinks []scopeLink
-	// FeatureImportPath is the topbar's reimport action, set only when FeatureScope names one
+	// FeatureImportPath is the breadcrumb's reimport action, set only when FeatureScope names one
 	// feature to reimport.
 	FeatureImportPath string
 }
@@ -386,7 +388,7 @@ type pageView struct {
 	BoardPath string
 }
 
-// scopeLink is one topbar nav pill for a scope axis: "all" plus one per configured repo.
+// scopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
 type scopeLink struct {
 	Name    string
 	Path    string
@@ -478,10 +480,10 @@ func (s *Server) buildChrome(
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
 		View:         params.View,
+		Section:      params.View,
 		RepoScope:    params.Repo,
 		RepoLinks:    repoLinksFor(s.repos, params),
 		FeatureScope: params.Feature,
-		FeatureLinks: featureLinksFor(tickets, params),
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)
@@ -878,8 +880,8 @@ func rowsIn(groups []group) []row {
 	return rows
 }
 
-// repoLinksFor is the masthead's repo nav row: "all" plus one pill per configured repo, nil when
-// none are configured so a single-repo fixture's masthead renders no extra row at all.
+// repoLinksFor is the breadcrumb's repo switcher: "all" plus one entry per configured repo, nil
+// when none are configured so a single-repo fixture's breadcrumb renders no switcher at all.
 func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
 	if len(repos) == 0 {
 		return nil
@@ -889,24 +891,6 @@ func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
 	for _, r := range repos {
 		links = append(links,
 			scopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
-	}
-	return links
-}
-
-// featureLinksFor is the masthead's feature nav row: "all" plus one pill per feature currently in
-// the fleet, following repoLinksFor -- but features are the tracker's own and unconfigured, so the
-// set comes from the loaded tickets rather than config, and nil when none carry one.
-func featureLinksFor(tickets []Ticket, params viewParams) []scopeLink {
-	features := distinctFeatures(tickets)
-	if len(features) == 0 {
-		return nil
-	}
-	links := make([]scopeLink, 0, len(features)+1)
-	links = append(links,
-		scopeLink{Name: "all", Path: params.withFeature("").pagePath(), Current: params.Feature == ""})
-	for _, f := range features {
-		links = append(links,
-			scopeLink{Name: f, Path: params.withFeature(f).pagePath(), Current: params.Feature == f})
 	}
 	return links
 }
@@ -1669,6 +1653,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	chr.Section = "features"
 
 	view := featuresPageView{chrome: chr, Features: rows, Query: query}
 	if failed {
