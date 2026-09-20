@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -47,14 +49,15 @@ type TickError struct {
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of the database
 // (inv. 9).
 type Loop struct {
-	store      *Store
-	observe    ObserveFunc
-	now        func() time.Time
-	runner     Runner
-	cfg        Config
-	ws         Workspace
-	trackerFor TrackerSource
-	nudgeCh    chan struct{}
+	store         *Store
+	observe       ObserveFunc
+	now           func() time.Time
+	runner        Runner
+	cfg           Config
+	ws            Workspace
+	trackerFor    TrackerSource
+	metricsParser MetricsParser
+	nudgeCh       chan struct{}
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
@@ -63,9 +66,14 @@ type Loop struct {
 func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
 	return &Loop{
 		store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
-		nudgeCh: make(chan struct{}, 1),
+		metricsParser: agentlog.ParseMetrics,
+		nudgeCh:       make(chan struct{}, 1),
 	}
 }
+
+// SetMetricsParser replaces the loop's agentlog.ParseMetrics, so a test can drive disposeRun with
+// a fake parser rather than a real log file on disk.
+func (l *Loop) SetMetricsParser(parser MetricsParser) { l.metricsParser = parser }
 
 // Nudge wakes Run for one tick right now rather than at the end of tickPeriod. A nudge that
 // finds the buffer full is dropped, not queued: the tick already in flight will pick up
@@ -368,12 +376,27 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, ob
 	if code, ok := l.runner.Reap(run.Pgid); ok {
 		exitCode = &code
 	}
-	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now); err != nil {
+	metrics := l.parseRunMetrics(run.LogPath)
+	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now, metrics); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
 	return l.store.AppendEvent(ctx, Event{
 		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
 	})
+}
+
+func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
+	if logPath == "" {
+		return nil
+	}
+	metrics, err := l.metricsParser(logPath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("parse run metrics %s: %v", logPath, err)
+		}
+		return nil
+	}
+	return &metrics
 }
 
 // commitsSinceBaseline counts commits after baseline from the ticket's own worktree while it
@@ -605,7 +628,7 @@ func (l *Loop) spawnRun(
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.now())
+		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.now(), nil)
 	}
 
 	// Nothing may be added between here and the UPDATE below — see the doc comment above.

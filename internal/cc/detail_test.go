@@ -140,7 +140,7 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 	obs := cc.Observation{

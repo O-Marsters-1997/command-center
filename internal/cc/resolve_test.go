@@ -261,7 +261,7 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := store.RecordDisposition(t.Context(), resolveRunID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(t.Context(), resolveRunID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbReRun, at.Add(time.Second)); err != nil {

@@ -120,7 +120,7 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {

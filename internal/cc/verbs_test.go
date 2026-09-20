@@ -97,7 +97,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	// pushPushable step race to reconcile it too -- exactly the interference a focused verb
 	// test must not have to account for.
 	exitCode := 0
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
 
