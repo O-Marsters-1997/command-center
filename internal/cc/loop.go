@@ -46,8 +46,8 @@ type TickError struct {
 	Message string    `json:"message"`
 }
 
-// Loop is the reconcile loop: observe, decide, act. It is the only writer of the database
-// (inv. 9).
+// Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state
+// (inv. 9, narrowed by ADR 0016).
 type Loop struct {
 	store         *Store
 	observe       ObserveFunc

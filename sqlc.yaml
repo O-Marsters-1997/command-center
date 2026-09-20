@@ -11,3 +11,4 @@ sql:
           url: "URL"
           baseline_sha: "BaselineSHA"
           base_sha_at_push: "BaseSHAAtPush"
+          token_sha: "TokenSHA"
