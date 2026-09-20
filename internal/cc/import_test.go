@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -259,6 +260,150 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	}
 	if len(runIDs) != 1 || runIDs[0] != runID {
 		t.Errorf("run ids for %s = %v, want the restored ticket's run history intact", withdrawn.URL, runIDs)
+	}
+}
+
+// TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws pins issue #235: blocked_by is
+// otherwise write-once after a ticket's first import, so once its blocker merges and withdraws,
+// nothing else ever revisits the stale edge and the dependent is stuck at blocked forever.
+func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
+	otherBlocker := "https://github.com/acme/alpha/issues/99"
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{blocker.URL, otherBlocker},
+	}
+	seed := []cc.ImportedTicket{
+		{Ticket: blocker, Repo: "alpha"},
+		{Ticket: dependent, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	// The blocker's pull request merges.
+	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
+	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	// Its issue closes: the next import of its own feature no longer returns it, withdrawing it.
+	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
+		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
+	}
+	want := []string{otherBlocker}
+	if !slices.Equal(tickets[0].BlockedBy, want) {
+		t.Errorf("blocked_by = %v, want %v (the withdrawn blocker pruned, the other edge kept)",
+			tickets[0].BlockedBy, want)
+	}
+}
+
+// TestImportTicketsRepairsBlockedByAcrossFeatures makes the same repair reach a dependent
+// imported under a different feature than its blocker -- the withdrawal and the stale edge it
+// leaves behind are never scoped to one feature.
+func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{blocker.URL},
+	}
+	blockerSeed := []cc.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", blockerSeed, at); err != nil {
+		t.Fatalf("ImportTickets blocker: %v", err)
+	}
+	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
+	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at); err != nil {
+		t.Fatalf("ImportTickets dependent: %v", err)
+	}
+
+	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
+	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	// project:x's next import withdraws the blocker; project:y is never re-imported.
+	if err := store.ImportTickets(ctx, "project:x", nil, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
+		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
+	}
+	if len(tickets[0].BlockedBy) != 0 {
+		t.Errorf("blocked_by = %v, want the cross-feature blocker pruned too", tickets[0].BlockedBy)
+	}
+}
+
+// TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged pins the other half of
+// issue #235: a withdrawal is not always "the blocker is gone for good" -- an issue relabelled
+// out of in-flight status (e.g. to status:backlog) withdraws the very same way a merged one
+// does, but its issue stays open and the ticket can come back. Pruning blocked_by for it would
+// silently satisfy a blocker that never resolved, the same failure AC3 warns against for a
+// pull request closed without merging.
+func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{blocker.URL},
+	}
+	seed := []cc.ImportedTicket{
+		{Ticket: blocker, Repo: "alpha"},
+		{Ticket: dependent, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	// The blocker is relabelled to status:backlog: it drops out of the next import with no
+	// merged (or any) pull request recorded for it.
+	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
+		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
+	}
+	want := []string{blocker.URL}
+	if !slices.Equal(tickets[0].BlockedBy, want) {
+		t.Errorf("blocked_by = %v, want %v (an unmerged withdrawal must not clobber it)", tickets[0].BlockedBy, want)
 	}
 }
 

@@ -63,14 +63,14 @@ func TestGithubSourceTickets(t *testing.T) {
 			BlockedBy: []string{},
 		},
 		{
-			URL:    "https://github.com/O-Marsters-1997/command-center/issues/121",
-			Number: 121,
-			Title:  "Wire the import route",
-			Body:   "Renders the tracker groups available.",
-			Status: "in-progress",
-			BlockedBy: []string{
-				"https://github.com/O-Marsters-1997/command-center/issues/98",
-			},
+			// 121's only dependency (98) is closed, so it drops out (issue #235): a closed
+			// blocker's issue is already gone from the tracker's own --state open query.
+			URL:       "https://github.com/O-Marsters-1997/command-center/issues/121",
+			Number:    121,
+			Title:     "Wire the import route",
+			Body:      "Renders the tracker groups available.",
+			Status:    "in-progress",
+			BlockedBy: []string{},
 		},
 	}
 	if len(got) != len(want) {
