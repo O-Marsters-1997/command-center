@@ -1,15 +1,9 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { bounds as layoutBounds, edgePath, edgesFor, layoutGroups } from "./layout";
 import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
-const COL_W = 260;
-const ROW_H = 64;
-// Tailwind's static scanner needs a literal class, so the node button's `w-[200px]` below
-// can't reference this constant and must be kept in sync with it by hand.
-const NODE_W = 200;
-const NODE_H = 40;
-const MARGIN = 24;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 
@@ -19,41 +13,16 @@ interface GraphNode extends Row {
   y: number;
 }
 
-interface Edge {
-  from: GraphNode;
-  to: GraphNode;
-}
+type Edge = ReturnType<typeof edgesFor<GraphNode>>[number];
 
 // nodeCache keeps one object per URL across polls: <For> keys its children by object identity,
 // so mutating a cached node in place (rather than spreading a fresh one every layoutGroups call)
 // is what keeps a node button's own DOM -- and its keyboard focus -- stable across a 5s poll.
 const nodeCache = new Map<string, GraphNode>();
 
-function layoutGroups(groups: Group[]): GraphNode[] {
-  const nodes: GraphNode[] = [];
-  let y = MARGIN;
-  for (const g of groups) {
-    if (g.root) {
-      nodes.push(toNode(g.root, 0, y));
-      let cy = y;
-      for (const child of g.children) {
-        cy += ROW_H;
-        nodes.push(toNode(child, 1, cy));
-      }
-      y = cy + ROW_H;
-    } else {
-      for (const child of g.children) {
-        nodes.push(toNode(child, 0, y));
-        y += ROW_H;
-      }
-    }
-  }
-  return nodes;
-}
-
-function toNode(row: Row, col: number, y: number): GraphNode {
+function toNode(row: Row, col: number, x: number, y: number): GraphNode {
   const node = nodeCache.get(row.url) ?? ({} as GraphNode);
-  Object.assign(node, row, { col, x: MARGIN + col * COL_W, y });
+  Object.assign(node, row, { col, x, y });
   nodeCache.set(row.url, node);
   return node;
 }
@@ -61,27 +30,6 @@ function toNode(row: Row, col: number, y: number): GraphNode {
 function ticketRef(url: string): string {
   const parts = url.split("/");
   return `#${parts[parts.length - 1]}`;
-}
-
-function edgesFor(nodes: GraphNode[]): Edge[] {
-  const byURL = new Map(nodes.map((n) => [n.url, n]));
-  const edges: Edge[] = [];
-  for (const node of nodes) {
-    for (const blockerURL of node.blocking || []) {
-      const from = byURL.get(blockerURL);
-      if (from) edges.push({ from, to: node });
-    }
-  }
-  return edges;
-}
-
-function edgePath(edge: Edge): string {
-  const x1 = edge.from.x + NODE_W;
-  const y1 = edge.from.y + NODE_H / 2;
-  const x2 = edge.to.x;
-  const y2 = edge.to.y + NODE_H / 2;
-  const dx = Math.max(40, (x2 - x1) / 2);
-  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 }
 
 customElement("cc-graph", {}, () => {
@@ -102,7 +50,7 @@ customElement("cc-graph", {}, () => {
     try {
       // Carries the page's own scope (e.g. ?repo=X) so /graph.json answers the same groups the
       // board renders (CONTEXT.md § Scope).
-      const res = await fetch("/graph.json" + window.location.search);
+      const res = await fetch(`/graph.json${window.location.search}`);
       if (!res.ok) return;
       setGroups(await res.json());
     } catch {}
@@ -115,17 +63,9 @@ customElement("cc-graph", {}, () => {
   });
   onCleanup(() => clearInterval(timer));
 
-  const nodes = createMemo(() => layoutGroups(groups()));
-  const edges = createMemo(() => edgesFor(nodes()));
-  const bounds = createMemo(() => {
-    const ns = nodes();
-    const maxCol = ns.reduce((m, n) => Math.max(m, n.col), 0);
-    const maxY = ns.reduce((m, n) => Math.max(m, n.y), 0);
-    return {
-      width: MARGIN * 2 + maxCol * COL_W + NODE_W,
-      height: maxY + NODE_H + MARGIN,
-    };
-  });
+  const nodes = createMemo(() => layoutGroups(groups()).map((p) => toNode(p.row, p.col, p.x, p.y)));
+  const edges = createMemo(() => edgesFor(nodes(), (n) => n.blocking));
+  const bounds = createMemo(() => layoutBounds(nodes()));
 
   const litURLs = createMemo(() => {
     const sel = selected();

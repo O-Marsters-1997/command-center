@@ -1213,12 +1213,6 @@ type launchModalView struct {
 	Pending      bool
 	Refused      string
 	Empty        bool
-	Candidates   []modalCandidate
-}
-
-type modalCandidate struct {
-	URL, Ref, Title, Label, Reason, Base, BaseVerdict, Hash string
-	Refused                                                 bool
 }
 
 func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
@@ -1261,14 +1255,6 @@ func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (laun
 		return view, nil
 	}
 
-	view.Candidates = make([]modalCandidate, 0, len(candidates))
-	for _, c := range candidates {
-		view.Candidates = append(view.Candidates, modalCandidate{
-			URL: c.URL, Ref: c.Ref, Title: c.Title, Label: c.Label, Reason: c.Reason,
-			Base: c.Base, BaseVerdict: c.BaseVerdict, Hash: c.PromptHash,
-			Refused: c.Label == plan.Refused.String(),
-		})
-	}
 	return view, nil
 }
 
