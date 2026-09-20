@@ -29,6 +29,8 @@ func Lookup(args []string) func(ctx context.Context, configPath string) error {
 		return func(ctx context.Context, configPath string) error { return tick(ctx, configPath, rest) }
 	case "request":
 		return func(ctx context.Context, configPath string) error { return request(ctx, configPath, rest) }
+	case "import":
+		return func(ctx context.Context, configPath string) error { return importFeature(ctx, configPath, rest) }
 	default:
 		return nil
 	}
@@ -55,6 +57,24 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 		}
 	}
 	return nil
+}
+
+func importFeature(ctx context.Context, configPath string, args []string) (err error) {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: cc import <feature>")
+	}
+
+	cfg, err := cc.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	store, err := cc.OpenStore(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, store.Close()) }()
+
+	return cc.QueueImport(ctx, store, args[0], time.Now())
 }
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately

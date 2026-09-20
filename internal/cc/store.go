@@ -398,7 +398,7 @@ func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
 	return tickErr, found, err
 }
 
-// ImportError is the last import refusal, rendered on GET /import.
+// ImportError is the last feature-conflict import refusal, rendered on GET /features.
 type ImportError struct {
 	At      time.Time `json:"at"`
 	Feature string    `json:"feature"`

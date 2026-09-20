@@ -11,7 +11,7 @@
 #
 # The repo below is named by its remote, so startup clones it to <data_dir>/repos/command-center
 # rather than expecting a directory someone made by hand. The fleet itself is no longer here:
-# label an issue project:<name> and import its group from GET /import.
+# label an issue project:<name> and browse what's importable at GET /features.
 
 max_agents = 3
 port       = 7777

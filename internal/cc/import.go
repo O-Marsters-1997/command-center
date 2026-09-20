@@ -4,14 +4,21 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// importVerb is the intent verb POST /import queues and the loop's applyImportIntents consumes.
-// It is not in supportedVerbs (verbs.go): that map is for verbs against an existing ticket, and
-// an import intent's own "ticket" id is a feature label, not a url.
+// importVerb is the intent verb the loop's applyImportIntents consumes. It is not in
+// supportedVerbs (verbs.go): that map is for verbs against an existing ticket, and an import
+// intent's own "ticket" id is a feature label, not a url.
 const importVerb = "import"
+
+// QueueImport queues one import intent for feature, which applyImportIntents performs on the
+// loop's next tick.
+func QueueImport(ctx context.Context, store *Store, feature string, at time.Time) error {
+	return store.QueueVerbIntent(ctx, feature, importVerb, at)
+}
 
 const eventImportRefused = "import_refused"
 
@@ -27,20 +34,17 @@ type ImportedTicket struct {
 	Source string
 }
 
-// ImportFeature is one project: label available to import, plus the tickets it would currently
-// bring in.
+// ImportFeature is one project: label a configured repo's tracker offers.
 type ImportFeature struct {
 	Feature string
-	Tickets []tracker.Ticket
 }
 
-// ImportFeatures reads every configured repo's tracker features and, for each, the tickets it
-// would bring in right now -- GET /import's whole view, gathered fresh on every render (inv. 14).
-// A repo with no remote has no tracker to dispatch to and is silently skipped.
+// ImportFeatures reads every configured repo's tracker features, gathered fresh on every render
+// (inv. 14): one gh label list per repo, and no per-feature ticket call. A repo with no remote
+// has no tracker to dispatch to and is silently skipped.
 func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([]ImportFeature, error) {
 	var names []string
 	seen := map[string]bool{}
-	var sources []tracker.Source
 	for _, r := range repos {
 		src, ok, err := trackerSourceFor(r, resolve)
 		if err != nil {
@@ -49,7 +53,6 @@ func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([
 		if !ok {
 			continue
 		}
-		sources = append(sources, src)
 
 		features, err := src.Features(ctx)
 		if err != nil {
@@ -66,15 +69,7 @@ func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([
 
 	result := make([]ImportFeature, 0, len(names))
 	for _, name := range names {
-		var tickets []tracker.Ticket
-		for _, src := range sources {
-			ts, err := src.Tickets(ctx, name)
-			if err != nil {
-				return nil, fmt.Errorf("list tickets for %s: %w", name, err)
-			}
-			tickets = append(tickets, ts...)
-		}
-		result = append(result, ImportFeature{Feature: name, Tickets: tickets})
+		result = append(result, ImportFeature{Feature: name})
 	}
 	return result, nil
 }

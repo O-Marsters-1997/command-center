@@ -1,0 +1,30 @@
+# GET /features lists every feature a configured repo's tracker offers, imported or not; opening
+# one 303s to the board scoped to it. GET /import and POST /import no longer exist.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc request GET /features
+stdout 'project:two-tasks</a></td>\s*<td>no</td>'
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+
+exec cc request GET /features
+stdout 'project:two-tasks</a></td>\s*<td>yes</td>'
+
+exec cc request GET '/features?q=nope'
+! stdout 'project:two-tasks'
+
+exec cc request GET '/features/project:two-tasks'
+stdout 'href="/\?feature=project%3Atwo-tasks"'
+
+exec cc request GET '/?feature=project%3Atwo-tasks'
+stdout '>#CC-1</button>'
+stdout '>#CC-2</button>'
+
+! exec cc request GET /import
+stderr '404'
+! exec cc request POST /import
+stderr '404'
