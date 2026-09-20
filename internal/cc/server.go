@@ -144,6 +144,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
+	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
 	mux.HandleFunc("GET /import", s.handleImport)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
@@ -271,7 +272,9 @@ type check struct {
 	DetailsURL string `json:"details_url"`
 }
 
-func (r row) Ticket() string { return "#" + path.Base(r.URL) }
+func (r row) Ticket() string { return ticketRef(r.URL) }
+
+func ticketRef(url string) string { return "#" + path.Base(url) }
 
 // FollowUpAvailable reports whether this row's state offers follow-up.
 func (r row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
@@ -1057,6 +1060,133 @@ type previewRow struct {
 	Prompt string
 }
 
+type candidate struct {
+	URL         string   `json:"url"`
+	Ref         string   `json:"ref"`
+	Title       string   `json:"title"`
+	Repo        string   `json:"repo"`
+	Feature     string   `json:"feature"`
+	Label       string   `json:"label"`
+	Reason      string   `json:"reason"`
+	Base        string   `json:"base"`
+	BaseVerdict string   `json:"base_verdict"`
+	PromptHash  string   `json:"prompt_hash"`
+	BlockedBy   []string `json:"blocked_by"`
+	Prompt      string   `json:"-"`
+}
+
+type candidateInputs struct {
+	tickets []Ticket
+	obs     Observation
+	facts   ticketFacts
+	vd      verdictDeps
+}
+
+func (s *Server) loadCandidateInputs(ctx context.Context) (candidateInputs, error) {
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		return candidateInputs{}, err
+	}
+	obs, _, err := s.store.LastObservation(ctx)
+	if err != nil {
+		return candidateInputs{}, err
+	}
+	facts, vd, err := s.loadTicketFacts(ctx)
+	if err != nil {
+		return candidateInputs{}, err
+	}
+	return candidateInputs{tickets: tickets, obs: obs, facts: facts, vd: vd}, nil
+}
+
+func candidatesFor(
+	requested []string, in candidateInputs, stackingByRepo map[string]bool, now time.Time,
+) ([]candidate, error) {
+	byTicketURL := make(map[string]Ticket, len(in.tickets))
+	ticketsByBranch := make(map[string]Ticket, len(in.tickets))
+	for _, t := range in.tickets {
+		byTicketURL[t.URL] = t
+		ticketsByBranch[t.Branch] = t
+	}
+	byURL := planTicketsByURL(in.tickets)
+
+	slice := make(map[string]bool, len(requested))
+	for _, ticketURL := range requested {
+		if _, ok := byURL[ticketURL]; !ok {
+			return nil, fmt.Errorf("unknown ticket %q", ticketURL)
+		}
+		slice[ticketURL] = true
+	}
+
+	prs := prsByBranch(in.tickets, in.obs)
+
+	candidates := make([]candidate, 0, len(requested))
+	for _, ticketURL := range requested {
+		t := byTicketURL[ticketURL]
+		pt := byURL[ticketURL]
+		stacking := stackingByRepo[t.Repo]
+		unlock := plan.Unlocked(pt, byURL, prs, stacking)
+		label, reason := plan.Preview(
+			unlock, slice, in.facts.memberships[ticketURL].LaunchID,
+			conflictedBase(pt, byURL, unlock, stacking, in.obs))
+
+		base := unlock.BaseBranch
+		if base == "" {
+			base = plan.ProspectiveBase(pt, byURL, stacking)
+		}
+		composed := plan.Compose(pt)
+		candidates = append(candidates, candidate{
+			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
+			Label: label.String(), Reason: string(reason),
+			Base:        "origin/" + base,
+			BaseVerdict: baseVerdict(base, ticketsByBranch, in.obs, in.facts, in.vd, now),
+			PromptHash:  plan.Hash(composed), BlockedBy: t.BlockedBy, Prompt: composed,
+		})
+	}
+	return candidates, nil
+}
+
+func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
+	if feature := q.Get("feature"); feature != "" {
+		var selected []string
+		for _, t := range tickets {
+			if t.Feature == feature {
+				selected = append(selected, t.URL)
+			}
+		}
+		return selected, nil
+	}
+	requested := q["ticket"]
+	if len(requested) == 0 {
+		return nil, fmt.Errorf("either ?feature= or at least one ?ticket= is required")
+	}
+	return requested, nil
+}
+
+func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	in, err := s.loadCandidateInputs(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	requested, err := candidateSelection(r.URL.Query(), in.tickets)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(candidates); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requested := r.URL.Query()["ticket"]
@@ -1065,64 +1195,24 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tickets, err := s.store.Tickets(ctx)
+	in, err := s.loadCandidateInputs(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	byURL := planTicketsByURL(tickets)
-	ticketsByBranch := make(map[string]Ticket, len(tickets))
-	for _, t := range tickets {
-		ticketsByBranch[t.Branch] = t
-	}
 
-	slice := make(map[string]bool, len(requested))
-	for _, ticketURL := range requested {
-		if _, ok := byURL[ticketURL]; !ok {
-			http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
-			return
-		}
-		slice[ticketURL] = true
-	}
-
-	obs, _, err := s.store.LastObservation(ctx)
+	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	prs := prsByBranch(tickets, obs)
-	facts, vd, err := s.loadTicketFacts(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	now := s.now()
 
-	rows := make([]previewRow, 0, len(requested))
-	for _, ticketURL := range requested {
-		t := byURL[ticketURL]
-		stacking := s.stackingByRepo[t.Repo]
-		unlock := plan.Unlocked(t, byURL, prs, stacking)
-		label, reason := plan.Preview(
-			unlock, slice, facts.memberships[ticketURL].LaunchID,
-			conflictedBase(t, byURL, unlock, stacking, obs))
-
-		base := unlock.BaseBranch
-		if base == "" {
-			base = plan.ProspectiveBase(t, byURL, stacking)
-		}
-		row := previewRow{
-			URL:         ticketURL,
-			Label:       label.String(),
-			Reason:      string(reason),
-			Base:        "origin/" + base,
-			BaseVerdict: baseVerdict(base, ticketsByBranch, obs, facts, vd, now),
-		}
-		composed := plan.Compose(t)
-		row.Hash = plan.Hash(composed)
-		row.Prompt = composed
-		row.Refused = label == plan.Refused
-		rows = append(rows, row)
+	rows := make([]previewRow, 0, len(candidates))
+	for _, c := range candidates {
+		rows = append(rows, previewRow{
+			URL: c.URL, Label: c.Label, Reason: c.Reason, Base: c.Base, BaseVerdict: c.BaseVerdict,
+			Refused: c.Label == plan.Refused.String(), Hash: c.PromptHash, Prompt: c.Prompt,
+		})
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
