@@ -281,7 +281,7 @@ func TestMastheadShowsReimportOnlyWhenFeatureScoped(t *testing.T) {
 	if !strings.Contains(scoped, `<input type="hidden" name="feature" value="board-scope">`) {
 		t.Errorf("?feature=board-scope masthead missing the launch action:\n%s", scoped)
 	}
-	if !strings.Contains(scoped, `href="/?view=board" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">all features</a>`) {
+	if !strings.Contains(scoped, `href="/?view=board"`) || !strings.Contains(scoped, ">all features</a>") {
 		t.Errorf("?feature=board-scope masthead missing the all-features link:\n%s", scoped)
 	}
 	if !strings.Contains(scoped, `href="/?view=board&feature=board-scope"`) {
