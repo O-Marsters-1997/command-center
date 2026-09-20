@@ -912,7 +912,7 @@ API, not citations inherited from earlier revisions).
 | Generating the predicate from `.mergify.yml` (YAML-alias parser) | the hash detector (§7) fires more than twice; the boolean grammar is already the parse target |
 | Adaptive rate-limit governor | you hit rate limits often enough to notice. Until then `max_agents` is the knob |
 | `POST /tasks` | you want to add a ticket without re-running `to-tickets` |
-| Slack / OTel / Datadog egress | a localhost page is not enough. Tick-age and last-error are already Phase 1 page fields |
+| Slack / OTel / Datadog egress | a localhost page is not enough. Tick-age and last-error are already Phase 1 page fields; `GET /insights` (docs/adr/0015-run-metrics-are-captured-at-disposition-from-stdout.md) now answers the same question for mechanical run spend without leaving the box, so this row is only the external-egress half — a ping or a trace leaving the process — not observability in general |
 | An inbox — one channel for a decision the agent cannot make: a `waiting on you` state, the question and the reply as rows, answering resumes the run | an agent guesses wrong, or a `failed` run turns out to have been an unanswerable question, more than once. It is the app's **first tool grant**, so invariant 17 flips from a denylist to an explicit allowlist on the same change; it removes one *cause* of an apparently-wedged run (limit 2) without detecting one |
 | MCP permission-prompt loop | denied permissions become a common failure mode |
 | TUI | the HTTP page is demonstrably the wrong shape |
@@ -964,6 +964,16 @@ API, not citations inherited from earlier revisions).
     sets.
 12. **A second workspace doubles concurrency silently** — `max_agents` and the flock are
     per-workspace; the subscription limit is per-account.
+13. **`GET /insights` plots one panel, static per load, with no drill-down.** Tokens per day,
+    input against output, not dollars — `cost_usd` is nullable and provider-computed
+    (docs/adr/0015), so a dollar axis would be the first thing to break under a second stdout
+    dialect. Not quality or hallucination rate — nothing exists yet that can score a run, so
+    those judgements stay out (plan preamble, `plans/run-insights.md`). The page does not poll:
+    a run disposing while it is open shows up only on reload, deliberately, since the underlying
+    data changes at most a few times a minute and a five-second poll would buy nothing. There is
+    no breakdown by task or feature yet, only the fleet-wide total. More panels land one at a
+    time against the same buckets; this one exists to prove the path from an agent's own stdout
+    to a plotted number, once.
 
 ## 14 · Corrected from revision 1
 
