@@ -499,7 +499,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "")
+	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "", "")
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
@@ -513,14 +513,15 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind, followUpText string,
+	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
+	followUpText, ciLogSection string,
 ) error {
 	var prompt string
 	switch kind {
 	case runKindResolve:
 		prompt = plan.ComposeResolve(planTicket(ticket))
 	case runKindFollowUp:
-		prompt = plan.ComposeFollowUp(followUpText)
+		prompt = plan.ComposeFollowUp(followUpText, ciLogSection)
 	default:
 		prompt = plan.Compose(planTicket(ticket))
 		if ticket.Body != "" {

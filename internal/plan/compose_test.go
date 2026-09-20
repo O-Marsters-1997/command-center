@@ -40,7 +40,7 @@ func TestComposeResolve(t *testing.T) {
 func TestComposeFollowUp(t *testing.T) {
 	t.Parallel()
 
-	got := plan.ComposeFollowUp("fix the flaky assertion in TestThing")
+	got := plan.ComposeFollowUp("fix the flaky assertion in TestThing", "")
 	for _, want := range []string{"cc/skills/follow-up/SKILL.md", "fix the flaky assertion in TestThing"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("ComposeFollowUp = %q, want it to mention %q", got, want)
@@ -48,6 +48,15 @@ func TestComposeFollowUp(t *testing.T) {
 	}
 	if strings.Contains(got, "/implement") {
 		t.Errorf("ComposeFollowUp = %q, want it never to compose the implement instruction", got)
+	}
+}
+
+func TestComposeFollowUpAppendsTheCISectionWhenGiven(t *testing.T) {
+	t.Parallel()
+
+	got := plan.ComposeFollowUp("fix it", "## Failed CI log\n\nsome log")
+	if !strings.Contains(got, "## Failed CI log\n\nsome log") {
+		t.Errorf("ComposeFollowUp = %q, want it to carry the CI section", got)
 	}
 }
 

@@ -160,6 +160,17 @@ func Rerun(ctx context.Context, repoPath, runID string) error {
 	return err
 }
 
+// RunViewLogFailed reads a failed GitHub Actions run's log: `gh run view --log-failed <id>`, the
+// follow-up verb's way to give an agent the CI failure its own settings firewall it from seeing
+// (internal/cc/settings.go denies it Bash(gh:*), WebFetch and WebSearch; issue #232).
+func RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
+	out, err := run(ctx, repoPath, "run", "view", "--log-failed", runID)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
 // CloseIssue closes issueURL's GitHub issue -- the post-merge cleanup verb's own bookkeeping
 // step, closing the issue tp remove --merged's worktree teardown never touches
 // (docs/prds/prd-command-centre.md § Phase 6, issue #147).
