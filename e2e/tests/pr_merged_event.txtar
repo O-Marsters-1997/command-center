@@ -1,0 +1,30 @@
+# A merged PR's branch is read off the fallback `gh pr list --state all` call, the only read
+# that ever sees mergedAt for real (bulk `pr list` is --state open). The first tick that observes
+# it appends exactly one pr_merged event, stamped with GitHub's own merge time rather than the
+# tick clock; a second tick over the same merged PR appends nothing more (internal/cc/merge_events.go).
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+# The human merges (squash) and GitHub deletes the branch.
+exec git -C $WORK/repo push -q origin --delete cc-1-x
+cc-fake-gh single-task-merged
+exec cc tick --count 1
+
+exec cc request GET /events
+stdout -count=1 '"Kind":"pr_merged"'
+stdout '"TicketURL":"https://github.com/sandbox-org/single-task/issues/CC-1","Kind":"pr_merged"'
+stdout '"At":"2020-01-01T00:00:00Z"'
+
+# A second tick over the same merged PR appends nothing.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=1 '"Kind":"pr_merged"'

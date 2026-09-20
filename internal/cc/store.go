@@ -470,6 +470,18 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	return nil
 }
 
+// HasEvent reports whether ticketURL already has an event of kind.
+func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, error) {
+	found, err := s.q.HasEvent(ctx, ccdb.HasEventParams{
+		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
+		Kind:     kind,
+	})
+	if err != nil {
+		return false, fmt.Errorf("has event %s for %s: %w", kind, ticketURL, err)
+	}
+	return found, nil
+}
+
 // Events returns every audit row, oldest first.
 func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	rows, err := s.q.Events(ctx)

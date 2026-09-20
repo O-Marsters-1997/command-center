@@ -102,6 +102,18 @@ func TestDecode(t *testing.T) {
 				if prs[0].State != Merged {
 					t.Errorf("state = %v, want Merged", prs[0].State)
 				}
+				if want := time.Date(2026, 8, 20, 10, 15, 0, 0, time.UTC); !prs[0].MergedAt.Equal(want) {
+					t.Errorf("mergedAt = %s, want %s", prs[0].MergedAt, want)
+				}
+			},
+		},
+		{
+			name:    "an open pr carries a zero mergedAt",
+			fixture: "mixed_rollup.json",
+			want: func(t *testing.T, prs []PR) {
+				if !prs[0].MergedAt.IsZero() {
+					t.Errorf("mergedAt = %s, want zero for an unmerged PR", prs[0].MergedAt)
+				}
 			},
 		},
 		{
@@ -141,6 +153,17 @@ func TestBulkAndFallbackFieldsBothRequestLabels(t *testing.T) {
 	}
 	if !strings.Contains(fallbackFields, "labels") {
 		t.Errorf("fallbackFields = %q, want it to include labels", fallbackFields)
+	}
+}
+
+func TestBulkAndFallbackFieldsBothRequestMergedAt(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(bulkFields, "mergedAt") {
+		t.Errorf("bulkFields = %q, want it to include mergedAt", bulkFields)
+	}
+	if !strings.Contains(fallbackFields, "mergedAt") {
+		t.Errorf("fallbackFields = %q, want it to include mergedAt", fallbackFields)
 	}
 }
 

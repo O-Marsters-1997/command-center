@@ -60,6 +60,8 @@ type PR struct {
 	// Labels names every label GitHub reports, invariant 2's ready-to-merge warning among them
 	// (docs/designs/command-centre-design.md § 4a).
 	Labels []string `json:"labels"`
+	// MergedAt is GitHub's own merge timestamp, zero unless State is Merged.
+	MergedAt time.Time `json:"merged_at"`
 }
 
 // Snapshot is the tracked branches' pull requests, keyed by head branch.
@@ -69,10 +71,11 @@ type Snapshot struct {
 
 // bulkFields is the full read; gh pr list's own defaults (--state open --limit 30) would hide
 // merged PRs and truncate below a busy repo's open count.
-const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state,statusCheckRollup,author,labels"
+const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
+	"statusCheckRollup,author,labels,mergedAt"
 
 // fallbackFields is the per-branch read. It is the only call that sees MERGED and CLOSED.
-const fallbackFields = "number,state,baseRefName,headRefOid,labels"
+const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
@@ -235,6 +238,7 @@ type rawPR struct {
 	Labels            []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
+	MergedAt string `json:"mergedAt"`
 }
 
 // rawIssue mirrors gh issue list's JSON exactly.
@@ -279,9 +283,18 @@ func decode(raw []byte) ([]PR, error) {
 			State:       parseState(r.State),
 			Checks:      normalise(r.StatusCheckRollup),
 			Labels:      labels,
+			MergedAt:    parseMergedAt(r.MergedAt),
 		})
 	}
 	return prs, nil
+}
+
+func parseMergedAt(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func parseState(s string) PRState {
