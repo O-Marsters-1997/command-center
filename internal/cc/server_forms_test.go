@@ -27,7 +27,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 
 	body := rec.Body.String()
 	wants := []string{
-		`<form id="launch" method="get" action="/preview"></form>`,
+		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"`,
 		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"`,
 		`<button type="submit" form="launch">launch selected</button>`,

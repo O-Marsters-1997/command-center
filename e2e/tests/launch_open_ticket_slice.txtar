@@ -1,0 +1,19 @@
+# POST /launch/open with a hand-picked ticket slice -- the board's checkboxes and the graph
+# island's selection both post this shape -- mounts the same modal a feature does, but straight
+# away: the tickets are already stored, so there is no import to queue and nothing to poll.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+
+exec cc request -form 'ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2' POST /launch/open
+stdout '<cc-launch-modal tickets='
+! stdout 'importing'
+
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
+exec cc tick --count 1
+exec cc request GET /
+stdout '>queued</span>'

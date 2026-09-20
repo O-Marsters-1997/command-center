@@ -100,11 +100,6 @@ func newRowSlot(r row, head bool, depth int, scope, featureScope string) rowSlot
 	}
 }
 
-//go:embed preview.tmpl
-var previewSource string
-
-var previewPage = template.Must(template.New("preview").Parse(previewSource))
-
 //go:embed features.tmpl
 var featuresSource string
 
@@ -117,7 +112,7 @@ var launchModalSource string
 
 var launchModal = template.Must(template.New("launchModal").Parse(launchModalSource))
 
-// Server is the status page plus the launch-preview, launch-authorisation and features routes. It
+// Server is the status page plus the launch, launch-authorisation and features routes. It
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
@@ -152,7 +147,6 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
-	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /features", s.handleFeatures)
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.HandleFunc("POST /features/{feature}/import", requireBrowserOrigin(s.handleImportFeature))
@@ -1092,26 +1086,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// previewRow is one line of a launch preview: what would happen to this ticket, and why. Base
-// carries the literal origin/ prefix tp new and gh pr create --base need — deliberately
-// different from the main page's Base column, which has no such prefix.
-type previewRow struct {
-	URL    string
-	Label  string
-	Reason string
-	Base   string
-	// Refused is Label's own refused case, so the template renders the row without a checkbox
-	// rather than comparing the label string it prints.
-	Refused bool
-	// BaseVerdict is the base's own CI verdict where the base is a blocker's branch, empty for
-	// a root row — "you are about to build on a red parent" is read before authorising, not
-	// after (docs/designs/command-centre-design.md § 4b).
-	BaseVerdict string
-	Hash        string
-	// Prompt is the fully composed prompt this launch would authorise.
-	Prompt string
-}
-
 type candidate struct {
 	URL         string   `json:"url"`
 	Ref         string   `json:"ref"`
@@ -1217,12 +1191,13 @@ func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
 type launchModalView struct {
 	Feature      string
 	FeatureQuery string
+	TicketQuery  string
 	Pending      bool
 	Refused      string
 	Empty        bool
 }
 
-func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
+func (s *Server) buildFeatureLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
 	view := launchModalView{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
 	intents, err := s.store.PendingVerbIntents(ctx, importVerb)
@@ -1265,6 +1240,25 @@ func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (laun
 	return view, nil
 }
 
+func (s *Server) buildTicketLaunchModalView(ctx context.Context, requested []string) (launchModalView, error) {
+	in, err := s.loadCandidateInputs(ctx)
+	if err != nil {
+		return launchModalView{}, err
+	}
+	if _, err := candidatesFor(requested, in, s.stackingByRepo, s.now()); err != nil {
+		return launchModalView{}, err
+	}
+	return launchModalView{TicketQuery: candidateQuery(requested)}, nil
+}
+
+func candidateQuery(requested []string) string {
+	q := make(url.Values, len(requested))
+	for _, ticketURL := range requested {
+		q.Add("ticket", ticketURL)
+	}
+	return q.Encode()
+}
+
 func (s *Server) renderLaunchModal(w http.ResponseWriter, view launchModalView) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := launchModal.Execute(w, view); err != nil {
@@ -1277,22 +1271,32 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	feature := r.FormValue("feature")
-	if feature == "" {
-		http.Error(w, "feature is required", http.StatusBadRequest)
-		return
-	}
-
 	ctx := r.Context()
-	if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	if feature := r.FormValue("feature"); feature != "" {
+		if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.nudge()
+
+		view, err := s.buildFeatureLaunchModalView(ctx, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.renderLaunchModal(w, view)
 		return
 	}
-	s.nudge()
 
-	view, err := s.buildLaunchModalView(ctx, feature)
+	requested := r.Form["ticket"]
+	if len(requested) == 0 {
+		http.Error(w, "either feature or at least one ticket is required", http.StatusBadRequest)
+		return
+	}
+	view, err := s.buildTicketLaunchModalView(ctx, requested)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	s.renderLaunchModal(w, view)
@@ -1301,14 +1305,24 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if r.Header.Get("HX-Request") != "" {
-		feature := r.URL.Query().Get("feature")
-		if feature == "" {
-			http.Error(w, "?feature= is required", http.StatusBadRequest)
+		q := r.URL.Query()
+		if feature := q.Get("feature"); feature != "" {
+			view, err := s.buildFeatureLaunchModalView(ctx, feature)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.renderLaunchModal(w, view)
 			return
 		}
-		view, err := s.buildLaunchModalView(ctx, feature)
+		requested := q["ticket"]
+		if len(requested) == 0 {
+			http.Error(w, "either ?feature= or at least one ?ticket= is required", http.StatusBadRequest)
+			return
+		}
+		view, err := s.buildTicketLaunchModalView(ctx, requested)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		s.renderLaunchModal(w, view)
@@ -1334,40 +1348,6 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(candidates); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requested := r.URL.Query()["ticket"]
-	if len(requested) == 0 {
-		http.Error(w, "at least one ?ticket= is required", http.StatusBadRequest)
-		return
-	}
-
-	in, err := s.loadCandidateInputs(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	rows := make([]previewRow, 0, len(candidates))
-	for _, c := range candidates {
-		rows = append(rows, previewRow{
-			URL: c.URL, Label: c.Label, Reason: c.Reason, Base: c.Base, BaseVerdict: c.BaseVerdict,
-			Refused: c.Label == plan.Refused.String(), Hash: c.PromptHash, Prompt: c.Prompt,
-		})
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := previewPage.Execute(w, rows); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

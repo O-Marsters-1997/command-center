@@ -48,10 +48,11 @@
 
 
 
-<form id="launch" method="get" action="/preview"></form>
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 
 <button type="submit" form="launch">launch selected</button>
 
+<div id="launch-modal"></div>
 </main>
 </body>
 </html>
