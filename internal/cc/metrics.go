@@ -2,6 +2,9 @@ package cc
 
 import (
 	"context"
+	"errors"
+	"io/fs"
+	"log"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
@@ -21,6 +24,9 @@ func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser) er
 	for _, run := range runs {
 		metrics, err := parser(run.LogPath)
 		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				log.Printf("backfill run %d metrics %s: %v", run.ID, run.LogPath, err)
+			}
 			continue
 		}
 		if err := store.BackfillRunMetrics(ctx, run.ID, metrics); err != nil {

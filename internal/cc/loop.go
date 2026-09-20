@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -387,6 +388,9 @@ func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
 	}
 	metrics, err := l.metricsParser(logPath)
 	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("parse run metrics %s: %v", logPath, err)
+		}
 		return nil
 	}
 	return &metrics

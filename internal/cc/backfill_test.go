@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"fmt"
+	"io/fs"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 
 	parser := func(logPath string) (agentlog.RunMetrics, error) {
 		if logPath == "/state/runs/pruned.jsonl" {
-			return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: no such file", logPath)
+			return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, fs.ErrNotExist)
 		}
 		return agentlog.RunMetrics{TokensIn: 10, TokensOut: 5, Settled: true}, nil
 	}
@@ -66,7 +67,7 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 	var reparsed []string
 	secondPass := func(logPath string) (agentlog.RunMetrics, error) {
 		reparsed = append(reparsed, logPath)
-		return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: no such file", logPath)
+		return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, fs.ErrNotExist)
 	}
 	if err := cc.BackfillMetrics(ctx, store, secondPass); err != nil {
 		t.Fatalf("BackfillMetrics second pass: %v", err)
