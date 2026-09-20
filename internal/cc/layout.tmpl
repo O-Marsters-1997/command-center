@@ -15,13 +15,6 @@
     document.documentElement.dataset.theme = next;
     localStorage.setItem("theme", next);
   }
-  if (localStorage.getItem("nav") === "rail") document.documentElement.dataset.nav = "rail";
-  function toggleNav() {
-    var next = document.documentElement.dataset.nav === "rail" ? "" : "rail";
-    document.documentElement.dataset.nav = next;
-    localStorage.setItem("nav", next);
-    document.getElementById("nav-toggle").setAttribute("aria-expanded", next === "rail" ? "false" : "true");
-  }
   // Every <time datetime> is rendered once with the instant it counts from, so the server's own
   // wording goes stale the moment it is sent and a swap is not what keeps it current.
   function ago(ms) {
@@ -79,9 +72,14 @@
   <span class="text-muted">/</span>
   <span>{{.FeatureScope}}</span>
   {{if .FeatureImportPath}}
+  <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+    <input type="hidden" name="feature" value="{{.FeatureScope}}">
+    <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">launch</button>
+  </form>
   <form hx-post="{{.FeatureImportPath}}" hx-target="#board" hx-swap="outerHTML">
     <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">reimport</button>
   </form>
+  <a href="/?view={{.View}}" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">all features</a>
   {{end}}
   {{end}}
   <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
@@ -104,15 +102,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
 {{- end}}
 
-{{define "icon-rail" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="6" y1="2.5" x2="6" y2="13.5"/></svg>
-{{- end}}
-
 {{define "sidebar" -}}
 <nav class="sidebar" id="sidebar-nav" aria-label="sections">
-  <a class="sidebar-item" href="/?view=board"{{if eq .Section "board"}} aria-current="page"{{end}}>{{template "icon-board"}}<span class="sidebar-label">board</span></a>
-  <a class="sidebar-item" href="/?view=graph"{{if eq .Section "graph"}} aria-current="page"{{end}}>{{template "icon-graph"}}<span class="sidebar-label">graph</span></a>
   <a class="sidebar-item" href="/features"{{if eq .Section "features"}} aria-current="page"{{end}}>{{template "icon-features"}}<span class="sidebar-label">features</span></a>
-  <button type="button" id="nav-toggle" class="sidebar-item sidebar-toggle" onclick="toggleNav()" aria-expanded="true" aria-controls="sidebar-nav">{{template "icon-rail"}}<span class="sidebar-label">collapse</span></button>
+  <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "board"}} aria-current="page"{{end}}>{{template "icon-board"}}<span class="sidebar-label">board</span></a>
+  <a class="sidebar-item" href="/?view=graph{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "graph"}} aria-current="page"{{end}}>{{template "icon-graph"}}<span class="sidebar-label">graph</span></a>
 </nav>
 {{- end}}
