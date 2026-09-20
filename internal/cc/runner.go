@@ -53,6 +53,23 @@ func substitute(arg string, cfg SpawnConfig) string {
 	return arg
 }
 
+// buildArgv resolves cfg.AgentCommand into a concrete argv. When cfg.SystemPromptPath is empty
+// (resolve and follow-up runs, see spawnRun), the flag preceding the {system_prompt} placeholder
+// is dropped along with it rather than left pointing at nothing.
+func buildArgv(cfg SpawnConfig) []string {
+	argv := make([]string, 0, len(cfg.AgentCommand))
+	for _, a := range cfg.AgentCommand {
+		if a == "{system_prompt}" && cfg.SystemPromptPath == "" {
+			if len(argv) > 0 {
+				argv = argv[:len(argv)-1]
+			}
+			continue
+		}
+		argv = append(argv, substitute(a, cfg))
+	}
+	return argv
+}
+
 // stripAPIKey removes ANTHROPIC_API_KEY from an environment list: every agent runs under the
 // app-owned settings file instead of inheriting the app's own key.
 func stripAPIKey(environ []string) []string {
@@ -79,11 +96,7 @@ func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, err
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
 	}
-	argv := make([]string, len(cfg.AgentCommand))
-	for i, a := range cfg.AgentCommand {
-		argv[i] = substitute(a, cfg)
-	}
-
+	argv := buildArgv(cfg)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cfg.WorktreePath
 	cmd.Stdout = cfg.LogFile

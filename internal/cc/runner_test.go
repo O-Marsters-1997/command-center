@@ -308,6 +308,50 @@ func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) 
 	}
 }
 
+// TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty covers resolve and follow-up
+// runs (spawnRun leaves SystemPromptPath unset for them): the flag naming {system_prompt} must
+// vanish from argv entirely, never survive pointed at an empty path.
+func TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty(t *testing.T) {
+	worktree := t.TempDir()
+	settingsPath := filepath.Join(t.TempDir(), "agent.json")
+	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	argvDump := filepath.Join(worktree, "argv.txt")
+	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
+	script := "#!/bin/sh\nprintf '%s' \"$*\" > " + argvDump + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logFile.Close() })
+
+	cfg := cc.SpawnConfig{
+		AgentCommand: []string{scriptPath, "before", "--append-system-prompt-file", "{system_prompt}", "after"},
+		WorktreePath: worktree,
+		SettingsPath: settingsPath,
+		PromptPath:   promptPath,
+		LogFile:      logFile,
+	}
+	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	reapExit(t, result.Pid)
+
+	got, err := os.ReadFile(argvDump)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "before after" {
+		t.Errorf("agent received argv %q, want %q: the flag and its placeholder both dropped", got, "before after")
+	}
+}
+
 // TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt guards against Spawn ever
 // again defaulting to this test binary's own cwd: real claude -p takes no {worktree} argument
 // (its positional argument is prompt text, not a path), so Dir is the only thing that puts the

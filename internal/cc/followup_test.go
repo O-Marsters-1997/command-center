@@ -49,8 +49,8 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	if spawned.WorktreePath != worktreePath {
 		t.Errorf("follow-up spawned in %q, want the existing worktree %q", spawned.WorktreePath, worktreePath)
 	}
-	if spawned.SystemPromptPath != ws.SystemPromptPath {
-		t.Errorf("system prompt path = %q, want %q", spawned.SystemPromptPath, ws.SystemPromptPath)
+	if spawned.SystemPromptPath != "" {
+		t.Errorf("system prompt path = %q, want none: the single-shot warning is implement-only", spawned.SystemPromptPath)
 	}
 	if !strings.Contains(spawned.Prompt, "cc/skills/follow-up/SKILL.md") {
 		t.Errorf("prompt = %q, want it to reference the follow-up skill", spawned.Prompt)
