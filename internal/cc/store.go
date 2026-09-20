@@ -14,6 +14,7 @@ import (
 	"github.com/pressly/goose/v3"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -144,8 +145,9 @@ func (e *FeatureConflictError) Error() string {
 
 // ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing (and later
 // restoring) any row the tracker stops (or resumes) returning for that feature. Every
-// tracker-owned column refreshes each call; branch and blocked_by are seeded once and never
-// touched again.
+// tracker-owned column refreshes each call; branch and blocked_by are seeded once and left to
+// POST /ticket after that, except that a merged-and-withdrawn blocker is pruned out of every
+// other ticket's blocked_by (see repairBlockedBy) rather than left stale forever.
 func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
 ) (err error) {
@@ -191,19 +193,70 @@ func (s *Store) ImportTickets(
 		}
 	}
 
-	previous, err := qtx.TicketURLsInFeature(ctx, feature)
+	previous, err := qtx.TicketsInFeature(ctx, feature)
 	if err != nil {
 		return fmt.Errorf("list existing tickets for %s: %w", feature, err)
 	}
-	for _, url := range previous {
-		if returned[url] {
+	obs, _, err := s.LastObservation(ctx)
+	if err != nil {
+		return fmt.Errorf("read observation for blocker repair: %w", err)
+	}
+	mergedWithdrawn := make(map[string]bool)
+	for _, t := range previous {
+		if returned[t.URL] {
 			continue
 		}
-		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
-			return fmt.Errorf("withdraw ticket %s: %w", url, err)
+		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: t.URL}); err != nil {
+			return fmt.Errorf("withdraw ticket %s: %w", t.URL, err)
+		}
+		// A withdrawal merely relabelled out of in-flight status (e.g. to status:backlog) is
+		// reversible and must not touch anyone's blocked_by; only a withdrawal behind a merged
+		// pull request is the terminal "this blocker is gone for good" the issue describes.
+		if obs.PRs[branchKey(t.Repo, t.Branch)].State == gh.Merged {
+			mergedWithdrawn[t.URL] = true
 		}
 	}
+	if err = repairBlockedBy(ctx, qtx, mergedWithdrawn); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// repairBlockedBy prunes every merged-and-withdrawn url out of every other (live) ticket's
+// stored blocked_by, across every feature. blocked_by is otherwise write-once after a ticket's
+// first import (#215's app-owned split), so once its blocker merges and withdraws, nothing else
+// ever revisits the stale edge and the dependent is stuck at blocked forever (issue #235).
+func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[string]bool) error {
+	if len(withdrawn) == 0 {
+		return nil
+	}
+	rows, err := qtx.TicketsWithBlockers(ctx)
+	if err != nil {
+		return fmt.Errorf("list tickets for blocker repair: %w", err)
+	}
+	for _, row := range rows {
+		var blockedBy []string
+		if err := json.Unmarshal(row.BlockedBy, &blockedBy); err != nil {
+			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+		}
+		pruned := make([]string, 0, len(blockedBy))
+		changed := false
+		for _, blocker := range blockedBy {
+			if withdrawn[blocker] {
+				changed = true
+				continue
+			}
+			pruned = append(pruned, blocker)
+		}
+		if !changed {
+			continue
+		}
+		blob, _ := json.Marshal(nonNil(pruned)) // json.Marshal of a []string cannot error
+		if err := qtx.SetBlockedBy(ctx, ccdb.SetBlockedByParams{BlockedBy: blob, URL: row.URL}); err != nil {
+			return fmt.Errorf("repair blocked_by for %s: %w", row.URL, err)
+		}
+	}
+	return nil
 }
 
 // WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep

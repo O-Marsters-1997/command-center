@@ -136,6 +136,20 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
+const setBlockedBy = `-- name: SetBlockedBy :exec
+UPDATE tickets SET blocked_by = $1 WHERE url = $2
+`
+
+type SetBlockedByParams struct {
+	BlockedBy json.RawMessage
+	URL       string
+}
+
+func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) error {
+	_, err := q.db.ExecContext(ctx, setBlockedBy, arg.BlockedBy, arg.URL)
+	return err
+}
+
 const ticketFeature = `-- name: TicketFeature :one
 SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
 `
@@ -145,33 +159,6 @@ func (q *Queries) TicketFeature(ctx context.Context, url string) (string, error)
 	var feature string
 	err := row.Scan(&feature)
 	return feature, err
-}
-
-const ticketURLsInFeature = `-- name: TicketURLsInFeature :many
-SELECT url FROM tickets WHERE feature = $1
-`
-
-func (q *Queries) TicketURLsInFeature(ctx context.Context, feature string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, ticketURLsInFeature, feature)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var url string
-		if err := rows.Scan(&url); err != nil {
-			return nil, err
-		}
-		items = append(items, url)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const tickets = `-- name: Tickets :many
@@ -213,6 +200,71 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 			&i.Feature,
 			&i.SyncedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketsInFeature = `-- name: TicketsInFeature :many
+SELECT url, repo, branch FROM tickets WHERE feature = $1
+`
+
+type TicketsInFeatureRow struct {
+	URL    string
+	Repo   string
+	Branch string
+}
+
+func (q *Queries) TicketsInFeature(ctx context.Context, feature string) ([]TicketsInFeatureRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketsInFeature, feature)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketsInFeatureRow
+	for rows.Next() {
+		var i TicketsInFeatureRow
+		if err := rows.Scan(&i.URL, &i.Repo, &i.Branch); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const ticketsWithBlockers = `-- name: TicketsWithBlockers :many
+SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL
+`
+
+type TicketsWithBlockersRow struct {
+	URL       string
+	BlockedBy json.RawMessage
+}
+
+func (q *Queries) TicketsWithBlockers(ctx context.Context) ([]TicketsWithBlockersRow, error) {
+	rows, err := q.db.QueryContext(ctx, ticketsWithBlockers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TicketsWithBlockersRow
+	for rows.Next() {
+		var i TicketsWithBlockersRow
+		if err := rows.Scan(&i.URL, &i.BlockedBy); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

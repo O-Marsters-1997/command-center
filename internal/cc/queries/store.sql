@@ -21,11 +21,17 @@ ON CONFLICT (url) DO UPDATE SET
     title = excluded.title, body = excluded.body, status = excluded.status,
     synced_at = excluded.synced_at, withdrawn_at = NULL;
 
--- name: TicketURLsInFeature :many
-SELECT url FROM tickets WHERE feature = $1;
+-- name: TicketsInFeature :many
+SELECT url, repo, branch FROM tickets WHERE feature = $1;
 
 -- name: WithdrawTicket :exec
 UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL;
+
+-- name: TicketsWithBlockers :many
+SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL;
+
+-- name: SetBlockedBy :exec
+UPDATE tickets SET blocked_by = $1 WHERE url = $2;
 
 -- name: AppendEvent :exec
 INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, $2, $3, $4);

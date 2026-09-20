@@ -154,8 +154,12 @@ func inFlightStatus(labels []rawLabel) (string, bool) {
 // GET /repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by.
 type rawDependency struct {
 	HTMLURL string `json:"html_url"`
+	State   string `json:"state"`
 }
 
+// decodeBlockedBy drops a closed dependency: once its issue is gone, the tracker's own
+// --state open query stops returning it too, so keeping it here would only hand plan a
+// blocker it can never resolve (issue #235).
 func decodeBlockedBy(raw []byte) ([]string, error) {
 	var decoded []rawDependency
 	if err := json.Unmarshal(raw, &decoded); err != nil {
@@ -163,6 +167,9 @@ func decodeBlockedBy(raw []byte) ([]string, error) {
 	}
 	urls := make([]string, 0, len(decoded))
 	for _, dep := range decoded {
+		if dep.State == "closed" {
+			continue
+		}
 		urls = append(urls, dep.HTMLURL)
 	}
 	return urls, nil
