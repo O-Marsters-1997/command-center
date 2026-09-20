@@ -144,13 +144,15 @@ type logLine struct {
 	Timestamp time.Time `json:"timestamp"`
 	RequestID string    `json:"request_id"`
 	Message   struct {
+		Model   string         `json:"model"`
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`
 	} `json:"message"`
-	Subtype    string  `json:"subtype"`
-	DurationMS int64   `json:"duration_ms"`
-	NumTurns   int     `json:"num_turns"`
-	CostUSD    float64 `json:"total_cost_usd"`
+	Subtype    string   `json:"subtype"`
+	DurationMS int64    `json:"duration_ms"`
+	NumTurns   int      `json:"num_turns"`
+	CostUSD    *float64 `json:"total_cost_usd"`
+	Usage      usage    `json:"usage"`
 }
 
 type usage struct {
@@ -175,11 +177,15 @@ func decode(line []byte) (logLine, error) {
 }
 
 func (l logLine) result() Result {
+	var cost float64
+	if l.CostUSD != nil {
+		cost = *l.CostUSD
+	}
 	return Result{
 		Outcome:  l.Subtype,
 		Duration: time.Duration(l.DurationMS) * time.Millisecond,
 		Turns:    l.NumTurns,
-		CostUSD:  l.CostUSD,
+		CostUSD:  cost,
 	}
 }
 
