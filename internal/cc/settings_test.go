@@ -45,6 +45,27 @@ func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
 	}
 }
 
+func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "system-prompt.md")
+	if err := cc.WriteAgentSystemPrompt(path); err != nil {
+		t.Fatalf("WriteAgentSystemPrompt: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read written system prompt: %v", err)
+	}
+	got := strings.ToLower(string(raw))
+
+	for _, want := range []string{"single-shot", "background", "subagent", "commit"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("system prompt = %q, want it to mention %q", raw, want)
+		}
+	}
+}
+
 func TestWriteAgentSettingsIsIdempotent(t *testing.T) {
 	t.Parallel()
 

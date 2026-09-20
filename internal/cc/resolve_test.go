@@ -49,6 +49,9 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 	if spawned.WorktreePath != worktreePath {
 		t.Errorf("resolve spawned in %q, want the existing worktree %q", spawned.WorktreePath, worktreePath)
 	}
+	if spawned.SystemPromptPath != ws.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", spawned.SystemPromptPath, ws.SystemPromptPath)
+	}
 	if !strings.Contains(spawned.Prompt, "cc/skills/resolve-merge-conflict/SKILL.md") {
 		t.Errorf("prompt = %q, want it to reference the resolve skill", spawned.Prompt)
 	}

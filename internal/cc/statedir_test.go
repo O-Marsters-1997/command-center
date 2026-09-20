@@ -24,6 +24,7 @@ func TestResolveWorkspaceLaysOutTheDataDir(t *testing.T) {
 		{"lock path", ws.LockPath, filepath.Join(state, "command-centre.lock")},
 		{"runs dir", ws.RunsDir, filepath.Join(state, "runs")},
 		{"settings path", ws.SettingsPath, filepath.Join(state, "settings", "agent.json")},
+		{"system prompt path", ws.SystemPromptPath, filepath.Join(state, "settings", "system-prompt.md")},
 	} {
 		if tt.got != tt.want {
 			t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.want)

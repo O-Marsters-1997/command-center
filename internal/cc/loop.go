@@ -583,12 +583,13 @@ func (l *Loop) spawnRun(
 	defer func() { _ = logFile.Close() }()
 
 	spawnCfg := SpawnConfig{
-		AgentCommand: l.cfg.AgentCommand,
-		WorktreePath: worktreePath,
-		SettingsPath: l.ws.SettingsPath,
-		Prompt:       spawnPrompt,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
+		AgentCommand:     l.cfg.AgentCommand,
+		WorktreePath:     worktreePath,
+		SettingsPath:     l.ws.SettingsPath,
+		SystemPromptPath: l.ws.SystemPromptPath,
+		Prompt:           spawnPrompt,
+		PromptPath:       promptPath,
+		LogFile:          logFile,
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {

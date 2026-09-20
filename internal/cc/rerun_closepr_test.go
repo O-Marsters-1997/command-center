@@ -61,6 +61,9 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	if fake.spawns[0].WorktreePath != worktreePath {
 		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.spawns[0].WorktreePath, worktreePath)
 	}
+	if fake.spawns[0].SystemPromptPath != ws.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", fake.spawns[0].SystemPromptPath, ws.SystemPromptPath)
+	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
