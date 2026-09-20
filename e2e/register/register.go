@@ -124,11 +124,12 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	if *form != "" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
-	requestOrigin := *origin
-	if requestOrigin == "" {
-		requestOrigin = server.URL
+	// No default: a real non-browser client sends neither Origin nor Sec-Fetch-Site, and
+	// http.CrossOriginProtection allows that. -origin is how a script drives the one case it
+	// doesn't: a browser's own foreign Origin.
+	if *origin != "" {
+		req.Header.Set("Origin", *origin)
 	}
-	req.Header.Set("Origin", requestOrigin)
 
 	// http.Client follows a 303 by default.
 	client := *server.Client()

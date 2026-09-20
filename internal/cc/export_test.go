@@ -3,6 +3,7 @@ package cc
 import (
 	"context"
 	"html/template"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -64,3 +65,9 @@ func BranchKey(repo, branch string) string { return branchKey(repo, branch) }
 
 // MainTipKey names defaultBaseBranch's own tip in Observation.BranchTips.
 func MainTipKey(repo string) string { return mainTipKey(repo) }
+
+// RegisterTestRoute adds a POST route directly to the server's own mux, letting a test prove that
+// cross-origin protection covers a route it was never told to wrap, not just the five it replaced.
+func (s *Server) RegisterTestRoute(pattern string, h http.HandlerFunc) {
+	s.rawMux.HandleFunc(pattern, h)
+}
