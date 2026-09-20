@@ -1,0 +1,29 @@
+# POST /launch/open imports a feature never seen before, one tick later its candidates are ready,
+# and confirming spawns CC-1 (max_agents=1) with CC-2 queued behind it -- the whole open, import,
+# confirm, spawn path, with no per-ticket /preview involved.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc request GET /features
+stdout 'project:two-tasks</a></td>\s*<td>no</td>'
+
+exec cc request -form 'feature=project:two-tasks' POST /launch/open
+stdout 'importing project:two-tasks'
+
+exec cc tick --count 1
+
+exec cc request GET '/launch/candidates?feature=project:two-tasks'
+stdout '"label":"now"'
+stdout '"label":"on unlock"'
+
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
+exec cc tick --count 1
+exec cc request GET /
+
+stdout '>#CC-1</button>'
+stdout '>#CC-2</button>'
+stdout '>queued</span>'
+stdout 'waiting for a slot'
+stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'

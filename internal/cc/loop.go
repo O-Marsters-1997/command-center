@@ -54,13 +54,27 @@ type Loop struct {
 	cfg        Config
 	ws         Workspace
 	trackerFor TrackerSource
+	nudgeCh    chan struct{}
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
-	return &Loop{store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New}
+	return &Loop{
+		store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
+		nudgeCh: make(chan struct{}, 1),
+	}
+}
+
+// Nudge wakes Run for one tick right now rather than at the end of tickPeriod. A nudge that
+// finds the buffer full is dropped, not queued: the tick already in flight will pick up
+// whatever intent prompted it anyway (docs/adr/0014-opening-the-launch-modal-imports-the-feature.md).
+func (l *Loop) Nudge() {
+	select {
+	case l.nudgeCh <- struct{}{}:
+	default:
+	}
 }
 
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
@@ -180,6 +194,7 @@ func (l *Loop) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(tickPeriod):
+		case <-l.nudgeCh:
 		}
 	}
 }

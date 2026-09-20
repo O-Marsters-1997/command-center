@@ -13,15 +13,22 @@
 <input type="search" name="q" value="{{.Query}}" placeholder="filter by name" class="border border-border rounded px-2 py-1">
 </form>
 <table class="w-full max-w-3xl">
-  <tr><th>feature</th><th>imported</th></tr>
+  <tr><th>feature</th><th>imported</th><th></th></tr>
   {{range .Features}}
   <tr>
     <td><a href="/features/{{.Feature | pathEscape}}">{{.Feature}}</a></td>
     <td>{{if .Imported}}yes{{else}}no{{end}}</td>
+    <td>
+      <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+        <input type="hidden" name="feature" value="{{.Feature}}">
+        <button type="submit">[ launch ]</button>
+      </form>
+    </td>
   </tr>
   {{else}}
-  <tr><td colspan="2" class="text-muted">no project: labels found across the configured repos.</td></tr>
+  <tr><td colspan="3" class="text-muted">no project: labels found across the configured repos.</td></tr>
   {{end}}
 </table>
 <a href="/" class="mt-2 inline-block">[ back ]</a>
+<div id="launch-modal"></div>
 </main>

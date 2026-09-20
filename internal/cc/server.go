@@ -112,6 +112,11 @@ var featuresPage = template.Must(template.New("features").
 	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
 	Parse(featuresSource))
 
+//go:embed launch_modal.tmpl
+var launchModalSource string
+
+var launchModal = template.Must(template.New("launchModal").Parse(launchModalSource))
+
 // Server is the status page plus the launch-preview, launch-authorisation and features routes. It
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
@@ -127,6 +132,9 @@ type Server struct {
 	spend             *spendCache
 	trackerFor        TrackerSource
 	mux               *http.ServeMux
+	// nudge wakes the loop for an immediate tick. A no-op until App.New wires it to Loop.Nudge,
+	// which is how the server stays ignorant of the loop it runs alongside (ADR 14).
+	nudge func()
 }
 
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
@@ -137,6 +145,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.New,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
+		nudge: func() {},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -151,6 +160,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
+	mux.HandleFunc("POST /launch/open", requireBrowserOrigin(s.handleLaunchOpen))
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	mux.HandleFunc("POST /ticket", requireBrowserOrigin(s.handleTicket))
@@ -161,6 +171,11 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 // SetTrackerSource replaces the server's tracker.New, so a test can drive GET /features with a
 // fake source rather than shelling out to gh.
 func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
+
+// SetNudge replaces the server's nudge call. App.New wires this to Loop.Nudge once, after both
+// exist, which is how the server queues an import intent and wakes the loop without importing
+// the loop package itself.
+func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
@@ -1194,8 +1209,137 @@ func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
 	return requested, nil
 }
 
+// launchModalView is the launch modal's own states: still pending; refused by name; imported but
+// empty (a tracker label with no tickets); or the candidate set to confirm. Mutually exclusive —
+// Pending short-circuits the rest, and a populated Refused or a set Empty means Candidates is nil.
+type launchModalView struct {
+	Feature      string
+	FeatureQuery string
+	Pending      bool
+	Refused      string
+	Empty        bool
+	Candidates   []modalCandidate
+}
+
+// modalCandidate is one candidate row as the launch modal template renders it: Refused is
+// candidate.Label's own refused case, so the template omits the hidden ticket/hash fields for
+// that row without string-comparing the label.
+type modalCandidate struct {
+	URL, Ref, Title, Label, Reason, Base, BaseVerdict, Hash string
+	Refused                                                 bool
+}
+
+// buildLaunchModalView answers the launch modal's own question for feature: still pending,
+// because an import intent for it is unconsumed; refused, reading store.LastImportError for a
+// refusal that names it, once there is no candidate to show instead; or the candidate set.
+func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
+	view := launchModalView{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
+
+	intents, err := s.store.PendingVerbIntents(ctx, importVerb)
+	if err != nil {
+		return launchModalView{}, err
+	}
+	for _, intent := range intents {
+		if intent.TicketID == feature {
+			view.Pending = true
+			return view, nil
+		}
+	}
+
+	in, err := s.loadCandidateInputs(ctx)
+	if err != nil {
+		return launchModalView{}, err
+	}
+	requested, err := candidateSelection(url.Values{"feature": {feature}}, in.tickets)
+	if err != nil {
+		return launchModalView{}, err
+	}
+	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
+	if err != nil {
+		return launchModalView{}, err
+	}
+
+	if len(candidates) == 0 {
+		lastErr, failed, err := s.store.LastImportError(ctx)
+		if err != nil {
+			return launchModalView{}, err
+		}
+		if failed && lastErr.Feature == feature {
+			view.Refused = lastErr.Message
+		} else {
+			view.Empty = true
+		}
+		return view, nil
+	}
+
+	view.Candidates = make([]modalCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		view.Candidates = append(view.Candidates, modalCandidate{
+			URL: c.URL, Ref: c.Ref, Title: c.Title, Label: c.Label, Reason: c.Reason,
+			Base: c.Base, BaseVerdict: c.BaseVerdict, Hash: c.PromptHash,
+			Refused: c.Label == plan.Refused.String(),
+		})
+	}
+	return view, nil
+}
+
+func (s *Server) renderLaunchModal(w http.ResponseWriter, view launchModalView) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := launchModal.Execute(w, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleLaunchOpen queues an import intent for feature and nudges the loop, so the tick that
+// picks it up runs now rather than up to tickPeriod from now (ADR 14). It answers with the same
+// modal fragment GET /launch/candidates polls, which for a fresh feature is Pending: the intent
+// this call just queued is by definition still unconsumed.
+func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	feature := r.FormValue("feature")
+	if feature == "" {
+		http.Error(w, "feature is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.nudge()
+
+	view, err := s.buildLaunchModalView(ctx, feature)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.renderLaunchModal(w, view)
+}
+
+// handleCandidates answers the launch modal's own poll with the HTML fragment it swaps into
+// itself (an htmx request always carries HX-Request), and answers everyone else — a plain fetch,
+// a future JS island, an e2e script — with the JSON candidate set #257 already serves.
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if r.Header.Get("HX-Request") != "" {
+		feature := r.URL.Query().Get("feature")
+		if feature == "" {
+			http.Error(w, "?feature= is required", http.StatusBadRequest)
+			return
+		}
+		view, err := s.buildLaunchModalView(ctx, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.renderLaunchModal(w, view)
+		return
+	}
+
 	in, err := s.loadCandidateInputs(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
