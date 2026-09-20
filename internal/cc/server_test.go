@@ -254,6 +254,70 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 }
 
+func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	dispositionAsPushed(t, store, ticket.URL, at)
+	const tip = "ci-tip"
+	if err := store.RecordPush(ctx, ticket.URL, tip, "main", "main-tip", at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
+		PRs: map[string]gh.PR{
+			cc.BranchKey("repo", "ci"): {
+				Number: 1, State: gh.Open, HeadOid: tip,
+				Checks: map[string]gh.CheckState{
+					"CI":     {Status: "COMPLETED", Conclusion: "FAILURE", DetailsURL: "https://github.com/o/r/actions/runs/1"},
+					"Deploy": {Status: "COMPLETED", Conclusion: "FAILURE", DetailsURL: "https://github.com/o/r/actions/runs/2"},
+					"Lint":   {Status: "COMPLETED", Conclusion: "FAILURE"},
+				},
+			},
+		},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	repos := []cc.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+		{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
+	}}}}
+	server := cc.NewServer(store, fixedClock(at), repos, "")
+	page := renderPage(t, server)
+
+	if state := rowState(t, page, ticket.URL); state != "ci_failed" {
+		t.Fatalf("state = %q, want ci_failed", state)
+	}
+
+	reason := rowCellAt(t, page, ticket.URL, 3)
+	ciLink := `<a href="https://github.com/o/r/actions/runs/1" target="_blank" rel="noopener">CI</a>`
+	if !strings.Contains(reason, ciLink) {
+		t.Errorf("CI is not linked to its DetailsURL:\n%s", reason)
+	}
+	deployLink := `<a href="https://github.com/o/r/actions/runs/2" target="_blank" rel="noopener">Deploy</a>`
+	if !strings.Contains(reason, deployLink) {
+		t.Errorf("Deploy is not linked to its DetailsURL:\n%s", reason)
+	}
+	if got := strings.Count(reason, "<a href="); got != 2 {
+		t.Errorf("reason has %d links, want 2 (one per red check with a DetailsURL):\n%s", got, reason)
+	}
+	if !strings.Contains(reason, "Lint") {
+		t.Errorf("Lint is not named:\n%s", reason)
+	}
+	if strings.Contains(reason, `<a href=""`) {
+		t.Errorf("Lint has no DetailsURL and should not render an empty anchor:\n%s", reason)
+	}
+}
+
 // TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed covers inv. 12 wired end to
 // end through the repo's configured compat_check: a red compat check with every other required
 // check green renders the row as waiting_on_producer_deploy, not needs_you.

@@ -252,6 +252,7 @@ type RunFact struct {
 	VerdictBaseMoved         bool
 	VerdictWaitingOnProducer bool
 	VerdictReason            Reason
+	RedLeaves                []string
 	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
 	// row reads needs_you naming the reason, and the automatic pass (internal/cc/refresh.go)
 	// never retries it -- only the refresh verb does.
