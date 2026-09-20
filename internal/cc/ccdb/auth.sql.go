@@ -26,6 +26,53 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteSession, userID)
+	return err
+}
+
+const issueSession = `-- name: IssueSession :exec
+INSERT INTO sessions (user_id, token_sha, created_at, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type IssueSessionParams struct {
+	UserID    int64
+	TokenSHA  string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+func (q *Queries) IssueSession(ctx context.Context, arg IssueSessionParams) error {
+	_, err := q.db.ExecContext(ctx, issueSession,
+		arg.UserID,
+		arg.TokenSHA,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const sessionOwner = `-- name: SessionOwner :one
+SELECT user_id FROM sessions WHERE token_sha = $1 AND expires_at > $2
+`
+
+type SessionOwnerParams struct {
+	TokenSHA  string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) SessionOwner(ctx context.Context, arg SessionOwnerParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sessionOwner, arg.TokenSHA, arg.ExpiresAt)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const userForLogin = `-- name: UserForLogin :one
 SELECT id, email, password_hash FROM users WHERE email = $1
 `

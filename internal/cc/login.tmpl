@@ -1,0 +1,18 @@
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+<main id="main" class="max-w-xs p-4">
+<h1 class="mb-3">Log in</h1>
+{{if .Error}}<p class="banner ribbon mb-2" data-tone="stop">{{.Error}}</p>{{end}}
+<form method="post" action="/login">
+  <label class="block mb-2">Email<br>
+    <input type="email" name="email" required autofocus class="w-full border border-border rounded px-2 py-1">
+  </label>
+  <label class="block mb-3">Password<br>
+    <input type="password" name="password" required class="w-full border border-border rounded px-2 py-1">
+  </label>
+  <button type="submit">Log in</button>
+</form>
+</main>
+</body>
+</html>
