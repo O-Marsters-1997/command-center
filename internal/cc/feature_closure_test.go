@@ -40,6 +40,7 @@ func TestCloseUnderBlockedByRefusesABlockerOutsideTheFeature(t *testing.T) {
 	got := closeUnderBlockedBy("project:x", tickets, ticketFeature, neverMerged)
 	if got == nil {
 		t.Fatal("closeUnderBlockedBy = nil, want a violation")
+		return
 	}
 	want := FeatureClosureError{Feature: "project:x", URL: "a", Blocker: "outside", BlockerFeature: "project:y"}
 	if *got != want {
@@ -69,6 +70,7 @@ func TestCloseUnderBlockedByRefusesABlockerNeverImported(t *testing.T) {
 	got := closeUnderBlockedBy("project:x", tickets, neverFeature, neverMerged)
 	if got == nil {
 		t.Fatal("closeUnderBlockedBy = nil, want a violation: an unseen blocker is outside the feature and unmerged")
+		return
 	}
 	if got.BlockerFeature != "" {
 		t.Errorf("BlockerFeature = %q, want empty for a blocker the app has never imported", got.BlockerFeature)

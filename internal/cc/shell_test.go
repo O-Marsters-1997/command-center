@@ -32,6 +32,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 	if tickErr != "" {
 		if observedAt == nil {
 			t.Fatal("a tick error is recorded against the observation's own instant, so it needs one")
+			return nil
 		}
 		failedAt := observedAt.Add(time.Second)
 		if err := store.RecordTickError(ctx, cc.TickError{At: failedAt, Message: tickErr}); err != nil {
