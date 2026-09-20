@@ -1,5 +1,7 @@
-# A POST to /launch with a foreign Origin is rejected, so no launches row appears and both
-# tasks stay in their unauthorised states.
+# A POST to /launch with a foreign Origin is rejected by the mux-wide http.CrossOriginProtection,
+# so no launches row appears and both tasks stay in their unauthorised states. Every other script's
+# plain `cc request POST` (no -origin) carries neither Origin nor Sec-Fetch-Site, which the same
+# layer allows -- that's what keeps a non-browser client like cc request working.
 
 cc-init-repo
 cc-config two-tasks
