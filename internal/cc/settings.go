@@ -28,3 +28,22 @@ func WriteAgentSettings(path string) error {
 	}
 	return nil
 }
+
+// agentSystemPrompt is appended to every spawned agent's own system prompt via
+// --append-system-prompt-file: a Task-spawned subagent's completion notification is delivered
+// into a later turn, and claude -p has none to deliver it into.
+const agentSystemPrompt = `This session is single-shot: it runs non-interactively (claude -p) and will not resume.
+Do not spawn a background subagent (e.g. via the Task tool) and end your turn waiting for its
+result: its completion notification arrives in a later turn, and this session has none. That
+result never reaches you, and the process exits with your work uncommitted.
+Do any work, including code review, yourself within this turn, and commit before it ends.
+`
+
+// WriteAgentSystemPrompt writes the default system prompt to path. Idempotent: the content never
+// varies by call, so writing it again (e.g. on every App.New()) is a no-op in effect.
+func WriteAgentSystemPrompt(path string) error {
+	if err := os.WriteFile(path, []byte(agentSystemPrompt), 0o600); err != nil {
+		return fmt.Errorf("write agent system prompt %s: %w", path, err)
+	}
+	return nil
+}

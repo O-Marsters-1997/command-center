@@ -582,13 +582,23 @@ func (l *Loop) spawnRun(
 	}
 	defer func() { _ = logFile.Close() }()
 
+	// The single-shot warning is implement-only: resolve and follow-up are short, scripted
+	// skill invocations that never spawn a subagent of their own, and resolve's own prompt
+	// already tells it not to commit -- directly contradicting the warning's "commit before it
+	// ends".
+	var systemPromptPath string
+	if kind == runKindAgent {
+		systemPromptPath = l.ws.SystemPromptPath
+	}
+
 	spawnCfg := SpawnConfig{
-		AgentCommand: l.cfg.AgentCommand,
-		WorktreePath: worktreePath,
-		SettingsPath: l.ws.SettingsPath,
-		Prompt:       spawnPrompt,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
+		AgentCommand:     l.cfg.AgentCommand,
+		WorktreePath:     worktreePath,
+		SettingsPath:     l.ws.SettingsPath,
+		SystemPromptPath: systemPromptPath,
+		Prompt:           spawnPrompt,
+		PromptPath:       promptPath,
+		LogFile:          logFile,
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {

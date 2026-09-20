@@ -84,7 +84,9 @@ const (
 var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
-	"--settings", "{settings}", "--model", "claude-sonnet-5",
+	"--settings", "{settings}",
+	"--append-system-prompt-file", "{system_prompt}",
+	"--model", "claude-sonnet-5",
 }
 
 // LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and

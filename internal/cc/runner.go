@@ -22,14 +22,15 @@ type Runner interface {
 }
 
 // SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {prompt} and {prompt_file} are substituted
-// into every element before exec.
+// configured argv template; {worktree}, {settings}, {system_prompt}, {prompt} and {prompt_file}
+// are substituted into every element before exec.
 type SpawnConfig struct {
-	AgentCommand []string
-	WorktreePath string
-	SettingsPath string
-	Prompt       string
-	PromptPath   string
+	AgentCommand     []string
+	WorktreePath     string
+	SettingsPath     string
+	SystemPromptPath string
+	Prompt           string
+	PromptPath       string
 	// LogFile is both stdout and stderr, opened by the caller and never a pipe: piping would
 	// need a goroutine per run to drain it, which the design forbids (§3).
 	LogFile *os.File
@@ -46,9 +47,27 @@ type ProcessRunner struct{}
 func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
+	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
 	return arg
+}
+
+// buildArgv resolves cfg.AgentCommand into a concrete argv. When cfg.SystemPromptPath is empty
+// (resolve and follow-up runs, see spawnRun), the flag preceding the {system_prompt} placeholder
+// is dropped along with it rather than left pointing at nothing.
+func buildArgv(cfg SpawnConfig) []string {
+	argv := make([]string, 0, len(cfg.AgentCommand))
+	for _, a := range cfg.AgentCommand {
+		if a == "{system_prompt}" && cfg.SystemPromptPath == "" {
+			if len(argv) > 0 {
+				argv = argv[:len(argv)-1]
+			}
+			continue
+		}
+		argv = append(argv, substitute(a, cfg))
+	}
+	return argv
 }
 
 // stripAPIKey removes ANTHROPIC_API_KEY from an environment list: every agent runs under the
@@ -77,11 +96,7 @@ func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, err
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
 	}
-	argv := make([]string, len(cfg.AgentCommand))
-	for i, a := range cfg.AgentCommand {
-		argv[i] = substitute(a, cfg)
-	}
-
+	argv := buildArgv(cfg)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cfg.WorktreePath
 	cmd.Stdout = cfg.LogFile

@@ -69,7 +69,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	want := []string{
 		"claude", "-p", "{prompt}",
 		"--output-format", "stream-json", "--verbose",
-		"--settings", "{settings}", "--model", "claude-sonnet-5",
+		"--settings", "{settings}",
+		"--append-system-prompt-file", "{system_prompt}",
+		"--model", "claude-sonnet-5",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
