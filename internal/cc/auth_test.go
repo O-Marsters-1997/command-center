@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -90,6 +91,134 @@ func TestDeleteExpiredSessionsRemovesOnlyThePastRow(t *testing.T) {
 	}
 }
 
+func TestSetPasswordReplacesTheHashAndTheOldOneNoLongerVerifies(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+
+	if err := store.CreateUser(ctx, "olly@example.com", "pbkdf2-sha256$600000$aa$bb", time.Now()); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := store.SetPassword(ctx, "olly@example.com", "pbkdf2-sha256$600000$cc$dd"); err != nil {
+		t.Fatalf("SetPassword: %v", err)
+	}
+
+	row, err := store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	if row.PasswordHash != "pbkdf2-sha256$600000$cc$dd" {
+		t.Errorf("PasswordHash = %q, want the rotated hash", row.PasswordHash)
+	}
+}
+
+func TestSetPasswordDeletesEverySessionForThatAccountButLeavesOthers(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+
+	if err := store.CreateUser(ctx, "olly@example.com", "pbkdf2-sha256$600000$aa$bb", time.Now()); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := store.CreateUser(ctx, "other@example.com", "pbkdf2-sha256$600000$aa$bb", time.Now()); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	target, err := store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	other, err := store.UserForLogin(ctx, "other@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	expiresAt := time.Now().Add(24 * time.Hour)
+	seedSession(t, dsn, target.ID, "target-token-sha", expiresAt)
+	seedSession(t, dsn, other.ID, "other-token-sha", expiresAt)
+
+	if err := store.SetPassword(ctx, "olly@example.com", "pbkdf2-sha256$600000$cc$dd"); err != nil {
+		t.Fatalf("SetPassword: %v", err)
+	}
+
+	if got := sessionCountForUser(t, dsn, target.ID); got != 0 {
+		t.Errorf("sessions for rotated account = %d, want 0", got)
+	}
+	if got := sessionCountForUser(t, dsn, other.ID); got != 1 {
+		t.Errorf("sessions for other account = %d, want 1 (untouched)", got)
+	}
+}
+
+func TestSetPasswordOnAnEmailWithNoAccountFailsRatherThanCreatingOne(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+
+	if err := store.SetPassword(ctx, "nobody@example.com", "pbkdf2-sha256$600000$cc$dd"); err == nil {
+		t.Error("SetPassword for an unknown email = nil error, want a failure")
+	}
+
+	if got := userCount(t, dsn); got != 0 {
+		t.Errorf("users after a failed SetPassword = %d, want 0", got)
+	}
+}
+
+func TestSetPasswordRollsBackBothWritesOnFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+
+	if err := store.CreateUser(ctx, "olly@example.com", "pbkdf2-sha256$600000$aa$bb", time.Now()); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	user, err := store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	seedSession(t, dsn, user.ID, "target-token-sha", time.Now().Add(24*time.Hour))
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	lock, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin locking tx: %v", err)
+	}
+	if _, err := lock.ExecContext(ctx, `SELECT id FROM sessions WHERE user_id = $1 FOR UPDATE`, user.ID); err != nil {
+		t.Fatalf("lock session row: %v", err)
+	}
+	t.Cleanup(func() { _ = lock.Rollback() })
+
+	blocked, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := store.SetPassword(blocked, "olly@example.com", "pbkdf2-sha256$600000$cc$dd"); err == nil {
+		t.Fatal("SetPassword while the session row is locked = nil error, want the blocked delete to fail")
+	}
+
+	if err := lock.Rollback(); err != nil {
+		t.Fatalf("release lock: %v", err)
+	}
+
+	row, err := store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	if row.PasswordHash != "pbkdf2-sha256$600000$aa$bb" {
+		t.Errorf("PasswordHash = %q, the update was not rolled back with the failed session delete", row.PasswordHash)
+	}
+	if got := sessionCountForUser(t, dsn, user.ID); got != 1 {
+		t.Errorf("sessions for the account = %d, want 1 (the failed delete left it in place)", got)
+	}
+}
+
 func seedUser(t *testing.T, dsn, email string) int64 {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
@@ -118,6 +247,36 @@ func seedSession(t *testing.T, dsn string, userID int64, tokenSHA string, expire
 	if _, err := db.Exec(query, userID, tokenSHA, expiresAt); err != nil {
 		t.Fatalf("seed session %s: %v", tokenSHA, err)
 	}
+}
+
+func sessionCountForUser(t *testing.T, dsn string, userID int64) int {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("count sessions for user %d: %v", userID, err)
+	}
+	return count
+}
+
+func userCount(t *testing.T, dsn string) int {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM users`).Scan(&count); err != nil {
+		t.Fatalf("count users: %v", err)
+	}
+	return count
 }
 
 func sessionTokens(t *testing.T, dsn string) []string {

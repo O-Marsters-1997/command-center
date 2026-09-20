@@ -38,6 +38,31 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt time.Time
 	return result.RowsAffected()
 }
 
+const deleteSessionsForUser = `-- name: DeleteSessionsForUser :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteSessionsForUser(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteSessionsForUser, userID)
+	return err
+}
+
+const updatePasswordByEmail = `-- name: UpdatePasswordByEmail :one
+UPDATE users SET password_hash = $2 WHERE email = $1 RETURNING id
+`
+
+type UpdatePasswordByEmailParams struct {
+	Email        string
+	PasswordHash string
+}
+
+func (q *Queries) UpdatePasswordByEmail(ctx context.Context, arg UpdatePasswordByEmailParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, updatePasswordByEmail, arg.Email, arg.PasswordHash)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const userForLogin = `-- name: UserForLogin :one
 SELECT id, email, password_hash FROM users WHERE email = $1
 `

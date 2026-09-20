@@ -2,6 +2,7 @@ package cc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -39,4 +40,30 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64
 		return 0, fmt.Errorf("delete expired sessions: %w", err)
 	}
 	return deleted, nil
+}
+
+// SetPassword replaces email's password hash and deletes every session for that account.
+func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	qtx := s.q.WithTx(tx)
+	userID, err := qtx.UpdatePasswordByEmail(ctx, ccdb.UpdatePasswordByEmailParams{
+		Email:        email,
+		PasswordHash: passwordHash,
+	})
+	if err != nil {
+		return fmt.Errorf("set password for %s: %w", email, err)
+	}
+	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
+		return fmt.Errorf("delete sessions for %s: %w", email, err)
+	}
+	return tx.Commit()
 }
