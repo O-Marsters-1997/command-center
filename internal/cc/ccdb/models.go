@@ -76,6 +76,14 @@ type Run struct {
 	MetricsSettled sql.NullBool
 }
 
+type Session struct {
+	ID        int64
+	UserID    int64
+	TokenSHA  string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type Ticket struct {
 	URL         string
 	Repo        string
@@ -88,4 +96,11 @@ type Ticket struct {
 	Feature     string
 	SyncedAt    string
 	WithdrawnAt sql.NullTime
+}
+
+type User struct {
+	ID           int64
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
 }
