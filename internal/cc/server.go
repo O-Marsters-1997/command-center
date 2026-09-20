@@ -662,9 +662,7 @@ func redChecksFor(redLeaves []string, checks map[string]gh.CheckState) []check {
 }
 
 // groupRows keys a fan-in row's group on the first blocker in its own Blocking
-// (internal/plan/plan.go:119); Reason still names every blocker. A chain of blockers (A blocks B
-// blocks C) flattens into A's one group rather than splitting at each link, since B would
-// otherwise render twice: once as A's child, once as the root of its own group for C.
+// (internal/plan/plan.go:119); Reason still names every blocker.
 func groupRows(rows []row) []group {
 	byURL := make(map[string]row, len(rows))
 	childrenByRoot := make(map[string][]row, len(rows))
@@ -719,9 +717,6 @@ func groupRows(rows []row) []group {
 	return groups
 }
 
-// flattenChain walks every descendant of root through childrenByRoot, so B and C both land in
-// A's group when A blocks B blocks C. seen guards a cycle, though cc-255 already requires the
-// blocker graph to be closed and acyclic.
 func flattenChain(root string, childrenByRoot map[string][]row) []row {
 	var out []row
 	seen := map[string]bool{root: true}
@@ -925,9 +920,8 @@ func runFactFor(
 	}
 
 	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.URL].Alive}
-	// PR state is a terminal fact read every tick regardless of the latest run's own outcome
-	// (plan.RunFact's own doc comment): a run that fails after an earlier run already pushed and
-	// merged must not starve PRMerged, or plan.Status can't outrank the failure with it.
+	// plan.go's inv. 14 treats PRMerged as a fact fetched every tick regardless of Outcome, so it
+	// is set here unconditionally too, not only on the Outcome==Push path below.
 	ownState := obs.PRs[branchKey(t.Repo, t.Branch)].State
 	fact.PROpen = ownState == gh.Open
 	fact.PRMerged = ownState == gh.Merged
