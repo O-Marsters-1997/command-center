@@ -2,7 +2,9 @@ package cc
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -64,12 +66,45 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 }
 
 // EditTicket writes branch and blocked_by directly -- the only two columns POST /ticket can
-// change; every other column is tracker- or import-owned and refreshed only by ImportTickets.
-func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) error {
-	blob, _ := json.Marshal(nonNil(blockedBy)) // json.Marshal of a []string cannot error
-	err := s.q.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL})
+// change, refreshed only by ImportTickets otherwise. A blocked_by breaking its own feature's
+// closure is refused whole rather than written.
+func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	qtx := s.q.WithTx(tx)
+	feature, err := qtx.TicketFeature(ctx, ticketURL)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("read feature for %s: %w", ticketURL, err)
+	}
+	if feature != "" {
+		var intended []ticketBlockedBy
+		intended, err = featureTicketsWithOverride(ctx, qtx, feature, ticketURL, blockedBy)
+		if err != nil {
+			return err
+		}
+		var obs Observation
+		obs, _, err = s.LastObservation(ctx)
+		if err != nil {
+			return fmt.Errorf("read observation for closure check: %w", err)
+		}
+		if violation := closeUnderBlockedBy(
+			feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
+		); violation != nil {
+			return violation
+		}
+	}
+
+	blob, _ := json.Marshal(nonNil(blockedBy)) // json.Marshal of a []string cannot error
+	if err = qtx.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL}); err != nil {
 		return fmt.Errorf("edit ticket %s: %w", ticketURL, err)
 	}
-	return nil
+	return tx.Commit()
 }

@@ -126,14 +126,18 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	url := "https://github.com/acme/alpha/issues/1"
-	first := []cc.ImportedTicket{{
-		Ticket: tracker.Ticket{
-			URL: url, Number: 1, Title: "Add x", Body: "body one", Status: "ready",
-			BlockedBy: []string{"https://github.com/acme/alpha/issues/2"},
+	blocker := "https://github.com/acme/alpha/issues/2"
+	first := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: blocker, Number: 2, Title: "Blocker"}, Repo: "alpha", Source: "github"},
+		{
+			Ticket: tracker.Ticket{
+				URL: url, Number: 1, Title: "Add x", Body: "body one", Status: "ready",
+				BlockedBy: []string{blocker},
+			},
+			Repo:   "alpha",
+			Source: "github",
 		},
-		Repo:   "alpha",
-		Source: "github",
-	}}
+	}
 	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
 		t.Fatalf("ImportTickets: %v", err)
 	}
@@ -142,14 +146,14 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tickets) != 1 {
-		t.Fatalf("tickets = %+v, want 1", tickets)
+	if len(tickets) != 2 {
+		t.Fatalf("tickets = %+v, want 2 (the ticket and its blocker)", tickets)
 	}
-	seeded := tickets[0]
+	seeded := ticketsByURLForTest(t, tickets)[url]
 	if seeded.Branch != "cc-1-add-x" {
 		t.Errorf("branch = %q, want cc-1-add-x", seeded.Branch)
 	}
-	if !slices.Equal(seeded.BlockedBy, []string{"https://github.com/acme/alpha/issues/2"}) {
+	if !slices.Equal(seeded.BlockedBy, []string{blocker}) {
 		t.Errorf("blocked_by = %v", seeded.BlockedBy)
 	}
 	if seeded.Repo != "alpha" || seeded.Source != "github" || seeded.Feature != "project:x" {
@@ -274,13 +278,14 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
-	otherBlocker := "https://github.com/acme/alpha/issues/99"
+	otherBlocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/99", Number: 99, Title: "Other blocker"}
 	dependent := tracker.Ticket{
 		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
-		BlockedBy: []string{blocker.URL, otherBlocker},
+		BlockedBy: []string{blocker.URL, otherBlocker.URL},
 	}
 	seed := []cc.ImportedTicket{
 		{Ticket: blocker, Repo: "alpha"},
+		{Ticket: otherBlocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
 	}
 	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
@@ -295,8 +300,11 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 	}
 
 	// Its issue closes: the next import of its own feature no longer returns it, withdrawing it.
-	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
-	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
+	onlyDependentAndOther := []cc.ImportedTicket{
+		{Ticket: otherBlocker, Repo: "alpha"},
+		{Ticket: dependent, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", onlyDependentAndOther, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
 	}
 
@@ -304,13 +312,14 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
-		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
+	if len(tickets) != 2 {
+		t.Fatalf("tickets = %+v, want the dependent and otherBlocker left on the board", tickets)
 	}
-	want := []string{otherBlocker}
-	if !slices.Equal(tickets[0].BlockedBy, want) {
+	dependentRow := ticketsByURLForTest(t, tickets)[dependent.URL]
+	want := []string{otherBlocker.URL}
+	if !slices.Equal(dependentRow.BlockedBy, want) {
 		t.Errorf("blocked_by = %v, want %v (the withdrawn blocker pruned, the other edge kept)",
-			tickets[0].BlockedBy, want)
+			dependentRow.BlockedBy, want)
 	}
 }
 
@@ -333,15 +342,16 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 	if err := store.ImportTickets(ctx, "project:x", blockerSeed, at); err != nil {
 		t.Fatalf("ImportTickets blocker: %v", err)
 	}
-	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
-	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at); err != nil {
-		t.Fatalf("ImportTickets dependent: %v", err)
-	}
 
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
 	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
+	}
+
+	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
+	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at); err != nil {
+		t.Fatalf("ImportTickets dependent: %v", err)
 	}
 
 	// project:x's next import withdraws the blocker; project:y is never re-imported.
@@ -445,6 +455,113 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 	}
 	if len(tickets) != 1 || tickets[0].Feature != "project:x" {
 		t.Fatalf("tickets = %+v, want only the original row, still under project:x, and fresh rolled back", tickets)
+	}
+}
+
+// TestImportTicketsRefusesAClosureViolation pins issue #255: a feature is closed under
+// blocked_by, so a ticket blocked by another feature's ticket is legal data ImportTickets must
+// refuse whole, rather than import and leave the board stuck.
+func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	outsider := "https://github.com/acme/alpha/issues/1"
+	outsiderSeed := []cc.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
+	}}
+	if err := store.ImportTickets(ctx, "project:x", outsiderSeed, at); err != nil {
+		t.Fatalf("ImportTickets outsider: %v", err)
+	}
+
+	blocked := "https://github.com/acme/beta/issues/2"
+	fresh := "https://github.com/acme/beta/issues/3"
+	second := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: fresh, Number: 3, Title: "Add z"}, Repo: "beta"},
+		{
+			Ticket: tracker.Ticket{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}},
+			Repo:   "beta",
+		},
+	}
+	err := store.ImportTickets(ctx, "project:y", second, at.Add(time.Hour))
+	if err == nil {
+		t.Fatal("ImportTickets: want an error, got nil")
+	}
+	var closure *cc.FeatureClosureError
+	if !errors.As(err, &closure) {
+		t.Fatalf("ImportTickets error = %v, want a *FeatureClosureError", err)
+	}
+	wantsFields := closure.URL == blocked && closure.Blocker == outsider &&
+		closure.BlockerFeature == "project:x" && closure.Feature == "project:y"
+	if !wantsFields {
+		t.Errorf("closure = %+v, want %s blocked by %s (project:x), importing project:y", closure, blocked, outsider)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != outsider {
+		t.Fatalf("tickets = %+v, want only the original outsider row, project:y rolled back whole", tickets)
+	}
+}
+
+// TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged is the closure check's own
+// exemption: a blocker outside the feature does not refuse once its pull request has merged.
+func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
+	blockerSeed := []cc.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", blockerSeed, at); err != nil {
+		t.Fatalf("ImportTickets blocker: %v", err)
+	}
+
+	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
+	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{blocker.URL},
+	}
+	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
+	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets dependent: want the merged outside blocker to be exempt, got %v", err)
+	}
+}
+
+// TestImportTicketsRefusesABlockerNeverImported pins the other half of issue #255's closure
+// check: a blocker the app has never seen at all is outside the feature and unmerged, so it
+// refuses exactly like a blocker imported under another feature would.
+func TestImportTicketsRefusesABlockerNeverImported(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	unseen := "https://github.com/acme/alpha/issues/1"
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{unseen},
+	}
+	seed := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	err := store.ImportTickets(ctx, "project:x", seed, at)
+	var closure *cc.FeatureClosureError
+	if !errors.As(err, &closure) {
+		t.Fatalf("ImportTickets error = %v, want a *FeatureClosureError", err)
+	}
+	if closure.Blocker != unseen || closure.BlockerFeature != "" {
+		t.Errorf("closure = %+v, want %s naming no feature (never imported)", closure, unseen)
 	}
 }
 
@@ -592,6 +709,80 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("events = %+v, want an import_refused event against %s", events, contested)
+	}
+}
+
+// TestLoopRecordsAClosureRefusalWithoutHaltingTheTick mirrors the feature-conflict case above for
+// issue #255's closure check: applyImportIntents must catch a *FeatureClosureError the same way.
+func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	outsider := "https://github.com/acme/alpha/issues/1"
+	outsiderSeed := []cc.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
+	}}
+	if err := store.ImportTickets(ctx, "project:x", outsiderSeed, at); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	blocked := "https://github.com/acme/alpha/issues/2"
+	if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
+		t.Fatal(err)
+	}
+	src := fakeTrackerSource{
+		features: []tracker.Feature{"project:y"},
+		tickets: map[string][]tracker.Ticket{
+			"project:y": {{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}}},
+		},
+	}
+	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != outsider {
+		t.Fatalf("tickets = %+v, want only the outsider, project:y rolled back whole", tickets)
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending import intents = %+v, want the refused one consumed rather than retried", pending)
+	}
+
+	lastErr, failed, err := store.LastImportError(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, blocked) {
+		t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, blocked)
+	}
+
+	events, err := store.Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range events {
+		if e.Kind == "import_refused" && strings.Contains(e.Detail, blocked) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("events = %+v, want an import_refused event naming %s", events, blocked)
 	}
 }
 
