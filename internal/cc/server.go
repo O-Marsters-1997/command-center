@@ -64,6 +64,15 @@ var mastheadSource string
 // tree that page.tmpl and boardSwap both call it from.
 var _ = template.Must(page.New("masthead").Parse(mastheadSource))
 
+//go:embed layout.tmpl
+var layoutSource string
+
+// The blank identifier is deliberate, not dead code: this registers "docHead", "topbar",
+// "sidebar" and the icon-* templates into the shared tree every page renders through --
+// page.tmpl, features.tmpl, preview.tmpl and confirm.tmpl all call them by name, so the doctype,
+// head and the chrome outside every hx-swap target are written once.
+var _ = template.Must(page.New("layout").Parse(layoutSource))
+
 //go:embed boardswap.tmpl
 var boardSwapSource string
 
@@ -100,15 +109,12 @@ func newRowSlot(r row, head bool, depth int, scope, featureScope string) rowSlot
 	}
 }
 
-//go:embed preview.tmpl
-var previewSource string
-
-var previewPage = template.Must(template.New("preview").Parse(previewSource))
-
 //go:embed features.tmpl
 var featuresSource string
 
-var featuresPage = template.Must(template.New("features").
+// pathEscape joins page's shared FuncMap: Funcs adds to the tree's one function map regardless of
+// which member template it is called on, so head, child, destructive and percent see it too.
+var featuresPage = template.Must(page.New("features").
 	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
 	Parse(featuresSource))
 
@@ -117,7 +123,7 @@ var launchModalSource string
 
 var launchModal = template.Must(template.New("launchModal").Parse(launchModalSource))
 
-// Server is the status page plus the launch-preview, launch-authorisation and features routes. It
+// Server is the status page plus the launch, launch-authorisation and features routes. It
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
@@ -152,7 +158,6 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
-	mux.HandleFunc("GET /preview", s.handlePreview)
 	mux.HandleFunc("GET /features", s.handleFeatures)
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.HandleFunc("POST /features/{feature}/import", requireBrowserOrigin(s.handleImportFeature))
@@ -339,37 +344,45 @@ type group struct {
 	Children []row `json:"children"`
 }
 
-type pageView struct {
+// chrome is the shell every page wears: workspace, the live and observe pills, the last tick's
+// error, the current board/graph view, and the repo/feature scope links. layout.tmpl's topbar and
+// masthead render it once per page load; every page's view model embeds it.
+type chrome struct {
 	Workspace  string
 	LiveAgents int
 	Observe    ageView
 	// ObserveStale is decided here rather than in the template, which cannot compare durations.
 	ObserveStale bool
 	LastError    *tickErrorView
-	Groups       []group
-	Band         bandView
-	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
-	// perpetuate this render's view state without the shell being involved.
-	BoardPath string
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
+	// Section names the sidebar's current destination: "board", "graph" or "features". It tracks
+	// View except on /features, which has no ?view= of its own.
+	Section string
 	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
 	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
 	RepoScope string
-	// RepoLinks is the masthead's own repo nav row (CONTEXT.md § Scope), empty when no repo is
-	// configured so the masthead renders no such row at all.
+	// RepoLinks is the breadcrumb's own repo switcher (CONTEXT.md § Scope), empty when no repo is
+	// configured so the breadcrumb renders no switcher at all.
 	RepoLinks []scopeLink
 	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
 	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
 	FeatureScope string
-	// FeatureLinks is the masthead's own feature nav row, empty when no ticket carries a feature.
-	FeatureLinks []scopeLink
-	// FeatureImportPath is the masthead's reimport action, set only when FeatureScope names one
+	// FeatureImportPath is the breadcrumb's reimport action, set only when FeatureScope names one
 	// feature to reimport.
 	FeatureImportPath string
 }
 
-// scopeLink is one masthead nav pill for a scope axis: "all" plus one per configured repo.
+type pageView struct {
+	chrome
+	Groups []group
+	Band   bandView
+	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
+	// perpetuate this render's view state without the shell being involved.
+	BoardPath string
+}
+
+// scopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
 type scopeLink struct {
 	Name    string
 	Path    string
@@ -440,30 +453,65 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	applyViewState(rows, params)
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
+		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, now, params),
+		Groups:    groups,
+		Band:      deriveBand(rowsIn(groups)),
+		BoardPath: params.boardPath(),
+	}
+	return view, nil
+}
+
+// buildChrome derives the shell every page wears from facts its caller already holds: render
+// already fetched tickets, the observation and the last error for its own board derivation, and
+// chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
+func (s *Server) buildChrome(
+	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool, now time.Time,
+	params viewParams,
+) chrome {
+	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
-		Groups:       groups,
-		Band:         deriveBand(rowsIn(groups)),
-		BoardPath:    params.boardPath(),
 		View:         params.View,
+		Section:      params.View,
 		RepoScope:    params.Repo,
 		RepoLinks:    repoLinksFor(s.repos, params),
 		FeatureScope: params.Feature,
-		FeatureLinks: featureLinksFor(tickets, params),
 	}
 	if observed {
-		view.Observe = relative(now, obs.ObservedAt)
-		view.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
+		c.Observe = relative(now, obs.ObservedAt)
+		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
-		view.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
+		c.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
 	}
 	if params.Feature != "" {
-		view.FeatureImportPath = params.featureImportPath()
+		c.FeatureImportPath = params.featureImportPath()
 	}
-	return view, nil
+	return c
+}
+
+// chromeFor builds a page's chrome without render's board derivation, groups or verdicts -- the
+// one cheap read /features, /preview and /confirm now make for the workspace, live and observe
+// pills, and scope links that every page's topbar and masthead show.
+func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, error) {
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	params.Repo = normalizeRepoScope(params.Repo, s.stackingByRepo)
+	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
+
+	obs, observed, err := s.store.LastObservation(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	lastErr, failed, err := s.store.LastError(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	return s.buildChrome(tickets, obs, observed, lastErr, failed, s.now(), params), nil
 }
 
 // applyViewState parses the selected row's own log only, not every row's: a board of twenty-five
@@ -826,8 +874,8 @@ func rowsIn(groups []group) []row {
 	return rows
 }
 
-// repoLinksFor is the masthead's repo nav row: "all" plus one pill per configured repo, nil when
-// none are configured so a single-repo fixture's masthead renders no extra row at all.
+// repoLinksFor is the breadcrumb's repo switcher: "all" plus one entry per configured repo, nil
+// when none are configured so a single-repo fixture's breadcrumb renders no switcher at all.
 func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
 	if len(repos) == 0 {
 		return nil
@@ -837,24 +885,6 @@ func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
 	for _, r := range repos {
 		links = append(links,
 			scopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
-	}
-	return links
-}
-
-// featureLinksFor is the masthead's feature nav row: "all" plus one pill per feature currently in
-// the fleet, following repoLinksFor -- but features are the tracker's own and unconfigured, so the
-// set comes from the loaded tickets rather than config, and nil when none carry one.
-func featureLinksFor(tickets []Ticket, params viewParams) []scopeLink {
-	features := distinctFeatures(tickets)
-	if len(features) == 0 {
-		return nil
-	}
-	links := make([]scopeLink, 0, len(features)+1)
-	links = append(links,
-		scopeLink{Name: "all", Path: params.withFeature("").pagePath(), Current: params.Feature == ""})
-	for _, f := range features {
-		links = append(links,
-			scopeLink{Name: f, Path: params.withFeature(f).pagePath(), Current: params.Feature == f})
 	}
 	return links
 }
@@ -1092,26 +1122,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// previewRow is one line of a launch preview: what would happen to this ticket, and why. Base
-// carries the literal origin/ prefix tp new and gh pr create --base need — deliberately
-// different from the main page's Base column, which has no such prefix.
-type previewRow struct {
-	URL    string
-	Label  string
-	Reason string
-	Base   string
-	// Refused is Label's own refused case, so the template renders the row without a checkbox
-	// rather than comparing the label string it prints.
-	Refused bool
-	// BaseVerdict is the base's own CI verdict where the base is a blocker's branch, empty for
-	// a root row — "you are about to build on a red parent" is read before authorising, not
-	// after (docs/designs/command-centre-design.md § 4b).
-	BaseVerdict string
-	Hash        string
-	// Prompt is the fully composed prompt this launch would authorise.
-	Prompt string
-}
-
 type candidate struct {
 	URL         string   `json:"url"`
 	Ref         string   `json:"ref"`
@@ -1217,12 +1227,13 @@ func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
 type launchModalView struct {
 	Feature      string
 	FeatureQuery string
+	TicketQuery  string
 	Pending      bool
 	Refused      string
 	Empty        bool
 }
 
-func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
+func (s *Server) buildFeatureLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
 	view := launchModalView{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
 	intents, err := s.store.PendingVerbIntents(ctx, importVerb)
@@ -1265,6 +1276,25 @@ func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (laun
 	return view, nil
 }
 
+func (s *Server) buildTicketLaunchModalView(ctx context.Context, requested []string) (launchModalView, error) {
+	in, err := s.loadCandidateInputs(ctx)
+	if err != nil {
+		return launchModalView{}, err
+	}
+	if _, err := candidatesFor(requested, in, s.stackingByRepo, s.now()); err != nil {
+		return launchModalView{}, err
+	}
+	return launchModalView{TicketQuery: candidateQuery(requested)}, nil
+}
+
+func candidateQuery(requested []string) string {
+	q := make(url.Values, len(requested))
+	for _, ticketURL := range requested {
+		q.Add("ticket", ticketURL)
+	}
+	return q.Encode()
+}
+
 func (s *Server) renderLaunchModal(w http.ResponseWriter, view launchModalView) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := launchModal.Execute(w, view); err != nil {
@@ -1277,22 +1307,32 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	feature := r.FormValue("feature")
-	if feature == "" {
-		http.Error(w, "feature is required", http.StatusBadRequest)
-		return
-	}
-
 	ctx := r.Context()
-	if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	if feature := r.FormValue("feature"); feature != "" {
+		if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.nudge()
+
+		view, err := s.buildFeatureLaunchModalView(ctx, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.renderLaunchModal(w, view)
 		return
 	}
-	s.nudge()
 
-	view, err := s.buildLaunchModalView(ctx, feature)
+	requested := r.Form["ticket"]
+	if len(requested) == 0 {
+		http.Error(w, "either feature or at least one ticket is required", http.StatusBadRequest)
+		return
+	}
+	view, err := s.buildTicketLaunchModalView(ctx, requested)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	s.renderLaunchModal(w, view)
@@ -1301,14 +1341,24 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if r.Header.Get("HX-Request") != "" {
-		feature := r.URL.Query().Get("feature")
-		if feature == "" {
-			http.Error(w, "?feature= is required", http.StatusBadRequest)
+		q := r.URL.Query()
+		if feature := q.Get("feature"); feature != "" {
+			view, err := s.buildFeatureLaunchModalView(ctx, feature)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.renderLaunchModal(w, view)
 			return
 		}
-		view, err := s.buildLaunchModalView(ctx, feature)
+		requested := q["ticket"]
+		if len(requested) == 0 {
+			http.Error(w, "either ?feature= or at least one ?ticket= is required", http.StatusBadRequest)
+			return
+		}
+		view, err := s.buildTicketLaunchModalView(ctx, requested)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		s.renderLaunchModal(w, view)
@@ -1334,40 +1384,6 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(candidates); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requested := r.URL.Query()["ticket"]
-	if len(requested) == 0 {
-		http.Error(w, "at least one ?ticket= is required", http.StatusBadRequest)
-		return
-	}
-
-	in, err := s.loadCandidateInputs(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	rows := make([]previewRow, 0, len(candidates))
-	for _, c := range candidates {
-		rows = append(rows, previewRow{
-			URL: c.URL, Label: c.Label, Reason: c.Reason, Base: c.Base, BaseVerdict: c.BaseVerdict,
-			Refused: c.Label == plan.Refused.String(), Hash: c.PromptHash, Prompt: c.Prompt,
-		})
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := previewPage.Execute(w, rows); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -1559,6 +1575,7 @@ type importErrorView struct {
 }
 
 type featuresPageView struct {
+	chrome
 	Features        []featureRow
 	Query           string
 	LastImportError *importErrorView
@@ -1598,7 +1615,14 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, featureRow{Feature: f.Feature, Imported: imported[f.Feature]})
 	}
 
-	view := featuresPageView{Features: rows, Query: query}
+	chr, err := s.chromeFor(ctx, parseViewParams(url.Values{}))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	chr.Section = "features"
+
+	view := featuresPageView{chrome: chr, Features: rows, Query: query}
 	if failed {
 		view.LastImportError = &importErrorView{
 			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,

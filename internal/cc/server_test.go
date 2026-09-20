@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +23,6 @@ var update = flag.Bool("update", false, "regenerate golden files")
 
 const goldenShell = "testdata/shell.golden.html"
 const goldenBoard = "testdata/board.golden.html"
-const goldenPreview = "testdata/preview.golden.html"
 const goldenPrompt = "testdata/prompt.golden.txt"
 
 // assertGolden compares got against the golden file at path, rewriting it under -update.
@@ -42,52 +40,6 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	}
 	if string(got) != string(want) {
 		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
-	}
-}
-
-func fetchPreview(t *testing.T, srv *httptest.Server, query string) string {
-	t.Helper()
-
-	resp, err := http.Get(srv.URL + "/preview?" + query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
-	}
-	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
-		t.Fatalf("Content-Type = %q, want text/html", ct)
-	}
-	return string(body)
-}
-
-// previewRowFor returns the one <tr> block naming ticketURL, so a test asserts on a single row's
-// cells without pulling in an HTML parser.
-func previewRowFor(t *testing.T, body, ticketURL string) string {
-	t.Helper()
-
-	for _, tr := range strings.Split(body, "<tr>") {
-		if strings.Contains(tr, "<td>"+ticketURL+"</td>") {
-			return tr
-		}
-	}
-	t.Fatalf("no preview row for %s in:\n%s", ticketURL, body)
-	return ""
-}
-
-func assertCells(t *testing.T, row string, cells ...string) {
-	t.Helper()
-
-	for _, cell := range cells {
-		if !strings.Contains(row, cell) {
-			t.Errorf("row does not contain %q:\n%s", cell, row)
-		}
 	}
 }
 
@@ -454,150 +406,29 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	assertSeeOtherHome(t, resp)
 }
 
-func TestPreviewRendersNowOnUnlockAndRefused(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []cc.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
-		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	// CC-4 is a tracked ticket but deliberately left out of the slice, so CC-3's blocker sits
-	// outside it with no pull request.
-	body := fetchPreview(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
-
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>now</td>", "<td>origin/main</td>")
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-2"), "<td>on unlock</td>", "<td>origin/main</td>")
-
-	refused := previewRowFor(t, body, "sandbox://CC-3")
-	assertCells(t, refused, "<td>refused</td>", "sandbox://CC-4")
-	if strings.Contains(refused, `<input type="checkbox"`) {
-		t.Errorf("refused row carries a checkbox and would be submitted:\n%s", refused)
-	}
-}
-
-// TestPreviewShowsTheBasesVerdictForAStackedRow covers issue #34's "you are about to build on a
-// red parent": the preview is read before authorising, so a row whose base is a blocker's own
-// branch carries that blocker's own CI verdict, not just its base branch name.
-func TestPreviewShowsTheBasesVerdictForAStackedRow(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []cc.Ticket{
-		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
-		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, "sandbox://PARENT", at)
-	const parentTip = "parent-tip"
-	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
-		t.Fatal(err)
-	}
-
-	obs := cc.Observation{
-		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): parentTip, cc.MainTipKey("repo"): "main-tip"},
-		PRs: map[string]gh.PR{
-			cc.BranchKey("repo", "parent"): {
-				Number: 1, State: gh.Open, HeadOid: parentTip,
-				Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
-			},
-		},
-	}
-	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
-	}
-
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "ticket=sandbox://CHILD")
-
-	// now because the parent's PR is open, origin/parent because stacking is on, and ci_failed
-	// because that parent's own CI is red.
-	assertCells(t, previewRowFor(t, body, "sandbox://CHILD"),
-		"<td>now</td>", "<td>origin/parent</td>", "<td>ci_failed</td>")
-}
-
-func TestPreviewRefusesATicketAlreadyInAnActiveLaunch(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "ticket=sandbox://CC-1")
-
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"), "<td>refused</td>", "already authorised in launch 1")
-}
-
-func TestPreviewRejectsEmptyOrUnknownTicket(t *testing.T) {
+// TestGetPreviewIsGone covers phase 5 of plans/feature-launch.md: the per-ticket preview page is
+// deleted along with handlePreview, so the route itself is unregistered rather than refusing a
+// bad request.
+func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	tests := []struct {
-		name string
-		path string
-	}{
-		{name: "no ticket at all", path: "/preview"},
-		{name: "an empty ticket value", path: "/preview?ticket="},
-		{name: "an unknown ticket", path: "/preview?ticket=sandbox://GHOST"},
+	resp, err := http.Get(srv.URL + "/preview?ticket=sandbox://CC-1")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Get(srv.URL + tt.path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400", resp.StatusCode)
-			}
-		})
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
 
-// TestPreviewAndLaunchHandleAnArbitrarilySizedSlice proves issue #33's "no size limit anywhere
+// TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice proves issue #33's "no size limit anywhere
 // in the path": a fan-out is one root plus as many dependents as the plan calls for, and neither
-// /preview nor /launch may special-case a small slice.
-func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
+// /launch/candidates nor /launch may special-case a small slice.
+func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	t.Parallel()
 
 	const fanOut = 50
@@ -625,9 +456,9 @@ func TestPreviewAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := fetchPreview(t, srv, query)
-	if got := strings.Count(body, `<input type="checkbox"`); got != fanOut+1 {
-		t.Fatalf("preview checkboxes = %d, want %d: the slice must not be truncated", got, fanOut+1)
+	candidates := fetchCandidates(t, srv, query)
+	if got := len(candidates); got != fanOut+1 {
+		t.Fatalf("candidates = %d, want %d: the slice must not be truncated", got, fanOut+1)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?"+query, nil)
@@ -701,31 +532,6 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}
 	}
-}
-
-// TestPreviewShowsTheComposedPromptAndItsHash covers issue #52's AC1: the preview renders the
-// prompt a launch would authorise, and the hash beside it is plan.Hash of exactly that prompt.
-func TestPreviewShowsTheComposedPromptAndItsHash(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "ticket=sandbox://CC-1")
-
-	wantPrompt := plan.Compose(plan.Ticket{URL: ticket.URL})
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
-		"<details><summary>prompt "+plan.Hash(wantPrompt)+"</summary><pre>"+html.EscapeString(wantPrompt)+"</pre></details>")
 }
 
 // TestLaunchStoresTheComposedHash covers issue #52's AC1 at the authorisation route:
@@ -875,114 +681,6 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	}
 	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "queued" {
 		t.Errorf("state = %q, want a bare %q once the tick consumed the intent", got, "queued")
-	}
-}
-
-// TestPreviewRendersItsPage goldens the whole preview render: a now row, an on-unlock row and a
-// refused row rendering with no checkbox.
-func TestPreviewRendersItsPage(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []cc.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
-		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := cc.NewServer(store, fixedClock(at), nil, "")
-	rec := httptest.NewRecorder()
-	target := "/preview?ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-
-	assertGolden(t, goldenPreview, rec.Body.Bytes())
-}
-
-// TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice covers issue #72's slice of
-// five: CC-2 is left out of a slice sitting on top of it, so both of its direct dependents are
-// refused and the three rows above them still read on unlock.
-func TestPreviewRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []cc.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
-		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
-		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", BlockedBy: []string{"sandbox://CC-2"}},
-		{URL: "sandbox://CC-5", Repo: "cc-sandbox", Branch: "cc-5", BlockedBy: []string{"sandbox://CC-3"}},
-		{URL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
-		{URL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv,
-		"ticket=sandbox://CC-3&ticket=sandbox://CC-4&ticket=sandbox://CC-5&ticket=sandbox://CC-6&ticket=sandbox://CC-7")
-
-	for _, ticketURL := range []string{"sandbox://CC-3", "sandbox://CC-4"} {
-		assertCells(t, previewRowFor(t, body, ticketURL), "<td>refused</td>", "sandbox://CC-2")
-	}
-	for _, ticketURL := range []string{"sandbox://CC-5", "sandbox://CC-6", "sandbox://CC-7"} {
-		assertCells(t, previewRowFor(t, body, ticketURL), "<td>on unlock</td>")
-	}
-	if got := strings.Count(body, "<td>on unlock</td>"); got != 3 {
-		t.Errorf("on unlock rows = %d, want 3", got)
-	}
-	if got := strings.Count(body, "<td>refused</td>"); got != 2 {
-		t.Errorf("refused rows = %d, want 2", got)
-	}
-}
-
-// TestPreviewCarriesTheHashOnEveryLaunchableRow covers issue #73's AC1: the authorise form posts
-// the hash the operator read alongside the ticket, and a refused row posts neither.
-func TestPreviewCarriesTheHashOnEveryLaunchableRow(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []cc.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-3"}},
-		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	body := fetchPreview(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2")
-
-	want := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"}))
-	assertCells(t, previewRowFor(t, body, "sandbox://CC-1"),
-		`<input type="hidden" name="hash" value="sandbox://CC-1 `+want+`">`)
-	if refused := previewRowFor(t, body, "sandbox://CC-2"); strings.Contains(refused, `name="hash"`) {
-		t.Errorf("refused row carries a hash and would be submitted:\n%s", refused)
 	}
 }
 

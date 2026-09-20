@@ -1,4 +1,4 @@
-# The preview for the two-ticket slice reads "now" for the root and "on unlock" for the
+# The candidate set for the two-ticket slice reads "now" for the root and "on unlock" for the
 # dependent, both bases origin/main (stacking off). POST /launch then one tick leaves both rows
 # queued with distinct reasons: one for a slot, one for a base — CC-1 is genuinely cut and
 # spawned (agent_command points at the empty.sh fake agent) in that tick, but its liveness is
@@ -11,11 +11,10 @@ cc-fake-gh no-prs
 
 exec cc import project:two-tasks
 exec cc tick --count 1
-exec cc request GET '/preview?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
-stdout '<td>now</td>'
-stdout '<td>on unlock</td>'
-stdout '<td>origin/main</td>'
-stdout '<button type="submit">\[ authorise \]</button>'
+exec cc request GET '/launch/candidates?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
+stdout '"label":"now"'
+stdout '"label":"on unlock"'
+stdout '"base":"origin/main"'
 
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1

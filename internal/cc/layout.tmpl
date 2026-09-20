@@ -1,0 +1,118 @@
+{{define "docHead" -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Centre</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script>
+  var stored = localStorage.getItem("theme");
+  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
+  function toggleTheme() {
+    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("theme", next);
+  }
+  if (localStorage.getItem("nav") === "rail") document.documentElement.dataset.nav = "rail";
+  function toggleNav() {
+    var next = document.documentElement.dataset.nav === "rail" ? "" : "rail";
+    document.documentElement.dataset.nav = next;
+    localStorage.setItem("nav", next);
+    document.getElementById("nav-toggle").setAttribute("aria-expanded", next === "rail" ? "false" : "true");
+  }
+  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
+  // wording goes stale the moment it is sent and a swap is not what keeps it current.
+  function ago(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
+    var h = Math.floor(m / 60);
+    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
+  }
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      var at = Date.parse(el.dateTime);
+      if (!isNaN(at)) el.textContent = ago(now - at);
+    });
+  }, 1000);
+  document.addEventListener("beforetoggle", function (e) {
+    if (e.target.id !== "repo-switcher" || e.newState !== "open") return;
+    var r = document.querySelector('[popovertarget="repo-switcher"]').getBoundingClientRect();
+    e.target.style.top = r.bottom + 4 + "px";
+    e.target.style.left = r.left + "px";
+  }, true);
+</script>
+<script src="/assets/htmx.min.js"></script>
+<script src="/assets/sse.min.js"></script>
+<script>
+  document.addEventListener("htmx:sseMessage", function (e) {
+    var pre = e.target;
+    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
+  });
+</script>
+</head>
+{{- end}}
+
+{{define "skipLink" -}}
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
+{{- end}}
+
+{{define "topbar" -}}
+<header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
+  {{with .Workspace}}<span>{{.}}</span>{{end}}
+  {{if .RepoLinks}}
+  <span class="text-muted">/</span>
+  <button type="button" popovertarget="repo-switcher" class="inline-flex items-center gap-1 py-[0.1rem] px-2 border border-border rounded-full text-muted">
+    {{range .RepoLinks}}{{if .Current}}{{.Name}}{{end}}{{end}} {{template "icon-chevron"}}
+  </button>
+  <div id="repo-switcher" popover class="repo-switcher">
+    {{range .RepoLinks}}
+    <a href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>
+    {{end}}
+  </div>
+  {{end}}
+  {{if .FeatureScope}}
+  <span class="text-muted">/</span>
+  <span>{{.FeatureScope}}</span>
+  {{if .FeatureImportPath}}
+  <form hx-post="{{.FeatureImportPath}}" hx-target="#board" hx-swap="outerHTML">
+    <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">reimport</button>
+  </form>
+  {{end}}
+  {{end}}
+  <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
+</header>
+{{- end}}
+
+{{define "icon-board" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg>
+{{- end}}
+
+{{define "icon-graph" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg>
+{{- end}}
+
+{{define "icon-features" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg>
+{{- end}}
+
+{{define "icon-chevron" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+{{- end}}
+
+{{define "icon-rail" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="6" y1="2.5" x2="6" y2="13.5"/></svg>
+{{- end}}
+
+{{define "sidebar" -}}
+<nav class="sidebar" id="sidebar-nav" aria-label="sections">
+  <a class="sidebar-item" href="/?view=board"{{if eq .Section "board"}} aria-current="page"{{end}}>{{template "icon-board"}}<span class="sidebar-label">board</span></a>
+  <a class="sidebar-item" href="/?view=graph"{{if eq .Section "graph"}} aria-current="page"{{end}}>{{template "icon-graph"}}<span class="sidebar-label">graph</span></a>
+  <a class="sidebar-item" href="/features"{{if eq .Section "features"}} aria-current="page"{{end}}>{{template "icon-features"}}<span class="sidebar-label">features</span></a>
+  <button type="button" id="nav-toggle" class="sidebar-item sidebar-toggle" onclick="toggleNav()" aria-expanded="true" aria-controls="sidebar-nav">{{template "icon-rail"}}<span class="sidebar-label">collapse</span></button>
+</nav>
+{{- end}}
