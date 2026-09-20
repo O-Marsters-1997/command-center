@@ -24,10 +24,15 @@ func ComposeResolve(t Ticket) string {
 
 const followUpSkillPath = "cc/skills/follow-up/SKILL.md"
 
-// ComposeFollowUp renders the prompt a follow-up run authorises: the follow-up skill invocation
-// plus the operator's own typed instruction.
-func ComposeFollowUp(text string) string {
-	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
+// ComposeFollowUp renders the prompt a follow-up run authorises: the follow-up skill invocation,
+// the operator's own typed instruction, and ciSection when the ticket is ci_failed -- composed by
+// the caller, since this package never execs and so cannot fetch a log itself.
+func ComposeFollowUp(text, ciSection string) string {
+	prompt := fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
+	if ciSection != "" {
+		prompt += "\n\n" + ciSection
+	}
+	return prompt
 }
 
 // Hash fingerprints a composed prompt. Consent is bound to content (docs/command-centre-

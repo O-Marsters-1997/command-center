@@ -41,17 +41,18 @@ var supportedVerbs = map[string]bool{
 }
 
 const (
-	eventReCheckRequested      = "re_check_requested"
-	eventReCheckRefused        = "re_check_refused"
-	eventClosePRRequested      = "close_pr_requested"
-	eventClosePRFailed         = "close_pr_failed"
-	eventRemoveWorktreeRefused = "remove_worktree_refused"
-	eventWorktreeRemoved       = "worktree_removed"
-	eventLaunchCancelled       = "launch_cancelled"
-	eventMergeAborted          = "merge_aborted"
-	eventMergeAbortFailed      = "merge_abort_failed"
-	eventResolveRefused        = "resolve_refused"
-	eventFollowUpRefused       = "follow_up_refused"
+	eventReCheckRequested         = "re_check_requested"
+	eventReCheckRefused           = "re_check_refused"
+	eventClosePRRequested         = "close_pr_requested"
+	eventClosePRFailed            = "close_pr_failed"
+	eventRemoveWorktreeRefused    = "remove_worktree_refused"
+	eventWorktreeRemoved          = "worktree_removed"
+	eventLaunchCancelled          = "launch_cancelled"
+	eventMergeAborted             = "merge_aborted"
+	eventMergeAbortFailed         = "merge_abort_failed"
+	eventResolveRefused           = "resolve_refused"
+	eventFollowUpRefused          = "follow_up_refused"
+	eventFollowUpCILogUnavailable = "follow_up_ci_log_unavailable"
 )
 
 // applyAbortIntents consumes every pending abort request: `git merge --abort` in the worktree,
@@ -153,7 +154,7 @@ func (l *Loop) resolveOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindResolve, "")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindResolve, "", "")
 }
 
 // idleWorktreeFor returns the ticket's worktree path, or "" with a refusal detail naming why: no
@@ -189,11 +190,21 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs Observation) error 
 	}
 	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
+	pushFacts, err := l.store.PushFacts(ctx)
+	if err != nil {
+		return err
+	}
+	vd, err := verdictDepsFor(
+		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+	if err != nil {
+		return err
+	}
 
 	now := l.now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
-			if err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, now); err != nil {
+			err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, vd, pushFacts, now)
+			if err != nil {
 				return err
 			}
 		}
@@ -208,7 +219,8 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs Observation) error 
 // one a live agent already owns (inv. 4): two agents in one worktree is the hazard follow-up
 // shares with re-run, not the fresh prompt.
 func (l *Loop) followUpOne(
-	ctx context.Context, ticket Ticket, repoPath, promptText string, obs Observation, now time.Time,
+	ctx context.Context, ticket Ticket, repoPath, promptText string, obs Observation, vd verdictDeps,
+	pushFacts map[string]PushFact, now time.Time,
 ) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
@@ -220,7 +232,72 @@ func (l *Loop) followUpOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindFollowUp, promptText)
+
+	ciSection, unavailableDetail := l.fetchCIFailedLog(ctx, ticket, repoPath, obs, vd, pushFacts)
+	if unavailableDetail != "" {
+		if err := l.store.AppendEvent(ctx, Event{
+			At: now, TicketURL: ticket.URL, Kind: eventFollowUpCILogUnavailable, Detail: unavailableDetail,
+		}); err != nil {
+			return err
+		}
+	}
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindFollowUp, promptText, ciSection)
+}
+
+// ciLogUnavailableSection is the prompt line a ci_failed follow-up carries in place of the log
+// when it could not be fetched (issue #232).
+const ciLogUnavailableSection = "## Failed CI log\n\n" +
+	"The failed job's log could not be retrieved. Treat the CI failure as unverified: you have not seen the log."
+
+// fetchCIFailedLog fetches a ci_failed follow-up's failed job log once, here at spawn -- never
+// from the observe phase's own Fetch, since invariant 10 aborts the whole tick on any read error
+// there (docs/designs/command-centre-design.md § 11 inv. 11; issue #232).
+func (l *Loop) fetchCIFailedLog(
+	ctx context.Context, ticket Ticket, repoPath string, obs Observation, vd verdictDeps, pushFacts map[string]PushFact,
+) (section, unavailableDetail string) {
+	pf := pushFacts[ticket.URL]
+	if pf.Refused || pf.Failed || obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State != gh.Open {
+		return "", ""
+	}
+
+	fact := &plan.RunFact{PROpen: true}
+	applyVerdict(fact, ticket, obs, vd)
+	if !fact.VerdictCIFailed {
+		return "", ""
+	}
+
+	checks := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].Checks
+	var detailsURL string
+	for _, name := range fact.RedLeaves {
+		if url := checks[name].DetailsURL; url != "" {
+			detailsURL = url
+			break
+		}
+	}
+	if detailsURL == "" {
+		return ciLogUnavailableSection, "red check names no Actions run id"
+	}
+
+	runID, err := runIDFromDetailsURL(detailsURL)
+	if err != nil {
+		return ciLogUnavailableSection, err.Error()
+	}
+
+	log, err := gh.RunViewLogFailed(ctx, repoPath, runID)
+	if err != nil {
+		return ciLogUnavailableSection, err.Error()
+	}
+	return "## Failed CI log\n\nLast 200 lines of the failed job's log:\n\n```\n" + lastLines(log, 200) + "\n```", ""
+}
+
+// lastLines returns s's last n lines, trimmed of a trailing newline first so a log ending in one
+// (as gh's output does) does not count as an extra blank line.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
@@ -326,7 +403,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, runKindAgent, "")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, runKindAgent, "", "")
 }
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat
