@@ -13,7 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 )
 
-func TestPostTicketRequiresBrowserOrigin(t *testing.T) {
+func TestPostTicketRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
@@ -21,14 +21,36 @@ func TestPostTicketRequiresBrowserOrigin(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
-	resp, err := http.Post(srv.URL+"/ticket", "application/x-www-form-urlencoded", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "http://evil.example")
+	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 with no Origin header", resp.StatusCode)
+		t.Errorf("status = %d, want 403 with a foreign Origin header", resp.StatusCode)
 	}
+}
+
+func TestPostTicketAllowsAMissingOrigin(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
+	resp, err := noRedirect(srv).Post(srv.URL+"/ticket", "application/x-www-form-urlencoded", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
 }
 
 func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {

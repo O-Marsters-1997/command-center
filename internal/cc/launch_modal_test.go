@@ -148,7 +148,29 @@ func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
 	}
 }
 
-func TestHandleLaunchOpenRejectsAMissingOrigin(t *testing.T) {
+func TestHandleLaunchOpenRejectsAForeignOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("feature=x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "http://evil.example")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestHandleLaunchOpenAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
@@ -159,8 +181,8 @@ func TestHandleLaunchOpenRejectsAMissingOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 }
 
