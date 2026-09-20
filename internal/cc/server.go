@@ -674,15 +674,24 @@ func groupRows(rows []row) []group {
 		}
 	}
 
+	isChild := make(map[string]bool, len(rows))
+	for _, children := range childrenByRoot {
+		for _, c := range children {
+			isChild[c.URL] = true
+		}
+	}
+
 	rootURLs := make([]string, 0, len(childrenByRoot))
 	for root := range childrenByRoot {
-		rootURLs = append(rootURLs, root)
+		if !isChild[root] {
+			rootURLs = append(rootURLs, root)
+		}
 	}
 	slices.Sort(rootURLs)
 
 	groups := make([]group, 0, len(rootURLs)+len(rows))
 	for _, root := range rootURLs {
-		children := childrenByRoot[root]
+		children := flattenChain(root, childrenByRoot)
 		slices.SortFunc(children, func(a, b row) int {
 			if a.MergeOrder != b.MergeOrder {
 				return cmp.Compare(a.MergeOrder, b.MergeOrder)
@@ -706,6 +715,25 @@ func groupRows(rows []row) []group {
 		groups = append(groups, group{Children: []row{r}})
 	}
 	return groups
+}
+
+func flattenChain(root string, childrenByRoot map[string][]row) []row {
+	var out []row
+	seen := map[string]bool{root: true}
+	queue := []string{root}
+	for len(queue) > 0 {
+		u := queue[0]
+		queue = queue[1:]
+		for _, c := range childrenByRoot[u] {
+			if seen[c.URL] {
+				continue
+			}
+			seen[c.URL] = true
+			out = append(out, c)
+			queue = append(queue, c.URL)
+		}
+	}
+	return out
 }
 
 // filterGroupsByRepo narrows groups to a repo scope, admitting a matching group whole: keeping a
@@ -892,6 +920,12 @@ func runFactFor(
 	}
 
 	fact := &plan.RunFact{LogPath: summary.LogPath, Alive: obs.Runs[t.URL].Alive}
+	// plan.go's inv. 14 treats PRMerged as a fact fetched every tick regardless of Outcome, so it
+	// is set here unconditionally too, not only on the Outcome==Push path below.
+	ownState := obs.PRs[branchKey(t.Repo, t.Branch)].State
+	fact.PROpen = ownState == gh.Open
+	fact.PRMerged = ownState == gh.Merged
+	fact.PRClosedUnmerged = ownState == gh.Closed
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
@@ -912,10 +946,6 @@ func runFactFor(
 					fmt.Sprintf("%s no longer merges cleanly into main", t.Branch))
 			}
 			fact.ConflictingPeer = conflictingPeer[t.URL]
-			ownState := obs.PRs[branchKey(t.Repo, t.Branch)].State
-			fact.PROpen = ownState == gh.Open
-			fact.PRMerged = ownState == gh.Merged
-			fact.PRClosedUnmerged = ownState == gh.Closed
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
 				applyVerdict(fact, t, obs, vd)
 			}
