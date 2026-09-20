@@ -275,6 +275,34 @@
     background: var(--tone);
   }
 
+  .spark-line {
+    fill: none;
+    stroke: var(--color-s-live);
+    stroke-width: 1.5;
+  }
+
+  .spark-area {
+    fill: var(--color-s-live);
+    opacity: 0.12;
+  }
+
+  .spark-point {
+    fill: var(--color-s-live);
+  }
+
+  .chart-bar {
+    fill: var(--color-s-live);
+  }
+
+  .chart-grid {
+    stroke: var(--color-border);
+  }
+
+  .chart-tick {
+    fill: var(--color-muted);
+    font-size: 10px;
+  }
+
   .line {
     display: flex;
     align-items: baseline;
