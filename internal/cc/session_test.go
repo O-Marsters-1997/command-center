@@ -24,6 +24,38 @@ func createLoginUser(t *testing.T, store *cc.Store, email, password string) {
 	}
 }
 
+func postLogin(t *testing.T, srv *httptest.Server, email, password string) *http.Response {
+	t.Helper()
+
+	form := strings.NewReader("email=" + email + "&password=" + password)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", srv.URL)
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func loginAs(t *testing.T, srv *httptest.Server, email, password string) *http.Cookie {
+	t.Helper()
+
+	resp := postLogin(t, srv, email, password)
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+	for _, c := range resp.Cookies() {
+		if c.Name == "cc_session" {
+			return c
+		}
+	}
+	t.Fatal("no cc_session cookie set")
+	return nil
+}
+
 func TestGetLoginRendersEmailAndPasswordFieldsWithNoChrome(t *testing.T) {
 	t.Parallel()
 
@@ -55,30 +87,7 @@ func TestPostLoginWithCorrectPasswordSetsCookieAndRedirects(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	form := strings.NewReader("email=olly%40example.com&password=correct+horse+battery+staple")
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
-
-	var cookie *http.Cookie
-	for _, c := range resp.Cookies() {
-		if c.Name == "cc_session" {
-			cookie = c
-		}
-	}
-	if cookie == nil {
-		t.Fatalf("no cc_session cookie set, got %v", resp.Cookies())
-	}
+	cookie := loginAs(t, srv, "olly%40example.com", "correct+horse+battery+staple")
 	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" {
 		t.Errorf("cc_session cookie = %+v, want HttpOnly, Secure, SameSite=Lax, Path=/", cookie)
 	}
@@ -107,32 +116,8 @@ func TestLoggingInTwiceDeletesTheFirstSession(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	login := func() *http.Cookie {
-		t.Helper()
-		form := strings.NewReader("email=olly%40example.com&password=correct+horse+battery+staple")
-		req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("Origin", srv.URL)
-		resp, err := noRedirect(srv).Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		assertSeeOtherHome(t, resp)
-		for _, c := range resp.Cookies() {
-			if c.Name == "cc_session" {
-				return c
-			}
-		}
-		t.Fatal("no cc_session cookie set")
-		return nil
-	}
-
-	first := login()
-	second := login()
+	first := loginAs(t, srv, "olly%40example.com", "correct+horse+battery+staple")
+	second := loginAs(t, srv, "olly%40example.com", "correct+horse+battery+staple")
 	if first.Value == second.Value {
 		t.Fatal("two logins minted the same token")
 	}
@@ -158,25 +143,9 @@ func TestWrongPasswordAndUnknownEmailProduceByteIdenticalResponses(t *testing.T)
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	post := func(email, password string) *http.Response {
-		t.Helper()
-		form := strings.NewReader("email=" + email + "&password=" + password)
-		req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("Origin", srv.URL)
-		resp, err := srv.Client().Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return resp
-	}
-
-	wrongPassword := post("olly%40example.com", "not+the+password")
+	wrongPassword := postLogin(t, srv, "olly%40example.com", "not+the+password")
 	defer func() { _ = wrongPassword.Body.Close() }()
-	unknownEmail := post("nobody%40example.com", "not+the+password")
+	unknownEmail := postLogin(t, srv, "nobody%40example.com", "not+the+password")
 	defer func() { _ = unknownEmail.Body.Close() }()
 
 	if wrongPassword.StatusCode != unknownEmail.StatusCode {
@@ -195,19 +164,8 @@ func TestUnknownEmailStillRunsTheKDF(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	form := strings.NewReader("email=nobody%40example.com&password=whatever")
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-
 	start := time.Now()
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp := postLogin(t, srv, "nobody%40example.com", "whatever")
 	defer func() { _ = resp.Body.Close() }()
 	elapsed := time.Since(start)
 
@@ -225,20 +183,7 @@ func TestLoginEmailIsCaseInsensitiveAndTrimmed(t *testing.T) {
 	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	form := strings.NewReader("email=+OLLY%40EXAMPLE.COM+&password=correct+horse+battery+staple")
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/login", form)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
+	loginAs(t, srv, "+OLLY%40EXAMPLE.COM+", "correct+horse+battery+staple")
 }
 
 func readAll(t *testing.T, resp *http.Response) string {
