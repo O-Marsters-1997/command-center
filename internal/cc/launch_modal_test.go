@@ -115,9 +115,11 @@ func TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed(t *testing.T)
 	}
 }
 
-// TestHandleCandidatesFragmentShowsTheCandidateSetOnceImported covers the poll's terminal
-// success answer, once the loop has applied the import.
-func TestHandleCandidatesFragmentShowsTheCandidateSetOnceImported(t *testing.T) {
+// TestHandleCandidatesFragmentMountsTheIslandOnceImported covers the poll's terminal success
+// answer, once the loop has applied the import: the fragment stops polling and mounts the island
+// that fetches the candidate set itself, rather than embedding it as HTML (#259 deletes phase 3's
+// candidate table).
+func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -139,11 +141,14 @@ func TestHandleCandidatesFragmentShowsTheCandidateSetOnceImported(t *testing.T) 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
 	defer func() { _ = resp.Body.Close() }()
 	body := readBody(t, resp)
-	wants := []string{"sandbox://CC-1", "sandbox://CC-2", "<td>now</td>", "<td>on unlock</td>", "origin/main"}
-	for _, want := range wants {
-		if !strings.Contains(body, want) {
-			t.Errorf("candidate fragment does not contain %q:\n%s", want, body)
-		}
+	if !strings.Contains(body, `<cc-launch-modal feature="project:x">`) {
+		t.Errorf("ready fragment does not mount the island:\n%s", body)
+	}
+	if !strings.Contains(body, `<script type="module" src="/assets/dist/launch-modal.js">`) {
+		t.Errorf("ready fragment does not load the island's script:\n%s", body)
+	}
+	if strings.Contains(body, "sandbox://CC-1") {
+		t.Errorf("ready fragment embeds candidate data, want the island to fetch its own JSON:\n%s", body)
 	}
 	if strings.Contains(body, "hx-get=") {
 		t.Errorf("terminal candidate fragment must not keep polling:\n%s", body)
@@ -208,8 +213,8 @@ func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
 	defer func() { _ = resp.Body.Close() }()
 	body := readBody(t, resp)
-	if !strings.Contains(body, "sandbox://CC-1") {
-		t.Errorf("fragment = %q, want the existing candidate shown despite the stale refusal", body)
+	if !strings.Contains(body, `<cc-launch-modal feature="project:x">`) {
+		t.Errorf("fragment = %q, want the island mounted despite the stale refusal", body)
 	}
 	if strings.Contains(body, "already belongs to feature") {
 		t.Errorf("fragment = %q, want the stale refusal not to shadow a real candidate set", body)
@@ -239,41 +244,6 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json without an HX-Request header", ct)
-	}
-}
-
-// TestHandleCandidatesFragmentShowsAnAlreadyAuthorisedMemberAsRefused covers relaunching a
-// feature with an active launch: a member already authorised renders refused, naming the launch,
-// rather than offering it again.
-func TestHandleCandidatesFragmentShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []cc.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Now()
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, "already authorised in launch") {
-		t.Errorf("fragment = %q, want the already-authorised member labelled refused", body)
-	}
-	if strings.Contains(body, `name="ticket" value="sandbox://CC-1"`) {
-		t.Errorf("fragment = %q, want no re-launch field for an already-authorised member", body)
 	}
 }
 

@@ -16,9 +16,11 @@ expensive.
 - **htmx drives updates.** The board polls itself every five seconds and swaps its own `outerHTML`.
   Never remove or rename an `hx-` attribute, `id="board"`, or the `hx-preserve` detail row while
   doing styling work.
-- **One Solid island exists**, `web/src/graph.tsx`, compiled with `solid-element`. It opts out of
-  shadow DOM ([ADR 2](docs/adr/0002-islands-opt-out-of-shadow-dom.md)), so its classes are
-  page-global. `solid-js` in `web/package.json` is that island and nothing more.
+- **Two Solid islands exist**, `web/src/graph.tsx` and `web/src/launch-modal.tsx`, compiled with
+  `solid-element`. Both opt out of shadow DOM
+  ([ADR 2](docs/adr/0002-islands-opt-out-of-shadow-dom.md)), so their classes are page-global.
+  `solid-js` in `web/package.json` is those islands and nothing more. `web/src/layout.ts` holds
+  the DAG layout math they share; neither island imports the other.
 - **Tailwind v4, CSS-first.** `web/app.css` holds `@import "tailwindcss"`, an `@theme` block of
   oklch tokens, and a `[data-theme="dark"]` override. There is no `tailwind.config.*`, and there
   will not be one.

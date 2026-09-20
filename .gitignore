@@ -11,6 +11,8 @@ web/node_modules/
 
 # The vite build's own output. Unlike app.css (ADR 1, committed so its own CI job's git diff
 # guards against drift), this is Node-only and never checked in: a Go-only build must embed no
-# graph.js and fall back to <cc-graph>'s light-DOM content (docs/prds/prd-fleet-view.md § The
-# build, and Go's dependency on it).
+# island script and fall back to its custom element's light-DOM content
+# (docs/prds/prd-fleet-view.md § The build, and Go's dependency on it).
 internal/cc/assets/dist/graph.js
+internal/cc/assets/dist/launch-modal.js
+internal/cc/assets/dist/layout-*.js

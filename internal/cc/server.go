@@ -1210,28 +1210,19 @@ func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
 }
 
 // launchModalView is the launch modal's own states: still pending; refused by name; imported but
-// empty (a tracker label with no tickets); or the candidate set to confirm. Mutually exclusive —
-// Pending short-circuits the rest, and a populated Refused or a set Empty means Candidates is nil.
+// empty (a tracker label with no tickets); or ready, naming the feature the island fetches its own
+// candidate set for. Mutually exclusive — Pending short-circuits the rest.
 type launchModalView struct {
 	Feature      string
 	FeatureQuery string
 	Pending      bool
 	Refused      string
 	Empty        bool
-	Candidates   []modalCandidate
-}
-
-// modalCandidate is one candidate row as the launch modal template renders it: Refused is
-// candidate.Label's own refused case, so the template omits the hidden ticket/hash fields for
-// that row without string-comparing the label.
-type modalCandidate struct {
-	URL, Ref, Title, Label, Reason, Base, BaseVerdict, Hash string
-	Refused                                                 bool
 }
 
 // buildLaunchModalView answers the launch modal's own question for feature: still pending,
 // because an import intent for it is unconsumed; refused, reading store.LastImportError for a
-// refusal that names it, once there is no candidate to show instead; or the candidate set.
+// refusal that names it, once there is no candidate to show instead; or ready.
 func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (launchModalView, error) {
 	view := launchModalView{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
@@ -1272,14 +1263,6 @@ func (s *Server) buildLaunchModalView(ctx context.Context, feature string) (laun
 		return view, nil
 	}
 
-	view.Candidates = make([]modalCandidate, 0, len(candidates))
-	for _, c := range candidates {
-		view.Candidates = append(view.Candidates, modalCandidate{
-			URL: c.URL, Ref: c.Ref, Title: c.Title, Label: c.Label, Reason: c.Reason,
-			Base: c.Base, BaseVerdict: c.BaseVerdict, Hash: c.PromptHash,
-			Refused: c.Label == plan.Refused.String(),
-		})
-	}
 	return view, nil
 }
 
