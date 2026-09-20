@@ -59,8 +59,6 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 	return nil
 }
 
-// importFeature queues one import intent directly against the store, for a fixture that needs a
-// feature's tickets seeded before a tick runs.
 func importFeature(ctx context.Context, configPath string, args []string) (err error) {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: cc import <feature>")

@@ -659,6 +659,36 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 	}
 }
 
+func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	url := "https://github.com/acme/alpha/issues/1"
+	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	conflict := &cc.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
+	if err := store.RecordImportRefusal(ctx, "project:y", conflict, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, time.Now, nil, "")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"project:y", url, "already belongs to feature"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page does not contain %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestHandleFeaturesFiltersByQuery(t *testing.T) {
 	t.Parallel()
 

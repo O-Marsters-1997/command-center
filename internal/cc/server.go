@@ -112,7 +112,7 @@ var featuresPage = template.Must(template.New("features").
 	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
 	Parse(featuresSource))
 
-// Server is the status page plus the launch-preview, launch-authorisation and import routes. It
+// Server is the status page plus the launch-preview, launch-authorisation and features routes. It
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
@@ -1313,9 +1313,16 @@ type featureRow struct {
 	Imported bool
 }
 
+type importErrorView struct {
+	Age     string
+	Feature string
+	Message string
+}
+
 type featuresPageView struct {
-	Features []featureRow
-	Query    string
+	Features        []featureRow
+	Query           string
+	LastImportError *importErrorView
 }
 
 // handleFeatures lists every feature the configured repos' trackers offer, read fresh from the
@@ -1328,6 +1335,11 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	lastErr, failed, err := s.store.LastImportError(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1347,8 +1359,15 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, featureRow{Feature: f.Feature, Imported: imported[f.Feature]})
 	}
 
+	view := featuresPageView{Features: rows, Query: query}
+	if failed {
+		view.LastImportError = &importErrorView{
+			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := featuresPage.Execute(w, featuresPageView{Features: rows, Query: query}); err != nil {
+	if err := featuresPage.Execute(w, view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -4,6 +4,11 @@
 <title>Features</title>
 <main class="p-4">
 <h1 class="mb-3">FEATURES</h1>
+{{with .LastImportError}}
+<p class="banner ribbon mb-2" data-tone="stop" role="status">
+  import of {{.Feature}} refused {{.Age}}. {{.Message}}
+</p>
+{{end}}
 <form method="get" action="/features" class="mb-3">
 <input type="search" name="q" value="{{.Query}}" placeholder="filter by name" class="border border-border rounded px-2 py-1">
 </form>

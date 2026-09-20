@@ -7,9 +7,9 @@
 # Where the config file sits decides nothing except what a relative [[repo]] path is relative
 # to. Where the database, run logs and checkouts live is data_dir's job, below.
 #
-# This sample carries no tickets: the fleet now comes from GET /import, which labels an issue
-# `project:<name>` and imports its feature. Stacking is on, so a dependent cuts and pushes off its
-# blocker's own branch rather than main once the blocker's PR opens.
+# This sample carries no tickets: label an issue `project:<name>` on GitHub, then browse what's
+# importable at GET /features. Stacking is on, so a dependent cuts and pushes off its blocker's
+# own branch rather than main once the blocker's PR opens.
 
 # Where the app keeps everything except the database: state/ for the lock, run logs and agent
 # settings, repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that,
