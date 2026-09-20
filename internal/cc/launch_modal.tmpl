@@ -1,0 +1,27 @@
+<dialog id="launch-modal-body" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}} class="p-4">
+{{if .Pending -}}
+<p>importing {{.Feature}}&hellip;</p>
+{{- else if .Refused -}}
+<p class="banner ribbon" data-tone="stop" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
+{{- else if .Empty -}}
+<p class="text-muted">{{.Feature}} has no tickets to launch.</p>
+{{- else -}}
+<form method="post" action="/launch">
+<table class="w-full max-w-4xl mb-3">
+  <tr><th></th><th>label</th><th>ticket</th><th>base</th><th>base verdict</th><th>why</th></tr>
+  {{range .Candidates}}
+  <tr>
+    <td>{{if not .Refused}}<input type="hidden" name="ticket" value="{{.URL}}"><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
+    <td>{{.Label}}</td>
+    <td>{{.Ref}} {{.Title}}</td>
+    <td>{{.Base}}</td>
+    <td>{{.BaseVerdict}}</td>
+    <td class="text-muted">{{.Reason}}</td>
+  </tr>
+  {{end}}
+</table>
+<button type="submit">[ confirm ]</button>
+</form>
+{{- end}}
+<a href="/features">[ cancel ]</a>
+</dialog>
