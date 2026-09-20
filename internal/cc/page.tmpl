@@ -1,9 +1,11 @@
 {{template "docHead" .}}
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+{{template "skipLink" .}}
 {{template "topbar" .}}
 {{template "masthead" .}}
-<main>
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main">
 {{template "band" .}}
 {{if eq .View "graph"}}
 <!-- noShadowDOM() is cc-graph's first statement (ADR 2), so this fallback content is what a
@@ -24,5 +26,6 @@
 <button type="submit" form="launch">launch selected</button>
 {{end}}
 </main>
+</div>
 </body>
 </html>

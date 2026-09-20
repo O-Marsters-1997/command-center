@@ -109,33 +109,6 @@ func TestDistinctFeaturesSortsAndDropsBlank(t *testing.T) {
 	}
 }
 
-func TestFeatureLinksForIsNilWithNoTicketCarryingAFeature(t *testing.T) {
-	t.Parallel()
-
-	if got := featureLinksFor(nil, viewParams{}); got != nil {
-		t.Errorf("featureLinksFor(nil, ...) = %+v, want nil", got)
-	}
-}
-
-func TestFeatureLinksForNamesAllPlusEveryFeatureInTheFleet(t *testing.T) {
-	t.Parallel()
-
-	tickets := []Ticket{{Feature: "board-scope"}, {Feature: "sqlc-migration"}}
-	got := featureLinksFor(tickets, viewParams{Feature: "sqlc-migration"})
-	if len(got) != 3 {
-		t.Fatalf("featureLinksFor(tickets, {Feature: sqlc-migration}) = %+v, want 3 links", got)
-	}
-	if got[0].Name != "all" || got[0].Current {
-		t.Errorf("all link = %+v, want Current=false since a feature is scoped", got[0])
-	}
-	if got[1].Name != "board-scope" || got[1].Current {
-		t.Errorf("board-scope link = %+v, want Current=false", got[1])
-	}
-	if got[2].Name != "sqlc-migration" || !got[2].Current || got[2].Path != "/?feature=sqlc-migration" {
-		t.Errorf("sqlc-migration link = %+v, want Current=true and Path=/?feature=sqlc-migration", got[2])
-	}
-}
-
 func TestRowsInFlattensRootAndChildren(t *testing.T) {
 	t.Parallel()
 

@@ -1,8 +1,11 @@
 {{template "docHead" .}}
 <body>
+{{template "skipLink" .}}
 {{template "topbar" .}}
 {{template "masthead" .}}
-<main class="p-4">
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="p-4">
 <h1 class="mb-3">LAUNCH</h1>
 <form method="post" action="/launch">
 <table class="w-full max-w-4xl mb-3">
@@ -29,5 +32,6 @@
 </form>
 <a href="/">[ cancel ]</a>
 </main>
+</div>
 </body>
 </html>
