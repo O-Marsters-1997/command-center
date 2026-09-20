@@ -1,3 +1,4 @@
+{{define "docHead" -}}
 <!doctype html>
 <html lang="en">
 <head>
@@ -14,8 +15,8 @@
     document.documentElement.dataset.theme = next;
     localStorage.setItem("theme", next);
   }
-  
-  
+  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
+  // wording goes stale the moment it is sent and a swap is not what keeps it current.
   function ago(ms) {
     var s = Math.max(0, Math.round(ms / 1000));
     if (s < 60) return s + "s ago";
@@ -41,30 +42,36 @@
   });
 </script>
 </head>
-<body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+{{- end}}
+
+{{define "topbar" -}}
 <header class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4 border-b border-border">
   <h1 class="m-0">Command Centre</h1>
-  
+  {{with .Workspace}}<span class="text-muted">{{.}}</span>{{end}}
   <nav class="flex gap-[0.4rem]">
-    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board" aria-current="page">board</a>
-    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph">graph</a>
+    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=board"{{if eq .View "board"}} aria-current="page"{{end}}>board</a>
+    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="/?view=graph"{{if eq .View "graph"}} aria-current="page"{{end}}>graph</a>
   </nav>
-  
-  
-  
+  {{if .RepoLinks}}
+  <nav class="flex gap-[0.4rem]">
+    {{range .RepoLinks}}
+    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>
+    {{end}}
+  </nav>
+  {{end}}
+  {{if .FeatureLinks}}
+  <nav class="flex gap-[0.4rem]">
+    {{range .FeatureLinks}}
+    <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline aria-[current=page]:border-s-live aria-[current=page]:text-fg" href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>
+    {{end}}
+  </nav>
+  {{end}}
+  {{if .FeatureImportPath}}
+  <form hx-post="{{.FeatureImportPath}}" hx-target="#board" hx-swap="outerHTML">
+    <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">reimport</button>
+  </form>
+  {{end}}
   <a class="py-[0.1rem] px-2 border border-border rounded-full text-muted no-underline" href="/features">features</a>
   <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
 </header>
-
-<main>
-
-
-
-<form id="launch" method="get" action="/preview"></form>
-
-<button type="submit" form="launch">launch selected</button>
-
-</main>
-</body>
-</html>
+{{- end}}

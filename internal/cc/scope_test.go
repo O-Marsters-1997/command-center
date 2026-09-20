@@ -168,7 +168,8 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	root := row{URL: "sandbox://ROOT", Repo: "repo", State: "ready", Tone: "idle"}
 	child := row{URL: "sandbox://CHILD", Repo: "services", State: "ready", Tone: "idle", Blocking: []string{root.URL}}
 	view := pageView{
-		Groups: []group{{Root: &root, Children: []row{child}}}, RepoScope: "repo", BoardPath: "/board?repo=repo",
+		Groups: []group{{Root: &root, Children: []row{child}}}, BoardPath: "/board?repo=repo",
+		chrome: chrome{RepoScope: "repo"},
 	}
 
 	var buf bytes.Buffer
@@ -196,8 +197,9 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 		URL: "sandbox://CHILD", Feature: "sqlc-migration", State: "ready", Tone: "idle", Blocking: []string{root.URL},
 	}
 	view := pageView{
-		Groups:       []group{{Root: &root, Children: []row{child}}},
-		FeatureScope: "board-scope", BoardPath: "/board?feature=board-scope",
+		Groups:    []group{{Root: &root, Children: []row{child}}},
+		BoardPath: "/board?feature=board-scope",
+		chrome:    chrome{FeatureScope: "board-scope"},
 	}
 
 	var buf bytes.Buffer

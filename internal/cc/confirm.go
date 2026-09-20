@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 )
 
 //go:embed confirm.tmpl
@@ -32,6 +33,7 @@ var destructiveVerbs = map[string]destruction{
 }
 
 type confirmView struct {
+	chrome
 	URL       string
 	Verb      string
 	Effect    string
@@ -52,7 +54,7 @@ func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view, err := s.render(r.Context(), viewParams{})
+	view, err := s.render(r.Context(), parseViewParams(url.Values{}))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -65,6 +67,7 @@ func (s *Server) handleConfirm(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	confirm := confirmView{
+		chrome:    view.chrome,
 		URL:       target.URL,
 		Verb:      verb,
 		Effect:    destroys.effect,

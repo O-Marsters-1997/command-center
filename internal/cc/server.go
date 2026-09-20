@@ -64,6 +64,14 @@ var mastheadSource string
 // tree that page.tmpl and boardSwap both call it from.
 var _ = template.Must(page.New("masthead").Parse(mastheadSource))
 
+//go:embed layout.tmpl
+var layoutSource string
+
+// The blank identifier is deliberate, not dead code: this registers "docHead" and "topbar" into
+// the shared tree every page renders through -- page.tmpl, features.tmpl, preview.tmpl and
+// confirm.tmpl all call them by name, so the doctype, head and static chrome are written once.
+var _ = template.Must(page.New("layout").Parse(layoutSource))
+
 //go:embed boardswap.tmpl
 var boardSwapSource string
 
@@ -103,12 +111,14 @@ func newRowSlot(r row, head bool, depth int, scope, featureScope string) rowSlot
 //go:embed preview.tmpl
 var previewSource string
 
-var previewPage = template.Must(template.New("preview").Parse(previewSource))
+var previewPage = template.Must(page.New("preview").Parse(previewSource))
 
 //go:embed features.tmpl
 var featuresSource string
 
-var featuresPage = template.Must(template.New("features").
+// pathEscape joins page's shared FuncMap: Funcs adds to the tree's one function map regardless of
+// which member template it is called on, so head, child, destructive and percent see it too.
+var featuresPage = template.Must(page.New("features").
 	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
 	Parse(featuresSource))
 
@@ -339,37 +349,44 @@ type group struct {
 	Children []row `json:"children"`
 }
 
-type pageView struct {
+// chrome is the shell every page wears: workspace, the live and observe pills, the last tick's
+// error, the current board/graph view, and the repo/feature scope links. layout.tmpl's topbar and
+// masthead render it once per page load; every page's view model embeds it.
+type chrome struct {
 	Workspace  string
 	LiveAgents int
 	Observe    ageView
 	// ObserveStale is decided here rather than in the template, which cannot compare durations.
 	ObserveStale bool
 	LastError    *tickErrorView
-	Groups       []group
-	Band         bandView
-	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
-	// perpetuate this render's view state without the shell being involved.
-	BoardPath string
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
 	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
 	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
 	RepoScope string
-	// RepoLinks is the masthead's own repo nav row (CONTEXT.md § Scope), empty when no repo is
-	// configured so the masthead renders no such row at all.
+	// RepoLinks is the topbar's own repo nav row (CONTEXT.md § Scope), empty when no repo is
+	// configured so the topbar renders no such row at all.
 	RepoLinks []scopeLink
 	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
 	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
 	FeatureScope string
-	// FeatureLinks is the masthead's own feature nav row, empty when no ticket carries a feature.
+	// FeatureLinks is the topbar's own feature nav row, empty when no ticket carries a feature.
 	FeatureLinks []scopeLink
-	// FeatureImportPath is the masthead's reimport action, set only when FeatureScope names one
+	// FeatureImportPath is the topbar's reimport action, set only when FeatureScope names one
 	// feature to reimport.
 	FeatureImportPath string
 }
 
-// scopeLink is one masthead nav pill for a scope axis: "all" plus one per configured repo.
+type pageView struct {
+	chrome
+	Groups []group
+	Band   bandView
+	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
+	// perpetuate this render's view state without the shell being involved.
+	BoardPath string
+}
+
+// scopeLink is one topbar nav pill for a scope axis: "all" plus one per configured repo.
 type scopeLink struct {
 	Name    string
 	Path    string
@@ -440,13 +457,26 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	applyViewState(rows, params)
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
+		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, now, params),
+		Groups:    groups,
+		Band:      deriveBand(rowsIn(groups)),
+		BoardPath: params.boardPath(),
+	}
+	return view, nil
+}
+
+// buildChrome derives the shell every page wears from facts its caller already holds: render
+// already fetched tickets, the observation and the last error for its own board derivation, and
+// chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
+func (s *Server) buildChrome(
+	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool, now time.Time,
+	params viewParams,
+) chrome {
+	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
-		Groups:       groups,
-		Band:         deriveBand(rowsIn(groups)),
-		BoardPath:    params.boardPath(),
 		View:         params.View,
 		RepoScope:    params.Repo,
 		RepoLinks:    repoLinksFor(s.repos, params),
@@ -454,16 +484,38 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		FeatureLinks: featureLinksFor(tickets, params),
 	}
 	if observed {
-		view.Observe = relative(now, obs.ObservedAt)
-		view.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
+		c.Observe = relative(now, obs.ObservedAt)
+		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
-		view.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
+		c.LastError = &tickErrorView{Age: relative(now, lastErr.At), Message: lastErr.Message}
 	}
 	if params.Feature != "" {
-		view.FeatureImportPath = params.featureImportPath()
+		c.FeatureImportPath = params.featureImportPath()
 	}
-	return view, nil
+	return c
+}
+
+// chromeFor builds a page's chrome without render's board derivation, groups or verdicts -- the
+// one cheap read /features, /preview and /confirm now make for the workspace, live and observe
+// pills, and scope links that every page's topbar and masthead show.
+func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, error) {
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	params.Repo = normalizeRepoScope(params.Repo, s.stackingByRepo)
+	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
+
+	obs, observed, err := s.store.LastObservation(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	lastErr, failed, err := s.store.LastError(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	return s.buildChrome(tickets, obs, observed, lastErr, failed, s.now(), params), nil
 }
 
 // applyViewState parses the selected row's own log only, not every row's: a board of twenty-five
@@ -1366,10 +1418,23 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	chr, err := s.chromeFor(ctx, parseViewParams(url.Values{}))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := previewPage.Execute(w, rows); err != nil {
+	if err := previewPage.Execute(w, previewPageView{chrome: chr, Rows: rows}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// previewPageView carries chrome alongside the preview's own rows, so preview.tmpl's topbar and
+// masthead read the same fields every other page's view model does.
+type previewPageView struct {
+	chrome
+	Rows []previewRow
 }
 
 // handleLaunch queues one launch intent per requested ticket, all sharing one fresh group token
@@ -1559,6 +1624,7 @@ type importErrorView struct {
 }
 
 type featuresPageView struct {
+	chrome
 	Features        []featureRow
 	Query           string
 	LastImportError *importErrorView
@@ -1598,7 +1664,13 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, featureRow{Feature: f.Feature, Imported: imported[f.Feature]})
 	}
 
-	view := featuresPageView{Features: rows, Query: query}
+	chr, err := s.chromeFor(ctx, parseViewParams(url.Values{}))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	view := featuresPageView{chrome: chr, Features: rows, Query: query}
 	if failed {
 		view.LastImportError = &importErrorView{
 			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,

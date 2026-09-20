@@ -1,48 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Command Centre</title>
-<link rel="stylesheet" href="/assets/app.css">
-<script>
-  var stored = localStorage.getItem("theme");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
-  function toggleTheme() {
-    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-  }
-  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
-  // wording goes stale the moment it is sent and a swap is not what keeps it current.
-  function ago(ms) {
-    var s = Math.max(0, Math.round(ms / 1000));
-    if (s < 60) return s + "s ago";
-    var m = Math.floor(s / 60);
-    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
-    var h = Math.floor(m / 60);
-    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
-  }
-  setInterval(function () {
-    var now = Date.now();
-    document.querySelectorAll("time[datetime]").forEach(function (el) {
-      var at = Date.parse(el.dateTime);
-      if (!isNaN(at)) el.textContent = ago(now - at);
-    });
-  }, 1000);
-</script>
-<script src="/assets/htmx.min.js"></script>
-<script src="/assets/sse.min.js"></script>
-<script>
-  document.addEventListener("htmx:sseMessage", function (e) {
-    var pre = e.target;
-    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
-  });
-</script>
-</head>
+{{template "docHead" .}}
 <body>
 <a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#board">skip to the board</a>
+{{template "topbar" .}}
 {{template "masthead" .}}
 <main>
 {{template "band" .}}

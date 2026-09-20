@@ -1,7 +1,7 @@
-<!doctype html>
-<meta charset="utf-8">
-<link rel="stylesheet" href="/assets/app.css">
-<title>Features</title>
+{{template "docHead" .}}
+<body>
+{{template "topbar" .}}
+{{template "masthead" .}}
 <main class="p-4">
 <h1 class="mb-3">FEATURES</h1>
 {{with .LastImportError}}
@@ -37,3 +37,5 @@
 <a href="/" class="mt-2 inline-block">[ back ]</a>
 <div id="launch-modal"></div>
 </main>
+</body>
+</html>

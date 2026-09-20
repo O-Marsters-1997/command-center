@@ -1,7 +1,7 @@
-<!doctype html>
-<meta charset="utf-8">
-<link rel="stylesheet" href="/assets/app.css">
-<title>Launch preview</title>
+{{template "docHead" .}}
+<body>
+{{template "topbar" .}}
+{{template "masthead" .}}
 <main class="p-4">
 <h1 class="mb-3">LAUNCH</h1>
 <form method="post" action="/launch">
@@ -9,7 +9,7 @@
   <tr>
     <th></th><th>label</th><th>ticket</th><th>base</th><th>base verdict</th><th>why</th><th>prompt</th>
   </tr>
-  {{range .}}
+  {{range .Rows}}
   <tr>
     <td>{{if not .Refused}}<input type="checkbox" name="ticket" value="{{.URL}}" checked><input type="hidden" name="hash" value="{{.URL}} {{.Hash}}">{{end}}</td>
     <td>{{.Label}}</td>
@@ -29,3 +29,5 @@
 </form>
 <a href="/">[ cancel ]</a>
 </main>
+</body>
+</html>
