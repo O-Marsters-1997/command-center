@@ -1,0 +1,26 @@
+# GET /insights.json serves the daily spend series over real disposed runs: the documented
+# top-level fields, one bucket per day in the default 30-day range, and today's own bucket
+# carrying the run this script just disposed.
+
+cc-init-repo
+cc-config spawn-commits
+cc-fake-gh no-prs
+
+exec cc import project:spawn
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec cc request GET /insights.json
+stdout '"since":"[0-9]{4}-[0-9]{2}-[0-9]{2}"'
+stdout '"until":"[0-9]{4}-[0-9]{2}-[0-9]{2}"'
+stdout '"timezone":"'
+stdout '"buckets":\['
+stdout '"runs":1'
+
+# An unrecognised repo scope excludes the run entirely, but still zero-fills every day.
+exec cc request GET '/insights.json?repo=not-a-repo'
+! stdout '"runs":1'
+stdout '"runs":0'
