@@ -2,8 +2,10 @@ package cc
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -110,6 +112,30 @@ func systemTimezoneName() string {
 		return ""
 	}
 	return target[i+len(zoneinfoDir):]
+}
+
+//go:embed insights.tmpl
+var insightsPageSource string
+
+var insightsPage = template.Must(page.New("insights").Parse(insightsPageSource))
+
+type insightsPageView struct {
+	chrome
+}
+
+func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	chr, err := s.chromeFor(ctx, parseViewParams(r.URL.Query()))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	chr.Section = "insights"
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := insightsPage.Execute(w, insightsPageView{chrome: chr}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // handleInsights serves GET /insights.json?repo=&feature=&since=, the daily spend series.
