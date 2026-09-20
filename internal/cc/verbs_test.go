@@ -187,6 +187,33 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	}
 }
 
+func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
+	f := newRemoveWorktreeFixture(t, "cc-1")
+	dependent := cc.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{f.ticket.URL}}
+	if err := f.store.UpsertTickets(t.Context(), []cc.Ticket{dependent}); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
+		PRs:       map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {State: gh.Merged}},
+	}
+	if err := f.requestRemoveWorktree(t, obs); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
+		t.Fatalf("tickets = %+v, want only the dependent left", tickets)
+	}
+	if len(tickets[0].BlockedBy) != 0 {
+		t.Errorf("dependent's blocked_by = %v, want the merged blocker pruned", tickets[0].BlockedBy)
+	}
+}
+
 // TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone covers issue #196: a worktree removed by
 // something other than this verb must not leave a merged row stuck refusing forever.
 func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {

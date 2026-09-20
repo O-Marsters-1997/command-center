@@ -284,12 +284,29 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 }
 
 // WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
-// their foreign key to it.
-func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time) error {
-	if err := s.q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
+// their foreign key to it. When merged is true, it also prunes the ticket's URL out of every
+// other ticket's blocked_by in the same transaction, mirroring ImportTickets' repairBlockedBy.
+func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	qtx := s.q.WithTx(tx)
+	if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
 		return fmt.Errorf("withdraw ticket %s: %w", url, err)
 	}
-	return nil
+	if merged {
+		if err = repairBlockedBy(ctx, qtx, map[string]bool{url: true}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func nonNil(s []string) []string {
