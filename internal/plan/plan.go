@@ -237,8 +237,9 @@ type RunFact struct {
 	PushFailed      bool
 	PROpen          bool
 	// PRMerged and PRClosedUnmerged read this ticket's own branch's PR state, never the blocker's
-	// (that is Unlock.BlockerClosed's job). Once GitHub says merged or closed, that outranks
-	// every other push fact below (docs/prds/prd-command-centre.md § The states).
+	// (that is Unlock.BlockerClosed's job). Merged is checked in Status itself, ahead of any run
+	// outcome; closed-unmerged outranks every other push fact below
+	// (docs/prds/prd-command-centre.md § The states).
 	PRMerged         bool
 	PRClosedUnmerged bool
 	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
@@ -309,6 +310,12 @@ func Status(f Facts) (State, Reason) {
 	if f.LatestRun != nil && f.Unlock.BlockerClosed {
 		return BaseGone, f.Unlock.Reason
 	}
+	// A merged pull request is a terminal fact, fetched every tick regardless of Outcome
+	// (inv. 14), and outranks whatever the latest run's own disposition says, the same way
+	// BlockerClosed outranks everything below it.
+	if f.LatestRun != nil && f.LatestRun.PRMerged {
+		return PRMerged, "pull request merged"
+	}
 	if state, reason, ok := statusFromRun(f.LatestRun); ok {
 		return state, reason
 	}
@@ -365,8 +372,6 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 // to the verdict step (Phase 5), and otherwise the push is still pending.
 func statusFromPush(run RunFact) (State, Reason) {
 	switch {
-	case run.PRMerged:
-		return PRMerged, "pull request merged"
 	case run.PRClosedUnmerged:
 		return PRClosedUnmerged, "pull request closed without merging"
 	case run.MidMerge:
