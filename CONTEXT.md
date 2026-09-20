@@ -141,8 +141,8 @@ What a run cost. Accruing tokens while alive, dollars from the `result` event on
 _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 
 **Sidebar**:
-The nav naming the app's three destinations, board, graph and features. Renders once per page
-load, outside every `hx-swap` target, so tabbing it never loses focus to a poll.
+The nav naming the app's four destinations, board, graph, features and insights. Renders once per
+page load, outside every `hx-swap` target, so tabbing it never loses focus to a poll.
 _Avoid_: Nav (ambiguous with the board/graph pair it replaced), menu, drawer
 
 **Rail**:

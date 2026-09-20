@@ -292,6 +292,7 @@
 
   .chart-bar {
     fill: var(--color-s-live);
+    background: var(--color-s-live);
   }
 
   .chart-grid {
@@ -301,6 +302,29 @@
   .chart-tick {
     fill: var(--color-muted);
     font-size: 10px;
+  }
+
+  .chart-bar-out {
+    fill: var(--color-s-done);
+    background: var(--color-s-done);
+  }
+
+  .chart-unsettled {
+    fill: var(--color-s-wait);
+    background: var(--color-s-wait);
+  }
+
+  .chart-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+  }
+
+  .chart-legend-swatch {
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    border-radius: 999px;
   }
 
   .line {

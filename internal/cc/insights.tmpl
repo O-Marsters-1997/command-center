@@ -1,0 +1,22 @@
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+{{template "topbar" .}}
+{{template "masthead" .}}
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="p-4">
+<h1 class="mb-3">INSIGHTS</h1>
+<!-- noShadowDOM() is cc-insights's first statement (ADR 2), so this fallback content is what a
+     Go-only build with no Node -- assets/dist/insights.js never built, the script below 404s --
+     renders: a custom element the browser never upgrades still shows its light-DOM children. -->
+<cc-insights>
+  <p class="banner ribbon" data-tone="wait" role="status">
+    insights need the built assets: run `just assets`, or switch to the board view.
+  </p>
+</cc-insights>
+<script type="module" src="/assets/dist/insights.js"></script>
+</main>
+</div>
+</body>
+</html>

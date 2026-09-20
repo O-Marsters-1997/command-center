@@ -21,7 +21,8 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Store is the Postgres database. Only the loop goroutine writes it (inv. 9).
+// Store is the Postgres database. Only the loop goroutine writes reconciled state (inv. 9,
+// narrowed by ADR 0016); CreateUser is this store's one exception.
 type Store struct {
 	db *sql.DB
 	q  *ccdb.Queries

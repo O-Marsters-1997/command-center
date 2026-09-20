@@ -98,6 +98,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg>
 {{- end}}
 
+{{define "icon-insights" -}}
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg>
+{{- end}}
+
 {{define "icon-chevron" -}}
 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
 {{- end}}
@@ -107,5 +111,6 @@
   <a class="sidebar-item" href="/features"{{if eq .Section "features"}} aria-current="page"{{end}}>{{template "icon-features"}}<span class="sidebar-label">features</span></a>
   <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "board"}} aria-current="page"{{end}}>{{template "icon-board"}}<span class="sidebar-label">board</span></a>
   <a class="sidebar-item" href="/?view=graph{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "graph"}} aria-current="page"{{end}}>{{template "icon-graph"}}<span class="sidebar-label">graph</span></a>
+  <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span class="sidebar-label">insights</span></a>
 </nav>
 {{- end}}
