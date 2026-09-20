@@ -287,6 +287,22 @@ func TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
 	}
 }
 
+func TestMastheadShowsReimportOnlyWhenFeatureScoped(t *testing.T) {
+	t.Parallel()
+
+	server := threeFeatureServer(t)
+
+	unscoped := renderPath(t, server, "/")
+	if strings.Contains(unscoped, "/import") {
+		t.Errorf("unscoped board offers a reimport action with no feature to name:\n%s", unscoped)
+	}
+
+	scoped := renderPath(t, server, "/?feature=board-scope")
+	if !strings.Contains(scoped, `hx-post="/features/board-scope/import?feature=board-scope"`) {
+		t.Errorf("?feature=board-scope masthead missing the reimport action:\n%s", scoped)
+	}
+}
+
 type scopeJSONGroup struct {
 	Root *struct {
 		URL string `json:"url"`

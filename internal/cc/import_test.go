@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -850,6 +851,38 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 	}
 }
 
+func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seed := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
+
+	server := cc.NewServer(store, time.Now, repos, "")
+	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `action="/features/project:x/import"`) {
+		t.Errorf("imported feature's row is missing the reimport action:\n%s", body)
+	}
+	if strings.Contains(body, `action="/features/project:y/import"`) {
+		t.Errorf("unimported feature's row should not offer reimport:\n%s", body)
+	}
+}
+
 func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	t.Parallel()
 
@@ -920,4 +953,70 @@ func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	if got := resp.Header.Get("Location"); got != "/?feature=project%3Ax" {
 		t.Fatalf("Location = %q, want /?feature=project%%3Ax", got)
 	}
+}
+
+func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	server := cc.NewServer(store, time.Now, nil, "")
+	var nudged atomic.Bool
+	server.SetNudge(func() { nudged.Store(true) })
+	srv := httptest.NewServer(server)
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("HX-Request", "true")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if !nudged.Load() {
+		t.Error("handleImportFeature did not nudge the loop")
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "project:x" {
+		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)
+	}
+}
+
+func TestHandleImportFeatureRejectsAMissingOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
 }

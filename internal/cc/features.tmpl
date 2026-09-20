@@ -23,6 +23,11 @@
         <input type="hidden" name="feature" value="{{.Feature}}">
         <button type="submit">[ launch ]</button>
       </form>
+      {{if .Imported}}
+      <form method="post" action="/features/{{.Feature | pathEscape}}/import">
+        <button type="submit">[ reimport ]</button>
+      </form>
+      {{end}}
     </td>
   </tr>
   {{else}}
