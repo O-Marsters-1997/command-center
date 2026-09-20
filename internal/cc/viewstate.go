@@ -117,6 +117,10 @@ func (v viewParams) boardPath() string { return withQuery("/board", v.query()) }
 func (v viewParams) verbPath() string  { return withQuery("/verb", v.query()) }
 func (v viewParams) pagePath() string  { return withQuery("/", v.query()) }
 
+func (v viewParams) featureImportPath() string {
+	return withQuery("/features/"+url.PathEscape(v.Feature)+"/import", v.query())
+}
+
 func withQuery(path, query string) string {
 	if query == "" {
 		return path
