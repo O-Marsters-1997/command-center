@@ -9,15 +9,6 @@ import (
 	"strings"
 )
 
-// inFlightStatuses are the status:* labels the ticket-tracker skill's state machine ranks at
-// status:ready or beyond; status:backlog and an unlabelled issue are absent.
-var inFlightStatuses = map[string]bool{
-	"ready":       true,
-	"in-progress": true,
-	"in-review":   true,
-	"done":        true,
-}
-
 // githubSource reads one GitHub repo's issues through the gh CLI, exactly as internal/gh does.
 type githubSource struct {
 	owner, repo string
@@ -51,10 +42,6 @@ func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, e
 
 	tickets := make([]Ticket, 0, len(issues))
 	for _, issue := range issues {
-		status, ok := inFlightStatus(issue.Labels)
-		if !ok {
-			continue
-		}
 		blockedBy, err := s.blockedBy(ctx, issue.Number)
 		if err != nil {
 			return nil, err
@@ -64,7 +51,7 @@ func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, e
 			Number:    issue.Number,
 			Title:     issue.Title,
 			Body:      issue.Body,
-			Status:    status,
+			Status:    ticketStatus(issue.Labels),
 			BlockedBy: blockedBy,
 		})
 	}
@@ -137,17 +124,15 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 	return decoded, nil
 }
 
-func inFlightStatus(labels []rawLabel) (string, bool) {
+// ticketStatus reads a ticket's status:* label for display; blocking order (blocked_by), not
+// this string, is what governs whether a ticket can launch.
+func ticketStatus(labels []rawLabel) string {
 	for _, label := range labels {
-		status, ok := strings.CutPrefix(label.Name, "status:")
-		if !ok {
-			continue
-		}
-		if inFlightStatuses[status] {
-			return status, true
+		if status, ok := strings.CutPrefix(label.Name, "status:"); ok {
+			return status
 		}
 	}
-	return "", false
+	return ""
 }
 
 // rawDependency mirrors the fields this package reads from GitHub's

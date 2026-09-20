@@ -229,9 +229,10 @@ func (s *Store) ImportTickets(
 		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: t.URL}); err != nil {
 			return fmt.Errorf("withdraw ticket %s: %w", t.URL, err)
 		}
-		// A withdrawal merely relabelled out of in-flight status (e.g. to status:backlog) is
-		// reversible and must not touch anyone's blocked_by; only a withdrawal behind a merged
-		// pull request is the terminal "this blocker is gone for good" the issue describes.
+		// A withdrawal merely dropped from the tracker's open, labelled results (project label
+		// removed, or the issue closed) is reversible and must not touch anyone's blocked_by;
+		// only a withdrawal behind a merged pull request is the terminal "this blocker is gone
+		// for good" the issue describes.
 		if obs.PRs[branchKey(t.Repo, t.Branch)].State == gh.Merged {
 			mergedWithdrawn[t.URL] = true
 		}

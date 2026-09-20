@@ -19,9 +19,12 @@ the tracker. A ticket has exactly one ref.
 _Avoid_: Ticket (a ref names the work, it is not the work), number, key, ID
 
 **Feature**:
-The tracker's own grouping of tickets, and the unit the board scopes to. A ticket belongs to at
-most one feature; a ticket the tracker puts in two is a tracker problem the app refuses rather
-than resolves.
+The tracker's own grouping of tickets. It is the unit the board scopes to, the unit a launch is
+offered against, and the only thing with a route of its own. A ticket belongs to at most one
+feature; a ticket the tracker puts in two is a tracker problem the app refuses rather than
+resolves. A feature is closed under `blocked_by`: every blocker of every ticket it holds is
+itself in the feature, unless that blocker has already merged. An import that would break
+closure is refused whole, the same way a two-feature ticket is.
 _Avoid_: Group (that is how the board lays out a blocker and its waiters), epic, project,
 milestone, slice
 
@@ -97,6 +100,13 @@ where a repo's working copy sits)
 The panel that expands under a selected row, carrying the run log and the flag prose.
 _Avoid_: Drawer, expansion, panel
 
+**Launch modal**:
+The dialog that opens from a feature row or a board selection, listing the tickets one launch
+would cover and drawing the DAG it would produce. Its toggles change nothing: only confirming
+writes. Unticking a ticket others depend on is refused, naming them, so the set it confirms is
+always closed under blockers.
+_Avoid_: Dialog, popup, drawer, preview (that is the label a ticket carries inside it)
+
 **Band**:
 The row of analytics cards above the board, counted off the current tick over the tickets the
 board's scope admits. Narrowing the scope narrows the band with it.
@@ -143,7 +153,9 @@ _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 - A **ticket** has zero or more **peers**; peership crosses **slice** and **feature** alike
 - A **ticket** has exactly one **ref**
 - A **ticket** belongs to exactly one **repo**; a **feature** spans one or more **repos**
+- A **feature** contains every unmerged blocker of every **ticket** it contains
 - A **scope** admits a **group** whole when any of its **tickets** matches
+- A **launch modal** confirms exactly one **slice**, drawn from one **feature** or one board selection
 - A **ticket** has zero or more **runs**; only the latest one renders
 - A **run** produces a log of **run phases**, and one **spend** figure
 - The **board** contains **groups**; a **detail** belongs to exactly one **ticket**
@@ -194,3 +206,7 @@ _Avoid_: Cost (ambiguous between the live and settled figures), usage, price
 - **"status"** was used for both a ticket's derived label and the Linear project status in the
   prototype. Resolved: **state** is the derived label; the prototype's project status has no
   referent in this app, which has no project concept.
+- **"scoped feature"** was used for "every feature the app knows about", while **scope** is
+  reserved here for the board's narrowing by feature or repo, which made the phrase circular.
+  Resolved: the features list shows every feature the **tracker** offers, imported or not, and
+  **scope** keeps its one meaning.

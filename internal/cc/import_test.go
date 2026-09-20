@@ -191,9 +191,9 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	}
 }
 
-// TestImportTicketsWithdrawsAndRestoresOnReimport simulates relabelling an issue to
-// status:backlog (withdrawn on reimport, run history intact) and back to status:ready
-// (restored on reimport, same history).
+// TestImportTicketsWithdrawsAndRestoresOnReimport simulates an issue dropping out of the
+// tracker's results (withdrawn on reimport, run history intact) and coming back (restored on
+// reimport, same history).
 func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	t.Parallel()
 
@@ -363,10 +363,10 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 }
 
 // TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged pins the other half of
-// issue #235: a withdrawal is not always "the blocker is gone for good" -- an issue relabelled
-// out of in-flight status (e.g. to status:backlog) withdraws the very same way a merged one
-// does, but its issue stays open and the ticket can come back. Pruning blocked_by for it would
-// silently satisfy a blocker that never resolved, the same failure AC3 warns against for a
+// issue #235: a withdrawal is not always "the blocker is gone for good" -- an issue dropped from
+// the tracker's results (its project: label removed, say) withdraws the very same way a merged
+// one does, but its issue stays open and the ticket can come back. Pruning blocked_by for it
+// would silently satisfy a blocker that never resolved, the same failure AC3 warns against for a
 // pull request closed without merging.
 func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *testing.T) {
 	t.Parallel()
@@ -388,8 +388,8 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	// The blocker is relabelled to status:backlog: it drops out of the next import with no
-	// merged (or any) pull request recorded for it.
+	// The blocker drops off the tracker (its project: label removed, say): it drops out of the
+	// next import with no merged (or any) pull request recorded for it.
 	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
