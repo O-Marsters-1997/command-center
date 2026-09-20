@@ -188,9 +188,6 @@ func TestRunOnceSweepsExpiredSessionsAndLeavesLiveOnes(t *testing.T) {
 	}
 }
 
-// TestRunOnceSweepErrorDoesNotAbortTheTick drops the sessions table so the sweep step's own
-// query fails without touching any other write RunOnce makes this tick, proving the tick
-// carries on rather than losing a queued launch intent over rows nobody reads.
 func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
 	t.Parallel()
 
