@@ -181,8 +181,10 @@ first paint and the toggle writes it back to `localStorage`, which holds nothing
 else. Each row's detail sits in a sibling `<tr>` carrying `hx-preserve` and a
 stable id, so an expanded row survives the board's own swap.
 
-Both POSTs are wrapped in `requireBrowserOrigin`, which rejects any request
-whose `Origin` header does not match `r.Host`.
+The whole mux sits behind `http.CrossOriginProtection`, which rejects a
+cross-site POST -- read from `Sec-Fetch-Site`, with an `Origin`-vs-`Host`
+fallback for older browsers -- and allows a request carrying neither header,
+which is how non-browser clients keep working.
 
 The verbs offered on the board are launch, kill, re-run, re-check, retry-push,
 close-pr, remove-worktree, cancel, refresh and abort. Which verbs a row offers

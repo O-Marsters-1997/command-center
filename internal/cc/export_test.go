@@ -3,6 +3,7 @@ package cc
 import (
 	"context"
 	"html/template"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -64,3 +65,7 @@ func BranchKey(repo, branch string) string { return branchKey(repo, branch) }
 
 // MainTipKey names defaultBaseBranch's own tip in Observation.BranchTips.
 func MainTipKey(repo string) string { return mainTipKey(repo) }
+
+func (s *Server) RegisterTestRoute(pattern string, h http.HandlerFunc) {
+	s.rawMux.HandleFunc(pattern, h)
+}

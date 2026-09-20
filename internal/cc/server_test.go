@@ -349,19 +349,20 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 		name       string
 		method     string
 		origin     string
+		setOrigin  bool
 		wantStatus int
 	}{
 		{
 			name:   "GET is rejected before origin is even checked",
-			method: http.MethodGet, origin: srv.URL, wantStatus: http.StatusMethodNotAllowed,
-		},
-		{
-			name:   "a missing Origin is rejected",
-			method: http.MethodPost, origin: "", wantStatus: http.StatusForbidden,
+			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:   "a foreign Origin is rejected",
-			method: http.MethodPost, origin: "http://evil.example", wantStatus: http.StatusForbidden,
+			method: http.MethodPost, origin: "http://evil.example", setOrigin: true, wantStatus: http.StatusForbidden,
+		},
+		{
+			name:   "a missing Origin is allowed by this layer",
+			method: http.MethodPost, setOrigin: false, wantStatus: http.StatusOK,
 		},
 	}
 
@@ -371,7 +372,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tt.origin != "" {
+			if tt.setOrigin {
 				req.Header.Set("Origin", tt.origin)
 			}
 			resp, err := srv.Client().Do(req)
@@ -383,6 +384,32 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
 			}
 		})
+	}
+}
+
+func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
+	t.Parallel()
+
+	server := cc.NewServer(seededStore(t, time.Now()), time.Now, nil, "")
+	server.RegisterTestRoute("POST /test-route", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(server)
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/test-route", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://evil.example")
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 (a route this test registered after NewServer, never wrapped)", resp.StatusCode)
 	}
 }
 
