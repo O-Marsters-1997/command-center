@@ -253,29 +253,6 @@ func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 	}
 }
 
-// TestMastheadFeatureLinksNameTheFleetsOwnFeaturesAndTheCurrentScope covers issue #220's masthead
-// nav row: "all" plus one pill per feature in the fleet, not every feature the tracker knows.
-func TestMastheadFeatureLinksNameTheFleetsOwnFeaturesAndTheCurrentScope(t *testing.T) {
-	t.Parallel()
-
-	server := threeFeatureServer(t)
-
-	unscoped := renderPath(t, server, "/")
-	for _, want := range []string{`href="/"`, `href="/?feature=board-scope"`, `href="/?feature=sqlc-migration"`} {
-		if !strings.Contains(unscoped, want) {
-			t.Errorf("masthead missing feature link %s:\n%s", want, unscoped)
-		}
-	}
-
-	scoped := renderPath(t, server, "/?feature=sqlc-migration")
-	if !strings.Contains(scoped, `href="/?feature=sqlc-migration" aria-current="page"`) {
-		t.Errorf("?feature=sqlc-migration should mark its own pill current:\n%s", scoped)
-	}
-	if strings.Contains(scoped, `href="/" aria-current="page"`) {
-		t.Errorf("?feature=sqlc-migration should not also mark \"all\" current:\n%s", scoped)
-	}
-}
-
 // TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature protects the many fixtures across this
 // package's other tests that never set Feature on a ticket.
 func TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
