@@ -22,6 +22,9 @@ type Workspace struct {
 	RunsDir string
 	// SettingsPath is the app-owned deny settings file passed to every spawn (inv. 17).
 	SettingsPath string
+	// SystemPromptPath is the app-owned system prompt appended to every spawn, warning it that
+	// its session is single-shot.
+	SystemPromptPath string
 }
 
 // dataDirEnv names the data directory when the config file does not.
@@ -82,12 +85,13 @@ func expandHome(path string) (string, error) {
 func ResolveWorkspace(dataDir string) (Workspace, error) {
 	state := filepath.Join(dataDir, "state")
 	ws := Workspace{
-		DataDir:      dataDir,
-		StateDir:     state,
-		ReposDir:     filepath.Join(dataDir, "repos"),
-		LockPath:     filepath.Join(state, "command-centre.lock"),
-		RunsDir:      filepath.Join(state, "runs"),
-		SettingsPath: filepath.Join(state, "settings", "agent.json"),
+		DataDir:          dataDir,
+		StateDir:         state,
+		ReposDir:         filepath.Join(dataDir, "repos"),
+		LockPath:         filepath.Join(state, "command-centre.lock"),
+		RunsDir:          filepath.Join(state, "runs"),
+		SettingsPath:     filepath.Join(state, "settings", "agent.json"),
+		SystemPromptPath: filepath.Join(state, "settings", "system-prompt.md"),
 	}
 	for _, dir := range []string{
 		ws.StateDir, ws.ReposDir, ws.RunsDir, filepath.Dir(ws.SettingsPath),

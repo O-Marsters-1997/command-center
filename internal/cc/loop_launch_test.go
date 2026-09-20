@@ -53,6 +53,9 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if spawned.SettingsPath != ws.SettingsPath {
 		t.Errorf("settings path = %q, want %q", spawned.SettingsPath, ws.SettingsPath)
 	}
+	if spawned.SystemPromptPath != ws.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", spawned.SystemPromptPath, ws.SystemPromptPath)
+	}
 	if _, err := os.Stat(spawned.PromptPath); err != nil {
 		t.Errorf("prompt file was not written: %v", err)
 	}

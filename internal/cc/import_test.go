@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -311,6 +312,61 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 	if !slices.Equal(dependentRow.BlockedBy, want) {
 		t.Errorf("blocked_by = %v, want %v (the withdrawn blocker pruned, the other edge kept)",
 			dependentRow.BlockedBy, want)
+	}
+}
+
+// TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdrawal pins issue
+// #266: a blocker can withdraw before its merged pull request fact reaches obs, and nothing
+// else ever revisits that ticket once it drops out of previous \ returned on a later call.
+func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdrawal(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
+	dependent := tracker.Ticket{
+		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
+		BlockedBy: []string{blocker.URL},
+	}
+	seed := []cc.ImportedTicket{
+		{Ticket: blocker, Repo: "alpha"},
+		{Ticket: dependent, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatalf("ImportTickets: %v", err)
+	}
+
+	// The blocker's issue closes and withdraws before its merged pull request fact reaches obs.
+	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
+		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
+	}
+
+	// The merge fact lands afterwards.
+	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
+	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	// A later reimport of the same feature returns exactly what it already had -- nothing
+	// transitions from present to absent this time, only the earlier withdrawal is now merged.
+	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(2*time.Hour)); err != nil {
+		t.Fatalf("ImportTickets reimporting after the merge fact lands: %v", err)
+	}
+
+	tickets, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
+		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
+	}
+	if len(tickets[0].BlockedBy) != 0 {
+		t.Errorf("blocked_by = %v, want the now-merged withdrawal pruned on the later reimport",
+			tickets[0].BlockedBy)
 	}
 }
 
@@ -850,6 +906,38 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 	}
 }
 
+func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seed := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
+
+	server := cc.NewServer(store, time.Now, repos, "")
+	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `action="/features/project:x/import"`) {
+		t.Errorf("imported feature's row is missing the reimport action:\n%s", body)
+	}
+	if strings.Contains(body, `action="/features/project:y/import"`) {
+		t.Errorf("unimported feature's row should not offer reimport:\n%s", body)
+	}
+}
+
 func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	t.Parallel()
 
@@ -920,4 +1008,70 @@ func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	if got := resp.Header.Get("Location"); got != "/?feature=project%3Ax" {
 		t.Fatalf("Location = %q, want /?feature=project%%3Ax", got)
 	}
+}
+
+func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	server := cc.NewServer(store, time.Now, nil, "")
+	var nudged atomic.Bool
+	server.SetNudge(func() { nudged.Store(true) })
+	srv := httptest.NewServer(server)
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("HX-Request", "true")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if !nudged.Load() {
+		t.Error("handleImportFeature did not nudge the loop")
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "project:x" {
+		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)
+	}
+}
+
+func TestHandleImportFeatureRejectsAMissingOrigin(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
 }

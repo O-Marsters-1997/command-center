@@ -362,3 +362,36 @@ func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) 
 	_, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
 	return err
 }
+
+const withdrawnTickets = `-- name: WithdrawnTickets :many
+SELECT url, repo, branch FROM tickets WHERE withdrawn_at IS NOT NULL
+`
+
+type WithdrawnTicketsRow struct {
+	URL    string
+	Repo   string
+	Branch string
+}
+
+func (q *Queries) WithdrawnTickets(ctx context.Context) ([]WithdrawnTicketsRow, error) {
+	rows, err := q.db.QueryContext(ctx, withdrawnTickets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WithdrawnTicketsRow
+	for rows.Next() {
+		var i WithdrawnTicketsRow
+		if err := rows.Scan(&i.URL, &i.Repo, &i.Branch); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

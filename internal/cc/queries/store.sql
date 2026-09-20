@@ -33,6 +33,9 @@ SELECT repo, branch FROM tickets WHERE url = $1;
 -- name: WithdrawTicket :exec
 UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL;
 
+-- name: WithdrawnTickets :many
+SELECT url, repo, branch FROM tickets WHERE withdrawn_at IS NOT NULL;
+
 -- name: TicketsWithBlockers :many
 SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL;
 
