@@ -105,10 +105,12 @@ var previewSource string
 
 var previewPage = template.Must(template.New("preview").Parse(previewSource))
 
-//go:embed import.tmpl
-var importSource string
+//go:embed features.tmpl
+var featuresSource string
 
-var importPage = template.Must(template.New("import").Parse(importSource))
+var featuresPage = template.Must(template.New("features").
+	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
+	Parse(featuresSource))
 
 // Server is the status page plus the launch-preview, launch-authorisation and import routes. It
 // never writes the database directly except to queue an intent: every state it shows is derived
@@ -144,18 +146,18 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /preview", s.handlePreview)
-	mux.HandleFunc("GET /import", s.handleImport)
+	mux.HandleFunc("GET /features", s.handleFeatures)
+	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
 	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
 	mux.HandleFunc("POST /ticket", requireBrowserOrigin(s.handleTicket))
-	mux.HandleFunc("POST /import", requireBrowserOrigin(s.handleImportFeature))
 	s.mux = mux
 	return s
 }
 
-// SetTrackerSource replaces the server's tracker.New, so a test can drive GET /import with a
+// SetTrackerSource replaces the server's tracker.New, so a test can drive GET /features with a
 // fake source rather than shelling out to gh.
 func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
 
@@ -1306,59 +1308,56 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-type importErrorView struct {
-	Age     string
-	Feature string
-	Message string
+type featureRow struct {
+	Feature  string
+	Imported bool
 }
 
-type importPageView struct {
-	Features        []ImportFeature
-	LastImportError *importErrorView
+type featuresPageView struct {
+	Features []featureRow
+	Query    string
 }
 
-// handleImport renders every configured repo's tracker features and the tickets each would
-// currently bring in, read fresh from the tracker on every request (§5, inv. 14): the page never
-// shows a stale preview of what an import would do.
-func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+// handleFeatures lists every feature the configured repos' trackers offer, read fresh from the
+// tracker on every request (§5, inv. 14).
+func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	features, err := ImportFeatures(ctx, s.repos, s.trackerFor)
+	all, err := ImportFeatures(ctx, s.repos, s.trackerFor)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	lastErr, failed, err := s.store.LastImportError(ctx)
+	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	view := importPageView{Features: features}
-	if failed {
-		view.LastImportError = &importErrorView{
-			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+	imported := make(map[string]bool)
+	for _, f := range distinctFeatures(tickets) {
+		imported[f] = true
+	}
+
+	query := r.URL.Query().Get("q")
+	q := strings.ToLower(query)
+	rows := make([]featureRow, 0, len(all))
+	for _, f := range all {
+		if q != "" && !strings.Contains(strings.ToLower(f.Feature), q) {
+			continue
 		}
+		rows = append(rows, featureRow{Feature: f.Feature, Imported: imported[f.Feature]})
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := importPage.Execute(w, view); err != nil {
+	if err := featuresPage.Execute(w, featuresPageView{Features: rows, Query: query}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-// handleImportFeature queues one import intent for the named feature and redirects -- the next
-// tick's applyImportIntents (loop.go) performs the sync, so the loop stays the tickets table's
-// only writer (inv. 9).
-func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
-	feature := r.FormValue("feature")
-	if feature == "" {
-		http.Error(w, "feature is required", http.StatusBadRequest)
-		return
-	}
-	if err := s.store.QueueVerbIntent(r.Context(), feature, importVerb, s.now()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/import", http.StatusSeeOther)
+// handleFeatureRedirect scopes the board to {feature}: a feature has no id or slug of its own,
+// only the tracker's own label name, which is exactly what ?feature= already matches.
+func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
+	feature := r.PathValue("feature")
+	http.Redirect(w, r, "/?feature="+url.QueryEscape(feature), http.StatusSeeOther)
 }
 
 // randomGroup mints the token that ties every intent from one POST /launch call together —

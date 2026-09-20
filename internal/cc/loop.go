@@ -185,8 +185,8 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 // applyImportIntents performs the actual upsert for every pending import request, keeping the
-// loop the tickets table's only writer (inv. 9) even for a row that arrived from GET /import
-// rather than a hand-authored config.
+// loop the tickets table's only writer (inv. 9) even for a row that arrived from a queued import
+// intent rather than a hand-authored config.
 func (l *Loop) applyImportIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, importVerb)
 	if err != nil {

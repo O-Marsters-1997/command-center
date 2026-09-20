@@ -8,7 +8,7 @@
 cc-init-repo
 cc-config teardown-cc7-empty
 cc-fake-gh no-prs
-exec cc request -form 'feature=project:teardown' POST /import
+exec cc import project:teardown
 
 # CC-7 fails with the empty-commit fake agent: no commits, no push, a plain failed row.
 exec cc tick --count 1
@@ -25,7 +25,7 @@ cc-config teardown-commits
 # The feature's second import brings in CC-1/CC-3/CC-4 before any verb or launch can name
 # them; CC-7 is re-imported too, but its branch/blocked_by, seeded on its first import, are
 # left alone.
-exec cc request -form 'feature=project:teardown-more' POST /import
+exec cc import project:teardown-more
 exec cc tick --count 1
 exec cc request POST '/verb?verb=re-run&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-1&ticket=https://github.com/sandbox-org/teardown/issues/CC-3&ticket=https://github.com/sandbox-org/teardown/issues/CC-4'

@@ -8,7 +8,7 @@ cc-init-repo services
 cc-config draft-gate-two-repos
 cc-fake-gh no-prs
 
-exec cc request -form 'feature=project:cross-repo' POST /import
+exec cc import project:cross-repo
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 exec cc tick --count 1

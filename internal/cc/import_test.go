@@ -18,10 +18,12 @@ import (
 )
 
 // fakeTrackerSource answers Features and Tickets from fixed data, so a test drives import.go's
-// consumers without shelling out to gh.
+// consumers without shelling out to gh. ticketCalls, when set, counts Tickets calls so a test can
+// pin that a caller never makes one.
 type fakeTrackerSource struct {
-	features []tracker.Feature
-	tickets  map[string][]tracker.Ticket
+	features    []tracker.Feature
+	tickets     map[string][]tracker.Ticket
+	ticketCalls *int
 }
 
 func (f fakeTrackerSource) Features(context.Context) ([]tracker.Feature, error) {
@@ -29,6 +31,9 @@ func (f fakeTrackerSource) Features(context.Context) ([]tracker.Feature, error) 
 }
 
 func (f fakeTrackerSource) Tickets(_ context.Context, feature string) ([]tracker.Ticket, error) {
+	if f.ticketCalls != nil {
+		*f.ticketCalls++
+	}
 	return f.tickets[feature], nil
 }
 
@@ -54,21 +59,9 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 		{Name: "local", Path: "."}, // no remote: no tracker to dispatch to, silently skipped
 	}
 
-	alphaTicket := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}
-	betaXTicket := tracker.Ticket{URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Add y"}
-	betaYTicket := tracker.Ticket{URL: "https://github.com/acme/beta/issues/3", Number: 3, Title: "Add z"}
-
-	alpha := fakeTrackerSource{
-		features: []tracker.Feature{"project:x"},
-		tickets:  map[string][]tracker.Ticket{"project:x": {alphaTicket}},
-	}
-	beta := fakeTrackerSource{
-		features: []tracker.Feature{"project:x", "project:y"},
-		tickets: map[string][]tracker.Ticket{
-			"project:x": {betaXTicket},
-			"project:y": {betaYTicket},
-		},
-	}
+	var ticketCalls int
+	alpha := fakeTrackerSource{features: []tracker.Feature{"project:x"}, ticketCalls: &ticketCalls}
+	beta := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}, ticketCalls: &ticketCalls}
 	resolve := resolveByRemote(map[string]tracker.Source{
 		"github.com/acme/alpha": alpha,
 		"github.com/acme/beta":  beta,
@@ -84,11 +77,9 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 	if got[0].Feature != "project:x" || got[1].Feature != "project:y" {
 		t.Errorf("feature order = %q, %q, want project:x then project:y", got[0].Feature, got[1].Feature)
 	}
-	if len(got[0].Tickets) != 2 {
-		t.Fatalf("project:x tickets = %+v, want one from each of alpha and beta", got[0].Tickets)
-	}
-	if len(got[1].Tickets) != 1 || got[1].Tickets[0].URL != betaYTicket.URL {
-		t.Errorf("project:y tickets = %+v, want just beta's own", got[1].Tickets)
+	if ticketCalls != 0 {
+		t.Errorf("Tickets calls = %d, want 0: listing features costs one gh label list per repo, nothing more",
+			ticketCalls)
 	}
 }
 
@@ -634,79 +625,70 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	}
 }
 
-func TestHandleImportRendersEveryFeatureAndItsTickets(t *testing.T) {
+func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seed := []cc.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
+	}
+	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+
+	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
+
+	server := cc.NewServer(store, time.Now, repos, "")
+	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"project:x", "project:y"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page does not contain %q:\n%s", want, body)
+		}
+	}
+	if strings.Index(body, "yes") > strings.Index(body, "project:y") {
+		t.Errorf("project:y, which has no imported tickets, reads as imported:\n%s", body)
+	}
+}
+
+func TestHandleFeaturesFiltersByQuery(t *testing.T) {
 	t.Parallel()
 
 	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
-	src := fakeTrackerSource{
-		features: []tracker.Feature{"project:x"},
-		tickets: map[string][]tracker.Ticket{
-			"project:x": {{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}},
-		},
-	}
+	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
 	server := cc.NewServer(openStore(t), time.Now, repos, "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/import", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features?q=X", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"project:x", "https://github.com/acme/alpha/issues/1", "Add x"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
+	if !strings.Contains(body, "project:x") {
+		t.Errorf("?q=X (case-insensitive) should still match project:x:\n%s", body)
+	}
+	if strings.Contains(body, "project:y") {
+		t.Errorf("?q=X should not match project:y:\n%s", body)
 	}
 }
 
-func TestHandleImportShowsTheLastRefusalWithoutEvents(t *testing.T) {
+func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	store := openStore(t)
-	url := "https://github.com/acme/alpha/issues/1"
-	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
-	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
-		t.Fatalf("seed ImportTickets: %v", err)
-	}
-
-	conflict := &cc.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
-	if err := store.RecordImportRefusal(ctx, "project:y", conflict, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-
-	server := cc.NewServer(store, time.Now, nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/import", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"project:y", url, "already belongs to feature"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
-	}
-}
-
-func TestPostImportQueuesAnIntentAndRedirects(t *testing.T) {
-	t.Parallel()
-
-	store := openStore(t)
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
 	t.Cleanup(srv.Close)
 
-	body := url.Values{"feature": {"project:x"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/import", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
+	resp, err := noRedirect(srv).Get(srv.URL + "/features/" + url.PathEscape("project:x"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,33 +696,7 @@ func TestPostImportQueuesAnIntentAndRedirects(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", resp.StatusCode)
 	}
-	if got := resp.Header.Get("Location"); got != "/import" {
-		t.Fatalf("Location = %q, want /import", got)
-	}
-
-	pending, err := store.PendingVerbIntents(t.Context(), "import")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 1 || pending[0].TicketID != "project:x" {
-		t.Fatalf("pending import intents = %+v, want one naming project:x", pending)
-	}
-}
-
-func TestPostImportRequiresBrowserOrigin(t *testing.T) {
-	t.Parallel()
-
-	store := openStore(t)
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"feature": {"project:x"}}.Encode()
-	resp, err := http.Post(srv.URL+"/import", "application/x-www-form-urlencoded", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 with no Origin header", resp.StatusCode)
+	if got := resp.Header.Get("Location"); got != "/?feature=project%3Ax" {
+		t.Fatalf("Location = %q, want /?feature=project%%3Ax", got)
 	}
 }

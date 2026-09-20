@@ -8,7 +8,7 @@ cc-init-repo
 cc-config single-task-commits
 cc-fake-gh no-prs
 
-exec cc request -form 'feature=project:single-task' POST /import
+exec cc import project:single-task
 exec cc tick --count 1
 
 # faketp logs its argv before it reads CC_TP_FAIL, so a failed cut is still a logged attempt.

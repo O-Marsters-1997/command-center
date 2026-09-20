@@ -10,7 +10,7 @@ cc-init-repo peer
 cc-config same-branch-two-repos
 cc-fake-gh same-branch-two-repos
 
-exec cc request -form 'feature=project:same-branch' POST /import
+exec cc import project:same-branch
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1&ticket=https://github.com/sandbox-org/peer/issues/CC-1'
 
