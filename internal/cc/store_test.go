@@ -200,7 +200,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour)); err != nil {
+	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
 		t.Fatalf("WithdrawTicket: %v", err)
 	}
 
@@ -255,7 +255,7 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour)); err != nil {
+	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
 		t.Fatalf("WithdrawTicket: %v", err)
 	}
 

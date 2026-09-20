@@ -657,7 +657,7 @@ func (l *Loop) removeWorktreeOne(
 		Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved, Detail: detail}); err != nil {
 		return err
 	}
-	return l.store.WithdrawTicket(ctx, ticket.URL, now)
+	return l.store.WithdrawTicket(ctx, ticket.URL, now, merged)
 }
 
 // pruneRunLogs deletes every runs/<id>.jsonl, runs/<id>.prompt and runs/<id>.diff a ticket's runs

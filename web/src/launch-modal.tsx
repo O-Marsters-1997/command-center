@@ -27,7 +27,7 @@ function Banner(props: { children: JSX.Element }) {
   );
 }
 
-customElement("cc-launch-modal", { feature: "" }, (props: { feature: string }) => {
+customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature: string; tickets: string }) => {
   noShadowDOM();
   // solid-element inserts into the element rather than clearing it first, so the light-DOM
   // fallback content (the Go-only-build message) survives an upgrade unless it goes here.
@@ -43,7 +43,8 @@ customElement("cc-launch-modal", { feature: "" }, (props: { feature: string }) =
   // reshapes the DAG from data already in hand, and only confirm talks to the server again.
   onMount(async () => {
     try {
-      const res = await fetch(`/launch/candidates?feature=${encodeURIComponent(props.feature)}`);
+      const query = props.tickets || `feature=${encodeURIComponent(props.feature)}`;
+      const res = await fetch(`/launch/candidates?${query}`);
       if (!res.ok) throw new Error(String(res.status));
       const data: Candidate[] = await res.json();
       setCandidates(data);
@@ -97,7 +98,7 @@ customElement("cc-launch-modal", { feature: "" }, (props: { feature: string }) =
   return (
     <div>
       <Show when={loaded()} fallback={<p class="text-muted">loading&hellip;</p>}>
-        <Show when={!loadError()} fallback={<Banner>could not load candidates for {props.feature}.</Banner>}>
+        <Show when={!loadError()} fallback={<Banner>could not load candidates{props.feature && ` for ${props.feature}`}.</Banner>}>
           <Show when={refusal()}>{(message) => <Banner>{message()}</Banner>}</Show>
 
           <div

@@ -518,7 +518,8 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 		if (tag == "input" || tag == "button") && strings.Contains(attrs, `hx-target="#board"`) {
 			continue
 		}
-		if tag == "form" && strings.Contains(attrs, `method="post" action="/verb"`) {
+		if tag == "form" && (strings.Contains(attrs, `method="post" action="/verb"`) ||
+			strings.Contains(attrs, `method="post" action="/launch/open"`)) {
 			continue
 		}
 		t.Errorf("a verb control carries htmx and so needs JavaScript: <%s%s>", tag, attrs)
@@ -528,7 +529,7 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 	for _, want := range []string{
 		`<form method="post" action="/verb" hx-post=`,
 		`<form method="get" action="/confirm">`,
-		`<form id="launch" method="get" action="/preview"></form>`,
+		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket"`,
 	} {
 		if !strings.Contains(board, want) {
@@ -538,7 +539,9 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 	// hx-post is allowed only where the form would still post on its own with JavaScript off.
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		attrs := m[2]
-		if strings.Contains(attrs, "hx-post") && !strings.Contains(attrs, `method="post" action="/verb"`) {
+		postsOnItsOwn := strings.Contains(attrs, `method="post" action="/verb"`) ||
+			strings.Contains(attrs, `method="post" action="/launch/open"`)
+		if strings.Contains(attrs, "hx-post") && !postsOnItsOwn {
 			t.Errorf("a verb posts over htmx rather than a form: <%s%s>", m[1], attrs)
 		}
 	}
