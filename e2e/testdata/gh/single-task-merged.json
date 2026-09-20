@@ -6,7 +6,7 @@
     "stdout": "[]\n"
   },
   "pr list --state all --head cc-1-x": {
-    "stdout": "[{\"number\":1,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\"}]\n"
+    "stdout": "[{\"number\":1,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"1111111111111111111111111111111111111111\",\"mergedAt\":\"2020-01-01T00:00:00Z\"}]\n"
   },
   "api repos/{owner}/{repo}": {
     "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"

@@ -83,6 +83,24 @@ func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
 	return value, err
 }
 
+const hasEvent = `-- name: HasEvent :one
+SELECT EXISTS (
+    SELECT 1 FROM events WHERE ticket_id = $1 AND kind = $2
+) AS found
+`
+
+type HasEventParams struct {
+	TicketID sql.NullString
+	Kind     string
+}
+
+func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasEvent, arg.TicketID, arg.Kind)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
 const importTicket = `-- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

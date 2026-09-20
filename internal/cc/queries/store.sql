@@ -48,6 +48,11 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, $2, $3, $4);
 -- name: Events :many
 SELECT at, ticket_id, kind, detail FROM events ORDER BY id;
 
+-- name: HasEvent :one
+SELECT EXISTS (
+    SELECT 1 FROM events WHERE ticket_id = $1 AND kind = $2
+) AS found;
+
 -- name: PutMeta :exec
 INSERT INTO meta (key, value) VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET value = excluded.value;

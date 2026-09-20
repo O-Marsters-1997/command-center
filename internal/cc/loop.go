@@ -162,6 +162,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.recordVerdictTransitions(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.recordMergedEvents(ctx, obs); err != nil {
+		return err
+	}
 	if err := l.applyDraftGate(ctx, obs); err != nil {
 		return err
 	}
