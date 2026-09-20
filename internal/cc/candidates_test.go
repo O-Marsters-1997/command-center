@@ -189,6 +189,95 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 	}
 }
 
+// TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice covers issue #72's slice of
+// five: CC-2 is left out of a slice sitting on top of it, so both of its direct dependents are
+// refused and the three rows above them still read on unlock -- the "blocker outside this slice"
+// refusal plan.Preview keeps for a hand-picked, cross-feature slice (plans/feature-launch.md phase 5).
+func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
+		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", BlockedBy: []string{"sandbox://CC-2"}},
+		{URL: "sandbox://CC-5", Repo: "cc-sandbox", Branch: "cc-5", BlockedBy: []string{"sandbox://CC-3"}},
+		{URL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
+		{URL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	candidates := fetchCandidates(t, srv,
+		"ticket=sandbox://CC-3&ticket=sandbox://CC-4&ticket=sandbox://CC-5&ticket=sandbox://CC-6&ticket=sandbox://CC-7")
+
+	for _, ticketURL := range []string{"sandbox://CC-3", "sandbox://CC-4"} {
+		c := candidateFor(t, candidates, ticketURL)
+		if c.Label != "refused" || !strings.Contains(c.Reason, "sandbox://CC-2") {
+			t.Errorf("%s = %+v, want refused naming the out-of-slice blocker", ticketURL, c)
+		}
+	}
+	for _, ticketURL := range []string{"sandbox://CC-5", "sandbox://CC-6", "sandbox://CC-7"} {
+		if c := candidateFor(t, candidates, ticketURL); c.Label != "on unlock" {
+			t.Errorf("%s Label = %q, want on unlock", ticketURL, c.Label)
+		}
+	}
+}
+
+// TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused covers issue #260's
+// AC2 directly: a hand-picked slice spanning two features is not itself a feature, so closure is
+// not guaranteed by construction -- CC-1 and CC-2 (two different features) are both launchable,
+// while CC-3's blocker sits outside the slice entirely and is refused naming it.
+func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Feature: "project:x"},
+		{
+			URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Feature: "project:y",
+			BlockedBy: []string{"sandbox://CC-1"},
+		},
+		{
+			URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", Feature: "project:x",
+			BlockedBy: []string{"sandbox://CC-4"},
+		},
+		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", Feature: "project:x"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, cc.Observation{PRs: map[string]gh.PR{}}); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	t.Cleanup(srv.Close)
+
+	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
+
+	if cc1 := candidateFor(t, candidates, "sandbox://CC-1"); cc1.Label != "now" {
+		t.Errorf("CC-1 (project:x) Label = %q, want now", cc1.Label)
+	}
+	if cc2 := candidateFor(t, candidates, "sandbox://CC-2"); cc2.Label != "on unlock" {
+		t.Errorf("CC-2 (project:y, blocked by project:x's CC-1) Label = %q, want on unlock", cc2.Label)
+	}
+	cc3 := candidateFor(t, candidates, "sandbox://CC-3")
+	if cc3.Label != "refused" || !strings.Contains(cc3.Reason, "sandbox://CC-4") {
+		t.Errorf("CC-3 = %+v, want refused naming the out-of-slice blocker sandbox://CC-4", cc3)
+	}
+}
+
 func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 	t.Parallel()
 

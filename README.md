@@ -152,16 +152,17 @@ needs the lease. `advanceOnto` and `restackBoundary` in
 
 ### The page
 
-`internal/cc/server.go` serves eleven routes. The shell, the board, the launch
-preview, the confirm page and a row's detail fragment are each `html/template`
-over an embedded template: `page.tmpl`, `board.tmpl`, `preview.tmpl`,
+`internal/cc/server.go` serves the shell, the board, the launch modal, the
+confirm page and a row's detail fragment, each `html/template` over an
+embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 `confirm.tmpl` and `detail.tmpl`.
 
 | Route | What |
 |---|---|
 | `GET /` | The page: the header, the liveness banner, the launch form and the board nested inside `<div id="board">`. |
 | `GET /board` | The board alone, the same `board.tmpl` fragment `GET /` nests. One row per task, with each row's verbs rendered as forms. |
-| `GET /preview` | What launching `?task=...` would do, and why. Where the board's checkboxes submit to, and where `[ authorise ]` posts to `/launch` from. |
+| `POST /launch/open` | Opens the launch modal for a feature (queueing its import) or a hand-picked `?ticket=...` slice, the board's checkboxes and the graph island's selection posting the latter. |
+| `GET /launch/candidates` | The candidate set for a feature or a ticket slice, as JSON — what each ticket would do, and why. |
 | `GET /events` | The append-only audit log, as JSON. |
 | `GET /confirm` | The one question a destructive verb asks first: what `?verb=...` does to `?task=...`, and the pgid or worktree path at risk. |
 | `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |

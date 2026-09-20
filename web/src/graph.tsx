@@ -7,6 +7,12 @@ const POLL_MS = 5000;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 
+declare global {
+  interface Window {
+    htmx?: { ajax: (verb: string, path: string, options: Record<string, unknown>) => void };
+  }
+}
+
 interface GraphNode extends Row {
   col: number;
   x: number;
@@ -87,8 +93,11 @@ customElement("cc-graph", {}, () => {
   }
 
   function submit() {
-    const params = [...selected()].map((u) => `ticket=${encodeURIComponent(u)}`).join("&");
-    window.location.href = params ? `/preview?${params}` : "/preview";
+    window.htmx?.ajax("POST", "/launch/open", {
+      target: "#launch-modal",
+      swap: "innerHTML",
+      values: { ticket: [...selected()] },
+    });
   }
 
   function resetView() {
@@ -154,7 +163,7 @@ customElement("cc-graph", {}, () => {
           reset view
         </button>
         <button type="button" class="ml-auto" disabled={selected().size === 0} onClick={submit}>
-          preview selection
+          launch selected
         </button>
       </div>
       <div
