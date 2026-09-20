@@ -150,12 +150,39 @@ func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) erro
 	return err
 }
 
+const ticketBranch = `-- name: TicketBranch :one
+SELECT repo, branch FROM tickets WHERE url = $1
+`
+
+type TicketBranchRow struct {
+	Repo   string
+	Branch string
+}
+
+func (q *Queries) TicketBranch(ctx context.Context, url string) (TicketBranchRow, error) {
+	row := q.db.QueryRowContext(ctx, ticketBranch, url)
+	var i TicketBranchRow
+	err := row.Scan(&i.Repo, &i.Branch)
+	return i, err
+}
+
 const ticketFeature = `-- name: TicketFeature :one
 SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
 `
 
 func (q *Queries) TicketFeature(ctx context.Context, url string) (string, error) {
 	row := q.db.QueryRowContext(ctx, ticketFeature, url)
+	var feature string
+	err := row.Scan(&feature)
+	return feature, err
+}
+
+const ticketFeatureAny = `-- name: TicketFeatureAny :one
+SELECT feature FROM tickets WHERE url = $1
+`
+
+func (q *Queries) TicketFeatureAny(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRowContext(ctx, ticketFeatureAny, url)
 	var feature string
 	err := row.Scan(&feature)
 	return feature, err
@@ -214,13 +241,14 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 }
 
 const ticketsInFeature = `-- name: TicketsInFeature :many
-SELECT url, repo, branch FROM tickets WHERE feature = $1
+SELECT url, repo, branch, blocked_by FROM tickets WHERE feature = $1 AND withdrawn_at IS NULL
 `
 
 type TicketsInFeatureRow struct {
-	URL    string
-	Repo   string
-	Branch string
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy json.RawMessage
 }
 
 func (q *Queries) TicketsInFeature(ctx context.Context, feature string) ([]TicketsInFeatureRow, error) {
@@ -232,7 +260,12 @@ func (q *Queries) TicketsInFeature(ctx context.Context, feature string) ([]Ticke
 	var items []TicketsInFeatureRow
 	for rows.Next() {
 		var i TicketsInFeatureRow
-		if err := rows.Scan(&i.URL, &i.Repo, &i.Branch); err != nil {
+		if err := rows.Scan(
+			&i.URL,
+			&i.Repo,
+			&i.Branch,
+			&i.BlockedBy,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
