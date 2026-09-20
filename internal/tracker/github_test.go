@@ -48,26 +48,21 @@ func TestDecodeFeaturesRejectsGarbage(t *testing.T) {
 	}
 }
 
-func TestInFlightStatus(t *testing.T) {
+func TestTicketStatus(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		labels     []rawLabel
-		wantStatus string
-		wantOK     bool
+		name   string
+		labels []rawLabel
+		want   string
 	}{
-		{name: "ready", labels: []rawLabel{{Name: "status:ready"}}, wantStatus: "ready", wantOK: true},
-		{name: "in-progress", labels: []rawLabel{{Name: "status:in-progress"}}, wantStatus: "in-progress", wantOK: true},
-		{name: "in-review", labels: []rawLabel{{Name: "status:in-review"}}, wantStatus: "in-review", wantOK: true},
-		{name: "done", labels: []rawLabel{{Name: "status:done"}}, wantStatus: "done", wantOK: true},
-		{name: "backlog is not in flight", labels: []rawLabel{{Name: "status:backlog"}}, wantOK: false},
-		{name: "no status label at all is not in flight", labels: []rawLabel{{Name: "project:x"}}, wantOK: false},
+		{name: "ready", labels: []rawLabel{{Name: "status:ready"}}, want: "ready"},
+		{name: "backlog", labels: []rawLabel{{Name: "status:backlog"}}, want: "backlog"},
+		{name: "no status label at all", labels: []rawLabel{{Name: "project:x"}}, want: ""},
 		{
-			name:       "status label alongside others",
-			labels:     []rawLabel{{Name: "project:x"}, {Name: "status:ready"}},
-			wantStatus: "ready",
-			wantOK:     true,
+			name:   "status label alongside others",
+			labels: []rawLabel{{Name: "project:x"}, {Name: "status:ready"}},
+			want:   "ready",
 		},
 	}
 
@@ -75,33 +70,10 @@ func TestInFlightStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			status, ok := inFlightStatus(tt.labels)
-			if ok != tt.wantOK || status != tt.wantStatus {
-				t.Errorf("inFlightStatus(%v) = %q, %v; want %q, %v", tt.labels, status, ok, tt.wantStatus, tt.wantOK)
+			if got := ticketStatus(tt.labels); got != tt.want {
+				t.Errorf("ticketStatus(%v) = %q, want %q", tt.labels, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestDecodeIssuesFiltersOnStatus(t *testing.T) {
-	t.Parallel()
-
-	issues, err := decodeIssues(readFixture(t, "issue_list_ready_and_beyond.json"))
-	if err != nil {
-		t.Fatalf("decodeIssues: %v", err)
-	}
-
-	var inFlight []int
-	for _, issue := range issues {
-		if _, ok := inFlightStatus(issue.Labels); ok {
-			inFlight = append(inFlight, issue.Number)
-		}
-	}
-
-	want := []int{120, 121}
-	if !slices.Equal(inFlight, want) {
-		t.Errorf("in-flight issue numbers = %v, want %v (a status:backlog or unlabelled issue leaked through)",
-			inFlight, want)
 	}
 }
 

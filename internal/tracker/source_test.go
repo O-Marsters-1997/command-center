@@ -21,6 +21,10 @@ func fakeRun(t *testing.T) func(ctx context.Context, args ...string) ([]byte, er
 			return readFixture(t, "blocked_by_empty.json"), nil
 		case args[0] == "api" && strings.HasSuffix(args[1], "/issues/121/dependencies/blocked_by"):
 			return readFixture(t, "blocked_by_121.json"), nil
+		case args[0] == "api" && strings.HasSuffix(args[1], "/issues/122/dependencies/blocked_by"):
+			return readFixture(t, "blocked_by_empty.json"), nil
+		case args[0] == "api" && strings.HasSuffix(args[1], "/issues/123/dependencies/blocked_by"):
+			return readFixture(t, "blocked_by_empty.json"), nil
 		case args[0] == "api" && strings.HasSuffix(args[1], "/issues/105/dependencies/blocked_by"):
 			return readFixture(t, "blocked_by_105.json"), nil
 		default:
@@ -72,10 +76,26 @@ func TestGithubSourceTickets(t *testing.T) {
 			Status:    "in-progress",
 			BlockedBy: []string{},
 		},
+		{
+			// status:backlog still comes back: blocking order, not status, governs launch order.
+			URL:       "https://github.com/O-Marsters-1997/command-center/issues/122",
+			Number:    122,
+			Title:     "Sketch a future idea",
+			Body:      "Not scoped yet.",
+			Status:    "backlog",
+			BlockedBy: []string{},
+		},
+		{
+			URL:       "https://github.com/O-Marsters-1997/command-center/issues/123",
+			Number:    123,
+			Title:     "Uncategorised ticket",
+			Body:      "No status label at all.",
+			Status:    "",
+			BlockedBy: []string{},
+		},
 	}
 	if len(got) != len(want) {
-		t.Fatalf("Tickets() returned %d tickets (%v), want %d — a status:backlog or unlabelled issue leaked through",
-			len(got), got, len(want))
+		t.Fatalf("Tickets() returned %d tickets (%v), want %d", len(got), got, len(want))
 	}
 	for i := range want {
 		if !reflect.DeepEqual(got[i], want[i]) {

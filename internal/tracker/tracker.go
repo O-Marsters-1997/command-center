@@ -33,7 +33,8 @@ type Ticket struct {
 type Source interface {
 	// Features lists the repo's fleets currently available to import.
 	Features(ctx context.Context) ([]Feature, error)
-	// Tickets lists feature's tickets that are ready to import.
+	// Tickets lists feature's open tickets, whatever their status: blocking order, not status,
+	// governs when one can launch.
 	Tickets(ctx context.Context, feature string) ([]Ticket, error)
 }
 
