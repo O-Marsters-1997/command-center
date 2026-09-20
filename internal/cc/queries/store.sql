@@ -13,6 +13,9 @@ FROM tickets WHERE withdrawn_at IS NULL ORDER BY url;
 -- name: TicketFeature :one
 SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL;
 
+-- name: TicketFeatureAny :one
+SELECT feature FROM tickets WHERE url = $1;
+
 -- name: ImportTicket :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -22,7 +25,10 @@ ON CONFLICT (url) DO UPDATE SET
     synced_at = excluded.synced_at, withdrawn_at = NULL;
 
 -- name: TicketsInFeature :many
-SELECT url, repo, branch FROM tickets WHERE feature = $1;
+SELECT url, repo, branch, blocked_by FROM tickets WHERE feature = $1 AND withdrawn_at IS NULL;
+
+-- name: TicketBranch :one
+SELECT repo, branch FROM tickets WHERE url = $1;
 
 -- name: WithdrawTicket :exec
 UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL;

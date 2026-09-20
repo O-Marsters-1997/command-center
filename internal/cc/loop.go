@@ -233,6 +233,10 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	if errors.As(err, &conflict) {
 		return l.store.RecordImportRefusal(ctx, feature, conflict, l.now())
 	}
+	var closure *FeatureClosureError
+	if errors.As(err, &closure) {
+		return l.store.RecordImportRefusal(ctx, feature, closure, l.now())
+	}
 	return err
 }
 
@@ -247,7 +251,13 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 
 	now := l.now()
 	for _, intent := range intents {
-		if err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy); err != nil {
+		err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy)
+		var closure *FeatureClosureError
+		if errors.As(err, &closure) {
+			if err := l.store.RecordImportRefusal(ctx, closure.Feature, closure, now); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {

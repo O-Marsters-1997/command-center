@@ -143,6 +143,8 @@ func (e *FeatureConflictError) Error() string {
 		e.URL, e.Existing, e.Importing)
 }
 
+func (e *FeatureConflictError) refusedTicket() string { return e.URL }
+
 // ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing (and later
 // restoring) any row the tracker stops (or resumes) returning for that feature. Every
 // tracker-owned column refreshes each call; branch and blocked_by are seeded once and left to
@@ -201,6 +203,24 @@ func (s *Store) ImportTickets(
 	if err != nil {
 		return fmt.Errorf("read observation for blocker repair: %w", err)
 	}
+
+	intended := make([]ticketBlockedBy, 0, len(returned))
+	for _, row := range previous {
+		if !returned[row.URL] {
+			continue
+		}
+		var blockedBy []string
+		if err = json.Unmarshal(row.BlockedBy, &blockedBy); err != nil {
+			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+		}
+		intended = append(intended, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
+	}
+	if violation := closeUnderBlockedBy(
+		feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
+	); violation != nil {
+		return violation
+	}
+
 	mergedWithdrawn := make(map[string]bool)
 	for _, t := range previous {
 		if returned[t.URL] {
@@ -385,15 +405,20 @@ type ImportError struct {
 	Message string    `json:"message"`
 }
 
-// RecordImportRefusal stores conflict as the last import failure and appends its audit event against the named ticket.
-func (s *Store) RecordImportRefusal(
-	ctx context.Context, feature string, conflict *FeatureConflictError, now time.Time,
-) error {
-	importErr := ImportError{At: now, Feature: feature, Message: conflict.Error()}
+type importRefusal interface {
+	error
+	refusedTicket() string
+}
+
+// RecordImportRefusal stores refusal as the last import failure and appends its audit event.
+func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal importRefusal, now time.Time) error {
+	importErr := ImportError{At: now, Feature: feature, Message: refusal.Error()}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
 		return err
 	}
-	return s.AppendEvent(ctx, Event{At: now, TicketURL: conflict.URL, Kind: eventImportRefused, Detail: conflict.Error()})
+	return s.AppendEvent(ctx, Event{
+		At: now, TicketURL: refusal.refusedTicket(), Kind: eventImportRefused, Detail: refusal.Error(),
+	})
 }
 
 // LastImportError returns the last import refusal, if any; it is not cleared by a later success.

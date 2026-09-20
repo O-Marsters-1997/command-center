@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +107,64 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 	}
 	if got[0].Title != "Add x, renamed" || got[0].Status != "in-progress" {
 		t.Errorf("title/status = %q/%q, want the re-imported tracker-owned values", got[0].Title, got[0].Status)
+	}
+}
+
+// TestLoopRecordsAClosureRefusalOnAnEditTicketIntent pins issue #255's other route in: POST
+// /ticket must not be able to edit blocked_by into a ticket outside its own feature either.
+func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	inFeature := "https://github.com/acme/alpha/issues/1"
+	outsider := "https://github.com/acme/beta/issues/2"
+	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: inFeature, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatalf("seed ImportTickets: %v", err)
+	}
+	outsiderSeed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: outsider, Number: 2, Title: "Add y"}, Repo: "beta"}}
+	if err := store.ImportTickets(ctx, "project:y", outsiderSeed, at); err != nil {
+		t.Fatalf("seed outsider ImportTickets: %v", err)
+	}
+
+	err := store.QueueEditTicketIntent(ctx, inFeature, "cc-1-add-x", []string{outsider}, at.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loop := cc.NewLoop(
+		store, noOpObserve, fixedClock(at.Add(time.Minute)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{},
+	)
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
+	}
+
+	got, err := store.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := ticketsByURLForTest(t, got)[inFeature]
+	if len(edited.BlockedBy) != 0 {
+		t.Errorf("blocked_by = %v, want the refused edit to leave it untouched", edited.BlockedBy)
+	}
+
+	pending, err := store.PendingEditTicketIntents(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending edit intents = %+v, want the refused one consumed rather than retried", pending)
+	}
+
+	lastErr, failed, err := store.LastImportError(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failed || lastErr.Feature != "project:x" || !strings.Contains(lastErr.Message, outsider) {
+		t.Errorf("LastImportError = %+v, failed=%v, want project:x naming %s", lastErr, failed, outsider)
 	}
 }
 
