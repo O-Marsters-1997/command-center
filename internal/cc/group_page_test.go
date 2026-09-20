@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -181,6 +182,42 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	}
 }
 
+// TestBoardFlattensAChainOfBlockersIntoOneGroup covers issue cc-258's board: A blocks B blocks C
+// must render B once, under A, not a second time as the root of its own group for C.
+func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	rows := renderedRows(page)
+	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-2"), ticketRef("sandbox://CC-3")}
+	if got := ticketRefs(rows); !slices.Equal(got, want) {
+		t.Fatalf("row order = %v, want %v (each ticket rendered exactly once)", got, want)
+	}
+	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
+		t.Errorf("root attrs = %q, want data-depth=0", rows[0].Attrs)
+	}
+	for _, r := range rows[1:] {
+		if !strings.Contains(r.Attrs, `data-depth="1"`) {
+			t.Errorf("%s attrs = %q, want data-depth=1", r.Ticket, r.Attrs)
+		}
+	}
+}
+
 // TestBoardRendersATicketSetWithNoBlockersFlat covers the rest of the fourth criterion: nothing is
 // indented and nothing carries a group line when no row waits on another.
 func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
@@ -209,6 +246,49 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 		if !strings.Contains(r.Attrs, `data-depth="0"`) {
 			t.Errorf("%s attrs = %q, want data-depth=0", r.Ticket, r.Attrs)
 		}
+	}
+}
+
+// TestBoardShowsAMergedPRDespiteALaterRunFailing covers issue cc-256's board: the latest run's own
+// failed outcome must not starve PRMerged when the branch's PR is already merged, or the row
+// shows failed next to a merged pr.
+func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 1
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{
+		ObservedAt: at,
+		PRs:        map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {Number: 262, State: gh.Merged}},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	if got := rowState(t, page, ticket.URL); got != "merged" {
+		t.Errorf("state = %q, want merged despite the latest run's own failed outcome", got)
+	}
+	if got := rowCellAt(t, page, ticket.URL, 6); got != "#262 merged" {
+		t.Errorf("pr cell = %q, want #262 merged", got)
 	}
 }
 
