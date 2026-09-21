@@ -73,6 +73,22 @@ func (q *Queries) SessionOwner(ctx context.Context, arg SessionOwnerParams) (int
 	return user_id, err
 }
 
+const updatePasswordByEmail = `-- name: UpdatePasswordByEmail :one
+UPDATE users SET password_hash = $2 WHERE email = $1 RETURNING id
+`
+
+type UpdatePasswordByEmailParams struct {
+	Email        string
+	PasswordHash string
+}
+
+func (q *Queries) UpdatePasswordByEmail(ctx context.Context, arg UpdatePasswordByEmailParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, updatePasswordByEmail, arg.Email, arg.PasswordHash)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const userForLogin = `-- name: UserForLogin :one
 SELECT id, email, password_hash FROM users WHERE email = $1
 `

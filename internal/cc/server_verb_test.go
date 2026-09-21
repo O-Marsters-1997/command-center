@@ -22,14 +22,15 @@ func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 		name       string
 		method     string
 		origin     string
+		setOrigin  bool
 		wantStatus int
 	}{
 		{name: "GET is rejected before origin is even checked",
-			method: http.MethodGet, origin: srv.URL, wantStatus: http.StatusMethodNotAllowed},
-		{name: "a missing Origin is rejected",
-			method: http.MethodPost, origin: "", wantStatus: http.StatusForbidden},
+			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed},
 		{name: "a foreign Origin is rejected",
-			method: http.MethodPost, origin: "http://evil.example", wantStatus: http.StatusForbidden},
+			method: http.MethodPost, origin: "http://evil.example", setOrigin: true, wantStatus: http.StatusForbidden},
+		{name: "a missing Origin is allowed by this layer",
+			method: http.MethodPost, setOrigin: false, wantStatus: http.StatusOK},
 	}
 
 	for _, tt := range tests {
@@ -38,7 +39,7 @@ func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tt.origin != "" {
+			if tt.setOrigin {
 				req.Header.Set("Origin", tt.origin)
 			}
 			resp, err := srv.Client().Do(req)

@@ -56,9 +56,11 @@ against the wall clock.
 `cc request [-origin URL] [-form BODY] METHOD PATH` prints what a real HTTP
 client gets back from the real handler, over an ephemeral httptest port so
 scripts can run in parallel. It does not take the flock, so it can read while
-`cc tick` or a daemon holds it. `-origin` sends a foreign `Origin` header, which
-is how the CSRF refusal is tested. `-form` posts a url-encoded body, which is
-how a route gets driven the way the page's own forms drive it.
+`cc tick` or a daemon holds it. With no `-origin`, the request carries neither
+`Origin` nor `Sec-Fetch-Site`, same as a non-browser client -- `-origin` sends
+a foreign `Origin` header instead, which is how the CSRF refusal is tested.
+`-form` posts a url-encoded body, which is how a route gets driven the way the
+page's own forms drive it.
 
 ## Script commands
 

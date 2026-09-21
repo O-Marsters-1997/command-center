@@ -55,23 +55,37 @@
   
   <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
 </header>
-
+<div id="masthead" hx-swap-oob="true">
+  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
+    <span class="pill">
+      <span class="pill-ring"></span>0 live
+    </span>
+    
+    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
+    
+  </div>
+  
+  <p class="banner ribbon" data-tone="stop" role="status">
+    the last tick failed <time datetime="2026-08-20T12:00:15Z">30s ago</time> and nothing below has been re-derived since. observe: gh pr list: exit status 1
+  </p>
+  
+</div>
 <div class="shell">
 <nav class="sidebar" id="sidebar-nav" aria-label="sections">
   <a class="sidebar-item" href="/features"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span class="sidebar-label">features</span></a>
-  <a class="sidebar-item" href="/?view=board" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span class="sidebar-label">board</span></a>
+  <a class="sidebar-item" href="/?view=board"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span class="sidebar-label">board</span></a>
   <a class="sidebar-item" href="/?view=graph"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg><span class="sidebar-label">graph</span></a>
-  <a class="sidebar-item" href="/insights"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span class="sidebar-label">insights</span></a>
+  <a class="sidebar-item" href="/insights" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span class="sidebar-label">insights</span></a>
 </nav>
-<main id="main">
+<main id="main" class="p-4">
+<h1 class="mb-3">INSIGHTS</h1>
 
-
-
-<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
-
-<button type="submit" form="launch">launch selected</button>
-
-<div id="launch-modal"></div>
+<cc-insights>
+  <p class="banner ribbon" data-tone="wait" role="status">
+    insights need the built assets: run `just assets`, or switch to the board view.
+  </p>
+</cc-insights>
+<script type="module" src="/assets/dist/insights.js"></script>
 </main>
 </div>
 </body>

@@ -14,3 +14,6 @@ SELECT user_id FROM sessions WHERE token_sha = $1 AND expires_at > $2;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE user_id = $1;
+
+-- name: UpdatePasswordByEmail :one
+UPDATE users SET password_hash = $2 WHERE email = $1 RETURNING id;

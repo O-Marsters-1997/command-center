@@ -137,7 +137,8 @@ type Server struct {
 	dataDir           string
 	spend             *spendCache
 	trackerFor        TrackerSource
-	mux               *http.ServeMux
+	rawMux            *http.ServeMux
+	mux               http.Handler
 	nudge             func()
 }
 
@@ -155,23 +156,25 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /board", s.handleBoard)
 	mux.HandleFunc("GET /graph.json", s.handleGraph)
+	mux.HandleFunc("GET /insights", s.handleInsightsPage)
 	mux.HandleFunc("GET /insights.json", s.handleInsights)
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /features", s.handleFeatures)
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
-	mux.HandleFunc("POST /features/{feature}/import", requireBrowserOrigin(s.handleImportFeature))
+	mux.HandleFunc("POST /features/{feature}/import", s.handleImportFeature)
 	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("GET /login", s.handleLogin)
-	mux.HandleFunc("POST /login", requireBrowserOrigin(s.handlePostLogin))
-	mux.HandleFunc("POST /launch/open", requireBrowserOrigin(s.handleLaunchOpen))
-	mux.HandleFunc("POST /launch", requireBrowserOrigin(s.handleLaunch))
-	mux.HandleFunc("POST /verb", requireBrowserOrigin(s.handleVerb))
-	mux.HandleFunc("POST /ticket", requireBrowserOrigin(s.handleTicket))
-	s.mux = mux
+	mux.HandleFunc("POST /login", s.handlePostLogin)
+	mux.HandleFunc("POST /launch/open", s.handleLaunchOpen)
+	mux.HandleFunc("POST /launch", s.handleLaunch)
+	mux.HandleFunc("POST /verb", s.handleVerb)
+	mux.HandleFunc("POST /ticket", s.handleTicket)
+	s.rawMux = mux
+	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
 }
 
@@ -188,25 +191,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 
 func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 	http.ServeFileFS(w, r, assetsDir, "assets/dist/app.css")
-}
-
-// requireBrowserOrigin rejects any request whose Origin header does not name this server's own
-// host. Comparing against r.Host rather than a fixed allowlist is what makes this work under
-// the e2e harness's ephemeral ports. Any future mutating verb wraps its handler the same way.
-func requireBrowserOrigin(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			http.Error(w, "the Origin header is required", http.StatusForbidden)
-			return
-		}
-		u, err := url.Parse(origin)
-		if err != nil || u.Host != r.Host {
-			http.Error(w, "the Origin header does not match this server", http.StatusForbidden)
-			return
-		}
-		next(w, r)
-	}
 }
 
 // row's json tags are what GET /graph.json serves: the route marshals []group verbatim, so this
