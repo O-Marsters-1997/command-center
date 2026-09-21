@@ -2,12 +2,16 @@ package cc_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
@@ -157,5 +161,73 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 	if events[0].Kind != "tick_error" || !events[0].At.Equal(bad) {
 		t.Errorf("event = %+v", events[0])
+	}
+}
+
+func TestRunOnceSweepsExpiredSessionsAndLeavesLiveOnes(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+
+	userID := seedUser(t, dsn, "olly@example.com")
+	seedSession(t, dsn, userID, "expired-token", now.Add(-time.Hour))
+	seedSession(t, dsn, userID, "live-token", now.Add(time.Hour))
+
+	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	loop := cc.NewLoop(store, stub, fixedClock(now), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	remaining := sessionTokens(t, dsn)
+	if len(remaining) != 1 || remaining[0] != "live-token" {
+		t.Errorf("remaining sessions = %v, want only live-token", remaining)
+	}
+}
+
+func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	dropSessionsTable(t, dsn)
+
+	at := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+		t.Fatalf("QueueLaunchIntent: %v", err)
+	}
+
+	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	loop := cc.NewLoop(store, stub, fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce returned an error for a sweeper failure, want it to log and continue: %v", err)
+	}
+
+	memberships, err := store.LaunchMemberships(ctx)
+	if err != nil {
+		t.Fatalf("LaunchMemberships: %v", err)
+	}
+	if memberships["sandbox://CC-1"].LaunchID == 0 {
+		t.Error("RunOnce aborted the tick after the sweeper failed")
+	}
+}
+
+func dropSessionsTable(t *testing.T, dsn string) {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`DROP TABLE sessions`); err != nil {
+		t.Fatalf("drop sessions table: %v", err)
 	}
 }

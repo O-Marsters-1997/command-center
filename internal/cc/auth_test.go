@@ -65,6 +65,32 @@ func TestUserForLoginOnUnknownEmailFails(t *testing.T) {
 	}
 }
 
+func TestDeleteExpiredSessionsRemovesOnlyThePastRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	userID := seedUser(t, dsn, "olly@example.com")
+	seedSession(t, dsn, userID, "expired-token", now.Add(-time.Hour))
+	seedSession(t, dsn, userID, "live-token", now.Add(time.Hour))
+
+	deleted, err := store.DeleteExpiredSessions(ctx, now)
+	if err != nil {
+		t.Fatalf("DeleteExpiredSessions: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1", deleted)
+	}
+
+	remaining := sessionTokens(t, dsn)
+	if len(remaining) != 1 || remaining[0] != "live-token" {
+		t.Errorf("remaining sessions = %v, want only live-token", remaining)
+	}
+}
+
 func TestSetPasswordReplacesTheHashAndTheOldOneNoLongerVerifies(t *testing.T) {
 	t.Parallel()
 
@@ -108,8 +134,9 @@ func TestSetPasswordDeletesEverySessionForThatAccountButLeavesOthers(t *testing.
 	if err != nil {
 		t.Fatalf("UserForLogin: %v", err)
 	}
-	seedSession(t, dsn, target.ID, "target-token-sha")
-	seedSession(t, dsn, other.ID, "other-token-sha")
+	expiresAt := time.Now().Add(24 * time.Hour)
+	seedSession(t, dsn, target.ID, "target-token-sha", expiresAt)
+	seedSession(t, dsn, other.ID, "other-token-sha", expiresAt)
 
 	if err := store.SetPassword(ctx, "olly@example.com", "pbkdf2-sha256$600000$cc$dd"); err != nil {
 		t.Fatalf("SetPassword: %v", err)
@@ -153,7 +180,7 @@ func TestSetPasswordRollsBackBothWritesOnFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserForLogin: %v", err)
 	}
-	seedSession(t, dsn, user.ID, "target-token-sha")
+	seedSession(t, dsn, user.ID, "target-token-sha", time.Now().Add(24*time.Hour))
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -192,7 +219,7 @@ func TestSetPasswordRollsBackBothWritesOnFailure(t *testing.T) {
 	}
 }
 
-func seedSession(t *testing.T, dsn string, userID int64, tokenSHA string) {
+func seedUser(t *testing.T, dsn, email string) int64 {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -200,13 +227,25 @@ func seedSession(t *testing.T, dsn string, userID int64, tokenSHA string) {
 	}
 	defer func() { _ = db.Close() }()
 
-	now := time.Now().UTC()
-	_, err = db.Exec(
-		`INSERT INTO sessions (user_id, token_sha, created_at, expires_at) VALUES ($1, $2, $3, $4)`,
-		userID, tokenSHA, now, now.Add(24*time.Hour),
-	)
+	var id int64
+	query := `INSERT INTO users (email, password_hash, created_at) VALUES ($1, 'hash', now()) RETURNING id`
+	if err := db.QueryRow(query, email).Scan(&id); err != nil {
+		t.Fatalf("seed user %s: %v", email, err)
+	}
+	return id
+}
+
+func seedSession(t *testing.T, dsn string, userID int64, tokenSHA string, expiresAt time.Time) {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatalf("seed session for user %d: %v", userID, err)
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	query := `INSERT INTO sessions (user_id, token_sha, created_at, expires_at) VALUES ($1, $2, now(), $3)`
+	if _, err := db.Exec(query, userID, tokenSHA, expiresAt); err != nil {
+		t.Fatalf("seed session %s: %v", tokenSHA, err)
 	}
 }
 
@@ -238,4 +277,29 @@ func userCount(t *testing.T, dsn string) int {
 		t.Fatalf("count users: %v", err)
 	}
 	return count
+}
+
+func sessionTokens(t *testing.T, dsn string) []string {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	rows, err := db.Query(`SELECT token_sha FROM sessions ORDER BY token_sha`)
+	if err != nil {
+		t.Fatalf("query sessions: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var tokens []string
+	for rows.Next() {
+		var token string
+		if err := rows.Scan(&token); err != nil {
+			t.Fatalf("scan session token: %v", err)
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens
 }

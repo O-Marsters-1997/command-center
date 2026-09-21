@@ -32,6 +32,16 @@ func (s *Store) UserForLogin(ctx context.Context, email string) (ccdb.UserForLog
 	return row, nil
 }
 
+// DeleteExpiredSessions deletes every session whose expiry is at or before now, and returns how
+// many rows that was.
+func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64, error) {
+	deleted, err := s.q.DeleteExpiredSessions(ctx, now.UTC())
+	if err != nil {
+		return 0, fmt.Errorf("delete expired sessions: %w", err)
+	}
+	return deleted, nil
+}
+
 // SetPassword replaces email's password hash and deletes every session for that account.
 func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)

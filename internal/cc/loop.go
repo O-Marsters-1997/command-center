@@ -93,6 +93,8 @@ func (l *Loop) SetTrackerSource(resolve TrackerSource) { l.trackerFor = resolve 
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting (inv. 10).
 func (l *Loop) RunOnce(ctx context.Context) error {
+	l.sweepExpiredSessions(ctx)
+
 	// Runs before observe, not after like every other applyXIntents: a ticket imported this
 	// tick then has its branch and PR read in the same observe pass, rather than sitting one
 	// tick behind.
@@ -207,6 +209,15 @@ func (l *Loop) Run(ctx context.Context) error {
 		case <-time.After(tickPeriod):
 		case <-l.nudgeCh:
 		}
+	}
+}
+
+// sweepExpiredSessions deletes session rows past their expiry, so the table has a floor rather
+// than growing forever. A failure here logs and the tick carries on: losing a tick over rows
+// nobody reads would be the wrong trade.
+func (l *Loop) sweepExpiredSessions(ctx context.Context) {
+	if _, err := l.store.DeleteExpiredSessions(ctx, l.now()); err != nil {
+		log.Printf("sweep expired sessions: %v", err)
 	}
 }
 
