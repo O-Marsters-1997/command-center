@@ -81,9 +81,14 @@ func featureTicketsWithOverride(
 	for _, row := range rows {
 		blockedBy := override
 		if row.URL != overrideURL {
-			if err := json.Unmarshal(row.BlockedBy, &blockedBy); err != nil {
+			// A fresh nil slice, never override's backing array: json.Unmarshal reuses a
+			// destination slice's capacity, so decoding into override here would overwrite the
+			// very edit this closure check is validating.
+			var decoded []string
+			if err := json.Unmarshal(row.BlockedBy, &decoded); err != nil {
 				return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
 			}
+			blockedBy = decoded
 		}
 		tickets = append(tickets, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
 	}
