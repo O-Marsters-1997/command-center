@@ -273,6 +273,12 @@ type row struct {
 	VerbPath string `json:"verb_path"`
 	// Log is the parsed run log, set only when Selected (docs/prds/prd-fleet-view.md § The run log).
 	Log logDetail `json:"log"`
+	// RunID is the ticket's latest run, used to look up its context curve once selected. Zero for
+	// a ticket with no run yet.
+	RunID int64 `json:"-"`
+	// ContextCurve is the selected run's per-request context chart, set only when Selected and the
+	// run has recorded rows.
+	ContextCurve contextCurveView `json:"-"`
 }
 
 type check struct {
@@ -443,6 +449,9 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
 	applyViewState(rows, params)
+	if err := s.applyContextCurve(ctx, rows); err != nil {
+		return pageView{}, err
+	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
 		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, now, params),
@@ -523,6 +532,20 @@ func applyViewState(rows []row, params viewParams) {
 			r.Log = buildLogDetail(r.LogPath, r.Alive, r.URL, params)
 		}
 	}
+}
+
+func (s *Server) applyContextCurve(ctx context.Context, rows []row) error {
+	for i := range rows {
+		if !rows[i].Selected || rows[i].RunID == 0 {
+			continue
+		}
+		requests, err := s.store.RunRequestsForRun(ctx, rows[i].RunID)
+		if err != nil {
+			return err
+		}
+		rows[i].ContextCurve = buildContextCurve(requests)
+	}
+	return nil
 }
 
 // loadTicketFacts gathers the ticketFacts and verdictDeps both render and handlePreview need.
@@ -671,6 +694,7 @@ func derive(
 			DraftReason:       draftReasonFor(pr, pt, byURL, prs, runFact),
 			FirstPushCIFailed: t.FirstPushCI != nil && !*t.FirstPushCI,
 			HandChurnLines:    handChurnLines(t),
+			RunID:             latestRun.ID,
 		})
 	}
 

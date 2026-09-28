@@ -76,3 +76,32 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 		t.Errorf("reparsed = %v, want only the still-unsettled pruned log", reparsed)
 	}
 }
+
+func TestBackfillMetricsPopulatesRunRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+
+	runID := backfillFixtureRun(t, store, "sandbox://CC-1", "/state/runs/survives.jsonl")
+	parser := func(logPath string) (agentlog.RunMetrics, error) {
+		return agentlog.RunMetrics{
+			TokensIn: 3, TokensOut: 1, Settled: true,
+			Requests: []agentlog.Request{
+				{ID: "r1", Thread: agentlog.MainThread, InputTokens: 2, CacheReadTokens: 1, OutputTokens: 1},
+			},
+		}, nil
+	}
+	if err := cc.BackfillMetrics(ctx, store, parser); err != nil {
+		t.Fatalf("BackfillMetrics: %v", err)
+	}
+
+	got, err := store.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("RunRequestsForRun: %v", err)
+	}
+	if len(got) != 1 || got[0].RequestID != "r1" || got[0].InputTokens != 2 {
+		t.Errorf("RunRequestsForRun = %+v, want one backfilled row for r1", got)
+	}
+}
