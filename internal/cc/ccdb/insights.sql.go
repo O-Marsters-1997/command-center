@@ -10,67 +10,65 @@ import (
 	"time"
 )
 
-const runInsights = `-- name: RunInsights :many
-WITH days AS (
-    SELECT generate_series($1::date, $2::date, interval '1 day')::date AS day
-), matched AS (
-    SELECT r.id, r.tokens_in, r.tokens_out, r.metrics_settled,
-           (r.ended_at AT TIME ZONE $3::text)::date AS day
-    FROM runs r
-    JOIN tickets t ON t.url = r.ticket_id
-    WHERE r.ended_at IS NOT NULL
-      AND ($4::text = '' OR t.repo = $4)
-      AND ($5::text = '' OR t.feature = $5)
+const mergedTicketSpend = `-- name: MergedTicketSpend :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
 )
-SELECT d.day AS day,
-       COALESCE(SUM(m.tokens_in), 0)::bigint AS tokens_in,
-       COALESCE(SUM(m.tokens_out), 0)::bigint AS tokens_out,
-       COUNT(m.id) AS runs,
-       COUNT(*) FILTER (WHERE m.metrics_settled = false) AS unsettled
-FROM days d
-LEFT JOIN matched m ON m.day = d.day
-GROUP BY d.day
-ORDER BY d.day
+SELECT t.url AS ticket_id, t.title, m.merged_at,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE ($1::text = '' OR t.repo = $1)
+  AND ($2::text = '' OR t.feature = $2)
+  AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+GROUP BY t.url, t.title, m.merged_at
+ORDER BY m.merged_at
 `
 
-type RunInsightsParams struct {
-	Since    time.Time
-	Until    time.Time
-	Timezone string
+type MergedTicketSpendParams struct {
 	Repo     string
 	Feature  string
+	Timezone string
+	Since    time.Time
+	Until    time.Time
 }
 
-type RunInsightsRow struct {
-	Day       time.Time
-	TokensIn  int64
-	TokensOut int64
-	Runs      int64
-	Unsettled int64
+type MergedTicketSpendRow struct {
+	TicketID    string
+	Title       string
+	MergedAt    time.Time
+	AgentUsd    float64
+	ResolveUsd  float64
+	FollowUpUsd float64
 }
 
-// Every disposed run counts, tickets.withdrawn_at included (docs/adr/0015).
-func (q *Queries) RunInsights(ctx context.Context, arg RunInsightsParams) ([]RunInsightsRow, error) {
-	rows, err := q.db.QueryContext(ctx, runInsights,
-		arg.Since,
-		arg.Until,
-		arg.Timezone,
+// One row per ticket with a pr_merged event in [since, until], weighing every run disposed
+// before that event.
+func (q *Queries) MergedTicketSpend(ctx context.Context, arg MergedTicketSpendParams) ([]MergedTicketSpendRow, error) {
+	rows, err := q.db.QueryContext(ctx, mergedTicketSpend,
 		arg.Repo,
 		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RunInsightsRow
+	var items []MergedTicketSpendRow
 	for rows.Next() {
-		var i RunInsightsRow
+		var i MergedTicketSpendRow
 		if err := rows.Scan(
-			&i.Day,
-			&i.TokensIn,
-			&i.TokensOut,
-			&i.Runs,
-			&i.Unsettled,
+			&i.TicketID,
+			&i.Title,
+			&i.MergedAt,
+			&i.AgentUsd,
+			&i.ResolveUsd,
+			&i.FollowUpUsd,
 		); err != nil {
 			return nil, err
 		}
@@ -83,4 +81,37 @@ func (q *Queries) RunInsights(ctx context.Context, arg RunInsightsParams) ([]Run
 		return nil, err
 	}
 	return items, nil
+}
+
+const withdrawnTicketWaste = `-- name: WithdrawnTicketWaste :one
+SELECT COALESCE(SUM(r.cost_usd), 0)::double precision AS waste_usd
+FROM tickets t
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
+WHERE t.withdrawn_at IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
+  AND ($1::text = '' OR t.repo = $1)
+  AND ($2::text = '' OR t.feature = $2)
+  AND (t.withdrawn_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
+`
+
+type WithdrawnTicketWasteParams struct {
+	Repo     string
+	Feature  string
+	Timezone string
+	Since    time.Time
+	Until    time.Time
+}
+
+// Every disposed run belonging to a ticket withdrawn without ever merging.
+func (q *Queries) WithdrawnTicketWaste(ctx context.Context, arg WithdrawnTicketWasteParams) (float64, error) {
+	row := q.db.QueryRowContext(ctx, withdrawnTicketWaste,
+		arg.Repo,
+		arg.Feature,
+		arg.Timezone,
+		arg.Since,
+		arg.Until,
+	)
+	var waste_usd float64
+	err := row.Scan(&waste_usd)
+	return waste_usd, err
 }

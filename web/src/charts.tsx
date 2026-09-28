@@ -58,6 +58,16 @@ function areaPath(points: Point[], height: number): string {
   return `${linePath(points)} L ${last?.x} ${height} L ${first?.x} ${height} Z`;
 }
 
+// rollingMedian is the trailing median over the last `window` values, one output per input, the
+// window shrinking to whatever is available at the start of the series.
+export function rollingMedian(values: number[], window = 10): number[] {
+  return values.map((_, i) => {
+    const slice = values.slice(Math.max(0, i - window + 1), i + 1).sort((a, b) => a - b);
+    const mid = Math.floor(slice.length / 2);
+    return slice.length % 2 === 0 ? (slice[mid - 1] + slice[mid]) / 2 : slice[mid];
+  });
+}
+
 export function histogramBars(values: number[], binCount = 8): Bar[] {
   if (values.length === 0) return [];
   const min = Math.min(...values);

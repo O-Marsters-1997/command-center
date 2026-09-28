@@ -23,27 +23,26 @@ func insightsTicket(t *testing.T, store *cc.Store, url, repo, feature string) {
 }
 
 func disposeInsightsRun(
-	t *testing.T, store *cc.Store, ticketURL string, endedAt time.Time, tokensIn, tokensOut int64, settled bool,
+	t *testing.T, store *cc.Store, ticketURL, kind string, endedAt time.Time, costUSD float64,
 ) {
 	t.Helper()
 	ctx := t.Context()
-	runID, err := store.InsertRunSkeleton(ctx, ticketURL, "agent", "deadbeef", "hash-"+ticketURL)
+	runID, err := store.InsertRunSkeleton(ctx, ticketURL, kind, "deadbeef", "hash-"+ticketURL)
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	metrics := &agentlog.RunMetrics{TokensIn: tokensIn, TokensOut: tokensOut, Settled: settled}
+	metrics := &agentlog.RunMetrics{CostUSD: &costUSD, Settled: true}
 	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, metrics); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 }
 
-func mustLoadLocation(t *testing.T, name string) *time.Location {
+func mergeInsightsTicket(t *testing.T, store *cc.Store, ticketURL string, mergedAt time.Time) {
 	t.Helper()
-	loc, err := time.LoadLocation(name)
+	err := store.AppendEvent(t.Context(), cc.Event{At: mergedAt, TicketURL: ticketURL, Kind: "pr_merged"})
 	if err != nil {
-		t.Fatalf("LoadLocation(%q): %v", name, err)
+		t.Fatalf("AppendEvent pr_merged: %v", err)
 	}
-	return loc
 }
 
 func civilDay(t *testing.T, year int, month time.Month, day int) time.Time {
@@ -51,148 +50,118 @@ func civilDay(t *testing.T, year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func bucketByDay(t *testing.T, buckets []cc.InsightsBucket) map[string]cc.InsightsBucket {
-	t.Helper()
-	byDay := make(map[string]cc.InsightsBucket, len(buckets))
-	for _, b := range buckets {
-		byDay[b.Day.Format("2006-01-02")] = b
-	}
-	return byDay
-}
-
-// TestRunInsightsZeroFillsDaysWithNoRuns covers the range's own quiet days: generate_series left-
-// joined against runs must still produce a row for a day nothing happened on, not a gap.
-func TestRunInsightsZeroFillsDaysWithNoRuns(t *testing.T) {
+func TestMergedTicketSpendSumsAllRunKinds(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	disposeInsightsRun(t, store, "sandbox://CC-1", time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC), 100, 20, true)
-	disposeInsightsRun(t, store, "sandbox://CC-1", time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC), 50, 10, true)
+	before := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
+	mergedAt := time.Date(2026, 6, 10, 18, 0, 0, 0, time.UTC)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", before, 1.00)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "resolve", before, 0.25)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", before, 0.10)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
-	buckets, err := store.RunInsights(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 12))
-	if err != nil {
-		t.Fatalf("RunInsights: %v", err)
-	}
-	if len(buckets) != 3 {
-		t.Fatalf("buckets = %d, want 3 (one per day in range)", len(buckets))
-	}
-	byDay := bucketByDay(t, buckets)
-	quiet := byDay["2026-06-11"]
-	if quiet.Runs != 0 || quiet.TokensIn != 0 || quiet.TokensOut != 0 || quiet.Unsettled != 0 {
-		t.Errorf("quiet day = %+v, want a zero-valued bucket", quiet)
-	}
-	if got := byDay["2026-06-10"]; got.Runs != 1 || got.TokensIn != 100 || got.TokensOut != 20 {
-		t.Errorf("2026-06-10 = %+v, want one run of 100/20", got)
-	}
-}
-
-// TestRunInsightsBucketsByLocalDayNotUTC is the ticket's own boundary case: two runs land on the
-// same UTC calendar day but either side of local midnight in Europe/London (BST, UTC+1 in June),
-// so bucketing by UTC would wrongly merge them into one day.
-func TestRunInsightsBucketsByLocalDayNotUTC(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-
-	// 2026-06-15 22:30 UTC = 2026-06-15 23:30 BST -- still the 15th, locally.
-	disposeInsightsRun(t, store, "sandbox://CC-1", time.Date(2026, 6, 15, 22, 30, 0, 0, time.UTC), 111, 11, true)
-	// 2026-06-15 23:30 UTC = 2026-06-16 00:30 BST -- already the 16th, locally.
-	disposeInsightsRun(t, store, "sandbox://CC-1", time.Date(2026, 6, 15, 23, 30, 0, 0, time.UTC), 222, 22, true)
-
-	london := mustLoadLocation(t, "Europe/London")
-	buckets, err := store.RunInsights(
-		ctx, "", "", london.String(), civilDay(t, 2026, 6, 15), civilDay(t, 2026, 6, 16),
+	points, err := store.MergedTicketSpend(
+		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
 	)
 	if err != nil {
-		t.Fatalf("RunInsights: %v", err)
+		t.Fatalf("MergedTicketSpend: %v", err)
 	}
-	byDay := bucketByDay(t, buckets)
-	if got := byDay["2026-06-15"]; got.Runs != 1 || got.TokensIn != 111 {
-		t.Errorf("2026-06-15 = %+v, want exactly the pre-midnight run", got)
+	if len(points) != 1 {
+		t.Fatalf("points = %d, want 1: %+v", len(points), points)
 	}
-	if got := byDay["2026-06-16"]; got.Runs != 1 || got.TokensIn != 222 {
-		t.Errorf("2026-06-16 = %+v, want exactly the post-midnight run", got)
+	got := points[0]
+	if got.AgentUSD != 1.00 || got.ResolveUSD != 0.25 || got.FollowUpUSD != 0.10 {
+		t.Errorf("kind split = %+v, want 1.00/0.25/0.10", got)
+	}
+	if got.TotalUSD() != 1.35 {
+		t.Errorf("TotalUSD() = %v, want 1.35", got.TotalUSD())
 	}
 }
 
-// TestRunInsightsCountsUnsettledSeparately covers a killed run's partial metrics
-// (metrics_settled = false): its tokens still land in the totals, and it also increments the
-// bucket's own unsettled count, but a fully-settled run never does.
-func TestRunInsightsCountsUnsettledSeparately(t *testing.T) {
+func TestMergedTicketSpendExcludesRunsDisposedAfterMerge(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	disposeInsightsRun(t, store, "sandbox://CC-1", day, 100, 10, true)
-	disposeInsightsRun(t, store, "sandbox://CC-1", day, 50, 5, false)
+	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-time.Hour), 1.00)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 5.00)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
-	buckets, err := store.RunInsights(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
+	points, err := store.MergedTicketSpend(
+		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
+	)
 	if err != nil {
-		t.Fatalf("RunInsights: %v", err)
+		t.Fatalf("MergedTicketSpend: %v", err)
 	}
-	if len(buckets) != 1 {
-		t.Fatalf("buckets = %d, want 1", len(buckets))
-	}
-	got := buckets[0]
-	if got.Runs != 2 || got.TokensIn != 150 || got.TokensOut != 15 {
-		t.Errorf("totals = %+v, want both runs summed", got)
-	}
-	if got.Unsettled != 1 {
-		t.Errorf("unsettled = %d, want 1", got.Unsettled)
+	if len(points) != 1 || points[0].TotalUSD() != 1.00 {
+		t.Fatalf("points = %+v, want the one pre-merge run only", points)
 	}
 }
 
-// TestRunInsightsFeatureMatchesTheTicketsOwnColumn covers the grain decision that ADR 13's
-// closure over unmerged blockers does not apply to insights: filtering by ?feature= must exclude
-// a run whose own ticket belongs to a different feature, blocker or not.
-func TestRunInsightsFeatureMatchesTheTicketsOwnColumn(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	insightsTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-b")
-	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	disposeInsightsRun(t, store, "sandbox://CC-1", day, 100, 10, true)
-	disposeInsightsRun(t, store, "sandbox://CC-2", day, 999, 999, true)
-
-	buckets, err := store.RunInsights(ctx, "", "feat-a", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
-	if err != nil {
-		t.Fatalf("RunInsights: %v", err)
-	}
-	if len(buckets) != 1 || buckets[0].Runs != 1 || buckets[0].TokensIn != 100 {
-		t.Fatalf("buckets = %+v, want only feat-a's run", buckets)
-	}
-}
-
-// TestRunInsightsIncludesWithdrawnTicketRuns covers the other grain decision: a withdrawn ticket
-// (remove-worktree's own doing) keeps its runs in every total, breaking the withdrawn_at IS NULL
-// convention every other read follows.
-func TestRunInsightsIncludesWithdrawnTicketRuns(t *testing.T) {
+func TestMergedTicketSpendExcludesUnmergedTickets(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	disposeInsightsRun(t, store, "sandbox://CC-1", day, 100, 10, true)
-
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", day, 3.00)
 	if err := store.WithdrawTicket(ctx, "sandbox://CC-1", day, false); err != nil {
 		t.Fatalf("WithdrawTicket: %v", err)
 	}
 
-	buckets, err := store.RunInsights(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
+	points, err := store.MergedTicketSpend(
+		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
+	)
 	if err != nil {
-		t.Fatalf("RunInsights: %v", err)
+		t.Fatalf("MergedTicketSpend: %v", err)
 	}
-	if len(buckets) != 1 || buckets[0].Runs != 1 || buckets[0].TokensIn != 100 {
-		t.Fatalf("buckets = %+v, want the withdrawn ticket's run still counted", buckets)
+	if len(points) != 0 {
+		t.Fatalf("points = %+v, want none for a withdrawn ticket with no pr_merged event", points)
+	}
+}
+
+func TestWithdrawnTicketWasteSumsOnlyUnmergedWithdrawals(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	day := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", day, 2.00)
+	if err := store.WithdrawTicket(ctx, "sandbox://CC-1", day, false); err != nil {
+		t.Fatalf("WithdrawTicket CC-1: %v", err)
+	}
+
+	insightsTicket(t, store, "sandbox://CC-2", "cc-sandbox", "feat-a")
+	disposeInsightsRun(t, store, "sandbox://CC-2", "agent", day.Add(-time.Hour), 9.00)
+	mergeInsightsTicket(t, store, "sandbox://CC-2", day)
+	if err := store.WithdrawTicket(ctx, "sandbox://CC-2", day, true); err != nil {
+		t.Fatalf("WithdrawTicket CC-2: %v", err)
+	}
+
+	waste, err := store.WithdrawnTicketWaste(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
+	if err != nil {
+		t.Fatalf("WithdrawnTicketWaste: %v", err)
+	}
+	if waste != 2.00 {
+		t.Errorf("waste = %v, want 2.00 (only CC-1, the unmerged withdrawal)", waste)
+	}
+
+	points, err := store.MergedTicketSpend(
+		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
+	)
+	if err != nil {
+		t.Fatalf("MergedTicketSpend: %v", err)
+	}
+	if len(points) != 1 || points[0].Ticket != "sandbox://CC-2" {
+		t.Fatalf("points = %+v, want only CC-2, the merged ticket", points)
 	}
 }
 
@@ -215,31 +184,28 @@ func fetchInsights(t *testing.T, server *cc.Server, query string) (*http.Respons
 }
 
 type insightsJSON struct {
-	Since    string           `json:"since"`
-	Until    string           `json:"until"`
-	Timezone string           `json:"timezone"`
-	Buckets  []insightsBucket `json:"buckets"`
+	Since        string          `json:"since"`
+	Until        string          `json:"until"`
+	Timezone     string          `json:"timezone"`
+	Points       []insightsPoint `json:"points"`
+	WastePctWeek float64         `json:"waste_pct_week"`
 }
 
-type insightsBucket struct {
-	Day       string `json:"day"`
-	TokensIn  int64  `json:"tokens_in"`
-	TokensOut int64  `json:"tokens_out"`
-	Runs      int64  `json:"runs"`
-	Unsettled int64  `json:"unsettled"`
+type insightsPoint struct {
+	Ticket   string  `json:"ticket"`
+	Title    string  `json:"title"`
+	MergedAt string  `json:"merged_at"`
+	PctWeek  float64 `json:"pct_week"`
 }
 
-// TestHandleInsightsServesTheDocumentedShape covers the route's wire contract end to end: content
-// type, top-level fields and one populated bucket for a run seeded on the clock's own day.
 func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
-	disposeInsightsRun(t, store, "sandbox://CC-1", now, 412000, 18400, true)
-	_ = ctx
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
 	server := cc.NewServer(store, fixedClock(now), nil, "")
 	resp, body := fetchInsights(t, server, "")
@@ -259,17 +225,8 @@ func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 	if body.Timezone == "" {
 		t.Error("timezone is empty")
 	}
-	var today *insightsBucket
-	for i, b := range body.Buckets {
-		if b.Day == "2026-09-20" {
-			today = &body.Buckets[i]
-		}
-	}
-	if today == nil {
-		t.Fatalf("no bucket for 2026-09-20 in %+v", body.Buckets)
-	}
-	if today.Runs != 1 || today.TokensIn != 412000 || today.TokensOut != 18400 || today.Unsettled != 0 {
-		t.Errorf("today = %+v, want the one seeded run", today)
+	if len(body.Points) != 1 || body.Points[0].Ticket != "sandbox://CC-1" {
+		t.Fatalf("points = %+v, want the one seeded ticket", body.Points)
 	}
 }
 

@@ -357,6 +357,11 @@
     background: var(--color-s-idle);
   }
 
+  .chart-dot {
+    fill: var(--color-s-live);
+    background: var(--color-s-live);
+  }
+
   .line {
     display: flex;
     align-items: baseline;

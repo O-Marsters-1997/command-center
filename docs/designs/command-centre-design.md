@@ -964,16 +964,21 @@ API, not citations inherited from earlier revisions).
     sets.
 12. **A second workspace doubles concurrency silently** — `max_agents` and the flock are
     per-workspace; the subscription limit is per-account.
-13. **`GET /insights` plots one panel, static per load, with no drill-down.** Tokens per day,
-    input against output, not dollars — `cost_usd` is nullable and provider-computed
-    (docs/adr/0015), so a dollar axis would be the first thing to break under a second stdout
-    dialect. Not quality or hallucination rate — nothing exists yet that can score a run, so
-    those judgements stay out (plan preamble, `plans/run-insights.md`). The page does not poll:
-    a run disposing while it is open shows up only on reload, deliberately, since the underlying
-    data changes at most a few times a minute and a five-second poll would buy nothing. There is
-    no breakdown by task or feature yet, only the fleet-wide total. More panels land one at a
-    time against the same buckets; this one exists to prove the path from an agent's own stdout
-    to a plotted number, once.
+13. **`GET /insights` plots one panel, static per load, with no drill-down.** One dot per merged
+    ticket, not one bar per day: a ticket's weight is every run disposed before its own
+    `pr_merged` event, all kinds summed (`cost_usd`, nullable and provider-computed, docs/adr/0015),
+    converted to a percentage of the week by the same trailing-fit `usage.Factor` the masthead
+    gauge already applies to its own cost (CC-313), not a dollar axis — dollars alone
+    say nothing about how much of the subscription a ticket actually spent. A withdrawn ticket that
+    never merged contributes only to the one waste total, never its own point, because
+    remove-worktree withdraws a merged-and-tidied ticket too and the `pr_merged` event, not
+    `withdrawn_at`, is what tells the two apart. Not quality or hallucination rate — nothing exists
+    yet that can score a run, so those judgements stay out (plan preamble, `plans/run-insights.md`).
+    The page does not poll: a ticket merging while it is open shows up only on reload, deliberately,
+    since the underlying data changes at most a few times a minute and a five-second poll would buy
+    nothing. There is no breakdown by task or feature yet, only the fleet-wide series. More panels
+    land one at a time against the same query; this one exists to show whether spend per ticket is
+    trending down after a change, not just that spend happened.
 
 ## 14 · Corrected from revision 1
 
