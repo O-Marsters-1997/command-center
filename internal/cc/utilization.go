@@ -31,15 +31,16 @@ type Gauge struct {
 }
 
 // LatestReadings returns the newest reading for every window that has one, keyed by window. A
-// window with no reading yet is simply absent, never a zero-valued Gauge.
+// window with no reading yet is simply absent, never a zero-valued Gauge. It is LatestReadingsFull
+// trimmed to the masthead's own Gauge shape, rather than a second query over the same rows.
 func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, error) {
-	rows, err := s.q.LatestReadings(ctx)
+	readings, err := s.LatestReadingsFull(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("select latest readings: %w", err)
+		return nil, err
 	}
-	gauges := make(map[agentlog.Window]Gauge, len(rows))
-	for _, row := range rows {
-		gauges[agentlog.Window(row.Window)] = Gauge{Utilization: row.Utilization, ResetsAt: row.ResetsAt}
+	gauges := make(map[agentlog.Window]Gauge, len(readings))
+	for window, r := range readings {
+		gauges[window] = Gauge{Utilization: r.Utilization, ResetsAt: r.ResetsAt}
 	}
 	return gauges, nil
 }

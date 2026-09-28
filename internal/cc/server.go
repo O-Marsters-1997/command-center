@@ -24,6 +24,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/usage"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -339,21 +340,68 @@ type tickErrorView struct {
 }
 
 // gaugeView is one window's masthead gauge: a fixed label so the DOM shape never changes between
-// polls, and the meter's own fill percentage. Pct is 0 for a window with no reading yet, same as
-// an empty meter rather than a hidden one, which keeps the masthead's own layout stable.
+// polls, and the meter's own fill percentage, 0 for a window with no reading yet. Calibrating is
+// true below usage.MinSamples trailing intervals, when CCPct -- cc's own share -- has no meaning.
 type gaugeView struct {
-	Label string
-	Pct   int
+	Label       string
+	Pct         int
+	Calibrating bool
+	CCPct       int
+}
+
+// windowSplit is one window's cc-vs-other input: the fit's own factor and sample count, and cc's
+// own recorded cost_usd within that window's trailing span -- deriveGauge's raw material, fetched
+// once per render by Server.gaugeSplit.
+type windowSplit struct {
+	Factor  float64
+	Samples int
+	CCUSD   float64
+}
+
+// gaugeSplit reads the fit and cc's own trailing spend once, keyed by window, for deriveGauges to
+// turn into each gauge's cc-vs-other split.
+func (s *Server) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Window]windowSplit, error) {
+	fits, err := s.store.FitFactors(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	ccCost, err := s.store.CCCostUSD(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	split := make(map[agentlog.Window]windowSplit, len(fits))
+	for window, fit := range fits {
+		split[window] = windowSplit{Factor: fit.Factor, Samples: fit.Samples, CCUSD: ccCost[window]}
+	}
+	return split, nil
 }
 
 // deriveGauges always returns the five-hour and weekly gauges in that fixed order, whether or not
-// either window has a reading yet (CC-310: the masthead shows raw account utilization, not yet
-// split into cc and other use).
-func deriveGauges(gauges map[agentlog.Window]Gauge) []gaugeView {
+// either window has a reading yet (CC-310).
+func deriveGauges(gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit) []gaugeView {
 	return []gaugeView{
-		{Label: "five-hour", Pct: pctOf(gauges[agentlog.FiveHour])},
-		{Label: "weekly", Pct: pctOf(gauges[agentlog.SevenDay])},
+		deriveGauge("five-hour", agentlog.FiveHour, gauges, split),
+		deriveGauge("weekly", agentlog.SevenDay, gauges, split),
 	}
+}
+
+func deriveGauge(
+	label string, window agentlog.Window, gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit,
+) gaugeView {
+	view := gaugeView{Label: label, Pct: pctOf(gauges[window])}
+	s, ok := split[window]
+	if !ok || s.Samples < usage.MinSamples {
+		view.Calibrating = true
+		return view
+	}
+	view.CCPct = clampPct(int(s.CCUSD*s.Factor*100+0.5), view.Pct)
+	return view
+}
+
+// clampPct keeps a derived share inside [0, total]: a noisy fit can otherwise put cc's own share
+// below zero or above the window's own total.
+func clampPct(pct, total int) int {
+	return max(0, min(pct, total))
 }
 
 func pctOf(g Gauge) int { return int(g.Utilization*100 + 0.5) }
@@ -381,7 +429,8 @@ type chrome struct {
 	ObserveStale bool
 	LastError    *tickErrorView
 	// Gauges is the masthead's own read of account utilization, five-hour then weekly, always both
-	// (CC-310: raw account utilization, not yet split into cc and other use).
+	// (CC-310), each split into cc's own share and other use once its fit has enough samples
+	// (CC-313).
 	Gauges []gaugeView
 	// SpendPaused names spend_limit_5h as the reason launchEligible spawned nothing this tick, nil
 	// whenever the five-hour reading is below the limit or no limit is configured (CC-314).
@@ -487,6 +536,10 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	}
 
 	now := s.now()
+	split, err := s.gaugeSplit(ctx, now)
+	if err != nil {
+		return pageView{}, err
+	}
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
 	applyViewState(rows, params)
@@ -495,7 +548,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
-		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, now, params),
+		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params),
 		Groups:    groups,
 		Band:      deriveBand(rowsIn(groups)),
 		BoardPath: params.boardPath(),
@@ -508,14 +561,14 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 // chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
 func (s *Server) buildChrome(
 	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool,
-	gauges map[agentlog.Window]Gauge, now time.Time, params viewParams,
+	gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit, now time.Time, params viewParams,
 ) chrome {
 	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
-		Gauges:       deriveGauges(gauges),
+		Gauges:       deriveGauges(gauges, split),
 		View:         params.View,
 		Section:      params.View,
 		RepoScope:    params.Repo,
@@ -562,7 +615,12 @@ func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, erro
 	if err != nil {
 		return chrome{}, err
 	}
-	return s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, s.now(), params), nil
+	now := s.now()
+	split, err := s.gaugeSplit(ctx, now)
+	if err != nil {
+		return chrome{}, err
+	}
+	return s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params), nil
 }
 
 // applyViewState parses the selected row's own log only, not every row's: a board of twenty-five

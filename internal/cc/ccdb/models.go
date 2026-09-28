@@ -119,6 +119,16 @@ type User struct {
 	CreatedAt    time.Time
 }
 
+type UtilizationInterval struct {
+	ID               int64
+	Window           string
+	StartAt          time.Time
+	EndAt            time.Time
+	UtilizationStart float64
+	UtilizationEnd   float64
+	WeightUsd        float64
+}
+
 type UtilizationReading struct {
 	ID          int64
 	At          time.Time

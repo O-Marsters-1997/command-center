@@ -21,6 +21,10 @@
 # server in this repo, which `just up` starts.
 # database_url = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
 
+# Where the Claude CLI itself writes every session transcript, interactive and agent alike --
+# what the spend fit reads to weigh a utilization window's actual cost. Absent, ~/.claude/projects.
+# claude_projects_dir = "~/.claude/projects"
+
 max_agents = 2
 port       = 7777
 

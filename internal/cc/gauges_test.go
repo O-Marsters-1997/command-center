@@ -1,12 +1,16 @@
 package cc_test
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/usage"
 )
 
 // TestMastheadRendersTheLatestStoredReading covers "the masthead gauges render the latest stored
@@ -63,6 +67,61 @@ func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 	if first != second {
 		t.Errorf("gauge markup changed between two polls of the same reading:\n--- first ---\n%s\n--- second ---\n%s",
 			first, second)
+	}
+}
+
+// TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated covers CC-313's acceptance criterion: below
+// usage.MinSamples trailing intervals the gauge reads "calibrating", and once a window has
+// enough, it splits into cc's own share.
+func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	store := seededStore(t, observedAt)
+
+	server := cc.NewServer(store, fixedClock(observedAt), nil, "")
+	if got := renderBoard(t, server); !strings.Contains(got, "five-hour · 0% · calibrating") {
+		t.Errorf("board masthead does not read calibrating below the sample threshold:\n%s", got)
+	}
+
+	// A real transcript in every interval's span, so leastSquares has something nonzero to fit
+	// against; no `runs` row is seeded, so cc's own share comes out 0% on a real, computed factor
+	// rather than the window simply staying uncalibrated.
+	projectsDir := t.TempDir()
+	project := filepath.Join(projectsDir, "proj")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var lines string
+	start := observedAt.Add(-6 * time.Hour)
+	for i := range usage.MinSamples {
+		at := start.Add(time.Duration(i)*time.Hour + 30*time.Minute)
+		lines += oneMillionInputTokensLine(at.Format(time.RFC3339), fmt.Sprintf("r%d", i)) + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(project, "session.jsonl"), []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// One more reading than usage.MinSamples, since the first has no previous reading yet to pair
+	// against and closes no interval of its own.
+	for i := range usage.MinSamples + 1 {
+		at := start.Add(time.Duration(i) * time.Hour)
+		reading := agentlog.Reading{
+			Window: agentlog.FiveHour, Utilization: float64(i) * 0.02,
+			ResetsAt: at.Add(5 * time.Hour), At: at,
+		}
+		if err := store.RecordReadingsAndIntervals(ctx, []agentlog.Reading{reading}, projectsDir); err != nil {
+			t.Fatalf("RecordReadingsAndIntervals (reading %d): %v", i, err)
+		}
+	}
+
+	// No `runs` row was seeded, so cc's own cost_usd in the window is 0 -- the fit itself is real,
+	// it just has nothing of cc's own to attribute. Weekly is untouched by this test and stays
+	// calibrating, so the assertion is scoped to five-hour rather than the whole board.
+	board := renderBoard(t, server)
+	if !strings.Contains(board, "five-hour · 10% · 0% cc") {
+		t.Errorf("board masthead does not show five-hour's cc share once calibrated:\n%s", board)
 	}
 }
 

@@ -380,6 +380,9 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 // TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
 // a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
 // path directly rather than through an injected parser.
+// TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
+// a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
+// path directly rather than through an injected parser.
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)

@@ -21,10 +21,12 @@ type Config struct {
 	// DataDir holds the resolved data directory after LoadConfig, not the raw config key.
 	DataDir string `toml:"data_dir"`
 	// DatabaseURL holds the resolved connection string after LoadConfig, not the raw config key.
-	DatabaseURL  string   `toml:"database_url"`
-	MaxAgents    int      `toml:"max_agents"`
-	Port         int      `toml:"port"`
-	AgentCommand []string `toml:"agent_command"`
+	DatabaseURL string `toml:"database_url"`
+	// ClaudeProjectsDir holds the resolved directory after LoadConfig, not the raw config key.
+	ClaudeProjectsDir string   `toml:"claude_projects_dir"`
+	MaxAgents         int      `toml:"max_agents"`
+	Port              int      `toml:"port"`
+	AgentCommand      []string `toml:"agent_command"`
 	// MaxTurns caps a spawned run at this many agent turns, appended to AgentCommand as
 	// --max-turns. Zero (the default) sets no cap.
 	MaxTurns int `toml:"max_turns"`
@@ -119,6 +121,11 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.DataDir = dataDir
 	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL)
+	claudeProjectsDir, err := ResolveClaudeProjectsDir(cfg.ClaudeProjectsDir)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.ClaudeProjectsDir = claudeProjectsDir
 	if err := applyAgentCommandEnv(&cfg); err != nil {
 		return Config{}, err
 	}

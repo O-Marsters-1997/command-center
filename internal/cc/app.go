@@ -157,7 +157,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if metricsParser == nil {
 		metricsParser = agentlog.ParseMetrics
 	}
-	if err := BackfillMetrics(ctx, store, metricsParser); err != nil {
+	if err := BackfillMetrics(ctx, store, metricsParser, cfg.ClaudeProjectsDir); err != nil {
 		return nil, err
 	}
 

@@ -3,10 +3,12 @@ package cc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/usage"
 )
 
 // MetricsParser reads one run's own log into its settled totals — agentlog.ParseMetrics's own
@@ -14,14 +16,20 @@ import (
 type MetricsParser func(logPath string) (agentlog.RunMetrics, error)
 
 // BackfillMetrics runs once at startup over every run RunsAwaitingMetricsBackfill still returns:
-// every surviving log gets both its metrics and its utilization readings extracted, since both
-// come from the same bytes. Idempotent on that predicate for metrics, and on utilization_readings'
-// own (at, window) constraint for readings, so a restart mid-backfill resumes rather than reparses
+// every surviving log gets its metrics, readings and any intervals they close, all from the same
+// bytes. Idempotent on that predicate for metrics, and on utilization_readings' own (at, window)
+// constraint for readings, so a restart mid-backfill resumes rather than reparses
 // (docs/adr/0015-run-metrics-are-captured-at-disposition-from-stdout.md).
-func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser) error {
+func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser, claudeProjectsDir string) error {
 	runs, err := store.RunsAwaitingMetricsBackfill(ctx)
 	if err != nil {
 		return err
+	}
+	// Loaded once for the whole backfill pass, not once per run, since every run's interval close
+	// weighs the same transcripts directory.
+	requests, err := usage.LoadRequests(claudeProjectsDir)
+	if err != nil {
+		return fmt.Errorf("load transcripts under %s: %w", claudeProjectsDir, err)
 	}
 	for _, run := range runs {
 		metrics, err := parser(run.LogPath)
@@ -40,7 +48,7 @@ func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser) er
 			}
 			continue
 		}
-		if err := store.RecordReadings(ctx, readings); err != nil {
+		if err := store.recordReadingsAndIntervals(ctx, readings, requests); err != nil {
 			return err
 		}
 	}

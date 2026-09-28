@@ -10,28 +10,34 @@ import (
 	"time"
 )
 
-const latestReadings = `-- name: LatestReadings :many
-SELECT DISTINCT ON ("window") "window", utilization, resets_at
+const latestReadingsFull = `-- name: LatestReadingsFull :many
+SELECT DISTINCT ON ("window") "window", at, utilization, resets_at
 FROM utilization_readings
 ORDER BY "window", at DESC
 `
 
-type LatestReadingsRow struct {
+type LatestReadingsFullRow struct {
 	Window      string
+	At          time.Time
 	Utilization float64
 	ResetsAt    time.Time
 }
 
-func (q *Queries) LatestReadings(ctx context.Context) ([]LatestReadingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestReadings)
+func (q *Queries) LatestReadingsFull(ctx context.Context) ([]LatestReadingsFullRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestReadingsFull)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LatestReadingsRow
+	var items []LatestReadingsFullRow
 	for rows.Next() {
-		var i LatestReadingsRow
-		if err := rows.Scan(&i.Window, &i.Utilization, &i.ResetsAt); err != nil {
+		var i LatestReadingsFullRow
+		if err := rows.Scan(
+			&i.Window,
+			&i.At,
+			&i.Utilization,
+			&i.ResetsAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
