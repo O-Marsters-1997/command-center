@@ -496,7 +496,8 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		})
 	}
 
-	toLaunch := plan.LaunchPlan(candidates, currentlyRunning(latest), l.cfg.MaxAgents, spendPaused(gauges, l.cfg.SpendLimit5h))
+	paused := spendPaused(gauges, l.cfg.SpendLimit5h)
+	toLaunch := plan.LaunchPlan(candidates, currentlyRunning(latest), l.cfg.MaxAgents, paused)
 	if len(toLaunch) == 0 {
 		return nil
 	}
