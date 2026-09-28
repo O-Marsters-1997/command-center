@@ -19,6 +19,33 @@ func TestCompose(t *testing.T) {
 	}
 }
 
+func TestComposeAddsAWorkedExampleWhenTheBlockerBranchIsSet(t *testing.T) {
+	t.Parallel()
+
+	ticket := plan.Ticket{URL: "sandbox://CC-2", WorkedExampleBranch: "cc-1-first"}
+
+	got := plan.Compose(ticket)
+	if !strings.HasPrefix(got, "/implement sandbox://CC-2") {
+		t.Errorf("Compose = %q, want the implement instruction to lead", got)
+	}
+	for _, want := range []string{
+		"## Worked example: cc-1-first", "git diff main...cc-1-first",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Compose = %q, want it to mention %q", got, want)
+		}
+	}
+}
+
+func TestComposeOmitsTheWorkedExampleWithoutABlockerBranch(t *testing.T) {
+	t.Parallel()
+
+	got := plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})
+	if strings.Contains(got, "Worked example") {
+		t.Errorf("Compose = %q, want no worked-example section without a blocker branch", got)
+	}
+}
+
 func TestComposeResolve(t *testing.T) {
 	t.Parallel()
 
@@ -105,5 +132,23 @@ func TestHashIsStableAndSensitiveToInput(t *testing.T) {
 	edited := plan.Hash("/implement sandbox://CC-2")
 	if edited == first {
 		t.Error("editing the composed input did not change the hash")
+	}
+}
+
+func TestHashChangesOnlyWhenTheWorkedExampleContentChanges(t *testing.T) {
+	t.Parallel()
+
+	ticket := plan.Ticket{URL: "sandbox://CC-2"}
+	withoutExample := plan.Hash(plan.Compose(ticket))
+
+	ticket.WorkedExampleBranch = "cc-1-first"
+	withExample := plan.Hash(plan.Compose(ticket))
+	if withExample == withoutExample {
+		t.Error("adding a worked-example branch did not change the hash")
+	}
+
+	sameAgain := plan.Hash(plan.Compose(ticket))
+	if sameAgain != withExample {
+		t.Error("composing the same ticket twice produced different hashes")
 	}
 }

@@ -308,6 +308,96 @@ func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) 
 	}
 }
 
+func TestProcessRunnerSpawnSubstitutesTheAgentsPathIntoArgv(t *testing.T) {
+	worktree := t.TempDir()
+	settingsPath := filepath.Join(t.TempDir(), "agent.json")
+	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(t.TempDir(), "agents.json")
+	if err := cc.WriteAgentDigestDefinition(agentsPath); err != nil {
+		t.Fatal(err)
+	}
+	argvDump := filepath.Join(worktree, "argv.txt")
+	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
+	script := "#!/bin/sh\nprintf '%s' \"$1\" > " + argvDump + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logFile.Close() })
+
+	cfg := cc.SpawnConfig{
+		AgentCommand: []string{scriptPath, "{agents}"},
+		WorktreePath: worktree,
+		SettingsPath: settingsPath,
+		AgentsPath:   agentsPath,
+		PromptPath:   promptPath,
+		LogFile:      logFile,
+	}
+	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	reapExit(t, result.Pid)
+
+	got, err := os.ReadFile(argvDump)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != agentsPath {
+		t.Errorf("agent received argv %q, want the agents path %q", got, agentsPath)
+	}
+}
+
+// TestProcessRunnerSpawnDropsTheAgentsFlagWhenPathIsEmpty covers resolve and follow-up runs
+// (spawnRun leaves AgentsPath unset for them): the flag naming {agents} must vanish from argv
+// entirely, never survive pointed at an empty path.
+func TestProcessRunnerSpawnDropsTheAgentsFlagWhenPathIsEmpty(t *testing.T) {
+	worktree := t.TempDir()
+	settingsPath := filepath.Join(t.TempDir(), "agent.json")
+	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	argvDump := filepath.Join(worktree, "argv.txt")
+	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
+	script := "#!/bin/sh\nprintf '%s' \"$*\" > " + argvDump + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logFile.Close() })
+
+	cfg := cc.SpawnConfig{
+		AgentCommand: []string{scriptPath, "before", "--agents", "{agents}", "after"},
+		WorktreePath: worktree,
+		SettingsPath: settingsPath,
+		PromptPath:   promptPath,
+		LogFile:      logFile,
+	}
+	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	reapExit(t, result.Pid)
+
+	got, err := os.ReadFile(argvDump)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "before after" {
+		t.Errorf("agent received argv %q, want %q: the flag and its placeholder both dropped", got, "before after")
+	}
+}
+
 // TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty covers resolve and follow-up
 // runs (spawnRun leaves SystemPromptPath unset for them): the flag naming {system_prompt} must
 // vanish from argv entirely, never survive pointed at an empty path.

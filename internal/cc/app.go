@@ -144,6 +144,9 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err := WriteAgentSystemPrompt(ws.SystemPromptPath); err != nil {
 		return nil, err
 	}
+	if err := WriteAgentDigestDefinition(ws.AgentsPath); err != nil {
+		return nil, err
+	}
 
 	observe := settings.observe
 	if observe == nil {
