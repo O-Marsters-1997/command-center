@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -326,6 +327,26 @@ type tickErrorView struct {
 	Message string
 }
 
+// gaugeView is one window's masthead gauge: a fixed label so the DOM shape never changes between
+// polls, and the meter's own fill percentage. Pct is 0 for a window with no reading yet, same as
+// an empty meter rather than a hidden one, which keeps the masthead's own layout stable.
+type gaugeView struct {
+	Label string
+	Pct   int
+}
+
+// deriveGauges always returns the five-hour and weekly gauges in that fixed order, whether or not
+// either window has a reading yet (CC-310: the masthead shows raw account utilization, not yet
+// split into cc and other use).
+func deriveGauges(gauges map[agentlog.Window]Gauge) []gaugeView {
+	return []gaugeView{
+		{Label: "five-hour", Pct: pctOf(gauges[agentlog.FiveHour])},
+		{Label: "weekly", Pct: pctOf(gauges[agentlog.SevenDay])},
+	}
+}
+
+func pctOf(g Gauge) int { return int(g.Utilization*100 + 0.5) }
+
 // group is one blocker and the rows waiting on it. A row with no blocker in the ticket set is its
 // own group with a nil Root (docs/prds/prd-operator-surface.md § Reading the board).
 type group struct {
@@ -343,6 +364,9 @@ type chrome struct {
 	// ObserveStale is decided here rather than in the template, which cannot compare durations.
 	ObserveStale bool
 	LastError    *tickErrorView
+	// Gauges is the masthead's own read of account utilization, five-hour then weekly, always both
+	// (CC-310: raw account utilization, not yet split into cc and other use).
+	Gauges []gaugeView
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
 	// Section names the sidebar's current destination: "board", "graph" or "features". It tracks
@@ -434,6 +458,10 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	if err != nil {
 		return pageView{}, err
 	}
+	gauges, err := s.store.LatestReadings(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 	facts, vd, err := s.loadTicketFacts(ctx)
 	if err != nil {
 		return pageView{}, err
@@ -445,7 +473,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	applyViewState(rows, params)
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
-		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, now, params),
+		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, now, params),
 		Groups:    groups,
 		Band:      deriveBand(rowsIn(groups)),
 		BoardPath: params.boardPath(),
@@ -457,14 +485,15 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 // already fetched tickets, the observation and the last error for its own board derivation, and
 // chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
 func (s *Server) buildChrome(
-	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool, now time.Time,
-	params viewParams,
+	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool,
+	gauges map[agentlog.Window]Gauge, now time.Time, params viewParams,
 ) chrome {
 	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
+		Gauges:       deriveGauges(gauges),
 		View:         params.View,
 		Section:      params.View,
 		RepoScope:    params.Repo,
@@ -504,7 +533,11 @@ func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, erro
 	if err != nil {
 		return chrome{}, err
 	}
-	return s.buildChrome(tickets, obs, observed, lastErr, failed, s.now(), params), nil
+	gauges, err := s.store.LatestReadings(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	return s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, s.now(), params), nil
 }
 
 // applyViewState parses the selected row's own log only, not every row's: a board of twenty-five

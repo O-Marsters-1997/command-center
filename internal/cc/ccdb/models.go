@@ -106,3 +106,11 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+type UtilizationReading struct {
+	ID          int64
+	At          time.Time
+	Window      string
+	Utilization float64
+	ResetsAt    time.Time
+}
