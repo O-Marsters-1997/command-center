@@ -165,6 +165,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	loop.SetMetricsParser(metricsParser)
 	server := NewServer(store, settings.now, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
+	server.SetSpendLimit5h(cfg.SpendLimit5h)
 
 	return &App{
 		cfg:    cfg,

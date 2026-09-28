@@ -94,6 +94,32 @@ func TestLoadConfigKeepsAnExplicitTracker(t *testing.T) {
 	}
 }
 
+func TestLoadConfigSpendLimit5h(t *testing.T) {
+	t.Parallel()
+
+	body := "spend_limit_5h = 80\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
+	got, err := cc.LoadConfig(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.SpendLimit5h != 80 {
+		t.Errorf("spend_limit_5h = %d, want 80", got.SpendLimit5h)
+	}
+}
+
+func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
+	t.Parallel()
+
+	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
+	got, err := cc.LoadConfig(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.SpendLimit5h != 0 {
+		t.Errorf("spend_limit_5h = %d, want default 0 (unset, never pauses)", got.SpendLimit5h)
+	}
+}
+
 func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 	t.Parallel()
 

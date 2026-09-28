@@ -136,6 +136,7 @@ type Server struct {
 	mergifySHAByRepo  map[string]string
 	compatCheckByRepo map[string]string
 	dataDir           string
+	spendLimit5h      int
 	spend             *spendCache
 	trackerFor        TrackerSource
 	rawMux            *http.ServeMux
@@ -185,6 +186,10 @@ func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolv
 // exist, which is how the server queues an import intent and wakes the loop without importing
 // the loop package itself.
 func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
+
+// SetSpendLimit5h replaces the server's copy of spend_limit_5h, so the masthead can name the same
+// limit the loop's own launch gate reads (CC-314).
+func (s *Server) SetSpendLimit5h(pct int) { s.spendLimit5h = pct }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
@@ -353,6 +358,11 @@ func deriveGauges(gauges map[agentlog.Window]Gauge) []gaugeView {
 
 func pctOf(g Gauge) int { return int(g.Utilization*100 + 0.5) }
 
+type spendPausedView struct {
+	Pct   int
+	Limit int
+}
+
 // group is one blocker and the rows waiting on it. A row with no blocker in the ticket set is its
 // own group with a nil Root (docs/prds/prd-operator-surface.md § Reading the board).
 type group struct {
@@ -373,6 +383,9 @@ type chrome struct {
 	// Gauges is the masthead's own read of account utilization, five-hour then weekly, always both
 	// (CC-310: raw account utilization, not yet split into cc and other use).
 	Gauges []gaugeView
+	// SpendPaused names spend_limit_5h as the reason launchEligible spawned nothing this tick, nil
+	// whenever the five-hour reading is below the limit or no limit is configured (CC-314).
+	SpendPaused *spendPausedView
 	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
 	View string
 	// Section names the sidebar's current destination: "board", "graph" or "features". It tracks
@@ -508,6 +521,9 @@ func (s *Server) buildChrome(
 		RepoScope:    params.Repo,
 		RepoLinks:    repoLinksFor(s.repos, params),
 		FeatureScope: params.Feature,
+	}
+	if spendPaused(gauges, s.spendLimit5h) {
+		c.SpendPaused = &spendPausedView{Pct: pctOf(gauges[agentlog.FiveHour]), Limit: s.spendLimit5h}
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)
