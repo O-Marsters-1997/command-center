@@ -70,6 +70,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"claude", "-p", "{prompt}",
 		"--output-format", "stream-json", "--verbose",
 		"--settings", "{settings}",
+		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--model", "claude-sonnet-5",
 	}
@@ -170,6 +171,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
+				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--model", "claude-sonnet-5",
 			},
@@ -181,6 +183,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
+				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--model", "claude-sonnet-5",
 				"--max-turns", "40",

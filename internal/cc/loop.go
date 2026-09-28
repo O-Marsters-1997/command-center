@@ -652,9 +652,10 @@ func (l *Loop) spawnRun(
 	// skill invocations that never spawn a subagent of their own, and resolve's own prompt
 	// already tells it not to commit -- directly contradicting the warning's "commit before it
 	// ends".
-	var systemPromptPath string
+	var systemPromptPath, agentsPath string
 	if kind == runKindAgent {
 		systemPromptPath = l.ws.SystemPromptPath
+		agentsPath = l.ws.AgentsPath
 	}
 
 	spawnCfg := SpawnConfig{
@@ -662,6 +663,7 @@ func (l *Loop) spawnRun(
 		WorktreePath:     worktreePath,
 		SettingsPath:     l.ws.SettingsPath,
 		SystemPromptPath: systemPromptPath,
+		AgentsPath:       agentsPath,
 		Prompt:           spawnPrompt,
 		PromptPath:       promptPath,
 		LogFile:          logFile,

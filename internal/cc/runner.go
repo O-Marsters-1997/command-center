@@ -22,15 +22,18 @@ type Runner interface {
 }
 
 // SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {system_prompt}, {prompt} and {prompt_file}
-// are substituted into every element before exec.
+// configured argv template; {worktree}, {settings}, {system_prompt}, {agents}, {prompt} and
+// {prompt_file} are substituted into every element before exec.
 type SpawnConfig struct {
 	AgentCommand     []string
 	WorktreePath     string
 	SettingsPath     string
 	SystemPromptPath string
-	Prompt           string
-	PromptPath       string
+	// AgentsPath names the --agents JSON file (WriteAgentDigestDefinition's output). Empty for a
+	// kind that gets no digest subagent, like SystemPromptPath.
+	AgentsPath string
+	Prompt     string
+	PromptPath string
 	// LogFile is both stdout and stderr, opened by the caller and never a pipe: piping would
 	// need a goroutine per run to drain it, which the design forbids (§3).
 	LogFile *os.File
@@ -48,18 +51,23 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
 	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
+	arg = strings.ReplaceAll(arg, "{agents}", cfg.AgentsPath)
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
 	return arg
 }
 
-// buildArgv resolves cfg.AgentCommand into a concrete argv. When cfg.SystemPromptPath is empty
-// (resolve and follow-up runs, see spawnRun), the flag preceding the {system_prompt} placeholder
-// is dropped along with it rather than left pointing at nothing.
+// buildArgv resolves cfg.AgentCommand into a concrete argv. When a placeholder's own path is
+// empty (e.g. {system_prompt} or {agents} on a resolve or follow-up run, see spawnRun), the flag
+// preceding it is dropped along with it rather than left pointing at nothing.
 func buildArgv(cfg SpawnConfig) []string {
+	omitWhenEmpty := map[string]string{
+		"{system_prompt}": cfg.SystemPromptPath,
+		"{agents}":        cfg.AgentsPath,
+	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {
-		if a == "{system_prompt}" && cfg.SystemPromptPath == "" {
+		if path, ok := omitWhenEmpty[a]; ok && path == "" {
 			if len(argv) > 0 {
 				argv = argv[:len(argv)-1]
 			}

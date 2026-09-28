@@ -98,6 +98,7 @@ var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
 	"--settings", "{settings}",
+	"--agents", "{agents}",
 	"--append-system-prompt-file", "{system_prompt}",
 	"--model", "claude-sonnet-5",
 }
