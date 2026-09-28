@@ -25,6 +25,8 @@ type Workspace struct {
 	// SystemPromptPath is the app-owned system prompt appended to every spawn, warning it that
 	// its session is single-shot.
 	SystemPromptPath string
+	// AgentsPath is the app-owned digest subagent definition passed to every implement spawn.
+	AgentsPath string
 }
 
 // dataDirEnv names the data directory when the config file does not.
@@ -110,6 +112,7 @@ func ResolveWorkspace(dataDir string) (Workspace, error) {
 		RunsDir:          filepath.Join(state, "runs"),
 		SettingsPath:     filepath.Join(state, "settings", "agent.json"),
 		SystemPromptPath: filepath.Join(state, "settings", "system-prompt.md"),
+		AgentsPath:       filepath.Join(state, "settings", "agents.json"),
 	}
 	for _, dir := range []string{
 		ws.StateDir, ws.ReposDir, ws.RunsDir, filepath.Dir(ws.SettingsPath),
