@@ -61,7 +61,14 @@
       {{- else}}not started{{end}}
     </td>
     <td>
-      {{- if .SpendSettled}}${{printf "%.2f" .SpendUSD}}
+      {{- if gt .SpendPctWeek 0.0}}
+      <span class="flex h-[0.4rem] w-24 overflow-hidden rounded-full bg-track" title="{{printf "%.2f" .SpendPctWeek}}% week (agent {{printf "%.2f" .AgentPctWeek}}, resolve {{printf "%.2f" .ResolvePctWeek}}, follow-up {{printf "%.2f" .FollowUpPctWeek}})">
+        <span class="segbar-segment" data-kind="agent" style="flex-grow: {{.AgentPctWeek}}"></span>
+        <span class="segbar-segment" data-kind="resolve" style="flex-grow: {{.ResolvePctWeek}}"></span>
+        <span class="segbar-segment" data-kind="follow_up" style="flex-grow: {{.FollowUpPctWeek}}"></span>
+      </span>
+      {{printf "%.2f" .SpendPctWeek}}% week{{if .TicketOpen}} <span class="text-muted text-[0.85em]">open</span>{{end}}
+      {{- else if .SpendSettled}}${{printf "%.2f" .SpendUSD}}
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
       {{- else}}no spend{{end}}
     </td>

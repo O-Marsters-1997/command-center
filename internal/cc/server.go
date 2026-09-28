@@ -261,8 +261,13 @@ type row struct {
 	DraftReason string `json:"draft_reason"`
 	// FirstPushCIFailed and HandChurnLines are nil-safe reads of the ticket's own columns:
 	// false/0 render nothing, distinct from the column never having been recorded.
-	FirstPushCIFailed bool `json:"first_push_ci_failed"`
-	HandChurnLines    int  `json:"hand_churn_lines"`
+	FirstPushCIFailed bool    `json:"first_push_ci_failed"`
+	HandChurnLines    int     `json:"hand_churn_lines"`
+	AgentPctWeek      float64 `json:"agent_pct_week"`
+	ResolvePctWeek    float64 `json:"resolve_pct_week"`
+	FollowUpPctWeek   float64 `json:"follow_up_pct_week"`
+	SpendPctWeek      float64 `json:"spend_pct_week"`
+	TicketOpen        bool    `json:"ticket_open"`
 
 	// Selected is this render's ?sel= row: the only one whose detail <tr> exists at all, so an
 	// unattached hx-preserve id never lingers past the row that grew it
@@ -540,8 +545,14 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	if err != nil {
 		return pageView{}, err
 	}
+	ticketSpend, err := s.store.BoardTicketSpend(ctx, params.Repo, params.Feature)
+	if err != nil {
+		return pageView{}, err
+	}
+
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
+	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Factor)
 	applyViewState(rows, params)
 	if err := s.applyContextCurve(ctx, rows); err != nil {
 		return pageView{}, err

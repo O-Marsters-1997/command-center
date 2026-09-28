@@ -126,6 +126,81 @@ func TestMergedTicketSpendExcludesUnmergedTickets(t *testing.T) {
 	}
 }
 
+func TestTicketSpendWeighsAMergedTicketTheSameAsMergedTicketSpend(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	mergedAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", mergedAt.Add(-time.Hour), 1.00)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 5.00)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+
+	byURL, err := store.BoardTicketSpend(ctx, "", "")
+	if err != nil {
+		t.Fatalf("TicketSpend: %v", err)
+	}
+	got, ok := byURL["sandbox://CC-1"]
+	if !ok {
+		t.Fatalf("byURL = %+v, want an entry for CC-1", byURL)
+	}
+	if !got.Merged {
+		t.Error("Merged = false, want true")
+	}
+	if got.TotalUSD() != 1.00 {
+		t.Errorf("TotalUSD() = %v, want 1.00 (the pre-merge run only, same as insights)", got.TotalUSD())
+	}
+}
+
+func TestTicketSpendSumsSpendSoFarForAnOpenTicket(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now, 1.00)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "resolve", now, 0.50)
+
+	byURL, err := store.BoardTicketSpend(ctx, "", "")
+	if err != nil {
+		t.Fatalf("TicketSpend: %v", err)
+	}
+	got, ok := byURL["sandbox://CC-1"]
+	if !ok {
+		t.Fatalf("byURL = %+v, want an entry for CC-1", byURL)
+	}
+	if got.Merged {
+		t.Error("Merged = true, want false: no pr_merged event")
+	}
+	if got.AgentUSD != 1.00 || got.ResolveUSD != 0.50 {
+		t.Errorf("kind split = %+v, want 1.00/0.50", got)
+	}
+}
+
+func TestTicketSpendScopesByRepoAndFeature(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	insightsTicket(t, store, "sandbox://CC-2", "cc-other", "feat-b")
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", time.Now(), 1.00)
+	disposeInsightsRun(t, store, "sandbox://CC-2", "agent", time.Now(), 9.00)
+
+	byURL, err := store.BoardTicketSpend(ctx, "cc-sandbox", "")
+	if err != nil {
+		t.Fatalf("TicketSpend: %v", err)
+	}
+	if _, ok := byURL["sandbox://CC-2"]; ok {
+		t.Errorf("byURL = %+v, want CC-2 excluded by repo scope", byURL)
+	}
+	if _, ok := byURL["sandbox://CC-1"]; !ok {
+		t.Errorf("byURL = %+v, want CC-1 included", byURL)
+	}
+}
+
 func TestWithdrawnTicketWasteSumsOnlyUnmergedWithdrawals(t *testing.T) {
 	t.Parallel()
 

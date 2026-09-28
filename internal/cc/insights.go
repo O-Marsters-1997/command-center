@@ -57,6 +57,35 @@ func (s *Store) MergedTicketSpend(
 	return points, nil
 }
 
+// BoardTicketSpend is one ticket's own weight right now, merged or not.
+type BoardTicketSpend struct {
+	AgentUSD, ResolveUSD, FollowUpUSD float64
+	Merged                            bool
+}
+
+// TotalUSD is every run's weight regardless of kind.
+func (t BoardTicketSpend) TotalUSD() float64 {
+	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
+}
+
+// BoardTicketSpend returns every ticket in scope's own weight, keyed by ticket URL, weighing every
+// run disposed before its own pr_merged event when merged, or every run disposed so far when
+// still open.
+func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map[string]BoardTicketSpend, error) {
+	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{Repo: repo, Feature: feature})
+	if err != nil {
+		return nil, fmt.Errorf("select ticket spend: %w", err)
+	}
+
+	byURL := make(map[string]BoardTicketSpend, len(rows))
+	for _, row := range rows {
+		byURL[row.TicketID] = BoardTicketSpend{
+			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd, Merged: row.Merged,
+		}
+	}
+	return byURL, nil
+}
+
 // WithdrawnTicketWaste sums every disposed run belonging to a ticket withdrawn, by its own
 // withdrawal time, without ever merging.
 func (s *Store) WithdrawnTicketWaste(
@@ -91,6 +120,15 @@ type insightsPointJSON struct {
 
 func pctWeek(usd, factor float64) float64 {
 	return usd * factor * 100
+}
+
+func kindPctWeek(agentUSD, resolveUSD, followUpUSD, factor float64) (
+	agentPct, resolvePct, followUpPct, totalPct float64,
+) {
+	agentPct = pctWeek(agentUSD, factor)
+	resolvePct = pctWeek(resolveUSD, factor)
+	followUpPct = pctWeek(followUpUSD, factor)
+	return agentPct, resolvePct, followUpPct, agentPct + resolvePct + followUpPct
 }
 
 // civilDate strips t to its own wall-clock year, month and day, encoded at UTC midnight since
@@ -197,12 +235,13 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 		Points: make([]insightsPointJSON, len(spend)), WastePctWeek: pctWeek(wasteUSD, factor),
 	}
 	for i, p := range spend {
+		agentPct, resolvePct, followUpPct, totalPct := kindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
 		resp.Points[i] = insightsPointJSON{
 			Ticket: p.Ticket, Title: p.Title, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
-			PctWeek:         pctWeek(p.TotalUSD(), factor),
-			AgentPctWeek:    pctWeek(p.AgentUSD, factor),
-			ResolvePctWeek:  pctWeek(p.ResolveUSD, factor),
-			FollowUpPctWeek: pctWeek(p.FollowUpUSD, factor),
+			PctWeek:         totalPct,
+			AgentPctWeek:    agentPct,
+			ResolvePctWeek:  resolvePct,
+			FollowUpPctWeek: followUpPct,
 		}
 	}
 

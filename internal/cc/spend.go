@@ -54,3 +54,15 @@ func applySpend(rows []row, cache *spendCache) {
 		rows[i].SpendTokens, rows[i].SpendUSD, rows[i].SpendSettled = cache.Spend(rows[i].LogPath)
 	}
 }
+
+func applyTicketSpend(rows []row, byURL map[string]BoardTicketSpend, factor float64) {
+	for i := range rows {
+		ts, ok := byURL[rows[i].URL]
+		if !ok {
+			continue
+		}
+		rows[i].AgentPctWeek, rows[i].ResolvePctWeek, rows[i].FollowUpPctWeek, rows[i].SpendPctWeek =
+			kindPctWeek(ts.AgentUSD, ts.ResolveUSD, ts.FollowUpUSD, factor)
+		rows[i].TicketOpen = !ts.Merged
+	}
+}
