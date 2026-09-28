@@ -3,6 +3,8 @@ package cc_test
 import (
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -103,5 +105,39 @@ func TestBackfillMetricsPopulatesRunRequests(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].RequestID != "r1" || got[0].InputTokens != 2 {
 		t.Errorf("RunRequestsForRun = %+v, want one backfilled row for r1", got)
+	}
+}
+
+// TestBackfillMetricsAlsoExtractsReadingsFromTheSameLog covers the ticket's "backfill fills them
+// from surviving logs": readings come from the very same bytes BackfillMetrics already opens for
+// metrics, so a real log on disk is what proves the wiring rather than a fake MetricsParser.
+func TestBackfillMetricsAlsoExtractsReadingsFromTheSameLog(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+
+	logPath := filepath.Join(t.TempDir(), "run.jsonl")
+	line := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
+		`"five_hour":{"utilization":0.05,"resetsAt":1787665200}}}}` + "\n"
+	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backfillFixtureRun(t, store, "sandbox://CC-1", logPath)
+
+	noMetrics := func(logPath string) (agentlog.RunMetrics, error) {
+		return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, fs.ErrNotExist)
+	}
+	if err := cc.BackfillMetrics(ctx, store, noMetrics); err != nil {
+		t.Fatalf("BackfillMetrics: %v", err)
+	}
+
+	gauges, err := store.LatestReadings(ctx)
+	if err != nil {
+		t.Fatalf("LatestReadings: %v", err)
+	}
+	if got := gauges[agentlog.FiveHour]; got.Utilization != 0.05 {
+		t.Errorf("five_hour gauge = %+v; want utilization 0.05", got)
 	}
 }

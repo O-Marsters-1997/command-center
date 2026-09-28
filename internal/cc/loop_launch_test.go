@@ -377,6 +377,63 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	}
 }
 
+// TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
+// a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
+// path directly rather than through an injected parser.
+func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := filepath.Join(t.TempDir(), "wt")
+	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(t.TempDir(), "run.jsonl")
+	line := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
+		`"five_hour":{"utilization":0.05,"resetsAt":1787665200},` +
+		`"seven_day":{"utilization":0.19,"resetsAt":1788159600}}}}` + "\n"
+	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(t.Context(), runID, 999, at, logPath); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	fake.canReap[999] = true
+	fake.reapCode[999] = 0
+
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	gauges, err := store.LatestReadings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gauges[agentlog.FiveHour]; got.Utilization != 0.05 {
+		t.Errorf("five_hour gauge = %+v; want utilization 0.05", got)
+	}
+	if got := gauges[agentlog.SevenDay]; got.Utilization != 0.19 {
+		t.Errorf("seven_day gauge = %+v; want utilization 0.19", got)
+	}
+}
+
 func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)

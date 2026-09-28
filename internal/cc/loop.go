@@ -394,6 +394,9 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, ob
 	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now, metrics); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
+	if err := l.store.RecordReadings(ctx, l.parseReadings(run.LogPath)); err != nil {
+		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
+	}
 	return l.store.AppendEvent(ctx, Event{
 		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
 	})
@@ -411,6 +414,23 @@ func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
 		return nil
 	}
 	return &metrics
+}
+
+// parseReadings reads a disposed run's own log for its rate_limit_event lines, the same log
+// parseRunMetrics already opened. A log gone missing or unreadable yields no readings rather
+// than failing the disposition.
+func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
+	if logPath == "" {
+		return nil
+	}
+	readings, err := agentlog.ParseReadings(logPath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("parse run readings %s: %v", logPath, err)
+		}
+		return nil
+	}
+	return readings
 }
 
 // commitsSinceBaseline counts commits after baseline from the ticket's own worktree while it

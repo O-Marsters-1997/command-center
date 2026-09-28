@@ -11,6 +11,12 @@
     {{else}}
     <span class="pill"><span class="pill-disc"></span>observed {{template "age" .Observe}}</span>
     {{end}}
+    {{range .Gauges}}
+    <span class="flex items-center gap-[0.4em]">
+      <span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
+      {{.Label}} · {{.Pct}}%
+    </span>
+    {{end}}
   </div>
   {{with .LastError}}
   <p class="banner ribbon" data-tone="stop" role="status">
