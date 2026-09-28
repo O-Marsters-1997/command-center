@@ -58,3 +58,12 @@ SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
 
 -- name: LatestRunLog :one
 SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1;
+
+-- name: InsertRunRequest :exec
+INSERT INTO run_requests
+  (run_id, request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+
+-- name: RunRequestsForRun :many
+SELECT request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
+FROM run_requests WHERE run_id = $1 ORDER BY id;

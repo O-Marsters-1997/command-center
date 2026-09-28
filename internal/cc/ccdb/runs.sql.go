@@ -118,6 +118,37 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 	return id, err
 }
 
+const insertRunRequest = `-- name: InsertRunRequest :exec
+INSERT INTO run_requests
+  (run_id, request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertRunRequestParams struct {
+	RunID               int64
+	RequestID           string
+	Thread              string
+	Tool                string
+	InputTokens         int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	OutputTokens        int64
+}
+
+func (q *Queries) InsertRunRequest(ctx context.Context, arg InsertRunRequestParams) error {
+	_, err := q.db.ExecContext(ctx, insertRunRequest,
+		arg.RunID,
+		arg.RequestID,
+		arg.Thread,
+		arg.Tool,
+		arg.InputTokens,
+		arg.CacheCreationTokens,
+		arg.CacheReadTokens,
+		arg.OutputTokens,
+	)
+	return err
+}
+
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
 INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id
 `
@@ -439,6 +470,52 @@ func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const runRequestsForRun = `-- name: RunRequestsForRun :many
+SELECT request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
+FROM run_requests WHERE run_id = $1 ORDER BY id
+`
+
+type RunRequestsForRunRow struct {
+	RequestID           string
+	Thread              string
+	Tool                string
+	InputTokens         int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	OutputTokens        int64
+}
+
+func (q *Queries) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequestsForRunRow, error) {
+	rows, err := q.db.QueryContext(ctx, runRequestsForRun, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RunRequestsForRunRow
+	for rows.Next() {
+		var i RunRequestsForRunRow
+		if err := rows.Scan(
+			&i.RequestID,
+			&i.Thread,
+			&i.Tool,
+			&i.InputTokens,
+			&i.CacheCreationTokens,
+			&i.CacheReadTokens,
+			&i.OutputTokens,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package agentlog_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -29,6 +30,16 @@ func TestParseMetrics(t *testing.T) {
 				ToolFailures: 1,
 				Model:        "claude-sonnet-5",
 				Settled:      true,
+				Requests: []agentlog.Request{
+					{ID: "req_011CePLyfpsLhMDxGkxLCMur", Thread: agentlog.MainThread, Tool: "Bash",
+						InputTokens: 2, CacheCreationTokens: 28560, CacheReadTokens: 24902, OutputTokens: 6},
+					{ID: "req_011CePMHKBeWZNmiwDf34JiQ", Thread: agentlog.MainThread, Tool: "Skill",
+						InputTokens: 2, CacheCreationTokens: 138, CacheReadTokens: 125101, OutputTokens: 8},
+					{ID: "req_011CePMx1Yb7eLszzYyMzgsr", Thread: agentlog.MainThread, Tool: "Bash",
+						InputTokens: 2, CacheCreationTokens: 241, CacheReadTokens: 176056, OutputTokens: 3},
+					{ID: "req_011CePNusaftdEQ1jXDGD1ts", Thread: agentlog.MainThread, Tool: "Skill",
+						InputTokens: 2, CacheCreationTokens: 2562, CacheReadTokens: 253508, OutputTokens: 4},
+				},
 			},
 		},
 		{
@@ -39,6 +50,13 @@ func TestParseMetrics(t *testing.T) {
 				TokensOut:    16,
 				ToolCalls:    3,
 				ToolFailures: 1,
+				Requests: []agentlog.Request{
+					{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+						InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
+					{ID: "r2", Thread: agentlog.MainThread, Tool: "Skill",
+						InputTokens: 1, CacheCreationTokens: 2, CacheReadTokens: 3, OutputTokens: 4},
+					{ID: "r3", Thread: agentlog.MainThread, Tool: "Edit", OutputTokens: 7},
+				},
 			},
 		},
 		{
@@ -51,6 +69,31 @@ func TestParseMetrics(t *testing.T) {
 				ToolCalls: 1,
 				Model:     "free-dialect-1",
 				Settled:   true,
+				Requests: []agentlog.Request{
+					{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash", OutputTokens: 3},
+				},
+			},
+		},
+		{
+			// A Task call's subagent writes its own requests into the same log, interleaved with
+			// the main thread's. Each is attributed to the Task tool_use id that spawned it, not
+			// to request order (acceptance: "attributes the subagent's requests to its tool_use
+			// id").
+			name:    "a Task call's requests are attributed to its tool_use id",
+			fixture: "subagent.jsonl",
+			want: agentlog.RunMetrics{
+				TokensIn: 4, TokensOut: 4,
+				ToolCalls: 2,
+				Requests: []agentlog.Request{
+					{ID: "r-main-1", Thread: agentlog.MainThread, Tool: "Task",
+						InputTokens: 1, CacheCreationTokens: 0, CacheReadTokens: 0, OutputTokens: 1},
+					{ID: "r-sub-1", Thread: "toolu_task1", Tool: "Bash",
+						InputTokens: 1, CacheCreationTokens: 0, CacheReadTokens: 0, OutputTokens: 1},
+					{ID: "r-sub-2", Thread: "toolu_task1",
+						InputTokens: 1, CacheCreationTokens: 0, CacheReadTokens: 0, OutputTokens: 1},
+					{ID: "r-main-2", Thread: agentlog.MainThread,
+						InputTokens: 1, CacheCreationTokens: 0, CacheReadTokens: 0, OutputTokens: 1},
+				},
 			},
 		},
 	}
@@ -65,6 +108,32 @@ func TestParseMetrics(t *testing.T) {
 			}
 			assertMetrics(t, got, tt.want)
 		})
+	}
+}
+
+// TestParseMetricsContextPerRequest covers run27's own acceptance criterion: four main-thread
+// requests, each carrying the context window (input + cache creation + cache read) the CLI billed
+// that turn against.
+func TestParseMetricsContextPerRequest(t *testing.T) {
+	t.Parallel()
+
+	got, err := agentlog.ParseMetrics(filepath.Join("testdata", "run27.jsonl"))
+	if err != nil {
+		t.Fatalf("ParseMetrics: %v", err)
+	}
+
+	want := []int64{53464, 125241, 176299, 256072}
+	if len(got.Requests) != len(want) {
+		t.Fatalf("got %d requests, want %d: %+v", len(got.Requests), len(want), got.Requests)
+	}
+	for i, r := range got.Requests {
+		if r.Thread != agentlog.MainThread {
+			t.Errorf("request %d thread = %q, want %q", i, r.Thread, agentlog.MainThread)
+		}
+		context := r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens
+		if context != want[i] {
+			t.Errorf("request %d context = %d, want %d", i, context, want[i])
+		}
 	}
 }
 
@@ -111,7 +180,7 @@ func assertMetrics(t *testing.T, got, want agentlog.RunMetrics) {
 
 	gotCost, wantCost := got.CostUSD, want.CostUSD
 	got.CostUSD, want.CostUSD = nil, nil
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ParseMetrics = %+v; want %+v", got, want)
 	}
 	switch {

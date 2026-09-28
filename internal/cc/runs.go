@@ -43,19 +43,31 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 	return nil
 }
 
-// RecordDisposition writes a dead run's outcome and its metrics in the same UPDATE. exitCode and
-// metrics are both nil when there is nothing to report: a spawn failure, an unreapable process,
-// or no log to parse.
+// RecordDisposition writes a dead run's outcome, its metrics and its per-request rows in one
+// transaction. exitCode and metrics are both nil when there is nothing to report: a spawn
+// failure, an unreapable process, or no log to parse.
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
 	metrics *agentlog.RunMetrics,
-) error {
+) (err error) {
 	var exitCodeParam sql.NullInt64
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+	qtx := s.q.WithTx(tx)
+
 	m := runMetricsColumns(metrics)
-	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+	if err = qtx.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:        notNull(outcome.String()),
 		ExitCode:       exitCodeParam,
 		EndedAt:        notNullTime(endedAt.UTC()),
@@ -69,9 +81,31 @@ func (s *Store) RecordDisposition(
 		Model:          m.Model,
 		MetricsSettled: m.MetricsSettled,
 		ID:             runID,
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", runID, err)
+	}
+	if metrics != nil {
+		if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, requests []agentlog.Request) error {
+	for _, r := range requests {
+		if err := q.InsertRunRequest(ctx, ccdb.InsertRunRequestParams{
+			RunID:               runID,
+			RequestID:           r.ID,
+			Thread:              r.Thread,
+			Tool:                r.Tool,
+			InputTokens:         r.InputTokens,
+			CacheCreationTokens: r.CacheCreationTokens,
+			CacheReadTokens:     r.CacheReadTokens,
+			OutputTokens:        r.OutputTokens,
+		}); err != nil {
+			return fmt.Errorf("insert run request for run %d: %w", runID, err)
+		}
 	}
 	return nil
 }
@@ -127,11 +161,23 @@ func (s *Store) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunAwaitingM
 	return runs, nil
 }
 
-// BackfillRunMetrics writes one run's metrics columns alone, leaving outcome, exit_code and
-// ended_at -- already written at disposition -- untouched.
-func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics agentlog.RunMetrics) error {
+// BackfillRunMetrics writes one run's metrics columns and its per-request rows in one
+// transaction, leaving outcome, exit_code and ended_at -- already written at disposition --
+// untouched.
+func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics agentlog.RunMetrics) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+	qtx := s.q.WithTx(tx)
+
 	m := runMetricsColumns(&metrics)
-	err := s.q.BackfillRunMetrics(ctx, ccdb.BackfillRunMetricsParams{
+	if err = qtx.BackfillRunMetrics(ctx, ccdb.BackfillRunMetricsParams{
 		TokensIn:       m.TokensIn,
 		TokensOut:      m.TokensOut,
 		Turns:          m.Turns,
@@ -142,11 +188,48 @@ func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics age
 		Model:          m.Model,
 		MetricsSettled: m.MetricsSettled,
 		ID:             runID,
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("backfill metrics for run %d: %w", runID, err)
 	}
-	return nil
+	if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RunRequest is one run_requests row: one deduplicated request_id's usage, attributed to its
+// thread -- the main run or the tool_use id of the Task call that spawned it.
+type RunRequest struct {
+	RequestID           string
+	Thread              string
+	Tool                string
+	InputTokens         int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	OutputTokens        int64
+}
+
+// RunRequestsForRun returns one run's per-request rows in the order they were recorded, ready for
+// the detail row's context-curve chart. Empty for a run with none, whether because it has not
+// disposed yet, disposed before this feature shipped, or its log held no requests.
+func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequest, error) {
+	rows, err := s.q.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("select run requests for run %d: %w", runID, err)
+	}
+	requests := make([]RunRequest, len(rows))
+	for i, row := range rows {
+		requests[i] = RunRequest{
+			RequestID:           row.RequestID,
+			Thread:              row.Thread,
+			Tool:                row.Tool,
+			InputTokens:         row.InputTokens,
+			CacheCreationTokens: row.CacheCreationTokens,
+			CacheReadTokens:     row.CacheReadTokens,
+			OutputTokens:        row.OutputTokens,
+		}
+	}
+	return requests, nil
 }
 
 // InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no

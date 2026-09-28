@@ -21,6 +21,24 @@ type RunMetrics struct {
 	ToolFailures int
 	Model        string
 	Settled      bool
+	// Requests is one deduplicated request_id per element, in the order each first appeared.
+	Requests []Request
+}
+
+// MainThread is Request.Thread's value for every request that is not a subagent's.
+const MainThread = "main"
+
+// Request is one deduplicated request_id's usage, attributed to the thread that spent it. Thread
+// is MainThread, or the tool_use id of the Task call whose subagent made the request. Tool is the
+// name of the tool the request itself called, empty for a request that called none.
+type Request struct {
+	ID                  string
+	Thread              string
+	Tool                string
+	InputTokens         int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	OutputTokens        int64
 }
 
 // ParseMetrics reads a run's log in the Claude CLI's stream-json dialect into RunMetrics. An
@@ -33,10 +51,10 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 	defer func() { _ = f.Close() }()
 
 	var (
-		metrics RunMetrics
-		result  *logLine
-		decoded int
-		seen    map[string]struct{}
+		metrics  RunMetrics
+		result   *logLine
+		decoded  int
+		byReqIdx map[string]int
 	)
 
 	reader := bufio.NewReader(f)
@@ -65,13 +83,30 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 			resultLine := parsed
 			result = &resultLine
 		case "assistant":
-			if seen == nil {
-				seen = make(map[string]struct{})
-			}
-			if _, dup := seen[parsed.RequestID]; dup {
+			tool := firstToolUse(parsed.Message.Content)
+			if idx, dup := byReqIdx[parsed.RequestID]; dup {
+				if metrics.Requests[idx].Tool == "" {
+					metrics.Requests[idx].Tool = tool
+				}
 				continue
 			}
-			seen[parsed.RequestID] = struct{}{}
+			if byReqIdx == nil {
+				byReqIdx = make(map[string]int)
+			}
+			byReqIdx[parsed.RequestID] = len(metrics.Requests)
+			thread := MainThread
+			if parsed.ParentToolUseID != "" {
+				thread = parsed.ParentToolUseID
+			}
+			metrics.Requests = append(metrics.Requests, Request{
+				ID:                  parsed.RequestID,
+				Thread:              thread,
+				Tool:                tool,
+				InputTokens:         int64(parsed.Message.Usage.Input),
+				CacheCreationTokens: int64(parsed.Message.Usage.CacheCreate),
+				CacheReadTokens:     int64(parsed.Message.Usage.CacheRead),
+				OutputTokens:        int64(parsed.Message.Usage.Output),
+			})
 			metrics.TokensIn += tokensIn(parsed.Message.Usage)
 			metrics.TokensOut += int64(parsed.Message.Usage.Output)
 		}
@@ -95,6 +130,15 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 
 func tokensIn(u usage) int64 {
 	return int64(u.Input + u.CacheCreate + u.CacheRead)
+}
+
+func firstToolUse(content []contentBlock) string {
+	for _, block := range content {
+		if block.Type == "tool_use" {
+			return block.Name
+		}
+	}
+	return ""
 }
 
 func countEvent(metrics *RunMetrics, parsed logLine) {
