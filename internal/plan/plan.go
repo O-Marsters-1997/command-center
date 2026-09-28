@@ -28,6 +28,10 @@ type Ticket struct {
 	Repo      string
 	Branch    string
 	BlockedBy []string
+	// WorkedExampleBranch is a same-repo blocker's branch, set by the caller once that
+	// blocker's pull request is open or merged (mirrors unlockedOnBlocker's PR-state cases).
+	// Compose renders it as a "## Worked example" section; empty renders no section.
+	WorkedExampleBranch string
 }
 
 // Reason is the human-readable sentence the page renders on a row.

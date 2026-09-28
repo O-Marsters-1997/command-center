@@ -6,9 +6,18 @@ import (
 	"fmt"
 )
 
-// Compose renders the prompt a launch authorises: the implement instruction for the ticket.
+// Compose renders the prompt a launch authorises: the implement instruction for the ticket,
+// plus a worked-example section when t.WorkedExampleBranch is set, so a later wave can read a
+// blocker's diff instead of re-exploring. The implement instruction always leads, since a slash
+// command has to open the prompt.
 func Compose(t Ticket) string {
-	return "/implement " + t.URL
+	prompt := "/implement " + t.URL
+	if t.WorkedExampleBranch != "" {
+		prompt += fmt.Sprintf(
+			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",
+			t.WorkedExampleBranch, defaultBranch)
+	}
+	return prompt
 }
 
 const resolveSkillPath = "cc/skills/resolve-merge-conflict/SKILL.md"
