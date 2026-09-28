@@ -149,6 +149,7 @@ func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
 func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 	dataDir := t.TempDir()
 	t.Setenv("CC_DATA_DIR", dataDir)
+	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
 
 	_, repoPath := repoWithOrigin(t)
 	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
