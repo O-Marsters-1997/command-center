@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 )
 
@@ -18,51 +19,78 @@ const insightsDefaultRangeDays = 30
 
 const insightsDateFormat = "2006-01-02"
 
-// InsightsBucket is one local calendar day's aggregated run spend.
-type InsightsBucket struct {
-	Day       time.Time
-	TokensIn  int64
-	TokensOut int64
-	Runs      int64
-	Unsettled int64
+// TicketSpend is one merged ticket's weight: every run disposed before its pr_merged event,
+// summed by kind, in dollars.
+type TicketSpend struct {
+	Ticket      string
+	Title       string
+	MergedAt    time.Time
+	AgentUSD    float64
+	ResolveUSD  float64
+	FollowUpUSD float64
 }
 
-// RunInsights buckets every disposed run in [since, until] by local day. A run's feature comes
-// from its own ticket alone, never ADR 13's blocker closure, and a withdrawn ticket's runs still
-// count (docs/adr/0015-run-metrics-are-captured-at-disposition-from-stdout.md).
-func (s *Store) RunInsights(
+// TotalUSD is every run's weight regardless of kind.
+func (t TicketSpend) TotalUSD() float64 {
+	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
+}
+
+// MergedTicketSpend returns one point per ticket whose pr_merged event falls in [since, until],
+// weighing every run disposed before that event.
+func (s *Store) MergedTicketSpend(
 	ctx context.Context, repo, feature, tz string, since, until time.Time,
-) ([]InsightsBucket, error) {
-	rows, err := s.q.RunInsights(ctx, ccdb.RunInsightsParams{
-		Since: since, Until: until, Timezone: tz, Repo: repo, Feature: feature,
+) ([]TicketSpend, error) {
+	rows, err := s.q.MergedTicketSpend(ctx, ccdb.MergedTicketSpendParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("select run insights: %w", err)
+		return nil, fmt.Errorf("select merged ticket spend: %w", err)
 	}
 
-	buckets := make([]InsightsBucket, len(rows))
+	points := make([]TicketSpend, len(rows))
 	for i, row := range rows {
-		buckets[i] = InsightsBucket{
-			Day: row.Day, TokensIn: row.TokensIn, TokensOut: row.TokensOut,
-			Runs: row.Runs, Unsettled: row.Unsettled,
+		points[i] = TicketSpend{
+			Ticket: row.TicketID, Title: row.Title, MergedAt: row.MergedAt,
+			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd,
 		}
 	}
-	return buckets, nil
+	return points, nil
+}
+
+// WithdrawnTicketWaste sums every disposed run belonging to a ticket withdrawn, by its own
+// withdrawal time, without ever merging.
+func (s *Store) WithdrawnTicketWaste(
+	ctx context.Context, repo, feature, tz string, since, until time.Time,
+) (float64, error) {
+	usd, err := s.q.WithdrawnTicketWaste(ctx, ccdb.WithdrawnTicketWasteParams{
+		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("select withdrawn ticket waste: %w", err)
+	}
+	return usd, nil
 }
 
 type insightsResponse struct {
-	Since    string               `json:"since"`
-	Until    string               `json:"until"`
-	Timezone string               `json:"timezone"`
-	Buckets  []insightsBucketJSON `json:"buckets"`
+	Since        string              `json:"since"`
+	Until        string              `json:"until"`
+	Timezone     string              `json:"timezone"`
+	Points       []insightsPointJSON `json:"points"`
+	WastePctWeek float64             `json:"waste_pct_week"`
 }
 
-type insightsBucketJSON struct {
-	Day       string `json:"day"`
-	TokensIn  int64  `json:"tokens_in"`
-	TokensOut int64  `json:"tokens_out"`
-	Runs      int64  `json:"runs"`
-	Unsettled int64  `json:"unsettled"`
+type insightsPointJSON struct {
+	Ticket          string  `json:"ticket"`
+	Title           string  `json:"title"`
+	MergedAt        string  `json:"merged_at"`
+	PctWeek         float64 `json:"pct_week"`
+	AgentPctWeek    float64 `json:"agent_pct_week"`
+	ResolvePctWeek  float64 `json:"resolve_pct_week"`
+	FollowUpPctWeek float64 `json:"follow_up_pct_week"`
+}
+
+func pctWeek(usd, factor float64) float64 {
+	return usd * factor * 100
 }
 
 // civilDate strips t to its own wall-clock year, month and day, encoded at UTC midnight since
@@ -138,28 +166,43 @@ func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleInsights serves GET /insights.json?repo=&feature=&since=, the daily spend series.
 func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	q := r.URL.Query()
 	now := s.now()
 	tz := insightsTimezone(now.Location())
 	until := civilDate(now)
 	since := parseSinceOrDefault(q.Get("since"), until)
+	repo, feature := q.Get("repo"), q.Get("feature")
 
-	buckets, err := s.store.RunInsights(r.Context(), q.Get("repo"), q.Get("feature"), tz, since, until)
+	spend, err := s.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	wasteUSD, err := s.store.WithdrawnTicketWaste(ctx, repo, feature, tz, since, until)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fits, err := s.store.FitFactors(ctx, now)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	factor := fits[agentlog.SevenDay].Factor
 
 	resp := insightsResponse{
 		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
-		Buckets: make([]insightsBucketJSON, len(buckets)),
+		Points: make([]insightsPointJSON, len(spend)), WastePctWeek: pctWeek(wasteUSD, factor),
 	}
-	for i, b := range buckets {
-		resp.Buckets[i] = insightsBucketJSON{
-			Day: b.Day.Format(insightsDateFormat), TokensIn: b.TokensIn, TokensOut: b.TokensOut,
-			Runs: b.Runs, Unsettled: b.Unsettled,
+	for i, p := range spend {
+		resp.Points[i] = insightsPointJSON{
+			Ticket: p.Ticket, Title: p.Title, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
+			PctWeek:         pctWeek(p.TotalUSD(), factor),
+			AgentPctWeek:    pctWeek(p.AgentUSD, factor),
+			ResolvePctWeek:  pctWeek(p.ResolveUSD, factor),
+			FollowUpPctWeek: pctWeek(p.FollowUpUSD, factor),
 		}
 	}
 

@@ -1,22 +1,29 @@
--- name: RunInsights :many
--- Every disposed run counts, tickets.withdrawn_at included (docs/adr/0015).
-WITH days AS (
-    SELECT generate_series(sqlc.arg(since)::date, sqlc.arg(until)::date, interval '1 day')::date AS day
-), matched AS (
-    SELECT r.id, r.tokens_in, r.tokens_out, r.metrics_settled,
-           (r.ended_at AT TIME ZONE sqlc.arg(timezone)::text)::date AS day
-    FROM runs r
-    JOIN tickets t ON t.url = r.ticket_id
-    WHERE r.ended_at IS NOT NULL
-      AND (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
-      AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+-- name: MergedTicketSpend :many
+-- One row per ticket with a pr_merged event in [since, until], weighing every run disposed
+-- before that event.
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
 )
-SELECT d.day AS day,
-       COALESCE(SUM(m.tokens_in), 0)::bigint AS tokens_in,
-       COALESCE(SUM(m.tokens_out), 0)::bigint AS tokens_out,
-       COUNT(m.id) AS runs,
-       COUNT(*) FILTER (WHERE m.metrics_settled = false) AS unsettled
-FROM days d
-LEFT JOIN matched m ON m.day = d.day
-GROUP BY d.day
-ORDER BY d.day;
+SELECT t.url AS ticket_id, t.title, m.merged_at,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
+FROM tickets t
+JOIN merges m ON m.ticket_id = t.url
+LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+WHERE (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
+  AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+  AND (m.merged_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
+GROUP BY t.url, t.title, m.merged_at
+ORDER BY m.merged_at;
+
+-- name: WithdrawnTicketWaste :one
+-- Every disposed run belonging to a ticket withdrawn without ever merging.
+SELECT COALESCE(SUM(r.cost_usd), 0)::double precision AS waste_usd
+FROM tickets t
+JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
+WHERE t.withdrawn_at IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
+  AND (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
+  AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+  AND (t.withdrawn_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date;
