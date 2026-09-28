@@ -14,6 +14,10 @@
   --color-s-stop: oklch(58% 0.196 25);
   --color-s-idle: oklch(65% 0.012 250);
 
+  --color-k-agent: oklch(60% 0.158 250);
+  --color-k-resolve: oklch(62% 0.148 150);
+  --color-k-follow-up: oklch(72% 0.146 80);
+
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -28,6 +32,10 @@
   --color-s-wait: oklch(80% 0.138 80);
   --color-s-stop: oklch(68% 0.178 25);
   --color-s-idle: oklch(55% 0.012 250);
+
+  --color-k-agent: oklch(70% 0.148 250);
+  --color-k-resolve: oklch(72% 0.148 150);
+  --color-k-follow-up: oklch(80% 0.138 80);
 }
 
 @layer base {
@@ -153,6 +161,18 @@
   [data-tone="idle"],
   .pill-idle {
     --tone: var(--color-s-idle);
+  }
+
+  [data-kind="agent"] {
+    --tone: var(--color-k-agent);
+  }
+
+  [data-kind="resolve"] {
+    --tone: var(--color-k-resolve);
+  }
+
+  [data-kind="follow_up"] {
+    --tone: var(--color-k-follow-up);
   }
 
   .pill {

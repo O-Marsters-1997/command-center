@@ -10,6 +10,68 @@ import (
 	"time"
 )
 
+const boardTicketSpend = `-- name: BoardTicketSpend :many
+WITH merges AS (
+    SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+)
+SELECT t.url AS ticket_id, (m.merged_at IS NOT NULL)::boolean AS merged,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
+       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
+FROM tickets t
+LEFT JOIN merges m ON m.ticket_id = t.url
+LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
+    AND (m.merged_at IS NULL OR r.ended_at < m.merged_at)
+WHERE ($1::text = '' OR t.repo = $1)
+  AND ($2::text = '' OR t.feature = $2)
+GROUP BY t.url, m.merged_at
+`
+
+type BoardTicketSpendParams struct {
+	Repo    string
+	Feature string
+}
+
+type BoardTicketSpendRow struct {
+	TicketID    string
+	Merged      bool
+	AgentUsd    float64
+	ResolveUsd  float64
+	FollowUpUsd float64
+}
+
+// One row per ticket in scope, weighing every run disposed before its own pr_merged event when
+// merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
+// uses, generalised past merged-only tickets and off any date window (ADR 17).
+func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendParams) ([]BoardTicketSpendRow, error) {
+	rows, err := q.db.QueryContext(ctx, boardTicketSpend, arg.Repo, arg.Feature)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BoardTicketSpendRow
+	for rows.Next() {
+		var i BoardTicketSpendRow
+		if err := rows.Scan(
+			&i.TicketID,
+			&i.Merged,
+			&i.AgentUsd,
+			&i.ResolveUsd,
+			&i.FollowUpUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mergedTicketSpend = `-- name: MergedTicketSpend :many
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'

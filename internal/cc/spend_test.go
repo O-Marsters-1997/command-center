@@ -1,8 +1,10 @@
 package cc
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -97,5 +99,88 @@ func TestSpendCacheTreatsARerunsNewLogPathAsANewEntry(t *testing.T) {
 	}
 	if entry := cache.by[first].reads; entry != 1 {
 		t.Errorf("first's reads = %d, want 1: the second path's own reads must not touch it", entry)
+	}
+}
+
+func TestApplyTicketSpendStacksByKindAndFlagsAnOpenTicket(t *testing.T) {
+	t.Parallel()
+
+	rows := []row{{URL: "sandbox://CC-1"}, {URL: "sandbox://CC-2"}}
+	byURL := map[string]BoardTicketSpend{
+		"sandbox://CC-1": {AgentUSD: 1, ResolveUSD: 0.5, FollowUpUSD: 0.25, Merged: true},
+		"sandbox://CC-2": {AgentUSD: 2, Merged: false},
+	}
+	applyTicketSpend(rows, byURL, 0.1)
+
+	merged := rows[0]
+	if merged.AgentPctWeek != 10 || merged.ResolvePctWeek != 5 || merged.FollowUpPctWeek != 2.5 {
+		t.Errorf("merged pct split = %+v, want 10/5/2.5", merged)
+	}
+	if merged.SpendPctWeek != 17.5 {
+		t.Errorf("merged SpendPctWeek = %v, want 17.5 (the stacked total)", merged.SpendPctWeek)
+	}
+	if merged.TicketOpen {
+		t.Error("merged TicketOpen = true, want false")
+	}
+
+	open := rows[1]
+	if !open.TicketOpen {
+		t.Error("open TicketOpen = false, want true: no pr_merged event")
+	}
+}
+
+func TestApplyTicketSpendLeavesARowWithNoSpendUntouched(t *testing.T) {
+	t.Parallel()
+
+	rows := []row{{URL: "sandbox://CC-1"}}
+	applyTicketSpend(rows, map[string]BoardTicketSpend{}, 0.1)
+
+	if got := rows[0]; got.SpendPctWeek != 0 || got.TicketOpen {
+		t.Errorf("row = %+v, want the zero value: no entry for this ticket", got)
+	}
+}
+
+func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) {
+	t.Parallel()
+
+	r := row{
+		URL: "sandbox://CC-1", State: "merged", Tone: "done",
+		AgentPctWeek: 1.5, ResolvePctWeek: 0.5, FollowUpPctWeek: 0.25,
+		SpendPctWeek: 2.25, TicketOpen: true,
+	}
+	var buf bytes.Buffer
+	if err := boardFragment.Execute(&buf, pageView{Groups: []group{{Children: []row{r}}}}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	got := buf.String()
+	wants := []string{
+		`data-kind="agent" style="flex-grow: 1.5"`,
+		`data-kind="resolve" style="flex-grow: 0.5"`,
+		`data-kind="follow_up" style="flex-grow: 0.25"`,
+		"2.25% week",
+		"open",
+	}
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Errorf("board does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBoardTemplateOmitsOpenForAMergedTicket(t *testing.T) {
+	t.Parallel()
+
+	r := row{
+		URL: "sandbox://CC-1", State: "merged", Tone: "done",
+		AgentPctWeek: 1, SpendPctWeek: 1, TicketOpen: false,
+	}
+	var buf bytes.Buffer
+	if err := boardFragment.Execute(&buf, pageView{Groups: []group{{Children: []row{r}}}}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if got := buf.String(); strings.Contains(got, "open") {
+		t.Errorf("board contains \"open\" for a merged ticket:\n%s", got)
 	}
 }
