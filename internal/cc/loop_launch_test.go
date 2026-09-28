@@ -367,8 +367,19 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	if !row.MetricsSettled.Valid || row.MetricsSettled.Bool {
 		t.Errorf("metrics_settled = %+v, want false (a killed run's log never reached a result line)", row.MetricsSettled)
 	}
+
+	latest, err := store.LatestRunsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary := latest[ticket.URL]; !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
+		t.Errorf("summary = %+v, want failed (no commits after baseline)", summary)
+	}
 }
 
+// TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
+// a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
+// path directly rather than through an injected parser.
 // TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
 // a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
 // path directly rather than through an injected parser.

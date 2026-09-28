@@ -76,6 +76,18 @@ type Run struct {
 	MetricsSettled sql.NullBool
 }
 
+type RunRequest struct {
+	ID                  int64
+	RunID               int64
+	RequestID           string
+	Thread              string
+	Tool                string
+	InputTokens         int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+	OutputTokens        int64
+}
+
 type Session struct {
 	ID        int64
 	UserID    int64

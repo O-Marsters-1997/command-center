@@ -327,6 +327,36 @@
     border-radius: 999px;
   }
 
+  .chart-line {
+    fill: none;
+    stroke-width: 1.5;
+  }
+
+  .chart-series-0 {
+    stroke: var(--color-s-live);
+    background: var(--color-s-live);
+  }
+
+  .chart-series-1 {
+    stroke: var(--color-s-done);
+    background: var(--color-s-done);
+  }
+
+  .chart-series-2 {
+    stroke: var(--color-s-wait);
+    background: var(--color-s-wait);
+  }
+
+  .chart-series-3 {
+    stroke: var(--color-s-stop);
+    background: var(--color-s-stop);
+  }
+
+  .chart-series-4 {
+    stroke: var(--color-s-idle);
+    background: var(--color-s-idle);
+  }
+
   .line {
     display: flex;
     align-items: baseline;

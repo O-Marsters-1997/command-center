@@ -145,7 +145,10 @@ type logLine struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	RequestID string    `json:"request_id"`
-	Message   struct {
+	// ParentToolUseID names the tool_use id of the Task call that spawned this line's thread, and
+	// is empty on every main-thread line.
+	ParentToolUseID string `json:"parent_tool_use_id"`
+	Message         struct {
 		Model   string         `json:"model"`
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`

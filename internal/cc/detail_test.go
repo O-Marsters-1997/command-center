@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -118,6 +119,50 @@ func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	}
 	if !strings.Contains(body, "<div>unit:") {
 		t.Errorf("unit has no DetailsURL and should render as plain text:\n%s", body)
+	}
+}
+
+func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	withRows := detailStore(t, writeLog(t, 1), now, now)
+	runID, err := withRows.InsertRunSkeleton(ctx, "https://github.com/o/r/issues/76", "agent", "basesha1234", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := agentlog.RunMetrics{
+		TokensIn: 100, TokensOut: 12, Settled: true,
+		Requests: []agentlog.Request{
+			{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+				InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
+			{ID: "r2", Thread: agentlog.MainThread,
+				InputTokens: 40, CacheCreationTokens: 50, CacheReadTokens: 60, OutputTokens: 7},
+		},
+	}
+	if err := withRows.RecordDisposition(ctx, runID, plan.OutcomePush, nil, now, &metrics); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	server := cc.NewServer(withRows, fixedClock(now), nil, "")
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="context-curve`) {
+		t.Errorf("no context curve for a disposed run with run_requests rows:\n%s", body)
+	}
+	if !strings.Contains(body, `chart-series-0`) {
+		t.Errorf("no main-thread series in the curve:\n%s", body)
+	}
+
+	noRows := detailStore(t, writeLog(t, 1), now, now)
+	rec2 := httptest.NewRecorder()
+	server2 := cc.NewServer(noRows, fixedClock(now), nil, "")
+	server2.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
+	if strings.Contains(rec2.Body.String(), `class="context-curve`) {
+		t.Errorf("a run with no run_requests rows still rendered a context curve:\n%s", rec2.Body)
 	}
 }
 

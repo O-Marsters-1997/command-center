@@ -79,6 +79,35 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 	}
 }
 
+func TestBackfillMetricsPopulatesRunRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+
+	runID := backfillFixtureRun(t, store, "sandbox://CC-1", "/state/runs/survives.jsonl")
+	parser := func(logPath string) (agentlog.RunMetrics, error) {
+		return agentlog.RunMetrics{
+			TokensIn: 3, TokensOut: 1, Settled: true,
+			Requests: []agentlog.Request{
+				{ID: "r1", Thread: agentlog.MainThread, InputTokens: 2, CacheReadTokens: 1, OutputTokens: 1},
+			},
+		}, nil
+	}
+	if err := cc.BackfillMetrics(ctx, store, parser, t.TempDir()); err != nil {
+		t.Fatalf("BackfillMetrics: %v", err)
+	}
+
+	got, err := store.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("RunRequestsForRun: %v", err)
+	}
+	if len(got) != 1 || got[0].RequestID != "r1" || got[0].InputTokens != 2 {
+		t.Errorf("RunRequestsForRun = %+v, want one backfilled row for r1", got)
+	}
+}
+
 // TestBackfillMetricsAlsoExtractsReadingsFromTheSameLog covers the ticket's "backfill fills them
 // from surviving logs": readings come from the very same bytes BackfillMetrics already opens for
 // metrics, so a real log on disk is what proves the wiring rather than a fake MetricsParser.
