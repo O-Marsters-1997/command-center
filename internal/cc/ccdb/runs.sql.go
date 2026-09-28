@@ -94,13 +94,57 @@ func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentPa
 	return err
 }
 
+const exploreRunsByLaunch = `-- name: ExploreRunsByLaunch :many
+SELECT launch_id, outcome FROM runs WHERE kind = 'explore'
+`
+
+type ExploreRunsByLaunchRow struct {
+	LaunchID sql.NullInt64
+	Outcome  sql.NullString
+}
+
+// One row per launch with an explore run, disposed or not -- launchEligible's own gate.
+func (q *Queries) ExploreRunsByLaunch(ctx context.Context) ([]ExploreRunsByLaunchRow, error) {
+	rows, err := q.db.QueryContext(ctx, exploreRunsByLaunch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExploreRunsByLaunchRow
+	for rows.Next() {
+		var i ExploreRunsByLaunchRow
+		if err := rows.Scan(&i.LaunchID, &i.Outcome); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const exploringCount = `-- name: ExploringCount :one
+SELECT COUNT(*) FROM runs WHERE kind = 'explore' AND pgid IS NOT NULL AND outcome IS NULL
+`
+
+func (q *Queries) ExploringCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, exploringCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertCutFailedRun = `-- name: InsertCutFailedRun :one
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id
 `
 
 type InsertCutFailedRunParams struct {
-	TicketID   string
+	TicketID   sql.NullString
 	PromptHash sql.NullString
 	Outcome    sql.NullString
 	EndedAt    sql.NullTime
@@ -113,6 +157,17 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 		arg.Outcome,
 		arg.EndedAt,
 	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertExploreRunSkeleton = `-- name: InsertExploreRunSkeleton :one
+INSERT INTO runs (launch_id, kind) VALUES ($1, 'explore') RETURNING id
+`
+
+func (q *Queries) InsertExploreRunSkeleton(ctx context.Context, launchID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertExploreRunSkeleton, launchID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -154,7 +209,7 @@ INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3
 `
 
 type InsertRunSkeletonParams struct {
-	TicketID    string
+	TicketID    sql.NullString
 	Kind        string
 	BaselineSHA sql.NullString
 	PromptHash  sql.NullString
@@ -181,7 +236,7 @@ type LatestRunLogRow struct {
 	EndedAt sql.NullTime
 }
 
-func (q *Queries) LatestRunLog(ctx context.Context, ticketID string) (LatestRunLogRow, error) {
+func (q *Queries) LatestRunLog(ctx context.Context, ticketID sql.NullString) (LatestRunLogRow, error) {
 	row := q.db.QueryRowContext(ctx, latestRunLog, ticketID)
 	var i LatestRunLogRow
 	err := row.Scan(&i.LogPath, &i.EndedAt)
@@ -192,13 +247,13 @@ const latestRunsByTicket = `-- name: LatestRunsByTicket :many
 SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
        r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
 FROM runs r
-JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
+JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id
 `
 
 type LatestRunsByTicketRow struct {
 	ID            int64
-	TicketID      string
+	TicketID      sql.NullString
 	Pgid          sql.NullInt64
 	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
@@ -245,6 +300,66 @@ func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketR
 	return items, nil
 }
 
+const launchMemberTicketIDs = `-- name: LaunchMemberTicketIDs :many
+SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id
+`
+
+func (q *Queries) LaunchMemberTicketIDs(ctx context.Context, launchID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, launchMemberTicketIDs, launchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ticket_id string
+		if err := rows.Scan(&ticket_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ticket_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pendingExploreRuns = `-- name: PendingExploreRuns :many
+SELECT id, launch_id FROM runs WHERE kind = 'explore' AND pgid IS NULL AND outcome IS NULL ORDER BY id
+`
+
+type PendingExploreRunsRow struct {
+	ID       int64
+	LaunchID sql.NullInt64
+}
+
+// Every explore run insertLaunch reserved that spawnExploreRuns has not yet cut a worktree for.
+func (q *Queries) PendingExploreRuns(ctx context.Context) ([]PendingExploreRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, pendingExploreRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PendingExploreRunsRow
+	for rows.Next() {
+		var i PendingExploreRunsRow
+		if err := rows.Scan(&i.ID, &i.LaunchID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id
 `
@@ -278,13 +393,14 @@ func (q *Queries) PendingIntentsByTicket(ctx context.Context) ([]PendingIntentsB
 }
 
 const pendingRunsAwaitingDisposition = `-- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, launch_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL
 `
 
 type PendingRunsAwaitingDispositionRow struct {
 	ID            int64
-	TicketID      string
+	TicketID      sql.NullString
+	LaunchID      sql.NullInt64
 	Pgid          sql.NullInt64
 	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
@@ -303,6 +419,7 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 		if err := rows.Scan(
 			&i.ID,
 			&i.TicketID,
+			&i.LaunchID,
 			&i.Pgid,
 			&i.ProcStartedAt,
 			&i.BaselineSHA,
@@ -457,7 +574,7 @@ const runIDsForTicket = `-- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id
 `
 
-func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
+func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID sql.NullString) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, runIDsForTicket, ticketID)
 	if err != nil {
 		return nil, err

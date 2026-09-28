@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 )
 
 // Compose renders the prompt a launch authorises: the implement instruction for the ticket,
@@ -18,6 +19,26 @@ func Compose(t Ticket) string {
 			t.WorkedExampleBranch, defaultBranch)
 	}
 	return prompt
+}
+
+// ComposeExplore renders the prompt a launch's own explore run authorises: read the repository
+// once for the whole launch and write a shared brief to path, naming every member ticket.
+func ComposeExplore(tickets []Ticket, path string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Explore this repository once for the whole launch below, and write a brief "+
+		"to %s covering:\n\n", path)
+	b.WriteString("## File map\n\nWhere the packages, tests and templates that matter here live.\n\n")
+	b.WriteString("## Conventions\n\nHow this codebase is written: idioms, package layout, error handling.\n\n")
+	b.WriteString("## Seams\n\nWhere two or more of the tickets below are about to touch the same code.\n\n")
+	b.WriteString("## Test commands\n\nHow to run the tests and lints this repo expects to pass.\n\n")
+	b.WriteString("Keep the whole brief to about 3,000 tokens. Then one section per ticket:\n")
+	for _, t := range tickets {
+		fmt.Fprintf(&b, "\n## %s\n\nBranch: %s.", t.URL, t.Branch)
+		if len(t.BlockedBy) > 0 {
+			fmt.Fprintf(&b, " Blocked by: %s.", strings.Join(t.BlockedBy, ", "))
+		}
+	}
+	return b.String()
 }
 
 const resolveSkillPath = "cc/skills/resolve-merge-conflict/SKILL.md"

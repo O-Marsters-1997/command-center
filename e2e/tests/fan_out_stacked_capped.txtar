@@ -13,10 +13,20 @@ exec cc import project:fan-out
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 
-# Tick: only the root is unlocked yet, so the cap never even comes into play here.
+# Tick: the one launch's own reserved explore run cuts and spawns first -- every ticket, root
+# included, stays queued until it disposes (ExploreBlocking), brief or not. The cap never even
+# comes into play here.
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=1 'run_launched'
+
+exec sleep 0.5
+
+# Tick: the explore run's dead process disposes -- the root, now unlocked and authorised with no
+# prior run, cuts and spawns.
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=2 'run_launched'
 
 exec sleep 0.5
 
@@ -33,7 +43,7 @@ cc-config fan-out-stacked-capped-sleeps
 # running, so only two cut and spawn off origin/cc-1-x.
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=3 'run_launched'
+stdout -count=4 'run_launched'
 grep -count=2 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
@@ -50,7 +60,7 @@ stdout -count=2 'waiting for a slot'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=4 'run_launched'
+stdout -count=5 'run_launched'
 grep -count=3 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc tick --count 1
@@ -63,7 +73,7 @@ stdout -count=1 'waiting for a slot'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3'
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=5 'run_launched'
+stdout -count=6 'run_launched'
 grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4'

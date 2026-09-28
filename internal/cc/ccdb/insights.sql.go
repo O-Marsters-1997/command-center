@@ -13,18 +13,28 @@ import (
 const boardTicketSpend = `-- name: BoardTicketSpend :many
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+), explore_share AS (
+    SELECT lm.ticket_id, SUM(r.cost_usd / m.members) AS share
+    FROM runs r
+    JOIN launch_members lm ON lm.launch_id = r.launch_id
+    JOIN (SELECT launch_id, COUNT(*)::float AS members FROM launch_members GROUP BY launch_id) m
+      ON m.launch_id = r.launch_id
+    WHERE r.kind = 'explore' AND r.ended_at IS NOT NULL
+    GROUP BY lm.ticket_id
 )
 SELECT t.url AS ticket_id, (m.merged_at IS NOT NULL)::boolean AS merged,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
+       (COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)
+        + COALESCE(es.share, 0))::double precision AS agent_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 LEFT JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
     AND (m.merged_at IS NULL OR r.ended_at < m.merged_at)
+LEFT JOIN explore_share es ON es.ticket_id = t.url
 WHERE ($1::text = '' OR t.repo = $1)
   AND ($2::text = '' OR t.feature = $2)
-GROUP BY t.url, m.merged_at
+GROUP BY t.url, m.merged_at, es.share
 `
 
 type BoardTicketSpendParams struct {
@@ -42,7 +52,8 @@ type BoardTicketSpendRow struct {
 
 // One row per ticket in scope, weighing every run disposed before its own pr_merged event when
 // merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
-// uses, generalised past merged-only tickets and off any date window (ADR 17).
+// uses, generalised past merged-only tickets and off any date window (ADR 17), with the same
+// explore_share apportionment.
 func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendParams) ([]BoardTicketSpendRow, error) {
 	rows, err := q.db.QueryContext(ctx, boardTicketSpend, arg.Repo, arg.Feature)
 	if err != nil {
@@ -75,18 +86,28 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 const mergedTicketSpend = `-- name: MergedTicketSpend :many
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
+), explore_share AS (
+    SELECT lm.ticket_id, SUM(r.cost_usd / m.members) AS share
+    FROM runs r
+    JOIN launch_members lm ON lm.launch_id = r.launch_id
+    JOIN (SELECT launch_id, COUNT(*)::float AS members FROM launch_members GROUP BY launch_id) m
+      ON m.launch_id = r.launch_id
+    WHERE r.kind = 'explore' AND r.ended_at IS NOT NULL
+    GROUP BY lm.ticket_id
 )
 SELECT t.url AS ticket_id, t.title, m.merged_at,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
+       (COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)
+        + COALESCE(es.share, 0))::double precision AS agent_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
+LEFT JOIN explore_share es ON es.ticket_id = t.url
 WHERE ($1::text = '' OR t.repo = $1)
   AND ($2::text = '' OR t.feature = $2)
   AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
-GROUP BY t.url, t.title, m.merged_at
+GROUP BY t.url, t.title, m.merged_at, es.share
 ORDER BY m.merged_at
 `
 
@@ -108,7 +129,8 @@ type MergedTicketSpendRow struct {
 }
 
 // One row per ticket with a pr_merged event in [since, until], weighing every run disposed
-// before that event.
+// before that event. explore_share splits each launch's own explore run cost equally across
+// its launch_members, folded into agent_usd.
 func (q *Queries) MergedTicketSpend(ctx context.Context, arg MergedTicketSpendParams) ([]MergedTicketSpendRow, error) {
 	rows, err := q.db.QueryContext(ctx, mergedTicketSpend,
 		arg.Repo,

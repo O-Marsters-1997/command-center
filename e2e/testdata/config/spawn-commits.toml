@@ -1,8 +1,8 @@
 # cc-config prepends `port = 0`, so this file must not set it.
 # {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
 #
-# One of the three spawn-*.toml fixtures spawn_and_dispose.txtar swaps between. CC-1/2/3 are
-# imported once, under whichever of the three is loaded first -- the only thing that changes
+# One of the four spawn-*.toml fixtures spawn_and_dispose.txtar swaps between. CC-1/2/3 are
+# imported once, under whichever of the four is loaded first -- the only thing that changes
 # underneath them across a swap is agent_command.
 
 max_agents = 3

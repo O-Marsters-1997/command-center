@@ -22,8 +22,8 @@ type Runner interface {
 }
 
 // SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {system_prompt}, {agents}, {prompt} and
-// {prompt_file} are substituted into every element before exec.
+// configured argv template; {worktree}, {settings}, {system_prompt}, {agents}, {model},
+// {prompt} and {prompt_file} are substituted into every element before exec.
 type SpawnConfig struct {
 	AgentCommand     []string
 	WorktreePath     string
@@ -32,6 +32,7 @@ type SpawnConfig struct {
 	// AgentsPath names the --agents JSON file (WriteAgentDigestDefinition's output). Empty for a
 	// kind that gets no digest subagent, like SystemPromptPath.
 	AgentsPath string
+	Model      string
 	Prompt     string
 	PromptPath string
 	// LogFile is both stdout and stderr, opened by the caller and never a pipe: piping would
@@ -54,6 +55,7 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{agents}", cfg.AgentsPath)
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
+	arg = strings.ReplaceAll(arg, "{model}", cfg.Model)
 	return arg
 }
 

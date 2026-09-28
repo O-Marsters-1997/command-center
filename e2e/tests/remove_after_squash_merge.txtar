@@ -12,6 +12,14 @@ cc-fake-gh no-prs
 exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+
+# The launch's own reserved explore run cuts and spawns first -- CC-1 stays queued until that
+# explore run disposes (ExploreBlocking), brief or not.
+exec cc tick --count 1
+exec sleep 0.5
+
+# The explore run's dead process disposes, unblocking CC-1 -- it cuts and spawns its own real
+# run this same tick.
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1

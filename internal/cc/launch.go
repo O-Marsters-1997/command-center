@@ -2,6 +2,7 @@ package cc
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,6 +113,10 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 		}); err != nil {
 			return fmt.Errorf("consume intent %d: %w", m.id, err)
 		}
+	}
+
+	if _, err := q.InsertExploreRunSkeleton(ctx, sql.NullInt64{Int64: launchID, Valid: true}); err != nil {
+		return fmt.Errorf("insert explore run for launch %d: %w", launchID, err)
 	}
 
 	detail := fmt.Sprintf("launch %d authorised with %d member(s)", launchID, len(members))

@@ -429,7 +429,9 @@ type group struct {
 type chrome struct {
 	Workspace  string
 	LiveAgents int
-	Observe    ageView
+	// Exploring counts spawned, undisposed explore runs.
+	Exploring int
+	Observe   ageView
 	// ObserveStale is decided here rather than in the template, which cannot compare durations.
 	ObserveStale bool
 	LastError    *tickErrorView
@@ -549,6 +551,10 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	if err != nil {
 		return pageView{}, err
 	}
+	exploring, err := s.store.ExploringCount(ctx)
+	if err != nil {
+		return pageView{}, err
+	}
 
 	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
 	applySpend(rows, s.spend)
@@ -559,7 +565,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
-		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params),
+		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, exploring, now, params),
 		Groups:    groups,
 		Band:      deriveBand(rowsIn(groups)),
 		BoardPath: params.boardPath(),
@@ -572,11 +578,13 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 // chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
 func (s *Server) buildChrome(
 	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool,
-	gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit, now time.Time, params viewParams,
+	gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit, exploring int,
+	now time.Time, params viewParams,
 ) chrome {
 	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
+		Exploring:    exploring,
 		Observe:      ageView{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
@@ -631,7 +639,11 @@ func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, erro
 	if err != nil {
 		return chrome{}, err
 	}
-	return s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params), nil
+	exploring, err := s.store.ExploringCount(ctx)
+	if err != nil {
+		return chrome{}, err
+	}
+	return s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, exploring, now, params), nil
 }
 
 // applyViewState parses the selected row's own log only, not every row's: a board of twenty-five

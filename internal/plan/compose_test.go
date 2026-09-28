@@ -87,6 +87,36 @@ func TestComposeFollowUpAppendsTheCISectionWhenGiven(t *testing.T) {
 	}
 }
 
+func TestComposeExplore(t *testing.T) {
+	t.Parallel()
+
+	tickets := []plan.Ticket{
+		{URL: "sandbox://CC-1", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+	}
+
+	got := plan.ComposeExplore(tickets, "/runs/launch-1/brief.md")
+	for _, want := range []string{
+		"/runs/launch-1/brief.md",
+		"## File map", "## Conventions", "## Seams", "## Test commands",
+		"## sandbox://CC-1", "cc-1",
+		"## sandbox://CC-2", "cc-2", "sandbox://CC-1",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ComposeExplore = %q, want it to mention %q", got, want)
+		}
+	}
+}
+
+func TestComposeExploreOmitsBlockedByWhenThereIsNone(t *testing.T) {
+	t.Parallel()
+
+	got := plan.ComposeExplore([]plan.Ticket{{URL: "sandbox://CC-1", Branch: "cc-1"}}, "/brief.md")
+	if strings.Contains(got, "Blocked by") {
+		t.Errorf("ComposeExplore = %q, want no Blocked by clause for a ticket with no blockers", got)
+	}
+}
+
 func TestHashIsStableAndSensitiveToInput(t *testing.T) {
 	t.Parallel()
 

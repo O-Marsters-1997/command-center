@@ -45,10 +45,11 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns = %d, want 2 (the launch's explore run, then the ticket)", len(fake.spawns))
 	}
-	spawned := fake.spawns[0]
+	spawned := fake.spawns[1]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
@@ -70,8 +71,8 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
-	if summary.Pgid == nil || *summary.Pgid != 1 {
-		t.Errorf("pgid = %v, want 1", summary.Pgid)
+	if summary.Pgid == nil || *summary.Pgid != 2 {
+		t.Errorf("pgid = %v, want 2 (pid 1 went to the explore run)", summary.Pgid)
 	}
 	if summary.BaselineSHA == "" {
 		t.Error("baseline_sha is empty")
@@ -103,11 +104,12 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns = %d, want 2 (the launch's explore run, then the ticket)", len(fake.spawns))
 	}
 
-	written, err := os.ReadFile(fake.spawns[0].PromptPath)
+	written, err := os.ReadFile(fake.spawns[1].PromptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,8 +141,9 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 			t.Fatalf("RunOnce %d: %v", i, err)
 		}
 	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned", len(fake.spawns))
+	if len(fake.spawns) != 1 {
+		t.Errorf("spawns = %d, want 1 (the explore run only): "+
+			"a hash the ticket no longer composes to must never be spawned", len(fake.spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -149,6 +152,69 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	}
 	if _, ran := latest[ticket.URL]; ran {
 		t.Error("no run should ever be recorded for a ticket whose authorised hash no longer matches")
+	}
+}
+
+func TestLoopLaunchesThreeTicketsAfterOneSuccessfulExploreRun(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 3, []string{"true"})
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+		{URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3"},
+	}
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, ticket := range tickets {
+		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+		if err := store.QueueLaunchIntent(t.Context(), ticket.URL, hash, "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A fresh test database's first launch gets id 1, so the brief path is known up front --
+	// the same way other tests here rely on fakeRunner's first pid being 1.
+	wantBrief := filepath.Join(ws.RunsDir, "launch-1", "brief.md")
+	fake := newFakeRunner()
+	fake.onSpawn = func(spawned cc.SpawnConfig) {
+		if spawned.Model == "claude-haiku-4-5" {
+			if err := os.WriteFile(wantBrief, []byte("brief"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns after tick 1 = %d, want 1 (the one shared explore run)", len(fake.spawns))
+	}
+	if got := fake.spawns[0].Model; got != "claude-haiku-4-5" {
+		t.Errorf("explore run model = %q, want claude-haiku-4-5", got)
+	}
+
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 4 {
+		t.Fatalf("spawns after settling explore = %d, want 4 (the explore run, then all three tickets)", len(fake.spawns))
+	}
+
+	for _, spawned := range fake.spawns[1:] {
+		prompt, err := os.ReadFile(spawned.PromptPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(prompt), "## Brief\n\n"+wantBrief) {
+			t.Errorf("ticket prompt = %q, want it to name the shared brief at %q", prompt, wantBrief)
+		}
 	}
 }
 
@@ -216,9 +282,17 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
+	// Each ticket authorised its own group, so this launches two explore runs, not one.
+	settleExplore(t, loop, fake)
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(fake.spawns))
+	var ticketSpawns int
+	for _, s := range fake.spawns {
+		if strings.Contains(s.WorktreePath, "wt-cc-1") || strings.Contains(s.WorktreePath, "wt-cc-2") {
+			ticketSpawns++
+		}
+	}
+	if ticketSpawns != 1 {
+		t.Fatalf("ticket spawns = %d, want exactly 1 (max_agents = 1)", ticketSpawns)
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -584,8 +658,9 @@ func TestLoopPausesSpawningAtOrAboveSpendLimit5h(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: the five-hour reading is at spend_limit_5h", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 1 {
+		t.Errorf("spawns = %d, want 1 (the explore run only): the five-hour reading is at spend_limit_5h", len(fake.spawns))
 	}
 }
 
@@ -617,8 +692,9 @@ func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 0 {
-		t.Fatalf("spawns after tick 1 = %d, want 0", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 1 {
+		t.Fatalf("spawns after settling explore = %d, want 1 (the explore run only)", len(fake.spawns))
 	}
 
 	under := agentlog.Reading{
@@ -631,8 +707,9 @@ func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Errorf("spawns after tick 2 = %d, want 1: the newer reading dropped below spend_limit_5h", len(fake.spawns))
+	if len(fake.spawns) != 2 {
+		t.Errorf("spawns after tick 2 = %d, want 2 (explore, then the ticket): "+
+			"the newer reading dropped below spend_limit_5h", len(fake.spawns))
 	}
 }
 

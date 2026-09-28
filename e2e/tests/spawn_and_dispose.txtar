@@ -18,10 +18,18 @@ cc-fake-gh no-prs
 exec cc import project:spawn
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
+
+# The launch's own reserved explore run cuts and spawns first -- CC-1 stays queued until that
+# explore run disposes (ExploreBlocking), brief or not.
 exec cc tick --count 1
 
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
+exec sleep 0.5
+
+# Tick: the explore run's dead process disposes, unblocking CC-1 -- it cuts and spawns its own
+# real run this same tick.
+exec cc tick --count 1
 exec sleep 0.5
 
 # Tick: CC-1's dead run disposes with commits, so the same tick pushes it and opens its PR. The
@@ -35,6 +43,13 @@ stdout 'agent finished with commits, waiting to push'
 # Swap the agent to the one that commits nothing, and launch CC-2 under it.
 cc-config spawn-empty
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-2'
+
+# CC-2's own reserved explore run cuts and spawns first, under the now-swapped empty.sh.
+exec cc tick --count 1
+exec sleep 0.5
+
+# The explore run's dead process disposes, unblocking CC-2 -- it cuts and spawns its own real
+# run this same tick.
 exec cc tick --count 1
 exec sleep 0.5
 
@@ -47,9 +62,18 @@ stdout -count=1 '>failed</span>'
 stdout 'no commits after this run'
 ! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2-x
 
-# Swap to the agent that never exits on its own, and launch CC-3 under it.
-cc-config spawn-sleeps
+# Launch CC-3 under commits_slow.sh, not empty.sh: a tick's own dispose pass runs in the same
+# RunOnce as its spawn pass, so an agent fast enough to exit before that same tick's liveness
+# check would let CC-3's own explore run dispose -- and CC-3's real run spawn -- before the
+# config below ever swaps to sleeps.sh. commits_slow.sh's full-second sleep rules that out.
+cc-config spawn-commits-slow
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
+exec cc tick --count 1
+exec sleep 1.5
+
+# Now swap to the agent that never exits on its own: the explore run has already disposed under
+# commits_slow.sh, so this tick's dispose-and-spawn only points CC-3's own real run at sleeps.sh.
+cc-config spawn-sleeps
 exec cc tick --count 1
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
@@ -75,10 +99,12 @@ exec cc request GET /
 ! stdout '>running</span>'
 stdout -count=2 '>failed</span>'
 
-# Three tasks, three agents, three spawns -- the agent log is independent of both tp.log's cuts
-# and events' own count.
-grep -count=1 'commits.sh' $WORK/agent.log
-grep -count=1 'empty.sh' $WORK/agent.log
+# Three tasks, four agents, six spawns -- each task's own explore run plus its real run -- the
+# agent log is independent of both tp.log's cuts and events' own count. sleeps.sh ran once, not
+# twice: CC-3's own explore run disposed under commits_slow.sh before the config ever swapped.
+grep -count=2 'commits.sh' $WORK/agent.log
+grep -count=2 'empty.sh' $WORK/agent.log
+grep -count=1 'commits_slow.sh' $WORK/agent.log
 grep -count=1 'sleeps.sh' $WORK/agent.log
 exec cc request GET /events
-stdout -count=3 'run_launched'
+stdout -count=6 'run_launched'

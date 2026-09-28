@@ -14,6 +14,11 @@ cc-fake-gh no-prs
 exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+
+# The launch's own reserved explore run cuts and spawns first, then disposes and unblocks the
+# ticket's real run -- one tick per spawn, one sleep per real process exit.
+exec cc tick --count 1
+exec sleep 0.5
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
@@ -38,7 +43,7 @@ exec cc request GET '/?sel=https%3A%2F%2Fgithub.com%2Fsandbox-org%2Fsingle-task%
 stdout '<div>CI: COMPLETED FAILURE</div>'
 stdout '<dt[^>]*>worktree</dt><dd[^>]*>.*/repo-cc-1-x</dd>'
 stdout '<dt[^>]*>base sha</dt><dd[^>]*>[0-9a-f]{40}</dd>'
-stdout '<span class="run-log-path[^"]*">.*/runs/1\.jsonl</span>'
+stdout '<span class="run-log-path[^"]*">.*/runs/2\.jsonl</span>'
 stdout '<dt[^>]*>elapsed</dt>'
 stdout 'hx-preserve="true"'
 

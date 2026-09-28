@@ -10,9 +10,13 @@ cc-config teardown-cc7-empty
 cc-fake-gh no-prs
 exec cc import project:teardown
 
-# CC-7 fails with the empty-commit fake agent: no commits, no push, a plain failed row.
+# CC-7 fails with the empty-commit fake agent: no commits, no push, a plain failed row. The
+# launch's own reserved explore run cuts, spawns and disposes first (ExploreBlocking, brief or
+# not) before CC-7's own real run gets its turn.
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
+exec cc tick --count 1
+exec sleep 0.5
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
@@ -29,9 +33,20 @@ exec cc import project:teardown-more
 exec cc tick --count 1
 exec cc request POST '/verb?verb=re-run&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-1&ticket=https://github.com/sandbox-org/teardown/issues/CC-3&ticket=https://github.com/sandbox-org/teardown/issues/CC-4'
+
+# re-run bypasses launchEligible entirely -- no explore run, no ExploreBlocking -- so CC-7's own
+# real run spawns this same tick. The new launch's own reserved explore run spawns alongside it,
+# and holds CC-1/CC-3/CC-4 queued until it disposes.
 exec cc tick --count 1
 grep -count=1 'new cc-7-x' $WORK/tp.log
 exec sleep 0.5
+
+# CC-7's re-run disposes and pushes; the explore run disposes too, unblocking CC-1 and CC-3 (CC-4
+# stays queued, still locked behind CC-3's own PR) -- both cut and spawn this same tick.
+exec cc tick --count 1
+exec sleep 0.5
+
+# CC-1 and CC-3's real runs dispose and push, through the same push step CC-7's re-run just used.
 exec cc tick --count 1
 
 # CC-7's re-run pushed its commits through the very same push step a fresh launch uses.
