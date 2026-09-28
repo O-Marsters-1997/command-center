@@ -24,7 +24,10 @@ type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
-	Repos        []Repo   `toml:"repo"`
+	// SpendLimit5h is the percent of the account's five-hour window at or above which
+	// launchEligible spawns nothing new (CC-314); 0 means unset, so nothing is ever paused.
+	SpendLimit5h int    `toml:"spend_limit_5h"`
+	Repos        []Repo `toml:"repo"`
 }
 
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the

@@ -544,6 +544,137 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	}
 }
 
+// TestLoopPausesSpawningAtOrAboveSpendLimit5h covers CC-314's first acceptance criterion: an
+// otherwise-eligible ticket stays queued while the latest five-hour reading is at or above
+// spend_limit_5h.
+func TestLoopPausesSpawningAtOrAboveSpendLimit5h(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	cfg.SpendLimit5h = 80
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	authoriseTicket(t, store, ticket.URL, hash, at)
+	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.80, ResetsAt: at.Add(time.Hour), At: at}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: the five-hour reading is at spend_limit_5h", len(fake.spawns))
+	}
+}
+
+// TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit covers CC-314's second acceptance
+// criterion: the same ticket launches once a later reading reports usage back under the limit.
+func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+	installFakeGh(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	cfg.SpendLimit5h = 80
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	authoriseTicket(t, store, ticket.URL, hash, at)
+	over := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.85, ResetsAt: at.Add(time.Hour), At: at}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{over}); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := newFakeRunner()
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 0 {
+		t.Fatalf("spawns after tick 1 = %d, want 0", len(fake.spawns))
+	}
+
+	under := agentlog.Reading{
+		Window: agentlog.FiveHour, Utilization: 0.50,
+		ResetsAt: at.Add(2 * time.Hour), At: at.Add(time.Second),
+	}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{under}); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	if len(fake.spawns) != 1 {
+		t.Errorf("spawns after tick 2 = %d, want 1: the newer reading dropped below spend_limit_5h", len(fake.spawns))
+	}
+}
+
+// TestLoopSpendPauseNeverKillsALiveRun covers CC-314's own constraint: a run already spawned
+// keeps going while spend_limit_5h pauses new spawns, since launchEligible only ever refuses to
+// start something new.
+func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
+	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := filepath.Join(t.TempDir(), "wt")
+	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+
+	store := openStore(t)
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.95, ResetsAt: at.Add(time.Hour), At: at}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	fake := newFakeRunner()
+	fake.alive[4242] = true
+
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg.SpendLimit5h = 80
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if len(fake.canceled) != 0 {
+		t.Errorf("canceled pgids = %v, want none: spend_limit_5h never kills a live run", fake.canceled)
+	}
+	if !fake.alive[4242] {
+		t.Error("the live run's process was stopped; spend_limit_5h must leave it running")
+	}
+}
+
 func runGit(t *testing.T, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
