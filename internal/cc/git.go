@@ -182,6 +182,28 @@ func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, 
 	return n, nil
 }
 
+// LinesChanged sums insertions and deletions between baseline and ref, skipping binary files.
+func LinesChanged(ctx context.Context, repoPath, baseline, ref string) (int, error) {
+	out, err := git(ctx, repoPath, "diff", "--numstat", baseline, ref)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		added, errA := strconv.Atoi(fields[0])
+		deleted, errD := strconv.Atoi(fields[1])
+		if errA != nil || errD != nil {
+			continue
+		}
+		total += added + deleted
+	}
+	return total, nil
+}
+
 // RemovalState is which of tp's own removal checks a branch has left to run, or -- once
 // GitHub's delete-branch-on-merge has pruned the remote-tracking ref tp would check against --
 // whether cc can prove the same thing in tp's place (issue #147).

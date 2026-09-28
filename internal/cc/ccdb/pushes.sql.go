@@ -11,6 +11,38 @@ import (
 	"time"
 )
 
+const firstPushedAt = `-- name: FirstPushedAt :many
+SELECT ticket_id, MIN(pushed_at)::timestamptz AS pushed_at FROM pushes GROUP BY ticket_id
+`
+
+type FirstPushedAtRow struct {
+	TicketID string
+	PushedAt time.Time
+}
+
+func (q *Queries) FirstPushedAt(ctx context.Context) ([]FirstPushedAtRow, error) {
+	rows, err := q.db.QueryContext(ctx, firstPushedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FirstPushedAtRow
+	for rows.Next() {
+		var i FirstPushedAtRow
+		if err := rows.Scan(&i.TicketID, &i.PushedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lastPushedTips = `-- name: LastPushedTips :many
 SELECT p.ticket_id, p.pushed_tip FROM pushes p
 JOIN (SELECT ticket_id, MAX(id) AS id FROM pushes GROUP BY ticket_id) latest

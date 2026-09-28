@@ -3,6 +3,8 @@ package cc_test
 import (
 	"context"
 	"database/sql"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -139,6 +141,120 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 	if got := len(mergedEvents(events)); got != 0 {
 		t.Errorf("pr_merged events for a closed-unmerged PR = %d, want 0: %+v", got, events)
 	}
+}
+
+func TestRecordMergedEventsRecordsHandChurnFromCommitsAfterCCsLastPush(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	dir := initRepoForHandChurnTest(t)
+	ccTip := commitFileForHandChurnTest(t, dir, "a.txt", "cc content\n", "cc commit")
+
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+	if err := store.RecordPush(ctx, ticket.URL, ccTip, "main", ccTip, time.Now()); err != nil {
+		t.Fatalf("RecordPush: %v", err)
+	}
+
+	handTip := commitFileForHandChurnTest(t, dir, "b.txt", "line one\nline two\n", "human commit")
+
+	observed := cc.Observation{
+		PRs: map[string]gh.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: time.Now(), HeadOid: handTip},
+		},
+	}
+	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
+	loop := cc.NewLoop(store,
+		func(context.Context) (cc.Observation, error) { return observed, nil },
+		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
+
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	got := ticketByURL(t, store, ticket.URL)
+	if got.HandChurnLines == nil || *got.HandChurnLines != 2 {
+		t.Fatalf("hand_churn_lines = %v, want 2", got.HandChurnLines)
+	}
+}
+
+func TestRecordMergedEventsRecordsZeroHandChurnWhenNothingLandsAfterCCsLastPush(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	dir := initRepoForHandChurnTest(t)
+	ccTip := commitFileForHandChurnTest(t, dir, "a.txt", "cc content\n", "cc commit")
+
+	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+	if err := store.RecordPush(ctx, ticket.URL, ccTip, "main", ccTip, time.Now()); err != nil {
+		t.Fatalf("RecordPush: %v", err)
+	}
+
+	observed := cc.Observation{
+		PRs: map[string]gh.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: time.Now(), HeadOid: ccTip},
+		},
+	}
+	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
+	loop := cc.NewLoop(store,
+		func(context.Context) (cc.Observation, error) { return observed, nil },
+		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
+
+	if err := loop.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	got := ticketByURL(t, store, ticket.URL)
+	if got.HandChurnLines == nil || *got.HandChurnLines != 0 {
+		t.Fatalf("hand_churn_lines = %v, want 0", got.HandChurnLines)
+	}
+}
+
+func initRepoForHandChurnTest(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runHandChurnGit(t, dir, "init", "-q", "-b", "main")
+	runHandChurnGit(t, dir, "commit", "-q", "--allow-empty", "-m", "initial")
+	return dir
+}
+
+func commitFileForHandChurnTest(t *testing.T, dir, name, content, msg string) string {
+	t.Helper()
+	if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+	runHandChurnGit(t, dir, "add", "-A")
+	runHandChurnGit(t, dir, "commit", "-q", "-m", msg)
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v", err)
+	}
+	return trimNewlineForHandChurnTest(string(out))
+}
+
+func runHandChurnGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+func trimNewlineForHandChurnTest(s string) string {
+	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func mergedEvents(events []cc.Event) []cc.Event {
