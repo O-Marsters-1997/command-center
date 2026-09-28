@@ -394,7 +394,8 @@ func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, ob
 	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now, metrics); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
-	if err := l.store.RecordReadings(ctx, l.parseReadings(run.LogPath)); err != nil {
+	readings := l.parseReadings(run.LogPath)
+	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
 	return l.store.AppendEvent(ctx, Event{

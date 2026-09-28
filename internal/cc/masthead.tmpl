@@ -14,7 +14,7 @@
     {{range .Gauges}}
     <span class="flex items-center gap-[0.4em]">
       <span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
-      {{.Label}} · {{.Pct}}%
+      {{.Label}} · {{.Pct}}%{{if .Calibrating}} · calibrating{{else}} · {{.CCPct}}% cc{{end}}
     </span>
     {{end}}
   </div>

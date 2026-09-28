@@ -7,7 +7,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -182,6 +184,38 @@ func decode(line []byte) (logLine, error) {
 	var parsed logLine
 	err := json.Unmarshal(line, &parsed)
 	return parsed, err
+}
+
+// forEachLine reads a transcript line by line, calling fn with each decoded line and the last
+// non-zero timestamp seen so far -- what a line carrying none of its own (a result line, a
+// rate_limit_event) is tagged with instead. A line that fails to decode is skipped, not failed.
+func forEachLine(logPath string, fn func(logLine, time.Time)) error {
+	f, err := os.Open(logPath)
+	if err != nil {
+		return fmt.Errorf("open agent log %s: %w", logPath, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	var last time.Time
+	reader := bufio.NewReader(f)
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("read agent log %s: %w", logPath, readErr)
+		}
+
+		parsed, decodeErr := decode(line)
+		if decodeErr != nil {
+			continue
+		}
+		if !parsed.Timestamp.IsZero() {
+			last = parsed.Timestamp
+		}
+		fn(parsed, last)
+	}
 }
 
 func (l logLine) result() Result {

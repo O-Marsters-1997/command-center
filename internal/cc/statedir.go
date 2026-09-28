@@ -69,6 +69,24 @@ func ResolveDataDir(configured string) (string, error) {
 	return filepath.Abs(dir)
 }
 
+// defaultClaudeProjectsDir names where the Claude CLI itself writes every session transcript,
+// interactive and agent alike.
+const defaultClaudeProjectsDir = "~/.claude/projects"
+
+// ResolveClaudeProjectsDir answers where usage.Weigh reads transcripts from: the config's own
+// claude_projects_dir, else defaultClaudeProjectsDir. A leading ~ expands.
+func ResolveClaudeProjectsDir(configured string) (string, error) {
+	dir := configured
+	if dir == "" {
+		dir = defaultClaudeProjectsDir
+	}
+	dir, err := expandHome(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(dir)
+}
+
 func expandHome(path string) (string, error) {
 	if path != "~" && !strings.HasPrefix(path, "~/") {
 		return path, nil

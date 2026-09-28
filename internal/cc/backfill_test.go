@@ -50,7 +50,7 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 		return agentlog.RunMetrics{TokensIn: 10, TokensOut: 5, Settled: true}, nil
 	}
 
-	if err := cc.BackfillMetrics(ctx, store, parser); err != nil {
+	if err := cc.BackfillMetrics(ctx, store, parser, t.TempDir()); err != nil {
 		t.Fatalf("BackfillMetrics: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestBackfillMetricsPopulatesSurvivingLogsAndLeavesPrunedOnesNull(t *testing
 		reparsed = append(reparsed, logPath)
 		return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, fs.ErrNotExist)
 	}
-	if err := cc.BackfillMetrics(ctx, store, secondPass); err != nil {
+	if err := cc.BackfillMetrics(ctx, store, secondPass, t.TempDir()); err != nil {
 		t.Fatalf("BackfillMetrics second pass: %v", err)
 	}
 	if len(reparsed) != 1 || reparsed[0] != "/state/runs/pruned.jsonl" {
@@ -100,7 +100,7 @@ func TestBackfillMetricsAlsoExtractsReadingsFromTheSameLog(t *testing.T) {
 	noMetrics := func(logPath string) (agentlog.RunMetrics, error) {
 		return agentlog.RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, fs.ErrNotExist)
 	}
-	if err := cc.BackfillMetrics(ctx, store, noMetrics); err != nil {
+	if err := cc.BackfillMetrics(ctx, store, noMetrics, t.TempDir()); err != nil {
 		t.Fatalf("BackfillMetrics: %v", err)
 	}
 
