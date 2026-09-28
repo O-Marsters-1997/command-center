@@ -230,6 +230,7 @@ path is relative to.
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. |
+| `max_turns` | Caps a spawned run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
 | `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`, `verify_command`. |
 
