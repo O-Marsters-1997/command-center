@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 
@@ -24,6 +25,9 @@ type Config struct {
 	MaxAgents    int      `toml:"max_agents"`
 	Port         int      `toml:"port"`
 	AgentCommand []string `toml:"agent_command"`
+	// MaxTurns caps a spawned run at this many agent turns, appended to AgentCommand as
+	// --max-turns. Zero (the default) sets no cap.
+	MaxTurns int `toml:"max_turns"`
 	// SpendLimit5h is the percent of the account's five-hour window at or above which
 	// launchEligible spawns nothing new (CC-314); 0 means unset, so nothing is ever paused.
 	SpendLimit5h int    `toml:"spend_limit_5h"`
@@ -117,6 +121,9 @@ func LoadConfig(path string) (Config, error) {
 	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL)
 	if err := applyAgentCommandEnv(&cfg); err != nil {
 		return Config{}, err
+	}
+	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
+		cfg.AgentCommand = append(cfg.AgentCommand, "--max-turns", strconv.Itoa(cfg.MaxTurns))
 	}
 	for i, r := range cfg.Repos {
 		if r.Tracker == "" {

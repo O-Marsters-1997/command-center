@@ -195,6 +195,112 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 	}
 }
 
+func TestRecordDispositionWritesRunRequestsAlongsideMetrics(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+
+	metrics := agentlog.RunMetrics{
+		TokensIn: 10, TokensOut: 6, Settled: true,
+		Requests: []agentlog.Request{
+			{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+				InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
+			{ID: "r2", Thread: "toolu_task1", Tool: "Explore", InputTokens: 1, OutputTokens: 1},
+		},
+	}
+	endedAt := startedAt.Add(time.Second)
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, &metrics); err != nil {
+		t.Fatalf("RecordDisposition: %v", err)
+	}
+
+	got, err := store.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("RunRequestsForRun: %v", err)
+	}
+	want := []cc.RunRequest{
+		{RequestID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+			InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
+		{RequestID: "r2", Thread: "toolu_task1", Tool: "Explore", InputTokens: 1, OutputTokens: 1},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("RunRequestsForRun = %+v, want %+v", got, want)
+	}
+}
+
+func TestRunLevelTokensEqualTheSumOfRunRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	seedOneTicket(t, store)
+
+	metrics, err := agentlog.ParseMetrics("../agentlog/testdata/alive.jsonl")
+	if err != nil {
+		t.Fatalf("ParseMetrics: %v", err)
+	}
+
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, time.Now(), &metrics); err != nil {
+		t.Fatalf("RecordDisposition: %v", err)
+	}
+
+	row := readRunMetrics(t, dsn, runID)
+	requests, err := store.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("RunRequestsForRun: %v", err)
+	}
+	var sumIn, sumOut int64
+	for _, r := range requests {
+		sumIn += r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens
+		sumOut += r.OutputTokens
+	}
+	if row.TokensIn.Int64 != sumIn {
+		t.Errorf("runs.tokens_in = %d, want the run_requests sum %d", row.TokensIn.Int64, sumIn)
+	}
+	if row.TokensOut.Int64 != sumOut {
+		t.Errorf("runs.tokens_out = %d, want the run_requests sum %d", row.TokensOut.Int64, sumOut)
+	}
+}
+
+func TestRunRequestsForRunIsEmptyWithoutRows(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeCutFailed, nil, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.RunRequestsForRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("RunRequestsForRun: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("RunRequestsForRun = %+v, want none for a run with no metrics", got)
+	}
+}
+
 func TestRecordDispositionLeavesMetricsNullWithoutAParse(t *testing.T) {
 	t.Parallel()
 

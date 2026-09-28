@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"s"}
+{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r-main-1","parent_tool_use_id":null,"message":{"usage":{"input_tokens":1,"output_tokens":1},"content":[{"type":"tool_use","id":"toolu_task1","name":"Task","input":{"subagent_type":"Explore","description":"find the thing"}}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01.000Z","request_id":"r-sub-1","parent_tool_use_id":"toolu_task1","message":{"usage":{"input_tokens":1,"output_tokens":1},"content":[{"type":"tool_use","id":"toolu_sub_bash1","name":"Bash","input":{"command":"grep -rn thing ."}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02.000Z","parent_tool_use_id":"toolu_task1","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_sub_bash1","content":"found it"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03.000Z","request_id":"r-sub-2","parent_tool_use_id":"toolu_task1","message":{"usage":{"input_tokens":1,"output_tokens":1},"content":[{"type":"text","text":"it is over there"}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04.000Z","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"toolu_task1","content":"it is over there"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:05.000Z","request_id":"r-main-2","parent_tool_use_id":null,"message":{"usage":{"input_tokens":1,"output_tokens":1},"content":[{"type":"text","text":"continuing"}]}}

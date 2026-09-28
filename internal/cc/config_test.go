@@ -155,6 +155,58 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 	}
 }
 
+func TestLoadConfigMaxTurns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "unset leaves agent_command untouched",
+			body: "[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			want: []string{
+				"claude", "-p", "{prompt}",
+				"--output-format", "stream-json", "--verbose",
+				"--settings", "{settings}",
+				"--append-system-prompt-file", "{system_prompt}",
+				"--model", "claude-sonnet-5",
+			},
+		},
+		{
+			name: "set appends --max-turns with the configured value",
+			body: "max_turns = 40\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			want: []string{
+				"claude", "-p", "{prompt}",
+				"--output-format", "stream-json", "--verbose",
+				"--settings", "{settings}",
+				"--append-system-prompt-file", "{system_prompt}",
+				"--model", "claude-sonnet-5",
+				"--max-turns", "40",
+			},
+		},
+		{
+			name: "an explicit empty agent_command stays empty so spawning stays off",
+			body: "max_turns = 40\nagent_command = []\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			want: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := cc.LoadConfig(writeConfig(t, tt.body))
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if !slices.Equal(got.AgentCommand, tt.want) {
+				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
+			}
+		})
+	}
+}
+
 const oneRepoWithChecks = `
 [[repo]]
 name        = "r"
