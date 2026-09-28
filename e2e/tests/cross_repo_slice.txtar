@@ -17,7 +17,16 @@ exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/services/issues/PLA-40'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 
-# Both cut and spawn on this tick.
+# Tick: each launch's own reserved explore run cuts and spawns, in its own repo -- both tickets
+# stay queued until their own explore run disposes (ExploreBlocking), brief or not.
+exec cc tick --count 1
+
+# Real wall time for both explore runs' agents to finish (commits_slow.sh sleeps a full second
+# first).
+exec sleep 1.5
+
+# Tick: both explore runs' dead processes dispose, unblocking both tickets -- both cut and spawn
+# this same tick.
 exec cc tick --count 1
 
 # A fresh instance -- nothing in memory from the one that spawned them -- ticks again before
@@ -27,7 +36,7 @@ exec cc tick --count 1
 exec cc request GET /
 stdout -count=2 '>running</span>'
 exec cc request GET /events
-stdout -count=2 'run_launched'
+stdout -count=4 'run_launched'
 grep -count=1 'commits_slow.sh .*services-cc-40-x' $WORK/agent.log
 grep -count=1 'commits_slow.sh .*repo-cc-1-x' $WORK/agent.log
 

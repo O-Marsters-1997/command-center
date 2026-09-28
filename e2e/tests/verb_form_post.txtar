@@ -10,10 +10,17 @@ exec cc import project:two-tasks
 exec cc tick --count 1
 exec cc request -form 'ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2' POST /launch
 
-# One form submission authorised the whole slice.
+# One form submission authorised the whole slice, and its own reserved explore run cuts and
+# spawns -- CC-1 stays queued until that explore run disposes (ExploreBlocking), brief or not.
 exec cc tick --count 1
 exec cc request GET /events
 stdout 'authorised with 2 member'
+
+exec sleep 0.5
+
+# The explore run's dead process disposes, which unblocks CC-1 -- now cuts and spawns its own
+# real run this same tick.
+exec cc tick --count 1
 
 exec sleep 0.5
 
@@ -29,6 +36,7 @@ cc-fake-gh no-prs
 exec cc request -form 'verb=retry-push&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1' POST /verb
 exec cc tick --count 1
 
-# The push step alone ran again: one more pr create, and no second agent.
+# The push step alone ran again: one more pr create, and no second agent. Two prior spawns, not
+# one -- the slice's own explore run plus CC-1's real run.
 grep -count=2 'pr create' $WORK/gh.log
-grep -count=1 'commits.sh' $WORK/agent.log
+grep -count=2 'commits.sh' $WORK/agent.log

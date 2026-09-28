@@ -9,16 +9,26 @@
 # lose the pgid or spawn a second agent -- which is what this script asserts it does not.
 
 cc-init-repo
-cc-config single-task-sleeps
+cc-config single-task-commits-slow
 cc-fake-gh no-prs
 
 exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 
-# This instance cuts and spawns, then exits. sleeps.sh writes its worktree files immediately but
-# needs real wall time to get there -- ready is written last, so its presence means pgid is
-# already complete.
+# Launch under commits_slow.sh first, so the launch's own reserved explore run disposes on a
+# later tick rather than hanging -- only CC-1's own real run needs to hang, for this script's
+# crash-recovery scenario. commits_slow.sh's full-second sleep, unlike commits.sh's, is long
+# enough that the explore run can never dispose within the same tick it was spawned in, which
+# the config swap to sleeps.sh below depends on.
+exec cc tick --count 1
+exec sleep 1.5
+cc-config single-task-sleeps
+
+# The explore run's dead process disposes, unblocking CC-1 -- it cuts and spawns its own real
+# run this same tick, now under sleeps.sh. This instance then exits. sleeps.sh writes its
+# worktree files immediately but needs real wall time to get there -- ready is written last, so
+# its presence means pgid is already complete.
 exec cc tick --count 1
 exec sleep 0.5
 exists $WORK/repo-cc-1-x/ready
@@ -36,11 +46,13 @@ stdout 'agent running'
 # page's markup changing around it.
 exec sh -c 'pgid=$(cat $WORK/repo-cc-1-x/pgid) && cc request GET "/confirm?verb=kill&ticket=https://github.com/sandbox-org/single-task/issues/CC-1" | grep -qw "$pgid"'
 
-# One spawn, ever. A relaunch would have appended a second line here and a second run_launched,
-# and would have been invisible to every assertion above.
+# One spawn under sleeps.sh, ever -- CC-1's own real run, never the launch's own explore run
+# (that one ran under commits_slow.sh above and is the other of the two run_launched events
+# here). A relaunch would have appended a second sleeps.sh line and a third run_launched,
+# invisible to every assertion above.
 grep -count=1 'sleeps.sh' $WORK/agent.log
 exec cc request GET /events
-stdout -count=1 'run_launched'
+stdout -count=2 'run_launched'
 
 # Kill the recovered run rather than leaking its `sleep 300` past the end of the script. It
 # disposes failed: no commits, and no exit code to record either, since a re-attached process
