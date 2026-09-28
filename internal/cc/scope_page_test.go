@@ -391,9 +391,10 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns = %d, want 2 (the explore run, then HIDDEN): "+
+			"the loop must act on HIDDEN whether or not any view ever scopes it out", len(fake.spawns))
 	}
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {

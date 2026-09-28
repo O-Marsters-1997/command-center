@@ -21,6 +21,8 @@ type fakeRunner struct {
 	canReap  map[int]bool
 	failNext bool
 	canceled []int
+	// onSpawn, when set, runs after Spawn records cfg.
+	onSpawn func(cc.SpawnConfig)
 }
 
 func newFakeRunner() *fakeRunner {
@@ -29,6 +31,9 @@ func newFakeRunner() *fakeRunner {
 
 func (f *fakeRunner) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, error) {
 	f.spawns = append(f.spawns, cfg)
+	if f.onSpawn != nil {
+		f.onSpawn(cfg)
+	}
 	if f.failNext {
 		f.failNext = false
 		return cc.SpawnResult{}, errSpawnFailed
@@ -36,6 +41,18 @@ func (f *fakeRunner) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResul
 	f.nextPid++
 	f.alive[f.nextPid] = true
 	return cc.SpawnResult{Pid: f.nextPid}, nil
+}
+
+// settleExplore marks every run fakeRunner has spawned so far as no longer alive and runs one
+// more tick, disposing a launch's own explore run so its tickets clear launchEligible's gate.
+func settleExplore(t *testing.T, loop *cc.Loop, fake *fakeRunner) {
+	t.Helper()
+	for pid := range fake.alive {
+		fake.alive[pid] = false
+	}
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce (settle explore): %v", err)
+	}
 }
 
 func (f *fakeRunner) Liveness(pgid int, _, _ time.Time) (bool, error) {

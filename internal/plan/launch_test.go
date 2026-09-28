@@ -100,6 +100,17 @@ func TestLaunchPlan(t *testing.T) {
 			spendPaused: true,
 			want:        nil,
 		},
+		{
+			name: "a candidate whose launch's explore run has not disposed yet is excluded",
+			candidates: []plan.LaunchCandidate{
+				{
+					URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true,
+					PromptHashMatches: true, ExploreBlocking: true,
+				},
+			},
+			maxAgents: 1,
+			want:      nil,
+		},
 	}
 
 	for _, tt := range tests {

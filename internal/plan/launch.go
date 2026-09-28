@@ -12,10 +12,14 @@ type LaunchCandidate struct {
 	// ConflictedBase names the base this launch would cut from when that base already carries a
 	// conflict, and is empty when it is clean (docs/adr/0006-resolve-a-conflict-once.md).
 	ConflictedBase string
+	// ExploreBlocking is true while this ticket's own launch has an explore run that has not
+	// disposed yet, brief or not.
+	ExploreBlocking bool
 }
 
 func (c LaunchCandidate) eligible() bool {
-	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun && c.ConflictedBase == ""
+	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun &&
+		c.ConflictedBase == "" && !c.ExploreBlocking
 }
 
 // LaunchPlan selects the ticket URLs to cut and spawn this tick: every eligible candidate, in

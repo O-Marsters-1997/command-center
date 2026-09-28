@@ -179,6 +179,55 @@ func TestTicketSpendSumsSpendSoFarForAnOpenTicket(t *testing.T) {
 	}
 }
 
+func TestTicketSpendApportionsExploreCostAcrossLaunchMembers(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, ticket := range tickets {
+		if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-"+ticket.URL, "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	pending, err := store.PendingExploreRuns(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending explore runs = %+v, want exactly 1 for the one launch", pending)
+	}
+	cost := 3.00
+	metrics := &agentlog.RunMetrics{CostUSD: &cost, Settled: true}
+	err = store.RecordDisposition(ctx, pending[0].ID, plan.OutcomePush, nil, at.Add(time.Minute), metrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byURL, err := store.BoardTicketSpend(ctx, "", "")
+	if err != nil {
+		t.Fatalf("BoardTicketSpend: %v", err)
+	}
+	for _, ticket := range tickets {
+		if got := byURL[ticket.URL].AgentUSD; got != 1.00 {
+			t.Errorf("%s AgentUSD = %v, want 1.00 (a third of the explore run's $3.00)", ticket.URL, got)
+		}
+	}
+}
+
 func TestTicketSpendScopesByRepoAndFeature(t *testing.T) {
 	t.Parallel()
 

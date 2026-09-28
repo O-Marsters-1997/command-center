@@ -154,7 +154,7 @@ func (l *Loop) resolveOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindResolve, "", "")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", "", runKindResolve, "", "")
 }
 
 // idleWorktreeFor returns the ticket's worktree path, or "" with a refusal detail naming why: no
@@ -241,7 +241,7 @@ func (l *Loop) followUpOne(
 			return err
 		}
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindFollowUp, promptText, ciSection)
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", "", runKindFollowUp, promptText, ciSection)
 }
 
 // ciLogUnavailableSection is the prompt line a ci_failed follow-up carries in place of the log
@@ -403,7 +403,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, runKindAgent, "", "")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, "", oldPromptPath, runKindAgent, "", "")
 }
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat

@@ -17,7 +17,7 @@ import (
 // (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
 	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
-		TicketID:    ticketID,
+		TicketID:    notNull(ticketID),
 		Kind:        kind,
 		BaselineSHA: notNull(baselineSHA),
 		PromptHash:  notNull(promptHash),
@@ -236,7 +236,7 @@ func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunReques
 // pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
-		TicketID:   ticketID,
+		TicketID:   notNull(ticketID),
 		PromptHash: notNull(promptHash),
 		Outcome:    notNull(plan.OutcomeCutFailed.String()),
 		EndedAt:    notNullTime(at.UTC()),
@@ -247,10 +247,87 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 	return id, nil
 }
 
+// InsertExploreRunSkeleton reserves a launch's explore run row, ticket-less and pgid-less like
+// InsertRunSkeleton but keyed by launch_id instead of ticket_id.
+func (s *Store) InsertExploreRunSkeleton(ctx context.Context, launchID int64) (int64, error) {
+	id, err := s.q.InsertExploreRunSkeleton(ctx, sql.NullInt64{Int64: launchID, Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("insert explore run skeleton for launch %d: %w", launchID, err)
+	}
+	return id, nil
+}
+
+// PendingExploreRun is one launch's explore run still awaiting its cut-and-spawn.
+type PendingExploreRun struct {
+	ID       int64
+	LaunchID int64
+}
+
+// PendingExploreRuns returns every explore run skeleton insertLaunch reserved that has not been
+// spawned yet.
+func (s *Store) PendingExploreRuns(ctx context.Context) ([]PendingExploreRun, error) {
+	rows, err := s.q.PendingExploreRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select pending explore runs: %w", err)
+	}
+	pending := make([]PendingExploreRun, len(rows))
+	for i, row := range rows {
+		pending[i] = PendingExploreRun{ID: row.ID, LaunchID: row.LaunchID.Int64}
+	}
+	return pending, nil
+}
+
+// ExploreRunState is one launch's explore run status, as launchEligible's gate needs it: still
+// running (Disposed false), or disposed either way (Succeeded reads the run's own outcome).
+type ExploreRunState struct {
+	Disposed  bool
+	Succeeded bool
+}
+
+// ExploreRunsByLaunch returns every launch that has an explore run, keyed by launch id. A launch
+// absent from the map has none (a launch created before this feature shipped), which
+// launchEligible reads the same as already disposed.
+func (s *Store) ExploreRunsByLaunch(ctx context.Context) (map[int64]ExploreRunState, error) {
+	rows, err := s.q.ExploreRunsByLaunch(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select explore runs by launch: %w", err)
+	}
+	states := make(map[int64]ExploreRunState, len(rows))
+	for _, row := range rows {
+		states[row.LaunchID.Int64] = ExploreRunState{
+			Disposed:  row.Outcome.Valid,
+			Succeeded: row.Outcome.String == plan.OutcomePush.String(),
+		}
+	}
+	return states, nil
+}
+
+// ExploringCount returns how many explore runs are currently spawned and undisposed, for the
+// masthead's own line while a launch's brief is still being written.
+func (s *Store) ExploringCount(ctx context.Context) (int, error) {
+	n, err := s.q.ExploringCount(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("count exploring launches: %w", err)
+	}
+	return int(n), nil
+}
+
+// LaunchMemberTicketIDs returns a launch's own member ticket URLs, ordered -- what
+// spawnExploreRuns needs to compose the shared brief's per-ticket sections.
+func (s *Store) LaunchMemberTicketIDs(ctx context.Context, launchID int64) ([]string, error) {
+	ids, err := s.q.LaunchMemberTicketIDs(ctx, launchID)
+	if err != nil {
+		return nil, fmt.Errorf("select member ticket ids for launch %d: %w", launchID, err)
+	}
+	return ids, nil
+}
+
 // PendingRun is one run this tick must check for liveness and, if it has died, dispose of.
+// TicketID is empty and LaunchID non-nil for an explore run (CC-327).
 type PendingRun struct {
 	ID            int64
 	TicketID      string
+	LaunchID      *int64
 	Pgid          int
 	ProcStartedAt time.Time
 	BaselineSHA   string
@@ -268,8 +345,11 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	var pending []PendingRun
 	for _, row := range rows {
 		p := PendingRun{
-			ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64),
+			ID: row.ID, TicketID: row.TicketID.String, Pgid: int(row.Pgid.Int64),
 			ProcStartedAt: row.ProcStartedAt.Time,
+		}
+		if row.LaunchID.Valid {
+			p.LaunchID = &row.LaunchID.Int64
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
 		pending = append(pending, p)
@@ -327,7 +407,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, 
 		}
 		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
-		summaries[row.TicketID] = summary
+		summaries[row.TicketID.String] = summary
 	}
 	return summaries, nil
 }
@@ -439,7 +519,7 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 // remove-worktree's log pruning needs to find every runs/<id>.jsonl, runs/<id>.prompt and
 // runs/<id>.diff it left behind (docs/prds/prd-command-centre.md § Phase 6).
 func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
-	ids, err := s.q.RunIDsForTicket(ctx, ticketID)
+	ids, err := s.q.RunIDsForTicket(ctx, notNull(ticketID))
 	if err != nil {
 		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
 	}
@@ -450,7 +530,7 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 // ticket with no run at all reads as ended with no path, so a caller tailing the log streams
 // nothing rather than failing.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
-	row, err := s.q.LatestRunLog(ctx, ticketURL)
+	row, err := s.q.LatestRunLog(ctx, notNull(ticketURL))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", true, nil

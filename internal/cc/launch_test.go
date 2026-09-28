@@ -65,6 +65,46 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 	}
 }
 
+func TestApplyLaunchIntentsAlsoReservesAnExploreRunSkeleton(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []cc.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	for _, ticket := range tickets {
+		if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash", "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	pending, err := store.PendingExploreRuns(ctx)
+	if err != nil {
+		t.Fatalf("PendingExploreRuns: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending explore runs = %+v, want exactly 1 for the one launch", pending)
+	}
+
+	memberships, err := store.LaunchMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := memberships["sandbox://CC-1"].LaunchID; pending[0].LaunchID != got {
+		t.Errorf("explore run's launch id = %d, want the launch's own id %d", pending[0].LaunchID, got)
+	}
+}
+
 func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
 	t.Parallel()
 

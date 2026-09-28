@@ -22,8 +22,8 @@ type Runner interface {
 }
 
 // SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {system_prompt}, {prompt} and {prompt_file}
-// are substituted into every element before exec.
+// configured argv template; {worktree}, {settings}, {system_prompt}, {prompt}, {prompt_file} and
+// {model} are substituted into every element before exec.
 type SpawnConfig struct {
 	AgentCommand     []string
 	WorktreePath     string
@@ -31,6 +31,8 @@ type SpawnConfig struct {
 	SystemPromptPath string
 	Prompt           string
 	PromptPath       string
+	// Model is the run's own {model} substitution.
+	Model string
 	// LogFile is both stdout and stderr, opened by the caller and never a pipe: piping would
 	// need a goroutine per run to drain it, which the design forbids (§3).
 	LogFile *os.File
@@ -50,6 +52,7 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
+	arg = strings.ReplaceAll(arg, "{model}", cfg.Model)
 	return arg
 }
 

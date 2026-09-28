@@ -91,15 +91,22 @@ const (
 	defaultMaxAgents = 1
 )
 
-// defaultAgentCommand is the argv a config naming no agent_command gets. The model is named
-// explicitly because the CLI's own default tracks Anthropic's latest release, so leaving it off
-// would change what every run is built by without this repo changing (§8).
+// defaultModel is every spawned run's own {model} substitution but explore's (CC-327 Phase 2);
+// named explicitly because the CLI's own default tracks Anthropic's latest release, so leaving
+// it off would change what every run is built by without this repo changing (§8).
+const defaultModel = "claude-sonnet-5"
+
+// modelHaiku is the explore run's own {model}: writing a shared brief is reading and
+// summarising, not the judgment work implement and review need.
+const modelHaiku = "claude-haiku-4-5"
+
+// defaultAgentCommand is the argv a config naming no agent_command gets.
 var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
 	"--settings", "{settings}",
 	"--append-system-prompt-file", "{system_prompt}",
-	"--model", "claude-sonnet-5",
+	"--model", "{model}",
 }
 
 // LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and

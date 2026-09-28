@@ -29,6 +29,7 @@ const (
 	runKindAgent    = "agent"
 	runKindResolve  = "resolve"
 	runKindFollowUp = "follow_up"
+	runKindExplore  = "explore"
 )
 
 // Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
@@ -128,6 +129,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return err
 	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.now()); err != nil {
+		return err
+	}
+	if err := l.spawnExploreRuns(ctx); err != nil {
 		return err
 	}
 	if err := l.applyCancelIntents(ctx); err != nil {
@@ -362,6 +366,15 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 		if err != nil {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
+		if run.LaunchID != nil {
+			if alive {
+				continue
+			}
+			if err := l.disposeExploreRun(ctx, run, now); err != nil {
+				return err
+			}
+			continue
+		}
 		obs.Runs[run.TicketID] = RunObservation{Alive: alive}
 		if alive {
 			continue
@@ -371,6 +384,31 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 		}
 	}
 	return nil
+}
+
+// disposeExploreRun computes and records one dead explore run's outcome: success reads off
+// whether the agent actually wrote its brief to disk.
+func (l *Loop) disposeExploreRun(ctx context.Context, run PendingRun, now time.Time) error {
+	outcome := plan.OutcomeFailed
+	if _, err := os.Stat(briefPath(l.ws.RunsDir, *run.LaunchID)); err == nil {
+		outcome = plan.OutcomePush
+	}
+
+	var exitCode *int
+	if code, ok := l.runner.Reap(run.Pgid); ok {
+		exitCode = &code
+	}
+	metrics := l.parseRunMetrics(run.LogPath)
+	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now, metrics); err != nil {
+		return fmt.Errorf("record disposition for explore run %d: %w", run.ID, err)
+	}
+	readings := l.parseReadings(run.LogPath)
+	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
+		return fmt.Errorf("record readings for explore run %d: %w", run.ID, err)
+	}
+	return l.store.AppendEvent(ctx, Event{
+		At: now, Kind: eventRunDisposed, Detail: runKindExplore + " " + outcome.String(),
+	})
 }
 
 // disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
@@ -471,6 +509,14 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
+	memberships, err := l.store.LaunchMemberships(ctx)
+	if err != nil {
+		return err
+	}
+	exploreRuns, err := l.store.ExploreRunsByLaunch(ctx)
+	if err != nil {
+		return err
+	}
 
 	stacking := stackingByRepo(l.cfg.Repos)
 	byURL := planTicketsByURL(tickets)
@@ -479,6 +525,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 
 	candidates := make([]plan.LaunchCandidate, 0, len(tickets))
 	unlocks := make(map[string]plan.Unlock, len(tickets))
+	briefPaths := make(map[string]string, len(tickets))
 	for _, t := range tickets {
 		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stacking[t.Repo])
@@ -487,6 +534,18 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		hash, isAuthorised := authorisedHashes[t.URL]
 		_, hasRun := latest[t.URL]
 		promptHashMatches := isAuthorised && hash == plan.Hash(plan.Compose(pt))
+
+		// A launch absent from exploreRuns (predating this feature) reads as already disposed.
+		var exploreBlocking bool
+		if launchID := memberships[t.URL].LaunchID; launchID != 0 {
+			if state, ok := exploreRuns[launchID]; ok {
+				exploreBlocking = !state.Disposed
+				if state.Disposed && state.Succeeded {
+					briefPaths[t.URL] = briefPath(l.ws.RunsDir, launchID)
+				}
+			}
+		}
+
 		candidates = append(candidates, plan.LaunchCandidate{
 			URL:               t.URL,
 			Unlock:            unlock,
@@ -494,6 +553,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 			PromptHashMatches: promptHashMatches,
 			HasRun:            hasRun,
 			ConflictedBase:    conflictedBase(pt, byURL, unlock, stacking[t.Repo], obs),
+			ExploreBlocking:   exploreBlocking,
 		})
 	}
 
@@ -511,6 +571,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 			baseBranch: unlocks[ticketURL].BaseBranch,
 			promptHash: authorisedHashes[ticketURL],
 			repoPath:   repoPaths[ticket.Repo],
+			briefPath:  briefPaths[ticketURL],
 		}
 		if err := l.cutAndSpawn(ctx, spec); err != nil {
 			return err
@@ -562,6 +623,8 @@ type launchSpec struct {
 	baseBranch string
 	promptHash string
 	repoPath   string
+	// briefPath is empty when the launch's explore run never wrote one.
+	briefPath string
 }
 
 // cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a ticket with no
@@ -590,7 +653,123 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "", "")
+	return l.spawnRun(
+		ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, spec.briefPath, "", runKindAgent, "", "")
+}
+
+func briefPath(runsDir string, launchID int64) string {
+	return filepath.Join(runsDir, fmt.Sprintf("launch-%d", launchID), "brief.md")
+}
+
+// spawnExploreRuns cuts a worktree and spawns each launch's own reserved explore run that has
+// not been spawned yet.
+func (l *Loop) spawnExploreRuns(ctx context.Context) error {
+	pending, err := l.store.PendingExploreRuns(ctx)
+	if err != nil {
+		return err
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return err
+	}
+	byTicket := ticketsByURL(tickets)
+	repoPaths := repoPathsByName(l.cfg.Repos)
+
+	for _, run := range pending {
+		if err := l.spawnExploreRun(ctx, run, byTicket, repoPaths); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// spawnExploreRun cuts a worktree at the repo's default base and spawns Haiku into it to write
+// the shared brief. A cut or spawn failure records the run failed and moves on.
+func (l *Loop) spawnExploreRun(
+	ctx context.Context, run PendingExploreRun, byTicket map[string]Ticket, repoPaths map[string]string,
+) error {
+	now := l.now()
+	memberIDs, err := l.store.LaunchMemberTicketIDs(ctx, run.LaunchID)
+	if err != nil {
+		return err
+	}
+	var members []Ticket
+	for _, id := range memberIDs {
+		if t, ok := byTicket[id]; ok {
+			members = append(members, t)
+		}
+	}
+	if len(members) == 0 {
+		return l.store.RecordDisposition(ctx, run.ID, plan.OutcomeFailed, nil, now, nil)
+	}
+
+	repoPath := repoPaths[members[0].Repo]
+	if repoPath == "" {
+		return l.store.RecordDisposition(ctx, run.ID, plan.OutcomeFailed, nil, now, nil)
+	}
+	branch := fmt.Sprintf("cc-explore-%d", run.LaunchID)
+	if err := tp.New(ctx, repoPath, branch, "origin/"+defaultBaseBranch); err != nil {
+		return l.store.RecordDisposition(ctx, run.ID, plan.OutcomeFailed, nil, now, nil)
+	}
+
+	worktrees, err := Worktrees(ctx, repoPath)
+	if err != nil {
+		return fmt.Errorf("list worktrees after cutting explore run for launch %d: %w", run.LaunchID, err)
+	}
+	worktreePath, ok := worktrees[branch]
+	if !ok {
+		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
+	}
+
+	path := briefPath(l.ws.RunsDir, run.LaunchID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("make brief directory for launch %d: %w", run.LaunchID, err)
+	}
+	planTickets := make([]plan.Ticket, len(members))
+	for i, t := range members {
+		planTickets[i] = planTicket(t)
+	}
+	prompt := plan.ComposeExplore(planTickets, path)
+
+	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
+	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
+		return fmt.Errorf("write prompt for explore run %d: %w", run.ID, err)
+	}
+	logPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", run.ID))
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		return fmt.Errorf("open log for explore run %d: %w", run.ID, err)
+	}
+	defer func() { _ = logFile.Close() }()
+
+	spawnCfg := SpawnConfig{
+		AgentCommand: l.cfg.AgentCommand,
+		WorktreePath: worktreePath,
+		SettingsPath: l.ws.SettingsPath,
+		Prompt:       prompt,
+		PromptPath:   promptPath,
+		Model:        modelHaiku,
+		LogFile:      logFile,
+	}
+	result, err := l.runner.Spawn(ctx, spawnCfg)
+	if err != nil {
+		return l.store.RecordDisposition(ctx, run.ID, plan.OutcomeFailed, nil, now, nil)
+	}
+
+	// Nothing may be added between here and the RecordSpawn call below -- see spawnRun's own
+	// doc comment.
+	startedAt := l.now()
+	if err := l.store.RecordSpawn(ctx, run.ID, result.Pid, startedAt, logPath); err != nil {
+		return err
+	}
+	return l.store.AppendEvent(ctx, Event{
+		At: startedAt, Kind: eventRunLaunched,
+		Detail: fmt.Sprintf("spawned explore run pid %d in %s", result.Pid, worktreePath),
+	})
 }
 
 // spawnRun is the part of the spawn sequence that is identical whether the worktree was just
@@ -604,7 +783,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
+	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, briefPath, oldPromptPath, kind string,
 	followUpText, ciLogSection string,
 ) error {
 	var prompt string
@@ -614,7 +793,13 @@ func (l *Loop) spawnRun(
 	case runKindFollowUp:
 		prompt = plan.ComposeFollowUp(followUpText, ciLogSection)
 	default:
+		// briefPath and ticket.Body are appended after Compose, never folded into it: the prompt
+		// hash a human authorises at launch time is plan.Hash(plan.Compose(pt)) alone, computed
+		// before the launch (and so the brief path) exists (docs/command-centre-v1.md § 4b).
 		prompt = plan.Compose(planTicket(ticket))
+		if briefPath != "" {
+			prompt += "\n\n## Brief\n\n" + briefPath
+		}
 		if ticket.Body != "" {
 			prompt += "\n\n## Ticket\n\n" + ticket.Body
 		}
@@ -664,6 +849,7 @@ func (l *Loop) spawnRun(
 		SystemPromptPath: systemPromptPath,
 		Prompt:           spawnPrompt,
 		PromptPath:       promptPath,
+		Model:            defaultModel,
 		LogFile:          logFile,
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)

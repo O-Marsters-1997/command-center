@@ -37,10 +37,11 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns after first run = %d, want 1", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns after first run = %d, want 2 (the explore run, then the ticket)", len(fake.spawns))
 	}
-	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.spawns[0].WorktreePath
+	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.spawns[1].WorktreePath
 
 	ticket.Body = "ticket body, edited"
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
@@ -53,10 +54,10 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 2 {
-		t.Fatalf("spawns after re-run = %d, want 2", len(fake.spawns))
+	if len(fake.spawns) != 3 {
+		t.Fatalf("spawns after re-run = %d, want 3", len(fake.spawns))
 	}
-	reRunSpawn := fake.spawns[1]
+	reRunSpawn := fake.spawns[2]
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {

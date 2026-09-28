@@ -135,8 +135,10 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.spawns))
+	settleExplore(t, loop, fake)
+	if len(fake.spawns) != 2 {
+		t.Fatalf("spawns after settling explore = %d, want 2 (the explore run, then max_agents caps the rest as queued)",
+			len(fake.spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -169,8 +171,8 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Fatalf("second RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Errorf("spawns after tick 2 = %d, want still 1: launchEligible must start nothing from a cancelled launch",
+	if len(fake.spawns) != 2 {
+		t.Errorf("spawns after cancel tick = %d, want still 2: launchEligible must start nothing from a cancelled launch",
 			len(fake.spawns))
 	}
 	if len(fake.canceled) != 0 {

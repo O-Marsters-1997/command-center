@@ -71,7 +71,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"--output-format", "stream-json", "--verbose",
 		"--settings", "{settings}",
 		"--append-system-prompt-file", "{system_prompt}",
-		"--model", "claude-sonnet-5",
+		"--model", "{model}",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
@@ -171,7 +171,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
 				"--append-system-prompt-file", "{system_prompt}",
-				"--model", "claude-sonnet-5",
+				"--model", "{model}",
 			},
 		},
 		{
@@ -182,7 +182,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
 				"--append-system-prompt-file", "{system_prompt}",
-				"--model", "claude-sonnet-5",
+				"--model", "{model}",
 				"--max-turns", "40",
 			},
 		},

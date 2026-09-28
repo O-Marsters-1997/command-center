@@ -22,15 +22,32 @@ WHERE id = $10;
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
 
+-- name: InsertExploreRunSkeleton :one
+INSERT INTO runs (launch_id, kind) VALUES ($1, 'explore') RETURNING id;
+
+-- name: PendingExploreRuns :many
+-- Every explore run insertLaunch reserved that spawnExploreRuns has not yet cut a worktree for.
+SELECT id, launch_id FROM runs WHERE kind = 'explore' AND pgid IS NULL AND outcome IS NULL ORDER BY id;
+
+-- name: ExploreRunsByLaunch :many
+-- One row per launch with an explore run, disposed or not -- launchEligible's own gate.
+SELECT launch_id, outcome FROM runs WHERE kind = 'explore';
+
+-- name: ExploringCount :one
+SELECT COUNT(*) FROM runs WHERE kind = 'explore' AND pgid IS NOT NULL AND outcome IS NULL;
+
+-- name: LaunchMemberTicketIDs :many
+SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id;
+
 -- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, launch_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: LatestRunsByTicket :many
 SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
        r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
 FROM runs r
-JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
+JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id;
 
 -- name: QueueVerbIntent :exec
