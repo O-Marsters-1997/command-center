@@ -13,8 +13,10 @@ import (
 // signature, injected so a test can substitute a fake without touching the filesystem.
 type MetricsParser func(logPath string) (agentlog.RunMetrics, error)
 
-// BackfillMetrics runs once at startup over every run RunsAwaitingMetricsBackfill still returns.
-// Idempotent on that predicate, so a restart mid-backfill resumes rather than reparses
+// BackfillMetrics runs once at startup over every run RunsAwaitingMetricsBackfill still returns:
+// every surviving log gets both its metrics and its utilization readings extracted, since both
+// come from the same bytes. Idempotent on that predicate for metrics, and on utilization_readings'
+// own (at, window) constraint for readings, so a restart mid-backfill resumes rather than reparses
 // (docs/adr/0015-run-metrics-are-captured-at-disposition-from-stdout.md).
 func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser) error {
 	runs, err := store.RunsAwaitingMetricsBackfill(ctx)
@@ -27,9 +29,18 @@ func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser) er
 			if !errors.Is(err, fs.ErrNotExist) {
 				log.Printf("backfill run %d metrics %s: %v", run.ID, run.LogPath, err)
 			}
+		} else if err := store.BackfillRunMetrics(ctx, run.ID, metrics); err != nil {
+			return err
+		}
+
+		readings, err := agentlog.ParseReadings(run.LogPath)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				log.Printf("backfill run %d readings %s: %v", run.ID, run.LogPath, err)
+			}
 			continue
 		}
-		if err := store.BackfillRunMetrics(ctx, run.ID, metrics); err != nil {
+		if err := store.RecordReadings(ctx, readings); err != nil {
 			return err
 		}
 	}

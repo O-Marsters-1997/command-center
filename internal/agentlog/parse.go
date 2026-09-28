@@ -151,11 +151,19 @@ type logLine struct {
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`
 	} `json:"message"`
-	Subtype    string   `json:"subtype"`
-	DurationMS int64    `json:"duration_ms"`
-	NumTurns   int      `json:"num_turns"`
-	CostUSD    *float64 `json:"total_cost_usd"`
-	Usage      usage    `json:"usage"`
+	Subtype       string         `json:"subtype"`
+	DurationMS    int64          `json:"duration_ms"`
+	NumTurns      int            `json:"num_turns"`
+	CostUSD       *float64       `json:"total_cost_usd"`
+	Usage         usage          `json:"usage"`
+	RateLimitInfo *rateLimitInfo `json:"rate_limit_info"`
+}
+
+type rateLimitInfo struct {
+	UnifiedWindows map[string]struct {
+		Utilization float64 `json:"utilization"`
+		ResetsAt    int64   `json:"resetsAt"`
+	} `json:"unifiedWindows"`
 }
 
 type usage struct {
