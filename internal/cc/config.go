@@ -30,17 +30,21 @@ type Config struct {
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
 // tracker's own, refreshed on every import; Repo is matched from URL against a [[repo]]'s remote.
 // Branch and BlockedBy are the app's own, seeded once on a URL's first import, then left alone.
+// FirstPushCI and HandChurnLines are nil until recordFirstPushCI/recordMergedEvents observe the
+// fact they report, and never overwritten after that.
 type Ticket struct {
-	URL       string
-	Repo      string
-	Branch    string
-	BlockedBy []string
-	Source    string
-	Title     string
-	Body      string
-	Status    string
-	Feature   string
-	SyncedAt  string
+	URL            string
+	Repo           string
+	Branch         string
+	BlockedBy      []string
+	Source         string
+	Title          string
+	Body           string
+	Status         string
+	Feature        string
+	SyncedAt       string
+	FirstPushCI    *bool
+	HandChurnLines *int
 }
 
 // Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by

@@ -2,6 +2,9 @@
 INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
 VALUES ($1, $2, $3, $4, $5);
 
+-- name: FirstPushedAt :many
+SELECT ticket_id, MIN(pushed_at)::timestamptz AS pushed_at FROM pushes GROUP BY ticket_id;
+
 -- name: RestackedSinceLastPush :many
 SELECT DISTINCT e.ticket_id
 FROM events e

@@ -252,6 +252,10 @@ type row struct {
 	// ready leaves GitHub's real state unchanged, and this must still render honestly.
 	Draft       bool   `json:"draft"`
 	DraftReason string `json:"draft_reason"`
+	// FirstPushCIFailed and HandChurnLines are nil-safe reads of the ticket's own columns:
+	// false/0 render nothing, distinct from the column never having been recorded.
+	FirstPushCIFailed bool `json:"first_push_ci_failed"`
+	HandChurnLines    int  `json:"hand_churn_lines"`
 
 	// Selected is this render's ?sel= row: the only one whose detail <tr> exists at all, so an
 	// unattached hx-preserve id never lingers past the row that grew it
@@ -637,34 +641,36 @@ func derive(
 			redLeaves = runFact.RedLeaves
 		}
 		rows = append(rows, row{
-			URL:            t.URL,
-			Repo:           t.Repo,
-			Feature:        t.Feature,
-			Title:          obs.Titles[t.URL],
-			State:          state.String(),
-			Reason:         string(reason),
-			Tone:           plan.Tone(state),
-			Unattended:     state.Unattended(),
-			Alive:          obs.Runs[t.URL].Alive,
-			Verbs:          plan.Verbs(state),
-			PendingVerbs:   facts.pendingVerbs[t.URL],
-			Branch:         t.Branch,
-			Base:           unlock.BaseBranch,
-			Worktree:       obs.Worktrees[branchKey(t.Repo, t.Branch)],
-			PRNumber:       pr.Number,
-			PRState:        pr.State.String(),
-			Pgid:           pgid,
-			Elapsed:        elapsed,
-			ElapsedSeconds: elapsedSeconds,
-			LogPath:        logPath,
-			CancelCount:    membership.Members,
-			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(state, facts.removals[t.URL])),
-			BaselineSHA:    latestRun.BaselineSHA,
-			Checks:         sortedChecks(pr.Checks),
-			RedChecks:      redChecksFor(redLeaves, pr.Checks),
-			Blocking:       unlock.Blocking,
-			Draft:          pr.IsDraft,
-			DraftReason:    draftReasonFor(pr, pt, byURL, prs, runFact),
+			URL:               t.URL,
+			Repo:              t.Repo,
+			Feature:           t.Feature,
+			Title:             obs.Titles[t.URL],
+			State:             state.String(),
+			Reason:            string(reason),
+			Tone:              plan.Tone(state),
+			Unattended:        state.Unattended(),
+			Alive:             obs.Runs[t.URL].Alive,
+			Verbs:             plan.Verbs(state),
+			PendingVerbs:      facts.pendingVerbs[t.URL],
+			Branch:            t.Branch,
+			Base:              unlock.BaseBranch,
+			Worktree:          obs.Worktrees[branchKey(t.Repo, t.Branch)],
+			PRNumber:          pr.Number,
+			PRState:           pr.State.String(),
+			Pgid:              pgid,
+			Elapsed:           elapsed,
+			ElapsedSeconds:    elapsedSeconds,
+			LogPath:           logPath,
+			CancelCount:       membership.Members,
+			Warning:           cmp.Or(readyToMergeWarning(pr), removalWarning(state, facts.removals[t.URL])),
+			BaselineSHA:       latestRun.BaselineSHA,
+			Checks:            sortedChecks(pr.Checks),
+			RedChecks:         redChecksFor(redLeaves, pr.Checks),
+			Blocking:          unlock.Blocking,
+			Draft:             pr.IsDraft,
+			DraftReason:       draftReasonFor(pr, pt, byURL, prs, runFact),
+			FirstPushCIFailed: t.FirstPushCI != nil && !*t.FirstPushCI,
+			HandChurnLines:    handChurnLines(t),
 		})
 	}
 
@@ -945,6 +951,13 @@ func draftReasonFor(
 		return "ready to un-draft; the last gh pr ready call has not taken effect yet"
 	}
 	return string(reason)
+}
+
+func handChurnLines(t Ticket) int {
+	if t.HandChurnLines == nil {
+		return 0
+	}
+	return *t.HandChurnLines
 }
 
 // runFactFor builds plan.Status's LatestRun input for one ticket, plus the pgid, elapsed time and

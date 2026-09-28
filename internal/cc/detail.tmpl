@@ -10,6 +10,8 @@
     {{if .Draft}}<dt class="text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
     {{if .BaseVerdict}}<dt class="text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}
     {{if .Warning}}<dt class="text-muted">warning</dt><dd class="m-0">{{.Warning}}</dd>{{end}}
+    {{if .FirstPushCIFailed}}<dt class="text-muted">first push</dt><dd class="m-0">CI failed</dd>{{end}}
+    {{if gt .HandChurnLines 0}}<dt class="text-muted">hand churn</dt><dd class="m-0">{{.HandChurnLines}} lines</dd>{{end}}
   </dl>
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
