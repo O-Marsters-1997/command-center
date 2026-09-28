@@ -17,6 +17,7 @@ func TestLaunchPlan(t *testing.T) {
 		candidates       []plan.LaunchCandidate
 		currentlyRunning int
 		maxAgents        int
+		spendPaused      bool
 		want             []string
 	}{
 		{
@@ -90,13 +91,22 @@ func TestLaunchPlan(t *testing.T) {
 			maxAgents:        1,
 			want:             nil,
 		},
+		{
+			name: "spend paused excludes an otherwise-eligible candidate",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+			},
+			maxAgents:   1,
+			spendPaused: true,
+			want:        nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := plan.LaunchPlan(tt.candidates, tt.currentlyRunning, tt.maxAgents)
+			got := plan.LaunchPlan(tt.candidates, tt.currentlyRunning, tt.maxAgents, tt.spendPaused)
 			if !equalUnordered(got, tt.want) || len(got) != len(tt.want) {
 				t.Errorf("LaunchPlan() = %v, want %v", got, tt.want)
 			}

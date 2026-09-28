@@ -29,8 +29,11 @@ type Config struct {
 	AgentCommand      []string `toml:"agent_command"`
 	// MaxTurns caps a spawned run at this many agent turns, appended to AgentCommand as
 	// --max-turns. Zero (the default) sets no cap.
-	MaxTurns int    `toml:"max_turns"`
-	Repos    []Repo `toml:"repo"`
+	MaxTurns int `toml:"max_turns"`
+	// SpendLimit5h is the percent of the account's five-hour window at or above which
+	// launchEligible spawns nothing new (CC-314); 0 means unset, so nothing is ever paused.
+	SpendLimit5h int    `toml:"spend_limit_5h"`
+	Repos        []Repo `toml:"repo"`
 }
 
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the

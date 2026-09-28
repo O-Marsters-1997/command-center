@@ -20,8 +20,12 @@ func (c LaunchCandidate) eligible() bool {
 
 // LaunchPlan selects the ticket URLs to cut and spawn this tick: every eligible candidate, in
 // input order, capped at the number of free agent slots (maxAgents, applied globally, minus
-// currentlyRunning).
-func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int) []string {
+// currentlyRunning). spendPaused stops every new spawn without touching a run already live
+// (CC-314): the caller decides it from the latest five-hour reading against spend_limit_5h.
+func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []string {
+	if spendPaused {
+		return nil
+	}
 	free := maxAgents - currentlyRunning
 	if free <= 0 {
 		return nil

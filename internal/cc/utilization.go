@@ -44,3 +44,7 @@ func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, 
 	}
 	return gauges, nil
 }
+
+func spendPaused(gauges map[agentlog.Window]Gauge, limit5h int) bool {
+	return limit5h > 0 && pctOf(gauges[agentlog.FiveHour]) >= limit5h
+}

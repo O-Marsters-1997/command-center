@@ -125,6 +125,55 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 	}
 }
 
+// TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused covers CC-314's third acceptance
+// criterion: once the latest five-hour reading is at or above spend_limit_5h, the masthead names
+// the limit rather than merely showing the gauge.
+func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	store := seededStore(t, observedAt)
+	reading := agentlog.Reading{
+		Window: agentlog.FiveHour, Utilization: 0.82,
+		ResetsAt: observedAt.Add(time.Hour), At: observedAt,
+	}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server.SetSpendLimit5h(80)
+	board := renderBoard(t, server)
+
+	if !strings.Contains(board, "spend_limit_5h") {
+		t.Errorf("board masthead does not name spend_limit_5h as the reason spawning is paused:\n%s", board)
+	}
+}
+
+// TestMastheadStaysSilentBelowSpendLimit5h covers the flip side: a reading under the configured
+// limit renders no pause reason at all.
+func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	store := seededStore(t, observedAt)
+	reading := agentlog.Reading{
+		Window: agentlog.FiveHour, Utilization: 0.50,
+		ResetsAt: observedAt.Add(time.Hour), At: observedAt,
+	}
+	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := cc.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server.SetSpendLimit5h(80)
+	board := renderBoard(t, server)
+
+	if strings.Contains(board, "spend_limit_5h") {
+		t.Errorf("board masthead names spend_limit_5h though the reading is below it:\n%s", board)
+	}
+}
+
 // gaugeMarkup isolates the masthead's gauge spans out of a full board render, so the assertion
 // is about their own markup rather than the rest of the poll (elapsed time, live count) that is
 // expected to change tick to tick.
