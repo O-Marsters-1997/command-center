@@ -122,7 +122,9 @@ func pctWeek(usd, factor float64) float64 {
 	return usd * factor * 100
 }
 
-func kindPctWeek(agentUSD, resolveUSD, followUpUSD, factor float64) (agentPct, resolvePct, followUpPct, totalPct float64) {
+func kindPctWeek(agentUSD, resolveUSD, followUpUSD, factor float64) (
+	agentPct, resolvePct, followUpPct, totalPct float64,
+) {
 	agentPct = pctWeek(agentUSD, factor)
 	resolvePct = pctWeek(resolveUSD, factor)
 	followUpPct = pctWeek(followUpUSD, factor)
