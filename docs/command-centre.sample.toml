@@ -33,6 +33,11 @@ agent_command = [
   "--settings", "{settings}", "--model", "claude-sonnet-5",
 ]
 
+# Caps a spawned run at this many agent turns, appended to agent_command as
+# --max-turns <n>. Absent (the default) sets no cap, so a runaway run can eat
+# an entire launch window.
+# max_turns = 60
+
 # A repo is located by exactly one of remote and path. path points at a checkout that already
 # exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this
 # same file run on a machine with no tree on it:
