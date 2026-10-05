@@ -100,6 +100,7 @@ var defaultAgentCommand = []string{
 	"--settings", "{settings}",
 	"--agents", "{agents}",
 	"--append-system-prompt-file", "{system_prompt}",
+	"--permission-mode", "auto",
 	"--model", "claude-sonnet-5",
 }
 
@@ -128,6 +129,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	cfg.ClaudeProjectsDir = claudeProjectsDir
 	if err := applyAgentCommandEnv(&cfg); err != nil {
+		return Config{}, err
+	}
+	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
 		return Config{}, err
 	}
 	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
@@ -162,6 +166,20 @@ func applyAgentCommandEnv(cfg *Config) error {
 		return fmt.Errorf("%s is an empty array", agentCommandEnv)
 	}
 	cfg.AgentCommand = argv
+	return nil
+}
+
+var requiredAgentCommandParts = []string{"--permission-mode", "{agents}", "{system_prompt}"}
+
+func requireAgentCommandParts(argv []string) error {
+	if len(argv) == 0 {
+		return nil
+	}
+	for _, part := range requiredAgentCommandParts {
+		if !slices.Contains(argv, part) {
+			return fmt.Errorf("agent_command %q lacks %s, which every run needs", argv, part)
+		}
+	}
 	return nil
 }
 

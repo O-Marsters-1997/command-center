@@ -6,7 +6,7 @@
 # max_agents defers the surplus rather than inferring it from how fast an agent happens to exit.
 
 max_agents = 2
-agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}"]
+agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
 
 [[repo]]
 name     = "repo"
