@@ -32,8 +32,10 @@ type Config struct {
 	MaxTurns int `toml:"max_turns"`
 	// SpendLimit5h is the percent of the account's five-hour window at or above which
 	// launchEligible spawns nothing new (CC-314); 0 means unset, so nothing is ever paused.
-	SpendLimit5h int    `toml:"spend_limit_5h"`
-	Repos        []Repo `toml:"repo"`
+	SpendLimit5h int `toml:"spend_limit_5h"`
+	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
+	BoardPollSeconds int    `toml:"board_poll_seconds"`
+	Repos            []Repo `toml:"repo"`
 }
 
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
@@ -87,8 +89,9 @@ type Repo struct {
 }
 
 const (
-	defaultPort      = 7777
-	defaultMaxAgents = 1
+	defaultPort             = 7777
+	defaultMaxAgents        = 1
+	defaultBoardPollSeconds = 5
 )
 
 // defaultAgentCommand is the argv a config naming no agent_command gets. The model is named
@@ -108,9 +111,16 @@ var defaultAgentCommand = []string{
 // rejects a ticket whose repo has no [[repo]] block. Where the config file sits decides one thing
 // only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
-	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
+	cfg := Config{
+		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: defaultBoardPollSeconds,
+		AgentCommand: slices.Clone(defaultAgentCommand),
+	}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
+	}
+
+	if cfg.BoardPollSeconds < 1 {
+		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
 	}
 
 	configDir, err := filepath.Abs(filepath.Dir(path))

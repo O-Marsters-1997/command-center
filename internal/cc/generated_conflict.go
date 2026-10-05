@@ -27,7 +27,7 @@ func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs Observation) e
 	}
 	generated := generatedByRepo(l.cfg.Repos)
 	buildCommand := buildCommandByRepo(l.cfg.Repos)
-	now := l.now()
+	now := l.clock.Now()
 
 	for _, t := range tickets {
 		if _, ok := pushed[t.URL]; !ok {

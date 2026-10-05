@@ -26,7 +26,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, t := range tickets {
 		row, pushed := rc.pushRows[t.URL]
 		if !pushed || row.BaseBranch == "" || row.BaseBranch == defaultBaseBranch {

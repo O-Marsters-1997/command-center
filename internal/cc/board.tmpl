@@ -1,5 +1,5 @@
 {{define "board" -}}
-<table id="board" hx-get="{{.BoardPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
+<table id="board" hx-get="{{.BoardPath}}" hx-trigger="every {{.BoardPollSeconds}}s" hx-swap="outerHTML">
   <tr>
     <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>

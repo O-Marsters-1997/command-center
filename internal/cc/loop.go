@@ -51,7 +51,7 @@ type TickError struct {
 type Loop struct {
 	store         *Store
 	observe       ObserveFunc
-	now           func() time.Time
+	clock         Clock
 	runner        Runner
 	cfg           Config
 	ws            Workspace
@@ -63,9 +63,9 @@ type Loop struct {
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
-func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
+func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, runner Runner) *Loop {
 	return &Loop{
-		store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
+		store: store, observe: observe, clock: clock, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
 	}
@@ -109,7 +109,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 
 	obs, err := l.observe(ctx)
 	if err != nil {
-		at := l.now()
+		at := l.clock.Now()
 		tickErr := fmt.Errorf("observe: %w", err)
 		if recordErr := l.store.RecordTickError(ctx, TickError{At: at, Message: tickErr.Error()}); recordErr != nil {
 			return recordErr
@@ -117,7 +117,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return tickErr
 	}
 
-	obs.ObservedAt = l.now()
+	obs.ObservedAt = l.clock.Now()
 	if obs.Runs == nil {
 		obs.Runs = map[string]RunObservation{}
 	}
@@ -127,7 +127,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.store.ApplyLaunchIntents(ctx, l.now()); err != nil {
+	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
 		return err
 	}
 	if err := l.applyCancelIntents(ctx); err != nil {
@@ -209,7 +209,7 @@ func (l *Loop) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(tickPeriod):
+		case <-l.clock.After(tickPeriod):
 		case <-l.nudgeCh:
 		}
 	}
@@ -219,7 +219,7 @@ func (l *Loop) Run(ctx context.Context) error {
 // than growing forever. A failure here logs and the tick carries on: losing a tick over rows
 // nobody reads would be the wrong trade.
 func (l *Loop) sweepExpiredSessions(ctx context.Context) {
-	if _, err := l.store.DeleteExpiredSessions(ctx, l.now()); err != nil {
+	if _, err := l.store.DeleteExpiredSessions(ctx, l.clock.Now()); err != nil {
 		log.Printf("sweep expired sessions: %v", err)
 	}
 }
@@ -236,7 +236,7 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 		return nil
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if err := l.importFeature(ctx, intent.TicketID); err != nil {
 			return err
@@ -268,14 +268,14 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 		}
 	}
 
-	err := l.store.ImportTickets(ctx, feature, matched, l.now())
+	err := l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
 	var conflict *FeatureConflictError
 	if errors.As(err, &conflict) {
-		return l.store.RecordImportRefusal(ctx, feature, conflict, l.now())
+		return l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
 	}
 	var closure *FeatureClosureError
 	if errors.As(err, &closure) {
-		return l.store.RecordImportRefusal(ctx, feature, closure, l.now())
+		return l.store.RecordImportRefusal(ctx, feature, closure, l.clock.Now())
 	}
 	return err
 }
@@ -289,7 +289,7 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy)
 		var closure *FeatureClosureError
@@ -324,7 +324,7 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
@@ -356,7 +356,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 	}
 	byTicket := ticketsByURL(tickets)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, run := range pending {
 		alive, err := l.runner.Liveness(run.Pgid, run.ProcStartedAt, now)
 		if err != nil {
@@ -534,7 +534,7 @@ func currentlyRunning(latest map[string]RunSummary) int {
 // tickCheckingWaits bumps every ticket's checking-wait tick count by one. It runs only after a
 // successful observe (RunOnce returns before reaching it otherwise), which is what makes the
 // count track ticks whose observe phase succeeded and never wall clock (docs/designs/command-centre-design.md
-// § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.now().
+// § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.clock.Now().
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
@@ -572,7 +572,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	baseRef := "origin/" + spec.baseBranch
 
 	if err := tp.New(ctx, spec.repoPath, branch, baseRef); err != nil {
-		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.ticket.URL, spec.promptHash, l.now())
+		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.ticket.URL, spec.promptHash, l.clock.Now())
 		return insertErr
 	}
 
@@ -670,12 +670,12 @@ func (l *Loop) spawnRun(
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.now(), nil)
+		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.clock.Now(), nil)
 	}
 
 	// Nothing may be added between here and the UPDATE below — see the doc comment above.
 	pgid := result.Pid
-	startedAt := l.now()
+	startedAt := l.clock.Now()
 	if err := l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath); err != nil {
 		return err
 	}
@@ -690,7 +690,7 @@ func (l *Loop) reRunDiffPreamble(
 ) (string, error) {
 	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
 		return "", l.store.AppendEvent(ctx, Event{
-			At: l.now(), TicketURL: ticket.URL, Kind: eventReRunNoDiff,
+			At: l.clock.Now(), TicketURL: ticket.URL, Kind: eventReRunNoDiff,
 			Detail: fmt.Sprintf("no prompt file at %s", oldPromptPath),
 		})
 	} else if err != nil {

@@ -35,7 +35,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 		return cc.Observation{}, nil
 	}
 
-	loop := cc.NewLoop(store, observe, time.Now, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, cc.RealClock{}, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
@@ -59,4 +59,43 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	var ticks atomic.Int32
+	observe := func(context.Context) (cc.Observation, error) {
+		ticks.Add(1)
+		return cc.Observation{}, nil
+	}
+	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
+	loop := cc.NewLoop(store, observe, clock, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { _ = loop.Run(ctx); close(done) }()
+
+	waitForTicks(t, &ticks, 1)
+	for want := int32(2); want <= 4; want++ {
+		waitForWaiter(t, clock)
+		clock.Advance(15 * time.Second)
+		waitForTicks(t, &ticks, want)
+	}
+
+	cancel()
+	<-done
+}
+
+func waitForWaiter(t *testing.T, clock *manualClock) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if clock.waiting() > 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("loop never waited on the clock")
 }

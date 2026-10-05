@@ -94,7 +94,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	server := cc.NewServer(store, time.Now, nil, "")
+	server := cc.NewServer(store, cc.RealClock{}, nil, "")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/confirm?verb=remove-worktree&ticket=sandbox://CC-1", nil)
 	server.ServeHTTP(rec, req)
@@ -114,7 +114,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 func TestConfirmRejectsNonDestructiveVerbsAndUnknownTickets(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{

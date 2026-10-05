@@ -689,3 +689,25 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 		t.Errorf("the line count does not cover the dropped lines too:\n%s", body)
 	}
 }
+
+func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	server := cc.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
+		t.Errorf("default board does not poll every 5s:\n%s", got)
+	}
+
+	server.SetBoardPollSeconds(1)
+	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 1s"`) {
+		t.Errorf("board does not poll every 1s:\n%s", got)
+	}
+}
+
+func boardBody(t *testing.T, server *cc.Server) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/board", nil))
+	return rec.Body.String()
+}
