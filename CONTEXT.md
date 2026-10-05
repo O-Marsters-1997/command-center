@@ -91,10 +91,18 @@ blocker outside the scope stays visible.
 _Avoid_: Filter (that is the run log's four log modes), view, selection, narrowing
 
 **Repo**:
-One configured repository, named by its remote and cloned by the app. A ticket belongs to exactly
+One tracked repository, named by its remote and cloned by the app. A ticket belongs to exactly
 one repo, matched from its URL. The second scope axis, and the one a working directory can imply.
+A GitHub repository the app does not track is not a repo here; it is a search result until you
+track it.
 _Avoid_: Project (that is the tracker's label prefix for a feature), codebase, checkout (that is
-where a repo's working copy sits)
+where a repo's working copy sits), configured repo (repos are no longer configured)
+
+**Track**:
+To make a GitHub repository a repo: the app records it, clones it and starts reconciling its
+tickets. Offered from the empty state a search lands on when the chosen repository is not yet a
+repo. Its opposite is untrack.
+_Avoid_: Add, register, connect, configure
 
 **Detail**:
 The panel that expands under a selected row, carrying the run log and the flag prose.
