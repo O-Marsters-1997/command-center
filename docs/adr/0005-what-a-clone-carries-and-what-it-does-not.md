@@ -22,7 +22,8 @@ checked out.
 
 Two environment variables carry everything machine-specific. `CC_DATA_DIR` says where `state/`
 and `repos/` go. `CC_AGENT_COMMAND` replaces `agent_command` wholesale, as a JSON array, and is
-where the laptop's `caffeinate` and `safehouse` wrapper goes. JSON rather than a shell-style
+where the laptop's `caffeinate` and `safehouse` wrapper goes. Either way the argv must name a
+permission mode, `{agents}` and `{system_prompt}`, and startup refuses one that does not. JSON rather than a shell-style
 split because an argv element may one day contain a space, and a silent mis-split is a worse
 failure than a parse error.
 

@@ -34,7 +34,11 @@ port       = 7777
 agent_command = [
   "claude", "-p", "{prompt}",
   "--output-format", "stream-json", "--verbose",
-  "--settings", "{settings}", "--model", "claude-sonnet-5",
+  "--settings", "{settings}",
+  "--agents", "{agents}",
+  "--append-system-prompt-file", "{system_prompt}",
+  "--permission-mode", "auto",
+  "--model", "claude-sonnet-5",
 ]
 
 # Caps a spawned run at this many agent turns, appended to agent_command as
