@@ -16,7 +16,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// fakeForge is an in-memory GitHub: Create opens a green PR for every tracked branch.
 type fakeForge struct {
 	t       *testing.T
 	remote  string
@@ -53,22 +52,16 @@ func (*fakeForge) Rerun(context.Context, string, string) error                  
 func (*fakeForge) RunViewLogFailed(context.Context, string, string) (string, error) { return "", nil }
 func (*fakeForge) CloseIssue(context.Context, string, string) error                 { return nil }
 
-// pathWithGitAndTpOnly leaves a PATH holding git and the fake tp but no gh, so a call that
-// reaches the gh binary fails the test instead of passing on the developer's machine.
 func pathWithGitAndTpOnly(t *testing.T) {
 	t.Helper()
 	installFakeTp(t, false)
-	tp, err := exec.LookPath("tp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	git, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
 	bin := t.TempDir()
-	for _, tool := range []string{tp, git} {
-		if err := os.Symlink(tool, filepath.Join(bin, filepath.Base(tool))); err != nil {
+	for _, name := range []string{"tp", "git"} {
+		tool, err := exec.LookPath(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(tool, filepath.Join(bin, name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -76,7 +69,6 @@ func pathWithGitAndTpOnly(t *testing.T) {
 }
 
 func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin and PATH use t.Setenv.
 	root, _ := repoWithOrigin(t)
 	pathWithGitAndTpOnly(t)
 
