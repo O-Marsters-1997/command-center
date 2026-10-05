@@ -415,3 +415,12 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 		t.Errorf("board_poll_seconds = %d, want 1", got.BoardPollSeconds)
 	}
 }
+
+func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
+	t.Parallel()
+
+	_, err := cc.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	if err == nil {
+		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
+	}
+}

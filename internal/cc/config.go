@@ -119,6 +119,10 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}
 
+	if cfg.BoardPollSeconds < 1 {
+		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
+	}
+
 	configDir, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
 		return Config{}, fmt.Errorf("resolve config path %s: %w", path, err)
