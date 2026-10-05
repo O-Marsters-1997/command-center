@@ -137,8 +137,13 @@ product phase.
 _Avoid_: Section, stage, step
 
 **Spend**:
-What a run cost. Accruing tokens while alive, dollars from the `result` event once ended.
-_Avoid_: Cost (ambiguous between the live and settled figures), usage, price
+What a run or ticket cost, as a percentage of the five-hour and weekly subscription windows. A
+ticket's spend sums its runs until its PR merges (ADR 17, ADR 19).
+_Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight), usage, price, dollars
+
+**Utilization reading**:
+One `rate_limit_event`'s account-wide utilization of a window, stored with its time.
+_Avoid_: Quota, limit (the limit is what utilization is a fraction of)
 
 **Sidebar**:
 The nav naming the app's four destinations, board, graph, features and insights. Renders once per
