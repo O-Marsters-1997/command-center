@@ -79,7 +79,7 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
-func List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
+func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
 	out, err := run(ctx, repoPath, "pr", "list", "--state", "open", "--limit", "100", "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, err
@@ -118,10 +118,27 @@ func List(ctx context.Context, repoPath string, tracked []string) (Snapshot, err
 	return Snapshot{ByBranch: byBranch}, nil
 }
 
+// Forge is every GitHub call the reconcile loop and its verbs make. CLI is the real one; a test
+// or the demo sim substitutes its own.
+type Forge interface {
+	List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error)
+	IssueTitles(ctx context.Context, repoPath string) (map[string]string, error)
+	Create(ctx context.Context, repoPath, base, body string, draft bool) error
+	Ready(ctx context.Context, repoPath, branch string) error
+	Edit(ctx context.Context, repoPath, branch, base string) error
+	Close(ctx context.Context, repoPath, branch string) error
+	Rerun(ctx context.Context, repoPath, runID string) error
+	RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error)
+	CloseIssue(ctx context.Context, repoPath, issueURL string) error
+}
+
+// CLI is the Forge that shells out to the gh binary.
+type CLI struct{}
+
 // Create opens a pull request for the branch checked out at repoPath against base, applying the
 // keep-open label that defuses both repos' 14-day auto-close. body overrides --fill's body only
 // for a stacked base's "Merge after #N" line (docs/prds/prd-command-centre.md § Phase 4); empty for a root PR.
-func Create(ctx context.Context, repoPath, base, body string, draft bool) error {
+func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
 		args = append(args, "--body", body)
@@ -136,7 +153,7 @@ func Create(ctx context.Context, repoPath, base, body string, draft bool) error 
 // Ready marks branch's pull request as ready for review, undoing draft state. It is one-way:
 // the reconciliation that calls this never asks to re-draft an already-ready PR
 // (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
-func Ready(ctx context.Context, repoPath, branch string) error {
+func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "ready", branch)
 	return err
 }
@@ -144,21 +161,21 @@ func Ready(ctx context.Context, repoPath, branch string) error {
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
 // delete-branch-on-merge retarget may have got there first, and re-pointing a pull request at
 // the base it already has is a no-op (docs/designs/command-centre-design.md § 4a).
-func Edit(ctx context.Context, repoPath, branch, base string) error {
+func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
 	_, err := run(ctx, repoPath, "pr", "edit", branch, "--base", base)
 	return err
 }
 
 // Close closes branch's pull request: the app can open one (Create), so it needs a sanctioned
 // way to unopen one too (docs/designs/command-centre-design.md § 5, the `close PR` verb). It never merges.
-func Close(ctx context.Context, repoPath, branch string) error {
+func (CLI) Close(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "close", branch)
 	return err
 }
 
 // Rerun re-runs a GitHub Actions run: `gh run rerun <id>`, the re-check verb's way to ask a
 // resolved-red compat check to run again (docs/prds/prd-command-centre.md § Phase 5).
-func Rerun(ctx context.Context, repoPath, runID string) error {
+func (CLI) Rerun(ctx context.Context, repoPath, runID string) error {
 	_, err := run(ctx, repoPath, "run", "rerun", runID)
 	return err
 }
@@ -166,7 +183,7 @@ func Rerun(ctx context.Context, repoPath, runID string) error {
 // RunViewLogFailed reads a failed GitHub Actions run's log: `gh run view --log-failed <id>`, the
 // follow-up verb's way to give an agent the CI failure its own settings firewall it from seeing
 // (internal/cc/settings.go denies it Bash(gh:*), WebFetch and WebSearch; issue #232).
-func RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
+func (CLI) RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
 	out, err := run(ctx, repoPath, "run", "view", "--log-failed", runID)
 	if err != nil {
 		return "", err
@@ -177,7 +194,7 @@ func RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, erro
 // CloseIssue closes issueURL's GitHub issue -- the post-merge cleanup verb's own bookkeeping
 // step, closing the issue tp remove --merged's worktree teardown never touches
 // (docs/prds/prd-command-centre.md § Phase 6, issue #147).
-func CloseIssue(ctx context.Context, repoPath, issueURL string) error {
+func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 	_, err := run(ctx, repoPath, "issue", "close", issueURL)
 	return err
 }
@@ -185,7 +202,7 @@ func CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 // IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
 // The URL is the join key because a task holds the whole ticket URL: reconstructing one from
 // `number` would guess at the repo's own host.
-func IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
+func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
 	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", "100")
 	if err != nil {
 		return nil, err

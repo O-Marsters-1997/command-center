@@ -64,7 +64,7 @@ type ObserveFunc func(ctx context.Context) (Observation, error)
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
 // then the worktree map, per configured repo. Every branch-keyed map is written under
 // branchKey(repo.Name, branch), since two configured repos can hold the same branch name.
-func NewObserver(store *Store, cfg Config) ObserveFunc {
+func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 	return func(ctx context.Context) (Observation, error) {
 		tickets, err := store.Tickets(ctx)
 		if err != nil {
@@ -88,14 +88,14 @@ func NewObserver(store *Store, cfg Config) ObserveFunc {
 			}
 
 			branches := branchesFor(tickets, repo.Name)
-			snapshot, err := gh.List(ctx, path, branches)
+			snapshot, err := forge.List(ctx, path, branches)
 			if err != nil {
 				return Observation{}, err
 			}
 			for branch, pr := range snapshot.ByBranch {
 				obs.PRs[branchKey(repo.Name, branch)] = pr
 			}
-			titles, err := gh.IssueTitles(ctx, path)
+			titles, err := forge.IssueTitles(ctx, path)
 			if err != nil {
 				return Observation{}, err
 			}

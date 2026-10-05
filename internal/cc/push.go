@@ -289,7 +289,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 	if pc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
 		body := plan.PRBody(base, pc.obs.PRs[branchKey(t.Repo, base)].Number)
 		draft := plan.OpensAsDraft(pc.byURL[t.URL], pc.byURL)
-		if err := gh.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {
+		if err := l.forge.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {
 			return l.store.AppendEvent(ctx,
 				Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 		}
