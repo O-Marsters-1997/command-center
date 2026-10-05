@@ -20,7 +20,7 @@ func RenderStatesBoard(states []plan.State) (string, error) {
 }
 
 func renderStates(tmpl *template.Template, states []plan.State) (string, error) {
-	view := pageView{chrome: chrome{Observe: ageView{Age: "0s ago"}}}
+	view := pageView{chrome: chrome{Observe: ageView{Age: "0s ago"}}, BoardPollSeconds: defaultBoardPollSeconds}
 	for _, state := range states {
 		r := row{
 			URL:        "sandbox://" + state.String(),

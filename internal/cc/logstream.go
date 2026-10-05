@@ -53,7 +53,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(logPollInterval):
+		case <-s.clock.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
 			return

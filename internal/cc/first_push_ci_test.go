@@ -34,7 +34,7 @@ func appendVerdictEvent(t *testing.T, store *cc.Store, ticketURL string, at time
 func noopLoop(store *cc.Store, at time.Time) *cc.Loop {
 	return cc.NewLoop(store,
 		func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil },
-		func() time.Time { return at }, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 }
 
 func TestRecordFirstPushCIRecordsFalseAndIgnoresALaterPass(t *testing.T) {

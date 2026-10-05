@@ -79,7 +79,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -178,7 +178,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=project%3Ax")
@@ -214,7 +214,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv,
@@ -261,7 +261,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -295,7 +295,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=widgets")

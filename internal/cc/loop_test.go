@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,7 +16,60 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-func fixedClock(at time.Time) func() time.Time { return func() time.Time { return at } }
+type manualClock struct {
+	mu      sync.Mutex
+	now     time.Time
+	waiters []manualWaiter
+}
+
+type manualWaiter struct {
+	at time.Time
+	ch chan time.Time
+}
+
+func newManualClock(at time.Time) *manualClock { return &manualClock{now: at} }
+
+type frozenClock struct{ at time.Time }
+
+func (c frozenClock) Now() time.Time                       { return c.at }
+func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+
+func fixedClock(at time.Time) cc.Clock { return frozenClock{at} }
+
+func (c *manualClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *manualClock) After(d time.Duration) <-chan time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := make(chan time.Time, 1)
+	c.waiters = append(c.waiters, manualWaiter{at: c.now.Add(d), ch: ch})
+	return ch
+}
+
+func (c *manualClock) waiting() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.waiters)
+}
+
+func (c *manualClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+	pending := c.waiters[:0]
+	for _, w := range c.waiters {
+		if w.at.After(c.now) {
+			pending = append(pending, w)
+			continue
+		}
+		w.ch <- c.now
+	}
+	c.waiters = pending
+}
 
 func TestRunOnceRecordsTheObservation(t *testing.T) {
 	t.Parallel()

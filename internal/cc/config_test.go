@@ -395,3 +395,23 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigBoardPollSeconds(t *testing.T) {
+	t.Parallel()
+
+	got, err := cc.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.BoardPollSeconds != 5 {
+		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
+	}
+
+	got, err = cc.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.BoardPollSeconds != 1 {
+		t.Errorf("board_poll_seconds = %d, want 1", got.BoardPollSeconds)
+	}
+}

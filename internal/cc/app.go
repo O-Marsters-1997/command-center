@@ -23,7 +23,7 @@ type App struct {
 }
 
 type options struct {
-	now           func() time.Time
+	clock         Clock
 	observe       ObserveFunc
 	repoCheck     RepoCheckFunc
 	checkout      CheckoutFunc
@@ -34,10 +34,10 @@ type options struct {
 // Option configures New.
 type Option func(*options)
 
-// WithClock replaces time.Now. Injecting it is what makes the rendered page byte-stable in
+// WithClock replaces the real clock. Injecting it is what makes the rendered page byte-stable in
 // tests; no test ever sleeps.
-func WithClock(now func() time.Time) Option {
-	return func(o *options) { o.now = now }
+func WithClock(clock Clock) Option {
+	return func(o *options) { o.clock = clock }
 }
 
 // WithObserver replaces the observe phase, so a tick can be driven without git or gh.
@@ -87,7 +87,7 @@ func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{now: time.Now}
+	settings := options{clock: RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -164,11 +164,12 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		return nil, err
 	}
 
-	loop := NewLoop(store, observe, settings.now, cfg, ws, runner)
+	loop := NewLoop(store, observe, settings.clock, cfg, ws, runner)
 	loop.SetMetricsParser(metricsParser)
-	server := NewServer(store, settings.now, cfg.Repos, ws.DataDir)
+	server := NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
+	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
 
 	return &App{
 		cfg:    cfg,

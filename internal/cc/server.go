@@ -130,7 +130,8 @@ var launchModal = template.Must(template.New("launchModal").Parse(launchModalSou
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
 	store             *Store
-	now               func() time.Time
+	clock             Clock
+	boardPollSeconds  int
 	repos             []Repo
 	stackingByRepo    map[string]bool
 	checksByRepo      map[string]verdict.Predicate
@@ -148,9 +149,10 @@ type Server struct {
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
 // the data directory: stacking, the verdict predicate, the mergify hash and the compat check
 // name are all per-repo config, and dataDir is the fleet the header names.
-func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string) *Server {
+func NewServer(store *Store, clock Clock, repos []Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.New,
+		store: store, clock: clock, boardPollSeconds: defaultBoardPollSeconds, repos: repos, dataDir: dataDir,
+		spend: newSpendCache(), trackerFor: tracker.New,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
 		nudge: func() {},
@@ -187,6 +189,9 @@ func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolv
 // exist, which is how the server queues an import intent and wakes the loop without importing
 // the loop package itself.
 func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
+
+// SetBoardPollSeconds replaces the interval the board's htmx poll refreshes at.
+func (s *Server) SetBoardPollSeconds(seconds int) { s.boardPollSeconds = seconds }
 
 // SetSpendLimit5h replaces the server's copy of spend_limit_5h, so the masthead can name the same
 // limit the loop's own launch gate reads (CC-314).
@@ -468,7 +473,8 @@ type pageView struct {
 	Band   bandView
 	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
 	// perpetuate this render's view state without the shell being involved.
-	BoardPath string
+	BoardPath        string
+	BoardPollSeconds int
 }
 
 // scopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
@@ -540,7 +546,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		return pageView{}, err
 	}
 
-	now := s.now()
+	now := s.clock.Now()
 	split, err := s.gaugeSplit(ctx, now)
 	if err != nil {
 		return pageView{}, err
@@ -559,10 +565,11 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	view := pageView{
-		chrome:    s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params),
-		Groups:    groups,
-		Band:      deriveBand(rowsIn(groups)),
-		BoardPath: params.boardPath(),
+		chrome:           s.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params),
+		Groups:           groups,
+		Band:             deriveBand(rowsIn(groups)),
+		BoardPath:        params.boardPath(),
+		BoardPollSeconds: s.boardPollSeconds,
 	}
 	return view, nil
 }
@@ -626,7 +633,7 @@ func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, erro
 	if err != nil {
 		return chrome{}, err
 	}
-	now := s.now()
+	now := s.clock.Now()
 	split, err := s.gaugeSplit(ctx, now)
 	if err != nil {
 		return chrome{}, err
@@ -1399,7 +1406,7 @@ func (s *Server) buildFeatureLaunchModalView(ctx context.Context, feature string
 	if err != nil {
 		return launchModalView{}, err
 	}
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
+	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now())
 	if err != nil {
 		return launchModalView{}, err
 	}
@@ -1425,7 +1432,7 @@ func (s *Server) buildTicketLaunchModalView(ctx context.Context, requested []str
 	if err != nil {
 		return launchModalView{}, err
 	}
-	if _, err := candidatesFor(requested, in, s.stackingByRepo, s.now()); err != nil {
+	if _, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now()); err != nil {
 		return launchModalView{}, err
 	}
 	return launchModalView{TicketQuery: candidateQuery(requested)}, nil
@@ -1454,7 +1461,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if feature := r.FormValue("feature"); feature != "" {
-		if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+		if err := QueueImport(ctx, s.store, feature, s.clock.Now()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1520,7 +1527,7 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.now())
+	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1590,7 +1597,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := s.now()
+	now := s.clock.Now()
 	for _, ticketURL := range requested {
 		if err := s.store.QueueLaunchIntent(ctx, ticketURL, hashes[ticketURL], group, now); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1640,9 +1647,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if verb == followUpVerb {
-		err = s.store.QueueVerbIntentWithPayload(ctx, ticketURL, verb, prompt, s.now())
+		err = s.store.QueueVerbIntentWithPayload(ctx, ticketURL, verb, prompt, s.clock.Now())
 	} else {
-		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.now())
+		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.clock.Now())
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1700,7 +1707,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.now()); err != nil {
+	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.clock.Now()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1769,7 +1776,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	view := featuresPageView{chrome: chr, Features: rows, Query: query}
 	if failed {
 		view.LastImportError = &importErrorView{
-			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+			Age: relative(s.clock.Now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
 		}
 	}
 
@@ -1789,7 +1796,7 @@ func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
 	feature := r.PathValue("feature")
 	ctx := r.Context()
-	if err := QueueImport(ctx, s.store, feature, s.now()); err != nil {
+	if err := QueueImport(ctx, s.store, feature, s.clock.Now()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

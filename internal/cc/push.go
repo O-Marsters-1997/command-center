@@ -113,7 +113,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, ticketURL := range toPush {
 		if facts[ticketURL].Failed || facts[ticketURL].Refused || refreshFacts[ticketURL].VerificationFailed {
 			continue // needs a human's retry-push, never an automatic one
@@ -147,7 +147,7 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if t, ok := byTicket[intent.TicketID]; ok {
 			tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
@@ -184,7 +184,7 @@ func (l *Loop) applyCommitResolutionIntents(ctx context.Context, obs Observation
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			if err := l.commitResolutionOne(ctx, ticket, pc, now); err != nil {

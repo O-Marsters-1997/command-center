@@ -118,7 +118,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	now := l.now()
+	now := l.clock.Now()
 
 	intents, err := l.store.PendingVerbIntents(ctx, refreshVerb)
 	if err != nil {

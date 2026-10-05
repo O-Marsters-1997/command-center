@@ -31,7 +31,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, t := range tickets {
 		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 		if pr.State != gh.Open || !pr.IsDraft {

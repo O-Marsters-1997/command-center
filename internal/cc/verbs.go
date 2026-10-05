@@ -73,7 +73,7 @@ func (l *Loop) applyAbortIntents(ctx context.Context, obs Observation) error {
 	}
 	byTicket := ticketsByURL(tickets)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			if err := l.abortOne(ctx, ticket, obs, now); err != nil {
@@ -127,7 +127,7 @@ func (l *Loop) applyResolveIntents(ctx context.Context, obs Observation) error {
 	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			if err := l.resolveOne(ctx, ticket, repoPaths[ticket.Repo], obs, now); err != nil {
@@ -200,7 +200,7 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs Observation) error 
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, vd, pushFacts, now)
@@ -306,7 +306,7 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		members, err := l.store.CancelLaunchesFor(ctx, intent.TicketID)
 		if err != nil {
@@ -357,7 +357,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			var oldPromptPath string
@@ -425,7 +425,7 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	compatChecks := compatCheckByRepo(l.cfg.Repos)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			err := l.reCheckOne(ctx, ticket, repoPaths[ticket.Repo], compatChecks[ticket.Repo], obs, now)
@@ -505,7 +505,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			event := Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
@@ -558,7 +558,7 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 	}
 	byTicket := ticketsByURL(tickets)
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			_, hasRun := latest[ticket.URL]

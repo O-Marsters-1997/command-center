@@ -17,7 +17,7 @@ func TestPostTicketRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
@@ -41,7 +41,7 @@ func TestPostTicketAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
@@ -57,7 +57,7 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	// sandbox://CC-2 has no worktree in seededStore, so its branch is free to change too.
@@ -110,7 +110,7 @@ func TestPostTicketRefusesBranchChangeWhenWorktreeExists(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now()) // sandbox://CC-1 has a worktree at cc-1-first
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-renamed"}}.Encode()
@@ -151,7 +151,7 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now()) // sandbox://CC-1 has a worktree
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	// Same branch, only blocked_by changes: no worktree conflict since the branch is unchanged.
@@ -182,7 +182,7 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{
