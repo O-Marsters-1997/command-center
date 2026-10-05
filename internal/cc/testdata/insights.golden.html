@@ -31,12 +31,6 @@
       if (!isNaN(at)) el.textContent = ago(now - at);
     });
   }, 1000);
-  document.addEventListener("beforetoggle", function (e) {
-    if (e.target.id !== "repo-switcher" || e.newState !== "open") return;
-    var r = document.querySelector('[popovertarget="repo-switcher"]').getBoundingClientRect();
-    e.target.style.top = r.bottom + 4 + "px";
-    e.target.style.left = r.left + "px";
-  }, true);
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
@@ -51,6 +45,8 @@
 <a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
 <header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
   
+  <span class="text-muted">/</span>
+  <a href="/features">repos</a>
   
   
   <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>

@@ -473,37 +473,4 @@
     clip: auto;
   }
 
-  /* [popover] is display:none until shown; display only inside :popover-open leaves that toggle
-     to the browser instead of a plain .repo-switcher rule permanently overriding it. */
-  .repo-switcher:popover-open {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  /* position: fixed is the popover's own UA default; the beforetoggle listener in docHead sets
-     top/left from the trigger button's own rect, since a popover promotes to the top layer and
-     stops following an ordinary positioned ancestor -- CSS anchor positioning would follow it
-     without JS, but is still Chromium-only. */
-  .repo-switcher {
-    margin: 0;
-    padding: 0.25rem;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: var(--color-bg);
-    box-shadow: 0 4px 12px color-mix(in oklab, var(--color-fg) 12%, transparent);
-  }
-
-  .repo-switcher a {
-    padding: 0.15rem 0.5rem;
-    border-radius: 3px;
-    color: var(--color-fg);
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .repo-switcher a:hover,
-  .repo-switcher a[aria-current="page"] {
-    background: color-mix(in oklab, var(--color-border) 40%, transparent);
-  }
 }

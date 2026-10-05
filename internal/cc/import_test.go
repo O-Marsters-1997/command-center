@@ -891,7 +891,7 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features?repo=alpha", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -925,7 +925,7 @@ func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features?repo=alpha", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -965,29 +965,6 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}
-	}
-}
-
-func TestHandleFeaturesFiltersByQuery(t *testing.T) {
-	t.Parallel()
-
-	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
-	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
-
-	server := cc.NewServer(openStore(t), time.Now, repos, "")
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
-
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features?q=X", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "project:x") {
-		t.Errorf("?q=X (case-insensitive) should still match project:x:\n%s", body)
-	}
-	if strings.Contains(body, "project:y") {
-		t.Errorf("?q=X should not match project:y:\n%s", body)
 	}
 }
 

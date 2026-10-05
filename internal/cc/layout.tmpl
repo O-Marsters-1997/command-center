@@ -32,12 +32,6 @@
       if (!isNaN(at)) el.textContent = ago(now - at);
     });
   }, 1000);
-  document.addEventListener("beforetoggle", function (e) {
-    if (e.target.id !== "repo-switcher" || e.newState !== "open") return;
-    var r = document.querySelector('[popovertarget="repo-switcher"]').getBoundingClientRect();
-    e.target.style.top = r.bottom + 4 + "px";
-    e.target.style.left = r.left + "px";
-  }, true);
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
@@ -57,16 +51,11 @@
 {{define "topbar" -}}
 <header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
   {{with .Workspace}}<span>{{.}}</span>{{end}}
-  {{if .RepoLinks}}
   <span class="text-muted">/</span>
-  <button type="button" popovertarget="repo-switcher" class="inline-flex items-center gap-1 py-[0.1rem] px-2 border border-border rounded-full text-muted">
-    {{range .RepoLinks}}{{if .Current}}{{.Name}}{{end}}{{end}} {{template "icon-chevron"}}
-  </button>
-  <div id="repo-switcher" popover class="repo-switcher">
-    {{range .RepoLinks}}
-    <a href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}}</a>
-    {{end}}
-  </div>
+  <a href="/features"{{if and (eq .Section "features") (not .RepoScope)}} aria-current="page"{{end}}>repos</a>
+  {{if .RepoScope}}
+  <span class="text-muted">/</span>
+  <a href="/features?repo={{.RepoScope}}"{{if eq .Section "features"}} aria-current="page"{{end}}>{{.RepoScope}}</a>
   {{end}}
   {{if .FeatureScope}}
   <span class="text-muted">/</span>
@@ -100,10 +89,6 @@
 
 {{define "icon-insights" -}}
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg>
-{{- end}}
-
-{{define "icon-chevron" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
 {{- end}}
 
 {{define "sidebar" -}}

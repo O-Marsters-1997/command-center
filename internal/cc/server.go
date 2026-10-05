@@ -117,7 +117,10 @@ var featuresSource string
 // pathEscape joins page's shared FuncMap: Funcs adds to the tree's one function map regardless of
 // which member template it is called on, so head, child, destructive and percent see it too.
 var featuresPage = template.Must(page.New("features").
-	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
+	Funcs(template.FuncMap{
+		"pathEscape": url.PathEscape,
+		"join":       func(parts []string) string { return strings.Join(parts, ", ") },
+	}).
 	Parse(featuresSource))
 
 //go:embed launch_modal.tmpl
@@ -140,6 +143,7 @@ type Server struct {
 	spendLimit5h      int
 	spend             *spendCache
 	trackerFor        TrackerSource
+	pushable          *pushableReposCache
 	rawMux            *http.ServeMux
 	mux               http.Handler
 	nudge             func()
@@ -153,7 +157,8 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 		store: store, now: now, repos: repos, dataDir: dataDir, spend: newSpendCache(), trackerFor: tracker.New,
 		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
 		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
-		nudge: func() {},
+		pushable: newPushableReposCache(gh.PushableRepos, now),
+		nudge:    func() {},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
@@ -165,6 +170,7 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.HandleFunc("GET /ticket/{ticket}/log", s.handleLog)
 	mux.HandleFunc("GET /features", s.handleFeatures)
+	mux.HandleFunc("GET /features/search", s.handleFeatureSearch)
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.HandleFunc("POST /features/{feature}/import", s.handleImportFeature)
 	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
@@ -182,6 +188,12 @@ func NewServer(store *Store, now func() time.Time, repos []Repo, dataDir string)
 // SetTrackerSource replaces the server's tracker.New, so a test can drive GET /features with a
 // fake source rather than shelling out to gh.
 func (s *Server) SetTrackerSource(resolve TrackerSource) { s.trackerFor = resolve }
+
+// SetPushableReposSource replaces the server's gh.PushableRepos, so a test can drive GET
+// /features/search with a fake list rather than shelling out to gh.
+func (s *Server) SetPushableReposSource(fetch func(context.Context) ([]gh.RepoSummary, error)) {
+	s.pushable = newPushableReposCache(fetch, s.now)
+}
 
 // SetNudge replaces the server's nudge call. App.New wires this to Loop.Nudge once, after both
 // exist, which is how the server queues an import intent and wakes the loop without importing
@@ -446,11 +458,11 @@ type chrome struct {
 	// View except on /features, which has no ?view= of its own.
 	Section string
 	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
-	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
+	// row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope), and
+	// the breadcrumb links it to its own scoped features page -- owner/name travels as a query
+	// value, never as a path segment, so it needs no escaping scheme (plans/tracked-repos.md §
+	// Routes).
 	RepoScope string
-	// RepoLinks is the breadcrumb's own repo switcher (CONTEXT.md § Scope), empty when no repo is
-	// configured so the breadcrumb renders no switcher at all.
-	RepoLinks []scopeLink
 	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
 	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
 	FeatureScope string
@@ -469,13 +481,6 @@ type pageView struct {
 	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
 	// perpetuate this render's view state without the shell being involved.
 	BoardPath string
-}
-
-// scopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
-type scopeLink struct {
-	Name    string
-	Path    string
-	Current bool
 }
 
 const observeStaleAfter = 20 * time.Second
@@ -583,7 +588,6 @@ func (s *Server) buildChrome(
 		View:         params.View,
 		Section:      params.View,
 		RepoScope:    params.Repo,
-		RepoLinks:    repoLinksFor(s.repos, params),
 		FeatureScope: params.Feature,
 	}
 	if spendPaused(gauges, s.spendLimit5h) {
@@ -1009,21 +1013,6 @@ func rowsIn(groups []group) []row {
 		rows = append(rows, g.Children...)
 	}
 	return rows
-}
-
-// repoLinksFor is the breadcrumb's repo switcher: "all" plus one entry per configured repo, nil
-// when none are configured so a single-repo fixture's breadcrumb renders no switcher at all.
-func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
-	if len(repos) == 0 {
-		return nil
-	}
-	links := make([]scopeLink, 0, len(repos)+1)
-	links = append(links, scopeLink{Name: "all", Path: params.withRepo("").pagePath(), Current: params.Repo == ""})
-	for _, r := range repos {
-		links = append(links,
-			scopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
-	}
-	return links
 }
 
 // distinctFeatures is the sorted set of non-blank Feature values among tickets, which render also
@@ -1707,57 +1696,43 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-type featureRow struct {
-	Feature  string
-	Imported bool
-}
-
 type importErrorView struct {
 	Age     string
 	Feature string
 	Message string
 }
 
+// scopedFeatureRow is one row of a scoped repo page's features table: a feature from that repo's
+// own tracker, naming any other repo whose tickets the same feature also spans.
+type scopedFeatureRow struct {
+	Feature    string
+	Imported   bool
+	OtherRepos []string
+}
+
+// featuresPageView renders both the unscoped repos page (Repos) and the scoped repo page
+// (Scoped, RepoName, ...): one template, branching on Scoped, since both share the chrome, the
+// search box and the LastImportError banner.
 type featuresPageView struct {
 	chrome
-	Features        []featureRow
-	Query           string
+	Repos []repoRow
+
+	Scoped     bool
+	RepoKnown  bool
+	RepoName   string
+	RepoRemote string
+	BoardPath  string
+	Features   []scopedFeatureRow
+
 	LastImportError *importErrorView
 }
 
-// handleFeatures lists every feature the configured repos' trackers offer, read fresh from the
-// tracker on every request (§5, inv. 14).
+// handleFeatures serves the unscoped repos page, or the scoped repo page when ?repo= names one --
+// a known repo's own tracker features, or an idle "not tracked" banner for an unrecognised name
+// (§ Phase 5 and 6, plans/tracked-repos.md).
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	all, err := ImportFeatures(ctx, s.repos, s.trackerFor)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	tickets, err := s.store.Tickets(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	lastErr, failed, err := s.store.LastImportError(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	imported := make(map[string]bool)
-	for _, f := range distinctFeatures(tickets) {
-		imported[f] = true
-	}
-
-	query := r.URL.Query().Get("q")
-	q := strings.ToLower(query)
-	rows := make([]featureRow, 0, len(all))
-	for _, f := range all {
-		if q != "" && !strings.Contains(strings.ToLower(f.Feature), q) {
-			continue
-		}
-		rows = append(rows, featureRow{Feature: f.Feature, Imported: imported[f.Feature]})
-	}
+	repoParam := r.URL.Query().Get("repo")
 
 	chr, err := s.chromeFor(ctx, parseViewParams(url.Values{}))
 	if err != nil {
@@ -1766,15 +1741,109 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	}
 	chr.Section = "features"
 
-	view := featuresPageView{chrome: chr, Features: rows, Query: query}
+	lastErr, failed, err := s.store.LastImportError(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	view := featuresPageView{chrome: chr}
 	if failed {
 		view.LastImportError = &importErrorView{
 			Age: relative(s.now(), lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
 		}
 	}
 
+	if repoParam == "" {
+		view.Repos = knownRepoRows(s.repos)
+		s.writeFeaturesPage(w, view)
+		return
+	}
+
+	view.chrome.RepoScope = repoParam
+	view.Scoped = true
+	view.RepoName = repoParam
+
+	repo, known := repoNamed(s.repos, repoParam)
+	if !known {
+		s.writeFeaturesPage(w, view)
+		return
+	}
+	view.RepoKnown = true
+	view.RepoRemote = repo.Remote
+	view.BoardPath = "/?repo=" + repo.Name
+
+	rows, err := s.scopedFeatureRows(ctx, repo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	view.Features = rows
+
+	s.writeFeaturesPage(w, view)
+}
+
+func (s *Server) writeFeaturesPage(w http.ResponseWriter, view featuresPageView) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := featuresPage.Execute(w, view); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// scopedFeatureRows lists the features repo's own tracker offers, each naming the other repos
+// (besides repo itself) that also hold tickets for it -- a feature spans repos at the ticket
+// level, never at the tracker-label level (plans/tracked-repos.md § Settled in planning).
+func (s *Server) scopedFeatureRows(ctx context.Context, repo Repo) ([]scopedFeatureRow, error) {
+	all, err := ImportFeatures(ctx, []Repo{repo}, s.trackerFor)
+	if err != nil {
+		return nil, err
+	}
+	tickets, err := s.store.Tickets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	imported := make(map[string]bool)
+	for _, f := range distinctFeatures(tickets) {
+		imported[f] = true
+	}
+	otherRepos := make(map[string][]string)
+	for _, t := range tickets {
+		if t.Feature == "" || t.Repo == repo.Name || slices.Contains(otherRepos[t.Feature], t.Repo) {
+			continue
+		}
+		otherRepos[t.Feature] = append(otherRepos[t.Feature], t.Repo)
+	}
+
+	rows := make([]scopedFeatureRow, 0, len(all))
+	for _, f := range all {
+		others := otherRepos[f.Feature]
+		slices.Sort(others)
+		rows = append(rows, scopedFeatureRow{Feature: f.Feature, Imported: imported[f.Feature], OtherRepos: others})
+	}
+	return rows, nil
+}
+
+// handleFeatureSearch answers the repos table's own htmx fragment: the known repos on an empty
+// query, otherwise the box's pushable GitHub repos matching q, merged with known state. The
+// pushable list itself is cached (pushableReposCache), so a burst of keystrokes costs one gh call.
+func (s *Server) handleFeatureSearch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query().Get("q")
+
+	var rows []repoRow
+	if q == "" {
+		rows = knownRepoRows(s.repos)
+	} else {
+		all, err := s.pushable.Get(ctx)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rows = mergeRepoRows(s.repos, filterPushable(all, q))
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := featuresPage.ExecuteTemplate(w, "reposTable", reposTableView{Repos: rows}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

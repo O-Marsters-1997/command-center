@@ -98,40 +98,39 @@ func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
 	}
 }
 
-// TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope covers issue #219's masthead
-// nav row: "all" plus one pill per configured repo, with aria-current tracking the query.
-func TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope(t *testing.T) {
+// TestBreadcrumbNamesTheCurrentRepoScope covers the plain-link breadcrumb that replaced the
+// repo-switcher popover: "repos" always links to /features, and a scoped board names the repo as
+// a link to its own scoped features page.
+func TestBreadcrumbNamesTheCurrentRepoScope(t *testing.T) {
 	t.Parallel()
 
 	server := threeRepoServer(t)
 
 	unscoped := renderPath(t, server, "/")
-	for _, want := range []string{`href="/"`, `href="/?repo=repo"`, `href="/?repo=services"`, `href="/?repo=other"`} {
-		if !strings.Contains(unscoped, want) {
-			t.Errorf("masthead missing repo link %s:\n%s", want, unscoped)
-		}
+	if !strings.Contains(unscoped, `href="/features"`) {
+		t.Errorf("breadcrumb missing the repos link:\n%s", unscoped)
 	}
-	if !strings.Contains(unscoped, `href="/" aria-current="page"`) {
-		t.Errorf("unscoped masthead should mark \"all\" current:\n%s", unscoped)
+	if strings.Contains(unscoped, "repo=") {
+		t.Errorf("unscoped board should name no repo segment:\n%s", unscoped)
 	}
 
 	scoped := renderPath(t, server, "/?repo=services")
-	if !strings.Contains(scoped, `href="/?repo=services" aria-current="page"`) {
-		t.Errorf("?repo=services should mark its own pill current:\n%s", scoped)
-	}
-	if strings.Contains(scoped, `href="/" aria-current="page"`) {
-		t.Errorf("?repo=services should not also mark \"all\" current:\n%s", scoped)
+	if !strings.Contains(scoped, `href="/features?repo=services">services</a>`) {
+		t.Errorf("?repo=services breadcrumb should link its own scoped features page:\n%s", scoped)
 	}
 }
 
-// TestMastheadOmitsRepoLinksWithNoConfiguredRepos protects the many single-repo fixtures across
-// this package's other tests: a server built with no [[repo]] renders no repo nav row at all.
-func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
+// TestBreadcrumbHasNoPopover covers the deletion of #repo-switcher: no page offers a popover any
+// more, scoped or not.
+func TestBreadcrumbHasNoPopover(t *testing.T) {
 	t.Parallel()
 
-	page := renderPage(t, seededServer(t))
-	if strings.Contains(page, "repo=") {
-		t.Errorf("masthead rendered a repo link though no repo is configured:\n%s", page)
+	server := threeRepoServer(t)
+	for _, path := range []string{"/", "/?repo=services", "/features", "/features?repo=repo"} {
+		page := renderPath(t, server, path)
+		if strings.Contains(page, "popover") {
+			t.Errorf("%s still renders a popover:\n%s", path, page)
+		}
 	}
 }
 

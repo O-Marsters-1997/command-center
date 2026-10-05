@@ -1,21 +1,23 @@
-# GET /features lists every feature a configured repo's tracker offers, imported or not; opening
-# one 303s to the board scoped to it. GET /import and POST /import no longer exist.
+# GET /features is the repos page: it lists the configured repo, ready. GET /features?repo=<name>
+# is that repo's own page, listing every feature its tracker offers, imported or not; opening one
+# 303s to the board scoped to it. GET /import and POST /import no longer exist.
 
 cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
 exec cc request GET /features
-stdout 'project:two-tasks</a></td>\s*<td>no</td>'
+stdout '>repo</a>'
+stdout 'pill-disc'
+
+exec cc request GET '/features?repo=repo'
+stdout 'project:two-tasks</a>\s*</td>\s*<td>no</td>'
 
 exec cc import project:two-tasks
 exec cc tick --count 1
 
-exec cc request GET /features
-stdout 'project:two-tasks</a></td>\s*<td>yes</td>'
-
-exec cc request GET '/features?q=nope'
-! stdout 'project:two-tasks</a></td>'
+exec cc request GET '/features?repo=repo'
+stdout 'project:two-tasks</a>\s*</td>\s*<td>yes</td>'
 
 exec cc request GET '/features/project:two-tasks'
 stdout 'href="/\?feature=project%3Atwo-tasks"'

@@ -1,3 +1,22 @@
+{{define "reposTable" -}}
+<table id="repos-table" class="w-full max-w-3xl">
+  <tr><th>repo</th><th>state</th><th></th></tr>
+  {{range .Repos}}
+  <tr>
+    <td><a href="{{.ScopePath}}">{{.Name}}</a></td>
+    <td>
+      <span class="pill" data-tone="{{.Tone}}">
+        {{if .Tracked}}<span class="pill-disc"></span>{{else}}<span class="pill-ring"></span>{{end}}{{.State}}
+      </span>
+    </td>
+    <td>{{if not .Tracked}}<a href="{{.ScopePath}}">track &rarr;</a>{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="3" class="text-muted">no repos match.</td></tr>
+  {{end}}
+</table>
+{{- end}}
+
 {{template "docHead" .}}
 <body>
 {{template "skipLink" .}}
@@ -6,20 +25,31 @@
 <div class="shell">
 {{template "sidebar" .}}
 <main id="main" class="p-4">
-<h1 class="mb-3">FEATURES</h1>
+{{if .Scoped}}
+<h1 class="mb-1">{{.RepoName}}</h1>
+{{if .RepoKnown}}
+<p class="text-muted mb-3">{{.RepoRemote}} &middot; <a href="{{.BoardPath}}">board &rarr;</a></p>
+{{else}}
+<p class="banner ribbon mb-3" data-tone="idle" role="status">Not tracked.</p>
+{{end}}
+<form class="mb-3">
+<input type="search" name="q" placeholder="find a repo" hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-search-results" hx-swap="innerHTML" class="border border-border rounded px-2 py-1">
+</form>
+<div id="repo-search-results"></div>
+{{if .RepoKnown}}
 {{with .LastImportError}}
 <p class="banner ribbon mb-2" data-tone="stop" role="status">
   import of {{.Feature}} refused {{.Age}}. {{.Message}}
 </p>
 {{end}}
-<form method="get" action="/features" class="mb-3">
-<input type="search" name="q" value="{{.Query}}" placeholder="filter by name" class="border border-border rounded px-2 py-1">
-</form>
 <table class="w-full max-w-3xl">
   <tr><th>feature</th><th>imported</th><th></th></tr>
   {{range .Features}}
   <tr>
-    <td><a href="/features/{{.Feature | pathEscape}}">{{.Feature}}</a></td>
+    <td>
+      <a href="/features/{{.Feature | pathEscape}}">{{.Feature}}</a>
+      {{if .OtherRepos}}<p class="text-muted">also in {{.OtherRepos | join}}</p>{{end}}
+    </td>
     <td>{{if .Imported}}yes{{else}}no{{end}}</td>
     <td>
       <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
@@ -34,10 +64,23 @@
     </td>
   </tr>
   {{else}}
-  <tr><td colspan="3" class="text-muted">no project: labels found across the configured repos.</td></tr>
+  <tr><td colspan="3" class="text-muted">no project: labels found in this repo's tracker.</td></tr>
   {{end}}
 </table>
-<a href="/" class="mt-2 inline-block">[ back ]</a>
+{{end}}
+{{else}}
+<h1 class="mb-3">REPOS</h1>
+{{with .LastImportError}}
+<p class="banner ribbon mb-2" data-tone="stop" role="status">
+  import of {{.Feature}} refused {{.Age}}. {{.Message}}
+</p>
+{{end}}
+<form class="mb-1">
+<input type="search" name="q" placeholder="find a repo" hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repos-table" hx-swap="outerHTML" class="border border-border rounded px-2 py-1 w-full max-w-3xl">
+</form>
+<p class="text-muted mb-3">search runs as this box's own gh identity.</p>
+{{template "reposTable" .}}
+{{end}}
 <div id="launch-modal"></div>
 </main>
 </div>

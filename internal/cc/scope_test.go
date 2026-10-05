@@ -123,14 +123,6 @@ func TestRowsInFlattensRootAndChildren(t *testing.T) {
 	}
 }
 
-func TestRepoLinksForIsNilWithNoConfiguredRepos(t *testing.T) {
-	t.Parallel()
-
-	if got := repoLinksFor(nil, viewParams{}); got != nil {
-		t.Errorf("repoLinksFor(nil, ...) = %+v, want nil", got)
-	}
-}
-
 // TestBoardNamesAnOutOfScopeGroupMembersOwnRepo covers issue #219 AC2 at the template's own
 // seam: plan.Unlocked only ever counts a same-repo blocker (plan.go:60), so a group groupRows
 // forms can never itself straddle two repos through today's live blocking edges -- this drives
@@ -187,24 +179,5 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 	rootRow := html[:strings.Index(html, "#CHILD")]
 	if strings.Contains(rootRow, ">board-scope<") {
 		t.Errorf("board named ROOT's own feature though it matches the scope:\n%s", rootRow)
-	}
-}
-
-func TestRepoLinksForNamesAllPlusEveryConfiguredRepo(t *testing.T) {
-	t.Parallel()
-
-	repos := []Repo{{Name: "repo"}, {Name: "services"}}
-	got := repoLinksFor(repos, viewParams{Repo: "services"})
-	if len(got) != 3 {
-		t.Fatalf("repoLinksFor(repos, {Repo: services}) = %+v, want 3 links", got)
-	}
-	if got[0].Name != "all" || got[0].Current {
-		t.Errorf("all link = %+v, want Current=false since a repo is scoped", got[0])
-	}
-	if got[1].Name != "repo" || got[1].Current {
-		t.Errorf("repo link = %+v, want Current=false", got[1])
-	}
-	if got[2].Name != "services" || !got[2].Current || got[2].Path != "/?repo=services" {
-		t.Errorf("services link = %+v, want Current=true and Path=/?repo=services", got[2])
 	}
 }
