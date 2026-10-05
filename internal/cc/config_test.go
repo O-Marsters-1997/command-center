@@ -123,6 +123,23 @@ func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
 	}
 }
 
+func withRequiredParts(head ...string) []string {
+	return append(slices.Clone(head),
+		"--agents", "{agents}",
+		"--append-system-prompt-file", "{system_prompt}",
+		"--permission-mode", "auto",
+	)
+}
+
+func agentCommandLine(t *testing.T, argv []string) string {
+	t.Helper()
+	quoted, err := json.Marshal(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "agent_command = " + string(quoted) + "\n"
+}
+
 func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 	t.Parallel()
 
@@ -133,8 +150,8 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 	}{
 		{
 			name: "a config naming its own argv replaces the default outright, never appending to it",
-			line: "agent_command = [\"my-agent\", \"--model\", \"claude-opus-5\", \"--agents\", \"{agents}\", \"--append-system-prompt-file\", \"{system_prompt}\", \"--permission-mode\", \"auto\"]\n",
-			want: []string{"my-agent", "--model", "claude-opus-5", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"},
+			line: agentCommandLine(t, withRequiredParts("my-agent", "--model", "claude-opus-5")),
+			want: withRequiredParts("my-agent", "--model", "claude-opus-5"),
 		},
 		{
 			// An empty array is how an operator turns spawning off: Spawn rejects it by design.
@@ -174,13 +191,6 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		}
 		return argv
 	}
-	toml := func(argv []string) string {
-		quoted, err := json.Marshal(argv)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return "agent_command = " + string(quoted) + "\n"
-	}
 
 	tests := []struct {
 		name    string
@@ -195,7 +205,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
 			t.Setenv("CC_DATA_DIR", t.TempDir())
 
-			_, err := cc.LoadConfig(writeConfig(t, toml(tt.argv)))
+			_, err := cc.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)))
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
@@ -208,7 +218,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 			}
 			t.Setenv("CC_AGENT_COMMAND", string(env))
 
-			_, err = cc.LoadConfig(writeConfig(t, toml(complete)))
+			_, err = cc.LoadConfig(writeConfig(t, agentCommandLine(t, complete)))
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
@@ -353,22 +363,28 @@ func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
 // on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	t.Setenv("CC_DATA_DIR", t.TempDir())
-	path := writeConfig(t, "agent_command = [\"claude\", \"-p\", \"{prompt}\", \"--agents\", \"{agents}\", \"--append-system-prompt-file\", \"{system_prompt}\", \"--permission-mode\", \"auto\"]\n")
+	tracked := withRequiredParts("claude", "-p", "{prompt}")
+	path := writeConfig(t, agentCommandLine(t, tracked))
 
 	got, err := cc.LoadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"claude", "-p", "{prompt}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"}; !slices.Equal(got.AgentCommand, want) {
-		t.Errorf("agent_command with no override = %v, want the tracked %v", got.AgentCommand, want)
+	if !slices.Equal(got.AgentCommand, tracked) {
+		t.Errorf("agent_command with no override = %v, want the tracked %v", got.AgentCommand, tracked)
 	}
 
-	t.Setenv("CC_AGENT_COMMAND", `["caffeinate", "-i", "claude", "-p", "{prompt}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]`)
+	override := withRequiredParts("caffeinate", "-i", "claude", "-p", "{prompt}")
+	env, err := json.Marshal(override)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CC_AGENT_COMMAND", string(env))
 	got, err = cc.LoadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"caffeinate", "-i", "claude", "-p", "{prompt}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"}; !slices.Equal(got.AgentCommand, want) {
+	if want := override; !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %v, want the override %v", got.AgentCommand, want)
 	}
 
