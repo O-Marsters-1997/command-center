@@ -481,3 +481,68 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 		t.Errorf("facts[%s] = %+v, want Refused with path %q", ticket.URL, got, "policy hit")
 	}
 }
+
+// TestLoopPicksUpADenyChangeFromOriginMainWithNoRestart covers plans/tracked-repos.md's central
+// promise: the
+// loop re-reads .command-centre.toml from origin/main every tick, so a merge tightens what an
+// agent may touch on its very next tick, with the daemon never restarted and the same *Loop
+// used throughout.
+func TestLoopPicksUpADenyChangeFromOriginMainWithNoRestart(t *testing.T) {
+	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
+	root, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+
+	store := openStore(t)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	// Tick 1: no settings file yet (defaults), so scripts/gen.sh is not denied.
+	worktree1 := cutWorktree(t, repoPath, "cc-1")
+	commitFile(t, worktree1, "scripts/gen.sh", "echo one\n")
+	ticket1 := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket1}); err != nil {
+		t.Fatal(err)
+	}
+	dispositionAsPushed(t, store, ticket1.URL, at)
+
+	obs := cc.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktree1}, PRs: map[string]gh.PR{},
+	}
+	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if !remoteHasBranch(t, root, "cc-1") {
+		t.Fatal("cc-1 was not pushed: scripts/gen.sh should not be denied yet")
+	}
+
+	// Between ticks, a merge to origin/main adds scripts/gen.sh to deny -- no restart, same loop.
+	writeAndPushSettings(t, repoPath, "deny = [\"scripts/gen.sh\"]\n")
+
+	// Tick 2: a second ticket touching the same path must now be refused.
+	worktree2 := cutWorktree(t, repoPath, "cc-2")
+	commitFile(t, worktree2, "scripts/gen.sh", "echo two\n")
+	ticket2 := cc.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"}
+	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket1, ticket2}); err != nil {
+		t.Fatal(err)
+	}
+	dispositionAsPushed(t, store, ticket2.URL, at)
+	obs.Worktrees[cc.BranchKey("repo", "cc-2")] = worktree2
+
+	if err := loop.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	if remoteHasBranch(t, root, "cc-2") {
+		t.Error("cc-2 must not exist on the remote: the merged deny change should refuse it")
+	}
+
+	facts, err := store.PushFacts(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := facts[ticket2.URL]; !f.Refused || f.RefusedPath != "scripts/gen.sh" {
+		t.Errorf("push facts for cc-2 = %+v, want refused naming scripts/gen.sh", f)
+	}
+}

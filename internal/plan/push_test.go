@@ -16,6 +16,7 @@ func TestPushRefused(t *testing.T) {
 	}{
 		{name: "workflow file refuses", path: ".github/workflows/ci.yml", refused: true},
 		{name: "root mergify config refuses", path: ".mergify.yml", refused: true},
+		{name: "the settings file itself refuses", path: ".command-centre.toml", refused: true},
 		{name: "nested package.json refuses", path: "packages/foo/package.json", refused: true},
 		{name: "pnpm lockfile refuses", path: "pnpm-lock.yaml", refused: true},
 		{name: "bun lockfile refuses", path: "web/bun.lock", refused: true},
@@ -38,6 +39,20 @@ func TestPushRefused(t *testing.T) {
 				t.Errorf("PushRefused(%q) named path %q, want %q", tt.path, path, tt.path)
 			}
 		})
+	}
+}
+
+// TestPushRefusedAlwaysRefusesTheSettingsFile covers plans/tracked-repos.md: a repo's own deny
+// list can only add to the default set, never override it, so .command-centre.toml stays
+// refused whatever that repo configures.
+func TestPushRefusedAlwaysRefusesTheSettingsFile(t *testing.T) {
+	t.Parallel()
+
+	for _, policy := range []plan.Policy{{}, {Deny: []string{"irrelevant/path"}}} {
+		refused, path := plan.PushRefused([]string{".command-centre.toml"}, policy)
+		if !refused || path != ".command-centre.toml" {
+			t.Errorf("PushRefused(.command-centre.toml, %+v) = %v, %q, want refused", policy, refused, path)
+		}
 	}
 }
 

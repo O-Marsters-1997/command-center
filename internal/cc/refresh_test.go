@@ -19,7 +19,7 @@ func stackedConfigAndWorkspace(t *testing.T, root string) (cc.Config, cc.Workspa
 	t.Helper()
 	cfg := cc.Config{
 		MaxAgents: 0,
-		Repos:     []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: true}},
+		Repos:     []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), RepoSettings: cc.RepoSettings{Stacking: true}}},
 	}
 	ws := cc.Workspace{
 		RunsDir:      t.TempDir(),

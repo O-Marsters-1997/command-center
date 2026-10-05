@@ -581,3 +581,48 @@ func TestEvaluateBaseMoved(t *testing.T) {
 		})
 	}
 }
+
+func TestPredicateValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		p       verdict.Predicate
+		wantErr bool
+	}{
+		{name: "zero value is valid (unconfigured)", p: verdict.Predicate{}},
+		{name: "a plain leaf is valid", p: verdict.Predicate{Success: "CI"}},
+		{name: "all_of over valid leaves is valid", p: verdict.Predicate{AllOf: []verdict.Predicate{{Success: "a"}, {Skipped: "b"}}}},
+		{name: "not over a valid leaf is valid", p: verdict.Predicate{Not: &verdict.Predicate{Success: "a"}}},
+		{
+			name:    "a leaf setting both success and author is invalid",
+			p:       verdict.Predicate{Success: "CI", Author: "dependabot[bot]"},
+			wantErr: true,
+		},
+		{
+			name:    "a node setting both all_of and a leaf is invalid",
+			p:       verdict.Predicate{AllOf: []verdict.Predicate{{Success: "a"}}, Success: "b"},
+			wantErr: true,
+		},
+		{
+			name:    "the violation can be nested under all_of",
+			p:       verdict.Predicate{AllOf: []verdict.Predicate{{Success: "a", Skipped: "b"}}},
+			wantErr: true,
+		},
+		{
+			name:    "the violation can be nested under not",
+			p:       verdict.Predicate{Not: &verdict.Predicate{Success: "a", Skipped: "b"}},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.p.Validate()
+			if tt.wantErr != (err != nil) {
+				t.Errorf("Validate() = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

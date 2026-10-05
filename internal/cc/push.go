@@ -42,10 +42,10 @@ func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observa
 	}
 	return pushContext{
 		byURL:      planTicketsByURL(tickets),
-		stacking:   stackingByRepo(l.cfg.Repos),
+		stacking:   stackingByRepo(l.repos),
 		prs:        prsByBranch(tickets, obs),
-		repoPaths:  repoPathsByName(l.cfg.Repos),
-		denyByRepo: denyByRepo(l.cfg.Repos),
+		repoPaths:  repoPathsByName(l.repos),
+		denyByRepo: denyByRepo(l.repos),
 		pushedTips: pushedTips,
 		restacked:  restacked,
 		obs:        obs,
@@ -78,6 +78,9 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 	var candidates []plan.PushCandidate
 	localTips := map[string]string{}
 	for _, t := range tickets {
+		if !l.repoSettingsOK(t.Repo) {
+			continue // a repo whose settings read failed this tick pushes nothing
+		}
 		summary, ok := latest[t.URL]
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue

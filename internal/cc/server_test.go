@@ -193,7 +193,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []cc.Repo{{Name: "repo", RepoSettings: cc.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -240,9 +240,9 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+	repos := []cc.Repo{{Name: "repo", RepoSettings: cc.RepoSettings{Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
-	}}}}
+	}}}}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -308,10 +308,13 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	}
 
 	repos := []cc.Repo{{
-		Name: "repo", CompatCheck: "GraphQL production compatibility",
-		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
-		}},
+		Name: "repo",
+		RepoSettings: cc.RepoSettings{
+			CompatCheck: "GraphQL production compatibility",
+			Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+				{Success: "GraphQL production compatibility"}, {Success: "Tests"},
+			}},
+		},
 	}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)

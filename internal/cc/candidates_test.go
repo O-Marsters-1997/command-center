@@ -145,7 +145,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []cc.Repo{{Name: "repo", RepoSettings: cc.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}}
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 

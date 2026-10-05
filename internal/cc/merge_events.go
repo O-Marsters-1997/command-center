@@ -19,7 +19,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs Observation) error {
 	if err != nil {
 		return err
 	}
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 
 	for _, t := range tickets {
 		pr := obs.PRs[branchKey(t.Repo, t.Branch)]

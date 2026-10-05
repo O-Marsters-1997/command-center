@@ -79,21 +79,71 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
 	}
-	if got.Repos[0].Tracker != "github" {
-		t.Errorf("tracker = %q, want default github for a [[repo]] naming none", got.Repos[0].Tracker)
+}
+
+// TestLoadConfigRefusesEveryLegacyRepoSetting covers plans/tracked-repos.md: every key that used to live in
+// [[repo]] now lives in .command-centre.toml, so LoadConfig must name it and point there rather
+// than silently keep working.
+func TestLoadConfigRefusesEveryLegacyRepoSetting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		key  string
+		line string
+	}{
+		{"tracker", "tracker = \"linear\"\n"},
+		{"stacking", "stacking = true\n"},
+		{"deny", "deny = [\"a\"]\n"},
+		{"compat_check", "compat_check = \"x\"\n"},
+		{"mergify_sha", "mergify_sha = \"sha256:deadbeef\"\n"},
+		{"verify_command", "verify_command = [\"make\", \"verify\"]\n"},
+		{"generated", "generated = [\"dist/**\"]\n"},
+		{"build_command", "build_command = [\"make\", \"dist\"]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			t.Parallel()
+
+			body := "[[repo]]\nname = \"r\"\npath = \"r\"\n" + tt.line
+			_, err := cc.LoadConfig(writeConfig(t, body))
+			if err == nil || !strings.Contains(err.Error(), tt.key) || !strings.Contains(err.Error(), ".command-centre.toml") {
+				t.Errorf("LoadConfig error = %v, want one naming %q and .command-centre.toml", err, tt.key)
+			}
+		})
 	}
 }
 
-func TestLoadConfigKeepsAnExplicitTracker(t *testing.T) {
+// TestLoadConfigRefusesChecksInARepoBlock covers the one legacy key whose own table header
+// ([repo.checks]) is nested rather than a plain key = value line.
+func TestLoadConfigRefusesChecksInARepoBlock(t *testing.T) {
 	t.Parallel()
 
-	body := "[[repo]]\nname = \"r\"\npath = \"r\"\ntracker = \"linear\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+	_, err := cc.LoadConfig(writeConfig(t, oneRepoWithChecks))
+	if err == nil || !strings.Contains(err.Error(), "checks") || !strings.Contains(err.Error(), ".command-centre.toml") {
+		t.Errorf("LoadConfig error = %v, want one naming checks and .command-centre.toml", err)
 	}
-	if got.Repos[0].Tracker != "linear" {
-		t.Errorf("tracker = %q, want the configured linear left untouched", got.Repos[0].Tracker)
+}
+
+// TestLoadConfigRefusesChecksAsNestedArrayOfTables covers the shape this repo's own
+// cc/config.toml carried until this PR -- [[repo.checks.all_of]] blocks nest three and four
+// keys deep, not the two a plain [repo.checks] header leaves undecoded, so the check must not
+// assume every legacy key is exactly two segments past "repo".
+func TestLoadConfigRefusesChecksAsNestedArrayOfTables(t *testing.T) {
+	t.Parallel()
+
+	body := `
+[[repo]]
+name   = "r"
+path   = "r"
+
+  [[repo.checks.all_of]]
+  success = "test"
+  [[repo.checks.all_of]]
+  success = "lint"
+`
+	_, err := cc.LoadConfig(writeConfig(t, body))
+	if err == nil || !strings.Contains(err.Error(), "checks") || !strings.Contains(err.Error(), ".command-centre.toml") {
+		t.Errorf("LoadConfig error = %v, want one naming checks and .command-centre.toml", err)
 	}
 }
 
@@ -297,37 +347,6 @@ mergify_sha = "sha256:deadbeef"
     ] },
   ]
 `
-
-// TestLoadConfigParsesChecks decodes [repo.checks] straight into verdict.Predicate — the same
-// struct internal/verdict.Evaluate takes, with no intermediate DTO (issue #6).
-func TestLoadConfigParsesChecks(t *testing.T) {
-	t.Parallel()
-
-	got, err := cc.LoadConfig(writeConfig(t, oneRepoWithChecks))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.Repos) != 1 {
-		t.Fatalf("repos = %+v", got.Repos)
-	}
-	repo := got.Repos[0]
-	if repo.MergifySHA != "sha256:deadbeef" {
-		t.Errorf("mergify_sha = %q", repo.MergifySHA)
-	}
-	if repo.Checks.IsZero() {
-		t.Fatal("checks decoded as zero-value")
-	}
-	if len(repo.Checks.AllOf) != 2 {
-		t.Fatalf("all_of = %+v, want 2 entries", repo.Checks.AllOf)
-	}
-	if repo.Checks.AllOf[0].Success != "Lint" {
-		t.Errorf("all_of[0] = %+v", repo.Checks.AllOf[0])
-	}
-	anyOf := repo.Checks.AllOf[1].AnyOf
-	if len(anyOf) != 2 || anyOf[1].Author != "dependabot[bot]" {
-		t.Errorf("all_of[1].any_of = %+v", anyOf)
-	}
-}
 
 // TestLoadConfigResolvesRepoPathsAgainstTheConfigFile covers phase 3: a relative path is
 // relative to the directory the config file is in, and an absolute one is taken as written.

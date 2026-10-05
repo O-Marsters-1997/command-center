@@ -78,7 +78,7 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	}
 
 	cfg := cc.Config{
-		Repos: []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
+		Repos: []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), RepoSettings: cc.RepoSettings{Checks: verdict.Predicate{Success: "CI"}}}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
@@ -298,7 +298,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+	repos := []cc.Repo{{Name: "repo", RepoSettings: cc.RepoSettings{Stacking: true}}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 

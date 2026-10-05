@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -56,31 +56,18 @@ type Ticket struct {
 	HandChurnLines *int
 }
 
-// Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
-// Path, an existing checkout. Exactly one of the two.
-// Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
-// the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
+// Repo is one [[repo]] block's identity: Name plus how to find a checkout, located by Remote, a
+// git URL the app clones, or by Path, an existing checkout. Exactly one of the two. Its
+// RepoSettings is never decoded from here -- plans/tracked-repos.md moved every per-repo key into
+// .command-centre.toml on the target's own origin/main, read fresh each tick by
+// ReadRepoSettings. The `toml:"-"` on the embedded field is what makes a key left behind in
+// [[repo]] surface as undecoded metadata rather than silently working, so LoadConfig can refuse
+// it (requireNoLegacyRepoSettings).
 type Repo struct {
-	Name   string `toml:"name"`
-	Remote string `toml:"remote"`
-	// Tracker names which issue tracker this repo's tickets live in. Absent, LoadConfig defaults
-	// it to "github".
-	Tracker     string            `toml:"tracker"`
-	Path        string            `toml:"path"`
-	Stacking    bool              `toml:"stacking"`
-	CompatCheck string            `toml:"compat_check"`
-	MergifySHA  string            `toml:"mergify_sha"`
-	Deny        []string          `toml:"deny"`
-	Checks      verdict.Predicate `toml:"checks"`
-	// VerifyCommand is the argv a clean refresh or restack is verified with before the row is
-	// offered as sound (issue #110); empty means the repo opted out.
-	VerifyCommand []string `toml:"verify_command"`
-	// Generated names the paths this repo's build regenerates, glob-matched against a conflict
-	// with origin/main; empty means the repo opted out.
-	Generated []string `toml:"generated"`
-	// BuildCommand is the argv that regenerates Generated's paths, run in the ticket's own
-	// worktree before they are staged and committed; empty means the repo opted out.
-	BuildCommand []string `toml:"build_command"`
+	Name         string `toml:"name"`
+	Remote       string `toml:"remote"`
+	Path         string `toml:"path"`
+	RepoSettings `toml:"-"`
 	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
 	// downstream reads this and derives no path of its own. Not a config key.
 	Checkout string `toml:"-"`
@@ -109,8 +96,12 @@ var defaultAgentCommand = []string{
 // only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{Port: defaultPort, MaxAgents: defaultMaxAgents, AgentCommand: slices.Clone(defaultAgentCommand)}
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	meta, err := toml.DecodeFile(path, &cfg)
+	if err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
+	}
+	if err := requireNoLegacyRepoSettings(meta); err != nil {
+		return Config{}, err
 	}
 
 	configDir, err := filepath.Abs(filepath.Dir(path))
@@ -138,9 +129,6 @@ func LoadConfig(path string) (Config, error) {
 		cfg.AgentCommand = append(cfg.AgentCommand, "--max-turns", strconv.Itoa(cfg.MaxTurns))
 	}
 	for i, r := range cfg.Repos {
-		if r.Tracker == "" {
-			cfg.Repos[i].Tracker = string(tracker.GitHub)
-		}
 		checkout, err := r.CheckoutPath(dataDir, configDir)
 		if err != nil {
 			return Config{}, err
@@ -148,6 +136,35 @@ func LoadConfig(path string) (Config, error) {
 		cfg.Repos[i].Checkout = checkout
 	}
 	return cfg, nil
+}
+
+// requireNoLegacyRepoSettings refuses a [[repo]] block that still sets a per-repo key now read
+// from .command-centre.toml (plans/tracked-repos.md). Repo's embedded RepoSettings is tagged
+// toml:"-" so none of
+// those keys ever decode into it; the toml package instead leaves them in meta's undecoded set,
+// each one named "repo.<key>" with no array index -- precise enough to name the key, not which
+// block. Every other undecoded key (a stale [[task]] block, say) is left alone, as LoadConfig
+// has always done.
+func requireNoLegacyRepoSettings(meta toml.MetaData) error {
+	var keys []string
+	for _, key := range meta.Undecoded() {
+		// len >= 2: checks nests as [[repo.checks.all_of]], three or four segments deep, not the
+		// two a plain key = value line (repo.stacking) leaves undecoded. Either shape's first
+		// segment past "repo" is the key to name.
+		if len(key) < 2 || key[0] != "repo" {
+			continue
+		}
+		if !slices.Contains(keys, key[1]) {
+			keys = append(keys, key[1])
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	slices.Sort(keys)
+	return fmt.Errorf(
+		"[[repo]] sets %s; move per-repo settings to .command-centre.toml on the repo's own origin/main",
+		strings.Join(keys, ", "))
 }
 
 // agentCommandEnv replaces agent_command with a machine-local wrapper, as a JSON array.

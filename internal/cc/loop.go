@@ -49,11 +49,22 @@ type TickError struct {
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state
 // (inv. 9, narrowed by ADR 0016).
 type Loop struct {
-	store         *Store
-	observe       ObserveFunc
-	now           func() time.Time
-	runner        Runner
-	cfg           Config
+	store   *Store
+	observe ObserveFunc
+	now     func() time.Time
+	runner  Runner
+	cfg     Config
+	// repos is cfg.Repos overlaid with each repo's RepoSettings, refreshed every tick by
+	// refreshRepoSettings (plans/tracked-repos.md) so a merged settings change takes effect
+	// with no restart.
+	// Every act step reads this, never cfg.Repos directly. It starts as cfg.Repos's own
+	// (unsettled, zero-value-settings) identities, so a step run before the first tick's own
+	// refresh -- applyImportIntents, which runs ahead of observe -- still has every repo's
+	// identity to work with.
+	repos []Repo
+	// okRepos names every repo whose settings read cleanly this tick -- the gate launch, push,
+	// refresh, generated-conflict and draft gate check before touching that repo's tickets.
+	okRepos       map[string]bool
 	ws            Workspace
 	trackerFor    TrackerSource
 	metricsParser MetricsParser
@@ -63,12 +74,56 @@ type Loop struct {
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
+// Each repo's Tracker defaults to "github" here, the same as a freshly read settings file with
+// none configured: applyImportIntents runs ahead of this tick's own refreshRepoSettings (and,
+// on the very first tick, every tick's), so l.repos needs a sane default before any file is
+// ever read, not just once one has been.
 func NewLoop(store *Store, observe ObserveFunc, now func() time.Time, cfg Config, ws Workspace, runner Runner) *Loop {
+	repos := make([]Repo, len(cfg.Repos))
+	for i, r := range cfg.Repos {
+		if r.Tracker == "" {
+			r.Tracker = string(tracker.GitHub)
+		}
+		repos[i] = r
+	}
 	return &Loop{
 		store: store, observe: observe, now: now, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
+		repos:         repos,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
 	}
+}
+
+// repoSettingsOK reports whether repo's settings read cleanly this tick -- false both for a
+// repo whose read just failed and (harmlessly) for an unknown name.
+func (l *Loop) repoSettingsOK(repo string) bool { return l.okRepos[repo] }
+
+// refreshRepoSettings overlays each configured repo's RepoSettings from .command-centre.toml on
+// its own origin/main, run after observe has fetched every repo so the read sees
+// whatever just landed on main. A repo whose read fails keeps its previous identity in l.repos
+// (so repoPathsByName and friends still resolve it) but is left out of okRepos, and the failure
+// becomes the tick's last error -- the tick itself still runs for every other repo and ticket.
+func (l *Loop) refreshRepoSettings(ctx context.Context) error {
+	repos := make([]Repo, len(l.cfg.Repos))
+	okRepos := make(map[string]bool, len(l.cfg.Repos))
+	var lastErr error
+	for i, r := range l.cfg.Repos {
+		settings, _, err := ReadRepoSettings(ctx, r.Checkout)
+		if err != nil {
+			lastErr = fmt.Errorf("repo settings for %s: %w", r.Name, err)
+			repos[i] = r
+			continue
+		}
+		r.RepoSettings = settings
+		repos[i] = r
+		okRepos[r.Name] = true
+	}
+	l.repos = repos
+	l.okRepos = okRepos
+	if lastErr == nil {
+		return nil
+	}
+	return l.store.RecordTickError(ctx, TickError{At: l.now(), Message: lastErr.Error()})
 }
 
 // SetMetricsParser replaces the loop's agentlog.ParseMetrics, so a test can drive disposeRun with
@@ -115,6 +170,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 			return recordErr
 		}
 		return tickErr
+	}
+	if err := l.refreshRepoSettings(ctx); err != nil {
+		return err
 	}
 
 	obs.ObservedAt = l.now()
@@ -250,7 +308,7 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	var matched []ImportedTicket
-	for _, repo := range l.cfg.Repos {
+	for _, repo := range l.repos {
 		src, ok, err := trackerSourceFor(repo, l.trackerFor)
 		if err != nil {
 			return fmt.Errorf("import %s: %w", feature, err)
@@ -448,7 +506,7 @@ func (l *Loop) commitsSinceBaseline(
 	if !ok {
 		return 0, nil
 	}
-	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
+	repoPath := repoPathsByName(l.repos)[ticket.Repo]
 	return CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
@@ -472,14 +530,17 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	stacking := stackingByRepo(l.cfg.Repos)
+	stacking := stackingByRepo(l.repos)
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(tickets, obs)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 
 	candidates := make([]plan.LaunchCandidate, 0, len(tickets))
 	unlocks := make(map[string]plan.Unlock, len(tickets))
 	for _, t := range tickets {
+		if !l.repoSettingsOK(t.Repo) {
+			continue // a repo whose settings read failed this tick launches nothing
+		}
 		pt := planTicket(t)
 		unlock := plan.Unlocked(pt, byURL, prs, stacking[t.Repo])
 		unlocks[t.URL] = unlock

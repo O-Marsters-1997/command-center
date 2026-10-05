@@ -12,6 +12,10 @@
 # The repo below is named by its remote, so startup clones it to <data_dir>/repos/command-center
 # rather than expecting a directory someone made by hand. The fleet itself is no longer here:
 # label an issue project:<name> and browse what's importable at GET /features.
+#
+# This repo's own per-repo settings -- stacking, deny, generated, build_command, checks -- live
+# in .command-centre.toml at the repo root, read from origin/main on every tick
+# (plans/tracked-repos.md), not here.
 
 max_agents = 3
 port       = 7777
@@ -30,27 +34,5 @@ agent_command = [
 ]
 
 [[repo]]
-name     = "command-center"
-remote   = "git@github.com:O-Marsters-1997/command-center.git"
-stacking = true
-deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
-
-# A conflict confined to these paths is resolved in the app: merge, run build_command, commit.
-# Naming no build_command opts the repo out, and every such conflict waits for the resolve verb.
-generated     = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"]
-build_command = ["just", "assets"]
-
-  [[repo.checks.all_of]]
-  success = "test"
-  [[repo.checks.all_of]]
-  success = "e2e"
-  [[repo.checks.all_of]]
-  success = "lint"
-  [[repo.checks.all_of]]
-  success = "build (ubuntu-latest)"
-  [[repo.checks.all_of]]
-  success = "build (macos-latest)"
-  [[repo.checks.all_of]]
-  success = "tidy"
-  [[repo.checks.all_of]]
-  success = "assets"
+name   = "command-center"
+remote = "git@github.com:O-Marsters-1997/command-center.git"

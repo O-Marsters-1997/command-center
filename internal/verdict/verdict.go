@@ -76,6 +76,39 @@ func (p Predicate) IsZero() bool {
 		p.Success == "" && p.Skipped == "" && p.AbsentOK == "" && p.Author == ""
 }
 
+// Validate reports whether p, or any node beneath it, breaks resolve's "exactly one of all_of,
+// any_of, not, success, skipped, absent_ok or author" invariant (see resolve's doc) -- the shape
+// a hand-edited .command-centre.toml can violate that a bare TOML decode never catches.
+func (p Predicate) Validate() error {
+	set := 0
+	for _, has := range []bool{
+		len(p.AllOf) > 0, len(p.AnyOf) > 0, p.Not != nil,
+		p.Success != "", p.Skipped != "", p.AbsentOK != "", p.Author != "",
+	} {
+		if has {
+			set++
+		}
+	}
+	if set > 1 {
+		return fmt.Errorf("checks: a predicate node sets more than one of " +
+			"all_of, any_of, not, success, skipped, absent_ok, author")
+	}
+	for _, child := range p.AllOf {
+		if err := child.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, child := range p.AnyOf {
+		if err := child.Validate(); err != nil {
+			return err
+		}
+	}
+	if p.Not != nil {
+		return p.Not.Validate()
+	}
+	return nil
+}
+
 // Input is everything Evaluate needs (docs/designs/command-centre-design.md § 8), including the
 // stacked-base check, which stays unscoped from HeadOidMatch since main's own tip moving would
 // otherwise make every root row look like its base moved too.

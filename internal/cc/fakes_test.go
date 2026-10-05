@@ -124,7 +124,7 @@ func testConfigAndWorkspace(t *testing.T, root string, maxAgents int, agentComma
 	cfg := cc.Config{
 		MaxAgents:    maxAgents,
 		AgentCommand: agentCommand,
-		Repos:        []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: false}},
+		Repos:        []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
 	}
 	ws := cc.Workspace{
 		RunsDir:      t.TempDir(),

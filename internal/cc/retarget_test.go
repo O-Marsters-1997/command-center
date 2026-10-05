@@ -246,7 +246,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
 	}
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []cc.Repo{{Name: "repo", RepoSettings: cc.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}}
 
 	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
 		t.Helper()

@@ -170,10 +170,13 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
 
 	repos := []cc.Repo{{
-		Name: "repo", Checkout: filepath.Join(root, "repo"), CompatCheck: reCheckCompatCheckName,
-		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-			{Success: reCheckCompatCheckName}, {Success: "Tests"},
-		}},
+		Name: "repo", Checkout: filepath.Join(root, "repo"),
+		RepoSettings: cc.RepoSettings{
+			CompatCheck: reCheckCompatCheckName,
+			Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+				{Success: reCheckCompatCheckName}, {Success: "Tests"},
+			}},
+		},
 	}}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	cfg := cc.Config{Repos: repos}

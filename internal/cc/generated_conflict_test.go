@@ -138,9 +138,11 @@ func (f generatedConflictFixture) configAndWorkspace(
 	cfg := cc.Config{
 		Repos: []cc.Repo{{
 			Name: "repo", Checkout: f.repoPath,
-			Checks:       verdict.Predicate{Success: "CI"},
-			Generated:    generated,
-			BuildCommand: buildCommand,
+			RepoSettings: cc.RepoSettings{
+				Checks:       verdict.Predicate{Success: "CI"},
+				Generated:    generated,
+				BuildCommand: buildCommand,
+			},
 		}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
@@ -372,9 +374,11 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 	cfg := cc.Config{
 		Repos: []cc.Repo{{
 			Name: "repo", Checkout: repoPath,
-			Checks:       verdict.Predicate{Success: "CI"},
-			Generated:    []string{"dist/**"},
-			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+			RepoSettings: cc.RepoSettings{
+				Checks:       verdict.Predicate{Success: "CI"},
+				Generated:    []string{"dist/**"},
+				BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+			},
 		}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
@@ -475,9 +479,11 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 	cfg := cc.Config{
 		Repos: []cc.Repo{{
 			Name: "repo", Checkout: repoPath,
-			Checks:       verdict.Predicate{Success: "CI"},
-			Generated:    []string{"dist/**"},
-			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+			RepoSettings: cc.RepoSettings{
+				Checks:       verdict.Predicate{Success: "CI"},
+				Generated:    []string{"dist/**"},
+				BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
+			},
 		}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}

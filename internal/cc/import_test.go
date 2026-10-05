@@ -91,8 +91,8 @@ func TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind(t *testing.T) 
 	t.Parallel()
 
 	repos := []cc.Repo{
-		{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "github"},
-		{Name: "beta", Remote: "git@github.com:acme/beta.git", Tracker: "linear"},
+		{Name: "alpha", Remote: "git@github.com:acme/alpha.git", RepoSettings: cc.RepoSettings{Tracker: "github"}},
+		{Name: "beta", Remote: "git@github.com:acme/beta.git", RepoSettings: cc.RepoSettings{Tracker: "linear"}},
 	}
 
 	var gotKinds []tracker.Kind
@@ -854,7 +854,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		},
 	}
 	cfg := cc.Config{
-		Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
+		Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", RepoSettings: cc.RepoSettings{Tracker: "linear"}}},
 	}
 
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, cc.ProcessRunner{})

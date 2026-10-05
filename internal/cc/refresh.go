@@ -96,10 +96,10 @@ func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Obse
 	}
 	return refreshContext{
 		byURL:     planTicketsByURL(tickets),
-		stacking:  stackingByRepo(l.cfg.Repos),
+		stacking:  stackingByRepo(l.repos),
 		prs:       prsByBranch(tickets, obs),
-		repoPaths: repoPathsByName(l.cfg.Repos),
-		verifyCmd: verifyCommandByRepo(l.cfg.Repos),
+		repoPaths: repoPathsByName(l.repos),
+		verifyCmd: verifyCommandByRepo(l.repos),
 		pushRows:  pushRows,
 		obs:       obs,
 	}, nil
@@ -159,6 +159,9 @@ func (l *Loop) autoRefresh(
 	for _, t := range tickets {
 		if requested[t.URL] {
 			continue
+		}
+		if !l.repoSettingsOK(t.Repo) {
+			continue // a repo whose settings read failed this tick auto-refreshes nothing
 		}
 		summary, ok := latest[t.URL]
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {

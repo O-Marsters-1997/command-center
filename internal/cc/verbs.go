@@ -125,7 +125,7 @@ func (l *Loop) applyResolveIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 
 	now := l.now()
 	for _, intent := range intents {
@@ -189,13 +189,13 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs Observation) error 
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 	pushFacts, err := l.store.PushFacts(ctx)
 	if err != nil {
 		return err
 	}
 	vd, err := verdictDepsFor(
-		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+		ctx, l.store, checksByRepo(l.repos), mergifySHAByRepo(l.repos), compatCheckByRepo(l.repos))
 	if err != nil {
 		return err
 	}
@@ -346,8 +346,8 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs Observation) error {
 	byTicket := ticketsByURL(tickets)
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(tickets, obs)
-	stacking := stackingByRepo(l.cfg.Repos)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	stacking := stackingByRepo(l.repos)
+	repoPaths := repoPathsByName(l.repos)
 	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
 	if err != nil {
 		return err
@@ -422,8 +422,8 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs Observation) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
-	compatChecks := compatCheckByRepo(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
+	compatChecks := compatCheckByRepo(l.repos)
 
 	now := l.now()
 	for _, intent := range intents {
@@ -503,7 +503,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 
 	now := l.now()
 	for _, intent := range intents {
@@ -551,8 +551,8 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs Observation) 
 	rc := removeWorktreeContext{
 		byURL:      planTicketsByURL(tickets),
 		prs:        prsByBranch(tickets, obs),
-		stacking:   stackingByRepo(l.cfg.Repos),
-		repoPaths:  repoPathsByName(l.cfg.Repos),
+		stacking:   stackingByRepo(l.repos),
+		repoPaths:  repoPathsByName(l.repos),
 		lastPushed: lastPushed,
 		obs:        obs,
 	}

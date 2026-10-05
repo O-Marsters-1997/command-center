@@ -37,7 +37,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 	}
 
 	vd, err := verdictDepsFor(
-		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+		ctx, l.store, checksByRepo(l.repos), mergifySHAByRepo(l.repos), compatCheckByRepo(l.repos))
 	if err != nil {
 		return err
 	}

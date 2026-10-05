@@ -1,0 +1,26 @@
+# This repo's own Command Centre settings, read from origin/main on every tick
+# (plans/tracked-repos.md). The loop never reads this file from a ticket's branch or worktree,
+# and the push policy always denies this path itself, so an agent cannot loosen the rules that
+# bind it.
+stacking = true
+deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
+
+# A conflict confined to these paths is resolved in the app: merge, run build_command, commit.
+# Naming no build_command opts the repo out, and every such conflict waits for the resolve verb.
+generated     = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"]
+build_command = ["just", "assets"]
+
+[[checks.all_of]]
+success = "test"
+[[checks.all_of]]
+success = "e2e"
+[[checks.all_of]]
+success = "lint"
+[[checks.all_of]]
+success = "build (ubuntu-latest)"
+[[checks.all_of]]
+success = "build (macos-latest)"
+[[checks.all_of]]
+success = "tidy"
+[[checks.all_of]]
+success = "assets"

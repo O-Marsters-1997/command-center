@@ -25,11 +25,14 @@ func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs Observation) e
 	if err != nil {
 		return err
 	}
-	generated := generatedByRepo(l.cfg.Repos)
-	buildCommand := buildCommandByRepo(l.cfg.Repos)
+	generated := generatedByRepo(l.repos)
+	buildCommand := buildCommandByRepo(l.repos)
 	now := l.now()
 
 	for _, t := range tickets {
+		if !l.repoSettingsOK(t.Repo) {
+			continue // a repo whose settings read failed this tick resolves nothing
+		}
 		if _, ok := pushed[t.URL]; !ok {
 			continue // nothing under review yet for pushPushable to deliver this to
 		}

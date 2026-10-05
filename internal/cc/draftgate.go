@@ -23,16 +23,19 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	}
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(tickets, obs)
-	repoPaths := repoPathsByName(l.cfg.Repos)
+	repoPaths := repoPathsByName(l.repos)
 
 	vd, err := verdictDepsFor(
-		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+		ctx, l.store, checksByRepo(l.repos), mergifySHAByRepo(l.repos), compatCheckByRepo(l.repos))
 	if err != nil {
 		return err
 	}
 
 	now := l.now()
 	for _, t := range tickets {
+		if !l.repoSettingsOK(t.Repo) {
+			continue // a repo whose settings read failed this tick un-drafts nothing
+		}
 		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 		if pr.State != gh.Open || !pr.IsDraft {
 			continue

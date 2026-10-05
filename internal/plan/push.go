@@ -14,12 +14,14 @@ type Policy struct {
 }
 
 // defaultDeny is the set every repo enforces before any per-repo addition: CI config, the file
-// the app's own verdict is transcribed from, ownership, every package manifest and lockfile,
-// and env files -- the paths a real deploy or a secret-bearing install step reads before any
-// application code compiles.
+// the app's own verdict is transcribed from, the per-repo settings file itself (so an agent
+// cannot loosen the rules that bind it, plans/tracked-repos.md), ownership, every package
+// manifest and lockfile, and env files -- the paths a real deploy or a secret-bearing install
+// step reads before any application code compiles.
 var defaultDeny = []string{
 	".github/**",
 	".mergify.yml",
+	".command-centre.toml",
 	"CODEOWNERS",
 	"**/package.json",
 	"**/package-lock.json",

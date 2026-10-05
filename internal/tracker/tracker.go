@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// Kind names which issue tracker a repo's tickets live in. A config that names none resolves to
-// GitHub (internal/cc's LoadConfig applies that default, not this package).
+// Kind names which issue tracker a repo's tickets live in. A repo that names none resolves to
+// GitHub (internal/cc's ReadRepoSettings and NewLoop apply that default, not this package).
 type Kind string
 
 // GitHub is the Kind a [[repo]] with no tracker key resolves to.
