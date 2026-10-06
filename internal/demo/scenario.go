@@ -57,6 +57,9 @@ type Ticket struct {
 	CIAfter   Duration    `toml:"ci_after"`
 	Merge     Step        `toml:"merge"`
 	Close     Step        `toml:"close"`
+	Cut       string      `toml:"cut"`
+	Push      string      `toml:"push"`
+	Verify    string      `toml:"verify"`
 }
 
 // AgentScript is what the fake agent does once spawned for a ticket.
@@ -129,8 +132,13 @@ func (s Scenario) validate() error {
 		if !repos[t.Repo] {
 			return fmt.Errorf("ticket %q names unknown repo %q", t.ID, t.Repo)
 		}
-		if t.Agent.Result != "commits" && t.Agent.Result != "conflict" {
+		if !slices.Contains([]string{"commits", "conflict", "crash"}, t.Agent.Result) {
 			return fmt.Errorf("ticket %q: agent result %q is not supported yet", t.ID, t.Agent.Result)
+		}
+		for field, value := range map[string]string{"cut": t.Cut, "push": t.Push, "verify": t.Verify} {
+			if value != "" && value != "fail" {
+				return fmt.Errorf("ticket %q: %s %q is not supported, want \"fail\"", t.ID, field, value)
+			}
 		}
 		for _, ci := range t.CI {
 			if !slices.Contains([]string{ciPass, ciFail, ciHang}, ci) {

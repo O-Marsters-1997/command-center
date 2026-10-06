@@ -54,6 +54,7 @@ type Loop struct {
 	observe       ObserveFunc
 	clock         Clock
 	forge         gh.Forge
+	worktrees     tp.Worktrees
 	runner        Runner
 	cfg           Config
 	ws            Workspace
@@ -68,6 +69,7 @@ type Loop struct {
 func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, runner Runner) *Loop {
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: runner, cfg: cfg, ws: ws,
+		worktrees:     tp.CLI{},
 		trackerFor:    tracker.New,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
@@ -90,6 +92,10 @@ func (l *Loop) Nudge() {
 
 // SetForge replaces the real gh-backed Forge, so a test or the demo sim can fake GitHub in-process.
 func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
+
+// SetWorktrees replaces the real tp-backed Worktrees, so a test or the demo sim can cut and remove
+// worktrees without the tp binary.
+func (l *Loop) SetWorktrees(worktrees tp.Worktrees) { l.worktrees = worktrees }
 
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
@@ -577,7 +583,7 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	branch := spec.ticket.Branch
 	baseRef := "origin/" + spec.baseBranch
 
-	if err := tp.New(ctx, spec.repoPath, branch, baseRef); err != nil {
+	if err := l.worktrees.New(ctx, spec.repoPath, branch, baseRef); err != nil {
 		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.ticket.URL, spec.promptHash, l.clock.Now())
 		return insertErr
 	}

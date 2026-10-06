@@ -77,10 +77,15 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	agent := NewAgent(clock, issues, sc.Seed)
 	resolve := trackerSource(issues)
 
+	verifyCommand, err := installFailureScripts(sb, issues)
+	if err != nil {
+		return nil, err
+	}
+	template := cc.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
 	cfg := cc.Config{
 		MaxAgents:    len(issues),
 		AgentCommand: []string{"demo-agent"},
-		Repos:        sb.Repos(cc.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}}),
+		Repos:        sb.Repos(template),
 	}
 	for _, repo := range cfg.Repos {
 		if err := cc.EnsureCheckout(ctx, repo); err != nil {
@@ -104,6 +109,7 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	loop := cc.NewLoop(store, cc.NewObserver(store, forge, cfg), clock, cfg, ws, agent)
 	loop.SetMetricsParser(agentlog.ParseMetrics)
 	loop.SetForge(forge)
+	loop.SetWorktrees(NewWorktrees(issues))
 	loop.SetTrackerSource(resolve)
 	server := cc.NewServer(store, clock, cfg.Repos, ws.DataDir)
 	server.SetTrackerSource(resolve)

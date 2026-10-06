@@ -1,0 +1,68 @@
+seed = 11
+speed = 20
+
+[[repo]]
+name = "acme/api"
+files = { "go.mod" = "module acme/api\n", "main.go" = "package main\n" }
+
+[[ticket]]
+id = "crash"
+repo = "acme/api"
+title = "Add the metrics endpoint"
+feature = "failures"
+agent = { after = "1m", result = "crash" }
+
+[[ticket]]
+id = "cut"
+repo = "acme/api"
+title = "Add the audit log"
+feature = "failures"
+cut = "fail"
+agent = { after = "1m", result = "commits", files = ["audit.go"] }
+
+[[ticket]]
+id = "push"
+repo = "acme/api"
+title = "Add the export endpoint"
+feature = "failures"
+push = "fail"
+agent = { after = "1m", result = "commits", files = ["export.go"] }
+
+[[ticket]]
+id = "base"
+repo = "acme/api"
+title = "Add the config loader"
+feature = "failures"
+agent = { after = "1m", result = "commits", files = ["config.go"] }
+ci = ["pass"]
+merge = { after = "2m" }
+
+[[ticket]]
+id = "verify"
+repo = "acme/api"
+title = "Add the config validator"
+feature = "failures"
+verify = "fail"
+agent = { after = "1m", result = "commits", files = ["validate.go"] }
+ci = ["pass"]
+merge = { after = "1h" }
+
+[[expect]]
+at = "1m30s"
+ticket = "crash"
+state = "failed"
+
+[[expect]]
+at = "1m30s"
+ticket = "cut"
+state = "cut_failed"
+
+[[expect]]
+at = "1m30s"
+ticket = "push"
+state = "push_failed"
+
+[[expect]]
+at = "4m"
+ticket = "verify"
+state = "verification_failed"

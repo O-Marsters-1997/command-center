@@ -13,22 +13,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 )
 
-const fakeTpScript = `#!/bin/sh
-set -eu
-branch="$2"
-base="$4"
-path="$(cd "$(dirname "$PWD")" && pwd)/wt-$branch"
-git worktree add -b "$branch" "$path" "$base" >&2
-printf '%s\n' "$path"
-`
-
 // Sandbox is the real-git half of the demo world: one bare origin per repo, a checkout the loop
-// works in, a throwaway database, and a fake tp on PATH. Close removes all of it.
+// works in, and a throwaway database. Close removes all of it.
 type Sandbox struct {
 	root     string
 	DSN      string
 	dropDB   func() error
-	bin      string
 	repos    []*sandboxRepo
 	byOrigin map[string]*sandboxRepo
 }
@@ -42,8 +32,7 @@ type sandboxRepo struct {
 	merger       string
 }
 
-// NewSandbox builds the repos' origins seeded from their files and a database, and puts the fake
-// tp first on PATH until Close.
+// NewSandbox builds the repos' origins seeded from their files and a database.
 func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	root, err := os.MkdirTemp("", "cc-demo-")
 	if err != nil {
@@ -69,18 +58,6 @@ func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 		sb.byOrigin[repo.origin] = repo
 	}
 
-	bin := filepath.Join(root, "bin")
-	if err := os.MkdirAll(bin, 0o750); err != nil {
-		return nil, err
-	}
-	//nolint:gosec // an executable script
-	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(fakeTpScript), 0o700); err != nil {
-		return nil, err
-	}
-	sb.bin = bin
-	if err := os.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")); err != nil {
-		return nil, err
-	}
 	return sb, nil
 }
 
@@ -195,16 +172,8 @@ func (s *Sandbox) Repos(template cc.Repo) []cc.Repo {
 // RunsDir is where the loop writes agent logs and prompts.
 func (s *Sandbox) RunsDir() string { return filepath.Join(s.root, "runs") }
 
-// Close drops the database, restores PATH and deletes the sandbox tree.
-func (s *Sandbox) Close() error {
-	var errs []error
-	if s.bin != "" {
-		path := strings.Replace(os.Getenv("PATH"), s.bin+string(os.PathListSeparator), "", 1)
-		errs = append(errs, os.Setenv("PATH", path))
-	}
-	errs = append(errs, s.dropDB(), os.RemoveAll(s.root))
-	return errors.Join(errs...)
-}
+// Close drops the database and deletes the sandbox tree.
+func (s *Sandbox) Close() error { return errors.Join(s.dropDB(), os.RemoveAll(s.root)) }
 
 func (s *Sandbox) repoFor(gitDir string) (*sandboxRepo, error) {
 	origin, err := git(gitDir, "remote", "get-url", "origin")

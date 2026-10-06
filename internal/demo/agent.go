@@ -41,6 +41,7 @@ type agentRun struct {
 	tokensOut int
 	finished  bool
 	resolving bool
+	exitCode  int
 	rng       *rand.Rand
 }
 
@@ -119,6 +120,11 @@ func (*Agent) turn(run *agentRun) error {
 }
 
 func (r *agentRun) finish(now time.Time) error {
+	if r.issue.Agent.Result == "crash" {
+		r.finished = true
+		r.exitCode = 1
+		return r.write(map[string]any{"type": "result", "subtype": "error_during_execution", "is_error": true})
+	}
 	if err := r.commitWork(); err != nil {
 		return err
 	}
@@ -203,7 +209,10 @@ func (a *Agent) Reap(pid int) (int, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run, ok := a.runs[pid]
-	return 0, ok && run.finished
+	if !ok {
+		return 0, false
+	}
+	return run.exitCode, run.finished
 }
 
 var _ cc.Runner = (*Agent)(nil)
