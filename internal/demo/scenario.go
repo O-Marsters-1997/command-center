@@ -135,9 +135,10 @@ func (s Scenario) validate() error {
 		if !slices.Contains([]string{"commits", "conflict", "crash"}, t.Agent.Result) {
 			return fmt.Errorf("ticket %q: agent result %q is not supported yet", t.ID, t.Agent.Result)
 		}
-		for field, value := range map[string]string{"cut": t.Cut, "push": t.Push, "verify": t.Verify} {
-			if value != "" && value != "fail" {
-				return fmt.Errorf("ticket %q: %s %q is not supported, want \"fail\"", t.ID, field, value)
+		scripted := []struct{ name, value string }{{"cut", t.Cut}, {"push", t.Push}, {"verify", t.Verify}}
+		for _, f := range scripted {
+			if f.value != "" && f.value != "fail" {
+				return fmt.Errorf("ticket %q: %s %q is not supported, want \"fail\"", t.ID, f.name, f.value)
 			}
 		}
 		for _, ci := range t.CI {

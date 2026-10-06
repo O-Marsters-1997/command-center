@@ -25,7 +25,8 @@ type Worktrees struct {
 func NewWorktrees(issues []issue) *Worktrees { return &Worktrees{issues: issues} }
 
 func (w *Worktrees) New(_ context.Context, repoPath, branch, baseRef string) error {
-	if slices.ContainsFunc(w.issues, func(i issue) bool { return i.branch == branch && i.Cut == "fail" }) {
+	failsCut := func(i issue) bool { return i.branch == branch && i.repo.checkout == repoPath && i.Cut == "fail" }
+	if slices.ContainsFunc(w.issues, failsCut) {
 		return errCutFailed
 	}
 	path := filepath.Join(filepath.Dir(repoPath), "wt-"+branch)

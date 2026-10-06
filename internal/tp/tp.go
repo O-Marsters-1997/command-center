@@ -70,12 +70,10 @@ func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error
 	return nil
 }
 
-// New is the package-level New.
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
 	return New(ctx, repoPath, branch, baseRef)
 }
 
-// Remove is the package-level Remove.
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
 	return Remove(ctx, repoPath, branch, mode)
 }
