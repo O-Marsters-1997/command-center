@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -359,7 +360,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 		t.Errorf("events = %+v, want no refreshed event: the merge conflicted", events)
 	}
 
-	mid, err := cc.MidMerge(t.Context(), f.childWorktree)
+	mid, err := git.MidMerge(t.Context(), f.childWorktree)
 	if err != nil {
 		t.Fatal(err)
 	}

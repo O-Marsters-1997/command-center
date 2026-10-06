@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -53,7 +54,7 @@ func (l *Loop) recordHandChurn(ctx context.Context, t Ticket, pr plan.PR, push p
 	var err error
 	if pr.HeadOid == push.PushedTip {
 		err = l.store.SetHandChurnLines(ctx, t.URL, 0)
-	} else if lines, diffErr := LinesChanged(ctx, repoPath, push.PushedTip, pr.HeadOid); diffErr != nil {
+	} else if lines, diffErr := git.LinesChanged(ctx, repoPath, push.PushedTip, pr.HeadOid); diffErr != nil {
 		log.Printf("hand churn for %s: %v", t.URL, diffErr)
 		return
 	} else {

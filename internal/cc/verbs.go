@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 const (
@@ -102,7 +102,7 @@ func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs plan.Observation
 	if obs.Runs[ticket.URL].Alive {
 		return fail(fmt.Sprintf("a run is alive in %s", worktreePath))
 	}
-	if err := MergeAbort(ctx, worktreePath); err != nil {
+	if err := git.MergeAbort(ctx, worktreePath); err != nil {
 		return fail(err.Error())
 	}
 
@@ -149,7 +149,7 @@ func (l *Loop) resolveOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: refusal})
 	}
 
-	baselineSHA, err := BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
@@ -226,7 +226,7 @@ func (l *Loop) followUpOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventFollowUpRefused, Detail: refusal})
 	}
 
-	baselineSHA, err := BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
@@ -390,7 +390,7 @@ func (l *Loop) reRunOne(
 ) error {
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
-		if err := DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
+		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
 		return l.cutAndSpawn(ctx, launchSpec{
@@ -398,7 +398,7 @@ func (l *Loop) reRunOne(
 		})
 	}
 
-	baselineSHA, err := BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
@@ -613,9 +613,9 @@ func (l *Loop) removeWorktreeOne(
 	repoPath := rc.repoPaths[ticket.Repo]
 	worktreePath, worktreePresent := rc.obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 
-	mode := tp.RemoveMerged
+	mode := git.RemoveMerged
 	if worktreePresent {
-		dirty, err := Dirty(ctx, worktreePath)
+		dirty, err := git.Dirty(ctx, worktreePath)
 		if err != nil {
 			return fmt.Errorf("check worktree dirty for %s: %w", ticket.URL, err)
 		}
@@ -623,15 +623,15 @@ func (l *Loop) removeWorktreeOne(
 			return refuse("worktree is dirty")
 		}
 
-		state, err := RemovalStateFor(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
+		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}
-		if state == NotRemovable {
+		if state == git.NotRemovable {
 			return refuse("worktree holds unpushed commits")
 		}
-		if state == RemovableByForce {
-			mode = tp.RemoveForced
+		if state == git.RemovableByForce {
+			mode = git.RemoveForced
 		}
 	}
 
@@ -649,7 +649,7 @@ func (l *Loop) removeWorktreeOne(
 		return err
 	}
 	var detail string
-	if mode == tp.RemoveForced {
+	if mode == git.RemoveForced {
 		detail = "forced: origin ref pruned, branch at last pushed tip"
 	}
 	if err := l.store.AppendEvent(ctx,

@@ -1,4 +1,4 @@
-package cc
+package git
 
 import (
 	"bytes"
@@ -21,9 +21,9 @@ func Fetch(ctx context.Context, repoPath string) error {
 	return nil
 }
 
-// Worktrees reads the authoritative branch -> path map (inv. 5: never a reimplemented
+// WorktreePaths reads the authoritative branch -> path map (inv. 5: never a reimplemented
 // derivation of where treepad puts things).
-func Worktrees(ctx context.Context, repoPath string) (map[string]string, error) {
+func WorktreePaths(ctx context.Context, repoPath string) (map[string]string, error) {
 	out, err := git(ctx, repoPath, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
@@ -394,17 +394,17 @@ func conflictedPaths(out []byte) []string {
 // Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
 // has replaced the history commit sat on (issue #89).
 func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
-	return gitSucceeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
+	return Succeeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
 }
 
 func refExists(ctx context.Context, worktreePath, ref string) (bool, error) {
-	return gitSucceeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
+	return Succeeds(ctx, worktreePath, "rev-parse", "--verify", "-q", ref)
 }
 
-// gitSucceeds runs a git query whose exit status is its answer, so exit 1 is a "no" rather than
+// Succeeds runs a git query whose exit status is its answer, so exit 1 is a "no" rather than
 // a failure. Every other exit -- 128 for a ref that does not resolve, most of all -- stays an
 // error, because a missing commit is not the same answer as a negative one.
-func gitSucceeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
+func Succeeds(ctx context.Context, repoPath string, args ...string) (bool, error) {
 	_, ok, err := gitRun(ctx, repoPath, args...)
 	return ok, err
 }

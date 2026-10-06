@@ -1,6 +1,4 @@
-// Package tp wraps the treepad CLI commands the app needs: `new` (Phase 3) and `remove`
-// (Phase 6 teardown).
-package tp
+package git
 
 import (
 	"bytes"
@@ -21,7 +19,7 @@ type CLI struct{}
 
 // New cuts a worktree for branch off baseRef via `tp new <branch> --base <baseRef>`, run inside
 // repoPath. A failure here is the caller's "cut failed", not a crash.
-func New(ctx context.Context, repoPath, branch, baseRef string) error {
+func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
 	cmd := exec.CommandContext(ctx, "tp", "new", branch, "--base", baseRef)
 	cmd.Dir = repoPath
 	var stderr bytes.Buffer
@@ -56,7 +54,7 @@ func (m RemoveMode) flag() string {
 
 // Remove tears down branch's worktree and deletes the branch via `tp remove <flag> <branch>`,
 // run inside repoPath, where mode picks the flag (see RemoveMode).
-func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
+func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
 	flag := mode.flag()
 	cmd := exec.CommandContext(ctx, "tp", "remove", flag, branch)
 	cmd.Dir = repoPath
@@ -68,12 +66,4 @@ func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error
 			flag, branch, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
 	}
 	return nil
-}
-
-func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	return New(ctx, repoPath, branch, baseRef)
-}
-
-func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
-	return Remove(ctx, repoPath, branch, mode)
 }

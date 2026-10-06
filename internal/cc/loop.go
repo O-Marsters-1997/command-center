@@ -15,10 +15,10 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -56,7 +56,7 @@ type Loop struct {
 	observe       ObserveFunc
 	clock         Clock
 	forge         gh.Forge
-	worktrees     tp.Worktrees
+	worktrees     git.Worktrees
 	runner        runner.Runner
 	cfg           Config
 	ws            Workspace
@@ -71,7 +71,7 @@ type Loop struct {
 func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, spawner runner.Runner) *Loop {
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
-		worktrees:     tp.CLI{},
+		worktrees:     git.CLI{},
 		trackerFor:    tracker.New,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
@@ -97,7 +97,7 @@ func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
 
 // SetWorktrees replaces the real tp-backed Worktrees, so a test or the demo sim can cut and remove
 // worktrees without the tp binary.
-func (l *Loop) SetWorktrees(worktrees tp.Worktrees) { l.worktrees = worktrees }
+func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
 
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
@@ -462,14 +462,14 @@ func (l *Loop) commitsSinceBaseline(
 	ctx context.Context, ticket Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
 	if worktreePath := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
-		return CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
+		return git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
 	}
 	tip, ok := obs.BranchTips[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return 0, nil
 	}
 	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
-	return CommitsSince(ctx, repoPath, baselineSHA, tip)
+	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
 // launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this
@@ -597,12 +597,12 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return insertErr
 	}
 
-	baselineSHA, err := BranchTip(ctx, spec.repoPath, branch)
+	baselineSHA, err := git.BranchTip(ctx, spec.repoPath, branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for %s: %w", spec.ticket.URL, err)
 	}
 
-	worktrees, err := Worktrees(ctx, spec.repoPath)
+	worktrees, err := git.WorktreePaths(ctx, spec.repoPath)
 	if err != nil {
 		return fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
 	}

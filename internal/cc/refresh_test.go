@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -422,7 +423,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
 	)
 	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -492,7 +493,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[cc.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -560,7 +561,7 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[cc.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
+		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}

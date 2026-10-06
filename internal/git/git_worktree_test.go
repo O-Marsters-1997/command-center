@@ -1,4 +1,4 @@
-package cc
+package git
 
 import (
 	"os"
@@ -144,20 +144,20 @@ func pruneRemoteTrackingRef(t *testing.T, repoPath, branch string) {
 	}
 }
 
-// TestWorktreesKeepsAMidRebaseWorktreeUnderItsBranch covers issue #91: git calls a rebasing
+// TestWorktreePathsKeepsAMidRebaseWorktreeUnderItsBranch covers issue #91: git calls a rebasing
 // worktree "detached", which dropped it from Observation.Worktrees and Observation.MidMerge
 // alike, so the row read review_me while its worktree sat on an unresolved conflict.
-func TestWorktreesKeepsAMidRebaseWorktreeUnderItsBranch(t *testing.T) {
+func TestWorktreePathsKeepsAMidRebaseWorktreeUnderItsBranch(t *testing.T) {
 	t.Parallel()
 
 	repo, worktree := repoWithAConflictedRebase(t)
 
-	worktrees, err := Worktrees(t.Context(), repo)
+	worktrees, err := WorktreePaths(t.Context(), repo)
 	if err != nil {
-		t.Fatalf("Worktrees: %v", err)
+		t.Fatalf("WorktreePaths: %v", err)
 	}
 	if got := worktrees["feature"]; got != worktree {
-		t.Errorf("Worktrees()[%q] = %q, want %q", "feature", got, worktree)
+		t.Errorf("WorktreePaths()[%q] = %q, want %q", "feature", got, worktree)
 	}
 
 	mid, err := MidMerge(t.Context(), worktree)

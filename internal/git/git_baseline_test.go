@@ -1,4 +1,4 @@
-package cc
+package git
 
 import (
 	"os"

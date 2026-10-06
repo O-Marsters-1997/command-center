@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -97,19 +98,19 @@ func advanceMainFile(t *testing.T, root, relPath, contents string) {
 func (f generatedConflictFixture) observe(t *testing.T) cc.ObserveFunc {
 	t.Helper()
 	return func(ctx context.Context) (plan.Observation, error) {
-		mainTip, err := cc.RevParse(ctx, f.repoPath, "refs/remotes/origin/main")
+		mainTip, err := git.RevParse(ctx, f.repoPath, "refs/remotes/origin/main")
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		branchTip, err := cc.RevParse(ctx, f.repoPath, "refs/heads/cc-1")
+		branchTip, err := git.RevParse(ctx, f.repoPath, "refs/heads/cc-1")
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		clean, paths, err := cc.MergesCleanly(ctx, f.repoPath, mainTip, branchTip)
+		clean, paths, err := git.MergesCleanly(ctx, f.repoPath, mainTip, branchTip)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		mid, err := cc.MidMerge(ctx, f.worktreePath)
+		mid, err := git.MidMerge(ctx, f.worktreePath)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -221,7 +222,7 @@ func TestAConflictTouchingAHandWrittenPathIsLeftUntouched(t *testing.T) {
 
 	// The row keeps the state it has today: the pre-existing base-moved refresh still runs and
 	// still conflicts for a human, since this ticket's own gate never touched the worktree.
-	mid, err := cc.MidMerge(t.Context(), f.worktreePath)
+	mid, err := git.MidMerge(t.Context(), f.worktreePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,19 +337,19 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
 
 	observe := func(ctx context.Context) (plan.Observation, error) {
-		mainTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/main")
+		mainTip, err := git.RevParse(ctx, repoPath, "refs/remotes/origin/main")
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		branchTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/cc-1")
+		branchTip, err := git.RevParse(ctx, repoPath, "refs/remotes/origin/cc-1")
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		clean, paths, err := cc.MergesCleanly(ctx, repoPath, mainTip, branchTip)
+		clean, paths, err := git.MergesCleanly(ctx, repoPath, mainTip, branchTip)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		mid, err := cc.MidMerge(ctx, worktreePath)
+		mid, err := git.MidMerge(ctx, worktreePath)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -399,7 +400,7 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 		t.Errorf("handwritten.go = %q, want main's own version merged in cleanly", gotHandwritten)
 	}
 
-	mid, err := cc.MidMerge(t.Context(), worktreePath)
+	mid, err := git.MidMerge(t.Context(), worktreePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +488,7 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	mid, err := cc.MidMerge(t.Context(), worktreePath)
+	mid, err := git.MidMerge(t.Context(), worktreePath)
 	if err != nil {
 		t.Fatal(err)
 	}

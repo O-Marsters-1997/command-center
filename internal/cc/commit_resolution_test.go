@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -68,7 +69,7 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if mid, err := cc.MidMerge(t.Context(), worktreePath); err != nil {
+	if mid, err := git.MidMerge(t.Context(), worktreePath); err != nil {
 		t.Fatal(err)
 	} else if mid {
 		t.Error("worktree is still mid-merge: MERGE_HEAD must be cleared by the commit")
@@ -124,7 +125,7 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if mid, err := cc.MidMerge(t.Context(), worktreePath); err != nil {
+	if mid, err := git.MidMerge(t.Context(), worktreePath); err != nil {
 		t.Fatal(err)
 	} else if !mid {
 		t.Error("worktree left the merge: an unmerged path must refuse the commit")
@@ -163,7 +164,7 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if mid, err := cc.MidMerge(t.Context(), worktreePath); err != nil {
+	if mid, err := git.MidMerge(t.Context(), worktreePath); err != nil {
 		t.Fatal(err)
 	} else if !mid {
 		t.Error("worktree left the merge: nothing staged must refuse the commit")
@@ -231,7 +232,7 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if mid, err := cc.MidMerge(t.Context(), worktreePath); err != nil {
+	if mid, err := git.MidMerge(t.Context(), worktreePath); err != nil {
 		t.Fatal(err)
 	} else if mid {
 		t.Error("worktree is still mid-merge: the commit itself is never gated by the push policy")
