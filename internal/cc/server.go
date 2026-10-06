@@ -1515,14 +1515,6 @@ func randomGroup() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func planTicketsByURL(tickets []Ticket) map[string]plan.Ticket {
-	byURL := make(map[string]plan.Ticket, len(tickets))
-	for _, t := range tickets {
-		byURL[t.URL] = planTicket(t)
-	}
-	return byURL
-}
-
 func planTicket(t Ticket) plan.Ticket {
 	return plan.Ticket{
 		URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,

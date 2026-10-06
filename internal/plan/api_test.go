@@ -37,7 +37,8 @@ func TestNoImpureImports(t *testing.T) {
 			t.Errorf("internal/plan imports %q; this package is pure", path)
 		}
 		if !isStdlib(path) && !slices.Contains(allowed, path) {
-			t.Errorf("internal/plan imports %q; only the standard library, internal/spend and internal/verdict are allowed", path)
+			t.Errorf("internal/plan imports %q; only the standard library, internal/spend and internal/verdict are allowed",
+				path)
 		}
 	}
 }
