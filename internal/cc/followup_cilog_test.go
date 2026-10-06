@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -52,7 +53,7 @@ func installFakeGhWithLogFailed(t *testing.T, output string, fail bool) (logPath
 // ci_failed, SUCCESS resolves review_me (issue #232 AC3).
 func setUpCIFailedTicket(
 	t *testing.T, store *cc.Store, root, repoPath string, ticket cc.Ticket, at time.Time, conclusion, detailsURL string,
-) (plan.Observation, cc.Config, cc.Workspace) {
+) (plan.Observation, config.Config, config.Workspace) {
 	t.Helper()
 	ctx := t.Context()
 

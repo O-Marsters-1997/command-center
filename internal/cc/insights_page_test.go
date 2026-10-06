@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 const goldenInsights = "testdata/insights.golden.html"
@@ -24,7 +25,7 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	repos := []cc.Repo{{Name: "cc-sandbox"}}
+	repos := []config.Repo{{Name: "cc-sandbox"}}
 	server := cc.NewServer(store, fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), repos, "")
 
 	got := renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a")

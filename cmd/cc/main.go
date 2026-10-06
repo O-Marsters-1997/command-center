@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
 func main() {
@@ -38,18 +38,18 @@ func main() {
 // runOptions is nil in the release binary; register_e2e.go's e2e build points it at the same
 // checkout override `cc tick` uses, so `cc-daemon` doesn't try to dial a sandbox repo's
 // undialable remote either.
-var runOptions []cc.Option
+var runOptions []app.Option
 
 func run(ctx context.Context, configPath string) (err error) {
 	log.Printf("config: %s", configPath)
 
-	app, err := cc.New(ctx, configPath, runOptions...)
+	instance, err := app.New(ctx, configPath, runOptions...)
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, app.Close()) }()
+	defer func() { err = errors.Join(err, instance.Close()) }()
 
-	return app.Run(ctx)
+	return instance.Run(ctx)
 }
 
 var demoSubcmd func(args []string) func(ctx context.Context, configPath string) error

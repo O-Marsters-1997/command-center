@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 // Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
@@ -45,14 +47,14 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 		return err
 	}
 
-	app, err := cc.New(ctx, configPath, cc.WithCheckout(SandboxCheckout))
+	instance, err := app.New(ctx, configPath, app.WithCheckout(SandboxCheckout))
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, app.Close()) }()
+	defer func() { err = errors.Join(err, instance.Close()) }()
 
 	for range *count {
-		if err := app.RunOnce(ctx); err != nil {
+		if err := instance.RunOnce(ctx); err != nil {
 			return err
 		}
 	}
@@ -64,7 +66,7 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 		return fmt.Errorf("usage: cc import <feature>")
 	}
 
-	cfg, err := cc.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
@@ -95,11 +97,11 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	}
 	method, path := rest[0], rest[1]
 
-	cfg, err := cc.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	ws, err := cc.ResolveWorkspace(cfg.DataDir)
+	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return err
 	}

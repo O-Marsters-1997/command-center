@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -48,8 +49,8 @@ func writeFakeGhReadyScript(t *testing.T, binDir, logPath string, readyFails boo
 // for applyDraftGate to decide over -- the shape every test below starts from.
 type draftGateFixture struct {
 	store *cc.Store
-	cfg   cc.Config
-	ws    cc.Workspace
+	cfg   config.Config
+	ws    config.Workspace
 	at    time.Time
 	tip   string
 }
@@ -78,10 +79,10 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 		t.Fatal(err)
 	}
 
-	cfg := cc.Config{
-		Repos: []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
+	cfg := config.Config{
+		Repos: []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
 	}
-	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
 }
 
@@ -303,7 +304,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo", Stacking: true}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 func TestFilterGroupsByRepoIsUnscopedWhenRepoIsBlank(t *testing.T) {
@@ -193,7 +195,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 func TestRepoLinksForNamesAllPlusEveryConfiguredRepo(t *testing.T) {
 	t.Parallel()
 
-	repos := []Repo{{Name: "repo"}, {Name: "services"}}
+	repos := []config.Repo{{Name: "repo"}, {Name: "services"}}
 	got := repoLinksFor(repos, viewParams{Repo: "services"})
 	if len(got) != 3 {
 		t.Fatalf("repoLinksFor(repos, {Repo: services}) = %+v, want 3 links", got)

@@ -18,6 +18,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -83,8 +84,8 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	if err != nil {
 		return nil, err
 	}
-	template := cc.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
-	cfg := cc.Config{
+	template := config.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
+	cfg := config.Config{
 		MaxAgents:    len(issues),
 		AgentCommand: []string{"demo-agent"},
 		Repos:        sb.Repos(template),
@@ -140,9 +141,9 @@ func features(issues []issue) []string {
 	return out
 }
 
-func workspaceIn(sb *Sandbox) (cc.Workspace, error) {
+func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 	state := filepath.Join(sb.root, "state")
-	ws := cc.Workspace{
+	ws := config.Workspace{
 		DataDir:          sb.root,
 		StateDir:         state,
 		RunsDir:          sb.RunsDir(),

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -55,7 +56,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo", Stacking: true}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -111,7 +112,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo", Stacking: true}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -157,7 +158,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, "")
+	server := cc.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, "")
 	page := renderPage(t, server)
 
 	got := rowCellAt(t, page, ticket.URL, 1)

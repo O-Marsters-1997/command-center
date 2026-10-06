@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/O-Marsters-1997/command-center/e2e/register"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
 // subcmd resolves the end-to-end-only subcommands. The build tag, not an init hook, is what
@@ -16,5 +16,5 @@ func subcmd(args []string) func(ctx context.Context, configPath string) error {
 }
 
 func init() {
-	runOptions = []cc.Option{cc.WithCheckout(register.SandboxCheckout)}
+	runOptions = []app.Option{app.WithCheckout(register.SandboxCheckout)}
 }

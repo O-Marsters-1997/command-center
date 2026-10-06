@@ -1,18 +1,18 @@
-package cc_test
+package config_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 func TestResolveWorkspaceLaysOutTheDataDir(t *testing.T) {
 	t.Parallel()
 
 	dataDir := t.TempDir()
-	ws, err := cc.ResolveWorkspace(dataDir)
+	ws, err := config.ResolveWorkspace(dataDir)
 	if err != nil {
 		t.Fatalf("ResolveWorkspace: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 	t.Setenv("CC_DATA_DIR", fromEnv)
 
 	fromKey := t.TempDir()
-	got, err := cc.ResolveDataDir(fromKey)
+	got, err := config.ResolveDataDir(fromKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 		t.Errorf("data dir = %q, want the config key %q", got, fromKey)
 	}
 
-	got, err = cc.ResolveDataDir("")
+	got, err = config.ResolveDataDir("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 	}
 
 	t.Setenv("CC_DATA_DIR", "")
-	got, err = cc.ResolveDataDir("")
+	got, err = config.ResolveDataDir("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestResolveDataDirExpandsHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	got, err := cc.ResolveDataDir("~/cc-data")
+	got, err := config.ResolveDataDir("~/cc-data")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,11 +102,11 @@ func TestResolveWorkspaceIgnoresTheWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
 	dataDir := t.TempDir()
-	first, err := cc.ResolveWorkspace(dataDir)
+	first, err := config.ResolveWorkspace(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := cc.ResolveWorkspace(dataDir)
+	second, err := config.ResolveWorkspace(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}

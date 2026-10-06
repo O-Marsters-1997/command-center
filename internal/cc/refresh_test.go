@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -16,13 +17,13 @@ import (
 
 // stackedConfigAndWorkspace mirrors testConfigAndWorkspace (fakes_test.go) but with stacking on:
 // refresh's own base recompute (plan.Unlocked) only ever names a non-main base under stacking.
-func stackedConfigAndWorkspace(t *testing.T, root string) (cc.Config, cc.Workspace) {
+func stackedConfigAndWorkspace(t *testing.T, root string) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := cc.Config{
+	cfg := config.Config{
 		MaxAgents: 0,
-		Repos:     []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: true}},
+		Repos:     []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: true}},
 	}
-	ws := cc.Workspace{
+	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
 	}

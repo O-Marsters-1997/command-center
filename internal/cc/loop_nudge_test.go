@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -37,7 +38,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 		return plan.Observation{}, nil
 	}
 
-	loop := cc.NewLoop(store, observe, cc.RealClock{}, cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, cc.RealClock{}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
@@ -73,7 +74,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 		return plan.Observation{}, nil
 	}
 	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-	loop := cc.NewLoop(store, observe, clock, cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})

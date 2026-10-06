@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -21,8 +22,8 @@ import (
 type removeWorktreeFixture struct {
 	root, repoPath, worktreePath string
 	store                        *cc.Store
-	ws                           cc.Workspace
-	cfg                          cc.Config
+	ws                           config.Workspace
+	cfg                          config.Config
 	ticket                       cc.Ticket
 	runID                        int64
 	at                           time.Time

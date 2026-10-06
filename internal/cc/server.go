@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -130,7 +131,7 @@ type Server struct {
 	store            *Store
 	clock            Clock
 	boardPollSeconds int
-	repos            []Repo
+	repos            []config.Repo
 	rules            plan.Rules
 	dataDir          string
 	spendLimit5h     int
@@ -144,11 +145,11 @@ type Server struct {
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
 // the data directory: stacking, the verdict predicate, the mergify hash and the compat check
 // name are all per-repo config, and dataDir is the fleet the header names.
-func NewServer(store *Store, clock Clock, repos []Repo, dataDir string) *Server {
+func NewServer(store *Store, clock Clock, repos []config.Repo, dataDir string) *Server {
 	s := &Server{
-		store: store, clock: clock, boardPollSeconds: defaultBoardPollSeconds, repos: repos, dataDir: dataDir,
+		store: store, clock: clock, boardPollSeconds: config.DefaultBoardPollSeconds, repos: repos, dataDir: dataDir,
 		spend: newSpendCache(), trackerFor: tracker.New,
-		rules: Config{Repos: repos}.PlanRules(),
+		rules: config.Config{Repos: repos}.PlanRules(),
 		nudge: func() {},
 	}
 	mux := http.NewServeMux()
@@ -909,7 +910,7 @@ func rowsIn(groups []group) []row {
 
 // repoLinksFor is the breadcrumb's repo switcher: "all" plus one entry per configured repo, nil
 // when none are configured so a single-repo fixture's breadcrumb renders no switcher at all.
-func repoLinksFor(repos []Repo, params viewParams) []scopeLink {
+func repoLinksFor(repos []config.Repo, params viewParams) []scopeLink {
 	if len(repos) == 0 {
 		return nil
 	}

@@ -1,18 +1,18 @@
-package cc_test
+package app_test
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
 func TestLockRefusesASecondInstance(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "command-centre.lock")
-	held, err := cc.Lock(path)
+	held, err := app.Lock(path)
 	if err != nil {
 		t.Fatalf("first Lock: %v", err)
 	}
@@ -22,7 +22,7 @@ func TestLockRefusesASecondInstance(t *testing.T) {
 		}
 	})
 
-	_, err = cc.Lock(path)
+	_, err = app.Lock(path)
 	if err == nil {
 		t.Fatal("second Lock succeeded; want a refusal")
 	}

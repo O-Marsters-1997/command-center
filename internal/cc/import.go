@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -43,7 +44,7 @@ type ImportFeature struct {
 // ImportFeatures reads every configured repo's tracker features, gathered fresh on every render
 // (inv. 14): one gh label list per repo, and no per-feature ticket call. A repo with no remote
 // has no tracker to dispatch to and is silently skipped.
-func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([]ImportFeature, error) {
+func ImportFeatures(ctx context.Context, repos []config.Repo, resolve TrackerSource) ([]ImportFeature, error) {
 	var names []string
 	seen := map[string]bool{}
 	for _, r := range repos {
@@ -75,7 +76,7 @@ func ImportFeatures(ctx context.Context, repos []Repo, resolve TrackerSource) ([
 	return result, nil
 }
 
-func trackerSourceFor(r Repo, resolve TrackerSource) (tracker.Source, bool, error) {
+func trackerSourceFor(r config.Repo, resolve TrackerSource) (tracker.Source, bool, error) {
 	if r.Remote == "" {
 		return nil, false, nil
 	}

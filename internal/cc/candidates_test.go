@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -145,7 +146,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
 	srv := httptest.NewServer(cc.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 

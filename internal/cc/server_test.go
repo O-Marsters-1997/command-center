@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -251,7 +252,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -298,7 +299,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+	repos := []config.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
 	}}}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
@@ -365,7 +366,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 		t.Fatal(err)
 	}
 
-	repos := []cc.Repo{{
+	repos := []config.Repo{{
 		Name: "repo", CompatCheck: "GraphQL production compatibility",
 		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 			{Success: "GraphQL production compatibility"}, {Success: "Tests"},

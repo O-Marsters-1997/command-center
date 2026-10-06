@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -42,7 +43,7 @@ func threeRepoStore(t *testing.T) *cc.Store {
 func threeRepoServer(t *testing.T) *cc.Server {
 	t.Helper()
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	repos := []cc.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
+	repos := []config.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
 	return cc.NewServer(threeRepoStore(t), fixedClock(at), repos, "")
 }
 
@@ -223,7 +224,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
-	repos := []cc.Repo{{Name: "repo"}, {Name: "other"}}
+	repos := []config.Repo{{Name: "repo"}, {Name: "other"}}
 	server := cc.NewServer(store, fixedClock(at), repos, "")
 
 	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
@@ -374,7 +375,7 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 2, []string{"true"})
-	cfg.Repos = append(cfg.Repos, cc.Repo{Name: "other", Checkout: filepath.Join(root, "repo")})
+	cfg.Repos = append(cfg.Repos, config.Repo{Name: "other", Checkout: filepath.Join(root, "repo")})
 
 	store := openStore(t)
 	shown := cc.Ticket{URL: "sandbox://SHOWN", Repo: "repo", Branch: "shown"}

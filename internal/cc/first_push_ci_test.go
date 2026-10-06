@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -36,7 +37,7 @@ func appendVerdictEvent(t *testing.T, store *cc.Store, ticketURL string, at time
 func noopLoop(store *cc.Store, at time.Time) *cc.Loop {
 	return cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
-		fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 }
 
 func TestRecordFirstPushCIRecordsFalseAndIgnoresALaterPass(t *testing.T) {
