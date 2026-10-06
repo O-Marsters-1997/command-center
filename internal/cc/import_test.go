@@ -15,6 +15,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -667,7 +668,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -714,7 +715,7 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 	}
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
@@ -788,7 +789,7 @@ func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
 	}
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
@@ -857,7 +858,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
 	}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)

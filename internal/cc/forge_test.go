@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -87,7 +88,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	store := openStore(t)
 	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	forge := &fakeForge{t: t, remote: filepath.Join(root, "remote.git")}
-	runner := newFakeRunner()
+	runner := runner.NewFake()
 	loop := cc.NewLoop(store, cc.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner)
 	loop.SetForge(forge)
 	loop.SetTrackerSource(resolve)
@@ -109,13 +110,13 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	}
 
 	tick()
-	if len(runner.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: the imported ticket should have launched", len(runner.spawns))
+	if len(runner.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1: the imported ticket should have launched", len(runner.Spawns))
 	}
-	commitFile(t, runner.spawns[0].WorktreePath, "x.go", "package x\n")
+	commitFile(t, runner.Spawns[0].WorktreePath, "x.go", "package x\n")
 
-	runner.alive[1] = false
-	runner.canReap[1] = true
+	runner.Alive[1] = false
+	runner.CanReap[1] = true
 	for range 4 {
 		tick()
 	}

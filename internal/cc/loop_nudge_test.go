@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func waitForTicks(t *testing.T, count *atomic.Int32, want int32) {
@@ -36,7 +37,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 		return plan.Observation{}, nil
 	}
 
-	loop := cc.NewLoop(store, observe, cc.RealClock{}, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, cc.RealClock{}, cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
@@ -72,7 +73,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 		return plan.Observation{}, nil
 	}
 	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-	loop := cc.NewLoop(store, observe, clock, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, clock, cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})

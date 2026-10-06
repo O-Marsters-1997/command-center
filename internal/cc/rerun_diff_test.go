@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T) {
@@ -31,15 +32,15 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	obs := &plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return *obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns after first run = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns after first run = %d, want 1", len(fake.Spawns))
 	}
-	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.spawns[0].WorktreePath
+	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.Spawns[0].WorktreePath
 
 	ticket.Body = "ticket body, edited"
 	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
@@ -52,10 +53,10 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 2 {
-		t.Fatalf("spawns after re-run = %d, want 2", len(fake.spawns))
+	if len(fake.Spawns) != 2 {
+		t.Fatalf("spawns after re-run = %d, want 2", len(fake.Spawns))
 	}
-	reRunSpawn := fake.spawns[1]
+	reRunSpawn := fake.Spawns[1]
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
@@ -131,17 +132,17 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: a missing stored prompt must never fail the re-run", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1: a missing stored prompt must never fail the re-run", len(fake.Spawns))
 	}
-	spawned := fake.spawns[0]
+	spawned := fake.Spawns[0]
 	newPrompt, err := os.ReadFile(spawned.PromptPath)
 	if err != nil {
 		t.Fatal(err)

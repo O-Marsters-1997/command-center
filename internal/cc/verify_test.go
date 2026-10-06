@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // writeVerifyScript writes an executable shell script and returns its path -- a repo's verify_command in these tests.
@@ -39,7 +40,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 	verifyScript := writeVerifyScript(t, "#!/bin/sh\necho 'undefined: dup' >&2\nexit 1\n")
 	cfg.Repos[0].VerifyCommand = []string{verifyScript}
 	clock := fixedClock(at.Add(time.Minute))
-	loop := cc.NewLoop(store, observe, clock, cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root) // VerifyCommand left unset
-	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	cfg.Repos[0].VerifyCommand = []string{script}
-	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -162,7 +163,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	cfg.Repos[0].VerifyCommand = []string{writeVerifyScript(t, "#!/bin/sh\nexit 1\n")}
 	clock := fixedClock(at.Add(time.Minute))
-	loop := cc.NewLoop(store, observe, clock, cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -239,7 +240,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	cfg.Repos[0].VerifyCommand = []string{mustLookPath(t, "go"), "vet", "./..."}
 	clock := fixedClock(at.Add(time.Minute))
-	loop := cc.NewLoop(store, observe, clock, cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

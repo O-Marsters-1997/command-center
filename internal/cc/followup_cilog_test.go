@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -106,16 +107,16 @@ func TestFollowUpFromCIFailedCarriesLastLinesOfTheFailedLog(t *testing.T) {
 	}
 
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	prompt := fake.spawns[0].Prompt
+	prompt := fake.Spawns[0].Prompt
 	if !strings.Contains(prompt, "line250") || !strings.Contains(prompt, "line51") {
 		t.Errorf("prompt = %q, want the last 200 lines (51..250)", prompt)
 	}
@@ -150,17 +151,17 @@ func TestFollowUpWithNoActionsRunIDSpawnsAnywayNotingLogUnavailable(t *testing.T
 	}
 
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: a follow-up must spawn even when the log is unavailable", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1: a follow-up must spawn even when the log is unavailable", len(fake.Spawns))
 	}
-	if !strings.Contains(fake.spawns[0].Prompt, "could not be retrieved") {
-		t.Errorf("prompt = %q, want it to say the log could not be retrieved", fake.spawns[0].Prompt)
+	if !strings.Contains(fake.Spawns[0].Prompt, "could not be retrieved") {
+		t.Errorf("prompt = %q, want it to say the log could not be retrieved", fake.Spawns[0].Prompt)
 	}
 	if got := ghLogLines(t, ghLog, "run view"); len(got) != 0 {
 		t.Errorf("gh run view invocations = %v, want none: there is no run id to fetch with", got)
@@ -193,17 +194,17 @@ func TestFollowUpWhenLogFetchFailsSpawnsAnywayNotingLogUnavailable(t *testing.T)
 	}
 
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: a follow-up must spawn even when the log fetch fails", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1: a follow-up must spawn even when the log fetch fails", len(fake.Spawns))
 	}
-	if !strings.Contains(fake.spawns[0].Prompt, "could not be retrieved") {
-		t.Errorf("prompt = %q, want it to say the log could not be retrieved", fake.spawns[0].Prompt)
+	if !strings.Contains(fake.Spawns[0].Prompt, "could not be retrieved") {
+		t.Errorf("prompt = %q, want it to say the log could not be retrieved", fake.Spawns[0].Prompt)
 	}
 
 	events, err := store.Events(t.Context())
@@ -234,17 +235,17 @@ func TestFollowUpFromNonCIFailedStateInjectsNoLog(t *testing.T) {
 	}
 
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	if strings.Contains(fake.spawns[0].Prompt, "Failed CI log") {
-		t.Errorf("prompt = %q, want no CI log section: the ticket is not ci_failed", fake.spawns[0].Prompt)
+	if strings.Contains(fake.Spawns[0].Prompt, "Failed CI log") {
+		t.Errorf("prompt = %q, want no CI log section: the ticket is not ci_failed", fake.Spawns[0].Prompt)
 	}
 	if got := ghLogLines(t, ghLog, "run view"); len(got) != 0 {
 		t.Errorf("gh run view invocations = %v, want none: a non-ci_failed follow-up must never fetch a log", got)

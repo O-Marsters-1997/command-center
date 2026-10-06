@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
@@ -32,7 +33,7 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 	}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(tickAt), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(tickAt), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
@@ -85,7 +86,7 @@ func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
 	}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(mergedAt.Add(time.Hour)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(mergedAt.Add(time.Hour)), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 	}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Now()), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(time.Now()), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -169,7 +170,7 @@ func TestRecordMergedEventsRecordsHandChurnFromCommitsAfterCCsLastPush(t *testin
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(time.Now()), cfg, cc.Workspace{}, runner.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -205,7 +206,7 @@ func TestRecordMergedEventsRecordsZeroHandChurnWhenNothingLandsAfterCCsLastPush(
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(time.Now()), cfg, cc.Workspace{}, runner.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)

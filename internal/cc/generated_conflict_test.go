@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -154,7 +155,7 @@ func TestAConflictConfinedToGeneratedPathsMergesRebuildsCommitsAndPushes(t *test
 	f := newGeneratedConflictFixture(t, store, at, false, true)
 
 	cfg, ws := f.configAndWorkspace(t, []string{"dist/**"}, buildCommandRegenerating("dist/app.css", regeneratedContent))
-	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -209,7 +210,7 @@ func TestAConflictTouchingAHandWrittenPathIsLeftUntouched(t *testing.T) {
 	f := newGeneratedConflictFixture(t, store, at, true, true)
 
 	cfg, ws := f.configAndWorkspace(t, []string{"dist/**"}, buildCommandRegenerating("dist/app.css", regeneratedContent))
-	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -253,7 +254,7 @@ func TestAGenuineMergeFailureIsReportedRatherThanBuiltOver(t *testing.T) {
 	}
 
 	cfg, ws := f.configAndWorkspace(t, []string{"dist/**"}, buildCommandRegenerating("dist/app.css", regeneratedContent))
-	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err == nil {
 		t.Fatal("RunOnce: want an error, the local change makes the real merge fail for a reason other than a conflict")
 	}
@@ -278,7 +279,7 @@ func TestAConflictOnABranchNeverPushedIsLeftAlone(t *testing.T) {
 	f := newGeneratedConflictFixture(t, store, at, false, false)
 
 	cfg, ws := f.configAndWorkspace(t, []string{"dist/**"}, buildCommandRegenerating("dist/app.css", regeneratedContent))
-	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, f.observe(t), fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -378,7 +379,7 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 		}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
-	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -481,7 +482,7 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 		}},
 	}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
-	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // TestCheckingTicksOnlyAdvanceOnSuccessfulObserve is the AC's forced-failure sequence over an
@@ -26,7 +27,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	ok := cc.NewLoop(store, func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
-		fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+		fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 
 	for i := range 3 {
 		if err := ok.RunOnce(ctx); err != nil {
@@ -39,7 +40,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	boom := errors.New("gh pr list: exit status 1")
 	failing := cc.NewLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
-	}, fixedClock(at.Add(time.Hour)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	}, fixedClock(at.Add(time.Hour)), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	for i := range 50 {
 		if err := failing.RunOnce(ctx); err == nil {
 			t.Fatalf("RunOnce %d returned nil for a forced-failure observe", i)

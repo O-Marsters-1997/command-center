@@ -12,6 +12,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // removeWorktreeFixture is one ticket fully run, pushed and recorded, its worktree cut for real --
@@ -135,7 +136,7 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	loop := cc.NewLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
 	return loop.RunOnce(t.Context())
 }
 

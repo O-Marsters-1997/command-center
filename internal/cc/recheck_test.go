@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -42,7 +43,7 @@ func TestReCheckRerunsTheActionsRunParsedFromTheCompatCheckDetailsURL(t *testing
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.Repos[0].CompatCheck = reCheckCompatCheckName
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestReCheckRefusesADetailsURLWithoutARunsSegment(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.Repos[0].CompatCheck = reCheckCompatCheckName
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	}}
 	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	cfg := cc.Config{Repos: repos}
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce (re-check tick): %v", err)
 	}

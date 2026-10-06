@@ -1,65 +1,13 @@
 package cc_test
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 )
-
-// fakeRunner drives loop orchestration tests without touching the OS: Spawn hands out
-// sequential pids, Liveness and Reap answer from maps the test controls directly.
-type fakeRunner struct {
-	spawns   []cc.SpawnConfig
-	nextPid  int
-	alive    map[int]bool
-	reapCode map[int]int
-	canReap  map[int]bool
-	failNext bool
-	canceled []int
-}
-
-func newFakeRunner() *fakeRunner {
-	return &fakeRunner{alive: map[int]bool{}, reapCode: map[int]int{}, canReap: map[int]bool{}}
-}
-
-func (f *fakeRunner) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, error) {
-	f.spawns = append(f.spawns, cfg)
-	if f.failNext {
-		f.failNext = false
-		return cc.SpawnResult{}, errSpawnFailed
-	}
-	f.nextPid++
-	f.alive[f.nextPid] = true
-	return cc.SpawnResult{Pid: f.nextPid}, nil
-}
-
-func (f *fakeRunner) Liveness(pgid int, _, _ time.Time) (bool, error) {
-	return f.alive[pgid], nil
-}
-
-func (f *fakeRunner) Cancel(pgid int) error {
-	f.alive[pgid] = false
-	f.canceled = append(f.canceled, pgid)
-	return nil
-}
-
-func (f *fakeRunner) Reap(pid int) (int, bool) {
-	if !f.canReap[pid] {
-		return 0, false
-	}
-	return f.reapCode[pid], true
-}
-
-var errSpawnFailed = &spawnError{}
-
-type spawnError struct{}
-
-func (*spawnError) Error() string { return "spawn failed" }
 
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so
 // internal/tp.New is genuinely exercised. exitCode non-zero simulates `tp new` failing
