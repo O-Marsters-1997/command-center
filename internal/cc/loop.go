@@ -67,7 +67,8 @@ type Loop struct {
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, runner Runner) *Loop {
 	return &Loop{
-		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
+		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: runner, cfg: cfg, ws: ws,
+		trackerFor:    tracker.New,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
 	}
