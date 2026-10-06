@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -18,23 +19,13 @@ const importVerb = "import"
 
 // QueueImport queues one import intent for feature, which applyImportIntents performs on the
 // loop's next tick.
-func QueueImport(ctx context.Context, store *Store, feature string, at time.Time) error {
+func QueueImport(ctx context.Context, store *store.Store, feature string, at time.Time) error {
 	return store.QueueVerbIntent(ctx, feature, importVerb, at)
 }
-
-const eventImportRefused = "import_refused"
 
 // TrackerSource resolves the tracker.Source that reads one repo's tracker. tracker.New in
 // production; a test substitutes a fake here rather than shelling out to gh.
 type TrackerSource func(kind tracker.Kind, remote string) (tracker.Source, error)
-
-// ImportedTicket is one tracker.Ticket paired with the configured repo it came from and that
-// repo's tracker kind -- Store.ImportTickets's own upsert unit.
-type ImportedTicket struct {
-	tracker.Ticket
-	Repo   string
-	Source string
-}
 
 // ImportFeature is one project: label a configured repo's tracker offers.
 type ImportFeature struct {

@@ -4,7 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -14,7 +15,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
 		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
 	}

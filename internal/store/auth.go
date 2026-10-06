@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // CreateUser inserts one user row with an already-hashed password. The table's UNIQUE

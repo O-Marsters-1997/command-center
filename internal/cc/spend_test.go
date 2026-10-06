@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const aliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
@@ -106,7 +108,7 @@ func TestApplyTicketSpendStacksByKindAndFlagsAnOpenTicket(t *testing.T) {
 	t.Parallel()
 
 	rows := []row{{URL: "sandbox://CC-1"}, {URL: "sandbox://CC-2"}}
-	byURL := map[string]BoardTicketSpend{
+	byURL := map[string]store.BoardTicketSpend{
 		"sandbox://CC-1": {AgentUSD: 1, ResolveUSD: 0.5, FollowUpUSD: 0.25, Merged: true},
 		"sandbox://CC-2": {AgentUSD: 2, Merged: false},
 	}
@@ -133,7 +135,7 @@ func TestApplyTicketSpendLeavesARowWithNoSpendUntouched(t *testing.T) {
 	t.Parallel()
 
 	rows := []row{{URL: "sandbox://CC-1"}}
-	applyTicketSpend(rows, map[string]BoardTicketSpend{}, 0.1)
+	applyTicketSpend(rows, map[string]store.BoardTicketSpend{}, 0.1)
 
 	if got := rows[0]; got.SpendPctWeek != 0 || got.TicketOpen {
 		t.Errorf("row = %+v, want the zero value: no entry for this ticket", got)

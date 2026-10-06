@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -19,10 +21,10 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 
-	tickets := []cc.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
+	tickets := []storepkg.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
 	children := []string{"CC-2", "CC-3", "CC-4", "CC-5"}
 	for _, c := range children {
-		tickets = append(tickets, cc.Ticket{
+		tickets = append(tickets, storepkg.Ticket{
 			URL: "sandbox://" + c, Repo: "repo", Branch: strings.ToLower(c),
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
@@ -79,7 +81,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
@@ -135,8 +137,8 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://MERGED", Repo: "repo", Branch: "merged"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://MERGED", Repo: "repo", Branch: "merged"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +147,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	if err := store.RecordPush(ctx, ticket.URL, "merged-tip", "main", "main-tip", at); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, cc.Event{
+	if err := store.AppendEvent(ctx, storepkg.Event{
 		At: at, TicketURL: ticket.URL, Kind: "remove_worktree_refused", Detail: "worktree is dirty",
 	}); err != nil {
 		t.Fatal(err)

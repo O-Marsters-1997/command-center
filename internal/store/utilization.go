@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // RecordReadings writes every reading once each, relying on utilization_readings' own (at,

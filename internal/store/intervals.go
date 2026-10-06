@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 const (
@@ -40,17 +40,17 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	if len(readings) == 0 {
 		return nil
 	}
-	requests, err := LoadRequests(projectsDir)
+	requests, err := agentlog.LoadRequests(projectsDir)
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", projectsDir, err)
 	}
-	return s.recordReadingsAndIntervals(ctx, readings, requests)
+	return s.RecordReadingsAndIntervalsFrom(ctx, readings, requests)
 }
 
-// recordReadingsAndIntervals is RecordReadingsAndIntervals's own core, taking transcripts already
+// RecordReadingsAndIntervalsFrom is RecordReadingsAndIntervals's own core, taking transcripts already
 // loaded -- BackfillMetrics calls this directly, loading once for every run it backfills rather
 // than once per run.
-func (s *Store) recordReadingsAndIntervals(
+func (s *Store) RecordReadingsAndIntervalsFrom(
 	ctx context.Context, readings []agentlog.Reading, requests []agentlog.RequestUsage,
 ) error {
 	if len(readings) == 0 {

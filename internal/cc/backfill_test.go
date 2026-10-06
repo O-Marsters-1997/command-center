@@ -12,11 +12,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // backfillFixtureRun disposes a run with no metrics -- the shape every pre-migration run is in --
 // and returns its id.
-func backfillFixtureRun(t *testing.T, store *cc.Store, ticketURL, logPath string) int64 {
+func backfillFixtureRun(t *testing.T, store *store.Store, ticketURL, logPath string) int64 {
 	t.Helper()
 	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "deadbeef", "hash-1")
 	if err != nil {

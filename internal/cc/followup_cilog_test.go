@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -52,12 +53,13 @@ func installFakeGhWithLogFailed(t *testing.T, output string, fail bool) (logPath
 // tip, and whose sole required check (cilogCheckName) reports conclusion -- FAILURE resolves
 // ci_failed, SUCCESS resolves review_me (issue #232 AC3).
 func setUpCIFailedTicket(
-	t *testing.T, store *cc.Store, root, repoPath string, ticket cc.Ticket, at time.Time, conclusion, detailsURL string,
+	t *testing.T, store *storepkg.Store, root, repoPath string, ticket storepkg.Ticket, at time.Time,
+	conclusion, detailsURL string,
 ) (plan.Observation, config.Config, config.Workspace) {
 	t.Helper()
 	ctx := t.Context()
 
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	dispositionAsPushed(t, store, ticket.URL, at)
@@ -98,7 +100,7 @@ func TestFollowUpFromCIFailedCarriesLastLinesOfTheFailedLog(t *testing.T) {
 	installFakeGhWithLogFailed(t, strings.Join(lines, "\n")+"\n", false)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	const detailsURL = "https://github.com/acme/repo/actions/runs/998877/job/2233"
 	obs, cfg, ws := setUpCIFailedTicket(t, store, root, repoPath, ticket, at, "FAILURE", detailsURL)
@@ -142,7 +144,7 @@ func TestFollowUpWithNoActionsRunIDSpawnsAnywayNotingLogUnavailable(t *testing.T
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	const externalDetailsURL = "https://example.com/build/123" // a StatusContext, no Actions run id
 	obs, cfg, ws := setUpCIFailedTicket(t, store, root, repoPath, ticket, at, "FAILURE", externalDetailsURL)
@@ -185,7 +187,7 @@ func TestFollowUpWhenLogFetchFailsSpawnsAnywayNotingLogUnavailable(t *testing.T)
 	installFakeGhWithLogFailed(t, "", true) // gh run view --log-failed exits non-zero
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	const detailsURL = "https://github.com/acme/repo/actions/runs/998877/job/2233"
 	obs, cfg, ws := setUpCIFailedTicket(t, store, root, repoPath, ticket, at, "FAILURE", detailsURL)
@@ -225,7 +227,7 @@ func TestFollowUpFromNonCIFailedStateInjectsNoLog(t *testing.T) {
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	const detailsURL = "https://github.com/acme/repo/actions/runs/998877/job/2233"
 	// The required check passed: this resolves review_me, not ci_failed.

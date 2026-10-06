@@ -19,12 +19,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
-
-// tickPeriod is the sleep *after* work: ticks never overlap, and the loop never branches on
-// why it woke.
-const tickPeriod = 15 * time.Second
 
 const killVerb = plan.VerbKill
 
@@ -43,16 +40,10 @@ const (
 	eventReRunNoDiff = "re_run_no_diff"
 )
 
-// TickError is the last failed tick, rendered on the page with its age.
-type TickError struct {
-	At      time.Time `json:"at"`
-	Message string    `json:"message"`
-}
-
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state
 // (inv. 9, narrowed by ADR 11).
 type Loop struct {
-	store         *Store
+	store         *store.Store
 	observe       ObserveFunc
 	clock         Clock
 	forge         gh.Forge
@@ -70,7 +61,7 @@ type Loop struct {
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
 // paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(
-	store *Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
+	store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
 ) *Loop {
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
@@ -85,7 +76,7 @@ func NewLoop(
 // a fake parser rather than a real log file on disk.
 func (l *Loop) SetMetricsParser(parser MetricsParser) { l.metricsParser = parser }
 
-// Nudge wakes Run for one tick right now rather than at the end of tickPeriod. A nudge that
+// Nudge wakes Run for one tick right now rather than at the end of store.TickPeriod. A nudge that
 // finds the buffer full is dropped, not queued: the tick already in flight will pick up
 // whatever intent prompted it anyway (docs/adr/0009-a-feature-is-closed-under-blocked-by.md).
 func (l *Loop) Nudge() {
@@ -128,7 +119,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err != nil {
 		at := l.clock.Now()
 		tickErr := fmt.Errorf("observe: %w", err)
-		if recordErr := l.store.RecordTickError(ctx, TickError{At: at, Message: tickErr.Error()}); recordErr != nil {
+		if recordErr := l.store.RecordTickError(ctx, store.TickError{At: at, Message: tickErr.Error()}); recordErr != nil {
 			return recordErr
 		}
 		return tickErr
@@ -256,7 +247,7 @@ func (l *Loop) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-l.clock.After(tickPeriod):
+		case <-l.clock.After(store.TickPeriod):
 		case <-l.nudgeCh:
 		}
 	}
@@ -296,7 +287,7 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 }
 
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
-	var matched []ImportedTicket
+	var matched []store.ImportedTicket
 	for _, repo := range l.cfg.Repos {
 		src, ok, err := trackerSourceFor(repo, l.trackerFor)
 		if err != nil {
@@ -311,16 +302,16 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			return fmt.Errorf("import %s from %s: %w", feature, repo.Name, err)
 		}
 		for _, t := range tickets {
-			matched = append(matched, ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
+			matched = append(matched, store.ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
 		}
 	}
 
 	err := l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
-	var conflict *FeatureConflictError
+	var conflict *store.FeatureConflictError
 	if errors.As(err, &conflict) {
 		return l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
 	}
-	var closure *FeatureClosureError
+	var closure *store.FeatureClosureError
 	if errors.As(err, &closure) {
 		return l.store.RecordImportRefusal(ctx, feature, closure, l.clock.Now())
 	}
@@ -339,7 +330,7 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	now := l.clock.Now()
 	for _, intent := range intents {
 		err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy)
-		var closure *FeatureClosureError
+		var closure *store.FeatureClosureError
 		if errors.As(err, &closure) {
 			if err := l.store.RecordImportRefusal(ctx, closure.Feature, closure, now); err != nil {
 				return err
@@ -423,7 +414,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 // disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
 func (l *Loop) disposeRun(
-	ctx context.Context, run PendingRun, ticket Ticket, obs plan.Observation, now time.Time,
+	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation, now time.Time,
 ) error {
 	commits := 0
 	if run.BaselineSHA != "" {
@@ -447,7 +438,7 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	return l.store.AppendEvent(ctx, Event{
+	return l.store.AppendEvent(ctx, store.Event{
 		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
 	})
 }
@@ -488,7 +479,7 @@ func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
 // #189): a remove-worktree racing a tick's disposal must not read as zero commits when
 // obs.BranchTips already carries that same tip from this tick's own fetch.
 func (l *Loop) commitsSinceBaseline(
-	ctx context.Context, ticket Ticket, obs plan.Observation, baselineSHA string,
+	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
 	if worktreePath := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
 		return git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
@@ -547,8 +538,8 @@ func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	return l.store.IncrementCheckingTicks(ctx, urls)
 }
 
-func ticketsByURL(tickets []Ticket) map[string]Ticket {
-	byURL := make(map[string]Ticket, len(tickets))
+func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
+	byURL := make(map[string]store.Ticket, len(tickets))
 	for _, t := range tickets {
 		byURL[t.URL] = t
 	}
@@ -558,7 +549,7 @@ func ticketsByURL(tickets []Ticket) map[string]Ticket {
 // launchSpec is one candidate's cut-and-spawn inputs, gathered so cutAndSpawn's own body reads
 // as the spawn sequence rather than a map-lookup dance.
 type launchSpec struct {
-	ticket     Ticket
+	ticket     store.Ticket
 	baseBranch string
 	promptHash string
 	repoPath   string
@@ -604,17 +595,17 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 // RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
 // (see the PR description).
 func (l *Loop) spawnRun(
-	ctx context.Context, ticket Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
+	ctx context.Context, ticket store.Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
 	followUpText, ciLogSection string,
 ) error {
 	var prompt string
 	switch kind {
 	case runKindResolve:
-		prompt = plan.ComposeResolve(planTicket(ticket))
+		prompt = plan.ComposeResolve(ticket.Plan())
 	case runKindFollowUp:
 		prompt = plan.ComposeFollowUp(followUpText, ciLogSection)
 	default:
-		prompt = plan.Compose(planTicket(ticket))
+		prompt = plan.Compose(ticket.Plan())
 		if ticket.Body != "" {
 			prompt += "\n\n## Ticket\n\n" + ticket.Body
 		}
@@ -680,17 +671,17 @@ func (l *Loop) spawnRun(
 		return err
 	}
 	l.spawned = append(l.spawned, ticket.URL)
-	return l.store.AppendEvent(ctx, Event{
+	return l.store.AppendEvent(ctx, store.Event{
 		At: startedAt, TicketURL: ticket.URL, Kind: eventRunLaunched,
 		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
 	})
 }
 
 func (l *Loop) reRunDiffPreamble(
-	ctx context.Context, ticket Ticket, oldPromptPath, newPrompt string, runID int64,
+	ctx context.Context, ticket store.Ticket, oldPromptPath, newPrompt string, runID int64,
 ) (string, error) {
 	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
-		return "", l.store.AppendEvent(ctx, Event{
+		return "", l.store.AppendEvent(ctx, store.Event{
 			At: l.clock.Now(), TicketURL: ticket.URL, Kind: eventReRunNoDiff,
 			Detail: fmt.Sprintf("no prompt file at %s", oldPromptPath),
 		})

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -19,7 +21,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
 	}
@@ -63,8 +65,8 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

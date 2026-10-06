@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 )
 
@@ -17,7 +18,7 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 	ctx := t.Context()
 	dsn := cctest.DSN(t)
 	store := openStoreAt(t, dsn)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
@@ -70,7 +71,7 @@ func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}
@@ -103,8 +104,8 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,7 +149,7 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"},
@@ -207,8 +208,8 @@ func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -243,7 +244,7 @@ func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}

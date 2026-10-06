@@ -11,12 +11,12 @@ to exclude those rows.
 
 ## Decision
 
-sqlc generates `internal/cc/ccdb` from `internal/cc/migrations` and `internal/cc/queries` (one `.sql`
+sqlc generates `internal/store/ccdb` from `internal/store/migrations` and `internal/store/queries` (one `.sql`
 per store Go file), committed. `Store` keeps its public API and domain types, and holds the generated
 `Queries` unexported beside `*sql.DB`, which goose and `BeginTx` still need. `sqlc.yaml` renames
 columns whose generated names disagree with the domain structs.
 
-`just sqlc` regenerates and CI runs `git diff --exit-code internal/cc/ccdb`. The sqlc version is
+`just sqlc` regenerates and CI runs `git diff --exit-code internal/store/ccdb`. The sqlc version is
 pinned in the recipe's `go run` line, not `go.mod`, to keep its dependencies out of `go.sum`.
 
 The schema is unchanged: `COALESCE` columns stay, and nullable `runs` columns stay nullable because

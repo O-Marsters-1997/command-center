@@ -24,6 +24,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -128,7 +129,7 @@ var launchModal = template.Must(template.New("launchModal").Parse(launchModalSou
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
-	store            *Store
+	store            *store.Store
 	clock            Clock
 	boardPollSeconds int
 	repos            []config.Repo
@@ -145,7 +146,7 @@ type Server struct {
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
 // the data directory: stacking, the verdict predicate, the mergify hash and the compat check
 // name are all per-repo config, and dataDir is the fleet the header names.
-func NewServer(store *Store, clock Clock, repos []config.Repo, dataDir string) *Server {
+func NewServer(store *store.Store, clock Clock, repos []config.Repo, dataDir string) *Server {
 	s := &Server{
 		store: store, clock: clock, boardPollSeconds: config.DefaultBoardPollSeconds, repos: repos, dataDir: dataDir,
 		spend: newSpendCache(), trackerFor: tracker.New,
@@ -381,7 +382,7 @@ func (s *Server) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Wi
 
 // deriveGauges always returns the five-hour and weekly gauges in that fixed order, whether or not
 // either window has a reading yet (CC-310).
-func deriveGauges(gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit) []gaugeView {
+func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit) []gaugeView {
 	return []gaugeView{
 		deriveGauge("five-hour", agentlog.FiveHour, gauges, split),
 		deriveGauge("weekly", agentlog.SevenDay, gauges, split),
@@ -389,7 +390,7 @@ func deriveGauges(gauges map[agentlog.Window]Gauge, split map[agentlog.Window]wi
 }
 
 func deriveGauge(
-	label string, window agentlog.Window, gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit,
+	label string, window agentlog.Window, gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit,
 ) gaugeView {
 	view := gaugeView{Label: label, Pct: spend.Pct(gauges[window].Utilization)}
 	w := split[window]
@@ -556,8 +557,8 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 // already fetched tickets, the observation and the last error for its own board derivation, and
 // chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
 func (s *Server) buildChrome(
-	tickets []Ticket, obs plan.Observation, observed bool, lastErr TickError, failed bool,
-	gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit, now time.Time, params viewParams,
+	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr store.TickError, failed bool,
+	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time, params viewParams,
 ) chrome {
 	c := chrome{
 		Workspace:    workspaceName(s.dataDir),
@@ -653,7 +654,7 @@ func (s *Server) applyContextCurve(ctx context.Context, rows []row) error {
 
 // deriveRows labels every row from the snapshot Derive made of the stored facts and this tick's
 // observation (docs/designs/command-centre-design.md § Schema, inv. 14).
-func deriveRows(tickets []Ticket, in plan.Input, snap plan.Snapshot) []row {
+func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []row {
 	rows := make([]row, 0, len(tickets))
 	verdictLabelByBranch := make(map[string]string, len(tickets))
 	baseByBranch := make(map[string]string, len(tickets))
@@ -925,7 +926,7 @@ func repoLinksFor(repos []config.Repo, params viewParams) []scopeLink {
 
 // distinctFeatures is the sorted set of non-blank Feature values among tickets, which render also
 // uses to blank an unrecognised ?feature=.
-func distinctFeatures(tickets []Ticket) []string {
+func distinctFeatures(tickets []store.Ticket) []string {
 	seen := make(map[string]bool)
 	for _, t := range tickets {
 		if t.Feature != "" {
@@ -956,7 +957,7 @@ func removalWarning(s plan.State, detail string) string {
 	return "worktree removal refused: " + detail
 }
 
-func handChurnLines(t Ticket) int {
+func handChurnLines(t store.Ticket) int {
 	if t.HandChurnLines == nil {
 		return 0
 	}
@@ -1007,7 +1008,7 @@ type candidate struct {
 }
 
 type candidateInputs struct {
-	tickets []Ticket
+	tickets []store.Ticket
 	snap    plan.Snapshot
 }
 
@@ -1029,7 +1030,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]candidate, err
 	if err != nil {
 		return nil, err
 	}
-	stored := make(map[string]Ticket, len(in.tickets))
+	stored := make(map[string]store.Ticket, len(in.tickets))
 	for _, t := range in.tickets {
 		stored[t.URL] = t
 	}
@@ -1047,7 +1048,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]candidate, err
 	return candidates, nil
 }
 
-func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
+func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) {
 	if feature := q.Get("feature"); feature != "" {
 		var selected []string
 		for _, t := range tickets {
@@ -1515,12 +1516,6 @@ func randomGroup() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func planTicket(t Ticket) plan.Ticket {
-	return plan.Ticket{
-		URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,
-	}
-}
-
 func workspaceName(dataDir string) string {
 	if dataDir == "" {
 		return ""
@@ -1528,7 +1523,7 @@ func workspaceName(dataDir string) string {
 	return filepath.Base(dataDir)
 }
 
-func liveAgents(tickets []Ticket, obs plan.Observation) int {
+func liveAgents(tickets []store.Ticket, obs plan.Observation) int {
 	live := 0
 	for _, t := range tickets {
 		if obs.Runs[t.URL].Alive {

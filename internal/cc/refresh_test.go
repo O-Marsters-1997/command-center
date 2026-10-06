@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // stackedConfigAndWorkspace mirrors testConfigAndWorkspace (fakes_test.go) but with stacking on:
@@ -50,12 +51,12 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 // tickets. Their commits diverge from the common ancestor, so a refresh merge is a genuine
 // three-way merge rather than a fast-forward.
 type stackedFixture struct {
-	parent, child                 cc.Ticket
+	parent, child                 storepkg.Ticket
 	parentWorktree, childWorktree string
 	parentTip0, mainSHA           string
 }
 
-func newStackedFixture(t *testing.T, repoPath string, store *cc.Store, at time.Time) stackedFixture {
+func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at time.Time) stackedFixture {
 	t.Helper()
 	ctx := context.Background()
 
@@ -70,11 +71,11 @@ func newStackedFixture(t *testing.T, repoPath string, store *cc.Store, at time.T
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
-	parent := cc.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
-	child := cc.Ticket{
+	parent := storepkg.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
+	child := storepkg.Ticket{
 		URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"},
 	}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{parent, child}); err != nil {
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{parent, child}); err != nil {
 		t.Fatal(err)
 	}
 	dispositionAsPushed(t, store, parent.URL, at)
@@ -370,15 +371,16 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}); err != nil {
+	refused := storepkg.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}
+	if err := store.AppendEvent(ctx, refused); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, cc.Event{
+	if err := store.AppendEvent(ctx, storepkg.Event{
 		At: time.Now(), TicketURL: ticket.URL, Kind: "refresh_refused", Detail: "conflict",
 	}); err != nil {
 		t.Fatal(err)

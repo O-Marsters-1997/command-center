@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
 	"github.com/pressly/goose/v3"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -244,7 +244,7 @@ func (s *Store) ImportTickets(
 	}
 	mergedWithdrawn := make(map[string]bool)
 	for _, row := range withdrawnRows {
-		if obs.PRs[branchKey(row.Repo, row.Branch)].State == plan.Merged {
+		if obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged {
 			mergedWithdrawn[row.URL] = true
 		}
 	}
@@ -369,10 +369,10 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string)
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// resetCheckingTicks zeroes one ticket's counter -- called by RecordPush (pushes.go) on every
+// ResetCheckingTicks zeroes one ticket's counter -- called by RecordPush (pushes.go) on every
 // fresh push, so a re-run's second push starts its own bounded wait rather than inheriting the
 // first push's.
-func (s *Store) resetCheckingTicks(ctx context.Context, ticketID string) error {
+func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
 		return err
@@ -416,7 +416,7 @@ func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	if err := s.putMeta(ctx, metaLastError, tickErr); err != nil {
 		return err
 	}
-	return s.AppendEvent(ctx, Event{At: tickErr.At, Kind: "tick_error", Detail: tickErr.Message})
+	return s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message})
 }
 
 // LastError returns the last tick failure, if there has been one. It is not cleared by a
@@ -446,7 +446,7 @@ func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal
 		return err
 	}
 	return s.AppendEvent(ctx, Event{
-		At: now, TicketURL: refusal.refusedTicket(), Kind: eventImportRefused, Detail: refusal.Error(),
+		At: now, TicketURL: refusal.refusedTicket(), Kind: EventImportRefused, Detail: refusal.Error(),
 	})
 }
 
@@ -509,14 +509,14 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 // VerdictTransitionEvents returns every verdict_transition event, oldest first -- what
 // recordFirstPushCI scans for the first terminal verdict at or after a ticket's first push.
 func (s *Store) VerdictTransitionEvents(ctx context.Context) ([]Event, error) {
-	rows, err := s.q.VerdictTransitionEvents(ctx, eventVerdictTransition)
+	rows, err := s.q.VerdictTransitionEvents(ctx, EventVerdictTransition)
 	if err != nil {
 		return nil, fmt.Errorf("select verdict transition events: %w", err)
 	}
 
 	events := make([]Event, len(rows))
 	for i, row := range rows {
-		events[i] = Event{At: row.At, TicketURL: row.TicketID.String, Kind: eventVerdictTransition, Detail: row.Detail.String}
+		events[i] = Event{At: row.At, TicketURL: row.TicketID.String, Kind: EventVerdictTransition, Detail: row.Detail.String}
 	}
 	return events, nil
 }

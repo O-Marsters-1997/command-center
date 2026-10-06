@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // InsertRunSkeleton reserves a runs row before the process exists: ticket_id, kind, baseline_sha

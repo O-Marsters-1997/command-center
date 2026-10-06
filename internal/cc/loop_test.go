@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
@@ -110,8 +112,8 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -142,8 +144,8 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	good := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	bad := good.Add(15 * time.Second)
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
@@ -253,8 +255,8 @@ func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
 	dropSessionsTable(t, dsn)
 
 	at := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {

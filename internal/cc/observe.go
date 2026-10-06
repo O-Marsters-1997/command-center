@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // ObserveFunc reads the world. Any non-zero exit ends the tick before anything changes.
@@ -20,7 +21,7 @@ type ObserveFunc func(ctx context.Context) (plan.Observation, error)
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
 // then the worktree map, per configured repo. Every branch-keyed map is written under
 // branchKey(repo.Name, branch), since two configured repos can hold the same branch name.
-func NewObserver(store *Store, forge gh.Forge, cfg config.Config) ObserveFunc {
+func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc {
 	return func(ctx context.Context) (plan.Observation, error) {
 		tickets, err := store.Tickets(ctx)
 		if err != nil {
@@ -196,7 +197,7 @@ func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, co
 	m[keyB][keyA] = conflicts
 }
 
-func branchesFor(tickets []Ticket, repo string) []string {
+func branchesFor(tickets []store.Ticket, repo string) []string {
 	var branches []string
 	for _, t := range tickets {
 		if t.Repo == repo {

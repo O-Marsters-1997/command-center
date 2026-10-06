@@ -16,17 +16,18 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // detailStore seeds one running ticket with a worktree, a live PR carrying two checks and a log
 // file on disk: every value issue #76 asks the fragment to carry, in one fixture.
-func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Store {
+func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
@@ -171,8 +172,8 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -366,7 +367,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
 		{URL: "sandbox://C", Repo: "repo", Branch: "c"},
@@ -486,7 +487,7 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
 	}

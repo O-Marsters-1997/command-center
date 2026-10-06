@@ -10,17 +10,18 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // shellStore seeds one ticket, an observation at observedAt when it is non-nil, and a tick error
 // one second later when tickErr is non-empty: a tick that failed after the last good observe.
-func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
+func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if observedAt != nil {
@@ -35,7 +36,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 			return nil
 		}
 		failedAt := observedAt.Add(time.Second)
-		if err := store.RecordTickError(ctx, cc.TickError{At: failedAt, Message: tickErr}); err != nil {
+		if err := store.RecordTickError(ctx, storepkg.TickError{At: failedAt, Message: tickErr}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -187,7 +188,7 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := observedAt.Add(2 * time.Second)
 	store := shellStore(t, &observedAt, "")
-	tickErr := cc.TickError{At: observedAt.Add(-30 * time.Second), Message: "gh is unavailable"}
+	tickErr := storepkg.TickError{At: observedAt.Add(-30 * time.Second), Message: "gh is unavailable"}
 	if err := store.RecordTickError(t.Context(), tickErr); err != nil {
 		t.Fatal(err)
 	}
@@ -230,11 +231,11 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	ctx := t.Context()
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	store := openStore(t)
-	blocker := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	dependent := cc.Ticket{
+	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	dependent := storepkg.Ticket{
 		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},
 	}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{blocker, dependent}); err != nil {
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
 	runID, err := store.InsertRunSkeleton(ctx, dependent.URL, "agent", "basesha1234", "hash-1")

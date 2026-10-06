@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func conflictedWorktree(t *testing.T, repoPath, worktreePath, relPath string) {
@@ -35,11 +36,11 @@ func resolveAndStage(t *testing.T, worktreePath, relPath, contents string) {
 	runGit(t, "-C", worktreePath, "add", relPath)
 }
 
-func commitResolutionFixture(t *testing.T, root, repoPath string) (*cc.Store, cc.Ticket, time.Time) {
+func commitResolutionFixture(t *testing.T, root, repoPath string) (*storepkg.Store, storepkg.Ticket, time.Time) {
 	t.Helper()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

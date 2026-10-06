@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestRunningRowsPillPulsesUnattendedDisc(t *testing.T) {
 	t.Parallel()
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	ticket := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)

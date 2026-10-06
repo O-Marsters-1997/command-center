@@ -1,12 +1,12 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "internal/cc/migrations"
-    queries: "internal/cc/queries"
+    schema: "internal/store/migrations"
+    queries: "internal/store/queries"
     gen:
       go:
         package: "ccdb"
-        out: "internal/cc/ccdb"
+        out: "internal/store/ccdb"
         rename:
           url: "URL"
           baseline_sha: "BaselineSHA"

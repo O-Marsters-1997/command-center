@@ -18,6 +18,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const logTicket = "https://github.com/o/r/issues/77"
@@ -28,13 +29,13 @@ func logStreamPath(from int64) string {
 
 // runStore seeds one spawned, undisposed run against a log file the test appends to, and hands
 // back the run id so a test can end the run mid-stream.
-func runStore(t *testing.T, logPath string, now time.Time) (*cc.Store, int64) {
+func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int64) {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
@@ -81,7 +82,7 @@ func renderedToolLine(t *testing.T, text string) string {
 	return string(html)
 }
 
-func endRun(t *testing.T, store *cc.Store, runID int64, at time.Time) {
+func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 	t.Helper()
 
 	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {

@@ -10,9 +10,9 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // runMetricsRow reads a run's metrics columns straight from Postgres: no product code reads them
@@ -45,10 +45,10 @@ func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
 	return row
 }
 
-func seedOneTicket(t *testing.T, store *cc.Store) {
+func seedOneTicket(t *testing.T, store *storepkg.Store) {
 	t.Helper()
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -228,7 +228,7 @@ func TestRecordDispositionWritesRunRequestsAlongsideMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunRequestsForRun: %v", err)
 	}
-	want := []cc.RunRequest{
+	want := []storepkg.RunRequest{
 		{RequestID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
 			InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
 		{RequestID: "r2", Thread: "toolu_task1", Tool: "Explore", InputTokens: 1, OutputTokens: 1},
@@ -417,8 +417,8 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	seedOneTicket(t, store)
-	second := cc.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{second}); err != nil {
+	second := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{second}); err != nil {
 		t.Fatal(err)
 	}
 

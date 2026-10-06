@@ -1,12 +1,12 @@
-package cc
+package store
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // FeatureClosureError reports a ticket blocked by a ticket outside its own feature, whose pull
@@ -66,7 +66,7 @@ func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observ
 		if err != nil {
 			return false
 		}
-		return obs.PRs[branchKey(branch.Repo, branch.Branch)].State == plan.Merged
+		return obs.PRs[plan.BranchKey(branch.Repo, branch.Branch)].State == plan.Merged
 	}
 }
 

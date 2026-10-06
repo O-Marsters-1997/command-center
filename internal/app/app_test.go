@@ -21,6 +21,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestNewRunsATickAndServesThePage(t *testing.T) {
@@ -106,16 +107,16 @@ func appConfig(t *testing.T) string {
 
 func seedTickets(t *testing.T, dsn string) {
 	t.Helper()
-	store, err := cc.OpenStore(dsn)
+	db, err := store.OpenStore(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if err := store.Close(); err != nil {
+		if err := db.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}()
-	err = store.UpsertTickets(t.Context(), []cc.Ticket{
+	err = db.UpsertTickets(t.Context(), []store.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	})
@@ -199,27 +200,27 @@ func TestNewBackfillsMetricsUsingTheInjectedParser(t *testing.T) {
 	dsn := cctest.DSN(t)
 	t.Setenv("CC_DATABASE_URL", dsn)
 
-	store, err := cc.OpenStore(dsn)
+	seed, err := store.OpenStore(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{
+	if err := seed.UpsertTickets(t.Context(), []store.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(t.Context(), "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	runID, err := seed.InsertRunSkeleton(t.Context(), "sandbox://CC-1", "agent", "deadbeef", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
+	if err := seed.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {
+	if err := seed.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Close(); err != nil {
+	if err := seed.Close(); err != nil {
 		t.Fatal(err)
 	}
 

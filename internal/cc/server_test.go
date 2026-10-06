@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -62,7 +63,7 @@ func assertSeeOtherHome(t *testing.T, resp *http.Response) {
 	}
 }
 
-func seedRun(t *testing.T, store *cc.Store, ticketURL string) int64 {
+func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
 
 	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "basesha", "hash-1")
@@ -76,7 +77,7 @@ func seedRun(t *testing.T, store *cc.Store, ticketURL string) int64 {
 }
 
 // seededRunning is seededStore with sandbox://CC-1 mid-run, the state that offers kill.
-func seededRunning(t *testing.T) *cc.Store {
+func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	store := seededStore(t, time.Now())
@@ -93,7 +94,7 @@ func seededRunning(t *testing.T) *cc.Store {
 }
 
 // seededFailed is seededStore with sandbox://CC-1's run failed, the state that offers follow-up.
-func seededFailed(t *testing.T) *cc.Store {
+func seededFailed(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	store := seededStore(t, time.Now())
@@ -107,7 +108,7 @@ func seededFailed(t *testing.T) *cc.Store {
 
 // seededQueued is seededStore with sandbox://CC-1 authorised but not yet launched, the state
 // that offers cancel.
-func seededQueued(t *testing.T) *cc.Store {
+func seededQueued(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	store := seededStore(t, time.Now())
@@ -121,12 +122,12 @@ func seededQueued(t *testing.T) *cc.Store {
 	return store
 }
 
-func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
+func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
@@ -142,7 +143,7 @@ func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
-	tickErr := cc.TickError{At: observedAt.Add(15 * time.Second), Message: "observe: gh pr list: exit status 1"}
+	tickErr := storepkg.TickError{At: observedAt.Add(15 * time.Second), Message: "observe: gh pr list: exit status 1"}
 	if err := store.RecordTickError(ctx, tickErr); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +214,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 
 	ctx := context.Background()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
@@ -270,8 +271,8 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 
 	ctx := context.Background()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -337,8 +338,8 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 
 	ctx := context.Background()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -521,12 +522,12 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 
-	root := cc.Ticket{URL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
-	tickets := []cc.Ticket{root}
+	root := storepkg.Ticket{URL: "sandbox://CC-0", Repo: "cc-sandbox", Branch: "cc-0"}
+	tickets := []storepkg.Ticket{root}
 	query := "ticket=" + root.URL
 	for i := 1; i <= fanOut; i++ {
 		ticketURL := fmt.Sprintf("sandbox://CC-%d", i)
-		tickets = append(tickets, cc.Ticket{
+		tickets = append(tickets, storepkg.Ticket{
 			URL: ticketURL, Repo: "cc-sandbox", Branch: fmt.Sprintf("cc-%d", i),
 			BlockedBy: []string{root.URL},
 		})
@@ -573,12 +574,12 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 
 // runningRowStore seeds one ticket with a live agent run, the state both a pgid/elapsed row and a
 // queued-verb row are read against.
-func runningRowStore(t *testing.T, ticket cc.Ticket, startedAt, now time.Time) *cc.Store {
+func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "deadbeef", "hash-1")
@@ -598,7 +599,7 @@ func runningRowStore(t *testing.T, ticket cc.Ticket, startedAt, now time.Time) *
 func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	t.Parallel()
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
@@ -627,8 +628,8 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
@@ -706,7 +707,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
@@ -778,7 +779,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
 	}

@@ -20,10 +20,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
-
-const tickPeriod = 15 * time.Second
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 
@@ -44,7 +43,7 @@ type Sim struct {
 	sandbox  *Sandbox
 	forge    *Forge
 	agent    *Agent
-	store    *cc.Store
+	store    *store.Store
 	loop     *cc.Loop
 	server   *cc.Server
 	issues   []issue
@@ -99,7 +98,7 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := cc.OpenStore(sb.DSN)
+	store, err := store.OpenStore(sb.DSN)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +196,7 @@ func (s *Sim) Tick(ctx context.Context) error {
 		return err
 	}
 	s.check(states)
-	s.clock.Advance(tickPeriod)
+	s.clock.Advance(store.TickPeriod)
 	return nil
 }
 

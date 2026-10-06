@@ -7,15 +7,15 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func openStore(t *testing.T) *cc.Store { return openStoreAt(t, cctest.DSN(t)) }
+func openStore(t *testing.T) *storepkg.Store { return openStoreAt(t, cctest.DSN(t)) }
 
-func openStoreAt(t *testing.T, dsn string) *cc.Store {
+func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := cc.OpenStore(dsn)
+	store, err := storepkg.OpenStore(dsn)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 
 	dsn := cctest.DSN(t)
 	store := openStoreAt(t, dsn)
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
@@ -61,7 +61,7 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 
 	dsn := cctest.DSN(t)
 	first := openStoreAt(t, dsn)
-	if err := first.UpsertTickets(t.Context(), []cc.Ticket{
+	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 
-	first := []cc.Ticket{
+	first := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
@@ -97,7 +97,7 @@ func TestUpsertTicketsIsIdempotentOnTicketURL(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	edited := []cc.Ticket{
+	edited := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-renamed"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
@@ -127,7 +127,7 @@ func TestUpsertTicketWithNoBlockersRoundTripsAsEmptyArray(t *testing.T) {
 	dsn := cctest.DSN(t)
 	store := openStoreAt(t, dsn)
 
-	if err := store.UpsertTickets(ctx, []cc.Ticket{
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
@@ -176,8 +176,8 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,16 +242,16 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
 	at := time.Now()
-	if err := store.AppendEvent(ctx, cc.Event{At: at, TicketURL: ticket.URL, Kind: "ticket_event"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticket.URL, Kind: "ticket_event"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, cc.Event{At: at, Kind: "fleet_event"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: "fleet_event"}); err != nil {
 		t.Fatal(err)
 	}
 

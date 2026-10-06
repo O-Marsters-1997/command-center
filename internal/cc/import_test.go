@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -121,7 +123,7 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 
 	url := "https://github.com/acme/alpha/issues/1"
 	blocker := "https://github.com/acme/alpha/issues/2"
-	first := []cc.ImportedTicket{
+	first := []storepkg.ImportedTicket{
 		{Ticket: tracker.Ticket{URL: blocker, Number: 2, Title: "Blocker"}, Repo: "alpha", Source: "github"},
 		{
 			Ticket: tracker.Ticket{
@@ -158,11 +160,11 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	edited := seeded
 	edited.Branch = "cc-1-custom-branch"
 	edited.BlockedBy = nil
-	if err := store.UpsertTickets(ctx, []cc.Ticket{edited}); err != nil {
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{edited}); err != nil {
 		t.Fatal(err)
 	}
 
-	second := []cc.ImportedTicket{{
+	second := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{
 			URL: url, Number: 1, Title: "Add x, renamed", Body: "body two", Status: "in-progress",
 			BlockedBy: []string{"https://github.com/acme/alpha/issues/3"},
@@ -207,7 +209,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	kept := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}
 	withdrawn := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Add y"}
 
-	both := []cc.ImportedTicket{{Ticket: kept, Repo: "alpha"}, {Ticket: withdrawn, Repo: "alpha"}}
+	both := []storepkg.ImportedTicket{{Ticket: kept, Repo: "alpha"}, {Ticket: withdrawn, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", both, at); err != nil {
 		t.Fatalf("ImportTickets: %v", err)
 	}
@@ -218,7 +220,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	}
 
 	// withdrawn.URL is relabelled to status:backlog, so the next import of project:x omits it.
-	onlyKept := []cc.ImportedTicket{{Ticket: kept, Repo: "alpha"}}
+	onlyKept := []storepkg.ImportedTicket{{Ticket: kept, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyKept, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets after relabelling to backlog: %v", err)
 	}
@@ -277,7 +279,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{blocker.URL, otherBlocker.URL},
 	}
-	seed := []cc.ImportedTicket{
+	seed := []storepkg.ImportedTicket{
 		{Ticket: blocker, Repo: "alpha"},
 		{Ticket: otherBlocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
@@ -294,7 +296,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 	}
 
 	// Its issue closes: the next import of its own feature no longer returns it, withdrawing it.
-	onlyDependentAndOther := []cc.ImportedTicket{
+	onlyDependentAndOther := []storepkg.ImportedTicket{
 		{Ticket: otherBlocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
 	}
@@ -332,7 +334,7 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{blocker.URL},
 	}
-	seed := []cc.ImportedTicket{
+	seed := []storepkg.ImportedTicket{
 		{Ticket: blocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
 	}
@@ -341,7 +343,7 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 	}
 
 	// The blocker's issue closes and withdraws before its merged pull request fact reaches obs.
-	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	onlyDependent := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
 	}
@@ -387,7 +389,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 		URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{blocker.URL},
 	}
-	blockerSeed := []cc.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
+	blockerSeed := []storepkg.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", blockerSeed, at); err != nil {
 		t.Fatalf("ImportTickets blocker: %v", err)
 	}
@@ -398,7 +400,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
+	dependentSeed := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
 	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at); err != nil {
 		t.Fatalf("ImportTickets dependent: %v", err)
 	}
@@ -438,7 +440,7 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{blocker.URL},
 	}
-	seed := []cc.ImportedTicket{
+	seed := []storepkg.ImportedTicket{
 		{Ticket: blocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
 	}
@@ -448,7 +450,7 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 
 	// The blocker drops off the tracker (its project: label removed, say): it drops out of the
 	// next import with no merged (or any) pull request recorded for it.
-	onlyDependent := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	onlyDependent := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
 	}
@@ -474,7 +476,7 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	contested := "https://github.com/acme/alpha/issues/1"
-	first := []cc.ImportedTicket{{
+	first := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
@@ -482,7 +484,7 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 	}
 
 	fresh := "https://github.com/acme/alpha/issues/2"
-	second := []cc.ImportedTicket{
+	second := []storepkg.ImportedTicket{
 		{Ticket: tracker.Ticket{URL: fresh, Number: 2, Title: "Add y"}, Repo: "alpha"},
 		{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"},
 	}
@@ -490,7 +492,7 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 	if err == nil {
 		t.Fatal("ImportTickets: want an error, got nil")
 	}
-	var conflict *cc.FeatureConflictError
+	var conflict *storepkg.FeatureConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("ImportTickets error = %v, want a *FeatureConflictError", err)
 	}
@@ -518,7 +520,7 @@ func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	outsider := "https://github.com/acme/alpha/issues/1"
-	outsiderSeed := []cc.ImportedTicket{{
+	outsiderSeed := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", outsiderSeed, at); err != nil {
@@ -527,7 +529,7 @@ func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
 
 	blocked := "https://github.com/acme/beta/issues/2"
 	fresh := "https://github.com/acme/beta/issues/3"
-	second := []cc.ImportedTicket{
+	second := []storepkg.ImportedTicket{
 		{Ticket: tracker.Ticket{URL: fresh, Number: 3, Title: "Add z"}, Repo: "beta"},
 		{
 			Ticket: tracker.Ticket{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}},
@@ -538,7 +540,7 @@ func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
 	if err == nil {
 		t.Fatal("ImportTickets: want an error, got nil")
 	}
-	var closure *cc.FeatureClosureError
+	var closure *storepkg.FeatureClosureError
 	if !errors.As(err, &closure) {
 		t.Fatalf("ImportTickets error = %v, want a *FeatureClosureError", err)
 	}
@@ -567,7 +569,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
-	blockerSeed := []cc.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
+	blockerSeed := []storepkg.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", blockerSeed, at); err != nil {
 		t.Fatalf("ImportTickets blocker: %v", err)
 	}
@@ -582,7 +584,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 		URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{blocker.URL},
 	}
-	dependentSeed := []cc.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
+	dependentSeed := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
 	if err := store.ImportTickets(ctx, "project:y", dependentSeed, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets dependent: want the merged outside blocker to be exempt, got %v", err)
 	}
@@ -603,9 +605,9 @@ func TestImportTicketsRefusesABlockerNeverImported(t *testing.T) {
 		URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Dependent",
 		BlockedBy: []string{unseen},
 	}
-	seed := []cc.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
+	seed := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	err := store.ImportTickets(ctx, "project:x", seed, at)
-	var closure *cc.FeatureClosureError
+	var closure *storepkg.FeatureClosureError
 	if !errors.As(err, &closure) {
 		t.Fatalf("ImportTickets error = %v, want a *FeatureClosureError", err)
 	}
@@ -622,7 +624,7 @@ func TestImportTicketsAllowsAWithdrawnTicketIntoANewFeature(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	relabelled := "https://github.com/acme/alpha/issues/1"
-	first := []cc.ImportedTicket{{
+	first := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: relabelled, Number: 1, Title: "Add x"}, Repo: "alpha",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", first, at); err != nil {
@@ -633,7 +635,7 @@ func TestImportTicketsAllowsAWithdrawnTicketIntoANewFeature(t *testing.T) {
 		t.Fatalf("ImportTickets withdrawing: %v", err)
 	}
 
-	second := []cc.ImportedTicket{{
+	second := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: relabelled, Number: 1, Title: "Add x"}, Repo: "alpha",
 	}}
 	if err := store.ImportTickets(ctx, "project:y", second, at.Add(2*time.Hour)); err != nil {
@@ -700,7 +702,7 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	contested := "https://github.com/acme/alpha/issues/1"
-	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
@@ -771,7 +773,7 @@ func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	outsider := "https://github.com/acme/alpha/issues/1"
-	outsiderSeed := []cc.ImportedTicket{{
+	outsiderSeed := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
 	}}
 	if err := store.ImportTickets(ctx, "project:x", outsiderSeed, at); err != nil {
@@ -879,7 +881,7 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	seed := []cc.ImportedTicket{
+	seed := []storepkg.ImportedTicket{
 		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
 	}
 	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
@@ -913,7 +915,7 @@ func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	seed := []cc.ImportedTicket{
+	seed := []storepkg.ImportedTicket{
 		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
 	}
 	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
@@ -946,12 +948,12 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	url := "https://github.com/acme/alpha/issues/1"
-	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	conflict := &cc.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
+	conflict := &storepkg.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
 	if err := store.RecordImportRefusal(ctx, "project:y", conflict, time.Now()); err != nil {
 		t.Fatal(err)
 	}
