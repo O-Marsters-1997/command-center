@@ -55,4 +55,5 @@ const (
 	EventImportRefused         = "import_refused"
 	EventRemoveWorktreeRefused = "remove_worktree_refused"
 	EventVerdictTransition     = "verdict_transition"
+	EventTickError             = "tick_error"
 )
