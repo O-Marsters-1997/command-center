@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const (
@@ -45,7 +46,7 @@ func (l *Loop) retargetOne(
 ) error {
 	repoPath := repoPathsByName(l.cfg.Repos)[t.Repo]
 	if err := l.forge.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
-		return l.store.AppendEvent(ctx, Event{
+		return l.store.AppendEvent(ctx, store.Event{
 			At: now, TicketURL: t.URL, Kind: eventRetargetFailed, Detail: err.Error(),
 		})
 	}
@@ -59,7 +60,7 @@ func (l *Loop) retargetOne(
 	if err := l.store.RecordPush(ctx, t.URL, row.PushedTip, defaultBaseBranch, row.BaseSHAAtPush, now); err != nil {
 		return err
 	}
-	if err := l.store.AppendEvent(ctx, Event{
+	if err := l.store.AppendEvent(ctx, store.Event{
 		At: now, TicketURL: t.URL, Kind: eventRetargeted,
 		Detail: fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, defaultBaseBranch),
 	}); err != nil {

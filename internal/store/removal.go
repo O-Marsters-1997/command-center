@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 // URL -- the row's own removal warning. A successful removal withdraws the ticket, so a stale
 // refusal from before a fix can never outlive the row it warns about.
 func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) {
-	rows, err := s.q.LatestRemovalRefusals(ctx, eventRemoveWorktreeRefused)
+	rows, err := s.q.LatestRemovalRefusals(ctx, EventRemoveWorktreeRefused)
 	if err != nil {
 		return nil, fmt.Errorf("select removal refusals: %w", err)
 	}

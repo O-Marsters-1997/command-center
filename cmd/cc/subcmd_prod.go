@@ -17,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/auth"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // subcmd resolves the release binary's subcommands, open, useradd and passwd. `cc tick` and
@@ -83,7 +84,7 @@ func useradd(ctx context.Context, configPath string, args []string) (err error) 
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func passwd(ctx context.Context, configPath string, args []string) (err error) {
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}

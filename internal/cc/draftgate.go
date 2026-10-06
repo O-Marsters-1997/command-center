@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const (
@@ -32,9 +33,9 @@ func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
 // readyOne calls `gh pr ready` for one ticket, recording either outcome as an event: a failure is
 // never latched, so leaving the row untouched here is exactly what lets the next tick retry.
 func (l *Loop) readyOne(ctx context.Context, t plan.Ticket, repoPath string, now time.Time) error {
-	event := Event{At: now, TicketURL: t.URL, Kind: eventDraftReady}
+	event := store.Event{At: now, TicketURL: t.URL, Kind: eventDraftReady}
 	if err := l.forge.Ready(ctx, repoPath, t.Branch); err != nil {
-		event = Event{At: now, TicketURL: t.URL, Kind: eventDraftReadyFailed, Detail: err.Error()}
+		event = store.Event{At: now, TicketURL: t.URL, Kind: eventDraftReadyFailed, Detail: err.Error()}
 	}
 	return l.store.AppendEvent(ctx, event)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
@@ -20,8 +21,8 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
@@ -74,8 +75,8 @@ func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
 	ctx := t.Context()
 	dsn := cctest.DSN(t)
 	store := openStoreAt(t, dsn)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
@@ -119,8 +120,8 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
@@ -153,8 +154,8 @@ func TestRecordMergedEventsRecordsHandChurnFromCommitsAfterCCsLastPush(t *testin
 	dir := initRepoForHandChurnTest(t)
 	ccTip := commitFileForHandChurnTest(t, dir, "a.txt", "cc content\n", "cc commit")
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	if err := store.RecordPush(ctx, ticket.URL, ccTip, "main", ccTip, time.Now()); err != nil {
@@ -191,8 +192,8 @@ func TestRecordMergedEventsRecordsZeroHandChurnWhenNothingLandsAfterCCsLastPush(
 	dir := initRepoForHandChurnTest(t)
 	ccTip := commitFileForHandChurnTest(t, dir, "a.txt", "cc content\n", "cc commit")
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	if err := store.RecordPush(ctx, ticket.URL, ccTip, "main", ccTip, time.Now()); err != nil {
@@ -259,8 +260,8 @@ func trimNewlineForHandChurnTest(s string) string {
 	return s
 }
 
-func mergedEvents(events []cc.Event) []cc.Event {
-	var merges []cc.Event
+func mergedEvents(events []storepkg.Event) []storepkg.Event {
+	var merges []storepkg.Event
 	for _, e := range events {
 		if e.Kind == "pr_merged" {
 			merges = append(merges, e)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const (
@@ -43,7 +44,7 @@ type curvePoint struct {
 	ctx int64
 }
 
-func buildContextCurve(requests []RunRequest) contextCurveView {
+func buildContextCurve(requests []store.RunRequest) contextCurveView {
 	if len(requests) == 0 {
 		return contextCurveView{}
 	}

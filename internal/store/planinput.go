@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	}
 	checkingFor := make(map[string]time.Duration, len(checkingTicks))
 	for url, ticks := range checkingTicks {
-		checkingFor[url] = time.Duration(ticks) * tickPeriod
+		checkingFor[url] = time.Duration(ticks) * TickPeriod
 	}
 	return plan.VerdictFacts{PushRows: pushRows, CheckingFor: checkingFor}, nil
 }
@@ -73,7 +73,7 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 
 	planTickets := make([]plan.Ticket, len(tickets))
 	for i, t := range tickets {
-		planTickets[i] = planTicket(t)
+		planTickets[i] = t.Plan()
 	}
 	return plan.Input{
 		Observed: observed, Tickets: planTickets, Obs: obs,

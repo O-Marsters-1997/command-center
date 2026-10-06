@@ -5,6 +5,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // ponytail: one mutex over the whole map. Per-path locks if 25 rows ever becomes 250.
@@ -56,7 +57,7 @@ func applySpend(rows []row, cache *spendCache) {
 	}
 }
 
-func applyTicketSpend(rows []row, byURL map[string]BoardTicketSpend, factor float64) {
+func applyTicketSpend(rows []row, byURL map[string]store.BoardTicketSpend, factor float64) {
 	for i := range rows {
 		ts, ok := byURL[rows[i].URL]
 		if !ok {

@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -75,7 +76,7 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
 	}
@@ -214,7 +215,7 @@ func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 		{
 			URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:x",
@@ -250,7 +251,7 @@ func TestHandleCandidatesFragmentMountsATicketSlice(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
 	}
@@ -294,11 +295,11 @@ func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
 	// The refused ticket must exist for the refusal event's own FK; it belongs to project:y,
 	// leaving project:x itself with no imported ticket to show instead of the refusal.
 	claimed := "https://github.com/acme/alpha/issues/1"
-	seed := []cc.Ticket{{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"}}
+	seed := []storepkg.Ticket{{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"}}
 	if err := store.UpsertTickets(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
-	conflict := &cc.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
+	conflict := &storepkg.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
 	if err := store.RecordImportRefusal(ctx, "project:x", conflict, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -322,12 +323,12 @@ func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []cc.Ticket{
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	conflict := &cc.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
+	conflict := &storepkg.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
 	if err := store.RecordImportRefusal(ctx, "project:x", conflict, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +352,7 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []cc.Ticket{
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 	}); err != nil {
 		t.Fatal(err)

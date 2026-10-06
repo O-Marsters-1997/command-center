@@ -3,6 +3,7 @@ package cc_test
 import (
 	"context"
 	"errors"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"testing"
 	"time"
 
@@ -21,8 +22,8 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 

@@ -15,7 +15,7 @@ down:
     docker compose down
 
 db_url := env_var_or_default("CC_DATABASE_URL", "postgres://cc:cc@localhost:5432/cc?sslmode=disable")
-goose := "go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/cc/migrations postgres"
+goose := "go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/store/migrations postgres"
 
 migrate-status:
     {{goose}} "{{db_url}}" status
@@ -30,7 +30,7 @@ migrate-redo:
     {{goose}} "{{db_url}}" redo
 
 migrate-create name:
-    go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/cc/migrations create {{name}} sql
+    go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/store/migrations create {{name}} sql
 
 # There is no goose Down for 0001_init.sql, so a hard reset drops the volume and replays Up.
 migrate-reset:
@@ -63,7 +63,7 @@ tidy:
 assets:
     cd web && bun install && bun run build
 
-# Regenerate the committed internal/cc/ccdb from internal/cc/queries and the schema.
+# Regenerate the committed internal/store/ccdb from internal/store/queries and the schema.
 sqlc:
     go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 

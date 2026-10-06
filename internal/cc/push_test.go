@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // installFakeGh puts a script named gh on PATH that logs every invocation to a file and answers
@@ -67,7 +68,7 @@ func commitFile(t *testing.T, worktreePath, relPath, contents string) {
 // dispositionAsPushed records a run whose disposition is already known to be push, so these
 // tests can drive pushPushable directly without re-exercising spawn/dispose (loop_launch_test.go
 // already covers that).
-func dispositionAsPushed(t *testing.T, store *cc.Store, ticketURL string, at time.Time) {
+func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
 	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
 	if err != nil {
@@ -82,7 +83,7 @@ func dispositionAsPushed(t *testing.T, store *cc.Store, ticketURL string, at tim
 	}
 }
 
-func countEvents(events []cc.Event, kind string) int {
+func countEvents(events []storepkg.Event, kind string) int {
 	n := 0
 	for _, e := range events {
 		if e.Kind == kind {
@@ -92,7 +93,7 @@ func countEvents(events []cc.Event, kind string) int {
 	return n
 }
 
-func hasEvent(events []cc.Event, kind, detailSubstring string) bool {
+func hasEvent(events []storepkg.Event, kind, detailSubstring string) bool {
 	for _, e := range events {
 		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
 			return true
@@ -133,8 +134,8 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	commitFile(t, worktreePath, ".github/workflows/x.yml", "name: x\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -193,8 +194,8 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -253,8 +254,8 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -297,8 +298,8 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -391,8 +392,8 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -427,15 +428,15 @@ func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "restacked"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "restacked"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -456,15 +457,15 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.AppendEvent(ctx, cc.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, cc.Event{
+	if err := store.AppendEvent(ctx, storepkg.Event{
 		At: time.Now(), TicketURL: ticket.URL, Kind: "push_refused", Detail: "policy hit",
 	}); err != nil {
 		t.Fatal(err)

@@ -16,13 +16,14 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
 type App struct {
 	cfg    config.Config
 	lock   *Flock
-	store  *cc.Store
+	store  *store.Store
 	loop   *cc.Loop
 	server *cc.Server
 }
@@ -151,7 +152,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}

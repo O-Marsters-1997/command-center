@@ -1,12 +1,12 @@
-package cc
+package store
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // RecordPush writes one successful push -- the row Phase 4's crash-safety hinges on:
@@ -23,7 +23,7 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 	if err != nil {
 		return fmt.Errorf("record push for %s: %w", ticketID, err)
 	}
-	return s.resetCheckingTicks(ctx, ticketID)
+	return s.ResetCheckingTicks(ctx, ticketID)
 }
 
 // RestackedSinceLastPush names every ticket whose branch the app itself rebased since it last
@@ -31,7 +31,7 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 // The comparison is >= rather than >: retargetOne stamps its push row and the restack that
 // follows it with one tick's single clock reading, so a strict > would never see its own work.
 func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.q.RestackedSinceLastPush(ctx, eventRestacked)
+	rows, err := s.q.RestackedSinceLastPush(ctx, EventRestacked)
 	if err != nil {
 		return nil, fmt.Errorf("select restacked tickets: %w", err)
 	}
@@ -81,17 +81,18 @@ func (s *Store) LatestPushes(ctx context.Context) (map[string]plan.PushRow, erro
 	return pushes, nil
 }
 
+// Event kinds a push writes and PushFacts reads back.
 const (
-	eventPushRefused = "push_refused"
-	eventPushFailed  = "push_failed"
-	eventPushed      = "pushed"
+	EventPushRefused = "push_refused"
+	EventPushFailed  = "push_failed"
+	EventPushed      = "pushed"
 )
 
 // PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL: what the
 // automatic push step's auto-retry gate (a failure, never a refusal, blocks it -- retry-push is
 // your verb) and the page's needs-you/push-failed rendering both read.
 func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error) {
-	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: eventPushRefused, Kind_2: eventPushFailed})
+	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: EventPushRefused, Kind_2: EventPushFailed})
 	if err != nil {
 		return nil, fmt.Errorf("select push facts: %w", err)
 	}
@@ -102,9 +103,9 @@ func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error)
 			continue
 		}
 		switch row.Kind {
-		case eventPushRefused:
+		case EventPushRefused:
 			facts[row.TicketID.String] = plan.PushFact{Refused: true, RefusedPath: row.Detail.String}
-		case eventPushFailed:
+		case EventPushFailed:
 			facts[row.TicketID.String] = plan.PushFact{Failed: true}
 		}
 	}

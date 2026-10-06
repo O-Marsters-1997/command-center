@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const eventGeneratedConflictResolved = "generated_conflict_resolved"
@@ -54,7 +55,7 @@ func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs plan.Observati
 }
 
 func (l *Loop) regenerateAndCommit(
-	ctx context.Context, t Ticket, worktreePath string, policy plan.GeneratedPolicy, now time.Time,
+	ctx context.Context, t store.Ticket, worktreePath string, policy plan.GeneratedPolicy, now time.Time,
 ) error {
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+t.Branch); err != nil {
 		return nil
@@ -85,7 +86,7 @@ func (l *Loop) regenerateAndCommit(
 	if err := git.Commit(ctx, worktreePath, "Regenerate after merging origin/"+defaultBaseBranch); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{
+	return l.store.AppendEvent(ctx, store.Event{
 		At: now, TicketURL: t.URL, Kind: eventGeneratedConflictResolved,
 		Detail: fmt.Sprintf("merged origin/%s, ran %s, committed", defaultBaseBranch, strings.Join(policy.BuildCommand, " ")),
 	})

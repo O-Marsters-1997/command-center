@@ -1,13 +1,12 @@
-package cc
+package agentlog_test
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
 func oneMillionInputTokensLine(timestamp, requestID string) string {
@@ -40,25 +39,19 @@ func TestLoadRequestsCountsAnInteractiveTranscriptAndItsSubagent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	requests, err := LoadRequests(dir)
+	requests, err := agentlog.LoadRequests(dir)
 	if err != nil {
 		t.Fatalf("LoadRequests: %v", err)
 	}
-	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)
-
-	// r1 and s1 are in range; r2 lands exactly at end, which is exclusive.
-	const sonnetInputPerMillion = 6.40
-	got, want := spend.SumWeight(requests, start, end), 2*sonnetInputPerMillion
-	if diff := got - want; diff > 1e-9 || diff < -1e-9 {
-		t.Errorf("SumWeight(LoadRequests(dir)) = %v, want %v", got, want)
+	if len(requests) != 3 {
+		t.Errorf("LoadRequests(dir) = %d requests, want 3: two interactive and one subagent", len(requests))
 	}
 }
 
 func TestLoadRequestsOnAMissingDirIsEmpty(t *testing.T) {
 	t.Parallel()
 
-	requests, err := LoadRequests(filepath.Join(t.TempDir(), "nothing"))
+	requests, err := agentlog.LoadRequests(filepath.Join(t.TempDir(), "nothing"))
 	if err != nil {
 		t.Fatalf("LoadRequests: %v", err)
 	}

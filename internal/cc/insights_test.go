@@ -10,20 +10,21 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // insightsTicket upserts one ticket with an explicit repo and feature, since seedOneTicket leaves
 // both blank.
-func insightsTicket(t *testing.T, store *cc.Store, url, repo, feature string) {
+func insightsTicket(t *testing.T, store *storepkg.Store, url, repo, feature string) {
 	t.Helper()
-	ticket := cc.Ticket{URL: url, Repo: repo, Branch: "branch-" + url, Feature: feature}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: url, Repo: repo, Branch: "branch-" + url, Feature: feature}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func disposeInsightsRun(
-	t *testing.T, store *cc.Store, ticketURL, kind string, endedAt time.Time, costUSD float64,
+	t *testing.T, store *storepkg.Store, ticketURL, kind string, endedAt time.Time, costUSD float64,
 ) {
 	t.Helper()
 	ctx := t.Context()
@@ -37,9 +38,9 @@ func disposeInsightsRun(
 	}
 }
 
-func mergeInsightsTicket(t *testing.T, store *cc.Store, ticketURL string, mergedAt time.Time) {
+func mergeInsightsTicket(t *testing.T, store *storepkg.Store, ticketURL string, mergedAt time.Time) {
 	t.Helper()
-	err := store.AppendEvent(t.Context(), cc.Event{At: mergedAt, TicketURL: ticketURL, Kind: "pr_merged"})
+	err := store.AppendEvent(t.Context(), storepkg.Event{At: mergedAt, TicketURL: ticketURL, Kind: "pr_merged"})
 	if err != nil {
 		t.Fatalf("AppendEvent pr_merged: %v", err)
 	}

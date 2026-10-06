@@ -18,6 +18,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
@@ -70,7 +71,7 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}

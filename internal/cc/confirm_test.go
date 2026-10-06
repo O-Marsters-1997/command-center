@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // TestBoardSendsOnlyDestructiveVerbsToConfirm covers issue #75's AC1: needs_you offers re-run,
@@ -46,18 +47,18 @@ func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	now := startedAt.Add(90 * time.Second)
-	running := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	running := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 
 	tests := []struct {
 		name  string
 		verb  string
-		store func(*testing.T) *cc.Store
+		store func(*testing.T) *store.Store
 		want  string
 	}{
 		{name: "kill names the pgid", verb: "kill", want: "4242",
-			store: func(t *testing.T) *cc.Store { return runningRowStore(t, running, startedAt, now) }},
+			store: func(t *testing.T) *store.Store { return runningRowStore(t, running, startedAt, now) }},
 		{name: "remove-worktree names the path", verb: "remove-worktree", want: "/repos/cc-sandbox-cc-1-first",
-			store: func(t *testing.T) *cc.Store { return seededStore(t, now) }},
+			store: func(t *testing.T) *store.Store { return seededStore(t, now) }},
 	}
 
 	for _, tt := range tests {

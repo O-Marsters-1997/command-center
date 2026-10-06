@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // threeRepoStore seeds a same-repo fan-out -- ROOT and CHILD both in "repo", CHILD blocked by
@@ -20,12 +21,12 @@ import (
 // (issue #219). plan.Unlocked only ever counts a same-repo blocker (plan.go:60), so a group as
 // groupRows renders it can never itself straddle two repos; filterGroupsByRepo's own
 // admit-whole rule for a group that did is proven directly against []group in scope_test.go.
-func threeRepoStore(t *testing.T) *cc.Store {
+func threeRepoStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
 		{URL: "sandbox://LONE", Repo: "other", Branch: "lone"},
@@ -140,12 +141,12 @@ func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
 // threeFeatureStore seeds a same-feature fan-out -- ROOT and CHILD both in "board-scope", CHILD
 // blocked by ROOT -- plus LONE, an unrelated ticket in "sqlc-migration", following
 // threeRepoStore (issue #220).
-func threeFeatureStore(t *testing.T) *cc.Store {
+func threeFeatureStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://ROOT", Feature: "board-scope", Branch: "root"},
 		{URL: "sandbox://CHILD", Feature: "board-scope", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
 		{URL: "sandbox://LONE", Feature: "sqlc-migration", Branch: "lone"},
@@ -212,7 +213,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 
 	store := openStore(t)
 	ctx := t.Context()
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://MATCH", Repo: "repo", Feature: "board-scope", Branch: "match"},
 		{URL: "sandbox://WRONG-REPO", Repo: "other", Feature: "board-scope", Branch: "wrong-repo"},
 		{URL: "sandbox://WRONG-FEATURE", Repo: "repo", Feature: "sqlc-migration", Branch: "wrong-feature"},
@@ -378,9 +379,9 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	cfg.Repos = append(cfg.Repos, config.Repo{Name: "other", Checkout: filepath.Join(root, "repo")})
 
 	store := openStore(t)
-	shown := cc.Ticket{URL: "sandbox://SHOWN", Repo: "repo", Branch: "shown"}
-	hidden := cc.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{shown, hidden}); err != nil {
+	shown := storepkg.Ticket{URL: "sandbox://SHOWN", Repo: "repo", Branch: "shown"}
+	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{shown, hidden}); err != nil {
 		t.Fatal(err)
 	}
 

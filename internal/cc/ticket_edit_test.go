@@ -9,6 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -19,7 +20,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 	store := openStore(t)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}
@@ -65,7 +66,7 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	url := "https://github.com/acme/alpha/issues/1"
-	seed := []cc.ImportedTicket{{
+	seed := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x", Status: "ready"},
 		Repo:   "alpha",
 	}}
@@ -83,7 +84,7 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	again := []cc.ImportedTicket{{
+	again := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{
 			URL: url, Number: 1, Title: "Add x, renamed", Status: "in-progress",
 			BlockedBy: []string{"https://github.com/acme/alpha/issues/2"},
@@ -123,11 +124,11 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 
 	inFeature := "https://github.com/acme/alpha/issues/1"
 	outsider := "https://github.com/acme/beta/issues/2"
-	seed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: inFeature, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: inFeature, Number: 1, Title: "Add x"}, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
-	outsiderSeed := []cc.ImportedTicket{{Ticket: tracker.Ticket{URL: outsider, Number: 2, Title: "Add y"}, Repo: "beta"}}
+	outsiderSeed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: outsider, Number: 2, Title: "Add y"}, Repo: "beta"}}
 	if err := store.ImportTickets(ctx, "project:y", outsiderSeed, at); err != nil {
 		t.Fatalf("seed outsider ImportTickets: %v", err)
 	}
@@ -170,9 +171,9 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	}
 }
 
-func ticketsByURLForTest(t *testing.T, tickets []cc.Ticket) map[string]cc.Ticket {
+func ticketsByURLForTest(t *testing.T, tickets []storepkg.Ticket) map[string]storepkg.Ticket {
 	t.Helper()
-	byURL := make(map[string]cc.Ticket, len(tickets))
+	byURL := make(map[string]storepkg.Ticket, len(tickets))
 	for _, ticket := range tickets {
 		byURL[ticket.URL] = ticket
 	}

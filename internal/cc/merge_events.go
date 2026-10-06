@@ -7,6 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const eventPRMerged = "pr_merged"
@@ -35,7 +36,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 			continue
 		}
 		l.recordHandChurn(ctx, t, pr, pushes[t.URL], repoPaths[t.Repo])
-		if err := l.store.AppendEvent(ctx, Event{
+		if err := l.store.AppendEvent(ctx, store.Event{
 			At: pr.MergedAt, TicketURL: t.URL, Kind: eventPRMerged,
 			Detail: fmt.Sprintf("PR #%d merged", pr.Number),
 		}); err != nil {
@@ -47,7 +48,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 
 // recordHandChurn diffs push.PushedTip (pushOne's own last write, cc's last commit) against the
 // merged PR's head, leaving hand_churn_lines NULL rather than 0 when there is nothing to diff.
-func (l *Loop) recordHandChurn(ctx context.Context, t Ticket, pr plan.PR, push plan.PushRow, repoPath string) {
+func (l *Loop) recordHandChurn(ctx context.Context, t store.Ticket, pr plan.PR, push plan.PushRow, repoPath string) {
 	if push.PushedTip == "" || repoPath == "" || pr.HeadOid == "" {
 		return
 	}

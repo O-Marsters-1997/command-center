@@ -3,6 +3,7 @@ package cc_test
 import (
 	"context"
 	"fmt"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,8 +21,8 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -43,7 +44,7 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	obs.Worktrees[cc.BranchKey("repo", "cc-1")] = fake.Spawns[0].WorktreePath
 
 	ticket.Body = "ticket body, edited"
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
@@ -106,8 +107,8 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 

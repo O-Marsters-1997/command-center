@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"encoding/json"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,7 +68,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
@@ -118,7 +119,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
@@ -166,7 +167,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []cc.Ticket{
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 	}); err != nil {
 		t.Fatal(err)
@@ -199,7 +200,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
@@ -243,7 +244,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Feature: "project:x"},
 		{
 			URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Feature: "project:y",
@@ -284,7 +285,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "widgets"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "widgets"},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", Feature: "gadgets"},

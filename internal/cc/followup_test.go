@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"context"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +19,8 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,8 +100,8 @@ func TestFollowUpNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,8 +141,8 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 

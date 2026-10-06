@@ -10,12 +10,13 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 // conflictingAdvance has both branches add the same path with different contents, so refresh's
 // step-3 merge can only conflict, and re-records the child's push against the pre-advance base.
-func conflictingAdvance(t *testing.T, repoPath string, store *cc.Store, f stackedFixture, at time.Time) string {
+func conflictingAdvance(t *testing.T, repoPath string, store *store.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
 	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
@@ -36,7 +37,7 @@ type conflictFixture struct {
 	f      stackedFixture
 	loop   *cc.Loop
 	server *cc.Server
-	store  *cc.Store
+	store  *store.Store
 	// aliveRuns is the liveness every tick's observation reports.
 	aliveRuns map[string]bool
 }

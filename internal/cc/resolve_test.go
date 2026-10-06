@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"context"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,11 +18,11 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{
+	ticket := storepkg.Ticket{
 		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		Body: "Implement the new widget exactly as described here.",
 	}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,8 +78,8 @@ func TestResolveNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,8 +118,8 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -194,8 +195,8 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -247,8 +248,8 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 

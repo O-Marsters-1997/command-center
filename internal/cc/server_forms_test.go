@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -49,7 +50,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://A", Repo: "repo", Branch: "a"},
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
 		{URL: "sandbox://C", Repo: "repo", Branch: "c"},

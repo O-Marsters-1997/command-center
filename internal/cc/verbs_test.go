@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // removeWorktreeFixture is one ticket fully run, pushed and recorded, its worktree cut for real --
@@ -21,10 +22,10 @@ import (
 // alone for a clean removal).
 type removeWorktreeFixture struct {
 	root, repoPath, worktreePath string
-	store                        *cc.Store
+	store                        *storepkg.Store
 	ws                           config.Workspace
 	cfg                          config.Config
-	ticket                       cc.Ticket
+	ticket                       storepkg.Ticket
 	runID                        int64
 	at                           time.Time
 	ghLog                        string
@@ -79,8 +80,8 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	runGit(t, "-C", repoPath, "push", "-q", "origin", branch)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -190,8 +191,8 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 
 func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
-	dependent := cc.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{f.ticket.URL}}
-	if err := f.store.UpsertTickets(t.Context(), []cc.Ticket{dependent}); err != nil {
+	dependent := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{f.ticket.URL}}
+	if err := f.store.UpsertTickets(t.Context(), []storepkg.Ticket{dependent}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,9 +261,9 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	// A dependent whose blocker's PR closed unmerged after it ran: base_gone, not merged --
 	// remove-worktree's other eligible state.
 	f := newRemoveWorktreeFixture(t, "cc-2")
-	blocker := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	dependent := cc.Ticket{URL: f.ticket.URL, Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
-	if err := f.store.UpsertTickets(t.Context(), []cc.Ticket{blocker, dependent}); err != nil {
+	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	dependent := storepkg.Ticket{URL: f.ticket.URL, Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
+	if err := f.store.UpsertTickets(t.Context(), []storepkg.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // retryPushVerb is the only verb push failed offers a human: the push step alone, no agent
@@ -124,7 +125,7 @@ func (l *Loop) commitResolutionOne(ctx context.Context, e plan.Entry, obs plan.O
 	ticket := e.Ticket
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventCommitResolutionRefused, Detail: detail})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: eventCommitResolutionRefused, Detail: detail})
 	}
 
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
@@ -204,7 +205,7 @@ func (l *Loop) pushOne(
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
 	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: l.cfg.PlanRules().Deny[t.Repo]}); refused {
-		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushRefused, Detail: path})
+		return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: t.URL, Kind: store.EventPushRefused, Detail: path})
 	}
 
 	pushedTips, err := l.store.LastPushedTips(ctx)
@@ -216,14 +217,14 @@ func (l *Loop) pushOne(
 		return err
 	}
 	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
-		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
+		return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: t.URL, Kind: store.EventPushFailed, Detail: err.Error()})
 	}
 
 	if obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
 		body := plan.PRBody(base, obs.PRs[branchKey(t.Repo, base)].Number)
 		if err := l.forge.Create(ctx, obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, e.OpensAsDraft); err != nil {
 			return l.store.AppendEvent(ctx,
-				Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
+				store.Event{At: now, TicketURL: t.URL, Kind: store.EventPushFailed, Detail: err.Error()})
 		}
 	}
 
@@ -234,8 +235,8 @@ func (l *Loop) pushOne(
 	if err := l.store.RecordPush(ctx, t.URL, localTip, base, baseSHA, now); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{
-		At: now, TicketURL: t.URL, Kind: eventPushed,
+	return l.store.AppendEvent(ctx, store.Event{
+		At: now, TicketURL: t.URL, Kind: store.EventPushed,
 		Detail: fmt.Sprintf("pushed %s to origin/%s", localTip, base),
 	})
 }

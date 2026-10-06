@@ -1,6 +1,7 @@
 package cc_test
 
 import (
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -114,10 +115,10 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	store := openStore(t)
 
 	ticketURLs := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
-	tickets := make([]cc.Ticket, len(ticketURLs))
+	tickets := make([]storepkg.Ticket, len(ticketURLs))
 	for i, ticketURL := range ticketURLs {
 		branch := strings.TrimPrefix(ticketURL, "sandbox://")
-		tickets[i] = cc.Ticket{URL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
+		tickets[i] = storepkg.Ticket{URL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
 	}
 	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)

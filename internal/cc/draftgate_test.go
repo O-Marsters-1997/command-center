@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -48,7 +49,7 @@ func writeFakeGhReadyScript(t *testing.T, binDir, logPath string, readyFails boo
 // draftGateFixture is a consumer ticket with a cross-repo gating blocker, pushed and open, ready
 // for applyDraftGate to decide over -- the shape every test below starts from.
 type draftGateFixture struct {
-	store *cc.Store
+	store *storepkg.Store
 	cfg   config.Config
 	ws    config.Workspace
 	at    time.Time
@@ -63,12 +64,12 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	}
 
 	store := openStore(t)
-	consumer := cc.Ticket{
+	consumer := storepkg.Ticket{
 		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
 	}
-	blocker := cc.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{consumer, blocker}); err != nil {
+	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{consumer, blocker}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,7 +288,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	tickets := []cc.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
@@ -327,12 +328,12 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	consumer := cc.Ticket{
+	consumer := storepkg.Ticket{
 		URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1",
 		BlockedBy: []string{"sandbox://PLA-40"},
 	}
-	blocker := cc.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{consumer, blocker}); err != nil {
+	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{consumer, blocker}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -369,8 +370,8 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

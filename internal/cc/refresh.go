@@ -7,76 +7,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const refreshVerb = plan.VerbRefresh
-
-const (
-	eventRefreshRefused     = "refresh_refused"
-	eventRefreshConflicted  = "refresh_conflicted"
-	eventRefreshed          = "refreshed"
-	eventRestacked          = "restacked"
-	eventVerificationFailed = "verification_failed"
-)
-
-// RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL. A
-// refusal or a verification failure gates the automatic pass's retry; the refresh verb ignores it
-// (docs/designs/command-centre-design.md § 4a).
-func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, error) {
-	outcomes, err := s.latestRefreshOutcomes(ctx)
-	if err != nil {
-		return nil, err
-	}
-	facts := make(map[string]plan.RefreshFact, len(outcomes))
-	for ticketID, o := range outcomes {
-		switch o.kind {
-		case eventRefreshRefused:
-			facts[ticketID] = plan.RefreshFact{Refused: true, Reason: o.detail}
-		case eventVerificationFailed:
-			facts[ticketID] = plan.RefreshFact{VerificationFailed: true, VerificationFailedDetail: o.detail}
-		}
-	}
-	return facts, nil
-}
-
-type refreshOutcome struct{ kind, detail string }
-
-// latestRefreshOutcomes returns each ticket's latest refresh-domain event since its last recorded
-// push, keyed by ticket URL: a failure the automatic pass never retries, or a later success that
-// supersedes an earlier failure without needing its own push
-// (docs/designs/command-centre-design.md § 4a).
-func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOutcome, error) {
-	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
-		Kind:   eventRefreshRefused,
-		Kind_2: eventRefreshConflicted,
-		Kind_3: eventVerificationFailed,
-		Kind_4: eventRefreshed,
-		Kind_5: eventRestacked,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("select refresh outcomes: %w", err)
-	}
-
-	outcomes := map[string]refreshOutcome{}
-	for _, row := range rows {
-		if !row.TicketID.Valid {
-			continue
-		}
-		outcomes[row.TicketID.String] = refreshOutcome{kind: row.Kind, detail: row.Detail.String}
-	}
-	return outcomes, nil
-}
-
-// applyRefreshIntents runs every requested refresh, which bypasses the RefreshFacts gate the way
 // retry-push bypasses PushFacts, then sweeps the eligible base-moved rows
 // (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	now := l.clock.Now()
 
-	intents, err := l.store.PendingVerbIntents(ctx, refreshVerb)
+	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbRefresh)
 	if err != nil {
 		return err
 	}
@@ -107,7 +48,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 func (l *Loop) autoRefresh(
 	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[string]bool, now time.Time,
 ) error {
-	outcomes, err := l.store.latestRefreshOutcomes(ctx)
+	outcomes, err := l.store.LatestRefreshOutcomes(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,7 +79,7 @@ func (l *Loop) autoRefresh(
 }
 
 // conflictDetail packs the two tips a failed refresh's merge step attempted into
-// eventRefreshConflicted's Detail: the branch's own origin tip it had just fast-forwarded to, and
+// store.EventRefreshConflicted's Detail: the branch's own origin tip it had just fast-forwarded to, and
 // the base's origin tip it tried to merge in. parseConflictDetail reads them back.
 func conflictDetail(branchTip, baseTip string, mergeErr error) string {
 	return fmt.Sprintf("%s %s %s", branchTip, baseTip, mergeErr)
@@ -157,11 +98,11 @@ func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
 // pushed by a human outside the app, or the base's, advanced again with a later fix -- makes it a
 // different merge from the one that failed, so the gate no longer applies to it (issue #188). Any
 // other refresh-domain outcome keeps gating until the refresh verb clears it.
-func supersededConflict(o refreshOutcome, t plan.Ticket, row plan.PushRow, obs plan.Observation) bool {
-	if o.kind != eventRefreshConflicted {
+func supersededConflict(o store.RefreshOutcome, t plan.Ticket, row plan.PushRow, obs plan.Observation) bool {
+	if o.Kind != store.EventRefreshConflicted {
 		return false
 	}
-	branchTip, baseTip, ok := parseConflictDetail(o.detail)
+	branchTip, baseTip, ok := parseConflictDetail(o.Detail)
 	if !ok {
 		return false
 	}
@@ -189,7 +130,7 @@ func (l *Loop) refreshOne(
 			return nil
 		}
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: detail})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: store.EventRefreshRefused, Detail: detail})
 	}
 
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, branch)]
@@ -203,8 +144,8 @@ func (l *Loop) refreshOne(
 	}
 
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: err.Error(),
+		return l.store.AppendEvent(ctx, store.Event{
+			At: now, TicketURL: ticket.URL, Kind: store.EventRefreshRefused, Detail: err.Error(),
 		})
 	}
 
@@ -219,25 +160,25 @@ func (l *Loop) refreshOne(
 		// whoever resolves it still needs the lease the completed restack would have earned
 		// (issue #93). A conflicted merge rewrites nothing and earns nothing.
 		if restacked {
-			if err := l.store.AppendEvent(ctx, Event{
-				At: now, TicketURL: ticket.URL, Kind: eventRestacked,
+			if err := l.store.AppendEvent(ctx, store.Event{
+				At: now, TicketURL: ticket.URL, Kind: store.EventRestacked,
 				Detail: detail + ", conflicted",
 			}); err != nil {
 				return err
 			}
 		}
 		baseTip := obs.BranchTips[branchKey(ticket.Repo, unlock.BaseBranch)]
-		return l.store.AppendEvent(ctx, Event{
-			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted,
+		return l.store.AppendEvent(ctx, store.Event{
+			At: now, TicketURL: ticket.URL, Kind: store.EventRefreshConflicted,
 			Detail: conflictDetail(obs.BranchTips[branchKey(ticket.Repo, branch)], baseTip, err),
 		})
 	}
 
-	kind := eventRefreshed
+	kind := store.EventRefreshed
 	if restacked {
-		kind = eventRestacked
+		kind = store.EventRestacked
 	}
-	if err := l.store.AppendEvent(ctx, Event{
+	if err := l.store.AppendEvent(ctx, store.Event{
 		At: now, TicketURL: ticket.URL, Kind: kind,
 		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
 	}); err != nil {
@@ -266,8 +207,8 @@ func (l *Loop) verifyOne(
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}
-	return l.store.AppendEvent(ctx, Event{
-		At: now, TicketURL: ticket.URL, Kind: eventVerificationFailed,
+	return l.store.AppendEvent(ctx, store.Event{
+		At: now, TicketURL: ticket.URL, Kind: store.EventVerificationFailed,
 		Detail: fmt.Sprintf("%s: %s: %s", strings.Join(argv, " "), err, detail),
 	})
 }

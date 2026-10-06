@@ -1,4 +1,4 @@
-package cc
+package store
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // editTicketPayload is an intent's free-form payload for verb "edit_ticket" -- the frozen v1

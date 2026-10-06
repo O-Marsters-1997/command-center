@@ -2,6 +2,7 @@ package cc_test
 
 import (
 	"context"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"path/filepath"
 	"testing"
 	"time"
@@ -22,8 +23,8 @@ func TestReCheckRerunsTheActionsRunParsedFromTheCompatCheckDetailsURL(t *testing
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,8 +78,8 @@ func TestReCheckRefusesADetailsURLWithoutARunsSegment(t *testing.T) {
 	ghLog := installFakeGh(t, false)
 
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,8 +133,8 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 

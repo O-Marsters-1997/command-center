@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -32,7 +33,7 @@ const regeneratedContent = "regenerated content\n"
 // advances main with a conflicting edit to the same paths -- the shape a repo's build output
 // conflicts in unconditionally, whatever the underlying rules do.
 type generatedConflictFixture struct {
-	ticket       cc.Ticket
+	ticket       storepkg.Ticket
 	worktreePath string
 	branchTip0   string
 	root         string
@@ -40,7 +41,7 @@ type generatedConflictFixture struct {
 }
 
 func newGeneratedConflictFixture(
-	t *testing.T, store *cc.Store, at time.Time, extraHandwritten, recordPush bool,
+	t *testing.T, store *storepkg.Store, at time.Time, extraHandwritten, recordPush bool,
 ) generatedConflictFixture {
 	t.Helper()
 	ctx := context.Background()
@@ -61,8 +62,8 @@ func newGeneratedConflictFixture(
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
 	branchTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	dispositionAsPushed(t, store, ticket.URL, at)
@@ -324,8 +325,8 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 
 	runGit(t, "-C", worktreePath, "reset", "--hard", staleTip)
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	dispositionAsPushed(t, store, ticket.URL, at)
@@ -446,8 +447,8 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
 	branchTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordPush(ctx, ticket.URL, branchTip, "main", mainSHA0, at); err != nil {

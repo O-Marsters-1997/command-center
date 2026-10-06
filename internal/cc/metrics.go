@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // MetricsParser reads one run's own log into its settled totals — agentlog.ParseMetrics's own
@@ -19,14 +20,14 @@ type MetricsParser func(logPath string) (agentlog.RunMetrics, error)
 // bytes. Idempotent on that predicate for metrics, and on utilization_readings' own (at, window)
 // constraint for readings, so a restart mid-backfill resumes rather than reparses
 // (docs/adr/0010-run-metrics-are-captured-per-request-at-disposition.md).
-func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser, claudeProjectsDir string) error {
+func BackfillMetrics(ctx context.Context, store *store.Store, parser MetricsParser, claudeProjectsDir string) error {
 	runs, err := store.RunsAwaitingMetricsBackfill(ctx)
 	if err != nil {
 		return err
 	}
 	// Loaded once for the whole backfill pass, not once per run, since every run's interval close
 	// weighs the same transcripts directory.
-	requests, err := LoadRequests(claudeProjectsDir)
+	requests, err := agentlog.LoadRequests(claudeProjectsDir)
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", claudeProjectsDir, err)
 	}
@@ -47,7 +48,7 @@ func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser, cl
 			}
 			continue
 		}
-		if err := store.recordReadingsAndIntervals(ctx, readings, requests); err != nil {
+		if err := store.RecordReadingsAndIntervalsFrom(ctx, readings, requests); err != nil {
 			return err
 		}
 	}

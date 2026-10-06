@@ -9,9 +9,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func ticketByURL(t *testing.T, store *cc.Store, url string) cc.Ticket {
+func ticketByURL(t *testing.T, store *storepkg.Store, url string) storepkg.Ticket {
 	t.Helper()
 	tickets, err := store.Tickets(t.Context())
 	if err != nil {
@@ -23,18 +24,18 @@ func ticketByURL(t *testing.T, store *cc.Store, url string) cc.Ticket {
 		}
 	}
 	t.Fatalf("no ticket %s", url)
-	return cc.Ticket{}
+	return storepkg.Ticket{}
 }
 
-func appendVerdictEvent(t *testing.T, store *cc.Store, ticketURL string, at time.Time, detail string) {
+func appendVerdictEvent(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time, detail string) {
 	t.Helper()
-	event := cc.Event{At: at, TicketURL: ticketURL, Kind: "verdict_transition", Detail: detail}
+	event := storepkg.Event{At: at, TicketURL: ticketURL, Kind: "verdict_transition", Detail: detail}
 	if err := store.AppendEvent(t.Context(), event); err != nil {
 		t.Fatalf("AppendEvent: %v", err)
 	}
 }
 
-func noopLoop(store *cc.Store, at time.Time) *cc.Loop {
+func noopLoop(store *storepkg.Store, at time.Time) *cc.Loop {
 	return cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
 		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
@@ -45,8 +46,8 @@ func TestRecordFirstPushCIRecordsFalseAndIgnoresALaterPass(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
@@ -81,8 +82,8 @@ func TestRecordFirstPushCIRecordsTrueForAPassingFirstVerdict(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	ticket := cc.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []cc.Ticket{ticket}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 

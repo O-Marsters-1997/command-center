@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const (
@@ -32,7 +33,7 @@ var supportedVerbs = map[string]bool{
 	closePRVerb:          true,
 	removeWorktreeVerb:   true,
 	cancelVerb:           true,
-	refreshVerb:          true,
+	plan.VerbRefresh:     true,
 	abortVerb:            true,
 	resolveVerb:          true,
 	followUpVerb:         true,
@@ -44,7 +45,6 @@ const (
 	eventReCheckRefused           = "re_check_refused"
 	eventClosePRRequested         = "close_pr_requested"
 	eventClosePRFailed            = "close_pr_failed"
-	eventRemoveWorktreeRefused    = "remove_worktree_refused"
 	eventWorktreeRemoved          = "worktree_removed"
 	eventLaunchCancelled          = "launch_cancelled"
 	eventMergeAborted             = "merge_aborted"
@@ -86,7 +86,7 @@ func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs pl
 func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation, now time.Time) error {
 	fail := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
 	}
 
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
@@ -101,7 +101,7 @@ func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observ
 	}
 
 	delete(obs.MidMerge, branchKey(ticket.Repo, ticket.Branch))
-	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
+	return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
 }
 
 func (l *Loop) applyResolveIntents(ctx context.Context, obs plan.Observation) error {
@@ -135,12 +135,12 @@ func (l *Loop) applyResolveIntents(ctx context.Context, obs plan.Observation) er
 }
 
 func (l *Loop) resolveOne(
-	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, now time.Time,
+	ctx context.Context, ticket store.Ticket, repoPath string, obs plan.Observation, now time.Time,
 ) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: refusal})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: refusal})
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
@@ -153,7 +153,7 @@ func (l *Loop) resolveOne(
 // idleWorktreeFor returns the ticket's worktree path, or "" with a refusal detail naming why: no
 // worktree at all, or one a live agent already owns (inv. 4) -- the hazard resolve and follow-up
 // both guard against before spawning into a worktree a prior run left behind.
-func idleWorktreeFor(ticket Ticket, obs plan.Observation) (worktreePath, refusal string) {
+func idleWorktreeFor(ticket store.Ticket, obs plan.Observation) (worktreePath, refusal string) {
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return "", fmt.Sprintf("no worktree for %s", ticket.Branch)
@@ -211,13 +211,13 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 // one a live agent already owns (inv. 4): two agents in one worktree is the hazard follow-up
 // shares with re-run, not the fresh prompt.
 func (l *Loop) followUpOne(
-	ctx context.Context, ticket Ticket, repoPath, promptText string, obs plan.Observation, vd plan.VerdictFacts,
+	ctx context.Context, ticket store.Ticket, repoPath, promptText string, obs plan.Observation, vd plan.VerdictFacts,
 	pushFacts map[string]plan.PushFact, now time.Time,
 ) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventFollowUpRefused, Detail: refusal})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: eventFollowUpRefused, Detail: refusal})
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
@@ -227,7 +227,7 @@ func (l *Loop) followUpOne(
 
 	ciSection, unavailableDetail := l.fetchCIFailedLog(ctx, ticket, repoPath, obs, vd, pushFacts)
 	if unavailableDetail != "" {
-		if err := l.store.AppendEvent(ctx, Event{
+		if err := l.store.AppendEvent(ctx, store.Event{
 			At: now, TicketURL: ticket.URL, Kind: eventFollowUpCILogUnavailable, Detail: unavailableDetail,
 		}); err != nil {
 			return err
@@ -245,7 +245,7 @@ const ciLogUnavailableSection = "## Failed CI log\n\n" +
 // from the observe phase's own Fetch, since invariant 10 aborts the whole tick on any read error
 // there (docs/designs/command-centre-design.md § 11 inv. 11; issue #232).
 func (l *Loop) fetchCIFailedLog(
-	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, vd plan.VerdictFacts,
+	ctx context.Context, ticket store.Ticket, repoPath string, obs plan.Observation, vd plan.VerdictFacts,
 	pushFacts map[string]plan.PushFact,
 ) (section, unavailableDetail string) {
 	pf := pushFacts[ticket.URL]
@@ -254,7 +254,7 @@ func (l *Loop) fetchCIFailedLog(
 	}
 
 	fact := &plan.RunFact{PROpen: true}
-	l.cfg.PlanRules().ApplyVerdict(fact, planTicket(ticket), obs, vd)
+	l.cfg.PlanRules().ApplyVerdict(fact, ticket.Plan(), obs, vd)
 	if !fact.VerdictCIFailed {
 		return "", ""
 	}
@@ -305,7 +305,7 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if err := l.store.AppendEvent(ctx, Event{
+		if err := l.store.AppendEvent(ctx, store.Event{
 			At: now, TicketURL: intent.TicketID, Kind: eventLaunchCancelled,
 			Detail: fmt.Sprintf("launch cancelled, %d member(s)", members),
 		}); err != nil {
@@ -373,7 +373,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs pl
 // only the commits this new run itself produces, never a previous run's. A worktree that's gone
 // is cut fresh off baseBranch instead of refusing.
 func (l *Loop) reRunOne(
-	ctx context.Context, ticket Ticket, repoPath, baseBranch string, obs plan.Observation, promptHash string,
+	ctx context.Context, ticket store.Ticket, repoPath, baseBranch string, obs plan.Observation, promptHash string,
 	now time.Time, oldPromptPath string,
 ) error {
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
@@ -430,7 +430,7 @@ func (l *Loop) reCheckOne(
 ) error {
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRefused, Detail: detail})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRefused, Detail: detail})
 	}
 	if compatCheck == "" {
 		return refuse("no compat check configured for this repo")
@@ -448,10 +448,10 @@ func (l *Loop) reCheckOne(
 
 	// Zeroed exactly as RecordPush zeroes it (pushes.go); issue #56 AC1 requires the row read
 	// checking again on the tick after.
-	if err := l.store.resetCheckingTicks(ctx, ticket.URL); err != nil {
+	if err := l.store.ResetCheckingTicks(ctx, ticket.URL); err != nil {
 		return err
 	}
-	return l.store.AppendEvent(ctx, Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRequested})
+	return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRequested})
 }
 
 // runIDFromDetailsURL parses the run id out of a check's DetailsURL
@@ -487,9 +487,9 @@ func (l *Loop) applyClosePRIntents(ctx context.Context, snap plan.Snapshot) erro
 	for _, intent := range intents {
 		if e, ok := snap.Entry(intent.TicketID); ok {
 			ticket := e.Ticket
-			event := Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
+			event := store.Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
 			if err := l.forge.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
-				event = Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
+				event = store.Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
 			}
 			if err := l.store.AppendEvent(ctx, event); err != nil {
 				return err
@@ -553,7 +553,7 @@ func (l *Loop) removeWorktreeOne(
 	ticket := e.Ticket
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
-			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
+			store.Event{At: now, TicketURL: ticket.URL, Kind: store.EventRemoveWorktreeRefused, Detail: detail})
 	}
 
 	merged := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
@@ -605,7 +605,7 @@ func (l *Loop) removeWorktreeOne(
 		detail = "forced: origin ref pruned, branch at last pushed tip"
 	}
 	if err := l.store.AppendEvent(ctx,
-		Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved, Detail: detail}); err != nil {
+		store.Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved, Detail: detail}); err != nil {
 		return err
 	}
 	return l.store.WithdrawTicket(ctx, ticket.URL, now, merged)
