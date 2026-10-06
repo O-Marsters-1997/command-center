@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -58,7 +59,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
-		mid, err := cc.MidMerge(ctx, f.childWorktree)
+		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -88,7 +89,7 @@ func (c conflictFixture) tick(t *testing.T) {
 
 func (c conflictFixture) midMerge(t *testing.T) bool {
 	t.Helper()
-	mid, err := cc.MidMerge(t.Context(), c.f.childWorktree)
+	mid, err := git.MidMerge(t.Context(), c.f.childWorktree)
 	if err != nil {
 		t.Fatal(err)
 	}

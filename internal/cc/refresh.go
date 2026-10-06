@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -235,7 +236,7 @@ func (l *Loop) refreshOne(
 		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
-	if err := MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
+	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: err.Error(),
 		})
@@ -316,17 +317,17 @@ func advanceOnto(
 	ref := "origin/" + base
 	boundary := restackBoundary(repo, row, obs)
 	if boundary == "" {
-		return false, ref, Merge(ctx, worktreePath, ref)
+		return false, ref, git.Merge(ctx, worktreePath, ref)
 	}
-	kept, err := Ancestor(ctx, worktreePath, boundary, ref)
+	kept, err := git.Ancestor(ctx, worktreePath, boundary, ref)
 	if err != nil {
 		return false, "", err
 	}
 	if kept {
-		return false, ref, Merge(ctx, worktreePath, ref)
+		return false, ref, git.Merge(ctx, worktreePath, ref)
 	}
 	return true, fmt.Sprintf("restacked onto %s, dropping everything up to %s", ref, boundary),
-		Rebase(ctx, worktreePath, ref, boundary)
+		git.Rebase(ctx, worktreePath, ref, boundary)
 }
 
 // restackBoundary is the last commit of the branch's recorded base that its own commits sit on

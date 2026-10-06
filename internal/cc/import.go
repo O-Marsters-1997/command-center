@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -78,7 +79,7 @@ func trackerSourceFor(r Repo, resolve TrackerSource) (tracker.Source, bool, erro
 	if r.Remote == "" {
 		return nil, false, nil
 	}
-	src, err := resolve(tracker.Kind(r.Tracker), normaliseRemote(r.Remote))
+	src, err := resolve(tracker.Kind(r.Tracker), git.NormaliseRemote(r.Remote))
 	if err != nil {
 		return nil, false, err
 	}

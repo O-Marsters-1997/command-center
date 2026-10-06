@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -199,7 +200,7 @@ func (l *Loop) commitResolutionOne(ctx context.Context, ticket Ticket, pc pushCo
 		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
 	}
 
-	unmerged, err := UnmergedPaths(ctx, worktreePath)
+	unmerged, err := git.UnmergedPaths(ctx, worktreePath)
 	if err != nil {
 		return fmt.Errorf("read unmerged paths for %s: %w", ticket.URL, err)
 	}
@@ -207,24 +208,24 @@ func (l *Loop) commitResolutionOne(ctx context.Context, ticket Ticket, pc pushCo
 		return refuse(fmt.Sprintf("still unmerged: %s", strings.Join(unmerged, ", ")))
 	}
 
-	midMerge, err := MidMerge(ctx, worktreePath)
+	midMerge, err := git.MidMerge(ctx, worktreePath)
 	if err != nil {
 		return fmt.Errorf("read merge state for %s: %w", ticket.URL, err)
 	}
 	if midMerge {
-		staged, err := StagedPaths(ctx, worktreePath)
+		staged, err := git.StagedPaths(ctx, worktreePath)
 		if err != nil {
 			return fmt.Errorf("read staged paths for %s: %w", ticket.URL, err)
 		}
 		if len(staged) == 0 {
 			return refuse("nothing staged to commit")
 		}
-		if err := CommitNoEdit(ctx, worktreePath); err != nil {
+		if err := git.CommitNoEdit(ctx, worktreePath); err != nil {
 			return refuse(err.Error())
 		}
 	}
 
-	tip, err := BranchTip(ctx, pc.repoPaths[ticket.Repo], ticket.Branch)
+	tip, err := git.BranchTip(ctx, pc.repoPaths[ticket.Repo], ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read tip after commit resolution for %s: %w", ticket.URL, err)
 	}
@@ -237,16 +238,16 @@ func (l *Loop) commitResolutionOne(ctx context.Context, ticket Ticket, pc pushCo
 // human is told about, and the lease still refuses if anything reached origin since that tip.
 func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, restacked bool) error {
 	if !restacked || recordedTip == "" {
-		return Push(ctx, repoPath, branch)
+		return git.Push(ctx, repoPath, branch)
 	}
-	descended, err := Ancestor(ctx, repoPath, recordedTip, branch)
+	descended, err := git.Ancestor(ctx, repoPath, recordedTip, branch)
 	if err != nil {
 		return err
 	}
 	if descended {
-		return Push(ctx, repoPath, branch)
+		return git.Push(ctx, repoPath, branch)
 	}
-	return PushRestacked(ctx, repoPath, branch, recordedTip)
+	return git.PushRestacked(ctx, repoPath, branch, recordedTip)
 }
 
 // pushOne computes t's base fresh (the same pure plan.Unlocked call job 2 uses, over this tick's
@@ -261,7 +262,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 	base := unlock.BaseBranch
 	repoPath := pc.repoPaths[t.Repo]
 
-	changed, err := ChangedPaths(ctx, repoPath, "origin/"+base, t.Branch)
+	changed, err := git.ChangedPaths(ctx, repoPath, "origin/"+base, t.Branch)
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
@@ -282,7 +283,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 		}
 	}
 
-	baseSHA, err := RevParse(ctx, repoPath, "origin/"+base)
+	baseSHA, err := git.RevParse(ctx, repoPath, "origin/"+base)
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}

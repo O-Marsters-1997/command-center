@@ -1,4 +1,4 @@
-package tp_test
+package git_test
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/tp"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
 func fakeTp(t *testing.T, exitCode int) (argsPath string) {
@@ -35,7 +35,7 @@ func TestNewInvokesTpNewWithBaseInTheRepoDir(t *testing.T) {
 	repoPath := t.TempDir()
 	argsPath := fakeTp(t, 0)
 
-	if err := tp.New(t.Context(), repoPath, "cc-1-first", "origin/main"); err != nil {
+	if err := (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main"); err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestNewReturnsAWrappedErrorOnFailure(t *testing.T) {
 	repoPath := t.TempDir()
 	fakeTp(t, 1)
 
-	err := tp.New(t.Context(), repoPath, "cc-1-first", "origin/main")
+	err := (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
 	if err == nil {
 		t.Fatal("New returned nil for a failing tp new")
 	}
@@ -77,7 +77,7 @@ func TestRemoveInvokesTpRemoveWithMerged(t *testing.T) {
 	repoPath := t.TempDir()
 	argsPath := fakeTp(t, 0)
 
-	if err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged); err != nil {
+	if err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestRemoveInvokesTpRemoveWithForce(t *testing.T) {
 	repoPath := t.TempDir()
 	argsPath := fakeTp(t, 0)
 
-	if err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveForced); err != nil {
+	if err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestRemoveReturnsAWrappedErrorOnFailure(t *testing.T) {
 	repoPath := t.TempDir()
 	fakeTp(t, 1)
 
-	err := tp.Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged)
+	err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
 	if err == nil {
 		t.Fatal("Remove returned nil for a failing tp remove")
 	}

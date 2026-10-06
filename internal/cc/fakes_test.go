@@ -10,7 +10,7 @@ import (
 )
 
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so
-// internal/tp.New is genuinely exercised. exitCode non-zero simulates `tp new` failing
+// internal/git.CLI.New is genuinely exercised. exitCode non-zero simulates `tp new` failing
 // (an unresolvable base), matching faketp's own $CC_TP_FAIL behaviour.
 func installFakeTp(t *testing.T, fail bool) {
 	t.Helper()

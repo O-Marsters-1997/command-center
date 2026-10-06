@@ -9,13 +9,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
+	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 )
 
 var errCutFailed = errors.New("tp new: scenario says this cut fails")
 
-// Worktrees is the tp.Worktrees seam over real git: it cuts and removes worktrees beside the
+// Worktrees is the git.Worktrees seam over real git: it cuts and removes worktrees beside the
 // repo's checkout, and fails the cut of any ticket whose script says cut = "fail".
 type Worktrees struct {
 	issues []issue
@@ -34,8 +33,8 @@ func (w *Worktrees) New(_ context.Context, repoPath, branch, baseRef string) err
 	return err
 }
 
-func (*Worktrees) Remove(ctx context.Context, repoPath, branch string, _ tp.RemoveMode) error {
-	worktrees, err := cc.Worktrees(ctx, repoPath)
+func (*Worktrees) Remove(ctx context.Context, repoPath, branch string, _ ccgit.RemoveMode) error {
+	worktrees, err := ccgit.WorktreePaths(ctx, repoPath)
 	if err != nil {
 		return err
 	}
@@ -50,7 +49,7 @@ func (*Worktrees) Remove(ctx context.Context, repoPath, branch string, _ tp.Remo
 	return err
 }
 
-var _ tp.Worktrees = (*Worktrees)(nil)
+var _ ccgit.Worktrees = (*Worktrees)(nil)
 
 func installFailureScripts(sb *Sandbox, issues []issue) (verifyCommand []string, err error) {
 	for _, repo := range sb.repos {

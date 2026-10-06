@@ -18,6 +18,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -89,7 +90,7 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 		Repos:        sb.Repos(template),
 	}
 	for _, repo := range cfg.Repos {
-		if err := cc.EnsureCheckout(ctx, repo); err != nil {
+		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
 			return nil, err
 		}
 	}

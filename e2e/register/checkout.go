@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
 // SandboxCheckout is the e2e build's cc.CheckoutFunc. A path-based repo gets the real
@@ -16,7 +17,7 @@ import (
 func SandboxCheckout(ctx context.Context, repos []cc.Repo) error {
 	for _, repo := range repos {
 		if repo.Path != "" {
-			if err := cc.EnsureCheckout(ctx, repo); err != nil {
+			if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
 				return err
 			}
 			continue

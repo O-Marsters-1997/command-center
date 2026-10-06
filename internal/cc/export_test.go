@@ -51,9 +51,6 @@ func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
 func ReadTestdata(name string) string              { return mustReadTestdata(name) }
 func WriteRunLog(t *testing.T, body string) string { return writeRunLog(t, body) }
 
-// SameRemote is the git-URL comparison EnsureCheckout refuses on.
-func SameRemote(a, b string) bool { return sameRemote(a, b) }
-
 // MergifyHash is the observe phase's read of .mergify.yml off origin's default branch.
 func MergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return mergifyHash(ctx, repoPath)

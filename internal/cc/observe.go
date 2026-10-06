@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -37,7 +38,7 @@ func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
-			if err := Fetch(ctx, path); err != nil {
+			if err := git.Fetch(ctx, path); err != nil {
 				return plan.Observation{}, err
 			}
 
@@ -58,12 +59,12 @@ func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
 			// name: unlike a ticket's own branch, every repo has a "main", so the plain name would
 			// collide the moment a second repo is configured.
-			mainTip, mainErr := RevParse(ctx, path, "origin/"+defaultBaseBranch)
+			mainTip, mainErr := git.RevParse(ctx, path, "origin/"+defaultBaseBranch)
 			if mainErr == nil {
 				obs.BranchTips[mainTipKey(repo.Name)] = mainTip
 			}
 			for _, branch := range branches {
-				tip, err := RevParse(ctx, path, "origin/"+branch)
+				tip, err := git.RevParse(ctx, path, "origin/"+branch)
 				if err != nil {
 					continue // never pushed, so there is no remote branch to read or to cut from
 				}
@@ -71,7 +72,7 @@ func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 				if mainErr != nil {
 					continue
 				}
-				clean, paths, err := MergesCleanly(ctx, path, mainTip, tip)
+				clean, paths, err := git.MergesCleanly(ctx, path, mainTip, tip)
 				if err != nil {
 					return plan.Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
@@ -83,23 +84,23 @@ func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 			}
 
 			if err := recordPeerConflicts(
-				ctx, path, repo.Name, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, MergesCleanly,
+				ctx, path, repo.Name, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, git.MergesCleanly,
 			); err != nil {
 				return plan.Observation{}, err
 			}
 
-			worktrees, err := Worktrees(ctx, path)
+			worktrees, err := git.WorktreePaths(ctx, path)
 			if err != nil {
 				return plan.Observation{}, err
 			}
 			for branch, wtPath := range worktrees {
 				obs.Worktrees[branchKey(repo.Name, branch)] = wtPath
-				tip, err := BranchTip(ctx, path, branch)
+				tip, err := git.BranchTip(ctx, path, branch)
 				if err != nil {
 					return plan.Observation{}, fmt.Errorf("read local tip of %s: %w", branch, err)
 				}
 				obs.LocalTips[branchKey(repo.Name, branch)] = tip
-				mid, err := MidMerge(ctx, wtPath)
+				mid, err := git.MidMerge(ctx, wtPath)
 				if err != nil {
 					return plan.Observation{}, fmt.Errorf("check mid-merge for %s: %w", branch, err)
 				}
@@ -123,7 +124,7 @@ func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
 // mergify_sha a human records after reviewing the file (docs/designs/command-centre-design.md
 // § 7). The ref, not the working tree: a dirty checkout is not a config change.
 func mergifyHash(ctx context.Context, repoPath string) (string, error) {
-	data, err := ShowFile(ctx, repoPath, "origin/"+defaultBaseBranch, ".mergify.yml")
+	data, err := git.ShowFile(ctx, repoPath, "origin/"+defaultBaseBranch, ".mergify.yml")
 	if err != nil {
 		return "", err
 	}
@@ -222,7 +223,7 @@ func planPR(pr gh.PR) plan.PR {
 func rereadLocalTips(ctx context.Context, obs plan.Observation, repoPaths map[string]string) {
 	for key := range obs.Worktrees {
 		repo, branch, _ := strings.Cut(key, "//")
-		if tip, err := BranchTip(ctx, repoPaths[repo], branch); err == nil {
+		if tip, err := git.BranchTip(ctx, repoPaths[repo], branch); err == nil {
 			obs.LocalTips[key] = tip
 		}
 	}

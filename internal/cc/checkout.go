@@ -2,12 +2,11 @@ package cc
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
 // CheckoutPath answers where a repo's working copy is. A remote repo's checkout is one the app
@@ -43,105 +42,18 @@ func validRepoName(name string) error {
 	return nil
 }
 
-// EnsureCheckout clones repo when its checkout directory is absent, and otherwise verifies that
-// what is there has the configured origin. It never resets, pulls or checks anything out: work
-// happens in the worktrees tp cuts beside the checkout, not in it.
-func EnsureCheckout(ctx context.Context, repo Repo) error {
-	switch _, err := os.Stat(repo.Checkout); {
-	case errors.Is(err, os.ErrNotExist):
-		if repo.Remote == "" {
-			return fmt.Errorf("repo %s: no checkout at %s, and no remote to clone from",
-				repo.Name, repo.Checkout)
-		}
-		if err := clone(ctx, repo); err != nil {
-			return err
-		}
-		return enableRerere(ctx, repo.Checkout)
-	case err != nil:
-		return fmt.Errorf("repo %s: stat %s: %w", repo.Name, repo.Checkout, err)
-	}
-
-	origin, err := originURL(ctx, repo.Checkout)
-	if err != nil {
-		return fmt.Errorf("repo %s: %s is not a git repository with an origin: %w",
-			repo.Name, repo.Checkout, err)
-	}
-	if repo.Remote != "" && !sameRemote(origin, repo.Remote) {
-		return fmt.Errorf("repo %s: %s has origin %s, but the config says %s",
-			repo.Name, repo.Checkout, origin, repo.Remote)
-	}
-	if err := enableRerere(ctx, repo.Checkout); err != nil {
-		return err
-	}
-	return Fetch(ctx, repo.Checkout)
-}
-
-// enableRerere has git record how a conflict was resolved and replay that resolution, already
-// staged, the next time the same conflict comes back -- a rebase drops the merge commit a
-// resolution was committed as, so every restack re-hits it. Local config, set here rather than
-// by hand, because a re-clone on a bare machine would otherwise lose it.
-func enableRerere(ctx context.Context, repoPath string) error {
-	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
-		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
-			return fmt.Errorf("enable %s in %s: %w", key, repoPath, err)
-		}
-	}
-	return nil
-}
-
-func clone(ctx context.Context, repo Repo) error {
-	if err := os.MkdirAll(filepath.Dir(repo.Checkout), 0o700); err != nil {
-		return fmt.Errorf("repo %s: create %s: %w", repo.Name, filepath.Dir(repo.Checkout), err)
-	}
-	cmd := exec.CommandContext(ctx, "git", "clone", repo.Remote, repo.Checkout)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("clone %s into %s: %w: %s", repo.Remote, repo.Checkout, err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
 // RepoNameForDir answers which configured repo dir belongs to, using dir's git origin normalised
-// and compared the same way EnsureCheckout compares an existing checkout's origin. No origin, or
+// and compared the same way git.EnsureCheckout compares an existing checkout's origin. No origin, or
 // no configured repo matching it, answers ok=false rather than an error.
 func RepoNameForDir(ctx context.Context, dir string, repos []Repo) (name string, ok bool) {
-	origin, err := originURL(ctx, dir)
+	origin, err := git.OriginURL(ctx, dir)
 	if err != nil {
 		return "", false
 	}
 	for _, r := range repos {
-		if r.Remote != "" && sameRemote(origin, r.Remote) {
+		if r.Remote != "" && git.SameRemote(origin, r.Remote) {
 			return r.Name, true
 		}
 	}
 	return "", false
-}
-
-func originURL(ctx context.Context, repoPath string) (string, error) {
-	out, err := git(ctx, repoPath, "remote", "get-url", "origin")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// sameRemote decides whether two git URLs name one repository. The ssh and https forms differ in
-// scheme, in carrying a user, and in the .git suffix, so all three are stripped before comparing.
-func sameRemote(a, b string) bool {
-	return normaliseRemote(a) == normaliseRemote(b)
-}
-
-func normaliseRemote(url string) string {
-	url = strings.TrimSpace(url)
-	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
-
-	if scheme := strings.Index(url, "://"); scheme >= 0 {
-		url = url[scheme+3:]
-	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
-		// scp-like: git@github.com:owner/repo
-		url = url[:colon] + "/" + url[colon+1:]
-	}
-	if at := strings.Index(url, "@"); at >= 0 {
-		url = url[at+1:]
-	}
-	return strings.ToLower(strings.TrimSuffix(url, "/"))
 }

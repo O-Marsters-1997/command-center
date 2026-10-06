@@ -39,7 +39,7 @@ type Source interface {
 }
 
 // New constructs the Source that reads kind's tracker for the repo named by remote, in the
-// host/owner/repo form internal/cc's normaliseRemote produces.
+// host/owner/repo form internal/git's NormaliseRemote produces.
 func New(kind Kind, remote string) (Source, error) {
 	switch kind {
 	case GitHub:

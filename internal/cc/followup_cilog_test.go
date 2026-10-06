@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -60,7 +61,7 @@ func setUpCIFailedTicket(
 	}
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	tip, err := cc.BranchTip(ctx, repoPath, ticket.Branch)
+	tip, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		t.Fatal(err)
 	}
