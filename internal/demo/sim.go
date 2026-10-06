@@ -50,6 +50,9 @@ type Sim struct {
 	last        map[string]string
 	transitions []Transition
 	checked     int
+	landed      int
+	pushed      int
+	pressed     int
 	mismatches  []error
 }
 
@@ -158,6 +161,12 @@ func (s *Sim) Elapsed() time.Duration { return s.clock.Now().Sub(simStart) }
 // Tick plays one loop tick: the world moves, the loop runs, then the sim records every board
 // state, presses launch for tickets that reached ready, and checks the checkpoints now due.
 func (s *Sim) Tick(ctx context.Context) error {
+	if err := s.landMain(); err != nil {
+		return err
+	}
+	if err := s.landPushes(); err != nil {
+		return err
+	}
 	if err := s.forge.Advance(); err != nil {
 		return err
 	}
@@ -173,6 +182,9 @@ func (s *Sim) Tick(ctx context.Context) error {
 	}
 	s.record(states)
 	if err := s.launchReady(states); err != nil {
+		return err
+	}
+	if err := s.pressDue(); err != nil {
 		return err
 	}
 	s.check(states)
@@ -248,6 +260,55 @@ func (s *Sim) launchReady(states map[string]string) error {
 		return fmt.Errorf("POST /launch: %d: %s", rec.Code, rec.Body)
 	}
 	return nil
+}
+
+func (s *Sim) landMain() error {
+	for ; s.landed < len(s.scenario.Main); s.landed++ {
+		m := s.scenario.Main[s.landed]
+		if time.Duration(m.At) > s.Elapsed() {
+			return nil
+		}
+		if err := s.sandbox.LandOnMain(m.Repo, m.Files); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Sim) landPushes() error {
+	for ; s.pushed < len(s.scenario.Push); s.pushed++ {
+		p := s.scenario.Push[s.pushed]
+		if time.Duration(p.At) > s.Elapsed() {
+			return nil
+		}
+		owner := s.issueByID(p.Ticket)
+		if err := s.sandbox.PushToBranch(owner.repo, owner.branch, p.Files); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Sim) pressDue() error {
+	for ; s.pressed < len(s.scenario.Press); s.pressed++ {
+		p := s.scenario.Press[s.pressed]
+		if time.Duration(p.At) > s.Elapsed() {
+			return nil
+		}
+		form := url.Values{"verb": {p.Verb}, "ticket": {s.issueByID(p.Ticket).url}}
+		req := httptest.NewRequest(http.MethodPost, "/verb", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.server.ServeHTTP(rec, req)
+		if rec.Code != http.StatusSeeOther {
+			return fmt.Errorf("POST /verb %s %s: %d: %s", p.Verb, p.Ticket, rec.Code, rec.Body)
+		}
+	}
+	return nil
+}
+
+func (s *Sim) issueByID(id string) issue {
+	return s.issues[slices.IndexFunc(s.issues, func(i issue) bool { return i.ID == id })]
 }
 
 func (s *Sim) check(states map[string]string) {

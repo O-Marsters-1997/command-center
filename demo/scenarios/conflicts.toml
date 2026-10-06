@@ -1,0 +1,133 @@
+seed = 11
+speed = 20
+
+[[repo]]
+name = "acme/api"
+stacking = true
+files = { "go.mod" = "module acme/api\n", "main.go" = "package main\n" }
+
+[[repo]]
+name = "acme/web"
+files = { "go.mod" = "module acme/web\n", "main.go" = "package main\n" }
+
+[[ticket]]
+id = "A"
+repo = "acme/web"
+title = "Rename the handler"
+feature = "conflicts"
+agent = { after = "1m", result = "conflict", files = ["main.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "B"
+repo = "acme/api"
+title = "Add the cache"
+feature = "conflicts"
+agent = { after = "1m", result = "commits", files = ["cache.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "C"
+repo = "acme/api"
+title = "Wire the cache into the handler"
+feature = "conflicts"
+blocked_by = ["B"]
+agent = { after = "1m", result = "conflict", files = ["cache.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "D"
+repo = "acme/api"
+title = "Add the config loader"
+feature = "conflicts"
+agent = { after = "1m", result = "commits", files = ["config.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "E"
+repo = "acme/api"
+title = "Add the metrics endpoint"
+feature = "conflicts"
+blocked_by = ["D"]
+agent = { after = "1m", result = "commits", files = ["metrics.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[main]]
+at = "4m"
+repo = "acme/web"
+files = { "main.go" = "package main // moved\n" }
+
+[[push]]
+at = "4m"
+ticket = "B"
+files = { "cache.go" = "package main // hand edit\n" }
+
+[[press]]
+at = "5m"
+ticket = "A"
+verb = "abort"
+
+[[press]]
+at = "5m"
+ticket = "C"
+verb = "abort"
+
+[[press]]
+at = "6m"
+ticket = "A"
+verb = "resolve"
+
+[[press]]
+at = "6m"
+ticket = "D"
+verb = "close-pr"
+
+[[expect]]
+at = "4m"
+ticket = "A"
+state = "conflicts_with_main"
+
+[[expect]]
+at = "4m"
+ticket = "C"
+state = "base_moved"
+
+[[expect]]
+at = "4m15s"
+ticket = "A"
+state = "refresh_conflicted"
+
+[[expect]]
+at = "4m15s"
+ticket = "C"
+state = "refresh_conflicted"
+
+[[expect]]
+at = "5m30s"
+ticket = "A"
+state = "conflicts_with_main"
+
+[[expect]]
+at = "5m30s"
+ticket = "C"
+state = "base_moved"
+
+[[expect]]
+at = "6m30s"
+ticket = "D"
+state = "pr_closed_unmerged"
+
+[[expect]]
+at = "6m30s"
+ticket = "E"
+state = "base_gone"
+
+[[expect]]
+at = "7m15s"
+ticket = "A"
+state = "conflict_resolved"

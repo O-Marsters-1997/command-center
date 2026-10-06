@@ -2,6 +2,7 @@ package demo
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -31,13 +32,17 @@ type Scenario struct {
 	Speed  float64  `toml:"speed"`
 	Repos  []Repo   `toml:"repo"`
 	Ticket []Ticket `toml:"ticket"`
+	Main   []Main   `toml:"main"`
+	Push   []Push   `toml:"push"`
+	Press  []Press  `toml:"press"`
 	Expect []Expect `toml:"expect"`
 }
 
 // Repo is one repository the sandbox hosts a bare origin for, seeded with Files on main.
 type Repo struct {
-	Name  string            `toml:"name"`
-	Files map[string]string `toml:"files"`
+	Name     string            `toml:"name"`
+	Stacking bool              `toml:"stacking"`
+	Files    map[string]string `toml:"files"`
 }
 
 // Ticket is one issue in the DAG and the script the world plays for it.
@@ -66,6 +71,27 @@ type Step struct {
 	After Duration `toml:"after"`
 }
 
+// Main is a commit landing on a repo's origin main at sim time At, not from cc.
+type Main struct {
+	At    Duration          `toml:"at"`
+	Repo  string            `toml:"repo"`
+	Files map[string]string `toml:"files"`
+}
+
+// Push is a commit a human pushes to Ticket's branch on origin at sim time At.
+type Push struct {
+	At     Duration          `toml:"at"`
+	Ticket string            `toml:"ticket"`
+	Files  map[string]string `toml:"files"`
+}
+
+// Press is a verb a human presses on Ticket's row at sim time At.
+type Press struct {
+	At     Duration `toml:"at"`
+	Ticket string   `toml:"ticket"`
+	Verb   string   `toml:"verb"`
+}
+
 // Expect is a checkpoint: at sim time At, Ticket must be in State.
 type Expect struct {
 	At     Duration `toml:"at"`
@@ -80,6 +106,9 @@ func LoadScenario(path string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("read scenario %s: %w", path, err)
 	}
 	slices.SortStableFunc(s.Expect, func(a, b Expect) int { return cmp.Compare(a.At, b.At) })
+	slices.SortStableFunc(s.Main, func(a, b Main) int { return cmp.Compare(a.At, b.At) })
+	slices.SortStableFunc(s.Push, func(a, b Push) int { return cmp.Compare(a.At, b.At) })
+	slices.SortStableFunc(s.Press, func(a, b Press) int { return cmp.Compare(a.At, b.At) })
 	if err := s.validate(); err != nil {
 		return Scenario{}, fmt.Errorf("scenario %s: %w", path, err)
 	}
@@ -100,7 +129,7 @@ func (s Scenario) validate() error {
 		if !repos[t.Repo] {
 			return fmt.Errorf("ticket %q names unknown repo %q", t.ID, t.Repo)
 		}
-		if t.Agent.Result != "commits" {
+		if t.Agent.Result != "commits" && t.Agent.Result != "conflict" {
 			return fmt.Errorf("ticket %q: agent result %q is not supported yet", t.ID, t.Agent.Result)
 		}
 		for _, ci := range t.CI {
@@ -114,6 +143,30 @@ func (s Scenario) validate() error {
 			if !ids[blocker] {
 				return fmt.Errorf("ticket %q is blocked by unknown ticket %q", t.ID, blocker)
 			}
+		}
+	}
+	for _, m := range s.Main {
+		if !repos[m.Repo] {
+			return fmt.Errorf("main event names unknown repo %q", m.Repo)
+		}
+		if len(m.Files) == 0 {
+			return errors.New("main event commits no files")
+		}
+	}
+	for _, p := range s.Push {
+		if !ids[p.Ticket] {
+			return fmt.Errorf("push names unknown ticket %q", p.Ticket)
+		}
+		if len(p.Files) == 0 {
+			return fmt.Errorf("push to ticket %q commits no files", p.Ticket)
+		}
+	}
+	for _, p := range s.Press {
+		if !ids[p.Ticket] {
+			return fmt.Errorf("press names unknown ticket %q", p.Ticket)
+		}
+		if p.Verb == "" {
+			return fmt.Errorf("press on ticket %q names no verb", p.Ticket)
 		}
 	}
 	for _, e := range s.Expect {

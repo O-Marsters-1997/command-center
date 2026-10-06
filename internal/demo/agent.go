@@ -9,11 +9,14 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 )
+
+const resolvePromptPrefix = "Merge origin/main into"
 
 // Agent is the fake agent Runner. A spawned run writes stream-json to its log as sim time passes
 // and, when its scripted duration is up, commits the scenario's files into the worktree with real
@@ -37,6 +40,7 @@ type agentRun struct {
 	tokensIn  int
 	tokensOut int
 	finished  bool
+	resolving bool
 	rng       *rand.Rand
 }
 
@@ -66,6 +70,7 @@ func (a *Agent) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, er
 	rng := rand.New(rand.NewPCG(uint64(a.seed), uint64(owner.number)))
 	run := &agentRun{
 		issue: owner, worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(), rng: rng,
+		resolving: strings.HasPrefix(cfg.Prompt, resolvePromptPrefix),
 	}
 	a.runs[a.nextPid] = run
 	if err := run.write(map[string]any{"type": "system", "subtype": "init", "session_id": branch}); err != nil {
@@ -114,11 +119,7 @@ func (*Agent) turn(run *agentRun) error {
 }
 
 func (r *agentRun) finish(now time.Time) error {
-	files := make(map[string]string, len(r.issue.Agent.Files))
-	for _, name := range r.issue.Agent.Files {
-		files[name] = "package main\n"
-	}
-	if err := commitAll(r.worktree, "implement "+r.issue.Title, files); err != nil {
+	if err := r.commitWork(); err != nil {
 		return err
 	}
 	r.finished = true
@@ -128,6 +129,45 @@ func (r *agentRun) finish(now time.Time) error {
 		"total_cost_usd": float64(r.tokensIn+r.tokensOut) / 1e6,
 		"usage":          map[string]int{"input_tokens": r.tokensIn, "output_tokens": r.tokensOut},
 	})
+}
+
+func (r *agentRun) commitWork() error {
+	if r.resolving {
+		return r.resolveConflict()
+	}
+	content := "package main\n"
+	if r.issue.Agent.Result == "conflict" {
+		content = "package main // " + r.issue.ID + "\n"
+	}
+	files := make(map[string]string, len(r.issue.Agent.Files))
+	for _, name := range r.issue.Agent.Files {
+		files[name] = content
+	}
+	return commitAll(r.worktree, "implement "+r.issue.Title, files)
+}
+
+func (r *agentRun) resolveConflict() error {
+	if _, err := git(r.worktree, "fetch", "-q", "origin"); err != nil {
+		return err
+	}
+	// The merge exits non-zero precisely when it leaves conflicts to resolve.
+	_, mergeErr := git(r.worktree, "merge", "--no-commit", "--no-ff", "origin/main")
+	conflicted, err := git(r.worktree, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return err
+	}
+	if conflicted == "" && mergeErr != nil {
+		return mergeErr
+	}
+	resolved := map[string]string{}
+	for _, name := range strings.Split(conflicted, "\n") {
+		resolved[name] = "package main // resolved by " + r.issue.ID + "\n"
+	}
+	if err := writeFiles(r.worktree, resolved); err != nil {
+		return err
+	}
+	_, err = git(r.worktree, "add", "-A")
+	return err
 }
 
 func (r *agentRun) write(line map[string]any) error {
