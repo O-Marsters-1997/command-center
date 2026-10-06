@@ -24,8 +24,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-const tickPeriod = 15 * time.Second
-
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 
 var pillRE = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
@@ -198,7 +196,7 @@ func (s *Sim) Tick(ctx context.Context) error {
 		return err
 	}
 	s.check(states)
-	s.clock.Advance(tickPeriod)
+	s.clock.Advance(store.TickPeriod)
 	return nil
 }
 

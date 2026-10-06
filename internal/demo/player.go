@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const (
@@ -155,7 +157,7 @@ func (p *Player) step(ctx context.Context) (time.Duration, error) {
 	if err := sim.Tick(ctx); err != nil {
 		return goAgain, err
 	}
-	return max(time.Duration(float64(tickPeriod)/ctl.speed), minTickWait), nil
+	return max(time.Duration(float64(store.TickPeriod)/ctl.speed), minTickWait), nil
 }
 
 func (p *Player) restart(ctx context.Context) error {
