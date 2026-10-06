@@ -64,7 +64,6 @@ type Loop struct {
 	metricsParser MetricsParser
 	nudgeCh       chan struct{}
 	spawned       []string
-	killed        int
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
@@ -165,6 +164,10 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	if err := l.applyCancelIntents(ctx); err != nil {
 		return err
 	}
+	l.spawned = nil
+	if err := l.applyKillIntents(ctx); err != nil {
+		return err
+	}
 	if err := l.reconcileRuns(ctx, obs); err != nil {
 		return err
 	}
@@ -184,10 +187,6 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 }
 
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	l.spawned, l.killed = nil, 0
-	if err := l.applyKillIntents(ctx); err != nil {
-		return err
-	}
 	if err := l.applyReRunIntents(ctx, snap, obs); err != nil {
 		return err
 	}
@@ -373,15 +372,10 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	}
 
 	now := l.clock.Now()
-	cancelled := map[string]bool{}
 	for _, intent := range intents {
 		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
 				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
-			}
-			if !cancelled[intent.TicketID] {
-				cancelled[intent.TicketID] = true
-				l.killed++
 			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
@@ -510,7 +504,7 @@ func (l *Loop) commitsSinceBaseline(
 // launchEligible is job 3 of the tick: snap.Launch picks the tickets to cut and spawn this tick,
 // under max_agents applied globally over every repo's unlock results.
 func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
-	toLaunch := snap.LaunchAfter(len(l.spawned), l.killed)
+	toLaunch := snap.LaunchAfter(len(l.spawned))
 	if len(toLaunch) == 0 {
 		return nil
 	}

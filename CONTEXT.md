@@ -91,13 +91,13 @@ _Avoid_: Observation (the raw facts a tick read, which a Snapshot is derived fro
 **Absorb**:
 The first phase of a tick: observe, then fold into the store everything that already happened.
 Cancels, disposed runs (with their spend readings), verdict transitions, merge and first-CI events.
-Absorb spawns, kills and pushes nothing, so the Snapshot derived after it sees every fact the tick
+Absorb spawns and pushes nothing, so the Snapshot derived after it sees every fact the tick
 can learn.
 _Avoid_: Reconcile (the whole tick), ingest
 
 **Act**:
 The second phase of a tick, run against one Snapshot: operator verbs first, then retarget, push,
-the draft gate and launch. Launch counts the agents act spawned or killed against the Snapshot's
+the draft gate and launch. Launch counts the agents act spawned against the Snapshot's
 free slots.
 _Avoid_: Apply, execute
 

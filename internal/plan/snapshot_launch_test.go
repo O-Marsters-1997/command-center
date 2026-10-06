@@ -123,7 +123,7 @@ func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
 	}
 }
 
-func TestSnapshotLaunchAfterCountsAgentsStartedAndStoppedThisTick(t *testing.T) {
+func TestSnapshotLaunchAfterCountsAgentsStartedThisTick(t *testing.T) {
 	t.Parallel()
 
 	first := ticket("1", "cc-1-first")
@@ -134,10 +134,10 @@ func TestSnapshotLaunchAfterCountsAgentsStartedAndStoppedThisTick(t *testing.T) 
 	}
 	snap := plan.Rules{MaxAgents: 1}.Derive(in)
 
-	if got := snap.LaunchAfter(1, 0); len(got) != 0 {
-		t.Errorf("LaunchAfter(1, 0) = %v, want none: a spawn took the only slot", got)
+	if got := snap.LaunchAfter(0); !slices.Equal(got, []string{first.URL}) {
+		t.Errorf("LaunchAfter(0) = %v, want the first ticket", got)
 	}
-	if got := snap.LaunchAfter(1, 1); !slices.Equal(got, []string{first.URL}) {
-		t.Errorf("LaunchAfter(1, 1) = %v, want the first ticket: the kill freed the slot", got)
+	if got := snap.LaunchAfter(1); len(got) != 0 {
+		t.Errorf("LaunchAfter(1) = %v, want none: a spawn took the only slot", got)
 	}
 }

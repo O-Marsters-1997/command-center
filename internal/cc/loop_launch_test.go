@@ -492,7 +492,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	}
 }
 
-func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRunNextTick(t *testing.T) {
+func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
@@ -547,20 +547,9 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRunNextTick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if latest[ticket.URL].HasOutcome {
-		t.Fatal("the killed run was disposed of in the tick that killed it: absorb runs before act")
-	}
-
-	if err := loop.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	latest, err = store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
 	summary := latest[ticket.URL]
 	if !summary.HasOutcome {
-		t.Fatal("the killed run was not disposed of by the next tick")
+		t.Fatal("the killed run was not disposed of in the same tick")
 	}
 	if summary.ExitCode == nil || *summary.ExitCode != 143 {
 		t.Errorf("exit code = %v, want 143", summary.ExitCode)
