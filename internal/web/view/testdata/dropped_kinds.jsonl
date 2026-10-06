@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"deadbeef-session"}
+{"type":"rate_limit_event","session_id":"deadbeef-session"}
+{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":[{"type":"thinking","thinking":"pondering-deeply"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo hi"}}]}}

@@ -1,0 +1,32 @@
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+{{template "topbar" .}}
+{{template "masthead" .}}
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main">
+{{template "band" .}}
+{{if eq .View "graph"}}
+<!-- noShadowDOM() is cc-graph's first statement (ADR 1), so this fallback content is what a
+     Go-only build with no Node -- assets/dist/graph.js never built, the script below 404s --
+     renders: a custom element the browser never upgrades still shows its light-DOM children. -->
+<cc-graph>
+  <p class="banner ribbon" data-tone="wait" role="status">
+    the dependency graph needs the built assets: run `just assets`, or switch to the board view.
+  </p>
+</cc-graph>
+<script type="module" src="/assets/dist/graph.js"></script>
+{{else}}
+<!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
+     checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
+     instead would nest the per-row verb forms inside it, which HTML forbids. -->
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+{{template "board" .}}
+<button type="submit" form="launch">launch selected</button>
+{{end}}
+<div id="launch-modal"></div>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test ./..."}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":[{"type":"tool_result","is_error":true,"content":"FAIL\tinternal/x"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:02Z","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"tdd","args":"writing the test"}}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:03Z","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"internal/cc/x.go"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:04Z","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"ok"}]}]}}
+{"type":"result","subtype":"success","duration_ms":1031000,"num_turns":129,"total_cost_usd":8.29}

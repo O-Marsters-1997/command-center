@@ -1,0 +1,311 @@
+package web_test
+
+import (
+	"regexp"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
+)
+
+// renderedRow is one <tr> the board emitted: its attributes, which carry the grouping, and the
+// ticket ref in its first cell.
+type renderedRow struct {
+	Attrs  string
+	Ticket string
+}
+
+var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*` +
+	`<button[^>]*>([^<]*)</button>`)
+
+func renderedRows(page string) []renderedRow {
+	matches := rowTagRE.FindAllStringSubmatch(page, -1)
+	rows := make([]renderedRow, 0, len(matches))
+	for _, m := range matches {
+		rows = append(rows, renderedRow{Attrs: strings.TrimSpace(m[1]), Ticket: m[2]})
+	}
+	return rows
+}
+
+func ticketRefs(rows []renderedRow) []string {
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Ticket)
+	}
+	return out
+}
+
+// failedRootAndQueuedChildren seeds one root whose only run failed and count rows authorised
+// behind it, which is the fan-out the PRD's "one problem, not four" is about.
+func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Store {
+	t.Helper()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"}}
+	for _, c := range children {
+		tickets = append(tickets, storepkg.Ticket{
+			URL: c, Repo: "repo", Branch: strings.TrimPrefix(c, "sandbox://"),
+			BlockedBy: []string{"sandbox://ROOT"},
+		})
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://ROOT", "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 1
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range children {
+		if err := store.QueueLaunchIntent(ctx, c, "hash-1", "group-a", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+func boardFor(t *testing.T, store *storepkg.Store) string {
+	t.Helper()
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	return renderBoard(t, web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
+}
+
+// TestBoardRendersAFanOutAsOneGroup covers issue #74's first two acceptance criteria: four rows
+// waiting on one blocker read as one failure, and every child keeps its own state and verbs.
+func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
+	t.Parallel()
+
+	children := []string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"}
+	page := boardFor(t, failedRootAndQueuedChildren(t, children))
+	rows := renderedRows(page)
+
+	if got, want := len(rows), 5; got != want {
+		t.Fatalf("rendered %d rows, want %d:\n%s", got, want, page)
+	}
+	if rows[0].Ticket != ticketRef("sandbox://ROOT") {
+		t.Errorf("first row = %q, want the blocker's group line", rows[0].Ticket)
+	}
+	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
+		t.Errorf("group line attrs = %q, want the blocker's own depth of 0", rows[0].Attrs)
+	}
+	if got := rowState(t, page, "sandbox://ROOT"); got != "failed" {
+		t.Errorf("group line state = %q, want the blocker's own failed", got)
+	}
+	for _, c := range children {
+		if got := rowState(t, page, c); got != "queued" {
+			t.Errorf("%s state = %q, want queued", c, got)
+		}
+		if got := rowCellAt(t, page, c, 3); !strings.Contains(got, "sandbox://ROOT") {
+			t.Errorf("%s reason = %q, want it to name the blocker", c, got)
+		}
+		if !strings.Contains(page, `name="ticket" value="`+c+`"`) {
+			t.Errorf("%s lost its verb buttons:\n%s", c, page)
+		}
+	}
+	for _, r := range rows[1:] {
+		if !strings.Contains(r.Attrs, `data-depth="1"`) {
+			t.Errorf("child %s attrs = %q, want data-depth=1", r.Ticket, r.Attrs)
+		}
+	}
+}
+
+// TestBoardOrdersChildrenMergeFirstAndStably covers the third criterion: the row you merge next
+// after the root is the top child, and two renders of unchanged data agree byte for byte.
+func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
+	t.Parallel()
+
+	store := failedRootAndQueuedChildren(t, []string{"sandbox://CC-5", "sandbox://CC-3", "sandbox://CC-4"})
+	page := boardFor(t, store)
+
+	want := []string{
+		ticketRef("sandbox://ROOT"), ticketRef("sandbox://CC-3"),
+		ticketRef("sandbox://CC-4"), ticketRef("sandbox://CC-5"),
+	}
+	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
+		t.Errorf("row order = %v, want %v", got, want)
+	}
+	if again := boardFor(t, store); again != page {
+		t.Errorf("a second render of unchanged data differs:\n--- first ---\n%s\n--- second ---\n%s", page, again)
+	}
+}
+
+// TestBoardPutsATwoBlockerRowUnderTheFirstOnly covers the fourth criterion: fan-in names both
+// blockers in the row's reason, but the row itself belongs to one group.
+func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+		{
+			URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3",
+			BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-2"},
+		},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-3"), ticketRef("sandbox://CC-2")}
+	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
+		t.Errorf("row order = %v, want CC-3 under CC-1 only, %v", got, want)
+	}
+	if got := rowCellAt(t, page, "sandbox://CC-3", 3); !strings.Contains(got, "sandbox://CC-2") {
+		t.Errorf("CC-3 reason = %q, want it to still name both blockers", got)
+	}
+}
+
+// TestBoardFlattensAChainOfBlockersIntoOneGroup covers issue cc-258's board: A blocks B blocks C
+// must render B once, under A, not a second time as the root of its own group for C.
+func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
+		{URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	rows := renderedRows(page)
+	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-2"), ticketRef("sandbox://CC-3")}
+	if got := ticketRefs(rows); !slices.Equal(got, want) {
+		t.Fatalf("row order = %v, want %v (each ticket rendered exactly once)", got, want)
+	}
+	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
+		t.Errorf("root attrs = %q, want data-depth=0", rows[0].Attrs)
+	}
+	for _, r := range rows[1:] {
+		if !strings.Contains(r.Attrs, `data-depth="1"`) {
+			t.Errorf("%s attrs = %q, want data-depth=1", r.Ticket, r.Attrs)
+		}
+	}
+}
+
+// TestBoardRendersATicketSetWithNoBlockersFlat covers the rest of the fourth criterion: nothing is
+// indented and nothing carries a group line when no row waits on another.
+func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	rows := renderedRows(page)
+	if got, want := len(rows), len(tickets); got != want {
+		t.Errorf("rendered %d rows for %d tickets, want no extra group line:\n%s", got, want, page)
+	}
+	for _, r := range rows {
+		if !strings.Contains(r.Attrs, `data-depth="0"`) {
+			t.Errorf("%s attrs = %q, want data-depth=0", r.Ticket, r.Attrs)
+		}
+	}
+}
+
+// TestBoardShowsAMergedPRDespiteALaterRunFailing covers issue cc-256's board: the latest run's own
+// failed outcome must not starve PRMerged when the branch's PR is already merged, or the row
+// shows failed next to a merged pr.
+func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 1
+	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := plan.Observation{
+		ObservedAt: at,
+		PRs:        map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 262, State: plan.Merged}},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+	if got := rowState(t, page, ticket.URL); got != "merged" {
+		t.Errorf("state = %q, want merged despite the latest run's own failed outcome", got)
+	}
+	if got := rowCellAt(t, page, ticket.URL, 6); got != "#262 merged" {
+		t.Errorf("pr cell = %q, want #262 merged", got)
+	}
+}
+
+const goldenGroupedBoard = "testdata/board_grouped.golden.html"
+
+// TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow covers issue #74's fifth acceptance criterion:
+// a golden covering a five-row fan-out plus an ungrouped row.
+func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := failedRootAndQueuedChildren(t,
+		[]string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"})
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	assertGolden(t, goldenGroupedBoard, []byte(boardFor(t, store)))
+}
