@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"os"
 	"slices"
@@ -20,7 +21,7 @@ import (
 type Agent struct {
 	clock  cc.Clock
 	issues []issue
-	rng    *rand.Rand
+	seed   int64
 
 	mu      sync.Mutex
 	runs    map[int]*agentRun
@@ -36,13 +37,14 @@ type agentRun struct {
 	tokensIn  int
 	tokensOut int
 	finished  bool
+	rng       *rand.Rand
 }
 
 // NewAgent returns a Runner whose token counts come from seed.
 func NewAgent(clock cc.Clock, issues []issue, seed int64) *Agent {
 	return &Agent{
 		clock: clock, issues: issues, runs: map[int]*agentRun{},
-		rng: rand.New(rand.NewPCG(uint64(seed), 0)), //nolint:gosec // reproducible demo data, not security
+		seed: seed,
 	}
 }
 
@@ -61,6 +63,7 @@ func (a *Agent) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, er
 	a.nextPid++
 	run := &agentRun{
 		issue: a.issues[ownerIdx], worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(),
+		rng: rand.New(rand.NewPCG(uint64(a.seed), uint64(a.issues[ownerIdx].number))), //nolint:gosec // reproducible demo data, not security
 	}
 	a.runs[a.nextPid] = run
 	if err := run.write(map[string]any{"type": "system", "subtype": "init", "session_id": branch}); err != nil {
@@ -75,7 +78,8 @@ func (a *Agent) Step() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.clock.Now()
-	for _, run := range a.runs {
+	for _, pid := range slices.Sorted(maps.Keys(a.runs)) {
+		run := a.runs[pid]
 		if run.finished {
 			continue
 		}
@@ -92,8 +96,8 @@ func (a *Agent) Step() error {
 	return nil
 }
 
-func (a *Agent) turn(run *agentRun) error {
-	in, out := 200+a.rng.IntN(800), 50+a.rng.IntN(200)
+func (*Agent) turn(run *agentRun) error {
+	in, out := 200+run.rng.IntN(800), 50+run.rng.IntN(200)
 	run.turns++
 	run.tokensIn += in
 	run.tokensOut += out

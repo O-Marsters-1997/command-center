@@ -1,8 +1,11 @@
 package demo
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -55,7 +58,8 @@ func (f *Forge) Advance() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := f.clock.Now()
-	for _, pr := range f.prs {
+	prs := slices.SortedFunc(maps.Values(f.prs), func(a, b *pullRequest) int { return cmp.Compare(a.number, b.number) })
+	for _, pr := range prs {
 		due := pr.openedAt.Add(time.Duration(pr.issue.Merge.After))
 		if pr.state != gh.Open || pr.draft || now.Before(due) {
 			continue

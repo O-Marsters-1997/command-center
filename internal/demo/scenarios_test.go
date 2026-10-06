@@ -64,9 +64,24 @@ func TestTheHappyPathsAgentLogsParseIntoMetrics(t *testing.T) {
 
 func TestTwoRunsOfOneSeedPassThroughTheSameStates(t *testing.T) {
 	path := filepath.Join(scenarioDir, "happy.toml")
-	first := play(t, path).Transitions()
-	second := play(t, path).Transitions()
-	if !slices.Equal(first, second) {
-		t.Errorf("Transitions() differ between runs of one seed:\nfirst:  %v\nsecond: %v", first, second)
+	first, second := play(t, path), play(t, path)
+	if !slices.Equal(first.Transitions(), second.Transitions()) {
+		t.Errorf("Transitions() differ between runs of one seed:\nfirst:  %v\nsecond: %v", first.Transitions(), second.Transitions())
 	}
+	if a, b := metricsOf(t, first), metricsOf(t, second); !slices.Equal(a, b) {
+		t.Errorf("agent metrics differ between runs of one seed:\nfirst:  %v\nsecond: %v", a, b)
+	}
+}
+
+func metricsOf(t *testing.T, sim *demo.Sim) []int64 {
+	t.Helper()
+	var totals []int64
+	for _, log := range sim.RunLogs() {
+		metrics, err := agentlog.ParseMetrics(log)
+		if err != nil {
+			t.Fatalf("ParseMetrics(%s): %v", log, err)
+		}
+		totals = append(totals, metrics.TokensIn, metrics.TokensOut)
+	}
+	return totals
 }

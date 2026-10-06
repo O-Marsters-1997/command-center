@@ -33,6 +33,10 @@ func (c *SimClock) After(d time.Duration) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ch := make(chan time.Time, 1)
+	if d <= 0 {
+		ch <- c.now
+		return ch
+	}
 	c.waiters = append(c.waiters, waiter{at: c.now.Add(d), ch: ch})
 	return ch
 }
