@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 
 const (
 	defaultSpeed       = 20
+	minTickWait        = time.Millisecond
 	goAgain            = time.Duration(0)
 	untilControlChange = time.Duration(-1)
 )
@@ -32,6 +34,7 @@ type playback struct {
 	until   time.Duration
 	jumpTo  time.Duration
 	restart bool
+	tickNow bool
 }
 
 type Status struct {
@@ -39,6 +42,7 @@ type Status struct {
 	Speed   float64
 	Elapsed time.Duration
 	PRs     []PRSummary
+	Error   string
 }
 
 type Player struct {
@@ -94,21 +98,27 @@ func (p *Player) control(change func(*playback)) {
 }
 
 func (p *Player) Pause()  { p.control(func(c *playback) { c.paused = true }) }
-func (p *Player) Resume() { p.control(func(c *playback) { c.paused = false }) }
+func (p *Player) Resume() { p.control(func(c *playback) { c.paused, c.until = false, 0 }) }
 
 func (p *Player) Restart() { p.control(func(c *playback) { c.restart = true }) }
 
 func (p *Player) JumpTo(to time.Duration) { p.control(func(c *playback) { c.jumpTo = to }) }
 
 func (p *Player) SetSpeed(speed float64) error {
-	if speed <= 0 {
-		return fmt.Errorf("speed %v must be positive", speed)
+	if !(speed > 0) || math.IsInf(speed, 0) {
+		return fmt.Errorf("speed %v must be positive and finite", speed)
 	}
 	p.control(func(c *playback) { c.speed = speed })
 	return nil
 }
 
-func (p *Player) MergeNow(number int) error { return p.current().forge.MergeNow(number) }
+func (p *Player) MergeNow(number int) error {
+	if err := p.current().forge.MergeNow(number); err != nil {
+		return err
+	}
+	p.control(func(c *playback) { c.tickNow = true })
+	return nil
+}
 
 func (p *Player) Status() Status {
 	ctl := p.playback()
@@ -128,6 +138,9 @@ func (p *Player) step(ctx context.Context) (time.Duration, error) {
 	case ctl.jumpTo > 0:
 		p.control(func(c *playback) { c.jumpTo = 0 })
 		return goAgain, nil
+	case ctl.tickNow:
+		p.control(func(c *playback) { c.tickNow = false })
+		return goAgain, sim.Tick(ctx)
 	case ctl.paused:
 		return untilControlChange, nil
 	case ctl.until > 0 && sim.Elapsed() >= ctl.until:
@@ -137,20 +150,21 @@ func (p *Player) step(ctx context.Context) (time.Duration, error) {
 	if err := sim.Tick(ctx); err != nil {
 		return goAgain, err
 	}
-	return time.Duration(float64(tickPeriod) / ctl.speed), nil
+	return max(time.Duration(float64(tickPeriod)/ctl.speed), minTickWait), nil
 }
 
 func (p *Player) restart(ctx context.Context) error {
-	if err := p.current().Close(); err != nil {
-		return err
-	}
 	sim, err := NewSim(ctx, p.scenario)
 	if err != nil {
 		return err
 	}
 	p.simMu.Lock()
+	old := p.sim
 	p.sim = sim
 	p.simMu.Unlock()
+	if err := old.Close(); err != nil {
+		return err
+	}
 	p.control(func(c *playback) { c.restart = false })
 	return nil
 }
@@ -214,7 +228,7 @@ func (p *Player) Handler() http.Handler {
 	mux.Handle("/", p.withStrip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p.current().server.ServeHTTP(w, r)
 	})))
-	mux.HandleFunc("GET /dev/state", func(w http.ResponseWriter, _ *http.Request) { p.render(w, "state") })
+	mux.HandleFunc("GET /dev/state", func(w http.ResponseWriter, _ *http.Request) { p.render(w, "state", "") })
 	mux.HandleFunc("POST /dev/pause", p.act(func(*http.Request) error { p.Pause(); return nil }))
 	mux.HandleFunc("POST /dev/resume", p.act(func(*http.Request) error { p.Resume(); return nil }))
 	mux.HandleFunc("POST /dev/restart", p.act(func(*http.Request) error { p.Restart(); return nil }))
@@ -245,16 +259,16 @@ func (p *Player) Handler() http.Handler {
 
 func (p *Player) act(do func(*http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var problem string
 		if err := do(r); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			problem = err.Error()
 		}
-		p.render(w, "state")
+		p.render(w, "state", problem)
 	}
 }
 
-func (p *Player) render(w http.ResponseWriter, name string) {
-	html, err := p.execute(name)
+func (p *Player) render(w http.ResponseWriter, name, problem string) {
+	html, err := p.execute(name, problem)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -263,9 +277,11 @@ func (p *Player) render(w http.ResponseWriter, name string) {
 	_, _ = w.Write([]byte(html))
 }
 
-func (p *Player) execute(name string) (string, error) {
+func (p *Player) execute(name, problem string) (string, error) {
+	status := p.Status()
+	status.Error = problem
 	var out strings.Builder
-	err := devStrip.ExecuteTemplate(&out, name, p.Status())
+	err := devStrip.ExecuteTemplate(&out, name, status)
 	return out.String(), err
 }
 
@@ -281,7 +297,7 @@ func (p *Player) withStrip(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 		body := rec.Body.String()
 		if strings.Contains(rec.Header().Get("Content-Type"), "text/html") && strings.Contains(body, "</body>") {
-			strip, err := p.execute("strip")
+			strip, err := p.execute("strip", "")
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

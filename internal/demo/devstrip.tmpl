@@ -29,6 +29,7 @@
 {{define "state"}}
 <div id="dev-strip-state" hx-get="/dev/state" hx-trigger="every 1s" hx-swap="outerHTML" hx-target="this">
   <span>{{if .Paused}}paused{{else}}playing at {{.Speed}}x{{end}}, sim time {{.Elapsed}}</span>
+  {{if .Error}}<span role="alert">{{.Error}}</span>{{end}}
   {{range .PRs}}
   <form hx-post="/dev/merge-now" hx-target="#dev-strip-state" hx-swap="outerHTML">
     <input type="hidden" name="number" value="{{.Number}}">

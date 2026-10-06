@@ -27,8 +27,7 @@ type Sandbox struct {
 	root     string
 	DSN      string
 	dropDB   func() error
-	oldPath  string
-	pathSet  bool
+	bin      string
 	repos    []*sandboxRepo
 	byOrigin map[string]*sandboxRepo
 }
@@ -76,9 +75,8 @@ func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(fakeTpScript), 0o700); err != nil {
 		return nil, err
 	}
-	sb.oldPath = os.Getenv("PATH")
-	sb.pathSet = true
-	if err := os.Setenv("PATH", bin+string(os.PathListSeparator)+sb.oldPath); err != nil {
+	sb.bin = bin
+	if err := os.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH")); err != nil {
 		return nil, err
 	}
 	return sb, nil
@@ -150,8 +148,9 @@ func (s *Sandbox) RunsDir() string { return filepath.Join(s.root, "runs") }
 // Close drops the database, restores PATH and deletes the sandbox tree.
 func (s *Sandbox) Close() error {
 	var errs []error
-	if s.pathSet {
-		errs = append(errs, os.Setenv("PATH", s.oldPath))
+	if s.bin != "" {
+		path := strings.Replace(os.Getenv("PATH"), s.bin+string(os.PathListSeparator), "", 1)
+		errs = append(errs, os.Setenv("PATH", path))
 	}
 	errs = append(errs, s.dropDB(), os.RemoveAll(s.root))
 	return errors.Join(errs...)

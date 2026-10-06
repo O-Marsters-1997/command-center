@@ -14,13 +14,15 @@ import (
 	"time"
 )
 
-func newTestPlayer(t *testing.T) *Player {
+func newTestPlayer(t *testing.T) *Player { return newTestPlayerUntil(t, 0) }
+
+func newTestPlayerUntil(t *testing.T, until time.Duration) *Player {
 	t.Helper()
 	sc, err := LoadScenario(filepath.Join("..", "..", "demo", "scenarios", "happy.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := NewPlayer(t.Context(), sc, 0, 0)
+	p, err := NewPlayer(t.Context(), sc, 0, until)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,5 +147,54 @@ func TestTheStripIsInjectedOutsideTheBoardAndOnlyIntoFullPages(t *testing.T) {
 	p.Handler().ServeHTTP(fragment, req)
 	if strings.Contains(fragment.Body.String(), "dev-strip") {
 		t.Error("board fragment carries the dev strip")
+	}
+}
+
+func TestResumeAfterUntilKeepsPlaying(t *testing.T) {
+	p := newTestPlayerUntil(t, 30*time.Second)
+	for !p.Status().Paused {
+		step(t, p)
+	}
+	stopped := p.Status().Elapsed
+
+	post(t, p, "/dev/resume", nil)
+	step(t, p)
+	step(t, p)
+	if got := p.Status().Elapsed; got <= stopped {
+		t.Errorf("Elapsed after resume = %v, want past %v", got, stopped)
+	}
+	if p.Status().Paused {
+		t.Error("run paused again after resume")
+	}
+}
+
+func TestMergeNowWhilePausedMergesWithoutResuming(t *testing.T) {
+	p := newTestPlayer(t)
+	for len(p.Status().PRs) == 0 {
+		step(t, p)
+	}
+	pr := p.Status().PRs[0]
+	post(t, p, "/dev/pause", nil)
+
+	post(t, p, "/dev/merge-now", url.Values{"number": {strconv.Itoa(pr.Number)}})
+	step(t, p)
+	if slices.Contains(p.Status().PRs, pr) {
+		t.Errorf("pull request #%d still open after merge-now while paused", pr.Number)
+	}
+	if !p.Status().Paused {
+		t.Error("merge-now resumed the run")
+	}
+}
+
+func TestBadInputIsShownInTheStrip(t *testing.T) {
+	p := newTestPlayer(t)
+	for _, bad := range []string{"NaN", "Inf", "0", "-1", "fast"} {
+		rec := post(t, p, "/dev/speed", url.Values{"speed": {bad}})
+		if !strings.Contains(rec.Body.String(), `role="alert"`) {
+			t.Errorf("speed %q: strip shows no error: %s", bad, rec.Body)
+		}
+	}
+	if got := p.Status().Speed; got != defaultSpeed {
+		t.Errorf("Speed after bad input = %v, want %v", got, float64(defaultSpeed))
 	}
 }
