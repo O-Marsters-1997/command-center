@@ -1,6 +1,7 @@
 package cc
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 )
@@ -65,27 +66,34 @@ func WriteAgentSystemPrompt(path string) error {
 	return nil
 }
 
-// agentDigestDefinition is the --agents JSON passed to every spawned implement run.
-const agentDigestDefinition = `{
-  "digest": {
-    "description": "Reads code or output to answer one question, without growing the caller's context.",
-    "prompt": "If the repo root has a .codegraph/ directory, start with one codegraph explore \"<symbols or question>\" in Bash and treat the source it prints as already read. Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
-    "tools": [
-      "Read",
-      "Grep",
-      "Glob",
-      "Bash"
-    ],
-    "model": "haiku"
-  }
+type agentDefinition struct {
+	Description string   `json:"description"`
+	Prompt      string   `json:"prompt"`
+	Tools       []string `json:"tools"`
+	Model       string   `json:"model"`
 }
-`
+
+// agentDigestDefinition is the --agents JSON passed to every spawned implement run.
+var agentDigestDefinition = map[string]agentDefinition{
+	"digest": {
+		Description: "Reads code or output to answer one question, without growing the caller's context.",
+		Prompt: "If the repo root has a .codegraph/ directory, start with one " +
+			`codegraph explore "<symbols or question>" in Bash and treat the source it prints as already read. ` +
+			"Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
+		Tools: []string{"Read", "Grep", "Glob", "Bash"},
+		Model: "haiku",
+	},
+}
 
 // WriteAgentDigestDefinition writes the digest subagent definition to path. Idempotent: the
 // content never varies by call, so writing it again (e.g. on every App.New()) is a no-op in
 // effect.
 func WriteAgentDigestDefinition(path string) error {
-	if err := os.WriteFile(path, []byte(agentDigestDefinition), 0o600); err != nil {
+	data, err := json.MarshalIndent(agentDigestDefinition, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode agent digest definition: %w", err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("write agent digest definition %s: %w", path, err)
 	}
 	return nil
