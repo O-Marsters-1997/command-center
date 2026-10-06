@@ -1007,9 +1007,8 @@ type candidate struct {
 }
 
 type candidateInputs struct {
-	tickets     []Ticket
-	memberships map[string]plan.LaunchMembership
-	snap        plan.Snapshot
+	tickets []Ticket
+	snap    plan.Snapshot
 }
 
 func (s *Server) loadCandidateInputs(ctx context.Context) (candidateInputs, error) {
@@ -1022,62 +1021,30 @@ func (s *Server) loadCandidateInputs(ctx context.Context) (candidateInputs, erro
 		return candidateInputs{}, err
 	}
 	in.Now = s.clock.Now()
-	return candidateInputs{tickets: tickets, memberships: in.Memberships, snap: s.rules.Derive(in)}, nil
+	return candidateInputs{tickets: tickets, snap: s.rules.Derive(in)}, nil
 }
 
-func candidatesFor(requested []string, in candidateInputs, stackingByRepo map[string]bool) ([]candidate, error) {
-	byTicketURL := make(map[string]Ticket, len(in.tickets))
+func previewCandidates(requested []string, in candidateInputs) ([]candidate, error) {
+	rows, err := in.snap.Preview(requested)
+	if err != nil {
+		return nil, err
+	}
+	stored := make(map[string]Ticket, len(in.tickets))
 	for _, t := range in.tickets {
-		byTicketURL[t.URL] = t
+		stored[t.URL] = t
 	}
-	byURL := planTicketsByURL(in.tickets)
-
-	slice := make(map[string]bool, len(requested))
-	for _, ticketURL := range requested {
-		if _, ok := byURL[ticketURL]; !ok {
-			return nil, fmt.Errorf("unknown ticket %q", ticketURL)
-		}
-		slice[ticketURL] = true
-	}
-
-	candidates := make([]candidate, 0, len(requested))
-	for _, ticketURL := range requested {
-		t := byTicketURL[ticketURL]
-		pt := byURL[ticketURL]
-		entry, _ := in.snap.Entry(ticketURL)
-		label, reason := plan.Preview(
-			entry.Unlock, slice, in.memberships[ticketURL].LaunchID, entry.ConflictedBase)
-
-		base := entry.Unlock.BaseBranch
-		if base == "" {
-			base = plan.ProspectiveBase(pt, byURL, stackingByRepo[t.Repo])
-		}
-		composed := plan.Compose(pt)
+	candidates := make([]candidate, 0, len(rows))
+	for _, row := range rows {
+		t := stored[row.Ticket.URL]
 		candidates = append(candidates, candidate{
 			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
-			Label: label.String(), Reason: string(reason),
-			Base:        "origin/" + base,
-			BaseVerdict: baseVerdict(base, in.tickets, in.snap),
-			PromptHash:  plan.Hash(composed), BlockedBy: t.BlockedBy, Prompt: composed,
+			Label: row.Label.String(), Reason: string(row.Reason),
+			Base:        "origin/" + row.Base,
+			BaseVerdict: verdictLabel(row.BaseRun),
+			PromptHash:  row.PromptHash, BlockedBy: t.BlockedBy, Prompt: row.Prompt,
 		})
 	}
 	return candidates, nil
-}
-
-// baseVerdict is the preview's read of a stacked row's base before authorising: empty for main,
-// otherwise the base ticket's own CI verdict, exactly what the board shows once the row has
-// launched (docs/designs/command-centre-design.md § 4b, "you are about to build on a red parent").
-func baseVerdict(base string, tickets []Ticket, snap plan.Snapshot) string {
-	if base == "" || base == defaultBaseBranch {
-		return ""
-	}
-	for _, t := range tickets {
-		if t.Branch == base {
-			entry, _ := snap.Entry(t.URL)
-			return verdictLabel(entry.Run)
-		}
-	}
-	return ""
 }
 
 func candidateSelection(q url.Values, tickets []Ticket) ([]string, error) {
@@ -1128,7 +1095,7 @@ func (s *Server) buildFeatureLaunchModalView(ctx context.Context, feature string
 	if err != nil {
 		return launchModalView{}, err
 	}
-	candidates, err := candidatesFor(requested, in, s.rules.Stacking)
+	candidates, err := previewCandidates(requested, in)
 	if err != nil {
 		return launchModalView{}, err
 	}
@@ -1154,7 +1121,7 @@ func (s *Server) buildTicketLaunchModalView(ctx context.Context, requested []str
 	if err != nil {
 		return launchModalView{}, err
 	}
-	if _, err := candidatesFor(requested, in, s.rules.Stacking); err != nil {
+	if _, err := previewCandidates(requested, in); err != nil {
 		return launchModalView{}, err
 	}
 	return launchModalView{TicketQuery: candidateQuery(requested)}, nil
@@ -1249,7 +1216,7 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	candidates, err := candidatesFor(requested, in, s.rules.Stacking)
+	candidates, err := previewCandidates(requested, in)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1291,26 +1258,25 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		previewed[ticketURL] = hash
 	}
 
-	tickets, err := s.store.Tickets(ctx)
+	in, err := s.loadCandidateInputs(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	byURL := planTicketsByURL(tickets)
-	hashes := make(map[string]string, len(requested))
-	for _, ticketURL := range requested {
-		t, ok := byURL[ticketURL]
-		if !ok {
-			http.Error(w, fmt.Sprintf("unknown ticket %q", ticketURL), http.StatusBadRequest)
-			return
-		}
-		hash := plan.Hash(plan.Compose(t))
-		if want, ok := previewed[ticketURL]; ok && want != hash {
+	rows, err := in.snap.Preview(requested)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	hashes := make(map[string]string, len(rows))
+	for _, row := range rows {
+		ticketURL := row.Ticket.URL
+		if want, ok := previewed[ticketURL]; ok && want != row.PromptHash {
 			http.Error(w, fmt.Sprintf("ticket %s was previewed at hash %s and now composes to %s",
-				ticketURL, want, hash), http.StatusConflict)
+				ticketURL, want, row.PromptHash), http.StatusConflict)
 			return
 		}
-		hashes[ticketURL] = hash
+		hashes[ticketURL] = row.PromptHash
 	}
 
 	group, err := randomGroup()
