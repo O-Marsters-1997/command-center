@@ -102,6 +102,8 @@ type Entry struct {
 	LogPath        string
 	ConflictedBase string
 	DraftReason    string
+	LaunchID       int64
+	Base           string
 }
 
 // Snapshot is every ticket's Entry, in input order.
@@ -154,6 +156,10 @@ func (r Rules) Derive(in Input) Snapshot {
 	snap := Snapshot{Entries: make([]Entry, 0, len(in.Tickets)), byURL: make(map[string]int, len(in.Tickets))}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
+		base := unlock.BaseBranch
+		if base == "" {
+			base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
+		}
 		run, pgid, elapsed, logPath := r.runFor(t, in, peers[t.URL])
 		membership := in.Memberships[t.URL]
 		conflictedBase := r.ConflictedBase(t, byURL, unlock, in.Obs)
@@ -171,6 +177,8 @@ func (r Rules) Derive(in Input) Snapshot {
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Pgid: pgid, Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftReason(in.Obs.PRs[BranchKey(t.Repo, t.Branch)], t, byURL, prs, run),
+			LaunchID:    membership.LaunchID,
+			Base:        base,
 		})
 	}
 	return snap
