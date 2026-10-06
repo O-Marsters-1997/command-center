@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/usage"
@@ -129,21 +128,18 @@ var launchModal = template.Must(template.New("launchModal").Parse(launchModalSou
 // never writes the database directly except to queue an intent: every state it shows is derived
 // from tickets and the last observation at render time (§5, inv. 14).
 type Server struct {
-	store             *Store
-	clock             Clock
-	boardPollSeconds  int
-	repos             []Repo
-	stackingByRepo    map[string]bool
-	checksByRepo      map[string]verdict.Predicate
-	mergifySHAByRepo  map[string]string
-	compatCheckByRepo map[string]string
-	dataDir           string
-	spendLimit5h      int
-	spend             *spendCache
-	trackerFor        TrackerSource
-	rawMux            *http.ServeMux
-	mux               http.Handler
-	nudge             func()
+	store            *Store
+	clock            Clock
+	boardPollSeconds int
+	repos            []Repo
+	rules            plan.Rules
+	dataDir          string
+	spendLimit5h     int
+	spend            *spendCache
+	trackerFor       TrackerSource
+	rawMux           *http.ServeMux
+	mux              http.Handler
+	nudge            func()
 }
 
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
@@ -153,8 +149,7 @@ func NewServer(store *Store, clock Clock, repos []Repo, dataDir string) *Server 
 	s := &Server{
 		store: store, clock: clock, boardPollSeconds: defaultBoardPollSeconds, repos: repos, dataDir: dataDir,
 		spend: newSpendCache(), trackerFor: tracker.New,
-		stackingByRepo: stackingByRepo(repos), checksByRepo: checksByRepo(repos),
-		mergifySHAByRepo: mergifySHAByRepo(repos), compatCheckByRepo: compatCheckByRepo(repos),
+		rules: Config{Repos: repos}.PlanRules(),
 		nudge: func() {},
 	}
 	mux := http.NewServeMux()
@@ -522,7 +517,7 @@ func (s *Server) renderView(w http.ResponseWriter, r *http.Request, tmpl *templa
 }
 
 func (s *Server) render(ctx context.Context, params viewParams) (pageView, error) {
-	params.Repo = normalizeRepoScope(params.Repo, s.stackingByRepo)
+	params.Repo = normalizeRepoScope(params.Repo, s.rules.Stacking)
 
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
@@ -556,7 +551,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 		return pageView{}, err
 	}
 
-	rows := derive(tickets, obs, facts, vd, s.stackingByRepo, now)
+	rows := derive(tickets, obs, facts, vd, s.rules.Stacking, now)
 	applySpend(rows, s.spend)
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Factor)
 	applyViewState(rows, params)
@@ -578,7 +573,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 // already fetched tickets, the observation and the last error for its own board derivation, and
 // chromeFor fetches them fresh for the three pages that otherwise never touch the store for them.
 func (s *Server) buildChrome(
-	tickets []Ticket, obs Observation, observed bool, lastErr TickError, failed bool,
+	tickets []Ticket, obs plan.Observation, observed bool, lastErr TickError, failed bool,
 	gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit, now time.Time, params viewParams,
 ) chrome {
 	c := chrome{
@@ -618,7 +613,7 @@ func (s *Server) chromeFor(ctx context.Context, params viewParams) (chrome, erro
 	if err != nil {
 		return chrome{}, err
 	}
-	params.Repo = normalizeRepoScope(params.Repo, s.stackingByRepo)
+	params.Repo = normalizeRepoScope(params.Repo, s.rules.Stacking)
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 
 	obs, observed, err := s.store.LastObservation(ctx)
@@ -699,7 +694,7 @@ func (s *Server) loadTicketFacts(ctx context.Context) (ticketFacts, verdictDeps,
 	if err != nil {
 		return ticketFacts{}, verdictDeps{}, err
 	}
-	vd, err := verdictDepsFor(ctx, s.store, s.checksByRepo, s.mergifySHAByRepo, s.compatCheckByRepo)
+	vd, err := verdictDepsFor(ctx, s.store, s.rules)
 	if err != nil {
 		return ticketFacts{}, verdictDeps{}, err
 	}
@@ -712,20 +707,17 @@ func (s *Server) loadTicketFacts(ctx context.Context) (ticketFacts, verdictDeps,
 }
 
 type verdictDeps struct {
-	pushRows          map[string]PushRow
-	checkingTicks     map[string]int
-	checksByRepo      map[string]verdict.Predicate
-	mergifySHAByRepo  map[string]string
-	compatCheckByRepo map[string]string
+	pushRows      map[string]PushRow
+	checkingTicks map[string]int
+	rules         plan.Rules
 }
 
 // verdictDepsFor gathers the store-derived facts applyVerdict needs, over the caller's own
-// per-repo predicate and mergify-hash maps -- shared by the page's render and the loop's own
+// rules -- shared by the page's render and the loop's own
 // verdict-transition and draft-gate tick steps, which all compute the same verdict the same way
 // (docs/designs/command-centre-design.md § 11 inv. 11).
 func verdictDepsFor(
-	ctx context.Context, store *Store, checksByRepo map[string]verdict.Predicate, mergifySHAByRepo map[string]string,
-	compatCheckByRepo map[string]string,
+	ctx context.Context, store *Store, rules plan.Rules,
 ) (verdictDeps, error) {
 	pushRows, err := store.LatestPushes(ctx)
 	if err != nil {
@@ -737,8 +729,7 @@ func verdictDepsFor(
 	}
 	return verdictDeps{
 		pushRows: pushRows, checkingTicks: checkingTicks,
-		checksByRepo: checksByRepo, mergifySHAByRepo: mergifySHAByRepo,
-		compatCheckByRepo: compatCheckByRepo,
+		rules: rules,
 	}, nil
 }
 
@@ -756,7 +747,7 @@ type ticketFacts struct {
 // stored: facts are stored, labels are derived every tick
 // (docs/designs/command-centre-design.md § Schema, inv. 14).
 func derive(
-	tickets []Ticket, obs Observation, facts ticketFacts, vd verdictDeps,
+	tickets []Ticket, obs plan.Observation, facts ticketFacts, vd verdictDeps,
 	stackingByRepo map[string]bool, now time.Time,
 ) []row {
 	byURL := planTicketsByURL(tickets)
@@ -847,7 +838,7 @@ func percentOf(part, total int) int {
 	return part * 100 / total
 }
 
-func sortedChecks(checks map[string]gh.CheckState) []check {
+func sortedChecks(checks map[string]plan.CheckState) []check {
 	out := make([]check, 0, len(checks))
 	for _, name := range slices.Sorted(maps.Keys(checks)) {
 		cs := checks[name]
@@ -856,7 +847,7 @@ func sortedChecks(checks map[string]gh.CheckState) []check {
 	return out
 }
 
-func redChecksFor(redLeaves []string, checks map[string]gh.CheckState) []check {
+func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []check {
 	if len(redLeaves) == 0 {
 		return nil
 	}
@@ -1049,7 +1040,7 @@ func distinctFeatures(tickets []Ticket) []string {
 // otherwise the base ticket's own CI verdict, exactly what the main page shows once the row has
 // launched (docs/designs/command-centre-design.md § 4b, "you are about to build on a red parent").
 func baseVerdict(
-	base string, ticketsByBranch map[string]Ticket, obs Observation, facts ticketFacts, vd verdictDeps, now time.Time,
+	base string, ticketsByBranch map[string]Ticket, obs plan.Observation, facts ticketFacts, vd verdictDeps, now time.Time,
 ) string {
 	if base == "" || base == defaultBaseBranch {
 		return ""
@@ -1066,7 +1057,7 @@ func baseVerdict(
 // readyToMergeWarning names invariant 2's hazard for the page: pr.BaseRef is what GitHub
 // actually has the PR targeting, which is what matters here, not the base this app would itself
 // choose (docs/designs/command-centre-design.md § 4a inv. 2).
-func readyToMergeWarning(pr gh.PR) string {
+func readyToMergeWarning(pr plan.PR) string {
 	if !plan.StackedReadyToMergeWarning(pr.BaseRef, pr.Labels) {
 		return ""
 	}
@@ -1088,7 +1079,7 @@ func removalWarning(s plan.State, detail string) string {
 // when the gate says ready but pr.IsDraft is still true -- that the last `gh pr ready` call
 // failed and the next tick retries (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
 func draftReasonFor(
-	pr gh.PR, t plan.Ticket, byURL map[string]plan.Ticket, prs map[string]plan.PRState, runFact *plan.RunFact,
+	pr plan.PR, t plan.Ticket, byURL map[string]plan.Ticket, prs map[string]plan.PRState, runFact *plan.RunFact,
 ) string {
 	if !pr.IsDraft {
 		return ""
@@ -1113,7 +1104,7 @@ func handChurnLines(t Ticket) int {
 // log path the page renders. Push facts only count once the run's outcome is push, and PROpen
 // reads this tick's PR snapshot rather than a stored column (inv. 14).
 func runFactFor(
-	t Ticket, obs Observation, facts ticketFacts, vd verdictDeps, conflictingPeer map[string]string, now time.Time,
+	t Ticket, obs plan.Observation, facts ticketFacts, vd verdictDeps, conflictingPeer map[string]string, now time.Time,
 ) (runFact *plan.RunFact, pgid, elapsed string, elapsedSeconds int, logPath string) {
 	summary, ok := facts.latestRuns[t.URL]
 	if !ok {
@@ -1124,9 +1115,9 @@ func runFactFor(
 	// plan.go's inv. 14 treats PRMerged as a fact fetched every tick regardless of Outcome, so it
 	// is set here unconditionally too, not only on the Outcome==Push path below.
 	ownState := obs.PRs[branchKey(t.Repo, t.Branch)].State
-	fact.PROpen = ownState == gh.Open
-	fact.PRMerged = ownState == gh.Merged
-	fact.PRClosedUnmerged = ownState == gh.Closed
+	fact.PROpen = ownState == plan.Open
+	fact.PRMerged = ownState == plan.Merged
+	fact.PRClosedUnmerged = ownState == plan.Closed
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
@@ -1186,8 +1177,8 @@ func mainTipKey(repo string) string { return branchKey(repo, defaultBaseBranch) 
 // applyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
 // unconfigured [repo.checks] leaves fact untouched, which is what keeps every pre-Phase-5
 // fixture reading exactly as it did before this phase (statusFromPush's own PROpen fallback).
-func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps) {
-	predicate := vd.checksByRepo[t.Repo]
+func applyVerdict(fact *plan.RunFact, t Ticket, obs plan.Observation, vd verdictDeps) {
+	predicate := vd.rules.Checks[t.Repo]
 	if predicate.IsZero() {
 		return
 	}
@@ -1198,7 +1189,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 
 	pr := obs.PRs[branchKey(t.Repo, t.Branch)]
 	hasRecordedBase := pushRow.BaseBranch != ""
-	mergifySHA := vd.mergifySHAByRepo[t.Repo]
+	mergifySHA := vd.rules.MergifySHA[t.Repo]
 
 	result := verdict.Evaluate(predicate, verdict.Input{
 		Checks:       verdictChecks(pr.Checks),
@@ -1209,7 +1200,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(time.Duration(vd.checkingTicks[t.URL]) * tickPeriod),
 		AuthorLogin:  pr.AuthorLogin,
-		CompatCheck:  vd.compatCheckByRepo[t.Repo],
+		CompatCheck:  vd.rules.CompatCheck[t.Repo],
 	})
 
 	switch result.Verdict {
@@ -1234,7 +1225,7 @@ func applyVerdict(fact *plan.RunFact, t Ticket, obs Observation, vd verdictDeps)
 
 // verdictChecks maps gh's normalised check shape onto verdict's own -- the pure package cannot
 // import internal/gh (issue #2 AC12), so this is the one place the two vocabularies meet.
-func verdictChecks(checks map[string]gh.CheckState) map[string]verdict.CheckState {
+func verdictChecks(checks map[string]plan.CheckState) map[string]verdict.CheckState {
 	out := make(map[string]verdict.CheckState, len(checks))
 	for name, c := range checks {
 		out[name] = toVerdictCheckState(c)
@@ -1245,7 +1236,7 @@ func verdictChecks(checks map[string]gh.CheckState) map[string]verdict.CheckStat
 // toVerdictCheckState mirrors the "no retry-pending rule" call (docs/designs/command-centre-design.md § 8):
 // anything completed but not exactly SUCCESS or SKIPPED reads as a definite Failure, never a
 // third kind of maybe.
-func toVerdictCheckState(cs gh.CheckState) verdict.CheckState {
+func toVerdictCheckState(cs plan.CheckState) verdict.CheckState {
 	if cs.Status != "COMPLETED" {
 		return verdict.Pending
 	}
@@ -1290,7 +1281,7 @@ type candidate struct {
 
 type candidateInputs struct {
 	tickets []Ticket
-	obs     Observation
+	obs     plan.Observation
 	facts   ticketFacts
 	vd      verdictDeps
 }
@@ -1406,7 +1397,7 @@ func (s *Server) buildFeatureLaunchModalView(ctx context.Context, feature string
 	if err != nil {
 		return launchModalView{}, err
 	}
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now())
+	candidates, err := candidatesFor(requested, in, s.rules.Stacking, s.clock.Now())
 	if err != nil {
 		return launchModalView{}, err
 	}
@@ -1432,7 +1423,7 @@ func (s *Server) buildTicketLaunchModalView(ctx context.Context, requested []str
 	if err != nil {
 		return launchModalView{}, err
 	}
-	if _, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now()); err != nil {
+	if _, err := candidatesFor(requested, in, s.rules.Stacking, s.clock.Now()); err != nil {
 		return launchModalView{}, err
 	}
 	return launchModalView{TicketQuery: candidateQuery(requested)}, nil
@@ -1527,7 +1518,7 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	candidates, err := candidatesFor(requested, in, s.stackingByRepo, s.clock.Now())
+	candidates, err := candidatesFor(requested, in, s.rules.Stacking, s.clock.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1830,10 +1821,10 @@ func planTicketsByURL(tickets []Ticket) map[string]plan.Ticket {
 // prsByBranch reads each ticket's own PR state back out under its own bare branch name, which is
 // what internal/plan indexes by: plan.Ticket carries no repo-qualified key of its own, and this
 // map's whole job is bridging Observation's repo-qualified storage back to plan's shape.
-func prsByBranch(tickets []Ticket, obs Observation) map[string]plan.PRState {
+func prsByBranch(tickets []Ticket, obs plan.Observation) map[string]plan.PRState {
 	prs := make(map[string]plan.PRState, len(tickets))
 	for _, t := range tickets {
-		prs[t.Branch] = prState(obs.PRs[branchKey(t.Repo, t.Branch)].State)
+		prs[t.Branch] = obs.PRs[branchKey(t.Repo, t.Branch)].State
 	}
 	return prs
 }
@@ -1844,21 +1835,6 @@ func planTicket(t Ticket) plan.Ticket {
 	}
 }
 
-func prState(s gh.PRState) plan.PRState {
-	switch s {
-	case gh.Open:
-		return plan.Open
-	case gh.Merged:
-		return plan.Merged
-	case gh.Closed:
-		return plan.Closed
-	case gh.Absent:
-		return plan.Absent
-	default:
-		return plan.Absent
-	}
-}
-
 func workspaceName(dataDir string) string {
 	if dataDir == "" {
 		return ""
@@ -1866,7 +1842,7 @@ func workspaceName(dataDir string) string {
 	return filepath.Base(dataDir)
 }
 
-func liveAgents(tickets []Ticket, obs Observation) int {
+func liveAgents(tickets []Ticket, obs plan.Observation) int {
 	live := 0
 	for _, t := range tickets {
 		if obs.Runs[t.URL].Alive {

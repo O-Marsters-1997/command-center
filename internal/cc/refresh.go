@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -86,17 +85,17 @@ type refreshContext struct {
 	repoPaths map[string]string
 	verifyCmd map[string][]string
 	pushRows  map[string]PushRow
-	obs       Observation
+	obs       plan.Observation
 }
 
-func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Observation) (refreshContext, error) {
+func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs plan.Observation) (refreshContext, error) {
 	pushRows, err := l.store.LatestPushes(ctx)
 	if err != nil {
 		return refreshContext{}, err
 	}
 	return refreshContext{
 		byURL:     planTicketsByURL(tickets),
-		stacking:  stackingByRepo(l.cfg.Repos),
+		stacking:  l.cfg.PlanRules().Stacking,
 		prs:       prsByBranch(tickets, obs),
 		repoPaths: repoPathsByName(l.cfg.Repos),
 		verifyCmd: verifyCommandByRepo(l.cfg.Repos),
@@ -108,7 +107,7 @@ func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs Obse
 // applyRefreshIntents runs every requested refresh, which bypasses the RefreshFacts gate the way
 // retry-push bypasses PushFacts, then sweeps the eligible base-moved rows
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) applyRefreshIntents(ctx context.Context, obs Observation) error {
+func (l *Loop) applyRefreshIntents(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -164,7 +163,7 @@ func (l *Loop) autoRefresh(
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
-		if rc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
+		if rc.obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
 		pushRow, pushed := rc.pushRows[t.URL]
@@ -201,7 +200,7 @@ func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
 // pushed by a human outside the app, or the base's, advanced again with a later fix -- makes it a
 // different merge from the one that failed, so the gate no longer applies to it (issue #188). Any
 // other refresh-domain outcome keeps gating until the refresh verb clears it.
-func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs Observation) bool {
+func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs plan.Observation) bool {
 	if o.kind != eventRefreshConflicted {
 		return false
 	}
@@ -216,7 +215,7 @@ func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs Observation
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
 // branch, or main once retargetMerged has pointed it there -- whose current tip differs from
 // what was recorded at the ticket's last push (issue #85: main counts the same as a stacked base).
-func baseMoved(row PushRow, obs Observation, repo string) bool {
+func baseMoved(row PushRow, obs plan.Observation, repo string) bool {
 	return row.BaseBranch != "" && obs.BranchTips[branchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
@@ -321,7 +320,7 @@ func (l *Loop) verifyOne(
 // either side touched. It reports which of the two it did, because only a restack licenses the
 // push step to lease-force, and what the event should say.
 func advanceOnto(
-	ctx context.Context, worktreePath, repo, base string, row PushRow, obs Observation,
+	ctx context.Context, worktreePath, repo, base string, row PushRow, obs plan.Observation,
 ) (bool, string, error) {
 	ref := "origin/" + base
 	boundary := restackBoundary(repo, row, obs)
@@ -343,11 +342,11 @@ func advanceOnto(
 // top of, so a restack drops exactly the work the base already carries. A merged base is read
 // from its pull request's head, not from base_sha_at_push, because a base that advanced after
 // this branch's last push has those later commits in the squash too (issue #89).
-func restackBoundary(repo string, row PushRow, obs Observation) string {
+func restackBoundary(repo string, row PushRow, obs plan.Observation) string {
 	if row.BaseBranch == "" {
 		return ""
 	}
-	if pr := obs.PRs[branchKey(repo, row.BaseBranch)]; pr.State == gh.Merged && pr.HeadOid != "" {
+	if pr := obs.PRs[branchKey(repo, row.BaseBranch)]; pr.State == plan.Merged && pr.HeadOid != "" {
 		return pr.HeadOid
 	}
 	return row.BaseSHAAtPush

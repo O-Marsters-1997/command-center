@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -101,17 +100,17 @@ func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 	return strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
 }
 
-func baseObservation(f stackedFixture, parentTip string) cc.Observation {
-	return cc.Observation{
+func baseObservation(f stackedFixture, parentTip string) plan.Observation {
+	return plan.Observation{
 		Worktrees: map[string]string{
 			cc.BranchKey("repo", "parent"): f.parentWorktree, cc.BranchKey("repo", "child"): f.childWorktree,
 		},
-		PRs: map[string]gh.PR{
-			cc.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: gh.Open},
-			cc.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: gh.Open},
+		PRs: map[string]plan.PR{
+			cc.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
+			cc.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
 		},
 		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): parentTip, cc.MainTipKey("repo"): f.mainSHA},
-		Runs:       map[string]cc.RunObservation{},
+		Runs:       map[string]plan.RunObservation{},
 		MidMerge:   map[string]bool{},
 	}
 }
@@ -126,7 +125,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -189,7 +188,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 
 	obs := baseObservation(f, f.parentTip0)
 	obs.BranchTips[cc.MainTipKey("repo")] = mainTip1
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -221,8 +220,8 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.Runs[f.child.URL] = cc.RunObservation{Alive: true}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs.Runs[f.child.URL] = plan.RunObservation{Alive: true}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -256,8 +255,8 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	obs.Runs[f.child.URL] = cc.RunObservation{Alive: true}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs.Runs[f.child.URL] = plan.RunObservation{Alive: true}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Second)); err != nil {
 		t.Fatal(err)
@@ -294,7 +293,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
 
 	obs := baseObservation(f, parentTip1)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})
@@ -421,10 +420,10 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	obs.BranchTips[cc.BranchKey("repo", "child")] = strings.TrimSpace(
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
 	)
-	observe := func(context.Context) (cc.Observation, error) {
+	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		obs.MidMerge[cc.BranchKey("repo", "child")] = mid
 		return obs, nil
@@ -491,10 +490,10 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[cc.BranchKey("repo", "child")] = childTip0
-	observe := func(context.Context) (cc.Observation, error) {
+	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		obs.MidMerge[cc.BranchKey("repo", "child")] = mid
 		return obs, nil
@@ -559,10 +558,10 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[cc.BranchKey("repo", "child")] = childTip0
-	observe := func(context.Context) (cc.Observation, error) {
+	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := cc.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		obs.MidMerge[cc.BranchKey("repo", "child")] = mid
 		return obs, nil
@@ -614,7 +613,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 
 	obs := baseObservation(f, parentTip1)
 	delete(obs.PRs, cc.BranchKey("repo", "parent"))
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, cc.ProcessRunner{})

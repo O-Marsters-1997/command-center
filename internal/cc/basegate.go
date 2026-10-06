@@ -11,7 +11,7 @@ import "github.com/O-Marsters-1997/command-center/internal/plan"
 // A locked row is judged on the base it would get once unlocked, which is what makes an
 // authorised row say why it is waiting instead of stalling at the next tick's cut.
 func conflictedBase(
-	t plan.Ticket, byURL map[string]plan.Ticket, unlock plan.Unlock, stacking bool, obs Observation,
+	t plan.Ticket, byURL map[string]plan.Ticket, unlock plan.Unlock, stacking bool, obs plan.Observation,
 ) string {
 	base := unlock.BaseBranch
 	if base == "" {

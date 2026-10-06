@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -193,56 +194,26 @@ func requireAgentCommandParts(argv []string) error {
 	return nil
 }
 
-// stackingByRepo indexes each configured repo's stacking flag by name — consulted on every
-// unlock decision, in both the page and the loop's own launch-eligibility check.
-func stackingByRepo(repos []Repo) map[string]bool {
-	m := make(map[string]bool, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.Stacking
+// PlanRules builds the rules every decision reads, indexing each configured repo's settings by
+// name. It is the only place those per-repo maps are built.
+func (c Config) PlanRules() plan.Rules {
+	rules := plan.Rules{
+		Stacking:     make(map[string]bool, len(c.Repos)),
+		Deny:         make(map[string][]string, len(c.Repos)),
+		Checks:       make(map[string]verdict.Predicate, len(c.Repos)),
+		MergifySHA:   make(map[string]string, len(c.Repos)),
+		CompatCheck:  make(map[string]string, len(c.Repos)),
+		MaxAgents:    c.MaxAgents,
+		SpendLimit5h: c.SpendLimit5h,
 	}
-	return m
-}
-
-// denyByRepo indexes each configured repo's per-repo push-policy additions by name -- the push
-// step's own per-repo half of plan.Policy (the default set lives in internal/plan).
-func denyByRepo(repos []Repo) map[string][]string {
-	m := make(map[string][]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.Deny
+	for _, r := range c.Repos {
+		rules.Stacking[r.Name] = r.Stacking
+		rules.Deny[r.Name] = r.Deny
+		rules.Checks[r.Name] = r.Checks
+		rules.MergifySHA[r.Name] = r.MergifySHA
+		rules.CompatCheck[r.Name] = r.CompatCheck
 	}
-	return m
-}
-
-// checksByRepo indexes each configured repo's CI verdict predicate by name -- internal/verdict's
-// own input, read fresh at render time (inv. 14).
-func checksByRepo(repos []Repo) map[string]verdict.Predicate {
-	m := make(map[string]verdict.Predicate, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.Checks
-	}
-	return m
-}
-
-// mergifySHAByRepo indexes each configured repo's recorded .mergify.yml hash by name -- the
-// value the predicate was written against, compared each tick to the file's current hash
-// (docs/designs/command-centre-design.md § 7).
-func mergifySHAByRepo(repos []Repo) map[string]string {
-	m := make(map[string]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.MergifySHA
-	}
-	return m
-}
-
-// compatCheckByRepo indexes each configured repo's cross-repo compat check name by name --
-// internal/verdict's inv. 12 input, empty for a repo that never opted in
-// (docs/designs/command-centre-design.md § 11 inv. 12).
-func compatCheckByRepo(repos []Repo) map[string]string {
-	m := make(map[string]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.CompatCheck
-	}
-	return m
+	return rules
 }
 
 func verifyCommandByRepo(repos []Repo) map[string][]string {

@@ -51,7 +51,7 @@ func parseViewParams(q url.Values) viewParams {
 
 // normalizeRepoScope blanks a ?repo= value unrecognised against the configured repos, following
 // normalizeLogFilter: a query string is user input, and an unknown scope shows the unscoped board
-// rather than an error. configuredRepos is keyed by repo name; the caller passes stackingByRepo
+// rather than an error. configuredRepos is keyed by repo name; the caller passes the stacking map
 // since it is already indexed that way, though this reads it purely as a membership set.
 func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
 	if _, ok := configuredRepos[repo]; ok {

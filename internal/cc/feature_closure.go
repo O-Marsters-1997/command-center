@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // FeatureClosureError reports a ticket blocked by a ticket outside its own feature, whose pull
@@ -60,13 +60,13 @@ func ticketFeatureLookup(ctx context.Context, qtx *ccdb.Queries) func(url string
 	}
 }
 
-func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs Observation) func(url string) bool {
+func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observation) func(url string) bool {
 	return func(url string) bool {
 		branch, err := qtx.TicketBranch(ctx, url)
 		if err != nil {
 			return false
 		}
-		return obs.PRs[branchKey(branch.Repo, branch.Branch)].State == gh.Merged
+		return obs.PRs[branchKey(branch.Repo, branch.Branch)].State == plan.Merged
 	}
 }
 

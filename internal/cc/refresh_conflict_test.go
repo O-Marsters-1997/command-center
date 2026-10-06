@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -49,18 +48,18 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	aliveRuns := map[string]bool{}
-	observe := func(ctx context.Context) (cc.Observation, error) {
+	observe := func(ctx context.Context) (plan.Observation, error) {
 		obs := baseObservation(f, parentTip1)
 		for ticketURL, alive := range aliveRuns {
-			obs.Runs[ticketURL] = cc.RunObservation{Alive: alive}
+			obs.Runs[ticketURL] = plan.RunObservation{Alive: alive}
 		}
-		obs.PRs[cc.BranchKey("repo", "child")] = gh.PR{
-			Number: 2, HeadRef: "child", State: gh.Open, HeadOid: childTip,
-			Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+		obs.PRs[cc.BranchKey("repo", "child")] = plan.PR{
+			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
+			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
 		mid, err := cc.MidMerge(ctx, f.childWorktree)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		obs.MidMerge[cc.BranchKey("repo", "child")] = mid
 		return obs, nil

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -22,16 +21,15 @@ const eventCommitResolutionRefused = "commit_resolution_refused"
 // computed once by pushPushable/applyRetryPushIntents rather than re-queried per ticket.
 type pushContext struct {
 	byURL      map[string]plan.Ticket
-	stacking   map[string]bool
 	prs        map[string]plan.PRState
 	repoPaths  map[string]string
-	denyByRepo map[string][]string
+	rules      plan.Rules
 	pushedTips map[string]string
 	restacked  map[string]bool
-	obs        Observation
+	obs        plan.Observation
 }
 
-func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observation) (pushContext, error) {
+func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs plan.Observation) (pushContext, error) {
 	pushedTips, err := l.store.LastPushedTips(ctx)
 	if err != nil {
 		return pushContext{}, err
@@ -42,10 +40,9 @@ func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observa
 	}
 	return pushContext{
 		byURL:      planTicketsByURL(tickets),
-		stacking:   stackingByRepo(l.cfg.Repos),
 		prs:        prsByBranch(tickets, obs),
 		repoPaths:  repoPathsByName(l.cfg.Repos),
-		denyByRepo: denyByRepo(l.cfg.Repos),
+		rules:      l.cfg.PlanRules(),
 		pushedTips: pushedTips,
 		restacked:  restacked,
 		obs:        obs,
@@ -56,7 +53,7 @@ func (l *Loop) newPushContext(ctx context.Context, tickets []Ticket, obs Observa
 // latest run disposed with commits gets its branch diffed against its base and either pushed
 // and PR-opened, or refused outright. A push or PR-create failure is not retried automatically
 // -- retry-push is your verb (see applyRetryPushIntents).
-func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
+func (l *Loop) pushPushable(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -82,17 +79,9 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
 			continue
 		}
-		// remove worktree (verbs.go) deletes the branch along with the worktree, and a ticket
-		// that has ever run stays a push candidate forever (its latest run's outcome never
-		// changes) -- without this guard, a removed ticket's absence from the same tick's own
-		// worktree map would make every later tick's BranchTip fail on an unknown ref and
-		// abort the whole tick.
-		if pc.obs.Worktrees[branchKey(t.Repo, t.Branch)] == "" {
+		tip, ok := pc.obs.LocalTips[branchKey(t.Repo, t.Branch)]
+		if !ok {
 			continue
-		}
-		tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
-		if err != nil {
-			return fmt.Errorf("branch tip for %s: %w", t.URL, err)
 		}
 		localTips[t.URL] = tip
 		candidates = append(candidates,
@@ -128,7 +117,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 // applyRetryPushIntents consumes every pending retry-push request synchronously, bypassing
 // pushPushable's failure gate: this is the retry (docs/prds/prd-command-centre.md § The states, push
 // failed's only verb).
-func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error {
+func (l *Loop) applyRetryPushIntents(ctx context.Context, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, retryPushVerb)
 	if err != nil {
 		return err
@@ -150,12 +139,10 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 	now := l.clock.Now()
 	for _, intent := range intents {
 		if t, ok := byTicket[intent.TicketID]; ok {
-			tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
-			if err != nil {
-				return fmt.Errorf("branch tip for %s: %w", t.URL, err)
-			}
-			if err := l.pushOne(ctx, t, tip, pc, now); err != nil {
-				return err
+			if tip, ok := pc.obs.LocalTips[branchKey(t.Repo, t.Branch)]; ok {
+				if err := l.pushOne(ctx, t, tip, pc, now); err != nil {
+					return err
+				}
 			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
@@ -165,7 +152,7 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 	return nil
 }
 
-func (l *Loop) applyCommitResolutionIntents(ctx context.Context, obs Observation) error {
+func (l *Loop) applyCommitResolutionIntents(ctx context.Context, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, commitResolutionVerb)
 	if err != nil {
 		return err
@@ -267,7 +254,7 @@ func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, resta
 // push-and-adopt-or-create sequence. An existing open PR is adopted, never duplicated (inv. 20):
 // recording the push only after create-or-adopt is what makes a crash between them a non-event.
 func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushContext, now time.Time) error {
-	unlock := plan.Unlocked(pc.byURL[t.URL], pc.byURL, pc.prs, pc.stacking[t.Repo])
+	unlock := plan.Unlocked(pc.byURL[t.URL], pc.byURL, pc.prs, pc.rules.Stacking[t.Repo])
 	if !unlock.Unlocked {
 		return nil // its blocker's PR closed between run and push; nothing sane to diff against
 	}
@@ -278,7 +265,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
-	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: pc.denyByRepo[t.Repo]}); refused {
+	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: pc.rules.Deny[t.Repo]}); refused {
 		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushRefused, Detail: path})
 	}
 
@@ -286,7 +273,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 		return l.store.AppendEvent(ctx, Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 	}
 
-	if pc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
+	if pc.obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
 		body := plan.PRBody(base, pc.obs.PRs[branchKey(t.Repo, base)].Number)
 		draft := plan.OpensAsDraft(pc.byURL[t.URL], pc.byURL)
 		if err := l.forge.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {

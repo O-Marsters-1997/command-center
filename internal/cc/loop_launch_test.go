@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func noOpObserve(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 
 func authoriseTicket(t *testing.T, store *cc.Store, ticketURL, hash string, at time.Time) {
 	t.Helper()
@@ -255,8 +255,8 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.canReap[999] = true
@@ -337,8 +337,8 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.canReap[999] = true
@@ -412,8 +412,8 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.canReap[999] = true
@@ -468,8 +468,8 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 
 	// No entry for "cc-1" in Worktrees: the worktree is gone by the time this tick disposes
 	// the run. BranchTips is what observe would have read from origin/cc-1 this tick.
-	obs := cc.Observation{BranchTips: map[string]string{cc.BranchKey("repo", "cc-1"): originTip}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{BranchTips: map[string]string{cc.BranchKey("repo", "cc-1"): originTip}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.canReap[999] = true
@@ -516,8 +516,8 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.alive[4242] = true
@@ -665,8 +665,8 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	fake.alive[4242] = true

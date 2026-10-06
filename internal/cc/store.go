@@ -14,7 +14,7 @@ import (
 	"github.com/pressly/goose/v3"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -244,7 +244,7 @@ func (s *Store) ImportTickets(
 	}
 	mergedWithdrawn := make(map[string]bool)
 	for _, row := range withdrawnRows {
-		if obs.PRs[branchKey(row.Repo, row.Branch)].State == gh.Merged {
+		if obs.PRs[branchKey(row.Repo, row.Branch)].State == plan.Merged {
 			mergedWithdrawn[row.URL] = true
 		}
 	}
@@ -401,12 +401,12 @@ func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it, which
 // is what makes the page's observe age an honest inv. 10 signal.
-func (s *Store) SaveObservation(ctx context.Context, obs Observation) error {
+func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
 	return s.putMeta(ctx, metaObservation, obs)
 }
 
-func (s *Store) LastObservation(ctx context.Context) (Observation, bool, error) {
-	var obs Observation
+func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, error) {
+	var obs plan.Observation
 	found, err := s.getMeta(ctx, metaObservation, &obs)
 	return obs, found, err
 }

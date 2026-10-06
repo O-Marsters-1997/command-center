@@ -32,7 +32,7 @@ func threeRepoStore(t *testing.T) *cc.Store {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -152,7 +152,7 @@ func threeFeatureStore(t *testing.T) *cc.Store {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -219,7 +219,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	repos := []cc.Repo{{Name: "repo"}, {Name: "other"}}

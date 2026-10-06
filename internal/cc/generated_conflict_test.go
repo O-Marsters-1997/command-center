@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -95,35 +95,35 @@ func advanceMainFile(t *testing.T, root, relPath, contents string) {
 // the next tick's own observation rather than by a frozen struct.
 func (f generatedConflictFixture) observe(t *testing.T) cc.ObserveFunc {
 	t.Helper()
-	return func(ctx context.Context) (cc.Observation, error) {
+	return func(ctx context.Context) (plan.Observation, error) {
 		mainTip, err := cc.RevParse(ctx, f.repoPath, "refs/remotes/origin/main")
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		branchTip, err := cc.RevParse(ctx, f.repoPath, "refs/heads/cc-1")
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		clean, paths, err := cc.MergesCleanly(ctx, f.repoPath, mainTip, branchTip)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		mid, err := cc.MidMerge(ctx, f.worktreePath)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
-		return cc.Observation{
+		return plan.Observation{
 			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): f.worktreePath},
-			PRs: map[string]gh.PR{
+			PRs: map[string]plan.PR{
 				cc.BranchKey("repo", "cc-1"): {
-					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
-					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+					Number: 1, HeadRef: "cc-1", State: plan.Open, HeadOid: branchTip,
+					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
 			BranchTips: map[string]string{
 				cc.MainTipKey("repo"): mainTip, cc.BranchKey("repo", "cc-1"): branchTip,
 			},
-			Runs:              map[string]cc.RunObservation{},
+			Runs:              map[string]plan.RunObservation{},
 			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): mid},
 			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): !clean},
 			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): paths},
@@ -334,35 +334,35 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 	advanceMainFile(t, root, "handwritten.go", "package x\n\nconst n = 3\n")
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
 
-	observe := func(ctx context.Context) (cc.Observation, error) {
+	observe := func(ctx context.Context) (plan.Observation, error) {
 		mainTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/main")
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		branchTip, err := cc.RevParse(ctx, repoPath, "refs/remotes/origin/cc-1")
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		clean, paths, err := cc.MergesCleanly(ctx, repoPath, mainTip, branchTip)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
 		mid, err := cc.MidMerge(ctx, worktreePath)
 		if err != nil {
-			return cc.Observation{}, err
+			return plan.Observation{}, err
 		}
-		return cc.Observation{
+		return plan.Observation{
 			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
-			PRs: map[string]gh.PR{
+			PRs: map[string]plan.PR{
 				cc.BranchKey("repo", "cc-1"): {
-					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
-					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+					Number: 1, HeadRef: "cc-1", State: plan.Open, HeadOid: branchTip,
+					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
 			BranchTips: map[string]string{
 				cc.MainTipKey("repo"): mainTip, cc.BranchKey("repo", "cc-1"): branchTip,
 			},
-			Runs:              map[string]cc.RunObservation{},
+			Runs:              map[string]plan.RunObservation{},
 			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): mid},
 			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): !clean},
 			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): paths},
@@ -456,16 +456,16 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
 
 	// Deliberately wrong: the real merge below conflicts on handwritten.go too.
-	observe := func(ctx context.Context) (cc.Observation, error) {
-		return cc.Observation{
+	observe := func(ctx context.Context) (plan.Observation, error) {
+		return plan.Observation{
 			Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
-			PRs: map[string]gh.PR{
+			PRs: map[string]plan.PR{
 				cc.BranchKey("repo", "cc-1"): {
-					Number: 1, HeadRef: "cc-1", State: gh.Open, HeadOid: branchTip,
-					Checks: map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+					Number: 1, HeadRef: "cc-1", State: plan.Open, HeadOid: branchTip,
+					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},
 			},
-			Runs:              map[string]cc.RunObservation{},
+			Runs:              map[string]plan.RunObservation{},
 			MidMerge:          map[string]bool{cc.BranchKey("repo", "cc-1"): false},
 			ConflictsWithBase: map[string]bool{cc.BranchKey("repo", "cc-1"): true},
 			ConflictedPaths:   map[string][]string{cc.BranchKey("repo", "cc-1"): {"dist/app.css"}},

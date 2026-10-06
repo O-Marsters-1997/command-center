@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // shellStore seeds one ticket, an observation at observedAt when it is non-nil, and a tick error
@@ -24,7 +24,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *cc.Store {
 		t.Fatal(err)
 	}
 	if observedAt != nil {
-		obs := cc.Observation{ObservedAt: *observedAt, PRs: map[string]gh.PR{}}
+		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[string]plan.PR{}}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
@@ -244,10 +244,10 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	if err := store.RecordSpawn(ctx, runID, 4242, now, "/logs/run.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	obs := cc.Observation{
+	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]cc.RunObservation{dependent.URL: {Alive: true}},
-		PRs:        map[string]gh.PR{"cc-1": {State: gh.Closed}},
+		Runs:       map[string]plan.RunObservation{dependent.URL: {Alive: true}},
+		PRs:        map[string]plan.PR{"cc-1": {State: plan.Closed}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

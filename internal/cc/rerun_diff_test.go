@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -29,8 +28,8 @@ func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T
 	planTicket := plan.Ticket{URL: ticket.URL}
 	authoriseTicket(t, store, ticket.URL, plan.Hash(plan.Compose(planTicket)), at)
 
-	obs := &cc.Observation{Worktrees: map[string]string{}, PRs: map[string]gh.PR{}}
-	observe := func(context.Context) (cc.Observation, error) { return *obs, nil }
+	obs := &plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	observe := func(context.Context) (plan.Observation, error) { return *obs, nil }
 
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
@@ -127,10 +126,10 @@ func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := newFakeRunner()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)

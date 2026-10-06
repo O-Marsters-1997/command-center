@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -16,7 +15,7 @@ const (
 // applyDraftGate un-drafts every open PR plan.DraftGate says is ready, and never re-drafts. A
 // failed `gh pr ready` is never latched -- the next tick simply retries against a fresh
 // observation (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
-func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
+func (l *Loop) applyDraftGate(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -26,7 +25,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	vd, err := verdictDepsFor(
-		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+		ctx, l.store, l.cfg.PlanRules())
 	if err != nil {
 		return err
 	}
@@ -34,7 +33,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 	now := l.clock.Now()
 	for _, t := range tickets {
 		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
-		if pr.State != gh.Open || !pr.IsDraft {
+		if pr.State != plan.Open || !pr.IsDraft {
 			continue
 		}
 

@@ -57,7 +57,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: now}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")

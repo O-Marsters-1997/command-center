@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -57,10 +56,10 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 	resolveAndStage(t, worktreePath, "shared.txt", "resolved version\n")
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -113,10 +112,10 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -152,10 +151,10 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 	runGit(t, "-C", worktreePath, "add", "shared.txt")
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -187,12 +186,12 @@ func TestCommitResolutionRefusesALiveRun(t *testing.T) {
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store, ticket, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
+	obs := plan.Observation{
 		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:       map[string]gh.PR{},
-		Runs:      map[string]cc.RunObservation{ticket.URL: {Alive: true}},
+		PRs:       map[string]plan.PR{},
+		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -220,10 +219,10 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 	resolveAndStage(t, worktreePath, ".github/workflows/ci.yml", "resolved\n")
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -263,10 +262,10 @@ func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testi
 	headBefore := strings.TrimSpace(runGitOutput(t, "-C", worktreePath, "rev-parse", "HEAD"))
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})

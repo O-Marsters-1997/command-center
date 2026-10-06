@@ -14,7 +14,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -36,13 +35,13 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *cc.Sto
 	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, logPath); err != nil {
 		t.Fatal(err)
 	}
-	obs := cc.Observation{
+	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]cc.RunObservation{ticket.URL: {Alive: true}},
+		Runs:       map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 		Worktrees:  map[string]string{cc.BranchKey("repo", "cc-76"): "/repos/repo-cc-76"},
-		PRs: map[string]gh.PR{cc.BranchKey("repo", "cc-76"): {
-			Number: 76, State: gh.Open, HeadRef: "cc-76",
-			Checks: map[string]gh.CheckState{
+		PRs: map[string]plan.PR{cc.BranchKey("repo", "cc-76"): {
+			Number: 76, State: plan.Open, HeadRef: "cc-76",
+			Checks: map[string]plan.CheckState{
 				"unit":  {Status: "COMPLETED", Conclusion: "SUCCESS"},
 				"build": {Status: "IN_PROGRESS", DetailsURL: "https://github.com/o/r/actions/runs/1"},
 			},
@@ -188,10 +187,10 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
-	obs := cc.Observation{
+	obs := plan.Observation{
 		ObservedAt: at,
 		Worktrees:  map[string]string{cc.BranchKey("repo", "cc-1"): "/repos/repo-cc-1"},
-		PRs:        map[string]gh.PR{},
+		PRs:        map[string]plan.PR{},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
@@ -375,7 +374,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: now}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
@@ -494,7 +493,7 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: now}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")

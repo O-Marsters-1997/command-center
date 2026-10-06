@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 const spendAliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
@@ -33,7 +34,7 @@ func spendRowStore(t *testing.T, ticket cc.Ticket, logPath string, alive bool, a
 	if err := store.RecordSpawn(ctx, runID, 4242, at, logPath); err != nil {
 		t.Fatal(err)
 	}
-	obs := cc.Observation{ObservedAt: at, Runs: map[string]cc.RunObservation{ticket.URL: {Alive: alive}}}
+	obs := plan.Observation{ObservedAt: at, Runs: map[string]plan.RunObservation{ticket.URL: {Alive: alive}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

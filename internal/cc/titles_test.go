@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // TestBoardNamesEachTicketByItsIssueTitle covers issue #100's first three acceptance criteria.
@@ -22,7 +23,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	obs := cc.Observation{
+	obs := plan.Observation{
 		ObservedAt: at,
 		Titles: map[string]string{
 			"https://github.com/owner/repo/issues/100": "Put each ticket's issue title on its row",

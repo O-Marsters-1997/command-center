@@ -5,7 +5,6 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -131,7 +130,7 @@ func deriveChecksCard(rows []row) checksCard {
 		}
 		card.Reported++
 		for _, c := range r.Checks {
-			switch toVerdictCheckState(gh.CheckState{Status: c.Status, Conclusion: c.Conclusion}) {
+			switch toVerdictCheckState(plan.CheckState{Status: c.Status, Conclusion: c.Conclusion}) {
 			case verdict.Success, verdict.Skipped:
 				card.Green++
 			case verdict.Failure:

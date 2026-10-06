@@ -16,7 +16,7 @@ const eventGeneratedConflictResolved = "generated_conflict_resolved"
 // with it is confined to paths this repo's build regenerates, rebuilds them, and commits the
 // result -- the one conflict shape that needs no judgement and so gets no agent, no run and no
 // verb (issue #177). pushPushable delivers the commit; this writes none of its own (push.go:54).
-func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs Observation) error {
+func (l *Loop) resolveGeneratedConflicts(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err

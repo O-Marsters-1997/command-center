@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func waitForTicks(t *testing.T, count *atomic.Int32, want int32) {
@@ -27,12 +28,12 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	store := openStore(t)
 	var ticks atomic.Int32
 	proceed := make(chan struct{})
-	observe := func(context.Context) (cc.Observation, error) {
+	observe := func(context.Context) (plan.Observation, error) {
 		n := ticks.Add(1)
 		if n == 2 {
 			<-proceed
 		}
-		return cc.Observation{}, nil
+		return plan.Observation{}, nil
 	}
 
 	loop := cc.NewLoop(store, observe, cc.RealClock{}, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
@@ -66,9 +67,9 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 
 	store := openStore(t)
 	var ticks atomic.Int32
-	observe := func(context.Context) (cc.Observation, error) {
+	observe := func(context.Context) (plan.Observation, error) {
 		ticks.Add(1)
-		return cc.Observation{}, nil
+		return plan.Observation{}, nil
 	}
 	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
 	loop := cc.NewLoop(store, observe, clock, cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})

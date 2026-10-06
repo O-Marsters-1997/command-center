@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -18,7 +17,7 @@ const eventVerdictTransition = "verdict_transition"
 // It computes the verdict the exact way the page does (applyVerdict, server.go), over this same
 // tick's observation, so a transition an operator would see on the next page load is exactly
 // the transition logged here.
-func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) error {
+func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -37,7 +36,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 	}
 
 	vd, err := verdictDepsFor(
-		ctx, l.store, checksByRepo(l.cfg.Repos), mergifySHAByRepo(l.cfg.Repos), compatCheckByRepo(l.cfg.Repos))
+		ctx, l.store, l.cfg.PlanRules())
 	if err != nil {
 		return err
 	}
@@ -50,7 +49,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 			continue
 		}
 		pf := pushFacts[t.URL]
-		if pf.Refused || pf.Failed || obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
+		if pf.Refused || pf.Failed || obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
 

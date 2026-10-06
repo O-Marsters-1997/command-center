@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -77,7 +76,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *cc.Store {
 	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -168,7 +167,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,7 +197,7 @@ func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,7 +232,7 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.SaveObservation(ctx, cc.Observation{ObservedAt: at}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,9 +274,9 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{
+	obs := plan.Observation{
 		ObservedAt: at,
-		PRs:        map[string]gh.PR{cc.BranchKey("repo", "cc-1"): {Number: 262, State: gh.Merged}},
+		PRs:        map[string]plan.PR{cc.BranchKey("repo", "cc-1"): {Number: 262, State: plan.Merged}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

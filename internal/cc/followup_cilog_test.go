@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -50,7 +50,7 @@ func installFakeGhWithLogFailed(t *testing.T, output string, fail bool) (logPath
 // ci_failed, SUCCESS resolves review_me (issue #232 AC3).
 func setUpCIFailedTicket(
 	t *testing.T, store *cc.Store, root, repoPath string, ticket cc.Ticket, at time.Time, conclusion, detailsURL string,
-) (cc.Observation, cc.Config, cc.Workspace) {
+) (plan.Observation, cc.Config, cc.Workspace) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -67,14 +67,14 @@ func setUpCIFailedTicket(
 		t.Fatal(err)
 	}
 
-	pr := gh.PR{
-		State: gh.Open, HeadOid: tip,
-		Checks: map[string]gh.CheckState{
+	pr := plan.PR{
+		State: plan.Open, HeadOid: tip,
+		Checks: map[string]plan.CheckState{
 			cilogCheckName: {Status: "COMPLETED", Conclusion: conclusion, DetailsURL: detailsURL},
 		},
 	}
-	obs := cc.Observation{
-		PRs:        map[string]gh.PR{cc.BranchKey(ticket.Repo, ticket.Branch): pr},
+	obs := plan.Observation{
+		PRs:        map[string]plan.PR{cc.BranchKey(ticket.Repo, ticket.Branch): pr},
 		BranchTips: map[string]string{cc.MainTipKey(ticket.Repo): tip},
 	}
 
@@ -105,7 +105,7 @@ func TestFollowUpFromCIFailedCarriesLastLinesOfTheFailedLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -149,7 +149,7 @@ func TestFollowUpWithNoActionsRunIDSpawnsAnywayNotingLogUnavailable(t *testing.T
 		t.Fatal(err)
 	}
 
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -192,7 +192,7 @@ func TestFollowUpWhenLogFetchFailsSpawnsAnywayNotingLogUnavailable(t *testing.T)
 		t.Fatal(err)
 	}
 
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -233,7 +233,7 @@ func TestFollowUpFromNonCIFailedStateInjectsNoLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := newFakeRunner()
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {

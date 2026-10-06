@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -286,7 +286,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 
 	// The blocker's pull request merges.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	obs := plan.Observation{PRs: map[string]plan.PR{cc.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 
 	// The merge fact lands afterwards.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	obs := plan.Observation{PRs: map[string]plan.PR{cc.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 	}
 
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	obs := plan.Observation{PRs: map[string]plan.PR{cc.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 	}
 
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := cc.Observation{PRs: map[string]gh.PR{cc.BranchKey("alpha", blockerBranch): {State: gh.Merged}}}
+	obs := plan.Observation{PRs: map[string]plan.PR{cc.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

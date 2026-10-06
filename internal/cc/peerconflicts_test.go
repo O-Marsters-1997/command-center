@@ -3,6 +3,8 @@ package cc
 import (
 	"context"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // TestRecordPeerConflictsReusesUnmovedTips covers the observe-phase cache (#180,
@@ -15,7 +17,7 @@ func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	tips := map[string]string{
 		branchKey("r", "a"): "sha-a", branchKey("r", "b"): "sha-b", branchKey("r", "c"): "sha-c",
 	}
-	prev := Observation{
+	prev := plan.Observation{
 		BranchTips: map[string]string{
 			branchKey("r", "a"): "sha-a", branchKey("r", "b"): "sha-b", branchKey("r", "c"): "sha-c",
 		},
@@ -53,7 +55,7 @@ func TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip(t *testing.T) {
 	tips := map[string]string{
 		branchKey("r", "a"): "sha-a-new", branchKey("r", "b"): "sha-b", branchKey("r", "c"): "sha-c",
 	} // a moved
-	prev := Observation{
+	prev := plan.Observation{
 		BranchTips: map[string]string{
 			branchKey("r", "a"): "sha-a", branchKey("r", "b"): "sha-b", branchKey("r", "c"): "sha-c",
 		},
@@ -99,7 +101,7 @@ func TestRecordPeerConflictsWithNoPriorObservation(t *testing.T) {
 	}
 
 	into := map[string]map[string]bool{}
-	if err := recordPeerConflicts(t.Context(), "", "r", branches, tips, Observation{}, into, merges); err != nil {
+	if err := recordPeerConflicts(t.Context(), "", "r", branches, tips, plan.Observation{}, into, merges); err != nil {
 		t.Fatalf("recordPeerConflicts: %v", err)
 	}
 	if calls != 1 {

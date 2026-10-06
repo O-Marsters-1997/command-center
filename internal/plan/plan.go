@@ -1,7 +1,7 @@
 // Package plan holds the Command Centre's decisions: pure functions over value types.
 //
-// It imports nothing outside the standard library — not even internal/gh, which execs — so
-// that "would this launch, and why is it waiting?" is a table test. api_test.go enforces it.
+// It imports only the standard library and the pure internal/verdict — never internal/gh, which
+// execs — so that "would this launch, and why is it waiting?" is a table test. api_test.go enforces it.
 package plan
 
 import (
@@ -21,6 +21,19 @@ const (
 	Merged
 	Closed
 )
+
+func (s PRState) String() string {
+	switch s {
+	case Open:
+		return "open"
+	case Merged:
+		return "merged"
+	case Closed:
+		return "closed"
+	default:
+		return "absent"
+	}
+}
 
 // Ticket is one tracked ticket.
 type Ticket struct {

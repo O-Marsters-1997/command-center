@@ -18,7 +18,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -26,10 +25,10 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	configPath := appConfig(t)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Open}},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
-	stub := func(context.Context) (cc.Observation, error) { return observed, nil }
+	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
 	app, err := cc.New(ctx, configPath, cc.WithClock(fixedClock(at)), cc.WithObserver(stub), stubSquashOnly)
@@ -160,7 +159,7 @@ func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	app, err := cc.New(t.Context(), configPath, cc.WithObserver(stub), stubSquashOnly)
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -225,7 +224,7 @@ func TestNewBackfillsMetricsUsingTheInjectedParser(t *testing.T) {
 	fake := func(string) (agentlog.RunMetrics, error) {
 		return agentlog.RunMetrics{TokensIn: 77, Settled: true}, nil
 	}
-	stub := cc.WithObserver(func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil })
+	stub := cc.WithObserver(func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil })
 	app, err := cc.New(t.Context(), configPath, stub, stubSquashOnly, cc.WithMetricsParser(fake))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -254,7 +253,7 @@ func TestNewBackfillsMetricsUsingTheInjectedParser(t *testing.T) {
 func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 	configPath := appConfig(t)
 
-	stub := func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil }
+	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
 	app, err := cc.New(ctx, configPath, cc.WithObserver(stub), stubSquashOnly)
 	if err != nil {
