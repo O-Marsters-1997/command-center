@@ -1,0 +1,122 @@
+package demo
+
+import (
+	"cmp"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/BurntSushi/toml"
+)
+
+// Duration is a scenario time written in real-world units, such as "12m" or "2h".
+type Duration time.Duration
+
+// UnmarshalText parses a time.ParseDuration string.
+func (d *Duration) UnmarshalText(text []byte) error {
+	parsed, err := time.ParseDuration(string(text))
+	if err != nil {
+		return fmt.Errorf("duration %q: %w", text, err)
+	}
+	*d = Duration(parsed)
+	return nil
+}
+
+// Scenario is one demo run read from a TOML file: the repos, the ticket DAG, each ticket's step
+// script, and the checkpoints the run is checked against. Every Duration is sim time since the
+// run started, except Merge.After, which counts from the moment the ticket's PR opens.
+type Scenario struct {
+	Seed   int64    `toml:"seed"`
+	Speed  float64  `toml:"speed"`
+	Repos  []Repo   `toml:"repo"`
+	Ticket []Ticket `toml:"ticket"`
+	Expect []Expect `toml:"expect"`
+}
+
+// Repo is one repository the sandbox hosts a bare origin for, seeded with Files on main.
+type Repo struct {
+	Name  string            `toml:"name"`
+	Files map[string]string `toml:"files"`
+}
+
+// Ticket is one issue in the DAG and the script the world plays for it.
+type Ticket struct {
+	ID        string      `toml:"id"`
+	Repo      string      `toml:"repo"`
+	Title     string      `toml:"title"`
+	Feature   string      `toml:"feature"`
+	BlockedBy []string    `toml:"blocked_by"`
+	Agent     AgentScript `toml:"agent"`
+	CI        []string    `toml:"ci"`
+	Merge     Step        `toml:"merge"`
+}
+
+// AgentScript is what the fake agent does once spawned for a ticket.
+type AgentScript struct {
+	After  Duration `toml:"after"`
+	Result string   `toml:"result"`
+	Files  []string `toml:"files"`
+}
+
+// Step is a scripted event that happens After a point the field's owner defines.
+type Step struct {
+	After Duration `toml:"after"`
+}
+
+// Expect is a checkpoint: at sim time At, Ticket must be in State.
+type Expect struct {
+	At     Duration `toml:"at"`
+	Ticket string   `toml:"ticket"`
+	State  string   `toml:"state"`
+}
+
+// LoadScenario reads and validates the scenario at path.
+func LoadScenario(path string) (Scenario, error) {
+	var s Scenario
+	if _, err := toml.DecodeFile(path, &s); err != nil {
+		return Scenario{}, fmt.Errorf("read scenario %s: %w", path, err)
+	}
+	slices.SortStableFunc(s.Expect, func(a, b Expect) int { return cmp.Compare(a.At, b.At) })
+	if err := s.validate(); err != nil {
+		return Scenario{}, fmt.Errorf("scenario %s: %w", path, err)
+	}
+	return s, nil
+}
+
+func (s Scenario) validate() error {
+	repos := map[string]bool{}
+	for _, r := range s.Repos {
+		repos[r.Name] = true
+	}
+	ids := map[string]bool{}
+	for _, t := range s.Ticket {
+		if ids[t.ID] {
+			return fmt.Errorf("ticket %q declared twice", t.ID)
+		}
+		ids[t.ID] = true
+		if !repos[t.Repo] {
+			return fmt.Errorf("ticket %q names unknown repo %q", t.ID, t.Repo)
+		}
+		if t.Agent.Result != "commits" {
+			return fmt.Errorf("ticket %q: agent result %q is not supported yet", t.ID, t.Agent.Result)
+		}
+		for _, ci := range t.CI {
+			if ci != "pass" {
+				return fmt.Errorf("ticket %q: ci %q is not supported yet", t.ID, ci)
+			}
+		}
+	}
+	for _, t := range s.Ticket {
+		for _, blocker := range t.BlockedBy {
+			if !ids[blocker] {
+				return fmt.Errorf("ticket %q is blocked by unknown ticket %q", t.ID, blocker)
+			}
+		}
+	}
+	for _, e := range s.Expect {
+		if !ids[e.Ticket] {
+			return fmt.Errorf("expect names unknown ticket %q", e.Ticket)
+		}
+	}
+	return nil
+}
