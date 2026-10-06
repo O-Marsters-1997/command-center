@@ -53,7 +53,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 		fact := &plan.RunFact{PROpen: true}
 		l.cfg.PlanRules().ApplyVerdict(fact, t.Plan(), obs, vd)
-		current := verdictLabel(fact)
+		current := plan.VerdictLabel(fact)
 		if current == "" || lastVerdicts[t.URL] == current {
 			continue
 		}
@@ -71,30 +71,4 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		return nil
 	}
 	return l.store.SaveLastVerdicts(ctx, lastVerdicts)
-}
-
-// verdictLabel names a ticket's just-computed verdict for comparison against the last recorded
-// one, and (server.go's derive) a row's own label as its dependents' BaseVerdict. Empty for a nil
-// fact (no run yet) or when ApplyVerdict left every flag untouched -- no predicate configured for
-// this repo (§7) -- neither of which may count as a transition.
-func verdictLabel(fact *plan.RunFact) string {
-	if fact == nil {
-		return ""
-	}
-	switch {
-	case fact.VerdictBaseMoved:
-		return "base_moved"
-	case fact.VerdictWaitingOnProducer:
-		return "waiting_on_producer_deploy"
-	case fact.VerdictReviewMe:
-		return "review_me"
-	case fact.VerdictCIFailed:
-		return "ci_failed"
-	case fact.VerdictNeedsYou:
-		return "needs_you"
-	case fact.VerdictReason != "":
-		return "checking"
-	default:
-		return ""
-	}
 }

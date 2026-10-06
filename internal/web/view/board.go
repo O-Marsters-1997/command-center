@@ -250,12 +250,12 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		}
 		rows[i].StackDepth = plan.StackDepth(rows[i].Branch, baseByBranch)
 		rows[i].MergeOrder = rows[i].StackDepth + 1
-		rows[i].ElapsedPercent = percentOf(rows[i].ElapsedSeconds, longestElapsed)
+		rows[i].ElapsedPercent = PercentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
 	return rows
 }
 
-func percentOf(part, total int) int {
+func PercentOf(part, total int) int {
 	if total <= 0 {
 		return 0
 	}
@@ -367,28 +367,7 @@ func flattenChain(root string, childrenByRoot map[string][]Row) []Row {
 // group's root or any child out of it would leave groupRows' unchecked byURL[root] lookup
 // pointing at nothing (ADR 7 "a scope admits a group whole"). An empty repo is unscoped.
 func filterGroupsByRepo(groups []Group, repo string) []Group {
-	if repo == "" {
-		return groups
-	}
-	filtered := make([]Group, 0, len(groups))
-	for _, g := range groups {
-		if groupInRepo(g, repo) {
-			filtered = append(filtered, g)
-		}
-	}
-	return filtered
-}
-
-func groupInRepo(g Group, repo string) bool {
-	if g.Root != nil && g.Root.Repo == repo {
-		return true
-	}
-	for _, c := range g.Children {
-		if c.Repo == repo {
-			return true
-		}
-	}
-	return false
+	return filterGroups(groups, repo, func(r Row) string { return r.Repo })
 }
 
 // filterGroupsByFeature narrows groups to a feature scope, following filterGroupsByRepo: it
@@ -396,28 +375,27 @@ func groupInRepo(g Group, repo string) bool {
 // filterGroupsByRepo in render, so both axes narrow independently rather than one overriding the
 // other.
 func filterGroupsByFeature(groups []Group, feature string) []Group {
-	if feature == "" {
+	return filterGroups(groups, feature, func(r Row) string { return r.Feature })
+}
+
+func filterGroups(groups []Group, scope string, scopeOf func(Row) string) []Group {
+	if scope == "" {
 		return groups
 	}
 	filtered := make([]Group, 0, len(groups))
 	for _, g := range groups {
-		if groupInFeature(g, feature) {
+		if groupInScope(g, scope, scopeOf) {
 			filtered = append(filtered, g)
 		}
 	}
 	return filtered
 }
 
-func groupInFeature(g Group, feature string) bool {
-	if g.Root != nil && g.Root.Feature == feature {
+func groupInScope(g Group, scope string, scopeOf func(Row) string) bool {
+	if g.Root != nil && scopeOf(*g.Root) == scope {
 		return true
 	}
-	for _, c := range g.Children {
-		if c.Feature == feature {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(g.Children, func(c Row) bool { return scopeOf(c) == scope })
 }
 
 // rowsIn flattens groups back to the rows they render, which is what deriveBand counts: a scoped

@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // writeVerifyScript writes an executable shell script and returns its path -- a repo's verify_command in these tests.
@@ -68,7 +69,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 		t.Errorf("remote child tip = %s, want unchanged %s: a failed verification must not push", remoteChildTip, childTip0)
 	}
 
-	server := cc.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, cfg.Repos, "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
 		t.Fatalf("child's state = %q, want verification_failed", state)
@@ -269,7 +270,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 			remoteParentTip1, remoteParentTip0)
 	}
 
-	server := cc.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, cfg.Repos, "")
 	if state := rowState(t, renderPage(t, server), f.parent.URL); state != "verification_failed" {
 		t.Fatalf("parent's state = %q, want verification_failed", state)
 	}

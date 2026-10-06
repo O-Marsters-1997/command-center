@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // conflictingAdvance has both branches add the same path with different contents, so refresh's
@@ -36,7 +37,7 @@ func conflictingAdvance(t *testing.T, repoPath string, store *store.Store, f sta
 type conflictFixture struct {
 	f      stackedFixture
 	loop   *cc.Loop
-	server *cc.Server
+	server *web.Server
 	store  *store.Store
 	// aliveRuns is the liveness every tick's observation reports.
 	aliveRuns map[string]bool
@@ -76,7 +77,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		f:         f,
 		aliveRuns: aliveRuns,
 		loop:      cc.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
-		server:    cc.NewServer(store, clock, cfg.Repos, ""),
+		server:    web.NewServer(store, clock, cfg.Repos, ""),
 		store:     store,
 	}
 }

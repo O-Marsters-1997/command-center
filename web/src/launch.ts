@@ -1,4 +1,4 @@
-// Mirrors internal/cc/server.go's candidate json tags verbatim -- the launch modal island's only
+// Mirrors internal/web/view's candidate json tags verbatim -- the launch modal island's only
 // view of the data (web/src/types.ts's own header comment records the same precedent for Row).
 export interface Candidate {
   url: string;

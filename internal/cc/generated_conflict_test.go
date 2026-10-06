@@ -15,6 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // buildCommandRegenerating is a fake build_command: it overwrites relPath with a fixed,
@@ -200,7 +201,7 @@ func TestAConflictConfinedToGeneratedPathsMergesRebuildsCommitsAndPushes(t *test
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	page := renderPage(t, cc.NewServer(store, fixedClock(at.Add(time.Minute)), cfg.Repos, ""))
+	page := renderPage(t, web.NewServer(store, fixedClock(at.Add(time.Minute)), cfg.Repos, ""))
 	if state := rowState(t, page, f.ticket.URL); state != "review_me" {
 		t.Errorf("row state = %q, want review_me: no operator action, no agent spawned", state)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // installFakeGhReady puts a script named gh on PATH that logs every invocation to a file and
@@ -227,7 +228,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
-	server := cc.NewServer(f.store, fixedClock(f.at), f.cfg.Repos, "")
+	server := web.NewServer(f.store, fixedClock(f.at), f.cfg.Repos, "")
 	page := renderPage(t, server)
 	state := rowState(t, page, "sandbox://CC-1")
 	if state == "base_gone" {
@@ -306,7 +307,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 
 	repos := []config.Repo{{Name: "repo", Stacking: true}}
-	server := cc.NewServer(store, fixedClock(at), repos, "")
+	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
 	if stack := rowCellAt(t, page, "sandbox://CHILD", 4); stack != "L2 ← parent" {

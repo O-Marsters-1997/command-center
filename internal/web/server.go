@@ -35,7 +35,7 @@ var page = template.Must(template.New("page").
 			return newRowSlot(r, false, depth, scope, featureScope)
 		},
 		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
-		"percent":     percentOf,
+		"percent":     view.PercentOf,
 		"raw":         func(s string) template.HTML { return template.HTML(s) },
 	}).
 	Parse(pageSource))
@@ -192,13 +192,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 
 func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 	http.ServeFileFS(w, r, assetsDir, "assets/dist/app.css")
-}
-
-func percentOf(part, total int) int {
-	if total <= 0 {
-		return 0
-	}
-	return part * 100 / total
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -528,12 +521,12 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	for i, f := range all {
 		offered[i] = f.Feature
 	}
-	page, err := s.view.Features(ctx, s.clock.Now(), offered, r.URL.Query().Get("q"))
+	features, err := s.view.Features(ctx, s.clock.Now(), offered, r.URL.Query().Get("q"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	renderHTML(w, featuresPage, page)
+	renderHTML(w, featuresPage, features)
 }
 
 func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {

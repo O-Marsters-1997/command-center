@@ -17,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
@@ -25,7 +26,7 @@ type App struct {
 	lock   *Flock
 	store  *store.Store
 	loop   *cc.Loop
-	server *cc.Server
+	server *web.Server
 }
 
 type options struct {
@@ -194,7 +195,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	loop.SetMetricsParser(metricsParser)
 	loop.SetForge(settings.forge)
 	loop.SetWorktrees(settings.worktrees)
-	server := cc.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
+	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)

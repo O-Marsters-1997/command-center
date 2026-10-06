@@ -53,26 +53,6 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	return ""
 }
 
-func rowTicket(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`<button type="button"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no ticket link found for %s in row:\n%s", ticketURL, row)
-	}
-	return m[1]
-}
-
-func rowTask(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`(?s)<div>(.*?)</div>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no task title found for %s in row:\n%s", ticketURL, row)
-	}
-	return strings.TrimSpace(m[1])
-}
-
 var (
 	pillTextRE   = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
 	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)

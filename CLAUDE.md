@@ -59,7 +59,7 @@ just assets        # bun install && bun run build, in web/
 just test          # or: go test ./...
 ```
 
-`internal/cc/assets/dist/app.css` is committed and CI diffs it, so a styling change is not finished
+`internal/web/assets/dist/app.css` is committed and CI diffs it, so a styling change is not finished
 until `just assets` has run and the built sheet is committed. Go never depends on Node: `test`,
 `e2e` and `lint` are Go-only.
 

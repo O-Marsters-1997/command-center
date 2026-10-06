@@ -25,7 +25,6 @@ var update = flag.Bool("update", false, "regenerate golden files")
 
 const goldenShell = "testdata/shell.golden.html"
 const goldenBoard = "testdata/board.golden.html"
-const goldenPrompt = "testdata/prompt.golden.txt"
 
 // assertGolden compares got against the golden file at path, rewriting it under -update.
 func assertGolden(t *testing.T, path string, got []byte) {

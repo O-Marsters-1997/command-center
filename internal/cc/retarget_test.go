@@ -17,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // mergeParentIntoMain is what merging the parent's pull request leaves behind: main carries the
@@ -275,7 +276,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
-		return rowState(t, renderPage(t, cc.NewServer(store, fixedClock(at), repos, "")), "sandbox://CHILD")
+		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), repos, "")), "sandbox://CHILD")
 	}
 
 	if got := stateOfChild(t, false, "main-tip-later"); got != "base_moved" {

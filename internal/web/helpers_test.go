@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -32,15 +31,6 @@ func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 func fixedClock(at time.Time) cc.Clock { return frozenClock{at} }
-
-func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-
-func authoriseTicket(t *testing.T, st *store.Store, ticketURL, hash string, at time.Time) {
-	t.Helper()
-	if err := st.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-"+ticketURL, at); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // dispositionAsPushed records a run whose disposition is already known to be push, so a test can
 // read what the board shows for a pushed ticket without driving the loop through spawn and dispose.
