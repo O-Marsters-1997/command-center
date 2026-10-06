@@ -24,6 +24,9 @@ func main() {
 	defer stop()
 
 	command := subcmd(flag.Args())
+	if command == nil && demoSubcmd != nil {
+		command = demoSubcmd(flag.Args())
+	}
 	if command == nil {
 		command = run
 	}
@@ -48,3 +51,5 @@ func run(ctx context.Context, configPath string) (err error) {
 
 	return app.Run(ctx)
 }
+
+var demoSubcmd func(args []string) func(ctx context.Context, configPath string) error
