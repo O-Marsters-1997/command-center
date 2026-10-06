@@ -96,7 +96,7 @@ review latency instead of six.
 Two things follow, and they are the reason the rest of the design is shaped the way it is.
 Children have to be retargeted to `main` when a parent merges, because a squash-merged branch is
 not an ancestor of anything (§4a). And branches cut from the same commit will conflict with each
-other, which is what the peer gate is for (ADR 10). Both are the bill for the rule, not features
+other, which is what the peer gate is for (ADR 4). Both are the bill for the rule, not features
 sitting beside it.
 
 ---

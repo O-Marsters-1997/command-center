@@ -1,6 +1,6 @@
 # Two configured repos each holding a ticket cut to the identical branch name -- "cc-1-x", since
 # both are issue #1 titled "x" -- stop contaminating each other's Observation facts (issue #217,
-# docs/adr/0004-seams-are-removed.md's prerequisite: "the plain name would collide the moment a
+# docs/adr/0003-seams-are-removed.md's prerequisite: "the plain name would collide the moment a
 # second repo is configured"). Before the fix, Observation's branch-keyed maps are indexed by the
 # bare branch name, so the second repo's own per-tick write clobbers the first's. This script pins
 # the fix: each ticket's own row must report its own repo's worktree, never its neighbour's.

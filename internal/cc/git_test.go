@@ -37,7 +37,7 @@ func TestParseWorktrees(t *testing.T) {
 // TestBranchKeyDisambiguatesPerRepo covers issue #85's fourth incident's own regression, generalised
 // to every ticket branch, not just main: two repos can hold the same branch name, so the plain name
 // would let one repo's fact stomp the other's the moment both are configured (draft_gate.txtar and
-// ADR 4 are the same collision end to end).
+// ADR 3 are the same collision end to end).
 func TestBranchKeyDisambiguatesPerRepo(t *testing.T) {
 	t.Parallel()
 

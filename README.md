@@ -325,7 +325,7 @@ and you must commit the rebuilt output, or the `assets` job fails.
 | [docs/designs/command-centre-design.md](docs/designs/command-centre-design.md) | The design, revision 4. Normative for mechanism, states and invariants. |
 | [docs/prds/prd-operator-surface.md](docs/prds/prd-operator-surface.md) | The page and the operator surface. Part A lands inside Phase 1. |
 | [docs/designs/cloud-agents.md](docs/designs/cloud-agents.md) | Where an always-on host and a hosted runner would fit. A sketch, normative about nothing. |
-| [plans/](plans/) | Build plans for work not yet shipped. A plan is deleted once its phases land. |
+| [docs/plans/](docs/plans/) | Build plans for work not yet shipped. A plan is deleted once its phases land. |
 | [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config, pointed at this repository. |
 | [e2e/README.md](e2e/README.md) | The end-to-end harness: scripts, fakes, fixtures, and how to add one. |
 

@@ -18,7 +18,7 @@ expensive.
   doing styling work.
 - **Two Solid islands exist**, `web/src/graph.tsx` and `web/src/launch-modal.tsx`, compiled with
   `solid-element`. Both opt out of shadow DOM
-  ([ADR 2](docs/adr/0002-islands-opt-out-of-shadow-dom.md)), so their classes are page-global.
+  ([ADR 1](docs/adr/0001-one-global-stylesheet.md)), so their classes are page-global.
   `solid-js` in `web/package.json` is those islands and nothing more. `web/src/layout.ts` holds
   the DAG layout math they share; neither island imports the other.
 - **Tailwind v4, CSS-first.** `web/app.css` holds `@import "tailwindcss"`, an `@theme` block of

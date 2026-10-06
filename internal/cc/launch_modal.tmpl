@@ -6,7 +6,7 @@
 {{- else if .Empty -}}
 <p class="text-muted">{{.Feature}} has no tickets to launch.</p>
 {{- else -}}
-<!-- noShadowDOM() is cc-launch-modal's first statement (ADR 2), so this fallback content is what
+<!-- noShadowDOM() is cc-launch-modal's first statement (ADR 1), so this fallback content is what
      a Go-only build with no Node -- assets/dist/launch-modal.js never built, the script below
      404s -- renders: a custom element the browser never upgrades still shows its light-DOM
      children. -->

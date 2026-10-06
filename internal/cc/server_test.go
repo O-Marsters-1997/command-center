@@ -433,7 +433,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	assertSeeOtherHome(t, resp)
 }
 
-// TestGetPreviewIsGone covers phase 5 of plans/feature-launch.md: the per-ticket preview page is
+// TestGetPreviewIsGone covers phase 5 of docs/plans/feature-launch.md: the per-ticket preview page is
 // deleted along with handlePreview, so the route itself is unregistered rather than refusing a
 // bad request.
 func TestGetPreviewIsGone(t *testing.T) {

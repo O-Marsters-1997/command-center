@@ -51,7 +51,7 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
 exec cc request GET /
 stdout '>merged</span>[\s\S]*?>#CC-1</button>'
 
-# remove-worktree refuses a dirty worktree: cc's own check (docs/adr/0012-cc-proves-what-tp-cannot.md)
+# remove-worktree refuses a dirty worktree: cc's own check (docs/adr/0008-cc-proves-what-tp-cannot.md)
 # catches it before tp is ever called, so the file is left, nothing is removed.
 cp scratch.txt $WORK/repo-cc-1-x/scratch.txt
 exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/teardown/issues/CC-1'

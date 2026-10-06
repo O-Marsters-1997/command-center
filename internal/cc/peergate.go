@@ -11,7 +11,7 @@ import (
 // conflicts with -- keyed by ticket URL, absent when there is none. Candidates are sorted into
 // ref order, which this package alone knows, so that of any conflicting pair only the lower one
 // proceeds; a stacked branch is never a candidate here, since conflictedBase already owns that
-// case (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+// case (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func conflictingPeerHold(
 	tickets []Ticket, byURL map[string]plan.Ticket, prs map[string]plan.PRState,
 	stackingByRepo map[string]bool, obs Observation,

@@ -146,7 +146,7 @@ _Avoid_: Section, stage, step
 
 **Spend**:
 What a run or ticket cost, as a percentage of the five-hour and weekly subscription windows. A
-ticket's spend sums its runs until its PR merges (ADR 17, ADR 19).
+ticket's spend sums its runs until its PR merges (ADR 12).
 _Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight), usage, price, dollars
 
 **Utilization reading**:
@@ -225,10 +225,6 @@ banner), header, nav
   remains, and the operator-surface PRD's rule stands — name a phase, do not number it.
 - **"cost"** was used for both the live token count and the settled dollar figure. Resolved: both
   are **spend**, which reads as tokens while a run is alive and as dollars once it ends.
-- **class names in ADR 2** were listed as `.st`, `.tl` and `.seg-h`, none of which exist. The
-  sheet has `.pill`, `.ticket-link` and `.segbar`. Resolved: the ADR names a **grammar**, not a
-  class; the Tailwind migration removes the global class namespace entirely, so the ADR's
-  collision guard becomes unnecessary rather than broken.
 - **"group"** named three things at once: the board's layout of a blocker and the tickets waiting
   on it, the tracker's own grouping that the import page lists, and an internal key tying one
   authorisation's intents together. Resolved: **group** is the board layout, always. The tracker's

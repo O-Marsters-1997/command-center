@@ -2,7 +2,7 @@
 
 **Source:** the auth plan's phase 7 (deployment) and integration points section, as scoped in
 [issue #294](https://github.com/O-Marsters-1997/command-center/issues/294). The plan itself
-(`plans/auth.md`) hasn't been committed to this repo yet.
+(`docs/plans/auth.md`) hasn't been committed to this repo yet.
 
 ## What Caddy does
 

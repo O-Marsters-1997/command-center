@@ -203,7 +203,7 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 type row struct {
 	URL string `json:"url"`
 	// Repo names the row's own configured repo, so a group kept whole by a member in scope can
-	// still name where an out-of-scope sibling lives (CONTEXT.md § Scope, ADR 11).
+	// still name where an out-of-scope sibling lives (CONTEXT.md § Scope, ADR 7).
 	Repo string `json:"repo"`
 	// Feature names the row's own tracker feature, so a group kept whole by a member in scope can
 	// still name where an out-of-scope sibling lives (CONTEXT.md § Feature).
@@ -943,7 +943,7 @@ func flattenChain(root string, childrenByRoot map[string][]row) []row {
 
 // filterGroupsByRepo narrows groups to a repo scope, admitting a matching group whole: keeping a
 // group's root or any child out of it would leave groupRows' unchecked byURL[root] lookup
-// pointing at nothing (ADR 11 "a scope admits a group whole"). An empty repo is unscoped.
+// pointing at nothing (ADR 7 "a scope admits a group whole"). An empty repo is unscoped.
 func filterGroupsByRepo(groups []group, repo string) []group {
 	if repo == "" {
 		return groups
@@ -999,7 +999,7 @@ func groupInFeature(g group, feature string) bool {
 }
 
 // rowsIn flattens groups back to the rows they render, which is what deriveBand counts: a scoped
-// group still shows its out-of-scope members, so the band counts them too (ADR 11).
+// group still shows its out-of-scope members, so the band counts them too (ADR 7).
 func rowsIn(groups []group) []row {
 	rows := make([]row, 0, len(groups))
 	for _, g := range groups {
@@ -1069,7 +1069,7 @@ func readyToMergeWarning(pr gh.PR) string {
 
 // removalWarning surfaces the row's own remove-worktree refusal, only while its state still
 // offers the verb -- once the row leaves that state (removed, or no longer eligible), a refusal
-// from before must never render as if it were today's (docs/adr/0012-cc-proves-what-tp-cannot.md).
+// from before must never render as if it were today's (docs/adr/0008-cc-proves-what-tp-cannot.md).
 func removalWarning(s plan.State, detail string) string {
 	if detail == "" || !slices.Contains(plan.Verbs(s), plan.VerbRemoveWorktree) {
 		return ""
