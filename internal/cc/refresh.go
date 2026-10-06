@@ -70,45 +70,10 @@ func (s *Store) latestRefreshOutcomes(ctx context.Context) (map[string]refreshOu
 	return outcomes, nil
 }
 
-type refreshContext struct {
-	byURL     map[string]plan.Ticket
-	stacking  map[string]bool
-	prs       map[string]plan.PRState
-	repoPaths map[string]string
-	verifyCmd map[string][]string
-	pushRows  map[string]plan.PushRow
-	obs       plan.Observation
-}
-
-func (l *Loop) newRefreshContext(ctx context.Context, tickets []Ticket, obs plan.Observation) (refreshContext, error) {
-	pushRows, err := l.store.LatestPushes(ctx)
-	if err != nil {
-		return refreshContext{}, err
-	}
-	return refreshContext{
-		byURL:     planTicketsByURL(tickets),
-		stacking:  l.cfg.PlanRules().Stacking,
-		prs:       prsByBranch(tickets, obs),
-		repoPaths: repoPathsByName(l.cfg.Repos),
-		verifyCmd: verifyCommandByRepo(l.cfg.Repos),
-		pushRows:  pushRows,
-		obs:       obs,
-	}, nil
-}
-
 // applyRefreshIntents runs every requested refresh, which bypasses the RefreshFacts gate the way
 // retry-push bypasses PushFacts, then sweeps the eligible base-moved rows
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) applyRefreshIntents(ctx context.Context, obs plan.Observation) error {
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
-	rc, err := l.newRefreshContext(ctx, tickets, obs)
-	if err != nil {
-		return err
-	}
+func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	now := l.clock.Now()
 
 	intents, err := l.store.PendingVerbIntents(ctx, refreshVerb)
@@ -118,8 +83,12 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs plan.Observation) er
 	requested := make(map[string]bool, len(intents))
 	for _, intent := range intents {
 		requested[intent.TicketID] = true
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			if err := l.refreshOne(ctx, ticket, rc.pushRows[ticket.URL], rc, now, true); err != nil {
+		if e, ok := snap.Entry(intent.TicketID); ok {
+			var row plan.PushRow
+			if e.LastPush != nil {
+				row = *e.LastPush
+			}
+			if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, now, true); err != nil {
 				return err
 			}
 		}
@@ -128,7 +97,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs plan.Observation) er
 		}
 	}
 
-	return l.autoRefresh(ctx, tickets, rc, requested, now)
+	return l.autoRefresh(ctx, snap, obs, requested, now)
 }
 
 // autoRefresh sweeps every pushed, base-moved row that no live run or unresolved merge bars
@@ -136,36 +105,32 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, obs plan.Observation) er
 // verification, so a human's abort is not undone by the next tick re-running the same merge
 // (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) autoRefresh(
-	ctx context.Context, tickets []Ticket, rc refreshContext, requested map[string]bool, now time.Time,
+	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[string]bool, now time.Time,
 ) error {
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return err
-	}
 	outcomes, err := l.store.latestRefreshOutcomes(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, t := range tickets {
+	for _, e := range snap.Entries {
+		t := e.Ticket
 		if requested[t.URL] {
 			continue
 		}
-		summary, ok := latest[t.URL]
-		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
+		if e.Run == nil || !e.Run.HasOutcome || e.Run.Outcome != plan.OutcomePush {
 			continue
 		}
-		if rc.obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
+		if obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
-		pushRow, pushed := rc.pushRows[t.URL]
-		if !pushed || !baseMoved(pushRow, rc.obs, t.Repo) {
+		pushRow := e.LastPush
+		if pushRow == nil || !baseMoved(*pushRow, obs, t.Repo) {
 			continue
 		}
-		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, rc.obs) {
+		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, *pushRow, obs) {
 			continue
 		}
-		if err := l.refreshOne(ctx, t, pushRow, rc, now, false); err != nil {
+		if err := l.refreshOne(ctx, snap, obs, t, *pushRow, now, false); err != nil {
 			return err
 		}
 	}
@@ -192,7 +157,7 @@ func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
 // pushed by a human outside the app, or the base's, advanced again with a later fix -- makes it a
 // different merge from the one that failed, so the gate no longer applies to it (issue #188). Any
 // other refresh-domain outcome keeps gating until the refresh verb clears it.
-func supersededConflict(o refreshOutcome, t Ticket, row plan.PushRow, obs plan.Observation) bool {
+func supersededConflict(o refreshOutcome, t plan.Ticket, row plan.PushRow, obs plan.Observation) bool {
 	if o.kind != eventRefreshConflicted {
 		return false
 	}
@@ -215,7 +180,8 @@ func baseMoved(row plan.PushRow, obs plan.Observation, repo string) bool {
 // result. A refused fast-forward records refresh_refused and stops; a conflict is left mid-merge
 // for a human (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) refreshOne(
-	ctx context.Context, ticket Ticket, row plan.PushRow, rc refreshContext, now time.Time, requested bool,
+	ctx context.Context, snap plan.Snapshot, obs plan.Observation, ticket plan.Ticket, row plan.PushRow,
+	now time.Time, requested bool,
 ) error {
 	branch := ticket.Branch
 	refuse := func(detail string) error {
@@ -226,13 +192,13 @@ func (l *Loop) refreshOne(
 			Event{At: now, TicketURL: ticket.URL, Kind: eventRefreshRefused, Detail: detail})
 	}
 
-	worktreePath, ok := rc.obs.Worktrees[branchKey(ticket.Repo, branch)]
+	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, branch)]
 	switch {
 	case !ok:
 		return refuse(fmt.Sprintf("no worktree for %s", branch))
-	case rc.obs.Runs[ticket.URL].Alive:
+	case obs.Runs[ticket.URL].Alive:
 		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
-	case rc.obs.MidMerge[branchKey(ticket.Repo, branch)]:
+	case obs.MidMerge[branchKey(ticket.Repo, branch)]:
 		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
@@ -242,11 +208,12 @@ func (l *Loop) refreshOne(
 		})
 	}
 
-	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
+	entry, _ := snap.Entry(ticket.URL)
+	unlock := entry.Unlock
 	if !unlock.Unlocked {
 		return refuse(string(unlock.Reason))
 	}
-	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, rc.obs)
+	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
 	if err != nil {
 		// A rebase that stops on a conflict has already rewritten the branch, so the push after
 		// whoever resolves it still needs the lease the completed restack would have earned
@@ -259,10 +226,10 @@ func (l *Loop) refreshOne(
 				return err
 			}
 		}
-		baseTip := rc.obs.BranchTips[branchKey(ticket.Repo, unlock.BaseBranch)]
+		baseTip := obs.BranchTips[branchKey(ticket.Repo, unlock.BaseBranch)]
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TicketURL: ticket.URL, Kind: eventRefreshConflicted,
-			Detail: conflictDetail(rc.obs.BranchTips[branchKey(ticket.Repo, branch)], baseTip, err),
+			Detail: conflictDetail(obs.BranchTips[branchKey(ticket.Repo, branch)], baseTip, err),
 		})
 	}
 
@@ -276,7 +243,7 @@ func (l *Loop) refreshOne(
 	}); err != nil {
 		return err
 	}
-	return l.verifyOne(ctx, ticket, worktreePath, rc.verifyCmd[ticket.Repo], now)
+	return l.verifyOne(ctx, ticket, worktreePath, verifyCommandByRepo(l.cfg.Repos)[ticket.Repo], now)
 }
 
 const maxVerifyDetail = 4000
@@ -284,7 +251,7 @@ const maxVerifyDetail = 4000
 // ponytail: runs synchronously in the tick, like refresh's own git calls -- if a slow build ever
 // measurably stalls the 15s loop, move it onto the async Runner spawnRun already uses.
 func (l *Loop) verifyOne(
-	ctx context.Context, ticket Ticket, worktreePath string, argv []string, now time.Time,
+	ctx context.Context, ticket plan.Ticket, worktreePath string, argv []string, now time.Time,
 ) error {
 	if len(argv) == 0 {
 		return nil

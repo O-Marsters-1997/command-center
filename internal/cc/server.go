@@ -1523,17 +1523,6 @@ func planTicketsByURL(tickets []Ticket) map[string]plan.Ticket {
 	return byURL
 }
 
-// prsByBranch reads each ticket's own PR state back out under its own bare branch name, which is
-// what internal/plan indexes by: plan.Ticket carries no repo-qualified key of its own, and this
-// map's whole job is bridging Observation's repo-qualified storage back to plan's shape.
-func prsByBranch(tickets []Ticket, obs plan.Observation) map[string]plan.PRState {
-	prs := make(map[string]plan.PRState, len(tickets))
-	for _, t := range tickets {
-		prs[t.Branch] = obs.PRs[branchKey(t.Repo, t.Branch)].State
-	}
-	return prs
-}
-
 func planTicket(t Ticket) plan.Ticket {
 	return plan.Ticket{
 		URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy,

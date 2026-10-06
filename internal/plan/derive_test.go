@@ -259,9 +259,16 @@ func TestDeriveDraftReason(t *testing.T) {
 					consumer.URL: {PushedTip: "tip", BaseBranch: "main", BaseSHAAtPush: "main-tip", PushedAt: pushedAt},
 				}},
 			}
-			got := entry(t, derive(rules, in), consumer.URL).DraftReason
-			if got != tt.want {
-				t.Errorf("DraftReason = %q, want %q", got, tt.want)
+			got := entry(t, derive(rules, in), consumer.URL)
+			wantReady := tt.draft && tt.blocker == plan.Merged && tt.checks == "SUCCESS"
+			if got.ReadyToUndraft != wantReady {
+				t.Errorf("ReadyToUndraft = %v, want %v", got.ReadyToUndraft, wantReady)
+			}
+			if !got.OpensAsDraft {
+				t.Error("OpensAsDraft = false, want true for a ticket with a gating blocker")
+			}
+			if got.DraftReason != tt.want {
+				t.Errorf("DraftReason = %q, want %q", got.DraftReason, tt.want)
 			}
 		})
 	}

@@ -19,7 +19,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -165,10 +164,14 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.retargetMerged(ctx, obs); err != nil {
+	snap, err := l.derive(ctx, obs)
+	if err != nil {
 		return err
 	}
-	if err := l.applyAbortIntents(ctx, obs); err != nil {
+	if err := l.retargetMerged(ctx, snap, obs); err != nil {
+		return err
+	}
+	if err := l.applyAbortIntents(ctx, snap, obs); err != nil {
 		return err
 	}
 	if err := l.resolveGeneratedConflicts(ctx, obs); err != nil {
@@ -177,17 +180,21 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyResolveIntents(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.applyRefreshIntents(ctx, obs); err != nil {
+	snap, err = l.derive(ctx, obs)
+	if err != nil {
+		return err
+	}
+	if err := l.applyRefreshIntents(ctx, snap, obs); err != nil {
 		return err
 	}
 	rereadLocalTips(ctx, obs, repoPathsByName(l.cfg.Repos))
-	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
+	if err := l.applyRetryPushIntents(ctx, snap, obs); err != nil {
 		return err
 	}
-	if err := l.applyCommitResolutionIntents(ctx, obs); err != nil {
+	if err := l.applyCommitResolutionIntents(ctx, snap, obs); err != nil {
 		return err
 	}
-	if err := l.pushPushable(ctx, obs); err != nil {
+	if err := l.pushPushable(ctx, snap, obs); err != nil {
 		return err
 	}
 	if err := l.recordVerdictTransitions(ctx, obs); err != nil {
@@ -199,25 +206,43 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.recordMergedEvents(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.applyDraftGate(ctx, obs); err != nil {
+	snap, err = l.derive(ctx, obs)
+	if err != nil {
 		return err
 	}
-	if err := l.applyReRunIntents(ctx, obs); err != nil {
+	if err := l.applyDraftGate(ctx, snap); err != nil {
+		return err
+	}
+	if err := l.applyReRunIntents(ctx, snap, obs); err != nil {
 		return err
 	}
 	if err := l.applyFollowUpIntents(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.applyReCheckIntents(ctx, obs); err != nil {
+	if err := l.applyReCheckIntents(ctx, snap, obs); err != nil {
 		return err
 	}
-	if err := l.applyClosePRIntents(ctx); err != nil {
+	if err := l.applyClosePRIntents(ctx, snap); err != nil {
 		return err
 	}
-	if err := l.applyRemoveWorktreeIntents(ctx, obs); err != nil {
+	if err := l.applyRemoveWorktreeIntents(ctx, snap, obs); err != nil {
 		return err
 	}
-	return l.launchEligible(ctx, obs)
+	snap, err = l.derive(ctx, obs)
+	if err != nil {
+		return err
+	}
+	return l.launchEligible(ctx, snap)
+}
+
+func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {
+	in, err := l.store.PlanInput(ctx)
+	if err != nil {
+		return plan.Snapshot{}, err
+	}
+	in.Now = l.clock.Now()
+	in.Obs = obs
+	return l.cfg.PlanRules().Derive(in), nil
 }
 
 // Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is
@@ -475,65 +500,27 @@ func (l *Loop) commitsSinceBaseline(
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
-// launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this
-// tick, under max_agents applied globally over every repo's unlock results.
-func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
-	if err != nil {
-		return err
-	}
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return err
-	}
-	gauges, err := l.store.LatestReadings(ctx)
-	if err != nil {
-		return err
-	}
-
-	rules := l.cfg.PlanRules()
-	stacking := rules.Stacking
-	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(tickets, obs)
-	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	candidates := make([]plan.LaunchCandidate, 0, len(tickets))
-	unlocks := make(map[string]plan.Unlock, len(tickets))
-	for _, t := range tickets {
-		pt := planTicket(t)
-		unlock := plan.Unlocked(pt, byURL, prs, stacking[t.Repo])
-		unlocks[t.URL] = unlock
-
-		hash, isAuthorised := authorisedHashes[t.URL]
-		_, hasRun := latest[t.URL]
-		promptHashMatches := isAuthorised && hash == plan.Hash(plan.Compose(pt))
-		candidates = append(candidates, plan.LaunchCandidate{
-			URL:               t.URL,
-			Unlock:            unlock,
-			Authorised:        isAuthorised,
-			PromptHashMatches: promptHashMatches,
-			HasRun:            hasRun,
-			ConflictedBase:    rules.ConflictedBase(pt, byURL, unlock, obs),
-		})
-	}
-
-	paused := spend.Paused(gauges[agentlog.FiveHour].Utilization, l.cfg.SpendLimit5h)
-	toLaunch := plan.LaunchPlan(candidates, currentlyRunning(latest), l.cfg.MaxAgents, paused)
+// launchEligible is job 3 of the tick: snap.Launch picks the tickets to cut and spawn this tick,
+// under max_agents applied globally over every repo's unlock results.
+func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
+	toLaunch := snap.Launch()
 	if len(toLaunch) == 0 {
 		return nil
 	}
 
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return err
+	}
 	byTicket := ticketsByURL(tickets)
+	repoPaths := repoPathsByName(l.cfg.Repos)
 	for _, ticketURL := range toLaunch {
+		entry, _ := snap.Entry(ticketURL)
 		ticket := byTicket[ticketURL]
 		spec := launchSpec{
 			ticket:     ticket,
-			baseBranch: unlocks[ticketURL].BaseBranch,
-			promptHash: authorisedHashes[ticketURL],
+			baseBranch: entry.Unlock.BaseBranch,
+			promptHash: entry.PromptHash,
 			repoPath:   repoPaths[ticket.Repo],
 		}
 		if err := l.cutAndSpawn(ctx, spec); err != nil {
@@ -541,18 +528,6 @@ func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 		}
 	}
 	return nil
-}
-
-// currentlyRunning counts tickets with a live-or-undisposed run: the slots LaunchPlan's max_agents
-// cap must subtract before deciding how many more to start this tick.
-func currentlyRunning(latest map[string]plan.RunSummary) int {
-	n := 0
-	for _, s := range latest {
-		if s.Pgid != nil && !s.HasOutcome {
-			n++
-		}
-	}
-	return n
 }
 
 // tickCheckingWaits bumps every ticket's checking-wait tick count by one. It runs only after a

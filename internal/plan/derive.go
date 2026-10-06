@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -87,6 +88,8 @@ type Input struct {
 	Verdict      VerdictFacts
 	PendingVerbs map[string][]string
 	Removals     map[string]string
+	// FiveHour is the latest five-hour utilization reading, as a fraction.
+	FiveHour float64
 }
 
 // Entry is one ticket's derived state: what the board shows and the verbs it may offer.
@@ -104,12 +107,30 @@ type Entry struct {
 	DraftReason    string
 	LaunchID       int64
 	Base           string
+	// ReadyToUndraft is true for an open draft pull request whose gate says it should be ready.
+	ReadyToUndraft bool
+	// OpensAsDraft is true when the ticket has a gating blocker in another repo.
+	OpensAsDraft bool
+	// PromptHash is the hash authorised for the ticket's active launch, empty outside one.
+	PromptHash string
+	// LastPush is the ticket's latest recorded push, nil before its first.
+	LastPush *PushRow
 }
 
 // Snapshot is every ticket's Entry, in input order.
 type Snapshot struct {
-	Entries []Entry
-	byURL   map[string]int
+	Entries     []Entry
+	byURL       map[string]int
+	launch      []LaunchCandidate
+	running     int
+	maxAgents   int
+	spendPaused bool
+}
+
+// Launch is the ticket URLs to cut and spawn: every eligible candidate in input order, capped at
+// the free agent slots, and none while the five-hour reading is at spend_limit_5h.
+func (s Snapshot) Launch() []string {
+	return LaunchPlan(s.launch, s.running, s.maxAgents, s.spendPaused)
 }
 
 // Entry returns the entry for a ticket URL.
@@ -153,7 +174,12 @@ func (r Rules) Derive(in Input) Snapshot {
 	prs := prsByBranch(in.Tickets, in.Obs)
 	peers := r.conflictingPeerHold(in.Tickets, byURL, prs, in.Obs)
 
-	snap := Snapshot{Entries: make([]Entry, 0, len(in.Tickets)), byURL: make(map[string]int, len(in.Tickets))}
+	snap := Snapshot{
+		Entries:     make([]Entry, 0, len(in.Tickets)),
+		byURL:       make(map[string]int, len(in.Tickets)),
+		maxAgents:   r.MaxAgents,
+		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
+	}
 	for _, t := range in.Tickets {
 		unlock := Unlocked(t, byURL, prs, r.Stacking[t.Repo])
 		base := unlock.BaseBranch
@@ -162,23 +188,43 @@ func (r Rules) Derive(in Input) Snapshot {
 		}
 		run, pgid, elapsed, logPath := r.runFor(t, in, peers[t.URL])
 		membership := in.Memberships[t.URL]
+		authorised := membership.LaunchID != 0
 		conflictedBase := r.ConflictedBase(t, byURL, unlock, in.Obs)
 		state, reason := Status(Facts{
 			Ticket:          t,
 			Unlock:          unlock,
 			Now:             in.Now,
-			Authorised:      membership.LaunchID != 0,
+			Authorised:      authorised,
 			LatestRun:       run,
 			CancelledMember: membership.Cancelled,
 			ConflictedBase:  conflictedBase,
 		})
+		snap.launch = append(snap.launch, LaunchCandidate{
+			URL:               t.URL,
+			Unlock:            unlock,
+			Authorised:        authorised,
+			PromptHashMatches: authorised && membership.PromptHash == Hash(Compose(t)),
+			HasRun:            run != nil,
+			ConflictedBase:    conflictedBase,
+		})
+		if pgid != nil && !run.HasOutcome {
+			snap.running++
+		}
+
+		pr := in.Obs.PRs[BranchKey(t.Repo, t.Branch)]
+		draftWhy, readyToUndraft := draftReason(pr, t, byURL, prs, run)
+		var lastPush *PushRow
+		if row, ok := in.Verdict.PushRows[t.URL]; ok {
+			lastPush = &row
+		}
 		snap.byURL[t.URL] = len(snap.Entries)
 		snap.Entries = append(snap.Entries, Entry{
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Pgid: pgid, Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
-			DraftReason: draftReason(in.Obs.PRs[BranchKey(t.Repo, t.Branch)], t, byURL, prs, run),
-			LaunchID:    membership.LaunchID,
-			Base:        base,
+			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
+			OpensAsDraft: len(GatingBlockers(t, byURL)) > 0,
+			PromptHash:   membership.PromptHash, LastPush: lastPush,
+			LaunchID: membership.LaunchID, Base: base,
 		})
 	}
 	return snap
@@ -258,16 +304,18 @@ func branchNumber(branch string) (int, bool) {
 // draftReason names why a drafted row is still a draft: DraftGate's own reason or, when the gate
 // says ready but the PR is still a draft, that the last `gh pr ready` call has not taken effect
 // (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
-func draftReason(pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run *RunFact) string {
+func draftReason(
+	pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run *RunFact,
+) (reason string, ready bool) {
 	if !pr.IsDraft {
-		return ""
+		return "", false
 	}
 	gating := GatingBlockers(t, byURL)
-	draft, reason := DraftGate(gating, prs, run != nil && run.VerdictReviewMe)
+	draft, gateReason := DraftGate(gating, prs, run != nil && run.VerdictReviewMe)
 	if !draft {
-		return "ready to un-draft; the last gh pr ready call has not taken effect yet"
+		return "ready to un-draft; the last gh pr ready call has not taken effect yet", true
 	}
-	return string(reason)
+	return string(gateReason), false
 }
 
 // runFor builds Status's LatestRun input for one ticket, plus the pgid, elapsed time and log path
