@@ -10,10 +10,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// importVerb is the intent verb whose pending rows mean a feature import is still queued. Its
-// ticket id is the feature label.
-const importVerb = "import"
-
 // Candidate is one ticket the launch preview would start, as GET /launch/candidates serves it.
 type Candidate struct {
 	URL         string   `json:"url"`
@@ -122,7 +118,7 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
 	view := LaunchModal{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
-	intents, err := r.store.PendingVerbIntents(ctx, importVerb)
+	intents, err := r.store.PendingVerbIntents(ctx, store.ImportVerb)
 	if err != nil {
 		return LaunchModal{}, err
 	}
