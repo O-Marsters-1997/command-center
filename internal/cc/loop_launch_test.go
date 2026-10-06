@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
@@ -40,15 +41,15 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
 	authoriseTicket(t, store, ticket.URL, hash, at)
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	spawned := fake.spawns[0]
+	spawned := fake.Spawns[0]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
@@ -98,16 +99,16 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
 	authoriseTicket(t, store, ticket.URL, hash, at)
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
 
-	written, err := os.ReadFile(fake.spawns[0].PromptPath)
+	written, err := os.ReadFile(fake.Spawns[0].PromptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,15 +133,15 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	authoriseTicket(t, store, ticket.URL, plan.Hash("a prompt this ticket never composed to"), at)
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	for i := 0; i < 3; i++ {
 		if err := loop.RunOnce(t.Context()); err != nil {
 			t.Fatalf("RunOnce %d: %v", i, err)
 		}
 	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned", len(fake.Spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -167,14 +168,14 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
 	authoriseTicket(t, store, ticket.URL, hash, at)
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(fake.Spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -211,14 +212,14 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 		authoriseTicket(t, store, ticket.URL, hash, at)
 	}
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(fake.Spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -258,9 +259,9 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.canReap[999] = true
-	fake.reapCode[999] = 0
+	fake := runner.NewFake()
+	fake.CanReap[999] = true
+	fake.ReapCode[999] = 0
 	// alive defaults to false in the map (zero value), i.e. the run reads dead this tick.
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
@@ -294,8 +295,8 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err := store.RecordSpawn(t.Context(), runID2, 1000, at, "/state/runs/2.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	fake.canReap[1000] = true
-	fake.reapCode[1000] = 0
+	fake.CanReap[1000] = true
+	fake.ReapCode[1000] = 0
 
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
@@ -340,9 +341,9 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.canReap[999] = true
-	fake.reapCode[999] = 137 // killed
+	fake := runner.NewFake()
+	fake.CanReap[999] = true
+	fake.ReapCode[999] = 137 // killed
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
@@ -415,9 +416,9 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.canReap[999] = true
-	fake.reapCode[999] = 0
+	fake := runner.NewFake()
+	fake.CanReap[999] = true
+	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
@@ -471,9 +472,9 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	obs := plan.Observation{BranchTips: map[string]string{cc.BranchKey("repo", "cc-1"): originTip}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.canReap[999] = true
-	fake.reapCode[999] = 0
+	fake := runner.NewFake()
+	fake.CanReap[999] = true
+	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
@@ -519,10 +520,10 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.alive[4242] = true
-	fake.canReap[4242] = true
-	fake.reapCode[4242] = 143
+	fake := runner.NewFake()
+	fake.Alive[4242] = true
+	fake.CanReap[4242] = true
+	fake.ReapCode[4242] = 143
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
@@ -530,8 +531,8 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.canceled) != 1 || fake.canceled[0] != 4242 {
-		t.Errorf("canceled = %v, want [4242]", fake.canceled)
+	if len(fake.Canceled) != 1 || fake.Canceled[0] != 4242 {
+		t.Errorf("canceled = %v, want [4242]", fake.Canceled)
 	}
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
@@ -579,13 +580,13 @@ func TestLoopPausesSpawningAtOrAboveSpendLimit5h(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: the five-hour reading is at spend_limit_5h", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: the five-hour reading is at spend_limit_5h", len(fake.Spawns))
 	}
 }
 
@@ -612,13 +613,13 @@ func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 0 {
-		t.Fatalf("spawns after tick 1 = %d, want 0", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Fatalf("spawns after tick 1 = %d, want 0", len(fake.Spawns))
 	}
 
 	under := agentlog.Reading{
@@ -631,8 +632,8 @@ func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Errorf("spawns after tick 2 = %d, want 1: the newer reading dropped below spend_limit_5h", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Errorf("spawns after tick 2 = %d, want 1: the newer reading dropped below spend_limit_5h", len(fake.Spawns))
 	}
 }
 
@@ -668,8 +669,8 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
-	fake.alive[4242] = true
+	fake := runner.NewFake()
+	fake.Alive[4242] = true
 
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	cfg.SpendLimit5h = 80
@@ -678,10 +679,10 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.canceled) != 0 {
-		t.Errorf("canceled pgids = %v, want none: spend_limit_5h never kills a live run", fake.canceled)
+	if len(fake.Canceled) != 0 {
+		t.Errorf("canceled pgids = %v, want none: spend_limit_5h never kills a live run", fake.Canceled)
 	}
-	if !fake.alive[4242] {
+	if !fake.Alive[4242] {
 		t.Error("the live run's process was stopped; spend_limit_5h must leave it running")
 	}
 }

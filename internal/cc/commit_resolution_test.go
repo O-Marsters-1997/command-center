@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func conflictedWorktree(t *testing.T, repoPath, worktreePath, relPath string) {
@@ -62,7 +63,7 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -194,7 +195,7 @@ func TestCommitResolutionRefusesALiveRun(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -225,7 +226,7 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -268,7 +269,7 @@ func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testi
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

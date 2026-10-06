@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // threeRepoStore seeds a same-repo fan-out -- ROOT and CHILD both in "repo", CHILD blocked by
@@ -386,14 +387,14 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	hash := plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL}))
 	authoriseTicket(t, store, hidden.URL, hash, at)
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
+	if len(fake.Spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(fake.spawns))
+			len(fake.Spawns))
 	}
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {

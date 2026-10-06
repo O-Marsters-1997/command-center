@@ -12,6 +12,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
@@ -29,7 +30,7 @@ type options struct {
 	observe       ObserveFunc
 	repoCheck     RepoCheckFunc
 	checkout      CheckoutFunc
-	runner        Runner
+	runner        runner.Runner
 	metricsParser MetricsParser
 	forge         gh.Forge
 	worktrees     tp.Worktrees
@@ -60,8 +61,8 @@ func WithRepoCheck(check RepoCheckFunc) Option {
 
 // WithRunner replaces the real process runner, so a test can drive spawn, liveness and cancel
 // without touching the OS.
-func WithRunner(runner Runner) Option {
-	return func(o *options) { o.runner = runner }
+func WithRunner(r runner.Runner) Option {
+	return func(o *options) { o.runner = r }
 }
 
 // CheckoutFunc ensures every configured repo has a working checkout before the loop starts. See
@@ -174,9 +175,9 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if observe == nil {
 		observe = NewObserver(store, settings.forge, cfg)
 	}
-	runner := settings.runner
-	if runner == nil {
-		runner = ProcessRunner{}
+	agents := settings.runner
+	if agents == nil {
+		agents = runner.ProcessRunner{}
 	}
 	metricsParser := settings.metricsParser
 	if metricsParser == nil {
@@ -186,7 +187,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		return nil, err
 	}
 
-	loop := NewLoop(store, observe, settings.clock, cfg, ws, runner)
+	loop := NewLoop(store, observe, settings.clock, cfg, ws, agents)
 	loop.SetMetricsParser(metricsParser)
 	loop.SetForge(settings.forge)
 	loop.SetWorktrees(settings.worktrees)

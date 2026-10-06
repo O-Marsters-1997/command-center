@@ -1,4 +1,4 @@
-package cc_test
+package runner_test
 
 import (
 	"os"
@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // commitsScript is the absolute path to testdata/agents/commits.sh (the fake agent that
-// commits a file and exits 0), which lives at the module root rather than under internal/cc.
+// commits a file and exits 0), which lives at the module root.
 func commitsScript(t *testing.T) string {
 	t.Helper()
 	abs, err := filepath.Abs("../../testdata/agents/commits.sh")
@@ -50,7 +50,7 @@ func gitRepo(t *testing.T) string {
 func TestProcessRunnerSpawnRunsTheAgentWithSubstitutedArgvAndRedirectedOutput(t *testing.T) {
 	worktree := gitRepo(t)
 	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	if err := cc.WriteAgentSettings(settingsPath); err != nil {
+	if err := os.WriteFile(settingsPath, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
@@ -66,14 +66,14 @@ func TestProcessRunnerSpawnRunsTheAgentWithSubstitutedArgvAndRedirectedOutput(t 
 
 	t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{commitsScript(t), "{worktree}", "{settings}", "{prompt_file}"},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := cc.ProcessRunner{}.Spawn(t.Context(), cfg)
+	result, err := runner.ProcessRunner{}.Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -120,7 +120,7 @@ func waitForFile(t *testing.T, path string) {
 // and testing.T reports that against the whole package rather than this one test.
 func reapExit(t *testing.T, pid int) {
 	t.Helper()
-	exitCode, ok := cc.Reap(pid)
+	exitCode, ok := runner.Reap(pid)
 	if !ok {
 		t.Fatalf("Reap reported no exit code for pid %d, which is our own direct child", pid)
 	}
@@ -150,14 +150,14 @@ func TestProcessRunnerSpawnStripsAnthropicAPIKey(t *testing.T) {
 
 	t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -191,14 +191,14 @@ func TestProcessRunnerSpawnSetsANewProcessGroup(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestProcessRunnerSpawnSubstitutesThePromptTextIntoArgv(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath, "{prompt}"},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
@@ -247,7 +247,7 @@ func TestProcessRunnerSpawnSubstitutesThePromptTextIntoArgv(t *testing.T) {
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) 
 		t.Fatal(err)
 	}
 	systemPromptPath := filepath.Join(t.TempDir(), "system-prompt.md")
-	if err := cc.WriteAgentSystemPrompt(systemPromptPath); err != nil {
+	if err := os.WriteFile(systemPromptPath, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	argvDump := filepath.Join(worktree, "argv.txt")
@@ -285,7 +285,7 @@ func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) 
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand:     []string{scriptPath, "{system_prompt}"},
 		WorktreePath:     worktree,
 		SettingsPath:     settingsPath,
@@ -293,7 +293,7 @@ func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) 
 		PromptPath:       promptPath,
 		LogFile:          logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestProcessRunnerSpawnSubstitutesTheAgentsPathIntoArgv(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentsPath := filepath.Join(t.TempDir(), "agents.json")
-	if err := cc.WriteAgentDigestDefinition(agentsPath); err != nil {
+	if err := os.WriteFile(agentsPath, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	argvDump := filepath.Join(worktree, "argv.txt")
@@ -331,7 +331,7 @@ func TestProcessRunnerSpawnSubstitutesTheAgentsPathIntoArgv(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath, "{agents}"},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
@@ -339,7 +339,7 @@ func TestProcessRunnerSpawnSubstitutesTheAgentsPathIntoArgv(t *testing.T) {
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -376,14 +376,14 @@ func TestProcessRunnerSpawnDropsTheAgentsFlagWhenPathIsEmpty(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath, "before", "--agents", "{agents}", "after"},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -420,14 +420,14 @@ func TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty(t *testing.T)
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath, "before", "--append-system-prompt-file", "{system_prompt}", "after"},
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
@@ -466,14 +466,14 @@ func TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt(t *testi
 	}
 	t.Cleanup(func() { _ = logFile.Close() })
 
-	cfg := cc.SpawnConfig{
+	cfg := runner.SpawnConfig{
 		AgentCommand: []string{scriptPath}, // no {worktree} anywhere in argv, on purpose
 		WorktreePath: worktree,
 		SettingsPath: settingsPath,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	result, err := (cc.ProcessRunner{}).Spawn(t.Context(), cfg)
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testing.T) {
@@ -34,17 +35,17 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	spawned := fake.spawns[0]
+	spawned := fake.Spawns[0]
 	if spawned.WorktreePath != worktreePath {
 		t.Errorf("follow-up spawned in %q, want the existing worktree %q", spawned.WorktreePath, worktreePath)
 	}
@@ -116,15 +117,15 @@ func TestFollowUpNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 0 {
-		t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.Spawns))
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
@@ -154,15 +155,15 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 0 {
-		t.Fatalf("spawns = %d, want 0: follow-up never cuts a fresh worktree", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Fatalf("spawns = %d, want 0: follow-up never cuts a fresh worktree", len(fake.Spawns))
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {

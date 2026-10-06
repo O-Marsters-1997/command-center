@@ -1,6 +1,6 @@
 //go:build unix
 
-package cc
+package runner
 
 import (
 	"errors"

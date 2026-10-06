@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func renderPage(t *testing.T, server *cc.Server) string {
@@ -130,13 +131,13 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.Spawns))
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -169,14 +170,14 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Fatalf("second RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
+	if len(fake.Spawns) != 1 {
 		t.Errorf("spawns after tick 2 = %d, want still 1: launchEligible must start nothing from a cancelled launch",
-			len(fake.spawns))
+			len(fake.Spawns))
 	}
-	if len(fake.canceled) != 0 {
-		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", fake.canceled)
+	if len(fake.Canceled) != 0 {
+		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", fake.Canceled)
 	}
-	if !fake.alive[runningPgid] {
+	if !fake.Alive[runningPgid] {
 		t.Error("the running member's process was stopped; cancel must leave it running")
 	}
 

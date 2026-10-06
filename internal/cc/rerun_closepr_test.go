@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting covers re-run's own contract
@@ -47,21 +48,21 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	if fake.spawns[0].WorktreePath != worktreePath {
-		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.spawns[0].WorktreePath, worktreePath)
+	if fake.Spawns[0].WorktreePath != worktreePath {
+		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.Spawns[0].WorktreePath, worktreePath)
 	}
-	if fake.spawns[0].SystemPromptPath != ws.SystemPromptPath {
-		t.Errorf("system prompt path = %q, want %q", fake.spawns[0].SystemPromptPath, ws.SystemPromptPath)
+	if fake.Spawns[0].SystemPromptPath != ws.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, ws.SystemPromptPath)
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -123,18 +124,18 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	if !strings.HasSuffix(fake.spawns[0].WorktreePath, "wt-cc-1") {
-		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.spawns[0].WorktreePath)
+	if !strings.HasSuffix(fake.Spawns[0].WorktreePath, "wt-cc-1") {
+		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.Spawns[0].WorktreePath)
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -186,7 +187,7 @@ func TestClosePRCallsGhPrCloseAndLogsTheEvent(t *testing.T) {
 
 	observe := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

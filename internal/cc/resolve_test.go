@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing.T) {
@@ -34,17 +35,17 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	spawned := fake.spawns[0]
+	spawned := fake.Spawns[0]
 	if spawned.WorktreePath != worktreePath {
 		t.Errorf("resolve spawned in %q, want the existing worktree %q", spawned.WorktreePath, worktreePath)
 	}
@@ -92,15 +93,15 @@ func TestResolveNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 0 {
-		t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.spawns))
+	if len(fake.Spawns) != 0 {
+		t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.Spawns))
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
@@ -132,20 +133,20 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
 
-	pid := fake.nextPid
-	fake.alive[pid] = false
-	fake.canReap[pid] = true
-	fake.reapCode[pid] = 0
+	pid := fake.NextPid
+	fake.Alive[pid] = false
+	fake.CanReap[pid] = true
+	fake.ReapCode[pid] = 0
 
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
@@ -208,14 +209,14 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce (resolve): %v", err)
 	}
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns after resolve = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns after resolve = %d, want 1", len(fake.Spawns))
 	}
 
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, plan.VerbReRun, at.Add(time.Second)); err != nil {
@@ -224,11 +225,11 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce (re-run): %v", err)
 	}
-	if len(fake.spawns) != 2 {
-		t.Fatalf("spawns after re-run = %d, want 2: the re-run must still reach the agent", len(fake.spawns))
+	if len(fake.Spawns) != 2 {
+		t.Fatalf("spawns after re-run = %d, want 2: the re-run must still reach the agent", len(fake.Spawns))
 	}
 
-	reRunSpawn := fake.spawns[1]
+	reRunSpawn := fake.Spawns[1]
 	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
 		t.Errorf("re-run's spawned prompt = %q, starts with '-': a CLI flag parser will refuse it "+
 			"and the run never starts", reRunSpawn.Prompt)
@@ -270,18 +271,18 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	fake := newFakeRunner()
+	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if len(fake.spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.spawns))
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	if !strings.HasSuffix(fake.spawns[0].WorktreePath, "wt-cc-1") {
-		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.spawns[0].WorktreePath)
+	if !strings.HasSuffix(fake.Spawns[0].WorktreePath, "wt-cc-1") {
+		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.Spawns[0].WorktreePath)
 	}
 
 	latest, err := store.LatestRunsByTicket(t.Context())
@@ -296,10 +297,10 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 		t.Errorf("kind = %q, want agent: the fresh relaunch is sourced fresh, not another resolve attempt", summary.Kind)
 	}
 
-	pid := fake.nextPid
-	fake.alive[pid] = false
-	fake.canReap[pid] = true
-	fake.reapCode[pid] = 1
+	pid := fake.NextPid
+	fake.Alive[pid] = false
+	fake.CanReap[pid] = true
+	fake.ReapCode[pid] = 1
 
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)

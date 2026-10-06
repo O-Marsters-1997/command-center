@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -72,7 +73,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	return conflictFixture{
 		f:         f,
 		aliveRuns: aliveRuns,
-		loop:      cc.NewLoop(store, observe, clock, cfg, ws, cc.ProcessRunner{}),
+		loop:      cc.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
 		server:    cc.NewServer(store, clock, cfg.Repos, ""),
 		store:     store,
 	}

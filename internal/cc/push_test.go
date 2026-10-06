@@ -12,6 +12,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 // installFakeGh puts a script named gh on PATH that logs every invocation to a file and answers
@@ -145,7 +146,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -266,7 +267,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -309,7 +310,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -411,7 +412,7 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce must not fail once a pushed ticket's branch has been removed: %v", err)
 	}

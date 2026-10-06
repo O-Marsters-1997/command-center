@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -56,7 +57,7 @@ type Loop struct {
 	clock         Clock
 	forge         gh.Forge
 	worktrees     tp.Worktrees
-	runner        Runner
+	runner        runner.Runner
 	cfg           Config
 	ws            Workspace
 	trackerFor    TrackerSource
@@ -66,10 +67,10 @@ type Loop struct {
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
 // and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
-// paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
-func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, runner Runner) *Loop {
+// paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
+func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, spawner runner.Runner) *Loop {
 	return &Loop{
-		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: runner, cfg: cfg, ws: ws,
+		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:     tp.CLI{},
 		trackerFor:    tracker.New,
 		metricsParser: agentlog.ParseMetrics,
@@ -677,7 +678,7 @@ func (l *Loop) spawnRun(
 		agentsPath = l.ws.AgentsPath
 	}
 
-	spawnCfg := SpawnConfig{
+	spawnCfg := runner.SpawnConfig{
 		AgentCommand:     l.cfg.AgentCommand,
 		WorktreePath:     worktreePath,
 		SettingsPath:     l.ws.SettingsPath,

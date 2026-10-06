@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 const resolvePromptPrefix = "Merge origin/main into"
@@ -53,14 +54,14 @@ func NewAgent(clock cc.Clock, issues []issue, seed int64) *Agent {
 	}
 }
 
-func (a *Agent) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, error) {
+func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error) {
 	branch, err := git(cfg.WorktreePath, "branch", "--show-current")
 	if err != nil {
-		return cc.SpawnResult{}, err
+		return runner.SpawnResult{}, err
 	}
 	ownerIdx := slices.IndexFunc(a.issues, func(i issue) bool { return i.branch == branch })
 	if ownerIdx < 0 {
-		return cc.SpawnResult{}, fmt.Errorf("no scenario ticket owns branch %s", branch)
+		return runner.SpawnResult{}, fmt.Errorf("no scenario ticket owns branch %s", branch)
 	}
 
 	a.mu.Lock()
@@ -75,9 +76,9 @@ func (a *Agent) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, er
 	}
 	a.runs[a.nextPid] = run
 	if err := run.write(map[string]any{"type": "system", "subtype": "init", "session_id": branch}); err != nil {
-		return cc.SpawnResult{}, err
+		return runner.SpawnResult{}, err
 	}
-	return cc.SpawnResult{Pid: a.nextPid}, nil
+	return runner.SpawnResult{Pid: a.nextPid}, nil
 }
 
 // Step plays every live run up to the current sim time: one more assistant turn each, and the
@@ -215,4 +216,4 @@ func (a *Agent) Reap(pid int) (int, bool) {
 	return run.exitCode, run.finished
 }
 
-var _ cc.Runner = (*Agent)(nil)
+var _ runner.Runner = (*Agent)(nil)

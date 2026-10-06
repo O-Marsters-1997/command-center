@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -29,7 +30,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	loop := cc.NewLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Minute)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{},
+		store, noOpObserve, fixedClock(at.Add(time.Minute)), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -136,7 +137,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	}
 
 	loop := cc.NewLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Minute)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{},
+		store, noOpObserve, fixedClock(at.Add(time.Minute)), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
