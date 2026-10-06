@@ -174,6 +174,9 @@ const (
 	stateCount
 )
 
+// StateCount is the number of States, so a test can walk every one.
+const StateCount = int(stateCount)
+
 func (s State) String() string {
 	switch s {
 	case Ready:

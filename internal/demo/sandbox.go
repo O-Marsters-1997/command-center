@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 // Sandbox is the real-git half of the demo world: one bare origin per repo, a checkout the loop
@@ -26,6 +27,7 @@ type Sandbox struct {
 type sandboxRepo struct {
 	scenarioName string
 	stacking     bool
+	compatCheck  string
 	name         string
 	origin       string
 	checkout     string
@@ -66,6 +68,7 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	repo := &sandboxRepo{
 		scenarioName: r.Name,
 		stacking:     r.Stacking,
+		compatCheck:  r.CompatCheck,
 		name:         name,
 		origin:       filepath.Join(s.root, "origins", filepath.FromSlash(r.Name)+".git"),
 		checkout:     filepath.Join(s.root, "repos", name),
@@ -164,6 +167,10 @@ func (s *Sandbox) Repos(template cc.Repo) []cc.Repo {
 		repo.Remote = r.origin
 		repo.Checkout = r.checkout
 		repo.Stacking = r.stacking
+		if r.compatCheck != "" {
+			repo.Checks = verdict.Predicate{AllOf: []verdict.Predicate{{Success: ciCheck}, {Success: r.compatCheck}}}
+			repo.CompatCheck = r.compatCheck
+		}
 		out = append(out, repo)
 	}
 	return out

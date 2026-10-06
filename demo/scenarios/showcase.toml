@@ -1,0 +1,242 @@
+seed = 11
+speed = 20
+showcase = "14m"
+
+[[repo]]
+name = "acme/api"
+stacking = true
+files = { "go.mod" = "module acme/api\n", "main.go" = "package main\n" }
+
+[[repo]]
+name = "acme/web"
+compat_check = "compat"
+files = { "go.mod" = "module acme/web\n", "main.go" = "package main\n", "w1.go" = "package main\n", "w2.go" = "package main\n", "w3.go" = "package main\n" }
+
+[[ticket]]
+id = "ready"
+repo = "acme/api"
+title = "Add the rate limiter"
+feature = "showcase"
+launch = "hold"
+agent = { after = "1m", result = "commits", files = ["limiter.go"] }
+
+[[ticket]]
+id = "blocked"
+repo = "acme/api"
+title = "Add the quota dashboard"
+feature = "showcase"
+blocked_by = ["ready"]
+agent = { after = "1m", result = "commits", files = ["quota.go"] }
+
+[[ticket]]
+id = "queued"
+repo = "acme/api"
+title = "Add the throttle headers"
+feature = "showcase"
+blocked_by = ["ready"]
+launch = "early"
+agent = { after = "1m", result = "commits", files = ["throttle.go"] }
+
+[[ticket]]
+id = "running"
+repo = "acme/api"
+title = "Add the search endpoint"
+feature = "showcase"
+agent = { after = "1h", result = "commits", files = ["search.go"] }
+
+[[ticket]]
+id = "failed"
+repo = "acme/api"
+title = "Add the metrics endpoint"
+feature = "showcase"
+agent = { after = "1m", result = "crash" }
+
+[[ticket]]
+id = "cut_failed"
+repo = "acme/api"
+title = "Add the audit log"
+feature = "showcase"
+cut = "fail"
+agent = { after = "1m", result = "commits", files = ["audit.go"] }
+
+[[ticket]]
+id = "push_failed"
+repo = "acme/api"
+title = "Add the export endpoint"
+feature = "showcase"
+push = "fail"
+agent = { after = "1m", result = "commits", files = ["export.go"] }
+
+[[ticket]]
+id = "cancelled"
+repo = "acme/api"
+title = "Add the webhook retries"
+feature = "showcase"
+blocked_by = ["ready"]
+launch = "early"
+agent = { after = "1m", result = "commits", files = ["webhook.go"] }
+
+[[ticket]]
+id = "merged"
+repo = "acme/api"
+title = "Add the config loader"
+feature = "showcase"
+agent = { after = "1m", result = "commits", files = ["config.go"] }
+ci = ["pass"]
+merge = { after = "2m" }
+
+[[ticket]]
+id = "verification_failed"
+repo = "acme/api"
+title = "Add the config validator"
+feature = "showcase"
+verify = "fail"
+agent = { after = "1m", result = "commits", files = ["validate.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "push_pending"
+repo = "acme/api"
+title = "Add the session store"
+feature = "showcase"
+agent = { after = "13m45s", result = "commits", files = ["session.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "checking"
+repo = "acme/api"
+title = "Add the slow report"
+feature = "showcase"
+agent = { after = "6m", result = "commits", files = ["slow.go"] }
+ci = ["pass"]
+ci_after = "2h"
+
+[[ticket]]
+id = "ci_failed"
+repo = "acme/api"
+title = "Add the red report"
+feature = "showcase"
+agent = { after = "1m", result = "commits", files = ["red.go"] }
+ci = ["fail"]
+ci_after = "1m"
+
+[[ticket]]
+id = "needs_you"
+repo = "acme/api"
+title = "Add the cache"
+feature = "showcase"
+agent = { after = "1m", result = "commits", files = ["cache.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "review_me"
+repo = "acme/api"
+title = "Add the health endpoint"
+feature = "showcase"
+agent = { after = "1m", result = "commits", files = ["health.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "base_moved"
+repo = "acme/api"
+title = "Wire the cache into the handler"
+feature = "showcase"
+blocked_by = ["needs_you"]
+agent = { after = "1m", result = "conflict", files = ["cache.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "pr_closed_unmerged"
+repo = "acme/api"
+title = "Add the legacy importer"
+feature = "showcase"
+agent = { after = "1m", result = "commits", files = ["legacy.go"] }
+ci = ["pass"]
+close = { after = "4m" }
+
+[[ticket]]
+id = "base_gone"
+repo = "acme/api"
+title = "Add the legacy importer's CLI"
+feature = "showcase"
+blocked_by = ["pr_closed_unmerged"]
+agent = { after = "1m", result = "commits", files = ["legacy_cli.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "waiting_on_producer_deploy"
+repo = "acme/web"
+title = "Read the new totals field"
+feature = "showcase"
+compat = "fail"
+agent = { after = "1m", result = "commits", files = ["totals.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "conflicts_with_main"
+repo = "acme/web"
+title = "Rename the handler"
+feature = "showcase"
+agent = { after = "1m", result = "conflict", files = ["w1.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "conflict_resolved"
+repo = "acme/web"
+title = "Rename the router"
+feature = "showcase"
+agent = { after = "1m", result = "conflict", files = ["w2.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[ticket]]
+id = "refresh_conflicted"
+repo = "acme/web"
+title = "Rename the middleware"
+feature = "showcase"
+agent = { after = "1m", result = "conflict", files = ["w3.go"] }
+ci = ["pass"]
+merge = { after = "100h" }
+
+[[main]]
+at = "4m"
+repo = "acme/web"
+files = { "w1.go" = "package main // moved\n", "w2.go" = "package main // moved\n", "w3.go" = "package main // moved\n" }
+
+[[push]]
+at = "3m30s"
+ticket = "needs_you"
+files = { "cache.go" = "package main // hand edit\n" }
+
+[[press]]
+at = "0s"
+ticket = "cancelled"
+verb = "cancel"
+
+[[press]]
+at = "5m"
+ticket = "base_moved"
+verb = "abort"
+
+[[press]]
+at = "5m"
+ticket = "conflicts_with_main"
+verb = "abort"
+
+[[press]]
+at = "5m"
+ticket = "conflict_resolved"
+verb = "abort"
+
+[[press]]
+at = "6m"
+ticket = "conflict_resolved"
+verb = "resolve"
