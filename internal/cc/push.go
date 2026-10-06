@@ -34,7 +34,7 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 			continue
 		}
 		tip, ok := obs.LocalTips[branchKey(e.Ticket.Repo, e.Ticket.Branch)]
-		if !ok {
+		if !ok || obs.Runs[e.Ticket.URL].Alive {
 			continue
 		}
 		candidates = append(candidates,
