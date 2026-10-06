@@ -122,3 +122,22 @@ func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
 		t.Errorf("LastPush = %v, want %v", got.LastPush, row)
 	}
 }
+
+func TestSnapshotLaunchAfterCountsAgentsStartedAndStoppedThisTick(t *testing.T) {
+	t.Parallel()
+
+	first := ticket("1", "cc-1-first")
+	second := ticket("2", "cc-2-second")
+	in := plan.Input{
+		Tickets:     []plan.Ticket{first, second},
+		Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first), second.URL: authorised(second)},
+	}
+	snap := plan.Rules{MaxAgents: 1}.Derive(in)
+
+	if got := snap.LaunchAfter(1, 0); len(got) != 0 {
+		t.Errorf("LaunchAfter(1, 0) = %v, want none: a spawn took the only slot", got)
+	}
+	if got := snap.LaunchAfter(1, 1); !slices.Equal(got, []string{first.URL}) {
+		t.Errorf("LaunchAfter(1, 1) = %v, want the first ticket: the kill freed the slot", got)
+	}
+}

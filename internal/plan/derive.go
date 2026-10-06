@@ -129,8 +129,12 @@ type Snapshot struct {
 
 // Launch is the ticket URLs to cut and spawn: every eligible candidate in input order, capped at
 // the free agent slots, and none while the five-hour reading is at spend_limit_5h.
-func (s Snapshot) Launch() []string {
-	return LaunchPlan(s.launch, s.running, s.maxAgents, s.spendPaused)
+func (s Snapshot) Launch() []string { return s.LaunchAfter(0, 0) }
+
+// LaunchAfter is Launch for a tick that has since spawned and killed agents: the snapshot's
+// running count plus spawned, minus killed, is what occupies the slots.
+func (s Snapshot) LaunchAfter(spawned, killed int) []string {
+	return LaunchPlan(s.launch, max(s.running+spawned-killed, 0), s.maxAgents, s.spendPaused)
 }
 
 // Entry returns the entry for a ticket URL.
