@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -52,6 +53,7 @@ type Loop struct {
 	store         *Store
 	observe       ObserveFunc
 	clock         Clock
+	forge         gh.Forge
 	runner        Runner
 	cfg           Config
 	ws            Workspace
@@ -65,7 +67,8 @@ type Loop struct {
 // paths). runner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(store *Store, observe ObserveFunc, clock Clock, cfg Config, ws Workspace, runner Runner) *Loop {
 	return &Loop{
-		store: store, observe: observe, clock: clock, runner: runner, cfg: cfg, ws: ws, trackerFor: tracker.New,
+		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: runner, cfg: cfg, ws: ws,
+		trackerFor:    tracker.New,
 		metricsParser: agentlog.ParseMetrics,
 		nudgeCh:       make(chan struct{}, 1),
 	}
@@ -84,6 +87,9 @@ func (l *Loop) Nudge() {
 	default:
 	}
 }
+
+// SetForge replaces the real gh-backed Forge, so a test or the demo sim can fake GitHub in-process.
+func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
 
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.

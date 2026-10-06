@@ -56,7 +56,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs Observation) error {
 // never latched, so leaving the row untouched here is exactly what lets the next tick retry.
 func (l *Loop) readyOne(ctx context.Context, t Ticket, repoPath string, now time.Time) error {
 	event := Event{At: now, TicketURL: t.URL, Kind: eventDraftReady}
-	if err := gh.Ready(ctx, repoPath, t.Branch); err != nil {
+	if err := l.forge.Ready(ctx, repoPath, t.Branch); err != nil {
 		event = Event{At: now, TicketURL: t.URL, Kind: eventDraftReadyFailed, Detail: err.Error()}
 	}
 	return l.store.AppendEvent(ctx, event)

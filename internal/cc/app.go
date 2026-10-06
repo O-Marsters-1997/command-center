@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
@@ -29,6 +30,8 @@ type options struct {
 	checkout      CheckoutFunc
 	runner        Runner
 	metricsParser MetricsParser
+	forge         gh.Forge
+	trackerFor    TrackerSource
 }
 
 // Option configures New.
@@ -75,6 +78,17 @@ func WithMetricsParser(p MetricsParser) Option {
 	return func(o *options) { o.metricsParser = p }
 }
 
+// WithForge replaces the gh-backed Forge, so GitHub can be faked in-process.
+func WithForge(forge gh.Forge) Option {
+	return func(o *options) { o.forge = forge }
+}
+
+// WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
+// faked in-process.
+func WithTrackerSource(resolve TrackerSource) Option {
+	return func(o *options) { o.trackerFor = resolve }
+}
+
 func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 	for _, repo := range repos {
 		if err := EnsureCheckout(ctx, repo); err != nil {
@@ -87,7 +101,7 @@ func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{clock: RealClock{}}
+	settings := options{clock: RealClock{}, forge: gh.CLI{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -150,7 +164,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	observe := settings.observe
 	if observe == nil {
-		observe = NewObserver(store, cfg)
+		observe = NewObserver(store, settings.forge, cfg)
 	}
 	runner := settings.runner
 	if runner == nil {
@@ -166,10 +180,15 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	loop := NewLoop(store, observe, settings.clock, cfg, ws, runner)
 	loop.SetMetricsParser(metricsParser)
+	loop.SetForge(settings.forge)
 	server := NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
+	if settings.trackerFor != nil {
+		loop.SetTrackerSource(settings.trackerFor)
+		server.SetTrackerSource(settings.trackerFor)
+	}
 
 	return &App{
 		cfg:    cfg,

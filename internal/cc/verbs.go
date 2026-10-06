@@ -283,7 +283,7 @@ func (l *Loop) fetchCIFailedLog(
 		return ciLogUnavailableSection, err.Error()
 	}
 
-	log, err := gh.RunViewLogFailed(ctx, repoPath, runID)
+	log, err := l.forge.RunViewLogFailed(ctx, repoPath, runID)
 	if err != nil {
 		return ciLogUnavailableSection, err.Error()
 	}
@@ -459,7 +459,7 @@ func (l *Loop) reCheckOne(
 		return refuse(err.Error())
 	}
 
-	if err := gh.Rerun(ctx, repoPath, runID); err != nil {
+	if err := l.forge.Rerun(ctx, repoPath, runID); err != nil {
 		return refuse(err.Error())
 	}
 
@@ -509,7 +509,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			event := Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
-			if err := gh.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
+			if err := l.forge.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
 				event = Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
 			}
 			if err := l.store.AppendEvent(ctx, event); err != nil {
@@ -642,7 +642,7 @@ func (l *Loop) removeWorktreeOne(
 		}
 	}
 
-	if err := gh.CloseIssue(ctx, repoPath, ticket.URL); err != nil {
+	if err := l.forge.CloseIssue(ctx, repoPath, ticket.URL); err != nil {
 		return refuse(err.Error())
 	}
 
