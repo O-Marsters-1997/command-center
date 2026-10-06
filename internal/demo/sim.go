@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -208,6 +209,19 @@ func (s *Sim) Play(ctx context.Context) error {
 	return errors.Join(s.mismatches...)
 }
 
+// PlayTo ticks until the sim has run to at, without checking any checkpoint.
+func (s *Sim) PlayTo(ctx context.Context, at time.Duration) error {
+	for s.Elapsed() <= at {
+		if err := s.Tick(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Board is each ticket's state as of the last tick, by scenario ticket id.
+func (s *Sim) Board() map[string]string { return maps.Clone(s.last) }
+
 // Transitions is every state change so far, in order.
 func (s *Sim) Transitions() []Transition { return slices.Clone(s.transitions) }
 
@@ -248,16 +262,28 @@ func (s *Sim) record(states map[string]string) {
 }
 
 func (s *Sim) launchReady(states map[string]string) error {
-	form := url.Values{}
+	var ready []string
 	for _, i := range s.issues {
-		if states[i.ID] == "ready" && !s.authorised[i.ID] {
-			s.authorised[i.ID] = true
-			form.Add("ticket", i.url)
+		if s.authorised[i.ID] || !i.launchDue(states[i.ID]) {
+			continue
 		}
+		s.authorised[i.ID] = true
+		if i.Launch == launchEarly {
+			if err := s.postLaunch([]string{i.url}); err != nil {
+				return err
+			}
+			continue
+		}
+		ready = append(ready, i.url)
 	}
-	if len(form["ticket"]) == 0 {
+	return s.postLaunch(ready)
+}
+
+func (s *Sim) postLaunch(tickets []string) error {
+	if len(tickets) == 0 {
 		return nil
 	}
+	form := url.Values{"ticket": tickets}
 	req := httptest.NewRequest(http.MethodPost, "/launch", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -266,6 +292,17 @@ func (s *Sim) launchReady(states map[string]string) error {
 		return fmt.Errorf("POST /launch: %d: %s", rec.Code, rec.Body)
 	}
 	return nil
+}
+
+func (i issue) launchDue(state string) bool {
+	switch i.Launch {
+	case launchHold:
+		return false
+	case launchEarly:
+		return true
+	default:
+		return state == "ready"
+	}
 }
 
 func (s *Sim) landMain() error {

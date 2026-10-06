@@ -10,6 +10,11 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const (
+	launchHold  = "hold"
+	launchEarly = "early"
+)
+
 // Duration is a scenario time written in real-world units, such as "12m" or "2h".
 type Duration time.Duration
 
@@ -28,21 +33,23 @@ func (d *Duration) UnmarshalText(text []byte) error {
 // run started, except Merge.After and Close.After, which count from the moment the ticket's PR
 // opens, and CIAfter, which counts from the push or re-run that started the check.
 type Scenario struct {
-	Seed   int64    `toml:"seed"`
-	Speed  float64  `toml:"speed"`
-	Repos  []Repo   `toml:"repo"`
-	Ticket []Ticket `toml:"ticket"`
-	Main   []Main   `toml:"main"`
-	Push   []Push   `toml:"push"`
-	Press  []Press  `toml:"press"`
-	Expect []Expect `toml:"expect"`
+	Seed     int64    `toml:"seed"`
+	Speed    float64  `toml:"speed"`
+	Showcase Duration `toml:"showcase"`
+	Repos    []Repo   `toml:"repo"`
+	Ticket   []Ticket `toml:"ticket"`
+	Main     []Main   `toml:"main"`
+	Push     []Push   `toml:"push"`
+	Press    []Press  `toml:"press"`
+	Expect   []Expect `toml:"expect"`
 }
 
 // Repo is one repository the sandbox hosts a bare origin for, seeded with Files on main.
 type Repo struct {
-	Name     string            `toml:"name"`
-	Stacking bool              `toml:"stacking"`
-	Files    map[string]string `toml:"files"`
+	Name        string            `toml:"name"`
+	Stacking    bool              `toml:"stacking"`
+	CompatCheck string            `toml:"compat_check"`
+	Files       map[string]string `toml:"files"`
 }
 
 // Ticket is one issue in the DAG and the script the world plays for it.
@@ -60,6 +67,8 @@ type Ticket struct {
 	Cut       string      `toml:"cut"`
 	Push      string      `toml:"push"`
 	Verify    string      `toml:"verify"`
+	Compat    string      `toml:"compat"`
+	Launch    string      `toml:"launch"`
 }
 
 // AgentScript is what the fake agent does once spawned for a ticket.
@@ -120,8 +129,10 @@ func LoadScenario(path string) (Scenario, error) {
 
 func (s Scenario) validate() error {
 	repos := map[string]bool{}
+	repoByName := map[string]Repo{}
 	for _, r := range s.Repos {
 		repos[r.Name] = true
+		repoByName[r.Name] = r
 	}
 	ids := map[string]bool{}
 	for _, t := range s.Ticket {
@@ -140,6 +151,12 @@ func (s Scenario) validate() error {
 			if f.value != "" && f.value != "fail" {
 				return fmt.Errorf("ticket %q: %s %q is not supported, want \"fail\"", t.ID, f.name, f.value)
 			}
+		}
+		if t.Compat != "" && (t.Compat != ciFail || repoByName[t.Repo].CompatCheck == "") {
+			return fmt.Errorf("ticket %q: compat %q needs \"fail\" in a repo with a compat_check", t.ID, t.Compat)
+		}
+		if !slices.Contains([]string{"", launchHold, launchEarly}, t.Launch) {
+			return fmt.Errorf("ticket %q: launch %q is not hold or early", t.ID, t.Launch)
 		}
 		for _, ci := range t.CI {
 			if !slices.Contains([]string{ciPass, ciFail, ciHang}, ci) {

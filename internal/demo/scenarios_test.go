@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/demo"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 const scenarioDir = "../../demo/scenarios"
@@ -119,5 +121,38 @@ func TestCancellingALaunchedTicketFromTheBoardReachesCancelled(t *testing.T) {
 	}
 	if last != "cancelled" {
 		t.Errorf("ticket A is %q after cancel, want cancelled", last)
+	}
+}
+
+func TestTheShowcaseHoldsEveryStateAtOnce(t *testing.T) {
+	sc, err := demo.LoadScenario(filepath.Join(scenarioDir, "showcase.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Showcase == 0 {
+		t.Fatal("showcase.toml names no showcase moment")
+	}
+	sim, err := demo.NewSim(t.Context(), sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sim.Close(); err != nil {
+			t.Errorf("close sim: %v", err)
+		}
+	})
+
+	if err := sim.PlayTo(t.Context(), time.Duration(sc.Showcase)); err != nil {
+		t.Fatal(err)
+	}
+
+	onBoard := map[string]bool{}
+	for _, state := range sim.Board() {
+		onBoard[state] = true
+	}
+	for s := range plan.State(plan.StateCount) {
+		if !onBoard[s.String()] {
+			t.Errorf("state %q is not on the board at %s", s, time.Duration(sc.Showcase))
+		}
 	}
 }

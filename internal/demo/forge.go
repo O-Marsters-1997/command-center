@@ -54,18 +54,30 @@ func (pr *pullRequest) running(now time.Time) bool {
 }
 
 func (pr *pullRequest) greenAt(now time.Time) bool {
-	return !pr.running(now) && pr.ciOutcome() == ciPass
+	return !pr.running(now) && pr.ciOutcome() == ciPass && pr.issue.Compat != ciFail
 }
 
-func (pr *pullRequest) check(now time.Time, repo string) gh.CheckState {
+func (pr *pullRequest) checks(now time.Time, repo *sandboxRepo) map[string]gh.CheckState {
+	checks := map[string]gh.CheckState{ciCheck: pr.check(now, repo.scenarioName, ciCheck, pr.ciOutcome())}
+	if repo.compatCheck != "" {
+		outcome := ciPass
+		if pr.issue.Compat == ciFail {
+			outcome = ciFail
+		}
+		checks[repo.compatCheck] = pr.check(now, repo.scenarioName, repo.compatCheck, outcome)
+	}
+	return checks
+}
+
+func (pr *pullRequest) check(now time.Time, repo, name, outcome string) gh.CheckState {
 	state := gh.CheckState{
-		Name: ciCheck, StartedAt: pr.runStart,
+		Name: name, StartedAt: pr.runStart,
 		DetailsURL: fmt.Sprintf("https://github.com/%s/actions/runs/%d/job/1", repo, pr.number),
 	}
 	switch {
 	case pr.running(now):
 		state.Status = "IN_PROGRESS"
-	case pr.ciOutcome() == ciPass:
+	case outcome == ciPass:
 		state.Status, state.Conclusion = "COMPLETED", "SUCCESS"
 	default:
 		state.Status, state.Conclusion = "COMPLETED", "FAILURE"
@@ -156,7 +168,7 @@ func (f *Forge) List(_ context.Context, repoPath string, tracked []string) (gh.S
 		byBranch[branch] = gh.PR{
 			Number: pr.number, HeadRef: branch, HeadOid: headOid, BaseRef: pr.baseRef,
 			IsDraft: pr.draft, State: pr.state, MergedAt: pr.mergedAt,
-			Checks: map[string]gh.CheckState{ciCheck: pr.check(now, repo.scenarioName)},
+			Checks: pr.checks(now, repo),
 		}
 	}
 	return gh.Snapshot{ByBranch: byBranch}, nil
