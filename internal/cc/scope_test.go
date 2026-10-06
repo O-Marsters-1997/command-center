@@ -104,7 +104,9 @@ func TestFilterGroupsComposeRepoAndFeatureNeitherOverridingTheOther(t *testing.T
 func TestDistinctFeaturesSortsAndDropsBlank(t *testing.T) {
 	t.Parallel()
 
-	tickets := []store.Ticket{{Feature: "sqlc-migration"}, {Feature: "board-scope"}, {Feature: ""}, {Feature: "board-scope"}}
+	tickets := []store.Ticket{
+		{Feature: "sqlc-migration"}, {Feature: "board-scope"}, {Feature: ""}, {Feature: "board-scope"},
+	}
 	got := distinctFeatures(tickets)
 	want := []string{"board-scope", "sqlc-migration"}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {

@@ -376,7 +376,8 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}); err != nil {
+	refused := storepkg.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}
+	if err := store.AppendEvent(ctx, refused); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AppendEvent(ctx, storepkg.Event{

@@ -217,7 +217,9 @@ func (l *Loop) pushOne(
 		return err
 	}
 	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
-		return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: t.URL, Kind: store.EventPushFailed, Detail: err.Error()})
+		return l.store.AppendEvent(ctx, store.Event{
+			At: now, TicketURL: t.URL, Kind: store.EventPushFailed, Detail: err.Error(),
+		})
 	}
 
 	if obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {

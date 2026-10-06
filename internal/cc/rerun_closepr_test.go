@@ -2,11 +2,12 @@ package cc_test
 
 import (
 	"context"
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"

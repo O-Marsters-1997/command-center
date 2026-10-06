@@ -128,7 +128,9 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
-	outsiderSeed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: outsider, Number: 2, Title: "Add y"}, Repo: "beta"}}
+	outsiderSeed := []storepkg.ImportedTicket{
+		{Ticket: tracker.Ticket{URL: outsider, Number: 2, Title: "Add y"}, Repo: "beta"},
+	}
 	if err := store.ImportTickets(ctx, "project:y", outsiderSeed, at); err != nil {
 		t.Fatalf("seed outsider ImportTickets: %v", err)
 	}

@@ -2,9 +2,10 @@ package cc_test
 
 import (
 	"database/sql"
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"testing"
 	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 

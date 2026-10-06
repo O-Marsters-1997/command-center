@@ -1,9 +1,10 @@
 package cc_test
 
 import (
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"testing"
 	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )

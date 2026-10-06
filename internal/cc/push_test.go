@@ -436,7 +436,8 @@ func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
 	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "restacked"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}); err != nil {
+	restackedEv := storepkg.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}
+	if err := store.AppendEvent(ctx, restackedEv); err != nil {
 		t.Fatal(err)
 	}
 
@@ -462,7 +463,8 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}); err != nil {
+	refused := storepkg.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}
+	if err := store.AppendEvent(ctx, refused); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AppendEvent(ctx, storepkg.Event{

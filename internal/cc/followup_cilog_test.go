@@ -53,7 +53,8 @@ func installFakeGhWithLogFailed(t *testing.T, output string, fail bool) (logPath
 // tip, and whose sole required check (cilogCheckName) reports conclusion -- FAILURE resolves
 // ci_failed, SUCCESS resolves review_me (issue #232 AC3).
 func setUpCIFailedTicket(
-	t *testing.T, store *storepkg.Store, root, repoPath string, ticket storepkg.Ticket, at time.Time, conclusion, detailsURL string,
+	t *testing.T, store *storepkg.Store, root, repoPath string, ticket storepkg.Ticket, at time.Time,
+	conclusion, detailsURL string,
 ) (plan.Observation, config.Config, config.Workspace) {
 	t.Helper()
 	ctx := t.Context()
