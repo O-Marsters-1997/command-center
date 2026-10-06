@@ -1,5 +1,5 @@
 # A squash-merged PR's branch is gone from GitHub before a human ever presses remove-worktree
-# (docs/adr/0012-cc-proves-what-tp-cannot.md): both repos this app drives delete the head branch
+# (docs/adr/0008-cc-proves-what-tp-cannot.md): both repos this app drives delete the head branch
 # on merge, and this app's own fetch --prune then drops the remote-tracking ref tp remove
 # --merged would otherwise check unpushed commits against. cc proves the same fact itself --
 # the branch sits exactly where it last pushed it -- and forces past tp's own check instead of

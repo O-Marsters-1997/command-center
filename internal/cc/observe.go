@@ -39,7 +39,7 @@ type Observation struct {
 	MidMerge map[string]bool `json:"mid_merge"`
 	// ConflictsWithBase reports whether origin/<branch> would conflict with origin/main, keyed by
 	// branchKey(repo, branch). It is what the launch gate refuses on: a child cut from a base that
-	// already conflicts inherits the conflict (docs/adr/0006-resolve-a-conflict-once.md).
+	// already conflicts inherits the conflict (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictsWithBase map[string]bool `json:"conflicts_with_base"`
 	// ConflictedPaths names each conflicting branch's own conflicted paths, keyed by
 	// branchKey(repo, branch).
@@ -47,7 +47,7 @@ type Observation struct {
 	// ConflictsWithPeer reports whether two branches' tips would conflict if merged together,
 	// keyed by branchKey(repo, branch) at both levels. Observe only ever records the pair, never
 	// which one yields: it has no ref order to decide that
-	// (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	// (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 }
 
@@ -178,7 +178,7 @@ type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []
 
 // recordPeerConflicts fills in ConflictsWithPeer for one repo's branches, reusing the prior
 // tick's read for any pair whose two tips have not moved since (#180,
-// docs/adr/0010-one-conflicting-peer-at-a-time.md): a pair's answer only changes when one of
+// docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md): a pair's answer only changes when one of
 // its two tips moves, and BranchTips already carries them, so an unmoved pair costs no
 // merge-tree call at all. A zero-value prev (nothing observed yet) never matches a real tip,
 // so a cold start falls through to merges for every pair without special-casing it.

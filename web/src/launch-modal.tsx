@@ -17,7 +17,7 @@ function ticketRef(url: string): string {
 }
 
 // Banner is the same markup launch_modal.tmpl's Pending/Refused/Empty branches and features.tmpl's
-// import-error banner render, so a refusal reads identically whether Go or Solid drew it (ADR 2).
+// import-error banner render, so a refusal reads identically whether Go or Solid drew it (ADR 1).
 function Banner(props: { children: JSX.Element }) {
   return (
     // biome-ignore lint/a11y/useSemanticElements: <output> would break that byte-for-byte match.

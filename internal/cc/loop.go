@@ -47,7 +47,7 @@ type TickError struct {
 }
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state
-// (inv. 9, narrowed by ADR 0016).
+// (inv. 9, narrowed by ADR 11).
 type Loop struct {
 	store   *Store
 	observe ObserveFunc
@@ -132,7 +132,7 @@ func (l *Loop) SetMetricsParser(parser MetricsParser) { l.metricsParser = parser
 
 // Nudge wakes Run for one tick right now rather than at the end of tickPeriod. A nudge that
 // finds the buffer full is dropped, not queued: the tick already in flight will pick up
-// whatever intent prompted it anyway (docs/adr/0014-opening-the-launch-modal-imports-the-feature.md).
+// whatever intent prompted it anyway (docs/adr/0009-a-feature-is-closed-under-blocked-by.md).
 func (l *Loop) Nudge() {
 	select {
 	case l.nudgeCh <- struct{}{}:

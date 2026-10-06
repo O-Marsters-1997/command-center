@@ -19,7 +19,7 @@ type MetricsParser func(logPath string) (agentlog.RunMetrics, error)
 // every surviving log gets its metrics, readings and any intervals they close, all from the same
 // bytes. Idempotent on that predicate for metrics, and on utilization_readings' own (at, window)
 // constraint for readings, so a restart mid-backfill resumes rather than reparses
-// (docs/adr/0015-run-metrics-are-captured-at-disposition-from-stdout.md).
+// (docs/adr/0010-run-metrics-are-captured-per-request-at-disposition.md).
 func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser, claudeProjectsDir string) error {
 	runs, err := store.RunsAwaitingMetricsBackfill(ctx)
 	if err != nil {

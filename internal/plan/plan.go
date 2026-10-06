@@ -158,7 +158,7 @@ const (
 	// no verb (docs/designs/command-centre-design.md § 4a).
 	RefreshConflicted
 	// ConflictsWithMain is derived from RunFact.ConflictsWithMain, this branch's own git
-	// merge-tree reading against origin/main (docs/adr/0006-resolve-a-conflict-once.md), never
+	// merge-tree reading against origin/main (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md), never
 	// GitHub's mergeable field. refresh is the only verb that clears it.
 	ConflictsWithMain
 	// VerificationFailed is derived from RunFact.VerificationFailed: a clean merge-forward or
@@ -269,12 +269,12 @@ type RunFact struct {
 	MidMerge bool
 	// ConflictsWithMain is set when this ticket's own pushed branch no longer merges cleanly into
 	// main, read from git merge-tree, never GitHub's mergeable field
-	// (docs/adr/0006-resolve-a-conflict-once.md). It outranks every fact below it, as MidMerge does.
+	// (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md). It outranks every fact below it, as MidMerge does.
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
 	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
 	// is empty when there is none. Ref order is decided in internal/cc, the one place that knows
-	// it (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+	// it (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictingPeer string
 	// VerificationFailed is set when a clean refresh or restack's configured verify command last
 	// failed since this ticket's last recorded push (issue #110). It outranks every push and
@@ -298,7 +298,7 @@ type Facts struct {
 	CancelledMember bool
 	// ConflictedBase names the base a launch would cut this task from when that base already
 	// carries a conflict, and is empty when it is clean. A row that has already run is described
-	// by its run instead (docs/adr/0006-resolve-a-conflict-once.md).
+	// by its run instead (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictedBase string
 }
 
@@ -422,7 +422,7 @@ func conflictedBaseReason(base string) Reason {
 
 // conflictingPeerReason is the sentence a row shows when it is held behind a lower-ref peer it
 // conflicts with, so the two refusals -- a conflicted base and a conflicting peer -- read alike
-// (docs/adr/0010-one-conflicting-peer-at-a-time.md).
+// (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func conflictingPeerReason(peer string) Reason {
 	return Reason(fmt.Sprintf(
 		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))

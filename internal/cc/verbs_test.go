@@ -305,7 +305,7 @@ func installFakeGhFailingIssueClose(t *testing.T) {
 }
 
 // TestRemoveWorktreeTearsDownBeforeClosingTheIssue covers the reordering
-// (docs/adr/0012-cc-proves-what-tp-cannot.md): tp remove runs before gh issue close, so a close
+// (docs/adr/0008-cc-proves-what-tp-cannot.md): tp remove runs before gh issue close, so a close
 // failure leaves the worktree already gone, and the row stays to retry -- issue #196's own guard
 // (a missing worktree is the state this verb is trying to reach) means the retry skips straight
 // to the close instead of refusing on a worktree that no longer needs tearing down.
@@ -389,7 +389,7 @@ func TestRemoveWorktreeRefusesUnpushedCommits(t *testing.T) {
 }
 
 // TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches covers the fix
-// (docs/adr/0012-cc-proves-what-tp-cannot.md): GitHub's delete-branch-on-merge, followed by this
+// (docs/adr/0008-cc-proves-what-tp-cannot.md): GitHub's delete-branch-on-merge, followed by this
 // app's own fetch --prune, can leave tp with no remote ref left to check unpushed commits
 // against -- at exactly the tip this app itself last pushed. cc proves that itself and forces
 // past tp's own check, rather than refusing forever on a fact tp can no longer verify.

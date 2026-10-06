@@ -125,7 +125,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 }
 
 // TestPageWarnsOnARemoveWorktreeRefusal covers the fix
-// (docs/adr/0012-cc-proves-what-tp-cannot.md): a remove-worktree refusal was write-only, an
+// (docs/adr/0008-cc-proves-what-tp-cannot.md): a remove-worktree refusal was write-only, an
 // event with nothing reading it back, so pressing the verb again looked like nothing happened.
 // The row now carries its own last refusal as a warning, worded for whichever verb it names
 // rather than the ready-to-merge flag's own fixed label.

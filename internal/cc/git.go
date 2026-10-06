@@ -214,7 +214,7 @@ const (
 	// still check the branch itself.
 	RemovableByMerged RemovalState = iota
 	// RemovableByForce: the ref is gone, but the branch sits exactly where this app last
-	// pushed it (docs/adr/0012-cc-proves-what-tp-cannot.md).
+	// pushed it (docs/adr/0008-cc-proves-what-tp-cannot.md).
 	RemovableByForce
 	// NotRemovable: the ref is gone and the branch has moved past the last recorded push.
 	NotRemovable

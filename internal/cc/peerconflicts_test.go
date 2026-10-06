@@ -6,7 +6,7 @@ import (
 )
 
 // TestRecordPeerConflictsReusesUnmovedTips covers the observe-phase cache (#180,
-// docs/adr/0010-one-conflicting-peer-at-a-time.md): a tick in which no tracked tip moved makes
+// docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md): a tick in which no tracked tip moved makes
 // no merge-tree call for any peer pair.
 func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	t.Parallel()

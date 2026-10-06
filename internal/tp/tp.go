@@ -33,7 +33,7 @@ const (
 	RemoveMerged RemoveMode = iota
 	// RemoveForced skips every check tp performs, for a caller that has already proven them
 	// itself once GitHub's delete-branch-on-merge leaves tp with no ref left to check against
-	// (docs/adr/0012-cc-proves-what-tp-cannot.md).
+	// (docs/adr/0008-cc-proves-what-tp-cannot.md).
 	RemoveForced
 )
 

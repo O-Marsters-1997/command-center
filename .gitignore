@@ -18,3 +18,9 @@ internal/cc/assets/dist/launch-modal.js
 internal/cc/assets/dist/insights.js
 internal/cc/assets/dist/layout-*.js
 internal/cc/assets/dist/index-*.js
+
+docs/plans/
+docs/prds/
+
+.codegraph/*
+!.codegraph/.gitignore

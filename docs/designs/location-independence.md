@@ -6,7 +6,7 @@ The app currently learns where everything is by inference. The workspace root is
 grandparent directory, and each `[[repo]]` names a path under it that has to exist already. Every
 directory the app touches was created by hand on one laptop, and nothing in the config says how to
 recreate any of them. This document inventories that, then proposes a repo model that does not
-depend on a pre-existing tree. ADR 0003 records the decision; this is the working behind it.
+depend on a pre-existing tree. ADR 2 records the decision; this is the working behind it.
 
 Dockerising is the reason to want this. It is not part of this task. No Dockerfile, no
 credentials-from-env, no change to `agent_command`, no decision about where agents run.

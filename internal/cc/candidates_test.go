@@ -192,7 +192,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 // TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice covers issue #72's slice of
 // five: CC-2 is left out of a slice sitting on top of it, so both of its direct dependents are
 // refused and the three rows above them still read on unlock -- the "blocker outside this slice"
-// refusal plan.Preview keeps for a hand-picked, cross-feature slice (plans/feature-launch.md phase 5).
+// refusal plan.Preview keeps for a hand-picked, cross-feature slice (docs/plans/feature-launch.md phase 5).
 func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testing.T) {
 	t.Parallel()
 

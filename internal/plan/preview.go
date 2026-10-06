@@ -29,7 +29,7 @@ func (l PreviewLabel) String() string {
 // starts on unlock only if every blocker is itself in the requested slice — otherwise nothing
 // in this launch will ever satisfy it, and the row is refused (docs/prds/prd-command-centre.md § A launch).
 // A non-empty conflictedBase refuses whatever the blockers say: nothing is ever cut from a base
-// that already carries a conflict (docs/adr/0006-resolve-a-conflict-once.md).
+// that already carries a conflict (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflictedBase string) (PreviewLabel, Reason) {
 	if activeLaunchID != 0 {
 		return Refused, Reason(fmt.Sprintf("already authorised in launch %d", activeLaunchID))
