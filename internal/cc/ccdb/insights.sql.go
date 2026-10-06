@@ -42,7 +42,7 @@ type BoardTicketSpendRow struct {
 
 // One row per ticket in scope, weighing every run disposed before its own pr_merged event when
 // merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
-// uses, generalised past merged-only tickets and off any date window (ADR 17).
+// uses, generalised past merged-only tickets and off any date window (ADR 12).
 func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendParams) ([]BoardTicketSpendRow, error) {
 	rows, err := q.db.QueryContext(ctx, boardTicketSpend, arg.Repo, arg.Feature)
 	if err != nil {

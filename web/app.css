@@ -404,7 +404,7 @@
   }
 
 
-  /* cc-graph is an island (noShadowDOM(), ADR 2): every rule below is page-global and also
+  /* cc-graph is an island (noShadowDOM(), ADR 1): every rule below is page-global and also
      styles the Go-rendered fallback banner cc-graph carries before Solid upgrades it. */
   cc-graph {
     display: block;

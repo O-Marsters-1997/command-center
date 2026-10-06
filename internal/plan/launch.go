@@ -10,7 +10,7 @@ type LaunchCandidate struct {
 	PromptHashMatches bool
 	HasRun            bool
 	// ConflictedBase names the base this launch would cut from when that base already carries a
-	// conflict, and is empty when it is clean (docs/adr/0006-resolve-a-conflict-once.md).
+	// conflict, and is empty when it is clean (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictedBase string
 }
 

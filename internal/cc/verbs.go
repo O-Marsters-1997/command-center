@@ -592,7 +592,7 @@ type removeWorktreeContext struct {
 // this verb is trying to reach (issue #196). Only when the worktree is still there does cc check
 // what tp's own removal check cannot: a dirty worktree, and -- once GitHub's delete-branch-on-merge
 // has pruned the remote ref tp would check against -- unpushed commits, forcing past tp's own
-// check only once cc has proven the same fact itself (docs/adr/0012-cc-proves-what-tp-cannot.md).
+// check only once cc has proven the same fact itself (docs/adr/0008-cc-proves-what-tp-cannot.md).
 // The worktree comes down before the GitHub issue closes: tp.Remove finding no worktree is the
 // state this verb is trying to reach (issue #196), so a close failure after a real teardown is
 // still retryable, and a refusal before either step leaves both untouched.
