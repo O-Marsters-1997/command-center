@@ -28,6 +28,7 @@ func TestNoImpureImports(t *testing.T) {
 
 	allowed := []string{
 		"github.com/O-Marsters-1997/command-center/internal/plan",
+		"github.com/O-Marsters-1997/command-center/internal/spend",
 		"github.com/O-Marsters-1997/command-center/internal/verdict",
 	}
 	forbidden := []string{"os/exec", "database/sql", "net/http"}
@@ -36,7 +37,8 @@ func TestNoImpureImports(t *testing.T) {
 			t.Errorf("internal/plan imports %q; this package is pure", path)
 		}
 		if !isStdlib(path) && !slices.Contains(allowed, path) {
-			t.Errorf("internal/plan imports %q; only the standard library and internal/verdict are allowed", path)
+			t.Errorf("internal/plan imports %q; only the standard library, internal/spend and internal/verdict are allowed",
+				path)
 		}
 	}
 }

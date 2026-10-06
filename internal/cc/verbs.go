@@ -57,7 +57,7 @@ const (
 // applyAbortIntents consumes every pending abort request: `git merge --abort` in the worktree,
 // the one verb `refresh conflicted` offers. It runs before the refresh step, whose own step 1
 // refuses to touch a worktree left mid-merge (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) applyAbortIntents(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, abortVerb)
 	if err != nil {
 		return err
@@ -66,16 +66,10 @@ func (l *Loop) applyAbortIntents(ctx context.Context, obs plan.Observation) erro
 		return nil
 	}
 
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
-
 	now := l.clock.Now()
 	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			if err := l.abortOne(ctx, ticket, obs, now); err != nil {
+		if e, ok := snap.Entry(intent.TicketID); ok {
+			if err := l.abortOne(ctx, e.Ticket, obs, now); err != nil {
 				return err
 			}
 		}
@@ -89,7 +83,7 @@ func (l *Loop) applyAbortIntents(ctx context.Context, obs plan.Observation) erro
 // abortOne aborts one ticket's unresolved merge, refusing a worktree a live agent owns (inv. 4),
 // and clears the mid-merge the same tick's refresh step reads
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) abortOne(ctx context.Context, ticket Ticket, obs plan.Observation, now time.Time) error {
+func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation, now time.Time) error {
 	fail := func(detail string) error {
 		return l.store.AppendEvent(ctx,
 			Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
@@ -329,7 +323,7 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 // Phase 6). Unlike a fresh launch, re-run is not gated by unlock, authorisation or a
 // prompt-hash match: it is a human's explicit, one-off decision, not the tick's own
 // eligibility check.
-func (l *Loop) applyReRunIntents(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, reRunVerb)
 	if err != nil {
 		return err
@@ -343,14 +337,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs plan.Observation) erro
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(tickets, obs)
-	stacking := l.cfg.PlanRules().Stacking
 	repoPaths := repoPathsByName(l.cfg.Repos)
-	authorisedHashes, err := l.store.ActiveLaunchHashes(ctx)
-	if err != nil {
-		return err
-	}
 	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
 		return err
@@ -363,12 +350,13 @@ func (l *Loop) applyReRunIntents(ctx context.Context, obs plan.Observation) erro
 			if run, ok := latest[ticket.URL]; ok {
 				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
 			}
-			baseBranch := plan.Unlocked(byURL[ticket.URL], byURL, prs, stacking[ticket.Repo]).BaseBranch
+			entry, _ := snap.Entry(ticket.URL)
+			baseBranch := entry.Unlock.BaseBranch
 			if baseBranch == "" {
 				baseBranch = defaultBaseBranch
 			}
 			err := l.reRunOne(
-				ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, authorisedHashes[ticket.URL], now, oldPromptPath,
+				ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, entry.PromptHash, now, oldPromptPath,
 			)
 			if err != nil {
 				return err
@@ -407,7 +395,7 @@ func (l *Loop) reRunOne(
 
 // applyReCheckIntents consumes every pending re-check request: `gh run rerun <id>`, the compat
 // check's own GitHub Actions run (docs/prds/prd-command-centre.md § Phase 5).
-func (l *Loop) applyReCheckIntents(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) applyReCheckIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, reCheckVerb)
 	if err != nil {
 		return err
@@ -416,17 +404,13 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs plan.Observation) er
 		return nil
 	}
 
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 	compatChecks := l.cfg.PlanRules().CompatCheck
 
 	now := l.clock.Now()
 	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
+		if e, ok := snap.Entry(intent.TicketID); ok {
+			ticket := e.Ticket
 			err := l.reCheckOne(ctx, ticket, repoPaths[ticket.Repo], compatChecks[ticket.Repo], obs, now)
 			if err != nil {
 				return err
@@ -442,7 +426,7 @@ func (l *Loop) applyReCheckIntents(ctx context.Context, obs plan.Observation) er
 // reCheckOne re-runs the compat check's own GitHub Actions run, named by the run id embedded in
 // its DetailsURL (https://github.com/<owner>/<repo>/actions/runs/<run-id>/job/<job-id>).
 func (l *Loop) reCheckOne(
-	ctx context.Context, ticket Ticket, repoPath, compatCheck string, obs plan.Observation, now time.Time,
+	ctx context.Context, ticket plan.Ticket, repoPath, compatCheck string, obs plan.Observation, now time.Time,
 ) error {
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
@@ -488,7 +472,7 @@ func runIDFromDetailsURL(detailsURL string) (string, error) {
 // applyClosePRIntents consumes every pending close-pr request: `gh pr close`, the sanctioned way
 // to unopen a pull request the app opened (docs/prds/prd-command-centre.md § The states). The next
 // tick's fallback PR read is what turns this into a derived `pr_closed_unmerged` row.
-func (l *Loop) applyClosePRIntents(ctx context.Context) error {
+func (l *Loop) applyClosePRIntents(ctx context.Context, snap plan.Snapshot) error {
 	intents, err := l.store.PendingVerbIntents(ctx, closePRVerb)
 	if err != nil {
 		return err
@@ -497,16 +481,12 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 		return nil
 	}
 
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
 	now := l.clock.Now()
 	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
+		if e, ok := snap.Entry(intent.TicketID); ok {
+			ticket := e.Ticket
 			event := Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
 			if err := l.forge.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
 				event = Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
@@ -526,7 +506,7 @@ func (l *Loop) applyClosePRIntents(ctx context.Context) error {
 // cleanup verb, called only with MERGED PR state or on a base_gone row the user clears (inv. 3).
 // A clean pass tears down its worktree via `tp remove`, closes the ticket's GitHub issue, and
 // drops its row from the fleet (issue #147).
-func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, removeWorktreeVerb)
 	if err != nil {
 		return err
@@ -535,33 +515,15 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs plan.Observat
 		return nil
 	}
 
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return err
-	}
 	lastPushed, err := l.store.LastPushedTips(ctx)
 	if err != nil {
 		return err
 	}
-	rc := removeWorktreeContext{
-		byURL:      planTicketsByURL(tickets),
-		prs:        prsByBranch(tickets, obs),
-		stacking:   l.cfg.PlanRules().Stacking,
-		repoPaths:  repoPathsByName(l.cfg.Repos),
-		lastPushed: lastPushed,
-		obs:        obs,
-	}
-	byTicket := ticketsByURL(tickets)
 
 	now := l.clock.Now()
 	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			_, hasRun := latest[ticket.URL]
-			if err := l.removeWorktreeOne(ctx, ticket, rc, hasRun, now); err != nil {
+		if e, ok := snap.Entry(intent.TicketID); ok {
+			if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL], now); err != nil {
 				return err
 			}
 		}
@@ -570,19 +532,6 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, obs plan.Observat
 		}
 	}
 	return nil
-}
-
-// removeWorktreeContext is the per-tick facts removeWorktreeOne needs, gathered once by
-// applyRemoveWorktreeIntents rather than re-queried per ticket -- pushContext's own shape (push.go).
-type removeWorktreeContext struct {
-	byURL     map[string]plan.Ticket
-	prs       map[string]plan.PRState
-	stacking  map[string]bool
-	repoPaths map[string]string
-	// lastPushed is what UnpushedAfterPrune falls back to once GitHub's delete-branch-on-merge
-	// and our own fetch --prune have removed the remote-tracking ref a merged branch was pushed to.
-	lastPushed map[string]string
-	obs        plan.Observation
 }
 
 // removeWorktreeOne applies inv. 3's gate: is this row even eligible (merged, or base_gone with
@@ -595,23 +544,26 @@ type removeWorktreeContext struct {
 // The worktree comes down before the GitHub issue closes: tp.Remove finding no worktree is the
 // state this verb is trying to reach (issue #196), so a close failure after a real teardown is
 // still retryable, and a refusal before either step leaves both untouched.
+//
+// lastPushed is what UnpushedAfterPrune falls back to once GitHub's delete-branch-on-merge and our
+// own fetch --prune have removed the remote-tracking ref a merged branch was pushed to.
 func (l *Loop) removeWorktreeOne(
-	ctx context.Context, ticket Ticket, rc removeWorktreeContext, hasRun bool, now time.Time,
+	ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed string, now time.Time,
 ) error {
+	ticket := e.Ticket
 	refuse := func(detail string) error {
 		return l.store.AppendEvent(ctx,
 			Event{At: now, TicketURL: ticket.URL, Kind: eventRemoveWorktreeRefused, Detail: detail})
 	}
 
-	merged := rc.obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
-	unlock := plan.Unlocked(rc.byURL[ticket.URL], rc.byURL, rc.prs, rc.stacking[ticket.Repo])
-	baseGone := hasRun && unlock.BlockerClosed
+	merged := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
+	baseGone := e.Run != nil && e.Unlock.BlockerClosed
 	if !merged && !baseGone {
 		return refuse("neither merged nor base gone")
 	}
 
-	repoPath := rc.repoPaths[ticket.Repo]
-	worktreePath, worktreePresent := rc.obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
+	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
+	worktreePath, worktreePresent := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 
 	mode := git.RemoveMerged
 	if worktreePresent {
@@ -623,7 +575,7 @@ func (l *Loop) removeWorktreeOne(
 			return refuse("worktree is dirty")
 		}
 
-		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, rc.lastPushed[ticket.URL])
+		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, lastPushed)
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}

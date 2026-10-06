@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -65,6 +66,11 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		return plan.Input{}, err
 	}
 
+	gauges, err := s.LatestReadings(ctx)
+	if err != nil {
+		return plan.Input{}, err
+	}
+
 	planTickets := make([]plan.Ticket, len(tickets))
 	for i, t := range tickets {
 		planTickets[i] = planTicket(t)
@@ -73,5 +79,6 @@ func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 		Observed: observed, Tickets: planTickets, Obs: obs,
 		Memberships: memberships, Runs: runs, Pushes: pushes, Refreshes: refreshes,
 		Verdict: verdictFacts, PendingVerbs: pendingVerbs, Removals: removals,
+		FiveHour: gauges[agentlog.FiveHour].Utilization,
 	}, nil
 }

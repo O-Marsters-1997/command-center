@@ -15,35 +15,14 @@ const (
 // applyDraftGate un-drafts every open PR plan.DraftGate says is ready, and never re-drafts. A
 // failed `gh pr ready` is never latched -- the next tick simply retries against a fresh
 // observation (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
-func (l *Loop) applyDraftGate(ctx context.Context, obs plan.Observation) error {
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byURL := planTicketsByURL(tickets)
-	prs := prsByBranch(tickets, obs)
+func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
 	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	vd, err := l.store.VerdictFacts(ctx)
-	if err != nil {
-		return err
-	}
-
 	now := l.clock.Now()
-	for _, t := range tickets {
-		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
-		if pr.State != plan.Open || !pr.IsDraft {
+	for _, e := range snap.Entries {
+		if !e.ReadyToUndraft {
 			continue
 		}
-
-		fact := &plan.RunFact{PROpen: true}
-		l.cfg.PlanRules().ApplyVerdict(fact, planTicket(t), obs, vd)
-		gating := plan.GatingBlockers(byURL[t.URL], byURL)
-		if draft, _ := plan.DraftGate(gating, prs, fact.VerdictReviewMe); draft {
-			continue
-		}
-
-		if err := l.readyOne(ctx, t, repoPaths[t.Repo], now); err != nil {
+		if err := l.readyOne(ctx, e.Ticket, repoPaths[e.Ticket.Repo], now); err != nil {
 			return err
 		}
 	}
@@ -52,7 +31,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs plan.Observation) error {
 
 // readyOne calls `gh pr ready` for one ticket, recording either outcome as an event: a failure is
 // never latched, so leaving the row untouched here is exactly what lets the next tick retry.
-func (l *Loop) readyOne(ctx context.Context, t Ticket, repoPath string, now time.Time) error {
+func (l *Loop) readyOne(ctx context.Context, t plan.Ticket, repoPath string, now time.Time) error {
 	event := Event{At: now, TicketURL: t.URL, Kind: eventDraftReady}
 	if err := l.forge.Ready(ctx, repoPath, t.Branch); err != nil {
 		event = Event{At: now, TicketURL: t.URL, Kind: eventDraftReadyFailed, Detail: err.Error()}
