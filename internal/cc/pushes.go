@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // RecordPush writes one successful push -- the row Phase 4's crash-safety hinges on:
@@ -60,26 +61,17 @@ func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
 	return tips, nil
 }
 
-// PushRow is one ticket's latest recorded push, in full -- what internal/verdict's Input needs
-// beyond the check rollup itself: which tip and base it was pushed against, and when.
-type PushRow struct {
-	PushedTip     string
-	BaseBranch    string
-	BaseSHAAtPush string
-	PushedAt      time.Time
-}
-
 // LatestPushes returns each ticket's latest recorded push in full, keyed by ticket URL -- the CI
 // verdict step's own per-ticket facts, read fresh every render (inv. 14).
-func (s *Store) LatestPushes(ctx context.Context) (map[string]PushRow, error) {
+func (s *Store) LatestPushes(ctx context.Context) (map[string]plan.PushRow, error) {
 	rows, err := s.q.LatestPushes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest pushes: %w", err)
 	}
 
-	pushes := map[string]PushRow{}
+	pushes := map[string]plan.PushRow{}
 	for _, r := range rows {
-		pushes[r.TicketID] = PushRow{
+		pushes[r.TicketID] = plan.PushRow{
 			PushedTip:     r.PushedTip,
 			BaseBranch:    r.BaseBranch,
 			BaseSHAAtPush: r.BaseSHAAtPush,
@@ -87,15 +79,6 @@ func (s *Store) LatestPushes(ctx context.Context) (map[string]PushRow, error) {
 		}
 	}
 	return pushes, nil
-}
-
-// PushFact is a ticket's outstanding push-policy problem: refused outright (naming the path), or
-// a push/PR-create failure. Neither is a stored column (inv. 14) -- both are derived from the
-// latest push_refused/push_failed event since the ticket's last recorded push, so a later success clears it.
-type PushFact struct {
-	Refused     bool
-	RefusedPath string
-	Failed      bool
 }
 
 const (
@@ -107,22 +90,22 @@ const (
 // PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL: what the
 // automatic push step's auto-retry gate (a failure, never a refusal, blocks it -- retry-push is
 // your verb) and the page's needs-you/push-failed rendering both read.
-func (s *Store) PushFacts(ctx context.Context) (map[string]PushFact, error) {
+func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error) {
 	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: eventPushRefused, Kind_2: eventPushFailed})
 	if err != nil {
 		return nil, fmt.Errorf("select push facts: %w", err)
 	}
 
-	facts := map[string]PushFact{}
+	facts := map[string]plan.PushFact{}
 	for _, row := range rows {
 		if !row.TicketID.Valid {
 			continue
 		}
 		switch row.Kind {
 		case eventPushRefused:
-			facts[row.TicketID.String] = PushFact{Refused: true, RefusedPath: row.Detail.String}
+			facts[row.TicketID.String] = plan.PushFact{Refused: true, RefusedPath: row.Detail.String}
 		case eventPushFailed:
-			facts[row.TicketID.String] = PushFact{Failed: true}
+			facts[row.TicketID.String] = plan.PushFact{Failed: true}
 		}
 	}
 	return facts, nil

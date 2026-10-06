@@ -49,7 +49,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs plan.Observation) error {
 // record a main this branch's content was never tried against (issue #85). The row it hands on
 // is the pre-retarget one: naming the merged parent is what tells advanceOnto to restack rather
 // than merge a squash that shares no ancestry with this branch (issue #89).
-func (l *Loop) retargetOne(ctx context.Context, t Ticket, row PushRow, rc refreshContext, now time.Time) error {
+func (l *Loop) retargetOne(ctx context.Context, t Ticket, row plan.PushRow, rc refreshContext, now time.Time) error {
 	repoPath := rc.repoPaths[t.Repo]
 	if err := l.forge.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
 		return l.store.AppendEvent(ctx, Event{

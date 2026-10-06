@@ -61,6 +61,65 @@ func assertSeeOtherHome(t *testing.T, resp *http.Response) {
 	}
 }
 
+func seedRun(t *testing.T, store *cc.Store, ticketURL string) int64 {
+	t.Helper()
+
+	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "basesha", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(t.Context(), runID, 4242, time.Now(), "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	return runID
+}
+
+// seededRunning is seededStore with sandbox://CC-1 mid-run, the state that offers kill.
+func seededRunning(t *testing.T) *cc.Store {
+	t.Helper()
+
+	store := seededStore(t, time.Now())
+	seedRun(t, store, "sandbox://CC-1")
+	obs, _, err := store.LastObservation(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	obs.Runs = map[string]plan.RunObservation{"sandbox://CC-1": {Alive: true}}
+	if err := store.SaveObservation(t.Context(), obs); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+// seededFailed is seededStore with sandbox://CC-1's run failed, the state that offers follow-up.
+func seededFailed(t *testing.T) *cc.Store {
+	t.Helper()
+
+	store := seededStore(t, time.Now())
+	runID := seedRun(t, store, "sandbox://CC-1")
+	exitCode := 1
+	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomeFailed, &exitCode, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+// seededQueued is seededStore with sandbox://CC-1 authorised but not yet launched, the state
+// that offers cancel.
+func seededQueued(t *testing.T) *cc.Store {
+	t.Helper()
+
+	store := seededStore(t, time.Now())
+	now := time.Now()
+	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-1", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(t.Context(), now); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
 func seededStore(t *testing.T, observedAt time.Time) *cc.Store {
 	t.Helper()
 

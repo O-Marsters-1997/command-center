@@ -193,8 +193,7 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 	if err != nil {
 		return err
 	}
-	vd, err := verdictDepsFor(
-		ctx, l.store, l.cfg.PlanRules())
+	vd, err := l.store.VerdictFacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -218,8 +217,8 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 // one a live agent already owns (inv. 4): two agents in one worktree is the hazard follow-up
 // shares with re-run, not the fresh prompt.
 func (l *Loop) followUpOne(
-	ctx context.Context, ticket Ticket, repoPath, promptText string, obs plan.Observation, vd verdictDeps,
-	pushFacts map[string]PushFact, now time.Time,
+	ctx context.Context, ticket Ticket, repoPath, promptText string, obs plan.Observation, vd plan.VerdictFacts,
+	pushFacts map[string]plan.PushFact, now time.Time,
 ) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
@@ -252,8 +251,8 @@ const ciLogUnavailableSection = "## Failed CI log\n\n" +
 // from the observe phase's own Fetch, since invariant 10 aborts the whole tick on any read error
 // there (docs/designs/command-centre-design.md § 11 inv. 11; issue #232).
 func (l *Loop) fetchCIFailedLog(
-	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, vd verdictDeps,
-	pushFacts map[string]PushFact,
+	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, vd plan.VerdictFacts,
+	pushFacts map[string]plan.PushFact,
 ) (section, unavailableDetail string) {
 	pf := pushFacts[ticket.URL]
 	if pf.Refused || pf.Failed || obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State != plan.Open {
@@ -261,7 +260,7 @@ func (l *Loop) fetchCIFailedLog(
 	}
 
 	fact := &plan.RunFact{PROpen: true}
-	applyVerdict(fact, ticket, obs, vd)
+	l.cfg.PlanRules().ApplyVerdict(fact, planTicket(ticket), obs, vd)
 	if !fact.VerdictCIFailed {
 		return "", ""
 	}

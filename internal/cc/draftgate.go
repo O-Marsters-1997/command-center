@@ -24,8 +24,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs plan.Observation) error {
 	prs := prsByBranch(tickets, obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
 
-	vd, err := verdictDepsFor(
-		ctx, l.store, l.cfg.PlanRules())
+	vd, err := l.store.VerdictFacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -38,7 +37,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, obs plan.Observation) error {
 		}
 
 		fact := &plan.RunFact{PROpen: true}
-		applyVerdict(fact, t, obs, vd)
+		l.cfg.PlanRules().ApplyVerdict(fact, planTicket(t), obs, vd)
 		gating := plan.GatingBlockers(byURL[t.URL], byURL)
 		if draft, _ := plan.DraftGate(gating, prs, fact.VerdictReviewMe); draft {
 			continue
