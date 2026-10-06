@@ -303,7 +303,8 @@ func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
 	ctx := t.Context()
 	store := failedRootAndQueuedChildren(t,
 		[]string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"})
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}); err != nil {
+	lone := []storepkg.Ticket{{URL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}
+	if err := store.UpsertTickets(ctx, lone); err != nil {
 		t.Fatal(err)
 	}
 
