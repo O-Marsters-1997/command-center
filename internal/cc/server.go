@@ -22,8 +22,8 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -346,7 +346,7 @@ type tickErrorView struct {
 
 // gaugeView is one window's masthead gauge: a fixed label so the DOM shape never changes between
 // polls, and the meter's own fill percentage, 0 for a window with no reading yet. Calibrating is
-// true below usage.MinSamples trailing intervals, when CCPct -- cc's own share -- has no meaning.
+// true below spend.MinSamples trailing intervals, when CCPct -- cc's own share -- has no meaning.
 type gaugeView struct {
 	Label       string
 	Pct         int
@@ -354,13 +354,11 @@ type gaugeView struct {
 	CCPct       int
 }
 
-// windowSplit is one window's cc-vs-other input: the fit's own factor and sample count, and cc's
-// own recorded cost_usd within that window's trailing span -- deriveGauge's raw material, fetched
-// once per render by Server.gaugeSplit.
+// windowSplit is one window's cc-vs-other input: the fit and cc's own recorded cost_usd within
+// that window's trailing span, fetched once per render by Server.gaugeSplit.
 type windowSplit struct {
-	Factor  float64
-	Samples int
-	CCUSD   float64
+	Fit   spend.Result
+	CCUSD float64
 }
 
 // gaugeSplit reads the fit and cc's own trailing spend once, keyed by window, for deriveGauges to
@@ -376,7 +374,7 @@ func (s *Server) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Wi
 	}
 	split := make(map[agentlog.Window]windowSplit, len(fits))
 	for window, fit := range fits {
-		split[window] = windowSplit{Factor: fit.Factor, Samples: fit.Samples, CCUSD: ccCost[window]}
+		split[window] = windowSplit{Fit: fit, CCUSD: ccCost[window]}
 	}
 	return split, nil
 }
@@ -393,23 +391,11 @@ func deriveGauges(gauges map[agentlog.Window]Gauge, split map[agentlog.Window]wi
 func deriveGauge(
 	label string, window agentlog.Window, gauges map[agentlog.Window]Gauge, split map[agentlog.Window]windowSplit,
 ) gaugeView {
-	view := gaugeView{Label: label, Pct: pctOf(gauges[window])}
-	s, ok := split[window]
-	if !ok || s.Samples < usage.MinSamples {
-		view.Calibrating = true
-		return view
-	}
-	view.CCPct = clampPct(int(s.CCUSD*s.Factor*100+0.5), view.Pct)
+	view := gaugeView{Label: label, Pct: spend.Pct(gauges[window].Utilization)}
+	w := split[window]
+	view.CCPct, view.Calibrating = spend.Share(view.Pct, w.Fit, w.CCUSD)
 	return view
 }
-
-// clampPct keeps a derived share inside [0, total]: a noisy fit can otherwise put cc's own share
-// below zero or above the window's own total.
-func clampPct(pct, total int) int {
-	return max(0, min(pct, total))
-}
-
-func pctOf(g Gauge) int { return int(g.Utilization*100 + 0.5) }
 
 type spendPausedView struct {
 	Pct   int
@@ -553,7 +539,7 @@ func (s *Server) render(ctx context.Context, params viewParams) (pageView, error
 
 	rows := derive(tickets, obs, facts, vd, s.rules.Stacking, now)
 	applySpend(rows, s.spend)
-	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Factor)
+	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	applyViewState(rows, params)
 	if err := s.applyContextCurve(ctx, rows); err != nil {
 		return pageView{}, err
@@ -588,8 +574,8 @@ func (s *Server) buildChrome(
 		RepoLinks:    repoLinksFor(s.repos, params),
 		FeatureScope: params.Feature,
 	}
-	if spendPaused(gauges, s.spendLimit5h) {
-		c.SpendPaused = &spendPausedView{Pct: pctOf(gauges[agentlog.FiveHour]), Limit: s.spendLimit5h}
+	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, s.spendLimit5h) {
+		c.SpendPaused = &spendPausedView{Pct: spend.Pct(fiveHour), Limit: s.spendLimit5h}
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)

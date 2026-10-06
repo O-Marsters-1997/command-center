@@ -1,11 +1,11 @@
-package usage_test
+package spend_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 func TestIntervalsPairsEachReadingWithThePreviousOneForItsWindow(t *testing.T) {
@@ -26,7 +26,7 @@ func TestIntervalsPairsEachReadingWithThePreviousOneForItsWindow(t *testing.T) {
 		return 8, nil
 	}
 
-	intervals, latest, err := usage.Intervals(readings, previous, weigh)
+	intervals, latest, err := spend.Intervals(readings, previous, weigh)
 	if err != nil {
 		t.Fatalf("Intervals: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestIntervalsPairsEachReadingWithThePreviousOneForItsWindow(t *testing.T) {
 		t.Errorf("weigh called with (%v, %v); want (%v, %v)", weighedStart, weighedEnd, start, end)
 	}
 
-	want := usage.Interval{
+	want := spend.Interval{
 		Window: agentlog.FiveHour, Start: start, End: end,
 		UtilizationStart: 0.10, UtilizationEnd: 0.30, WeightUSD: 8,
 	}
@@ -55,7 +55,7 @@ func TestIntervalsWithNoPreviousReadingClosesNothingYet(t *testing.T) {
 	called := false
 	weigh := func(time.Time, time.Time) (float64, error) { called = true; return 0, nil }
 
-	intervals, latest, err := usage.Intervals(readings, nil, weigh)
+	intervals, latest, err := spend.Intervals(readings, nil, weigh)
 	if err != nil {
 		t.Fatalf("Intervals: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestIntervalsIgnoresADuplicateOrOlderReading(t *testing.T) {
 	}
 	older := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.15, At: at.Add(-time.Minute)}
 
-	intervals, latest, err := usage.Intervals([]agentlog.Reading{older}, previous, failWeigher(t))
+	intervals, latest, err := spend.Intervals([]agentlog.Reading{older}, previous, failWeigher(t))
 	if err != nil {
 		t.Fatalf("Intervals: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestIntervalsSkipsAPairStraddlingAReset(t *testing.T) {
 	}
 	afterReset := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.10, At: at.Add(time.Hour)}
 
-	intervals, latest, err := usage.Intervals([]agentlog.Reading{afterReset}, previous, failWeigher(t))
+	intervals, latest, err := spend.Intervals([]agentlog.Reading{afterReset}, previous, failWeigher(t))
 	if err != nil {
 		t.Fatalf("Intervals: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestIntervalsSkipsAPairStraddlingAReset(t *testing.T) {
 	}
 }
 
-func failWeigher(t *testing.T) usage.Weigher {
+func failWeigher(t *testing.T) spend.Weigher {
 	t.Helper()
 	return func(time.Time, time.Time) (float64, error) {
 		t.Fatal("weigh should not have been called")

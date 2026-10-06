@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -515,7 +516,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 		})
 	}
 
-	paused := spendPaused(gauges, l.cfg.SpendLimit5h)
+	paused := spend.Paused(gauges[agentlog.FiveHour].Utilization, l.cfg.SpendLimit5h)
 	toLaunch := plan.LaunchPlan(candidates, currentlyRunning(latest), l.cfg.MaxAgents, paused)
 	if len(toLaunch) == 0 {
 		return nil
