@@ -88,10 +88,14 @@ func ciCheck(conclusion string) map[string]plan.CheckState {
 	return map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: conclusion}}
 }
 
-func draftConsumerPR(blockerState plan.PRState, consumerChecks map[string]plan.CheckState, tip string) plan.Observation {
+func draftConsumerPR(
+	blockerState plan.PRState, consumerChecks map[string]plan.CheckState, tip string,
+) plan.Observation {
 	return plan.Observation{
 		PRs: map[string]plan.PR{
-			cc.BranchKey("repo", "cc-1"):       {Number: 1, State: plan.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks},
+			cc.BranchKey("repo", "cc-1"): {
+				Number: 1, State: plan.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks,
+			},
 			cc.BranchKey("services", "pla-40"): {State: blockerState},
 		},
 		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},

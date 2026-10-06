@@ -252,7 +252,8 @@ const ciLogUnavailableSection = "## Failed CI log\n\n" +
 // from the observe phase's own Fetch, since invariant 10 aborts the whole tick on any read error
 // there (docs/designs/command-centre-design.md § 11 inv. 11; issue #232).
 func (l *Loop) fetchCIFailedLog(
-	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, vd verdictDeps, pushFacts map[string]PushFact,
+	ctx context.Context, ticket Ticket, repoPath string, obs plan.Observation, vd verdictDeps,
+	pushFacts map[string]PushFact,
 ) (section, unavailableDetail string) {
 	pf := pushFacts[ticket.URL]
 	if pf.Refused || pf.Failed || obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State != plan.Open {

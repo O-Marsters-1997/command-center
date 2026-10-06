@@ -391,7 +391,9 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 
 // disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
-func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, obs plan.Observation, now time.Time) error {
+func (l *Loop) disposeRun(
+	ctx context.Context, run PendingRun, ticket Ticket, obs plan.Observation, now time.Time,
+) error {
 	commits := 0
 	if run.BaselineSHA != "" {
 		var err error
