@@ -12,6 +12,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
@@ -31,6 +32,7 @@ type options struct {
 	runner        Runner
 	metricsParser MetricsParser
 	forge         gh.Forge
+	worktrees     tp.Worktrees
 	trackerFor    TrackerSource
 }
 
@@ -83,6 +85,12 @@ func WithForge(forge gh.Forge) Option {
 	return func(o *options) { o.forge = forge }
 }
 
+// WithWorktrees replaces the tp-backed Worktrees, so worktree cuts and removals can be faked
+// in-process.
+func WithWorktrees(worktrees tp.Worktrees) Option {
+	return func(o *options) { o.worktrees = worktrees }
+}
+
 // WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
 // faked in-process.
 func WithTrackerSource(resolve TrackerSource) Option {
@@ -101,7 +109,7 @@ func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{clock: RealClock{}, forge: gh.CLI{}}
+	settings := options{clock: RealClock{}, forge: gh.CLI{}, worktrees: tp.CLI{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -181,6 +189,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	loop := NewLoop(store, observe, settings.clock, cfg, ws, runner)
 	loop.SetMetricsParser(metricsParser)
 	loop.SetForge(settings.forge)
+	loop.SetWorktrees(settings.worktrees)
 	server := NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)

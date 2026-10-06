@@ -637,7 +637,7 @@ func (l *Loop) removeWorktreeOne(
 	}
 
 	if worktreePresent {
-		if err := tp.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
+		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
 			return refuse(err.Error())
 		}
 	}
