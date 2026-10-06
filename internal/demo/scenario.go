@@ -152,7 +152,7 @@ func (s Scenario) validate() error {
 				return fmt.Errorf("ticket %q: %s %q is not supported, want \"fail\"", t.ID, f.name, f.value)
 			}
 		}
-		if t.Compat != "" && (t.Compat != "fail" || repoByName[t.Repo].CompatCheck == "") {
+		if t.Compat != "" && (t.Compat != ciFail || repoByName[t.Repo].CompatCheck == "") {
 			return fmt.Errorf("ticket %q: compat %q needs \"fail\" in a repo with a compat_check", t.ID, t.Compat)
 		}
 		if !slices.Contains([]string{"", launchHold, launchEarly}, t.Launch) {

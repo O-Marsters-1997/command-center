@@ -264,7 +264,7 @@ func (s *Sim) record(states map[string]string) {
 func (s *Sim) launchReady(states map[string]string) error {
 	var ready []string
 	for _, i := range s.issues {
-		if s.authorised[i.ID] || !s.launchDue(i, states[i.ID]) {
+		if s.authorised[i.ID] || !i.launchDue(states[i.ID]) {
 			continue
 		}
 		s.authorised[i.ID] = true
@@ -294,7 +294,7 @@ func (s *Sim) postLaunch(tickets []string) error {
 	return nil
 }
 
-func (*Sim) launchDue(i issue, state string) bool {
+func (i issue) launchDue(state string) bool {
 	switch i.Launch {
 	case launchHold:
 		return false
