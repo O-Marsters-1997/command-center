@@ -151,13 +151,16 @@ func (r *agentRun) resolveConflict() error {
 		return err
 	}
 	// The merge exits non-zero precisely when it leaves conflicts to resolve.
-	_, _ = git(r.worktree, "merge", "--no-commit", "--no-ff", "origin/main")
+	_, mergeErr := git(r.worktree, "merge", "--no-commit", "--no-ff", "origin/main")
 	conflicted, err := git(r.worktree, "diff", "--name-only", "--diff-filter=U")
 	if err != nil {
 		return err
 	}
+	if conflicted == "" && mergeErr != nil {
+		return mergeErr
+	}
 	resolved := map[string]string{}
-	for name := range strings.FieldsSeq(conflicted) {
+	for _, name := range strings.Split(conflicted, "\n") {
 		resolved[name] = "package main // resolved by " + r.issue.ID + "\n"
 	}
 	if err := writeFiles(r.worktree, resolved); err != nil {

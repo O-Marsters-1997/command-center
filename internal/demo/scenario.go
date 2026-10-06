@@ -2,6 +2,7 @@ package demo
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -145,15 +146,24 @@ func (s Scenario) validate() error {
 		if !repos[m.Repo] {
 			return fmt.Errorf("main event names unknown repo %q", m.Repo)
 		}
+		if len(m.Files) == 0 {
+			return errors.New("main event commits no files")
+		}
 	}
 	for _, p := range s.Push {
 		if !ids[p.Ticket] {
 			return fmt.Errorf("push names unknown ticket %q", p.Ticket)
 		}
+		if len(p.Files) == 0 {
+			return fmt.Errorf("push to ticket %q commits no files", p.Ticket)
+		}
 	}
 	for _, p := range s.Press {
 		if !ids[p.Ticket] {
 			return fmt.Errorf("press names unknown ticket %q", p.Ticket)
+		}
+		if p.Verb == "" {
+			return fmt.Errorf("press on ticket %q names no verb", p.Ticket)
 		}
 	}
 	for _, e := range s.Expect {
