@@ -8,7 +8,6 @@ import (
 	"log"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
 )
 
 // MetricsParser reads one run's own log into its settled totals — agentlog.ParseMetrics's own
@@ -27,7 +26,7 @@ func BackfillMetrics(ctx context.Context, store *Store, parser MetricsParser, cl
 	}
 	// Loaded once for the whole backfill pass, not once per run, since every run's interval close
 	// weighs the same transcripts directory.
-	requests, err := usage.LoadRequests(claudeProjectsDir)
+	requests, err := LoadRequests(claudeProjectsDir)
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", claudeProjectsDir, err)
 	}

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 // ponytail: one mutex over the whole map. Per-path locks if 25 rows ever becomes 250.
@@ -62,7 +63,7 @@ func applyTicketSpend(rows []row, byURL map[string]BoardTicketSpend, factor floa
 			continue
 		}
 		rows[i].AgentPctWeek, rows[i].ResolvePctWeek, rows[i].FollowUpPctWeek, rows[i].SpendPctWeek =
-			kindPctWeek(ts.AgentUSD, ts.ResolveUSD, ts.FollowUpUSD, factor)
+			spend.KindPctWeek(ts.AgentUSD, ts.ResolveUSD, ts.FollowUpUSD, factor)
 		rows[i].TicketOpen = !ts.Merged
 	}
 }

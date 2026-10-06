@@ -7,7 +7,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 const (
@@ -40,7 +40,7 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	if len(readings) == 0 {
 		return nil
 	}
-	requests, err := usage.LoadRequests(projectsDir)
+	requests, err := LoadRequests(projectsDir)
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", projectsDir, err)
 	}
@@ -60,8 +60,8 @@ func (s *Store) recordReadingsAndIntervals(
 	if err != nil {
 		return err
 	}
-	weigh := func(start, end time.Time) (float64, error) { return usage.SumWeight(requests, start, end), nil }
-	intervals, _, err := usage.Intervals(readings, previous, weigh)
+	weigh := func(start, end time.Time) (float64, error) { return spend.SumWeight(requests, start, end), nil }
+	intervals, _, err := spend.Intervals(readings, previous, weigh)
 	if err != nil {
 		return fmt.Errorf("build utilization intervals: %w", err)
 	}
@@ -82,22 +82,22 @@ func (s *Store) recordReadingsAndIntervals(
 }
 
 // FitFactors reads every trailing-seven-day interval and returns each window's least-squares
-// dollars-to-utilization factor. A window below usage.MinSamples is simply absent, the same
+// dollars-to-utilization factor. A window below spend.MinSamples is simply absent, the same
 // convention LatestReadings uses for a window with no reading yet.
-func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Window]usage.Result, error) {
+func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Window]spend.Result, error) {
 	rows, err := s.q.IntervalsSince(ctx, now.Add(-sevenDayDuration))
 	if err != nil {
 		return nil, fmt.Errorf("select intervals: %w", err)
 	}
-	samples := make([]usage.Interval, len(rows))
+	samples := make([]spend.Interval, len(rows))
 	for i, row := range rows {
-		samples[i] = usage.Interval{
+		samples[i] = spend.Interval{
 			Window: agentlog.Window(row.Window), Start: row.StartAt, End: row.EndAt,
 			UtilizationStart: row.UtilizationStart, UtilizationEnd: row.UtilizationEnd,
 			WeightUSD: row.WeightUsd,
 		}
 	}
-	return usage.Fit(samples, now), nil
+	return spend.Fit(samples, now), nil
 }
 
 // CCCostUSD returns cc's own runs' recorded cost_usd within each window's own trailing span as of

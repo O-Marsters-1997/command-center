@@ -10,7 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 // TestMastheadRendersTheLatestStoredReading covers "the masthead gauges render the latest stored
@@ -71,7 +71,7 @@ func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 }
 
 // TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated covers CC-313's acceptance criterion: below
-// usage.MinSamples trailing intervals the gauge reads "calibrating", and once a window has
+// spend.MinSamples trailing intervals the gauge reads "calibrating", and once a window has
 // enough, it splits into cc's own share.
 func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 	t.Parallel()
@@ -95,7 +95,7 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 	}
 	var lines string
 	start := observedAt.Add(-6 * time.Hour)
-	for i := range usage.MinSamples {
+	for i := range spend.MinSamples {
 		at := start.Add(time.Duration(i)*time.Hour + 30*time.Minute)
 		lines += oneMillionInputTokensLine(at.Format(time.RFC3339), fmt.Sprintf("r%d", i)) + "\n"
 	}
@@ -103,9 +103,9 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// One more reading than usage.MinSamples, since the first has no previous reading yet to pair
+	// One more reading than spend.MinSamples, since the first has no previous reading yet to pair
 	// against and closes no interval of its own.
-	for i := range usage.MinSamples + 1 {
+	for i := range spend.MinSamples + 1 {
 		at := start.Add(time.Duration(i) * time.Hour)
 		reading := agentlog.Reading{
 			Window: agentlog.FiveHour, Utilization: float64(i) * 0.02,

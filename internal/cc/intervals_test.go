@@ -9,7 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/usage"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 // oneMillionInputTokensLine is one $6.40 (at the calibrated sonnet rate) assistant request, for a
@@ -77,7 +77,7 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 }
 
 // TestFitFactorsOmitsAWindowBelowMinSamples covers the masthead's own "calibrating" reading: with
-// fewer than usage.MinSamples trailing intervals, the window is simply absent.
+// fewer than spend.MinSamples trailing intervals, the window is simply absent.
 func TestFitFactorsOmitsAWindowBelowMinSamples(t *testing.T) {
 	t.Parallel()
 
@@ -85,7 +85,7 @@ func TestFitFactorsOmitsAWindowBelowMinSamples(t *testing.T) {
 	store := openStore(t)
 
 	start := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
-	for i := range usage.MinSamples - 1 {
+	for i := range spend.MinSamples - 1 {
 		at := start.Add(time.Duration(i) * time.Hour)
 		reading := agentlog.Reading{
 			Window: agentlog.FiveHour, Utilization: float64(i) * 0.02,

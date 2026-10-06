@@ -1,7 +1,7 @@
-// Package usage fits the subscription's utilization windows to what was actually spent: Intervals
+// Package spend fits the subscription's utilization windows to what was actually spent: Intervals
 // samples between consecutive readings, and Fit finds each window's dollars-per-utilization
 // factor through the origin (CC-313).
-package usage
+package spend
 
 import (
 	"maps"

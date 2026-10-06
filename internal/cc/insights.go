@@ -13,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
 const insightsDefaultRangeDays = 30
@@ -118,19 +119,6 @@ type insightsPointJSON struct {
 	FollowUpPctWeek float64 `json:"follow_up_pct_week"`
 }
 
-func pctWeek(usd, factor float64) float64 {
-	return usd * factor * 100
-}
-
-func kindPctWeek(agentUSD, resolveUSD, followUpUSD, factor float64) (
-	agentPct, resolvePct, followUpPct, totalPct float64,
-) {
-	agentPct = pctWeek(agentUSD, factor)
-	resolvePct = pctWeek(resolveUSD, factor)
-	followUpPct = pctWeek(followUpUSD, factor)
-	return agentPct, resolvePct, followUpPct, agentPct + resolvePct + followUpPct
-}
-
 // civilDate strips t to its own wall-clock year, month and day, encoded at UTC midnight since
 // Postgres's date type carries no zone of its own.
 func civilDate(t time.Time) time.Time {
@@ -213,7 +201,7 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 	since := parseSinceOrDefault(q.Get("since"), until)
 	repo, feature := q.Get("repo"), q.Get("feature")
 
-	spend, err := s.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
+	merged, err := s.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -232,10 +220,10 @@ func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 
 	resp := insightsResponse{
 		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
-		Points: make([]insightsPointJSON, len(spend)), WastePctWeek: pctWeek(wasteUSD, factor),
+		Points: make([]insightsPointJSON, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
 	}
-	for i, p := range spend {
-		agentPct, resolvePct, followUpPct, totalPct := kindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
+	for i, p := range merged {
+		agentPct, resolvePct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
 		resp.Points[i] = insightsPointJSON{
 			Ticket: p.Ticket, Title: p.Title, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,
