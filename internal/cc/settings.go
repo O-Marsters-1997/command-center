@@ -69,7 +69,7 @@ func WriteAgentSystemPrompt(path string) error {
 const agentDigestDefinition = `{
   "digest": {
     "description": "Reads code or output to answer one question, without growing the caller's context.",
-    "prompt": "Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
+    "prompt": "If the repo root has a .codegraph/ directory, start with one codegraph explore \"<symbols or question>\" in Bash and treat the source it prints as already read. Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
     "tools": [
       "Read",
       "Grep",

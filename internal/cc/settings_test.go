@@ -100,8 +100,9 @@ func TestWriteAgentDigestDefinitionDefinesDigestOnHaikuWithReadOnlyTools(t *test
 	}
 
 	var defs map[string]struct {
-		Model string   `json:"model"`
-		Tools []string `json:"tools"`
+		Prompt string   `json:"prompt"`
+		Model  string   `json:"model"`
+		Tools  []string `json:"tools"`
 	}
 	if err := json.Unmarshal(raw, &defs); err != nil {
 		t.Fatalf("agents definition is not valid JSON: %v\n%s", err, raw)
@@ -118,6 +119,9 @@ func TestWriteAgentDigestDefinitionDefinesDigestOnHaikuWithReadOnlyTools(t *test
 		if !slices.Contains(digest.Tools, want) {
 			t.Errorf("digest tools = %v, want %q", digest.Tools, want)
 		}
+	}
+	if !strings.Contains(digest.Prompt, "codegraph explore") {
+		t.Errorf("digest prompt = %q, want it to query an indexed repo through codegraph explore", digest.Prompt)
 	}
 }
 
