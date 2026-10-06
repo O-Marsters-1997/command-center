@@ -66,6 +66,7 @@ exec cc request GET /events
 stdout -count=5 'run_launched'
 grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
 
+exec cc tick --count 1
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 exec cc tick --count 1

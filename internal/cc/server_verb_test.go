@@ -15,7 +15,7 @@ import (
 func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededRunning(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -57,7 +57,7 @@ func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
+	store := seededRunning(t)
 	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
@@ -86,7 +86,7 @@ func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
+	store := seededQueued(t)
 	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
@@ -146,7 +146,7 @@ func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
+	store := seededRunning(t)
 	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
@@ -180,7 +180,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededRunning(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
@@ -259,7 +259,7 @@ func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
+	store := seededFailed(t)
 	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
@@ -289,5 +289,43 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 	}
 	if pending[0].Payload != "fix the flaky test" {
 		t.Errorf("payload = %q, want the typed prompt text", pending[0].Payload)
+	}
+}
+
+func TestVerbAnswers409WhenTheRowsStateDoesNotOfferIt(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: a ready row does not offer kill", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "ready") || !strings.Contains(string(body), "kill") {
+		t.Errorf("body = %q, want the row's state and the refused verb named", body)
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending kill intents = %+v, want none queued on a 409", pending)
 	}
 }

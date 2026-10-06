@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // launchPayload is an intent's free-form payload for verb "launch". group ties every intent
@@ -121,29 +122,22 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	return nil
 }
 
-type LaunchMembership struct {
-	LaunchID   int64
-	Members    int
-	Cancelled  bool
-	PromptHash string
-}
-
 // LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus that
 // launch's member count — and Cancelled for a ticket whose launch was cancelled and not relaunched.
-func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembership, error) {
+func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
 	rows, err := s.q.LaunchMemberships(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}
 
-	memberships := map[string]LaunchMembership{}
+	memberships := map[string]plan.LaunchMembership{}
 	cancelled := map[string]bool{}
 	for _, row := range rows {
 		if row.State == "cancelled" {
 			cancelled[row.TicketID] = true
 			continue
 		}
-		memberships[row.TicketID] = LaunchMembership{
+		memberships[row.TicketID] = plan.LaunchMembership{
 			LaunchID:   row.LaunchID,
 			Members:    int(row.Members),
 			PromptHash: row.PromptHash,
@@ -151,7 +145,7 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[string]LaunchMembers
 	}
 	for ticketID := range cancelled {
 		if _, active := memberships[ticketID]; !active {
-			memberships[ticketID] = LaunchMembership{Cancelled: true}
+			memberships[ticketID] = plan.LaunchMembership{Cancelled: true}
 		}
 	}
 	return memberships, nil

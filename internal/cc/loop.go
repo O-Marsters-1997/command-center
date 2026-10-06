@@ -30,7 +30,7 @@ const killVerb = plan.VerbKill
 
 const (
 	runKindAgent    = "agent"
-	runKindResolve  = "resolve"
+	runKindResolve  = plan.RunKindResolve
 	runKindFollowUp = "follow_up"
 )
 
@@ -492,7 +492,8 @@ func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 		return err
 	}
 
-	stacking := l.cfg.PlanRules().Stacking
+	rules := l.cfg.PlanRules()
+	stacking := rules.Stacking
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(tickets, obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
@@ -513,7 +514,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 			Authorised:        isAuthorised,
 			PromptHashMatches: promptHashMatches,
 			HasRun:            hasRun,
-			ConflictedBase:    conflictedBase(pt, byURL, unlock, stacking[t.Repo], obs),
+			ConflictedBase:    rules.ConflictedBase(pt, byURL, unlock, obs),
 		})
 	}
 
@@ -541,7 +542,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 
 // currentlyRunning counts tickets with a live-or-undisposed run: the slots LaunchPlan's max_agents
 // cap must subtract before deciding how many more to start this tick.
-func currentlyRunning(latest map[string]RunSummary) int {
+func currentlyRunning(latest map[string]plan.RunSummary) int {
 	n := 0
 	for _, s := range latest {
 		if s.Pgid != nil && !s.HasOutcome {

@@ -14,7 +14,7 @@ const eventVerdictTransition = "verdict_transition"
 // from what the previous tick recorded -- the last category of what `events` needs to reconstruct
 // the whole run
 // (docs/prds/prd-command-centre.md § Phase 6).
-// It computes the verdict the exact way the page does (applyVerdict, server.go), over this same
+// It computes the verdict the exact way the page does (plan.Rules.ApplyVerdict), over this same
 // tick's observation, so a transition an operator would see on the next page load is exactly
 // the transition logged here.
 func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observation) error {
@@ -35,8 +35,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		return err
 	}
 
-	vd, err := verdictDepsFor(
-		ctx, l.store, l.cfg.PlanRules())
+	vd, err := l.store.VerdictFacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,7 +53,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		}
 
 		fact := &plan.RunFact{PROpen: true}
-		applyVerdict(fact, t, obs, vd)
+		l.cfg.PlanRules().ApplyVerdict(fact, planTicket(t), obs, vd)
 		current := verdictLabel(fact)
 		if current == "" || lastVerdicts[t.URL] == current {
 			continue
@@ -77,7 +76,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 // verdictLabel names a ticket's just-computed verdict for comparison against the last recorded
 // one, and (server.go's derive) a row's own label as its dependents' BaseVerdict. Empty for a nil
-// fact (no run yet) or when applyVerdict left every flag untouched -- no predicate configured for
+// fact (no run yet) or when ApplyVerdict left every flag untouched -- no predicate configured for
 // this repo (§7) -- neither of which may count as a transition.
 func verdictLabel(fact *plan.RunFact) string {
 	if fact == nil {

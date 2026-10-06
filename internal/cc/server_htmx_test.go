@@ -33,7 +33,7 @@ func postVerb(t *testing.T, srv *httptest.Server, target string, headers map[str
 func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededRunning(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", map[string]string{"HX-Request": "true"})
@@ -55,7 +55,7 @@ func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededRunning(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", nil)
@@ -66,7 +66,7 @@ func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 func TestVerbSwapKeepsTheSelectedRowExpanded(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(seededRunning(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	q := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}, "sel": {"sandbox://CC-1"}}

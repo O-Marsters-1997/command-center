@@ -130,7 +130,7 @@ func deriveChecksCard(rows []row) checksCard {
 		}
 		card.Reported++
 		for _, c := range r.Checks {
-			switch toVerdictCheckState(plan.CheckState{Status: c.Status, Conclusion: c.Conclusion}) {
+			switch plan.ToVerdictCheckState(plan.CheckState{Status: c.Status, Conclusion: c.Conclusion}) {
 			case verdict.Success, verdict.Skipped:
 				card.Green++
 			case verdict.Failure:

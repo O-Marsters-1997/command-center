@@ -21,30 +21,21 @@ const (
 	eventVerificationFailed = "verification_failed"
 )
 
-// RefreshFact is a ticket's outstanding refresh-domain problem since its last recorded push: a
-// refused fast-forward, or a clean merge/restack whose verify command then failed (issue #110).
-type RefreshFact struct {
-	Refused                  bool
-	Reason                   string
-	VerificationFailed       bool
-	VerificationFailedDetail string
-}
-
 // RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL. A
 // refusal or a verification failure gates the automatic pass's retry; the refresh verb ignores it
 // (docs/designs/command-centre-design.md § 4a).
-func (s *Store) RefreshFacts(ctx context.Context) (map[string]RefreshFact, error) {
+func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, error) {
 	outcomes, err := s.latestRefreshOutcomes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	facts := make(map[string]RefreshFact, len(outcomes))
+	facts := make(map[string]plan.RefreshFact, len(outcomes))
 	for ticketID, o := range outcomes {
 		switch o.kind {
 		case eventRefreshRefused:
-			facts[ticketID] = RefreshFact{Refused: true, Reason: o.detail}
+			facts[ticketID] = plan.RefreshFact{Refused: true, Reason: o.detail}
 		case eventVerificationFailed:
-			facts[ticketID] = RefreshFact{VerificationFailed: true, VerificationFailedDetail: o.detail}
+			facts[ticketID] = plan.RefreshFact{VerificationFailed: true, VerificationFailedDetail: o.detail}
 		}
 	}
 	return facts, nil
@@ -84,7 +75,7 @@ type refreshContext struct {
 	prs       map[string]plan.PRState
 	repoPaths map[string]string
 	verifyCmd map[string][]string
-	pushRows  map[string]PushRow
+	pushRows  map[string]plan.PushRow
 	obs       plan.Observation
 }
 
@@ -200,7 +191,7 @@ func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
 // pushed by a human outside the app, or the base's, advanced again with a later fix -- makes it a
 // different merge from the one that failed, so the gate no longer applies to it (issue #188). Any
 // other refresh-domain outcome keeps gating until the refresh verb clears it.
-func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs plan.Observation) bool {
+func supersededConflict(o refreshOutcome, t Ticket, row plan.PushRow, obs plan.Observation) bool {
 	if o.kind != eventRefreshConflicted {
 		return false
 	}
@@ -215,7 +206,7 @@ func supersededConflict(o refreshOutcome, t Ticket, row PushRow, obs plan.Observ
 // baseMoved is the git-level fact §4a marks a row on: the row's recorded base -- a stacked
 // branch, or main once retargetMerged has pointed it there -- whose current tip differs from
 // what was recorded at the ticket's last push (issue #85: main counts the same as a stacked base).
-func baseMoved(row PushRow, obs plan.Observation, repo string) bool {
+func baseMoved(row plan.PushRow, obs plan.Observation, repo string) bool {
 	return row.BaseBranch != "" && obs.BranchTips[branchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
@@ -223,7 +214,7 @@ func baseMoved(row PushRow, obs plan.Observation, repo string) bool {
 // result. A refused fast-forward records refresh_refused and stops; a conflict is left mid-merge
 // for a human (docs/designs/command-centre-design.md § 4a).
 func (l *Loop) refreshOne(
-	ctx context.Context, ticket Ticket, row PushRow, rc refreshContext, now time.Time, requested bool,
+	ctx context.Context, ticket Ticket, row plan.PushRow, rc refreshContext, now time.Time, requested bool,
 ) error {
 	branch := ticket.Branch
 	refuse := func(detail string) error {
@@ -320,7 +311,7 @@ func (l *Loop) verifyOne(
 // either side touched. It reports which of the two it did, because only a restack licenses the
 // push step to lease-force, and what the event should say.
 func advanceOnto(
-	ctx context.Context, worktreePath, repo, base string, row PushRow, obs plan.Observation,
+	ctx context.Context, worktreePath, repo, base string, row plan.PushRow, obs plan.Observation,
 ) (bool, string, error) {
 	ref := "origin/" + base
 	boundary := restackBoundary(repo, row, obs)
@@ -342,7 +333,7 @@ func advanceOnto(
 // top of, so a restack drops exactly the work the base already carries. A merged base is read
 // from its pull request's head, not from base_sha_at_push, because a base that advanced after
 // this branch's last push has those later commits in the squash too (issue #89).
-func restackBoundary(repo string, row PushRow, obs plan.Observation) string {
+func restackBoundary(repo string, row plan.PushRow, obs plan.Observation) string {
 	if row.BaseBranch == "" {
 		return ""
 	}

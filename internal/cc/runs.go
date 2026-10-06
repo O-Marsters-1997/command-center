@@ -277,36 +277,17 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	return pending, nil
 }
 
-// RunSummary is the latest run the page and the launch-eligibility check need per ticket.
-type RunSummary struct {
-	ID            int64
-	Pgid          *int
-	ProcStartedAt *time.Time
-	HasOutcome    bool
-	Outcome       plan.Outcome
-	ExitCode      *int
-	EndedAt       *time.Time
-	LogPath       string
-	BaselineSHA   string
-	// PromptHash is what this run was spawned (or cut-failed) against — the page's own prompt-
-	// changed comparison for a row that has already run compares a fresh recomposition against
-	// this, never the launch membership's hash, which a later re-run or relaunch supersedes.
-	PromptHash string
-	// Kind is runs.kind: "agent" for a launch or re-run, "resolve" for a conflict-resolution run.
-	Kind string
-}
-
 // LatestRunsByTicket returns each ticket's single most recent run (highest id). Its presence alone
 // is what LaunchPlan's "no prior run" rule and the page's pgid/elapsed/log-path columns need.
-func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]RunSummary, error) {
+func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSummary, error) {
 	rows, err := s.q.LatestRunsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}
 
-	summaries := map[string]RunSummary{}
+	summaries := map[string]plan.RunSummary{}
 	for _, row := range rows {
-		summary := RunSummary{ID: row.ID, Kind: row.Kind}
+		summary := plan.RunSummary{ID: row.ID, Kind: row.Kind}
 		if row.Pgid.Valid {
 			v := int(row.Pgid.Int64)
 			summary.Pgid = &v
