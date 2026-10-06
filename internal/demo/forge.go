@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,6 +16,12 @@ import (
 
 const ciCheck = "CI"
 
+const (
+	ciPass = "pass"
+	ciFail = "fail"
+	ciHang = "hang"
+)
+
 type pullRequest struct {
 	issue    issue
 	number   int
@@ -23,6 +30,47 @@ type pullRequest struct {
 	baseRef  string
 	openedAt time.Time
 	mergedAt time.Time
+
+	headOid  string
+	runs     int
+	runStart time.Time
+}
+
+func (pr *pullRequest) ciOutcome() string {
+	seq := pr.issue.CI
+	if len(seq) == 0 {
+		return ciPass
+	}
+	return seq[min(pr.runs, len(seq))-1]
+}
+
+func (pr *pullRequest) startRun(now time.Time) {
+	pr.runs++
+	pr.runStart = now
+}
+
+func (pr *pullRequest) running(now time.Time) bool {
+	return pr.ciOutcome() == ciHang || now.Before(pr.runStart.Add(time.Duration(pr.issue.CIAfter)))
+}
+
+func (pr *pullRequest) greenAt(now time.Time) bool {
+	return !pr.running(now) && pr.ciOutcome() == ciPass
+}
+
+func (pr *pullRequest) check(now time.Time, repo string) gh.CheckState {
+	state := gh.CheckState{
+		Name: ciCheck, StartedAt: pr.runStart,
+		DetailsURL: fmt.Sprintf("https://github.com/%s/actions/runs/%d/job/1", repo, pr.number),
+	}
+	switch {
+	case pr.running(now):
+		state.Status = "IN_PROGRESS"
+	case pr.ciOutcome() == ciPass:
+		state.Status, state.Conclusion = "COMPLETED", "SUCCESS"
+	default:
+		state.Status, state.Conclusion = "COMPLETED", "FAILURE"
+	}
+	return state
 }
 
 // Forge is the in-memory GitHub. It keeps pull requests and plays the scenario's CI and merge
@@ -53,15 +101,25 @@ func (f *Forge) issueFor(repo *sandboxRepo, branch string) (issue, bool) {
 	return issue{}, false
 }
 
-// Advance merges every open, non-draft pull request whose scripted merge time has come.
+// Advance closes every open pull request whose scripted close time has come, and merges every
+// open, non-draft one whose scripted merge time has come and whose checks are green.
 func (f *Forge) Advance() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := f.clock.Now()
 	prs := slices.SortedFunc(maps.Values(f.prs), func(a, b *pullRequest) int { return cmp.Compare(a.number, b.number) })
 	for _, pr := range prs {
+		if pr.state != gh.Open {
+			continue
+		}
+		if closeAfter := pr.issue.Close.After; closeAfter > 0 {
+			if !now.Before(pr.openedAt.Add(time.Duration(closeAfter))) {
+				pr.state = gh.Closed
+			}
+			continue
+		}
 		due := pr.openedAt.Add(time.Duration(pr.issue.Merge.After))
-		if pr.state != gh.Open || pr.draft || now.Before(due) {
+		if pr.draft || now.Before(due) || !pr.greenAt(now) {
 			continue
 		}
 		if err := pr.issue.repo.squashMerge(pr.issue.branch, pr.issue.Title); err != nil {
@@ -80,6 +138,7 @@ func (f *Forge) List(_ context.Context, repoPath string, tracked []string) (gh.S
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	now := f.clock.Now()
 	byBranch := make(map[string]gh.PR, len(tracked))
 	for _, branch := range tracked {
 		pr, ok := f.prs[prKey(repo, branch)]
@@ -90,12 +149,14 @@ func (f *Forge) List(_ context.Context, repoPath string, tracked []string) (gh.S
 		if err != nil {
 			return gh.Snapshot{}, err
 		}
+		if pr.headOid != "" && pr.headOid != headOid {
+			pr.startRun(now)
+		}
+		pr.headOid = headOid
 		byBranch[branch] = gh.PR{
 			Number: pr.number, HeadRef: branch, HeadOid: headOid, BaseRef: pr.baseRef,
 			IsDraft: pr.draft, State: pr.state, MergedAt: pr.mergedAt,
-			Checks: map[string]gh.CheckState{ciCheck: {
-				Name: ciCheck, Status: "COMPLETED", Conclusion: "SUCCESS", StartedAt: pr.openedAt,
-			}},
+			Checks: map[string]gh.CheckState{ciCheck: pr.check(now, repo.scenarioName)},
 		}
 	}
 	return gh.Snapshot{ByBranch: byBranch}, nil
@@ -129,12 +190,19 @@ func (f *Forge) Create(_ context.Context, worktreePath, base, _ string, draft bo
 	if !ok {
 		return fmt.Errorf("no scenario ticket owns branch %s", branch)
 	}
+	headOid, err := git(repo.origin, "rev-parse", "refs/heads/"+branch)
+	if err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.next++
-	f.prs[prKey(repo, branch)] = &pullRequest{
-		issue: is, number: f.next, draft: draft, state: gh.Open, baseRef: base, openedAt: f.clock.Now(),
+	now := f.clock.Now()
+	pr := &pullRequest{
+		issue: is, number: f.next, draft: draft, state: gh.Open, baseRef: base, openedAt: now, headOid: headOid,
 	}
+	pr.startRun(now)
+	f.prs[prKey(repo, branch)] = pr
 	return nil
 }
 
@@ -165,7 +233,27 @@ func (f *Forge) update(repoPath, branch string, change func(*pullRequest)) error
 	return nil
 }
 
-func (*Forge) Rerun(context.Context, string, string) error { return nil }
+// Rerun starts the next entry of the ticket's ci sequence on the pull request whose check run
+// has id runID.
+func (f *Forge) Rerun(_ context.Context, repoPath, runID string) error {
+	number, err := strconv.Atoi(runID)
+	if err != nil {
+		return fmt.Errorf("run id %q: %w", runID, err)
+	}
+	repo, err := f.sb.repoFor(repoPath)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, pr := range f.prs {
+		if pr.issue.repo == repo && pr.number == number {
+			pr.startRun(f.clock.Now())
+			return nil
+		}
+	}
+	return fmt.Errorf("no pull request with run %s", runID)
+}
 
 func (*Forge) RunViewLogFailed(context.Context, string, string) (string, error) {
 	return "", nil

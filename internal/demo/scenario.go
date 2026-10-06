@@ -24,7 +24,8 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 // Scenario is one demo run read from a TOML file: the repos, the ticket DAG, each ticket's step
 // script, and the checkpoints the run is checked against. Every Duration is sim time since the
-// run started, except Merge.After, which counts from the moment the ticket's PR opens.
+// run started, except Merge.After and Close.After, which count from the moment the ticket's PR
+// opens, and CIAfter, which counts from the push or re-run that started the check.
 type Scenario struct {
 	Seed   int64    `toml:"seed"`
 	Speed  float64  `toml:"speed"`
@@ -48,7 +49,9 @@ type Ticket struct {
 	BlockedBy []string    `toml:"blocked_by"`
 	Agent     AgentScript `toml:"agent"`
 	CI        []string    `toml:"ci"`
+	CIAfter   Duration    `toml:"ci_after"`
 	Merge     Step        `toml:"merge"`
+	Close     Step        `toml:"close"`
 }
 
 // AgentScript is what the fake agent does once spawned for a ticket.
@@ -101,8 +104,8 @@ func (s Scenario) validate() error {
 			return fmt.Errorf("ticket %q: agent result %q is not supported yet", t.ID, t.Agent.Result)
 		}
 		for _, ci := range t.CI {
-			if ci != "pass" {
-				return fmt.Errorf("ticket %q: ci %q is not supported yet", t.ID, ci)
+			if !slices.Contains([]string{ciPass, ciFail, ciHang}, ci) {
+				return fmt.Errorf("ticket %q: ci %q is not pass, fail or hang", t.ID, ci)
 			}
 		}
 	}
