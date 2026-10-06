@@ -92,3 +92,6 @@ ci:
     golangci-lint run ./...
     just test
     just test-e2e
+
+demo scenario *args:
+    go run -tags=demo ./cmd/cc demo {{args}} {{scenario}}

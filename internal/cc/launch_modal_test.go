@@ -32,7 +32,7 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := cc.NewServer(store, time.Now, nil, "")
+	server := cc.NewServer(store, cc.RealClock{}, nil, "")
 	var nudged atomic.Bool
 	server.SetNudge(func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
@@ -83,7 +83,7 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, time.Now, nil, "")
+	server := cc.NewServer(store, cc.RealClock{}, nil, "")
 	var nudged atomic.Bool
 	server.SetNudge(func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
@@ -129,7 +129,7 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("ticket=sandbox://GHOST"))
@@ -151,7 +151,7 @@ func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
 func TestHandleLaunchOpenRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("feature=x"))
@@ -173,7 +173,7 @@ func TestHandleLaunchOpenRejectsAForeignOrigin(t *testing.T) {
 func TestHandleLaunchOpenAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Post(srv.URL+"/launch/open", "application/x-www-form-urlencoded", strings.NewReader("feature=x"))
@@ -195,7 +195,7 @@ func TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed(t *testing.T)
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
@@ -225,7 +225,7 @@ func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
@@ -258,7 +258,7 @@ func TestHandleCandidatesFragmentMountsATicketSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2")
@@ -276,7 +276,7 @@ func TestHandleCandidatesFragmentMountsATicketSlice(t *testing.T) {
 func TestHandleCandidatesFragmentRejectsAnUnknownTicket(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FGHOST")
@@ -303,7 +303,7 @@ func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
@@ -332,7 +332,7 @@ func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
@@ -357,7 +357,7 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(cc.NewServer(store, time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/launch/candidates?feature=project%3Ax")
@@ -373,7 +373,7 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 func TestHandleCandidatesFragmentShowsAnEmptyFeatureWithoutOfferingConfirm(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), time.Now, nil, ""))
+	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")

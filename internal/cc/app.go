@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 // App is one Command Centre instance: the flock, the store, the loop and the page.
@@ -23,21 +25,24 @@ type App struct {
 }
 
 type options struct {
-	now           func() time.Time
+	clock         Clock
 	observe       ObserveFunc
 	repoCheck     RepoCheckFunc
 	checkout      CheckoutFunc
 	runner        Runner
 	metricsParser MetricsParser
+	forge         gh.Forge
+	worktrees     tp.Worktrees
+	trackerFor    TrackerSource
 }
 
 // Option configures New.
 type Option func(*options)
 
-// WithClock replaces time.Now. Injecting it is what makes the rendered page byte-stable in
+// WithClock replaces the real clock. Injecting it is what makes the rendered page byte-stable in
 // tests; no test ever sleeps.
-func WithClock(now func() time.Time) Option {
-	return func(o *options) { o.now = now }
+func WithClock(clock Clock) Option {
+	return func(o *options) { o.clock = clock }
 }
 
 // WithObserver replaces the observe phase, so a tick can be driven without git or gh.
@@ -75,6 +80,23 @@ func WithMetricsParser(p MetricsParser) Option {
 	return func(o *options) { o.metricsParser = p }
 }
 
+// WithForge replaces the gh-backed Forge, so GitHub can be faked in-process.
+func WithForge(forge gh.Forge) Option {
+	return func(o *options) { o.forge = forge }
+}
+
+// WithWorktrees replaces the tp-backed Worktrees, so worktree cuts and removals can be faked
+// in-process.
+func WithWorktrees(worktrees tp.Worktrees) Option {
+	return func(o *options) { o.worktrees = worktrees }
+}
+
+// WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
+// faked in-process.
+func WithTrackerSource(resolve TrackerSource) Option {
+	return func(o *options) { o.trackerFor = resolve }
+}
+
 func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 	for _, repo := range repos {
 		if err := EnsureCheckout(ctx, repo); err != nil {
@@ -87,7 +109,7 @@ func ensureAllCheckouts(ctx context.Context, repos []Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{now: time.Now}
+	settings := options{clock: RealClock{}, forge: gh.CLI{}, worktrees: tp.CLI{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -150,7 +172,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	observe := settings.observe
 	if observe == nil {
-		observe = NewObserver(store, cfg)
+		observe = NewObserver(store, settings.forge, cfg)
 	}
 	runner := settings.runner
 	if runner == nil {
@@ -164,11 +186,18 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		return nil, err
 	}
 
-	loop := NewLoop(store, observe, settings.now, cfg, ws, runner)
+	loop := NewLoop(store, observe, settings.clock, cfg, ws, runner)
 	loop.SetMetricsParser(metricsParser)
-	server := NewServer(store, settings.now, cfg.Repos, ws.DataDir)
+	loop.SetForge(settings.forge)
+	loop.SetWorktrees(settings.worktrees)
+	server := NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(loop.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
+	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
+	if settings.trackerFor != nil {
+		loop.SetTrackerSource(settings.trackerFor)
+		server.SetTrackerSource(settings.trackerFor)
+	}
 
 	return &App{
 		cfg:    cfg,

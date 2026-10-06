@@ -207,7 +207,7 @@ func (s *Server) handleInsightsPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInsights(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
-	now := s.now()
+	now := s.clock.Now()
 	tz := insightsTimezone(now.Location())
 	until := civilDate(now)
 	since := parseSinceOrDefault(q.Get("since"), until)

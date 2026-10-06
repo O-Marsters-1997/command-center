@@ -113,7 +113,7 @@ func (l *Loop) pushPushable(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, ticketURL := range toPush {
 		if facts[ticketURL].Failed || facts[ticketURL].Refused || refreshFacts[ticketURL].VerificationFailed {
 			continue // needs a human's retry-push, never an automatic one
@@ -147,7 +147,7 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, obs Observation) error
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if t, ok := byTicket[intent.TicketID]; ok {
 			tip, err := BranchTip(ctx, pc.repoPaths[t.Repo], t.Branch)
@@ -184,7 +184,7 @@ func (l *Loop) applyCommitResolutionIntents(ctx context.Context, obs Observation
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
 			if err := l.commitResolutionOne(ctx, ticket, pc, now); err != nil {
@@ -289,7 +289,7 @@ func (l *Loop) pushOne(ctx context.Context, t Ticket, localTip string, pc pushCo
 	if pc.obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open {
 		body := plan.PRBody(base, pc.obs.PRs[branchKey(t.Repo, base)].Number)
 		draft := plan.OpensAsDraft(pc.byURL[t.URL], pc.byURL)
-		if err := gh.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {
+		if err := l.forge.Create(ctx, pc.obs.Worktrees[branchKey(t.Repo, t.Branch)], base, body, draft); err != nil {
 			return l.store.AppendEvent(ctx,
 				Event{At: now, TicketURL: t.URL, Kind: eventPushFailed, Detail: err.Error()})
 		}

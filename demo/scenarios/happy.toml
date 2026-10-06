@@ -1,0 +1,95 @@
+seed = 7
+speed = 20
+
+[[repo]]
+name = "acme/api"
+files = { "go.mod" = "module acme/api\n", "main.go" = "package main\n" }
+
+[[ticket]]
+id = "A"
+repo = "acme/api"
+title = "Add the health endpoint"
+feature = "health"
+agent = { after = "1m", result = "commits", files = ["health.go"] }
+ci = ["pass"]
+merge = { after = "1m" }
+
+[[ticket]]
+id = "B"
+repo = "acme/api"
+title = "Add the readiness endpoint"
+feature = "health"
+blocked_by = ["A"]
+agent = { after = "1m", result = "commits", files = ["ready.go"] }
+ci = ["pass"]
+merge = { after = "1m" }
+
+[[ticket]]
+id = "C"
+repo = "acme/api"
+title = "Add the liveness endpoint"
+feature = "health"
+blocked_by = ["B"]
+agent = { after = "1m", result = "commits", files = ["live.go"] }
+ci = ["pass"]
+merge = { after = "1m" }
+
+[[expect]]
+at = "0s"
+ticket = "A"
+state = "ready"
+
+[[expect]]
+at = "0s"
+ticket = "B"
+state = "blocked"
+
+[[expect]]
+at = "0s"
+ticket = "C"
+state = "blocked"
+
+[[expect]]
+at = "30s"
+ticket = "A"
+state = "running"
+
+[[expect]]
+at = "1m30s"
+ticket = "A"
+state = "review_me"
+
+[[expect]]
+at = "1m30s"
+ticket = "B"
+state = "ready"
+
+[[expect]]
+at = "2m"
+ticket = "B"
+state = "running"
+
+[[expect]]
+at = "2m15s"
+ticket = "A"
+state = "merged"
+
+[[expect]]
+at = "3m"
+ticket = "B"
+state = "review_me"
+
+[[expect]]
+at = "3m"
+ticket = "C"
+state = "ready"
+
+[[expect]]
+at = "6m"
+ticket = "B"
+state = "merged"
+
+[[expect]]
+at = "6m"
+ticket = "C"
+state = "merged"

@@ -26,7 +26,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	for _, t := range tickets {
 		row, pushed := rc.pushRows[t.URL]
 		if !pushed || row.BaseBranch == "" || row.BaseBranch == defaultBaseBranch {
@@ -51,7 +51,7 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 // than merge a squash that shares no ancestry with this branch (issue #89).
 func (l *Loop) retargetOne(ctx context.Context, t Ticket, row PushRow, rc refreshContext, now time.Time) error {
 	repoPath := rc.repoPaths[t.Repo]
-	if err := gh.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
+	if err := l.forge.Edit(ctx, repoPath, t.Branch, defaultBaseBranch); err != nil {
 		return l.store.AppendEvent(ctx, Event{
 			At: now, TicketURL: t.URL, Kind: eventRetargetFailed, Detail: err.Error(),
 		})

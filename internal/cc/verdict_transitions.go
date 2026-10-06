@@ -42,7 +42,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs Observation) er
 		return err
 	}
 
-	now := l.now()
+	now := l.clock.Now()
 	changed := false
 	for _, t := range tickets {
 		summary, ok := latest[t.URL]

@@ -9,6 +9,16 @@ import (
 	"os/exec"
 )
 
+// Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; the demo
+// sim substitutes its own.
+type Worktrees interface {
+	New(ctx context.Context, repoPath, branch, baseRef string) error
+	Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error
+}
+
+// CLI is the Worktrees that shells out to the tp binary.
+type CLI struct{}
+
 // New cuts a worktree for branch off baseRef via `tp new <branch> --base <baseRef>`, run inside
 // repoPath. A failure here is the caller's "cut failed", not a crash.
 func New(ctx context.Context, repoPath, branch, baseRef string) error {
@@ -58,4 +68,12 @@ func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error
 			flag, branch, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
 	}
 	return nil
+}
+
+func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
+	return New(ctx, repoPath, branch, baseRef)
+}
+
+func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
+	return Remove(ctx, repoPath, branch, mode)
 }
