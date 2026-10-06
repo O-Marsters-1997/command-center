@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 // retargetMerged re-points every descendant whose parent has merged at the default branch.
 // Both repos delete a merged branch, and Mergify's queue takes main-based pull requests only
 // (docs/designs/command-centre-design.md § 4a).
-func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
+func (l *Loop) retargetMerged(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -32,8 +32,8 @@ func (l *Loop) retargetMerged(ctx context.Context, obs Observation) error {
 		if !pushed || row.BaseBranch == "" || row.BaseBranch == defaultBaseBranch {
 			continue
 		}
-		if obs.PRs[branchKey(t.Repo, t.Branch)].State != gh.Open ||
-			obs.PRs[branchKey(t.Repo, row.BaseBranch)].State != gh.Merged {
+		if obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open ||
+			obs.PRs[branchKey(t.Repo, row.BaseBranch)].State != plan.Merged {
 			continue
 		}
 		if err := l.retargetOne(ctx, t, row, rc, now); err != nil {

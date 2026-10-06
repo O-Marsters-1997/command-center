@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // TestPageRendersStackDepthAndMergeOrderForAFiveRowStack covers issue #34's "the page shows
@@ -31,12 +31,12 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	prs := map[string]gh.PR{}
+	prs := map[string]plan.PR{}
 	dispositionAsPushed(t, store, "sandbox://ROOT", at)
 	if err := store.RecordPush(ctx, "sandbox://ROOT", "root-tip", "main", "main-tip", at); err != nil {
 		t.Fatal(err)
 	}
-	prs[cc.BranchKey("repo", "root")] = gh.PR{Number: 1, State: gh.Open, HeadOid: "root-tip"}
+	prs[cc.BranchKey("repo", "root")] = plan.PR{Number: 1, State: plan.Open, HeadOid: "root-tip"}
 
 	for _, c := range children {
 		branch := strings.ToLower(c)
@@ -45,10 +45,10 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		if err := store.RecordPush(ctx, ticket, branch+"-tip", "root", "root-tip", at); err != nil {
 			t.Fatal(err)
 		}
-		prs[cc.BranchKey("repo", branch)] = gh.PR{Number: 2, State: gh.Open, HeadOid: branch + "-tip"}
+		prs[cc.BranchKey("repo", branch)] = plan.PR{Number: 2, State: plan.Open, HeadOid: branch + "-tip"}
 	}
 
-	if err := store.SaveObservation(ctx, cc.Observation{
+	if err := store.SaveObservation(ctx, plan.Observation{
 		BranchTips: map[string]string{cc.BranchKey("repo", "root"): "root-tip"},
 		PRs:        prs,
 	}); err != nil {
@@ -96,14 +96,14 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{
+	obs := plan.Observation{
 		BranchTips: map[string]string{cc.BranchKey("repo", "parent"): "parent-tip"},
-		PRs: map[string]gh.PR{
+		PRs: map[string]plan.PR{
 			cc.BranchKey("repo", "parent"): {
-				Number: 1, State: gh.Open, HeadOid: "parent-tip", BaseRef: "main", Labels: []string{"ready-to-merge"},
+				Number: 1, State: plan.Open, HeadOid: "parent-tip", BaseRef: "main", Labels: []string{"ready-to-merge"},
 			},
 			cc.BranchKey("repo", "child"): {
-				Number: 2, State: gh.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"},
+				Number: 2, State: plan.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"},
 			},
 		},
 	}
@@ -150,8 +150,8 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{
-		PRs: map[string]gh.PR{cc.BranchKey("repo", "merged"): {Number: 1, State: gh.Merged, HeadOid: "merged-tip"}},
+	obs := plan.Observation{
+		PRs: map[string]plan.PR{cc.BranchKey("repo", "merged"): {Number: 1, State: plan.Merged, HeadOid: "merged-tip"}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

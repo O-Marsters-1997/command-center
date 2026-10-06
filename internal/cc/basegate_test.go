@@ -76,13 +76,13 @@ func TestConflictedBase(t *testing.T) {
 	offMain := plan.Unlock{Unlocked: true, BaseBranch: "main"}
 	locked := plan.Unlock{Blocking: []string{"sandbox://CC-1"}}
 
-	conflicts := Observation{
+	conflicts := plan.Observation{
 		ConflictsWithBase: map[string]bool{branchKey("r", "cc-1-first"): true}, MidMerge: map[string]bool{},
 	}
-	midMerge := Observation{
+	midMerge := plan.Observation{
 		ConflictsWithBase: map[string]bool{}, MidMerge: map[string]bool{branchKey("r", "cc-1-first"): true},
 	}
-	clean := Observation{
+	clean := plan.Observation{
 		ConflictsWithBase: map[string]bool{branchKey("r", "cc-1-first"): false}, MidMerge: map[string]bool{},
 	}
 
@@ -90,7 +90,7 @@ func TestConflictedBase(t *testing.T) {
 		name   string
 		task   plan.Ticket
 		unlock plan.Unlock
-		obs    Observation
+		obs    plan.Observation
 		want   string
 	}{
 		{name: "a base that does not merge cleanly", task: child, unlock: stacked, obs: conflicts, want: "cc-1-first"},
@@ -124,7 +124,7 @@ func TestConflictedBaseIgnoresAConflictWithoutStacking(t *testing.T) {
 		BlockedBy: []string{"sandbox://CC-1"},
 	}
 	byURL := map[string]plan.Ticket{root.URL: root, child.URL: child}
-	obs := Observation{ConflictsWithBase: map[string]bool{branchKey("r", "cc-1-first"): true}}
+	obs := plan.Observation{ConflictsWithBase: map[string]bool{branchKey("r", "cc-1-first"): true}}
 
 	if got := conflictedBase(child, byURL, plan.Unlock{Blocking: []string{"sandbox://CC-1"}}, false, obs); got != "" {
 		t.Errorf("conflictedBase() = %q, want \"\": an unstacked cut is from main", got)

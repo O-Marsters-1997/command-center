@@ -23,7 +23,7 @@ func TestConflictingPeerHold(t *testing.T) {
 
 	t.Run("a conflicting pair holds the higher ref behind the lower", func(t *testing.T) {
 		t.Parallel()
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
 			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
@@ -38,7 +38,7 @@ func TestConflictingPeerHold(t *testing.T) {
 
 	t.Run("a clean pair holds neither", func(t *testing.T) {
 		t.Parallel()
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): false},
 			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): false},
 		}}
@@ -58,7 +58,7 @@ func TestConflictingPeerHold(t *testing.T) {
 			},
 		}
 		stackingOn := map[string]bool{"r": true}
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
 			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
@@ -71,7 +71,7 @@ func TestConflictingPeerHold(t *testing.T) {
 	t.Run("a branch with no open pull request is never a candidate", func(t *testing.T) {
 		t.Parallel()
 		noPR := map[string]plan.PRState{lower.Branch: plan.Open}
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", lower.Branch):  {branchKey("r", higher.Branch): true},
 			branchKey("r", higher.Branch): {branchKey("r", lower.Branch): true},
 		}}
@@ -93,7 +93,7 @@ func TestConflictingPeerHold(t *testing.T) {
 		}
 		prs := map[string]plan.PRState{a.Branch: plan.Open, b.Branch: plan.Open, c.Branch: plan.Open}
 		stacking := map[string]bool{"r": false}
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", a.Branch): {branchKey("r", b.Branch): true, branchKey("r", c.Branch): false},
 			branchKey("r", b.Branch): {branchKey("r", a.Branch): true, branchKey("r", c.Branch): true},
 			branchKey("r", c.Branch): {branchKey("r", a.Branch): false, branchKey("r", b.Branch): true},
@@ -119,7 +119,7 @@ func TestConflictingPeerHold(t *testing.T) {
 			hundred.URL: {URL: hundred.URL, Repo: hundred.Repo, Branch: hundred.Branch},
 		}
 		prs := map[string]plan.PRState{nine.Branch: plan.Open, hundred.Branch: plan.Open}
-		obs := Observation{ConflictsWithPeer: map[string]map[string]bool{
+		obs := plan.Observation{ConflictsWithPeer: map[string]map[string]bool{
 			branchKey("r", nine.Branch):    {branchKey("r", hundred.Branch): true},
 			branchKey("r", hundred.Branch): {branchKey("r", nine.Branch): true},
 		}}

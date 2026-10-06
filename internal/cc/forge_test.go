@@ -126,4 +126,12 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	if !forge.created {
 		t.Error("the fake Forge never saw a Create: the push opened its PR some other way")
 	}
+
+	obs, _, err := store.LastObservation(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs.LocalTips) == 0 {
+		t.Error("the observation holds no local tips: observe must read them for the push step")
+	}
 }

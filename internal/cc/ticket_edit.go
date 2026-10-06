@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc/ccdb"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // editTicketPayload is an intent's free-form payload for verb "edit_ticket" -- the frozen v1
@@ -90,7 +91,7 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 		if err != nil {
 			return err
 		}
-		var obs Observation
+		var obs plan.Observation
 		obs, _, err = s.LastObservation(ctx)
 		if err != nil {
 			return fmt.Errorf("read observation for closure check: %w", err)

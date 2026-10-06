@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // TestCheckingTicksOnlyAdvanceOnSuccessfulObserve is the AC's forced-failure sequence over an
@@ -24,7 +25,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	ok := cc.NewLoop(store, func(context.Context) (cc.Observation, error) { return cc.Observation{}, nil },
+	ok := cc.NewLoop(store, func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
 		fixedClock(at), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 
 	for i := range 3 {
@@ -36,8 +37,8 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	// An injected clock that keeps moving, standing in for a real outage's wall-clock span,
 	// while every observe across it fails.
 	boom := errors.New("gh pr list: exit status 1")
-	failing := cc.NewLoop(store, func(context.Context) (cc.Observation, error) {
-		return cc.Observation{}, boom
+	failing := cc.NewLoop(store, func(context.Context) (plan.Observation, error) {
+		return plan.Observation{}, boom
 	}, fixedClock(at.Add(time.Hour)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	for i := range 50 {
 		if err := failing.RunOnce(ctx); err == nil {

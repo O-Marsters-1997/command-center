@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -422,5 +423,39 @@ func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 	_, err := cc.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
 	if err == nil {
 		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
+	}
+}
+
+func TestPlanRulesIndexesEachRepoByName(t *testing.T) {
+	t.Parallel()
+
+	cfg := cc.Config{
+		MaxAgents: 3, SpendLimit5h: 80,
+		Repos: []cc.Repo{
+			{Name: "a", Stacking: true, Deny: []string{".github/**"}, CompatCheck: "compat", MergifySHA: "sha256:1",
+				Checks: verdict.Predicate{Success: "CI"}},
+			{Name: "b"},
+		},
+	}
+
+	rules := cfg.PlanRules()
+
+	if rules.MaxAgents != 3 || rules.SpendLimit5h != 80 {
+		t.Errorf("max_agents/spend_limit_5h = %d/%d, want 3/80", rules.MaxAgents, rules.SpendLimit5h)
+	}
+	if !rules.Stacking["a"] || rules.Stacking["b"] {
+		t.Errorf("stacking = %v, want a only", rules.Stacking)
+	}
+	if !slices.Equal(rules.Deny["a"], []string{".github/**"}) || len(rules.Deny["b"]) != 0 {
+		t.Errorf("deny = %v", rules.Deny)
+	}
+	if rules.Checks["a"].Success != "CI" || !rules.Checks["b"].IsZero() {
+		t.Errorf("checks = %v", rules.Checks)
+	}
+	if rules.MergifySHA["a"] != "sha256:1" || rules.CompatCheck["a"] != "compat" {
+		t.Errorf("mergify/compat = %v/%v", rules.MergifySHA, rules.CompatCheck)
+	}
+	if _, ok := rules.Stacking["b"]; !ok {
+		t.Error("a repo that never opted in must still be present, so scope checks see it")
 	}
 }

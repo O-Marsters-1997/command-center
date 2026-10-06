@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -30,15 +30,15 @@ func TestReCheckRerunsTheActionsRunParsedFromTheCompatCheckDetailsURL(t *testing
 		t.Fatal(err)
 	}
 
-	obs := cc.Observation{PRs: map[string]gh.PR{
-		cc.BranchKey("repo", "cc-1"): {Checks: map[string]gh.CheckState{
+	obs := plan.Observation{PRs: map[string]plan.PR{
+		cc.BranchKey("repo", "cc-1"): {Checks: map[string]plan.CheckState{
 			reCheckCompatCheckName: {
 				Status: "COMPLETED", Conclusion: "FAILURE",
 				DetailsURL: "https://github.com/acme/repo/actions/runs/998877/job/2233",
 			},
 		}},
 	}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.Repos[0].CompatCheck = reCheckCompatCheckName
@@ -86,12 +86,12 @@ func TestReCheckRefusesADetailsURLWithoutARunsSegment(t *testing.T) {
 	}
 
 	const oddDetailsURL = "https://github.com/acme/repo/checks/998877"
-	obs := cc.Observation{PRs: map[string]gh.PR{
-		cc.BranchKey("repo", "cc-1"): {Checks: map[string]gh.CheckState{
+	obs := plan.Observation{PRs: map[string]plan.PR{
+		cc.BranchKey("repo", "cc-1"): {Checks: map[string]plan.CheckState{
 			reCheckCompatCheckName: {Status: "COMPLETED", Conclusion: "FAILURE", DetailsURL: oddDetailsURL},
 		}},
 	}}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.Repos[0].CompatCheck = reCheckCompatCheckName
@@ -153,9 +153,9 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 		t.Fatal(err)
 	}
 
-	redPR := gh.PR{
-		Number: 1, State: gh.Open, HeadOid: tip,
-		Checks: map[string]gh.CheckState{
+	redPR := plan.PR{
+		Number: 1, State: plan.Open, HeadOid: tip,
+		Checks: map[string]plan.CheckState{
 			reCheckCompatCheckName: {
 				Status: "COMPLETED", Conclusion: "FAILURE",
 				DetailsURL: "https://github.com/acme/repo/actions/runs/998877/job/2233",
@@ -163,11 +163,11 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 			"Tests": {Status: "COMPLETED", Conclusion: "SUCCESS"},
 		},
 	}
-	obs := cc.Observation{
-		PRs:        map[string]gh.PR{cc.BranchKey("repo", "cc-1"): redPR},
+	obs := plan.Observation{
+		PRs:        map[string]plan.PR{cc.BranchKey("repo", "cc-1"): redPR},
 		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	repos := []cc.Repo{{
 		Name: "repo", Checkout: filepath.Join(root, "repo"), CompatCheck: reCheckCompatCheckName,
@@ -191,12 +191,12 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	}
 
 	pendingPR := redPR
-	pendingPR.Checks = map[string]gh.CheckState{
+	pendingPR.Checks = map[string]plan.CheckState{
 		reCheckCompatCheckName: {Status: "IN_PROGRESS"},
 		"Tests":                {Status: "COMPLETED", Conclusion: "SUCCESS"},
 	}
-	obs = cc.Observation{
-		PRs:        map[string]gh.PR{cc.BranchKey("repo", "cc-1"): pendingPR},
+	obs = plan.Observation{
+		PRs:        map[string]plan.PR{cc.BranchKey("repo", "cc-1"): pendingPR},
 		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
 	}
 	if err := loop.RunOnce(ctx); err != nil {

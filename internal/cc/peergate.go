@@ -14,7 +14,7 @@ import (
 // case (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func conflictingPeerHold(
 	tickets []Ticket, byURL map[string]plan.Ticket, prs map[string]plan.PRState,
-	stackingByRepo map[string]bool, obs Observation,
+	stackingByRepo map[string]bool, obs plan.Observation,
 ) map[string]string {
 	var candidates []Ticket
 	for _, t := range tickets {

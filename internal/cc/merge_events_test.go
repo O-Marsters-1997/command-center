@@ -10,7 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
@@ -25,13 +25,13 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 
 	tickAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: mergedAt},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
 	loop := cc.NewLoop(store,
-		func(context.Context) (cc.Observation, error) { return observed, nil },
+		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(tickAt), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {
@@ -78,13 +78,13 @@ func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
 	}
 
 	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: mergedAt},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
 	loop := cc.NewLoop(store,
-		func(context.Context) (cc.Observation, error) { return observed, nil },
+		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(mergedAt.Add(time.Hour)), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
@@ -122,13 +122,13 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Closed},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Closed},
 		},
 	}
 	loop := cc.NewLoop(store,
-		func(context.Context) (cc.Observation, error) { return observed, nil },
+		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), cc.Config{}, cc.Workspace{}, cc.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -161,14 +161,14 @@ func TestRecordMergedEventsRecordsHandChurnFromCommitsAfterCCsLastPush(t *testin
 
 	handTip := commitFileForHandChurnTest(t, dir, "b.txt", "line one\nline two\n", "human commit")
 
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: time.Now(), HeadOid: handTip},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: time.Now(), HeadOid: handTip},
 		},
 	}
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
 	loop := cc.NewLoop(store,
-		func(context.Context) (cc.Observation, error) { return observed, nil },
+		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {
@@ -197,14 +197,14 @@ func TestRecordMergedEventsRecordsZeroHandChurnWhenNothingLandsAfterCCsLastPush(
 		t.Fatalf("RecordPush: %v", err)
 	}
 
-	observed := cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: gh.Merged, MergedAt: time.Now(), HeadOid: ccTip},
+	observed := plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: time.Now(), HeadOid: ccTip},
 		},
 	}
 	cfg := cc.Config{Repos: []cc.Repo{{Name: "cc-sandbox", Checkout: dir}}}
 	loop := cc.NewLoop(store,
-		func(context.Context) (cc.Observation, error) { return observed, nil },
+		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), cfg, cc.Workspace{}, cc.ProcessRunner{})
 
 	if err := loop.RunOnce(ctx); err != nil {

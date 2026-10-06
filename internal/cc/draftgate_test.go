@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -84,14 +84,18 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
 }
 
-func ciCheck(conclusion string) map[string]gh.CheckState {
-	return map[string]gh.CheckState{"CI": {Status: "COMPLETED", Conclusion: conclusion}}
+func ciCheck(conclusion string) map[string]plan.CheckState {
+	return map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: conclusion}}
 }
 
-func draftConsumerPR(blockerState gh.PRState, consumerChecks map[string]gh.CheckState, tip string) cc.Observation {
-	return cc.Observation{
-		PRs: map[string]gh.PR{
-			cc.BranchKey("repo", "cc-1"):       {Number: 1, State: gh.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks},
+func draftConsumerPR(
+	blockerState plan.PRState, consumerChecks map[string]plan.CheckState, tip string,
+) plan.Observation {
+	return plan.Observation{
+		PRs: map[string]plan.PR{
+			cc.BranchKey("repo", "cc-1"): {
+				Number: 1, State: plan.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks,
+			},
 			cc.BranchKey("services", "pla-40"): {State: blockerState},
 		},
 		BranchTips: map[string]string{cc.MainTipKey("repo"): "main-tip"},
@@ -117,8 +121,8 @@ func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
-	obs := draftConsumerPR(gh.Open, ciCheck("SUCCESS"), f.tip)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := draftConsumerPR(plan.Open, ciCheck("SUCCESS"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	loop := cc.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, cc.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -136,8 +140,8 @@ func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
-	obs := draftConsumerPR(gh.Merged, ciCheck("FAILURE"), f.tip)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := draftConsumerPR(plan.Merged, ciCheck("FAILURE"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	loop := cc.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, cc.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -156,8 +160,8 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
-	obs := draftConsumerPR(gh.Open, ciCheck("FAILURE"), f.tip)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := draftConsumerPR(plan.Open, ciCheck("FAILURE"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	loop := cc.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, cc.ProcessRunner{})
 
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -168,7 +172,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// Blocker merges, but the consumer's own CI is still red.
-	obs = draftConsumerPR(gh.Merged, ciCheck("FAILURE"), f.tip)
+	obs = draftConsumerPR(plan.Merged, ciCheck("FAILURE"), f.tip)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 2: %v", err)
 	}
@@ -177,7 +181,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// Both halves now hold: this is the tick that must call `gh pr ready`.
-	obs = draftConsumerPR(gh.Merged, ciCheck("SUCCESS"), f.tip)
+	obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 3: %v", err)
 	}
@@ -186,8 +190,8 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// GitHub now reports the PR as ready, as a real observe would from here on.
-	obs.PRs[cc.BranchKey("repo", "cc-1")] = gh.PR{
-		Number: 1, State: gh.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS"),
+	obs.PRs[cc.BranchKey("repo", "cc-1")] = plan.PR{
+		Number: 1, State: plan.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS"),
 	}
 	for i := range 9 {
 		if err := loop.RunOnce(t.Context()); err != nil {
@@ -207,8 +211,8 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
-	obs := draftConsumerPR(gh.Closed, ciCheck("SUCCESS"), f.tip)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	loop := cc.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, cc.ProcessRunner{})
 
 	for i := range 5 {
@@ -236,8 +240,8 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	f := newDraftGateFixture(t)
 	logPath, binDir := installFakeGhReady(t, true)
 
-	obs := draftConsumerPR(gh.Merged, ciCheck("SUCCESS"), f.tip)
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	obs := draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	loop := cc.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, cc.ProcessRunner{})
 
 	if err := loop.RunOnce(t.Context()); err != nil {
@@ -290,9 +294,9 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	obs := cc.Observation{
+	obs := plan.Observation{
 		Worktrees: map[string]string{cc.BranchKey("repo", "parent"): "/repos/parent"},
-		PRs:       map[string]gh.PR{cc.BranchKey("repo", "parent"): {Number: 1, State: gh.Open, IsDraft: true}},
+		PRs:       map[string]plan.PR{cc.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
@@ -332,10 +336,10 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})
@@ -370,10 +374,10 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := cc.Observation{
-		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]gh.PR{},
+	obs := plan.Observation{
+		Worktrees: map[string]string{cc.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
-	observe := func(context.Context) (cc.Observation, error) { return obs, nil }
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, cc.ProcessRunner{})

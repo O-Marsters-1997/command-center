@@ -130,8 +130,11 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	}
 
 	obs.ObservedAt = l.clock.Now()
+	if obs.LocalTips == nil {
+		obs.LocalTips = map[string]string{}
+	}
 	if obs.Runs == nil {
-		obs.Runs = map[string]RunObservation{}
+		obs.Runs = map[string]plan.RunObservation{}
 	}
 	if err := l.tickCheckingWaits(ctx); err != nil {
 		return err
@@ -172,6 +175,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyRefreshIntents(ctx, obs); err != nil {
 		return err
 	}
+	rereadLocalTips(ctx, obs, repoPathsByName(l.cfg.Repos))
 	if err := l.applyRetryPushIntents(ctx, obs); err != nil {
 		return err
 	}
@@ -353,7 +357,7 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 // reconcileRuns is liveness plus disposition, over every run this or a prior instance spawned
 // and never disposed of. It runs identically on tick 1 after a restart and on tick 4000 of
 // uptime: a re-attached process is found alive the same way a fresh one is (§ Crash recovery).
-func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
+func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
 		return err
@@ -374,7 +378,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 		if err != nil {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
-		obs.Runs[run.TicketID] = RunObservation{Alive: alive}
+		obs.Runs[run.TicketID] = plan.RunObservation{Alive: alive}
 		if alive {
 			continue
 		}
@@ -387,7 +391,9 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs Observation) error {
 
 // disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
 // commits after its own baseline decide push vs failed, never a missing event (inv. 7).
-func (l *Loop) disposeRun(ctx context.Context, run PendingRun, ticket Ticket, obs Observation, now time.Time) error {
+func (l *Loop) disposeRun(
+	ctx context.Context, run PendingRun, ticket Ticket, obs plan.Observation, now time.Time,
+) error {
 	commits := 0
 	if run.BaselineSHA != "" {
 		var err error
@@ -451,7 +457,7 @@ func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
 // #189): a remove-worktree racing a tick's disposal must not read as zero commits when
 // obs.BranchTips already carries that same tip from this tick's own fetch.
 func (l *Loop) commitsSinceBaseline(
-	ctx context.Context, ticket Ticket, obs Observation, baselineSHA string,
+	ctx context.Context, ticket Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
 	if worktreePath := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
 		return CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
@@ -466,7 +472,7 @@ func (l *Loop) commitsSinceBaseline(
 
 // launchEligible is job 3 of the tick: plan.LaunchPlan picks the tickets to cut and spawn this
 // tick, under max_agents applied globally over every repo's unlock results.
-func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
+func (l *Loop) launchEligible(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
 		return err
@@ -484,7 +490,7 @@ func (l *Loop) launchEligible(ctx context.Context, obs Observation) error {
 		return err
 	}
 
-	stacking := stackingByRepo(l.cfg.Repos)
+	stacking := l.cfg.PlanRules().Stacking
 	byURL := planTicketsByURL(tickets)
 	prs := prsByBranch(tickets, obs)
 	repoPaths := repoPathsByName(l.cfg.Repos)
