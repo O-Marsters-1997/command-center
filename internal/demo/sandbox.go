@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
@@ -35,6 +36,7 @@ type Sandbox struct {
 
 type sandboxRepo struct {
 	scenarioName string
+	stacking     bool
 	name         string
 	origin       string
 	checkout     string
@@ -88,6 +90,7 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	name := strings.ReplaceAll(r.Name, "/", "-")
 	repo := &sandboxRepo{
 		scenarioName: r.Name,
+		stacking:     r.Stacking,
 		name:         name,
 		origin:       filepath.Join(s.root, "origins", filepath.FromSlash(r.Name)+".git"),
 		checkout:     filepath.Join(s.root, "repos", name),
@@ -114,11 +117,24 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	return repo, nil
 }
 
-func (r *sandboxRepo) squashMerge(branch, message string) error {
-	steps := [][]string{
+func (r *sandboxRepo) syncMain() error {
+	for _, args := range [][]string{
 		{"fetch", "-q", "origin"},
 		{"checkout", "-q", "main"},
 		{"reset", "-q", "--hard", "origin/main"},
+	} {
+		if _, err := git(r.merger, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *sandboxRepo) squashMerge(branch, message string) error {
+	if err := r.syncMain(); err != nil {
+		return err
+	}
+	steps := [][]string{
 		{"merge", "-q", "--squash", "origin/" + branch},
 		{"commit", "-q", "-m", message},
 		{"push", "-q", "origin", "main"},
@@ -131,6 +147,39 @@ func (r *sandboxRepo) squashMerge(branch, message string) error {
 	return nil
 }
 
+// LandOnMain commits files to the named scenario repo's origin main, as a push that did not
+// come from cc.
+func (s *Sandbox) LandOnMain(repoName string, files map[string]string) error {
+	idx := slices.IndexFunc(s.repos, func(r *sandboxRepo) bool { return r.scenarioName == repoName })
+	if idx < 0 {
+		return fmt.Errorf("no sandbox repo %q", repoName)
+	}
+	repo := s.repos[idx]
+	if err := repo.syncMain(); err != nil {
+		return err
+	}
+	if err := commitAll(repo.merger, "land on main", files); err != nil {
+		return err
+	}
+	_, err := git(repo.merger, "push", "-q", "origin", "main")
+	return err
+}
+
+// PushToBranch commits files to branch on the repo's origin, as a human pushing to a pull request.
+func (s *Sandbox) PushToBranch(repo *sandboxRepo, branch string, files map[string]string) error {
+	if _, err := git(repo.merger, "fetch", "-q", "origin"); err != nil {
+		return err
+	}
+	if _, err := git(repo.merger, "checkout", "-q", "-B", branch, "origin/"+branch); err != nil {
+		return err
+	}
+	if err := commitAll(repo.merger, "hand edit", files); err != nil {
+		return err
+	}
+	_, err := git(repo.merger, "push", "-q", "origin", branch)
+	return err
+}
+
 // Repos is the cc.Repo for each scenario repo, pointed at its origin and sandbox checkout.
 func (s *Sandbox) Repos(template cc.Repo) []cc.Repo {
 	out := make([]cc.Repo, 0, len(s.repos))
@@ -139,6 +188,7 @@ func (s *Sandbox) Repos(template cc.Repo) []cc.Repo {
 		repo.Name = r.name
 		repo.Remote = r.origin
 		repo.Checkout = r.checkout
+		repo.Stacking = r.stacking
 		out = append(out, repo)
 	}
 	return out
