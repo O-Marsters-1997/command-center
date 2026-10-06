@@ -14,6 +14,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -196,7 +197,7 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, "")
+	server := cc.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state != "failed" {
 		t.Fatalf("state = %q, want failed", state)
@@ -377,7 +378,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
+	server := cc.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 	all := []string{"sandbox://A", "sandbox://B", "sandbox://C"}
 
 	for _, tc := range []struct{ from, to string }{
@@ -496,7 +497,7 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
+	server := cc.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 
 	first := httptest.NewRecorder()
 	server.ServeHTTP(first, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://A"), nil))

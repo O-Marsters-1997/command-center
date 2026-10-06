@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/runner"
-
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 type manualClock struct {
@@ -88,7 +88,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	}
 	loop := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	loop := cc.NewLoop(store, stub, fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 	ok := cc.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(good), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+		fixedClock(good), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := ok.RunOnce(ctx); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	boom := errors.New("gh pr list: exit status 1")
 	failing := cc.NewLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
-	}, fixedClock(bad), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	}, fixedClock(bad), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
 	err := failing.RunOnce(ctx)
 	if err == nil {
@@ -233,7 +233,7 @@ func TestRunOnceSweepsExpiredSessionsAndLeavesLiveOnes(t *testing.T) {
 	seedSession(t, dsn, userID, "live-token", now.Add(time.Hour))
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	loop := cc.NewLoop(store, stub, fixedClock(now), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, stub, fixedClock(now), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	loop := cc.NewLoop(store, stub, fixedClock(at), cc.Config{}, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce returned an error for a sweeper failure, want it to log and continue: %v", err)
 	}

@@ -1,4 +1,4 @@
-package cc_test
+package app_test
 
 import (
 	"context"
@@ -16,8 +16,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -26,27 +28,27 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{cc.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
+		PRs: map[string]plan.PR{"cc-sandbox//cc-1-first": {Number: 41, State: plan.Open}},
 	}
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
-	app, err := cc.New(ctx, configPath, cc.WithClock(fixedClock(at)), cc.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub), stubSquashOnly)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := app.Close(); err != nil {
+		if err := inst.Close(); err != nil {
 			t.Errorf("close app: %v", err)
 		}
 	})
 
-	if err := app.RunOnce(ctx); err != nil {
+	if err := inst.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	rec := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	inst.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -68,13 +70,13 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := cc.New(ctx, configPath, stubSquashOnly)
+	first, err := app.New(ctx, configPath, stubSquashOnly)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
 
-	if _, err := cc.New(ctx, configPath, stubSquashOnly); err == nil {
+	if _, err := app.New(ctx, configPath, stubSquashOnly); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
@@ -124,17 +126,17 @@ func seedTickets(t *testing.T, dsn string) {
 
 // stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out
 // to: none of their fixture repos are real git checkouts with a GitHub remote.
-var stubSquashOnly = cc.WithRepoCheck(func(context.Context, cc.Workspace, []cc.Repo) error { return nil })
+var stubSquashOnly = app.WithRepoCheck(func(context.Context, config.Workspace, []config.Repo) error { return nil })
 
 func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
 	configPath := appConfig(t)
 
-	notSquashOnly := cc.WithRepoCheck(func(_ context.Context, _ cc.Workspace, repos []cc.Repo) error {
+	notSquashOnly := app.WithRepoCheck(func(_ context.Context, _ config.Workspace, repos []config.Repo) error {
 		return fmt.Errorf("repo %s allows merge commits (allow_merge_commit=true): "+
 			"command-centre requires squash-only merges, refusing to start", repos[0].Name)
 	})
 
-	_, err := cc.New(t.Context(), configPath, notSquashOnly)
+	_, err := app.New(t.Context(), configPath, notSquashOnly)
 	if err == nil {
 		t.Fatal("New started despite a repo that allows merge commits")
 	}
@@ -160,11 +162,11 @@ func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	app, err := cc.New(t.Context(), configPath, cc.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(t.Context(), configPath, app.WithObserver(stub), stubSquashOnly)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = app.Close() })
+	t.Cleanup(func() { _ = inst.Close() })
 
 	checkout := filepath.Join(dataDir, "repos", "cc-sandbox")
 	if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
@@ -172,7 +174,7 @@ func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	inst.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
 	}
@@ -224,12 +226,12 @@ func TestNewBackfillsMetricsUsingTheInjectedParser(t *testing.T) {
 	fake := func(string) (agentlog.RunMetrics, error) {
 		return agentlog.RunMetrics{TokensIn: 77, Settled: true}, nil
 	}
-	stub := cc.WithObserver(func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil })
-	app, err := cc.New(t.Context(), configPath, stub, stubSquashOnly, cc.WithMetricsParser(fake))
+	stub := app.WithObserver(func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil })
+	inst, err := app.New(t.Context(), configPath, stub, stubSquashOnly, app.WithMetricsParser(fake))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = app.Close() })
+	t.Cleanup(func() { _ = inst.Close() })
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -255,14 +257,14 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	app, err := cc.New(ctx, configPath, cc.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithObserver(stub), stubSquashOnly)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = app.Close() })
+	t.Cleanup(func() { _ = inst.Close() })
 
 	done := make(chan error, 1)
-	go func() { done <- app.Run(ctx) }()
+	go func() { done <- inst.Run(ctx) }()
 	cancel()
 
 	select {
@@ -274,3 +276,10 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 		t.Fatal("Run did not return within the shutdown budget")
 	}
 }
+
+type frozenClock struct{ at time.Time }
+
+func (c frozenClock) Now() time.Time                       { return c.at }
+func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+
+func fixedClock(at time.Time) cc.Clock { return frozenClock{at} }

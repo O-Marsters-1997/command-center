@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so
@@ -67,14 +67,16 @@ func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	return root, repoPath
 }
 
-func testConfigAndWorkspace(t *testing.T, root string, maxAgents int, agentCommand []string) (cc.Config, cc.Workspace) {
+func testConfigAndWorkspace(
+	t *testing.T, root string, maxAgents int, agentCommand []string,
+) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := cc.Config{
+	cfg := config.Config{
 		MaxAgents:    maxAgents,
 		AgentCommand: agentCommand,
-		Repos:        []cc.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: false}},
+		Repos:        []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: false}},
 	}
-	ws := cc.Workspace{
+	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
 	}

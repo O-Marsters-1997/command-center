@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -86,7 +87,7 @@ func boardFor(t *testing.T, store *cc.Store) string {
 	t.Helper()
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return renderBoard(t, cc.NewServer(store, fixedClock(at), []cc.Repo{{Name: "repo"}}, ""))
+	return renderBoard(t, cc.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
 }
 
 // TestBoardRendersAFanOutAsOneGroup covers issue #74's first two acceptance criteria: four rows

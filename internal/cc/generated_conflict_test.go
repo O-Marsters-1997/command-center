@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -135,17 +136,17 @@ func (f generatedConflictFixture) observe(t *testing.T) cc.ObserveFunc {
 
 func (f generatedConflictFixture) configAndWorkspace(
 	t *testing.T, generated, buildCommand []string,
-) (cc.Config, cc.Workspace) {
+) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := cc.Config{
-		Repos: []cc.Repo{{
+	cfg := config.Config{
+		Repos: []config.Repo{{
 			Name: "repo", Checkout: f.repoPath,
 			Checks:       verdict.Predicate{Success: "CI"},
 			Generated:    generated,
 			BuildCommand: buildCommand,
 		}},
 	}
-	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return cfg, ws
 }
 
@@ -371,15 +372,15 @@ func TestAStaleWorktreeIsFastForwardedBeforeMergingAGeneratedConflict(t *testing
 		}, nil
 	}
 
-	cfg := cc.Config{
-		Repos: []cc.Repo{{
+	cfg := config.Config{
+		Repos: []config.Repo{{
 			Name: "repo", Checkout: repoPath,
 			Checks:       verdict.Predicate{Success: "CI"},
 			Generated:    []string{"dist/**"},
 			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
 		}},
 	}
-	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -474,15 +475,15 @@ func TestAMergeThatUnexpectedlyConflictsOutsideTheGeneratedSetAborts(t *testing.
 		}, nil
 	}
 
-	cfg := cc.Config{
-		Repos: []cc.Repo{{
+	cfg := config.Config{
+		Repos: []config.Repo{{
 			Name: "repo", Checkout: repoPath,
 			Checks:       verdict.Predicate{Success: "CI"},
 			Generated:    []string{"dist/**"},
 			BuildCommand: buildCommandRegenerating("dist/app.css", regeneratedContent),
 		}},
 	}
-	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	loop := cc.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)

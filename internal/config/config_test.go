@@ -1,4 +1,4 @@
-package cc_test
+package config_test
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -42,7 +42,7 @@ blocked_by = []
 name = "cc-sandbox"
 path = "cc-sandbox"
 `
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	t.Parallel()
 
 	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestLoadConfigKeepsAnExplicitTracker(t *testing.T) {
 	t.Parallel()
 
 	body := "[[repo]]\nname = \"r\"\npath = \"r\"\ntracker = \"linear\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestLoadConfigSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
 	body := "spend_limit_5h = 80\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
 	t.Parallel()
 
 	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := cc.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := cc.LoadConfig(writeConfig(t, tt.line))
+			got, err := config.LoadConfig(writeConfig(t, tt.line))
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -206,7 +206,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
 			t.Setenv("CC_DATA_DIR", t.TempDir())
 
-			_, err := cc.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)))
+			_, err := config.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)))
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
@@ -219,7 +219,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 			}
 			t.Setenv("CC_AGENT_COMMAND", string(env))
 
-			_, err = cc.LoadConfig(writeConfig(t, agentCommandLine(t, complete)))
+			_, err = config.LoadConfig(writeConfig(t, agentCommandLine(t, complete)))
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
@@ -272,7 +272,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := cc.LoadConfig(writeConfig(t, tt.body))
+			got, err := config.LoadConfig(writeConfig(t, tt.body))
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -304,7 +304,7 @@ mergify_sha = "sha256:deadbeef"
 func TestLoadConfigParsesChecks(t *testing.T) {
 	t.Parallel()
 
-	got, err := cc.LoadConfig(writeConfig(t, oneRepoWithChecks))
+	got, err := config.LoadConfig(writeConfig(t, oneRepoWithChecks))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
 	path := writeConfig(t, "[[repo]]\nname = \"rel\"\npath = \"checkouts/rel\"\n\n"+
 		"[[repo]]\nname = \"abs\"\npath = "+strconv.Quote(elsewhere)+"\n")
 
-	got, err := cc.LoadConfig(path)
+	got, err := config.LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
 func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
 	t.Parallel()
 
-	_, err := cc.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
+	_, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
 	if err == nil || !strings.Contains(err.Error(), "r") {
 		t.Errorf("error = %v, want one naming the repo with no path", err)
 	}
@@ -367,7 +367,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	tracked := withRequiredParts("claude", "-p", "{prompt}")
 	path := writeConfig(t, agentCommandLine(t, tracked))
 
-	got, err := cc.LoadConfig(path)
+	got, err := config.LoadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("CC_AGENT_COMMAND", string(env))
-	got, err = cc.LoadConfig(path)
+	got, err = config.LoadConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 
 	for _, bad := range []string{"caffeinate -i claude", "[]", `{"a":1}`} {
 		t.Setenv("CC_AGENT_COMMAND", bad)
-		if _, err := cc.LoadConfig(path); err == nil {
+		if _, err := config.LoadConfig(path); err == nil {
 			t.Errorf("CC_AGENT_COMMAND=%q was accepted, want a refusal", bad)
 		}
 	}
@@ -400,7 +400,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 func TestLoadConfigBoardPollSeconds(t *testing.T) {
 	t.Parallel()
 
-	got, err := cc.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	got, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
 	}
 
-	got, err = cc.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 	t.Parallel()
 
-	_, err := cc.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
 	if err == nil {
 		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
 	}
@@ -429,9 +429,9 @@ func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 func TestPlanRulesIndexesEachRepoByName(t *testing.T) {
 	t.Parallel()
 
-	cfg := cc.Config{
+	cfg := config.Config{
 		MaxAgents: 3, SpendLimit5h: 80,
-		Repos: []cc.Repo{
+		Repos: []config.Repo{
 			{Name: "a", Stacking: true, Deny: []string{".github/**"}, CompatCheck: "compat", MergifySHA: "sha256:1",
 				Checks: verdict.Predicate{Success: "CI"}},
 			{Name: "b"},

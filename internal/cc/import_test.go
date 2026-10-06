@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -55,7 +56,7 @@ func resolveByRemote(byRemote map[string]tracker.Source) cc.TrackerSource {
 func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 	t.Parallel()
 
-	repos := []cc.Repo{
+	repos := []config.Repo{
 		{Name: "alpha", Remote: "git@github.com:acme/alpha.git"},
 		{Name: "beta", Remote: "git@github.com:acme/beta.git"},
 		{Name: "local", Path: "."}, // no remote: no tracker to dispatch to, silently skipped
@@ -91,7 +92,7 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 func TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind(t *testing.T) {
 	t.Parallel()
 
-	repos := []cc.Repo{
+	repos := []config.Repo{
 		{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "github"},
 		{Name: "beta", Remote: "git@github.com:acme/beta.git", Tracker: "linear"},
 	}
@@ -666,9 +667,9 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 			}},
 		},
 	}
-	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -713,9 +714,9 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 			"project:y": {{URL: contested, Number: 1, Title: "Add x"}},
 		},
 	}
-	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
@@ -787,9 +788,9 @@ func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
 			"project:y": {{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}}},
 		},
 	}
-	cfg := cc.Config{Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
@@ -854,11 +855,11 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 			}},
 		},
 	}
-	cfg := cc.Config{
-		Repos: []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
+	cfg := config.Config{
+		Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
 	}
 
-	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, cc.Workspace{}, runner.ProcessRunner{})
+	loop := cc.NewLoop(store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})
 	loop.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -885,7 +886,7 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
 	server := cc.NewServer(store, cc.RealClock{}, repos, "")
@@ -919,7 +920,7 @@ func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
 	server := cc.NewServer(store, cc.RealClock{}, repos, "")
@@ -972,7 +973,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 func TestHandleFeaturesFiltersByQuery(t *testing.T) {
 	t.Parallel()
 
-	repos := []cc.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
+	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
 	server := cc.NewServer(openStore(t), cc.RealClock{}, repos, "")

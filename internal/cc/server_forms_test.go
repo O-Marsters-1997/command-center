@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -60,7 +61,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := cc.NewServer(store, fixedClock(now), []cc.Repo{{Name: "repo"}}, "")
+	server := cc.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 
 	target := "/?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
 	rec := httptest.NewRecorder()

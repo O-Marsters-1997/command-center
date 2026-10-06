@@ -8,6 +8,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -19,7 +20,7 @@ type ObserveFunc func(ctx context.Context) (plan.Observation, error)
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
 // then the worktree map, per configured repo. Every branch-keyed map is written under
 // branchKey(repo.Name, branch), since two configured repos can hold the same branch name.
-func NewObserver(store *Store, forge gh.Forge, cfg Config) ObserveFunc {
+func NewObserver(store *Store, forge gh.Forge, cfg config.Config) ObserveFunc {
 	return func(ctx context.Context) (plan.Observation, error) {
 		tickets, err := store.Tickets(ctx)
 		if err != nil {

@@ -7,14 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
-// SandboxCheckout is the e2e build's cc.CheckoutFunc. A path-based repo gets the real
+// SandboxCheckout is the e2e build's app.CheckoutFunc. A path-based repo gets the real
 // EnsureCheckout; a remote-based one exists only so import.go's repo-matching has a real
 // host+owner+repo string to check tickets against, and its checkout is a symlink, never a clone.
-func SandboxCheckout(ctx context.Context, repos []cc.Repo) error {
+func SandboxCheckout(ctx context.Context, repos []config.Repo) error {
 	for _, repo := range repos {
 		if repo.Path != "" {
 			if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
@@ -32,7 +32,7 @@ func SandboxCheckout(ctx context.Context, repos []cc.Repo) error {
 // ensureSandboxSymlink links repo.Checkout to the sandbox repo instead of cloning it. `git
 // rev-parse --show-toplevel` resolves a symlinked cwd to its real target, so tp's worktree
 // siblings and every $WORK/<repo> assertion see the same path a real checkout would.
-func ensureSandboxSymlink(ctx context.Context, repo cc.Repo) error {
+func ensureSandboxSymlink(ctx context.Context, repo config.Repo) error {
 	_, err := os.Lstat(repo.Checkout)
 	if err == nil {
 		return nil

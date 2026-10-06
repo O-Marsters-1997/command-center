@@ -1,6 +1,5 @@
-// Package cc is the Command Centre's imperative shell: config, state dir, store, loop and page.
-// The pure decisions live in internal/plan; gh's JSON shape lives in internal/gh.
-package cc
+// Package config loads the user-edited TOML file and resolves the workspace layout it names.
+package config
 
 import (
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -37,26 +37,6 @@ type Config struct {
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
 	BoardPollSeconds int    `toml:"board_poll_seconds"`
 	Repos            []Repo `toml:"repo"`
-}
-
-// Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
-// tracker's own, refreshed on every import; Repo is matched from URL against a [[repo]]'s remote.
-// Branch and BlockedBy are the app's own, seeded once on a URL's first import, then left alone.
-// FirstPushCI and HandChurnLines are nil until recordFirstPushCI/recordMergedEvents observe the
-// fact they report, and never overwritten after that.
-type Ticket struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      []string
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	FirstPushCI    *bool
-	HandChurnLines *int
 }
 
 // Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
@@ -92,7 +72,7 @@ type Repo struct {
 const (
 	defaultPort             = 7777
 	defaultMaxAgents        = 1
-	defaultBoardPollSeconds = 5
+	DefaultBoardPollSeconds = 5
 )
 
 // defaultAgentCommand is the argv a config naming no agent_command gets. The model is named
@@ -113,7 +93,7 @@ var defaultAgentCommand = []string{
 // only: what a relative repo path is relative to.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{
-		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: defaultBoardPollSeconds,
+		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: DefaultBoardPollSeconds,
 		AgentCommand: slices.Clone(defaultAgentCommand),
 	}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
@@ -216,34 +196,35 @@ func (c Config) PlanRules() plan.Rules {
 	return rules
 }
 
-func verifyCommandByRepo(repos []Repo) map[string][]string {
-	m := make(map[string][]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.VerifyCommand
+// CheckoutPath answers where a repo's working copy is. A remote repo's checkout is one the app
+// makes and names, at <dataDir>/repos/<name>; a path repo's is one the operator made, absolute
+// or relative to configDir. Exactly one of the two forms is allowed.
+func (r Repo) CheckoutPath(dataDir, configDir string) (string, error) {
+	switch {
+	case r.Remote != "" && r.Path != "":
+		return "", fmt.Errorf("repo %s sets both remote and path: pick one", r.Name)
+	case r.Remote == "" && r.Path == "":
+		return "", fmt.Errorf("repo %s sets neither remote nor path", r.Name)
+	case r.Remote != "":
+		if err := validRepoName(r.Name); err != nil {
+			return "", err
+		}
+		return filepath.Join(dataDir, "repos", r.Name), nil
 	}
-	return m
+
+	path, err := expandHome(r.Path)
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(configDir, path)
+	}
+	return filepath.Clean(path), nil
 }
 
-func generatedByRepo(repos []Repo) map[string][]string {
-	m := make(map[string][]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.Generated
+func validRepoName(name string) error {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("repo name %q is not a single directory name", name)
 	}
-	return m
-}
-
-func buildCommandByRepo(repos []Repo) map[string][]string {
-	m := make(map[string][]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.BuildCommand
-	}
-	return m
-}
-
-func repoPathsByName(repos []Repo) map[string]string {
-	m := make(map[string]string, len(repos))
-	for _, r := range repos {
-		m[r.Name] = r.Checkout
-	}
-	return m
+	return nil
 }

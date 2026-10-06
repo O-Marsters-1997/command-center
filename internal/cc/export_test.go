@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -20,7 +21,7 @@ func RenderStatesBoard(states []plan.State) (string, error) {
 }
 
 func renderStates(tmpl *template.Template, states []plan.State) (string, error) {
-	view := pageView{chrome: chrome{Observe: ageView{Age: "0s ago"}}, BoardPollSeconds: defaultBoardPollSeconds}
+	view := pageView{chrome: chrome{Observe: ageView{Age: "0s ago"}}, BoardPollSeconds: config.DefaultBoardPollSeconds}
 	for _, state := range states {
 		r := row{
 			URL:        "sandbox://" + state.String(),

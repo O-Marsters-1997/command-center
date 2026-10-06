@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -158,9 +158,9 @@ func (s *Sandbox) PushToBranch(repo *sandboxRepo, branch string, files map[strin
 	return err
 }
 
-// Repos is the cc.Repo for each scenario repo, pointed at its origin and sandbox checkout.
-func (s *Sandbox) Repos(template cc.Repo) []cc.Repo {
-	out := make([]cc.Repo, 0, len(s.repos))
+// Repos is the config.Repo for each scenario repo, pointed at its origin and sandbox checkout.
+func (s *Sandbox) Repos(template config.Repo) []config.Repo {
+	out := make([]config.Repo, 0, len(s.repos))
 	for _, r := range s.repos {
 		repo := template
 		repo.Name = r.name

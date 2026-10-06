@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -170,14 +171,14 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	repos := []cc.Repo{{
+	repos := []config.Repo{{
 		Name: "repo", Checkout: filepath.Join(root, "repo"), CompatCheck: reCheckCompatCheckName,
 		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
 			{Success: reCheckCompatCheckName}, {Success: "Tests"},
 		}},
 	}}
-	ws := cc.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
-	cfg := cc.Config{Repos: repos}
+	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
+	cfg := config.Config{Repos: repos}
 	loop := cc.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := loop.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce (re-check tick): %v", err)

@@ -84,7 +84,7 @@ so it renders the page but cannot spawn anything.
 
 ## How it works
 
-`cmd/cc` is a thin main: flags, signal handling, `cc.New`, `app.Run`. Run starts
+`cmd/cc` is a thin main: flags, signal handling, `app.New`, `Run`. Run starts
 two goroutines. One is the reconcile loop. One is an HTTP server bound to
 127.0.0.1.
 
@@ -92,7 +92,9 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 
 | Package | What |
 |---|---|
-| `internal/cc` | The imperative shell. Config, workspace and state dir, Postgres store, the tick, the page, push, verbs, observe, the process runner, the flock. |
+| `internal/config` | The TOML config, repo checkout paths and the workspace layout under the data directory. |
+| `internal/app` | Wiring: `App`, the `With*` options and the flock. |
+| `internal/cc` | The imperative shell. Postgres store, the tick, the page, push, verbs, observe. |
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
 | `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
 | `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
@@ -270,7 +272,7 @@ restack that itself verifies clean, clears it.
 ## Testing
 
 `go test ./...` is the unit suite. Determinism comes from four seams injected on
-`cc.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
+`app.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
 test sleeps.
 
 Every test that touches the store gets a database of its own from
