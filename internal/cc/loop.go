@@ -63,9 +63,8 @@ type Loop struct {
 	trackerFor    TrackerSource
 	metricsParser MetricsParser
 	nudgeCh       chan struct{}
-	// spawned and killed count the agents act started and stopped this tick, which launch
-	// subtracts from the snapshot's free slots.
-	spawned, killed int
+	spawned       []string
+	killed        int
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
@@ -153,10 +152,6 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	return l.act(ctx, snap, obs)
 }
 
-// absorb folds this tick's observation and every run that ended into the store: cancels, dispose
-// runs (with their spend transcript reads and interval fit), verdict transitions and the merge
-// and first-CI events. It spawns, kills and pushes nothing, so the snapshot derived after it
-// sees every fact this tick can learn (docs/adr/0014-the-two-phase-tick.md).
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	if err := l.tickCheckingWaits(ctx); err != nil {
 		return err
@@ -188,10 +183,8 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	return l.recordMergedEvents(ctx, obs)
 }
 
-// act applies the operator's verbs and then the automatic work against one snapshot: verbs first,
-// so a verb's spawn or kill is counted by launch against the same slot rule.
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	l.spawned, l.killed = 0, 0
+	l.spawned, l.killed = nil, 0
 	if err := l.applyKillIntents(ctx); err != nil {
 		return err
 	}
@@ -208,6 +201,12 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		return err
 	}
 	if err := l.applyResolveIntents(ctx, obs); err != nil {
+		return err
+	}
+	for _, url := range l.spawned {
+		obs.Runs[url] = plan.RunObservation{Alive: true}
+	}
+	if err := l.retargetMerged(ctx, snap, obs); err != nil {
 		return err
 	}
 	if err := l.applyRefreshIntents(ctx, snap, obs); err != nil {
@@ -227,9 +226,6 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		return err
 	}
 	if err := l.applyCommitResolutionIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.retargetMerged(ctx, snap, obs); err != nil {
 		return err
 	}
 	if err := l.pushPushable(ctx, snap, obs); err != nil {
@@ -377,12 +373,16 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	}
 
 	now := l.clock.Now()
+	cancelled := map[string]bool{}
 	for _, intent := range intents {
 		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
 				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
 			}
-			l.killed++
+			if !cancelled[intent.TicketID] {
+				cancelled[intent.TicketID] = true
+				l.killed++
+			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
 			return err
@@ -510,7 +510,7 @@ func (l *Loop) commitsSinceBaseline(
 // launchEligible is job 3 of the tick: snap.Launch picks the tickets to cut and spawn this tick,
 // under max_agents applied globally over every repo's unlock results.
 func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
-	toLaunch := snap.LaunchAfter(l.spawned, l.killed)
+	toLaunch := snap.LaunchAfter(len(l.spawned), l.killed)
 	if len(toLaunch) == 0 {
 		return nil
 	}
@@ -685,7 +685,7 @@ func (l *Loop) spawnRun(
 	if err := l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath); err != nil {
 		return err
 	}
-	l.spawned++
+	l.spawned = append(l.spawned, ticket.URL)
 	return l.store.AppendEvent(ctx, Event{
 		At: startedAt, TicketURL: ticket.URL, Kind: eventRunLaunched,
 		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),

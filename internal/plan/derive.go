@@ -131,8 +131,8 @@ type Snapshot struct {
 // the free agent slots, and none while the five-hour reading is at spend_limit_5h.
 func (s Snapshot) Launch() []string { return s.LaunchAfter(0, 0) }
 
-// LaunchAfter is Launch for a tick that has since spawned and killed agents: the snapshot's
-// running count plus spawned, minus killed, is what occupies the slots.
+// LaunchAfter is Launch for a tick that has since spawned and killed agents, so the snapshot's
+// running count is stale by that much.
 func (s Snapshot) LaunchAfter(spawned, killed int) []string {
 	return LaunchPlan(s.launch, max(s.running+spawned-killed, 0), s.maxAgents, s.spendPaused)
 }

@@ -19,6 +19,7 @@ A tick is observe, **absorb**, one `PlanInput` and `Derive`, then **act**.
 - Act runs the operator's verbs (kill, re-run, follow-up, abort, resolve, refresh, retry-push,
   re-check, close-pr, remove-worktree, commit-resolution) before retarget, push, the draft gate and
   launch.
+- Retarget runs after the spawning verbs and before refresh, so a refresh never repeats a restack.
 - Import and edit-ticket intents still run before observe, so the observation reads the new branch.
 - Steps stay `func(ctx, snap) error`, called in order in `RunOnce`: no slice, no dispatch table.
 - Launch asks `Snapshot.LaunchAfter(spawned, killed)`, so a verb's spawn and an automatic launch
@@ -29,3 +30,7 @@ A tick is observe, **absorb**, one `PlanInput` and `Derive`, then **act**.
 A run killed in act is disposed by the next tick's absorb, not the same one. A run disposed in absorb
 is pushed in the same tick. A verdict transition and the first-CI event for a push made in act are
 recorded by the next tick.
+
+A kill and a re-run queued for one ticket in the same tick overlap: the killed process may still be
+exiting when the new agent starts. The snapshot is not re-derived inside act, so only `obs` (worktrees,
+run liveness, mid-merge) is live there.
