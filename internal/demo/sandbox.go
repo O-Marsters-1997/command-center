@@ -72,7 +72,8 @@ func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	if err := os.MkdirAll(bin, 0o750); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(fakeTpScript), 0o700); err != nil { //nolint:gosec // an executable script
+	//nolint:gosec // an executable script
+	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(fakeTpScript), 0o700); err != nil {
 		return nil, err
 	}
 	sb.oldPath = os.Getenv("PATH")

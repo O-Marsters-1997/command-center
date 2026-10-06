@@ -61,9 +61,11 @@ func (a *Agent) Spawn(_ context.Context, cfg cc.SpawnConfig) (cc.SpawnResult, er
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextPid++
+	owner := a.issues[ownerIdx]
+	//nolint:gosec // reproducible demo data, not security
+	rng := rand.New(rand.NewPCG(uint64(a.seed), uint64(owner.number)))
 	run := &agentRun{
-		issue: a.issues[ownerIdx], worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(),
-		rng: rand.New(rand.NewPCG(uint64(a.seed), uint64(a.issues[ownerIdx].number))), //nolint:gosec // reproducible demo data, not security
+		issue: owner, worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(), rng: rng,
 	}
 	a.runs[a.nextPid] = run
 	if err := run.write(map[string]any{"type": "system", "subtype": "init", "session_id": branch}); err != nil {
