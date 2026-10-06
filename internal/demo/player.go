@@ -123,7 +123,12 @@ func (p *Player) MergeNow(number int) error {
 func (p *Player) Status() Status {
 	ctl := p.playback()
 	sim := p.current()
-	return Status{Paused: ctl.paused, Speed: ctl.speed, Elapsed: sim.Elapsed().Round(time.Second), PRs: sim.forge.OpenPRs()}
+	return Status{
+		Paused:  ctl.paused,
+		Speed:   ctl.speed,
+		Elapsed: sim.Elapsed().Round(time.Second),
+		PRs:     sim.forge.OpenPRs(),
+	}
 }
 
 func (p *Player) step(ctx context.Context) (time.Duration, error) {
