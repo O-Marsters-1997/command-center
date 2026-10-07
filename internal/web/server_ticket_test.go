@@ -223,7 +223,12 @@ func TestDetailRowRendersEditFormPrefilled(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(raw)
-	for _, want := range []string{`action="/ticket"`, `name="ticket" value="sandbox://CC-2"`, `name="branch" value="cc-2-second"`, `name="blocked_by" value="sandbox://CC-1"`} {
+	for _, want := range []string{
+		`action="/ticket"`,
+		`name="ticket" value="sandbox://CC-2"`,
+		`name="branch" value="cc-2-second"`,
+		`name="blocked_by" value="sandbox://CC-1"`,
+	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("detail row missing %s", want)
 		}
