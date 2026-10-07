@@ -189,9 +189,6 @@ func decode(line []byte) (logLine, error) {
 	return parsed, err
 }
 
-// forEachLine reads a transcript line by line, calling fn with each decoded line and the last
-// non-zero timestamp seen so far -- what a line carrying none of its own (a result line, a
-// rate_limit_event) is tagged with instead. A line that fails to decode is skipped, not failed.
 func forEachLine(logPath string, fn func(logLine, time.Time)) error {
 	f, err := os.Open(logPath)
 	if err != nil {
@@ -266,8 +263,7 @@ func (b contentBlock) toolEvent() Event {
 	return Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input)}
 }
 
-// resultText reads a tool result's content, which the CLI writes either as a bare string or as
-// the Messages API's content blocks.
+// The CLI writes a tool result's content either as a bare string or as Messages API blocks.
 func (b contentBlock) resultText() string {
 	var whole string
 	if json.Unmarshal(b.Content, &whole) == nil {
@@ -282,8 +278,7 @@ func (b contentBlock) resultText() string {
 	return blocks[0].Text
 }
 
-// primaryInputKeys is ordered most specific first because a tool's input schema carries several
-// of them at once: Bash has both command and description, and the command is the one to show.
+// Ordered most specific first: Bash input has both command and description.
 var primaryInputKeys = []string{"command", "file_path", "pattern", "path", "url", "query", "description", "prompt"}
 
 func primaryInput(input map[string]any) string {
