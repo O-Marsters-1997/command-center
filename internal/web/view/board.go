@@ -31,6 +31,7 @@ type Row struct {
 	Alive           bool     `json:"alive"`
 	Verbs           []string `json:"verbs"`
 	Branch          string   `json:"branch"`
+	BlockedBy       []string `json:"blocked_by"`
 	PendingVerbs    []string `json:"pending_verbs"`
 	Base            string   `json:"base"`
 	BaseVerdict     string   `json:"base_verdict"`
@@ -175,6 +176,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Verbs:          plan.Verbs(e.State),
 			PendingVerbs:   in.PendingVerbs[t.URL],
 			Branch:         t.Branch,
+			BlockedBy:      t.BlockedBy,
 			Base:           e.Unlock.BaseBranch,
 			Worktree:       in.Obs.Worktrees[plan.BranchKey(t.Repo, t.Branch)],
 			PRNumber:       pr.Number,

@@ -414,6 +414,16 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	s.renderBoard(w, r, boardSwap)
 }
 
+func nonBlank(values []string) []string {
+	var kept []string
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			kept = append(kept, v)
+		}
+	}
+	return kept
+}
+
 func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := r.ParseForm(); err != nil {
@@ -426,7 +436,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ticket and branch are both required", http.StatusBadRequest)
 		return
 	}
-	blockedBy := r.Form["blocked_by"]
+	blockedBy := nonBlank(r.Form["blocked_by"])
 
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {

@@ -51,6 +51,18 @@
     </div>
   </div>
   {{- end}}
+  <form method="post" action="/ticket" class="edit-ticket mt-3 flex flex-col gap-2">
+    <input type="hidden" name="ticket" value="{{.URL}}">
+    <label class="flex items-center gap-2"><span class="text-muted">branch</span><input type="text" name="branch" value="{{.Branch}}" required class="flex-1"></label>
+    <fieldset class="m-0 flex flex-col gap-1 border-0 p-0">
+      <legend class="text-muted">blocked by</legend>
+      {{- range .BlockedBy}}
+      <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+      {{- end}}
+      <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+    </fieldset>
+    <button type="submit" class="self-end">save</button>
+  </form>
   {{- if .FollowUpAvailable}}
   <form method="post" action="/verb" hx-post="{{or .VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML" class="follow-up mt-3 flex flex-col gap-2">
     <input type="hidden" name="ticket" value="{{.URL}}">
