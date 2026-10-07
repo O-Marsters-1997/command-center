@@ -7,8 +7,7 @@ ON CONFLICT (url) DO UPDATE SET
     status = excluded.status, feature = excluded.feature, synced_at = excluded.synced_at;
 
 -- name: Tickets :many
-SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at,
-       first_push_ci, hand_churn_lines
+SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at
 FROM tickets WHERE withdrawn_at IS NULL ORDER BY url;
 
 -- name: TicketFeature :one
@@ -53,19 +52,6 @@ SELECT at, ticket_id, kind, detail FROM events ORDER BY id;
 SELECT EXISTS (
     SELECT 1 FROM events WHERE ticket_id = $1 AND kind = $2
 ) AS found;
-
--- name: VerdictTransitionEvents :many
-SELECT e.ticket_id, e.at, e.detail
-FROM events e
-JOIN tickets t ON t.url = e.ticket_id
-WHERE e.kind = $1 AND t.first_push_ci IS NULL
-ORDER BY e.id;
-
--- name: SetFirstPushCI :exec
-UPDATE tickets SET first_push_ci = $1 WHERE url = $2 AND first_push_ci IS NULL;
-
--- name: SetHandChurnLines :exec
-UPDATE tickets SET hand_churn_lines = $1 WHERE url = $2;
 
 -- name: PutMeta :exec
 INSERT INTO meta (key, value) VALUES ($1, $2)

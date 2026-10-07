@@ -12,4 +12,3 @@ sql:
           baseline_sha: "BaselineSHA"
           base_sha_at_push: "BaseSHAAtPush"
           token_sha: "TokenSHA"
-          first_push_ci: "FirstPushCI"

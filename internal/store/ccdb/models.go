@@ -97,19 +97,17 @@ type Session struct {
 }
 
 type Ticket struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      json.RawMessage
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	WithdrawnAt    sql.NullTime
-	FirstPushCI    sql.NullBool
-	HandChurnLines sql.NullInt64
+	URL         string
+	Repo        string
+	Branch      string
+	BlockedBy   json.RawMessage
+	Source      string
+	Title       string
+	Body        string
+	Status      string
+	Feature     string
+	SyncedAt    string
+	WithdrawnAt sql.NullTime
 }
 
 type User struct {

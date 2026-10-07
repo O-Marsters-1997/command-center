@@ -168,34 +168,6 @@ func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) erro
 	return err
 }
 
-const setFirstPushCI = `-- name: SetFirstPushCI :exec
-UPDATE tickets SET first_push_ci = $1 WHERE url = $2 AND first_push_ci IS NULL
-`
-
-type SetFirstPushCIParams struct {
-	FirstPushCI sql.NullBool
-	URL         string
-}
-
-func (q *Queries) SetFirstPushCI(ctx context.Context, arg SetFirstPushCIParams) error {
-	_, err := q.db.ExecContext(ctx, setFirstPushCI, arg.FirstPushCI, arg.URL)
-	return err
-}
-
-const setHandChurnLines = `-- name: SetHandChurnLines :exec
-UPDATE tickets SET hand_churn_lines = $1 WHERE url = $2
-`
-
-type SetHandChurnLinesParams struct {
-	HandChurnLines sql.NullInt64
-	URL            string
-}
-
-func (q *Queries) SetHandChurnLines(ctx context.Context, arg SetHandChurnLinesParams) error {
-	_, err := q.db.ExecContext(ctx, setHandChurnLines, arg.HandChurnLines, arg.URL)
-	return err
-}
-
 const ticketBranch = `-- name: TicketBranch :one
 SELECT repo, branch FROM tickets WHERE url = $1
 `
@@ -235,24 +207,21 @@ func (q *Queries) TicketFeatureAny(ctx context.Context, url string) (string, err
 }
 
 const tickets = `-- name: Tickets :many
-SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at,
-       first_push_ci, hand_churn_lines
+SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at
 FROM tickets WHERE withdrawn_at IS NULL ORDER BY url
 `
 
 type TicketsRow struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      json.RawMessage
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	FirstPushCI    sql.NullBool
-	HandChurnLines sql.NullInt64
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy json.RawMessage
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	Feature   string
+	SyncedAt  string
 }
 
 func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
@@ -275,8 +244,6 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 			&i.Status,
 			&i.Feature,
 			&i.SyncedAt,
-			&i.FirstPushCI,
-			&i.HandChurnLines,
 		); err != nil {
 			return nil, err
 		}
@@ -398,43 +365,6 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) erro
 		arg.SyncedAt,
 	)
 	return err
-}
-
-const verdictTransitionEvents = `-- name: VerdictTransitionEvents :many
-SELECT e.ticket_id, e.at, e.detail
-FROM events e
-JOIN tickets t ON t.url = e.ticket_id
-WHERE e.kind = $1 AND t.first_push_ci IS NULL
-ORDER BY e.id
-`
-
-type VerdictTransitionEventsRow struct {
-	TicketID sql.NullString
-	At       time.Time
-	Detail   sql.NullString
-}
-
-func (q *Queries) VerdictTransitionEvents(ctx context.Context, kind string) ([]VerdictTransitionEventsRow, error) {
-	rows, err := q.db.QueryContext(ctx, verdictTransitionEvents, kind)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []VerdictTransitionEventsRow
-	for rows.Next() {
-		var i VerdictTransitionEventsRow
-		if err := rows.Scan(&i.TicketID, &i.At, &i.Detail); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const withdrawTicket = `-- name: WithdrawTicket :exec

@@ -127,13 +127,6 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			SyncedAt: row.SyncedAt,
 		}
 		_ = json.Unmarshal(row.BlockedBy, &t.BlockedBy) // jsonb rejects malformed JSON at write, so this can't fail
-		if row.FirstPushCI.Valid {
-			t.FirstPushCI = &row.FirstPushCI.Bool
-		}
-		if row.HandChurnLines.Valid {
-			lines := int(row.HandChurnLines.Int64)
-			t.HandChurnLines = &lines
-		}
 		tickets = append(tickets, t)
 	}
 	return tickets, nil
@@ -480,58 +473,6 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 		events = append(events, e)
 	}
 	return events, nil
-}
-
-// VerdictTransitionEvents returns every verdict_transition event, oldest first.
-func (s *Store) VerdictTransitionEvents(ctx context.Context) ([]Event, error) {
-	rows, err := s.q.VerdictTransitionEvents(ctx, EventVerdictTransition)
-	if err != nil {
-		return nil, fmt.Errorf("select verdict transition events: %w", err)
-	}
-
-	events := make([]Event, len(rows))
-	for i, row := range rows {
-		events[i] = Event{At: row.At, TicketURL: row.TicketID.String, Kind: EventVerdictTransition, Detail: row.Detail.String}
-	}
-	return events, nil
-}
-
-// FirstPushedAt returns each ticket's earliest recorded push time, keyed by ticket URL.
-func (s *Store) FirstPushedAt(ctx context.Context) (map[string]time.Time, error) {
-	rows, err := s.q.FirstPushedAt(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select first pushed at: %w", err)
-	}
-
-	at := make(map[string]time.Time, len(rows))
-	for _, row := range rows {
-		at[row.TicketID] = row.PushedAt
-	}
-	return at, nil
-}
-
-// SetFirstPushCI records the outcome of a ticket's first terminal CI verdict after its first
-// push. It is a no-op once set.
-func (s *Store) SetFirstPushCI(ctx context.Context, ticketURL string, passed bool) error {
-	err := s.q.SetFirstPushCI(ctx, ccdb.SetFirstPushCIParams{
-		URL: ticketURL, FirstPushCI: sql.NullBool{Bool: passed, Valid: true},
-	})
-	if err != nil {
-		return fmt.Errorf("set first push ci for %s: %w", ticketURL, err)
-	}
-	return nil
-}
-
-// SetHandChurnLines records the line count of commits cc did not make that landed on a
-// ticket's branch after its last recorded push, once its PR is observed merged.
-func (s *Store) SetHandChurnLines(ctx context.Context, ticketURL string, lines int) error {
-	err := s.q.SetHandChurnLines(ctx, ccdb.SetHandChurnLinesParams{
-		URL: ticketURL, HandChurnLines: sql.NullInt64{Int64: int64(lines), Valid: true},
-	})
-	if err != nil {
-		return fmt.Errorf("set hand churn lines for %s: %w", ticketURL, err)
-	}
-	return nil
 }
 
 func (s *Store) putMeta(ctx context.Context, key string, value any) error {

@@ -35,18 +35,17 @@ const (
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
-	store         *store.Store
-	observe       ObserveFunc
-	clock         Clock
-	forge         gh.Forge
-	worktrees     git.Worktrees
-	runner        runner.Runner
-	cfg           config.Config
-	ws            config.Workspace
-	trackerFor    tracker.Resolver
-	metricsParser MetricsParser
-	nudgeCh       chan struct{}
-	spawned       []string
+	store      *store.Store
+	observe    ObserveFunc
+	clock      Clock
+	forge      gh.Forge
+	worktrees  git.Worktrees
+	runner     runner.Runner
+	cfg        config.Config
+	ws         config.Workspace
+	trackerFor tracker.Resolver
+	nudgeCh    chan struct{}
+	spawned    []string
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
@@ -57,16 +56,11 @@ func NewLoop(
 ) *Loop {
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
-		worktrees:     git.CLI{},
-		trackerFor:    tracker.New,
-		metricsParser: agentlog.ParseMetrics,
-		nudgeCh:       make(chan struct{}, 1),
+		worktrees:  git.CLI{},
+		trackerFor: tracker.New,
+		nudgeCh:    make(chan struct{}, 1),
 	}
 }
-
-// SetMetricsParser replaces the loop's agentlog.ParseMetrics, so a test can drive disposeRun with
-// a fake parser rather than a real log file on disk.
-func (l *Loop) SetMetricsParser(parser MetricsParser) { l.metricsParser = parser }
 
 // Nudge wakes Run for one tick right now rather than at the end of store.TickPeriod. A nudge that
 // finds the buffer full is dropped, not queued: the tick already in flight will pick up
@@ -153,9 +147,6 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 		return err
 	}
 	if err := l.recordVerdictTransitions(ctx, obs); err != nil {
-		return err
-	}
-	if err := l.recordFirstPushCI(ctx); err != nil {
 		return err
 	}
 	return l.recordMergedEvents(ctx, obs)
@@ -408,7 +399,7 @@ func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
 	if logPath == "" {
 		return nil
 	}
-	metrics, err := l.metricsParser(logPath)
+	metrics, err := agentlog.ParseMetrics(logPath)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Printf("parse run metrics %s: %v", logPath, err)

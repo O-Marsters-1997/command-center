@@ -9,20 +9,17 @@ import (
 
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
 // tracker's, refreshed on every import; Branch and BlockedBy are the app's, seeded once.
-// FirstPushCI and HandChurnLines stay nil until observed, then are never overwritten.
 type Ticket struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      []string
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	FirstPushCI    *bool
-	HandChurnLines *int
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy []string
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	Feature   string
+	SyncedAt  string
 }
 
 func (t Ticket) Plan() plan.Ticket {

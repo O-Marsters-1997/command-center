@@ -135,61 +135,6 @@ func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
 	}
 }
 
-// RunAwaitingMetricsBackfill is one disposed run a backfill pass must try: it has a log path but
-// no metrics written yet.
-type RunAwaitingMetricsBackfill struct {
-	ID      int64
-	LogPath string
-}
-
-// RunsAwaitingMetricsBackfill returns every run with a log_path but no metrics written yet.
-func (s *Store) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunAwaitingMetricsBackfill, error) {
-	rows, err := s.q.RunsAwaitingMetricsBackfill(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select runs awaiting metrics backfill: %w", err)
-	}
-	var runs []RunAwaitingMetricsBackfill
-	for _, row := range rows {
-		runs = append(runs, RunAwaitingMetricsBackfill{ID: row.ID, LogPath: row.LogPath.String})
-	}
-	return runs, nil
-}
-
-// BackfillRunMetrics writes one run's metrics columns and per-request rows in one
-// transaction, leaving outcome, exit_code and ended_at untouched.
-func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics agentlog.RunMetrics) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-	qtx := s.q.WithTx(tx)
-
-	m := runMetricsColumns(&metrics)
-	if err = qtx.BackfillRunMetrics(ctx, ccdb.BackfillRunMetricsParams{
-		TokensIn:       m.TokensIn,
-		TokensOut:      m.TokensOut,
-		Turns:          m.Turns,
-		DurationMs:     m.DurationMs,
-		CostUsd:        m.CostUsd,
-		ToolCalls:      m.ToolCalls,
-		ToolFailures:   m.ToolFailures,
-		Model:          m.Model,
-		MetricsSettled: m.MetricsSettled,
-		ID:             runID,
-	}); err != nil {
-		return fmt.Errorf("backfill metrics for run %d: %w", runID, err)
-	}
-	if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 // RunRequest is one run_requests row: one deduplicated request_id's usage, attributed to its
 // thread -- the main run or the tool_use id of the Task call that spawned it.
 type RunRequest struct {
