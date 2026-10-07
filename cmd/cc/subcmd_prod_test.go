@@ -45,6 +45,12 @@ func TestUseraddAndPasswdPrintAPasswordThatVerifies(t *testing.T) {
 	if err := useradd(ctx, configPath, nil); err == nil {
 		t.Error("useradd with no email = nil error, want usage")
 	}
+	if err := passwd(ctx, configPath, []string{"nobody@example.com"}); err == nil {
+		t.Error("passwd for an unknown email = nil error, want a failure")
+	}
+	if err := useradd(ctx, configPath, []string{"olly@example.com"}); err == nil {
+		t.Error("useradd for an existing email = nil error, want a failure")
+	}
 }
 
 func verifies(t *testing.T, dsn, email, password string) bool {
@@ -69,9 +75,12 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	orig := os.Stdout
 	os.Stdout = w
-	fn()
-	os.Stdout = orig
+	func() {
+		defer func() { os.Stdout = orig }()
+		fn()
+	}()
 	w.Close()
+	t.Cleanup(func() { r.Close() })
 	out, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err)
