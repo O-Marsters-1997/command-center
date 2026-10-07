@@ -75,13 +75,8 @@
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
       {{- else if eq . $row.FollowUpVerb -}}
-      {{- else if destructive .}}
-      <form method="get" action="/confirm">
-        <input type="hidden" name="ticket" value="{{$row.URL}}">
-        <button type="submit" name="verb" value="{{.}}">{{.}}</button>
-      </form>
       {{- else}}
-      <form method="post" action="/verb" hx-post="{{or $row.VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML">
+      <form method="post" action="/verb" hx-post="{{or $row.VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML"{{with confirmation . $row.Row}} hx-confirm="{{.}}"{{end}}>
         <input type="hidden" name="ticket" value="{{$row.URL}}">
         <button type="submit" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}

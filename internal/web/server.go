@@ -33,9 +33,9 @@ var page = template.Must(template.New("page").
 		"child": func(r view.Row, depth int, scope, featureScope string) rowSlot {
 			return newRowSlot(r, false, depth, scope, featureScope)
 		},
-		"destructive": func(verb string) bool { _, ok := destructiveVerbs[verb]; return ok },
-		"percent":     view.PercentOf,
-		"raw":         func(s string) template.HTML { return template.HTML(s) },
+		"confirmation": confirmation,
+		"percent":      view.PercentOf,
+		"raw":          func(s string) template.HTML { return template.HTML(s) },
 	}).
 	Parse(pageSource))
 
@@ -144,7 +144,6 @@ func NewServer(store *store.Store, clock Clock, repos []config.Repo, dataDir str
 	mux.HandleFunc("POST /features/{feature}/import", s.handleImportFeature)
 	mux.HandleFunc("GET /launch/candidates", s.handleCandidates)
 	mux.HandleFunc("GET /events", s.handleEvents)
-	mux.HandleFunc("GET /confirm", s.handleConfirm)
 	mux.HandleFunc("POST /launch/open", s.handleLaunchOpen)
 	mux.HandleFunc("POST /launch", s.handleLaunch)
 	mux.HandleFunc("POST /verb", s.handleVerb)
