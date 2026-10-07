@@ -46,7 +46,8 @@ func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflic
 }
 
 // ProspectiveBase is the base an OnUnlock row would get once unlocked, computed without an
-// existing PR by the rule Unlocked applies to its single-blocker, open-PR arm.
+// existing PR by the rule Unlocked applies to its single-blocker, open-PR arm. Unlock.BaseBranch stays empty for
+// a blocked row.
 func ProspectiveBase(t Ticket, byURL map[string]Ticket, stacking bool) string {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {

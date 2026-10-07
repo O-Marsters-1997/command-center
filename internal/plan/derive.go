@@ -14,6 +14,7 @@ import (
 
 const RunKindResolve = "resolve"
 
+// BranchKey is the repo-qualified key every branch-keyed Observation map must use.
 func BranchKey(repo, branch string) string { return repo + "//" + branch }
 
 type LaunchMembership struct {
