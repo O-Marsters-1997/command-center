@@ -1,5 +1,4 @@
 // Command cc runs the Command Centre: one reconcile loop plus one status page.
-// See docs/designs/command-centre-design.md.
 package main
 
 import (
@@ -35,9 +34,6 @@ func main() {
 	}
 }
 
-// runOptions is nil in the release binary; register_e2e.go's e2e build points it at the same
-// checkout override `cc tick` uses, so `cc-daemon` doesn't try to dial a sandbox repo's
-// undialable remote either.
 var runOptions []app.Option
 
 func run(ctx context.Context, configPath string) (err error) {

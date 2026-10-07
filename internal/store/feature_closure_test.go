@@ -16,8 +16,8 @@ func TestCloseUnderBlockedByAllowsABlockerInsideTheFeature(t *testing.T) {
 	}
 }
 
-// TestCloseUnderBlockedByAllowsAWithdrawnUnmergedBlockerStillTaggedToTheFeature pins the other
-// half of issue #235 (already shipped): a blocker withdrawn without merging is never reassigned,
+// TestCloseUnderBlockedByAllowsAWithdrawnUnmergedBlockerStillTaggedToTheFeature
+// pins that a blocker withdrawn without merging is never reassigned,
 // so it must not manufacture a closure violation just for being momentarily inactive.
 func TestCloseUnderBlockedByAllowsAWithdrawnUnmergedBlockerStillTaggedToTheFeature(t *testing.T) {
 	t.Parallel()

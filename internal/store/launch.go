@@ -11,16 +11,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// launchPayload is an intent's free-form payload for verb "launch". group ties every intent
-// from one POST /launch call together, without a batch-key column: the frozen v1 schema's
-// intents.payload is free-form JSON precisely so this needs no migration.
 type launchPayload struct {
 	PromptHash string `json:"prompt_hash"`
 	Group      string `json:"group"`
 }
 
-// QueueLaunchIntent records one ticket's authorisation to launch. The next tick's
-// ApplyLaunchIntents turns every intent sharing a group into one launches row.
+// QueueLaunchIntent records one ticket's authorisation to launch.
 func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, group string, at time.Time) error {
 	payload, err := json.Marshal(launchPayload{PromptHash: promptHash, Group: group})
 	if err != nil {
@@ -37,9 +33,8 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 	return nil
 }
 
-// ApplyLaunchIntents turns every unconsumed launch intent into a launch: one launches row per
-// group plus one launch_members row per intent. Called once per tick; every intent it touches
-// it also marks consumed, so re-applying with nothing new queued is a no-op.
+// ApplyLaunchIntents turns every unconsumed launch intent into a launches row per group
+// plus a launch_members row per intent, marking each consumed.
 func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -72,8 +67,6 @@ type pendingIntent struct {
 	promptHash string
 }
 
-// pendingLaunchIntents reads every unconsumed launch intent and groups it by its payload's
-// group field. order preserves first-seen group order, so launches are created deterministically.
 func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pendingIntent, []string, error) {
 	rows, err := q.PendingLaunchIntents(ctx)
 	if err != nil {
@@ -122,8 +115,8 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	return nil
 }
 
-// LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus that
-// launch's member count — and Cancelled for a ticket whose launch was cancelled and not relaunched.
+// LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
+// Cancelled entry for a ticket whose launch was cancelled and not relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
 	rows, err := s.q.LaunchMemberships(ctx)
 	if err != nil {
@@ -152,7 +145,7 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMe
 }
 
 // CancelLaunchesFor cancels every active launch the ticket belongs to, returning how many
-// memberships those launches withdraw — the named ticket's own included.
+// memberships it withdraws.
 func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (members int, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

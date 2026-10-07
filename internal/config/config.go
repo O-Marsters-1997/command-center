@@ -17,7 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// Config is the user-edited TOML file named by --config. See docs/designs/command-centre-design.md §8.
+// Config is the user-edited TOML file named by --config.
 type Config struct {
 	// DataDir holds the resolved data directory after LoadConfig, not the raw config key.
 	DataDir string `toml:"data_dir"`
@@ -31,18 +31,17 @@ type Config struct {
 	// MaxTurns caps a spawned run at this many agent turns, appended to AgentCommand as
 	// --max-turns. Zero (the default) sets no cap.
 	MaxTurns int `toml:"max_turns"`
-	// SpendLimit5h is the percent of the account's five-hour window at or above which
-	// launchEligible spawns nothing new (CC-314); 0 means unset, so nothing is ever paused.
+	// SpendLimit5h is the percent of the account's five-hour window at or above which nothing new
+	// spawns; 0 means unset.
 	SpendLimit5h int `toml:"spend_limit_5h"`
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
 	BoardPollSeconds int    `toml:"board_poll_seconds"`
 	Repos            []Repo `toml:"repo"`
 }
 
-// Repo is one [[repo]] block. A repo is located by Remote, a git URL the app clones, or by
-// Path, an existing checkout. Exactly one of the two.
-// Checks, MergifySHA and CompatCheck are all empty until a repo opts into a CI verdict, matching
-// the pre-Phase-5 behaviour where every row stops at checking (docs/designs/command-centre-design.md § 11 inv. 11).
+// Repo is one [[repo]] block, located by Remote (a git URL the app clones) or Path (an
+// existing checkout); exactly one. Checks, MergifySHA and CompatCheck are empty until the repo
+// opts into a CI verdict.
 type Repo struct {
 	Name   string `toml:"name"`
 	Remote string `toml:"remote"`
@@ -55,8 +54,7 @@ type Repo struct {
 	MergifySHA  string            `toml:"mergify_sha"`
 	Deny        []string          `toml:"deny"`
 	Checks      verdict.Predicate `toml:"checks"`
-	// VerifyCommand is the argv a clean refresh or restack is verified with before the row is
-	// offered as sound (issue #110); empty means the repo opted out.
+	// VerifyCommand is the argv a clean refresh or restack is verified with; empty means opted out.
 	VerifyCommand []string `toml:"verify_command"`
 	// Generated names the paths this repo's build regenerates, glob-matched against a conflict
 	// with origin/main; empty means the repo opted out.
@@ -75,9 +73,8 @@ const (
 	DefaultBoardPollSeconds = 5
 )
 
-// defaultAgentCommand is the argv a config naming no agent_command gets. The model is named
-// explicitly because the CLI's own default tracks Anthropic's latest release, so leaving it off
-// would change what every run is built by without this repo changing (§8).
+// The model is named explicitly because the claude CLI's own default tracks Anthropic's
+// latest release.
 var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
@@ -141,7 +138,6 @@ func LoadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-// agentCommandEnv replaces agent_command with a machine-local wrapper, as a JSON array.
 const agentCommandEnv = "CC_AGENT_COMMAND"
 
 func applyAgentCommandEnv(cfg *Config) error {

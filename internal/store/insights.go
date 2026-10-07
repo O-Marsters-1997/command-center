@@ -8,8 +8,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// TicketSpend is one merged ticket's weight: every run disposed before its pr_merged event,
-// summed by kind, in dollars.
+// TicketSpend is one merged ticket's dollar weight, summed by run kind.
 type TicketSpend struct {
 	Ticket      string
 	Title       string
@@ -24,8 +23,8 @@ func (t TicketSpend) TotalUSD() float64 {
 	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
 }
 
-// MergedTicketSpend returns one point per ticket whose pr_merged event falls in [since, until],
-// weighing every run disposed before that event.
+// MergedTicketSpend returns one point per ticket whose pr_merged event falls in
+// [since, until], weighing every run disposed before that event.
 func (s *Store) MergedTicketSpend(
 	ctx context.Context, repo, feature, tz string, since, until time.Time,
 ) ([]TicketSpend, error) {
@@ -57,9 +56,8 @@ func (t BoardTicketSpend) TotalUSD() float64 {
 	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
 }
 
-// BoardTicketSpend returns every ticket in scope's own weight, keyed by ticket URL, weighing every
-// run disposed before its own pr_merged event when merged, or every run disposed so far when
-// still open.
+// BoardTicketSpend returns every ticket in scope's weight, keyed by ticket URL: runs
+// disposed before pr_merged when merged, every disposed run when open.
 func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map[string]BoardTicketSpend, error) {
 	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{Repo: repo, Feature: feature})
 	if err != nil {
@@ -75,8 +73,7 @@ func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map
 	return byURL, nil
 }
 
-// WithdrawnTicketWaste sums every disposed run belonging to a ticket withdrawn, by its own
-// withdrawal time, without ever merging.
+// WithdrawnTicketWaste sums every disposed run of a ticket withdrawn without merging.
 func (s *Store) WithdrawnTicketWaste(
 	ctx context.Context, repo, feature, tz string, since, until time.Time,
 ) (float64, error) {

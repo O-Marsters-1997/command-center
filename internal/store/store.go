@@ -21,8 +21,8 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Store is the Postgres database. Only the loop goroutine writes reconciled state (inv. 9,
-// narrowed by ADR 11); CreateUser is this store's one exception.
+// Store is the Postgres database. Only the loop goroutine writes reconciled state;
+// CreateUser is the one exception, and handlers only queue intents.
 type Store struct {
 	db *sql.DB
 	q  *ccdb.Queries
@@ -48,8 +48,8 @@ var (
 	gooseSetupErr error
 )
 
-// setUpGoose configures goose once per process. goose keeps its base FS, logger and dialect in
-// package-level globals, so setting them per OpenStore races between two concurrent opens.
+// goose keeps its base FS, logger and dialect in package-level globals, so setting them
+// per OpenStore races between concurrent opens.
 func setUpGoose() error {
 	gooseOnce.Do(func() {
 		goose.SetBaseFS(migrations)
@@ -71,9 +71,8 @@ func (s *Store) init(ctx context.Context) error {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// UpsertTickets writes a ticket row directly, every column at once, keyed on url. Production no
-// longer calls this itself -- ImportTickets is the tracker's own write path -- but it stays as
-// the direct-write counterpart tests use to seed a fixture with an exact row.
+// UpsertTickets writes a ticket row directly, every column at once, keyed on url.
+// Tests use it to seed an exact row; production imports through ImportTickets.
 func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -153,11 +152,9 @@ func (e *FeatureConflictError) Error() string {
 
 func (e *FeatureConflictError) refusedTicket() string { return e.URL }
 
-// ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing (and later
-// restoring) any row the tracker stops (or resumes) returning for that feature. Every
-// tracker-owned column refreshes each call; branch and blocked_by are seeded once and left to
-// POST /ticket after that, except that a merged-and-withdrawn blocker is pruned out of every
-// other ticket's blocked_by (see repairBlockedBy) rather than left stale forever.
+// ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing and later
+// restoring rows the tracker stops and resumes returning. branch and blocked_by are seeded
+// once; a merged-and-withdrawn blocker is pruned from every other ticket's blocked_by.
 func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
 ) (err error) {
@@ -254,10 +251,6 @@ func (s *Store) ImportTickets(
 	return tx.Commit()
 }
 
-// repairBlockedBy prunes every merged-and-withdrawn url out of every other (live) ticket's
-// stored blocked_by, across every feature. blocked_by is otherwise write-once after a ticket's
-// first import (#215's app-owned split), so once its blocker merges and withdraws, nothing else
-// ever revisits the stale edge and the dependent is stuck at blocked forever (issue #235).
 func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[string]bool) error {
 	if len(withdrawn) == 0 {
 		return nil
@@ -292,8 +285,7 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 }
 
 // WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
-// their foreign key to it. When merged is true, it also prunes the ticket's URL out of every
-// other ticket's blocked_by in the same transaction, mirroring ImportTickets' repairBlockedBy.
+// their foreign key. When merged, it also prunes the URL from every other ticket's blocked_by.
 func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -324,13 +316,10 @@ func nonNil(s []string) []string {
 	return s
 }
 
-// notNull wraps s as an always-valid sql.NullString, for a nullable column this package always
-// writes a real value into, never an explicit NULL.
 func notNull(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
-// notNullTime is notNull's sql.NullTime counterpart.
 func notNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t, Valid: true}
 }
@@ -344,9 +333,7 @@ const (
 )
 
 // CheckingTicks returns each ticket's count of successful ticks since it last had anything to
-// resolve into a CI verdict. verdict.Input.Now is derived from this, never wall clock, so a
-// GitHub outage cannot walk every in-flight row to needs_you the moment it ends
-// (docs/designs/command-centre-design.md § 11 inv. 11).
+// resolve into a CI verdict. verdict.Input.Now derives from this, never wall clock.
 func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	ticks := map[string]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
@@ -355,9 +342,7 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	return ticks, nil
 }
 
-// IncrementCheckingTicks bumps every named ticket's counter by one -- called once per successful
-// tick, never on a failed observe, which is what makes the counter track successful ticks,
-// not wall time.
+// IncrementCheckingTicks bumps every named ticket's counter by one per successful tick.
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -369,9 +354,7 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string)
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// ResetCheckingTicks zeroes one ticket's counter -- called by RecordPush (pushes.go) on every
-// fresh push, so a re-run's second push starts its own bounded wait rather than inheriting the
-// first push's.
+// ResetCheckingTicks zeroes one ticket's counter on every fresh push.
 func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -384,9 +367,7 @@ func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
 	return s.putMeta(ctx, metaCheckingTicks, ticks)
 }
 
-// LastVerdicts returns each ticket's most recently recorded CI verdict label ("review_me",
-// "needs_you" or "checking"), keyed by ticket URL -- what recordVerdictTransitions (loop.go)
-// compares this tick's freshly computed verdict against before logging a transition event.
+// LastVerdicts returns each ticket's most recently recorded CI verdict label, keyed by ticket URL.
 func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
@@ -399,8 +380,7 @@ func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string
 	return s.putMeta(ctx, metaLastVerdicts, verdicts)
 }
 
-// SaveObservation replaces the persisted observation. Only a successful tick calls it, which
-// is what makes the page's observe age an honest inv. 10 signal.
+// SaveObservation replaces the persisted observation. Only a successful tick calls it.
 func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
 	return s.putMeta(ctx, metaObservation, obs)
 }
@@ -411,7 +391,6 @@ func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, er
 	return obs, found, err
 }
 
-// RecordTickError stores the last tick failure and appends its audit row.
 func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	if err := s.putMeta(ctx, metaLastError, tickErr); err != nil {
 		return err
@@ -419,15 +398,14 @@ func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	return s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message})
 }
 
-// LastError returns the last tick failure, if there has been one. It is not cleared by a
-// later success: the page shows both ages.
+// LastError returns the last tick failure. A later success does not clear it.
 func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
 	return tickErr, found, err
 }
 
-// ImportError is the last feature-conflict import refusal, rendered on GET /features.
+// ImportError is the last feature-conflict import refusal.
 type ImportError struct {
 	At      time.Time `json:"at"`
 	Feature string    `json:"feature"`
@@ -450,7 +428,7 @@ func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal
 	})
 }
 
-// LastImportError returns the last import refusal, if any; it is not cleared by a later success.
+// LastImportError returns the last import refusal; a later success does not clear it.
 func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) {
 	var importErr ImportError
 	found, err := s.getMeta(ctx, metaImportError, &importErr)
@@ -478,7 +456,6 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	return nil
 }
 
-// HasEvent reports whether ticketURL already has an event of kind.
 func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, error) {
 	found, err := s.q.HasEvent(ctx, ccdb.HasEventParams{
 		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
@@ -490,7 +467,6 @@ func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, err
 	return found, nil
 }
 
-// Events returns every audit row, oldest first.
 func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	rows, err := s.q.Events(ctx)
 	if err != nil {
@@ -506,8 +482,7 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	return events, nil
 }
 
-// VerdictTransitionEvents returns every verdict_transition event, oldest first -- what
-// recordFirstPushCI scans for the first terminal verdict at or after a ticket's first push.
+// VerdictTransitionEvents returns every verdict_transition event, oldest first.
 func (s *Store) VerdictTransitionEvents(ctx context.Context) ([]Event, error) {
 	rows, err := s.q.VerdictTransitionEvents(ctx, EventVerdictTransition)
 	if err != nil {
@@ -536,7 +511,7 @@ func (s *Store) FirstPushedAt(ctx context.Context) (map[string]time.Time, error)
 }
 
 // SetFirstPushCI records the outcome of a ticket's first terminal CI verdict after its first
-// push. A no-op once already set (inv. the ticket's very first verdict, never a later one).
+// push. It is a no-op once set.
 func (s *Store) SetFirstPushCI(ctx context.Context, ticketURL string, passed bool) error {
 	err := s.q.SetFirstPushCI(ctx, ccdb.SetFirstPushCIParams{
 		URL: ticketURL, FirstPushCI: sql.NullBool{Bool: passed, Valid: true},
@@ -547,8 +522,8 @@ func (s *Store) SetFirstPushCI(ctx context.Context, ticketURL string, passed boo
 	return nil
 }
 
-// SetHandChurnLines records the line count of commits cc did not make that landed on a ticket's
-// branch after its last recorded push, once its PR is observed merged.
+// SetHandChurnLines records the line count of commits cc did not make that landed on a
+// ticket's branch after its last recorded push, once its PR is observed merged.
 func (s *Store) SetHandChurnLines(ctx context.Context, ticketURL string, lines int) error {
 	err := s.q.SetHandChurnLines(ctx, ccdb.SetHandChurnLinesParams{
 		URL: ticketURL, HandChurnLines: sql.NullInt64{Int64: int64(lines), Valid: true},

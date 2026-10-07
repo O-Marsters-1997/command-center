@@ -9,15 +9,13 @@ import (
 	"syscall"
 )
 
-// Flock is an exclusive advisory lock on a path, held for the life of the process (inv. 9:
-// one app instance per workspace).
+// Flock is an exclusive advisory lock on a path, held for the life of the process.
 type Flock struct {
 	f *os.File
 }
 
 // Lock takes an exclusive non-blocking flock on path, creating the file if needed.
-// The lock is taken on the DB path itself, so a second instance is refused before it opens
-// SQLite and before it can write anything.
+// A second holder is refused with an error naming the workspace.
 func Lock(path string) (*Flock, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {

@@ -300,7 +300,7 @@ mergify_sha = "sha256:deadbeef"
 `
 
 // TestLoadConfigParsesChecks decodes [repo.checks] straight into verdict.Predicate — the same
-// struct internal/verdict.Evaluate takes, with no intermediate DTO (issue #6).
+// struct internal/verdict.Evaluate takes, with no intermediate DTO.
 func TestLoadConfigParsesChecks(t *testing.T) {
 	t.Parallel()
 

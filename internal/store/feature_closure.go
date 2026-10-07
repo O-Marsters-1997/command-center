@@ -9,8 +9,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// FeatureClosureError reports a ticket blocked by a ticket outside its own feature, whose pull
-// request has not merged: a feature is closed under blocked_by, or the import/edit refuses.
+// FeatureClosureError reports a ticket blocked by an unmerged ticket outside its own
+// feature; the import or edit is refused.
 type FeatureClosureError struct {
 	Feature, URL, Blocker, BlockerFeature string
 }
@@ -81,9 +81,8 @@ func featureTicketsWithOverride(
 	for _, row := range rows {
 		blockedBy := override
 		if row.URL != overrideURL {
-			// A fresh nil slice, never override's backing array: json.Unmarshal reuses a
-			// destination slice's capacity, so decoding into override here would overwrite the
-			// very edit this closure check is validating.
+			// json.Unmarshal reuses a destination slice's capacity, so decoding into override
+			// would overwrite the edit under validation.
 			var decoded []string
 			if err := json.Unmarshal(row.BlockedBy, &decoded); err != nil {
 				return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)

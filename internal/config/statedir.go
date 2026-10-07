@@ -15,12 +15,12 @@ type Workspace struct {
 	StateDir string
 	// ReposDir holds one checkout per configured repo, named after the repo.
 	ReposDir string
-	// LockPath is the file the one-instance-per-workspace flock is taken on (inv. 9).
+	// LockPath is the file the one-instance-per-workspace flock is taken on.
 	LockPath string
 	// RunsDir holds one <run-id>.jsonl per run: agent stdout and stderr, redirected, never
 	// piped, outside any checkout so a crash never loses it.
 	RunsDir string
-	// SettingsPath is the app-owned deny settings file passed to every spawn (inv. 17).
+	// SettingsPath is the app-owned deny settings file passed to every spawn.
 	SettingsPath string
 	// SystemPromptPath is the app-owned system prompt appended to every spawn, warning it that
 	// its session is single-shot.
@@ -29,17 +29,13 @@ type Workspace struct {
 	AgentsPath string
 }
 
-// dataDirEnv names the data directory when the config file does not.
 const dataDirEnv = "CC_DATA_DIR"
 
-// databaseURLEnv names the database when the config file does not.
 const (
 	databaseURLEnv     = "CC_DATABASE_URL"
 	defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
 )
 
-// resolveDatabaseURL answers which database the app connects to: the config's own database_url,
-// else CC_DATABASE_URL, else the local compose server.
 func resolveDatabaseURL(configured string) string {
 	if configured != "" {
 		return configured
@@ -71,8 +67,6 @@ func ResolveDataDir(configured string) (string, error) {
 	return filepath.Abs(dir)
 }
 
-// defaultClaudeProjectsDir names where the Claude CLI itself writes every session transcript,
-// interactive and agent alike.
 const defaultClaudeProjectsDir = "~/.claude/projects"
 
 // ResolveClaudeProjectsDir answers where usage.Weigh reads transcripts from: the config's own
