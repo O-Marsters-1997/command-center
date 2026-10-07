@@ -14,6 +14,7 @@ import (
 	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -891,7 +892,7 @@ func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
 	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
-	server := cc.NewServer(store, cc.RealClock{}, repos, "")
+	server := web.NewServer(store, cc.RealClock{}, repos, "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
@@ -925,7 +926,7 @@ func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
 	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
-	server := cc.NewServer(store, cc.RealClock{}, repos, "")
+	server := web.NewServer(store, cc.RealClock{}, repos, "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
@@ -958,7 +959,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := cc.NewServer(store, cc.RealClock{}, nil, "")
+	server := web.NewServer(store, cc.RealClock{}, nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
 	if rec.Code != http.StatusOK {
@@ -978,7 +979,7 @@ func TestHandleFeaturesFiltersByQuery(t *testing.T) {
 	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
 	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
 
-	server := cc.NewServer(openStore(t), cc.RealClock{}, repos, "")
+	server := web.NewServer(openStore(t), cc.RealClock{}, repos, "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 
 	rec := httptest.NewRecorder()
@@ -998,7 +999,7 @@ func TestHandleFeaturesFiltersByQuery(t *testing.T) {
 func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := noRedirect(srv).Get(srv.URL + "/features/" + url.PathEscape("project:x"))
@@ -1019,7 +1020,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := cc.NewServer(store, cc.RealClock{}, nil, "")
+	server := web.NewServer(store, cc.RealClock{}, nil, "")
 	var nudged atomic.Bool
 	server.SetNudge(func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
@@ -1056,7 +1057,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
@@ -1077,7 +1078,7 @@ func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
@@ -1093,7 +1094,7 @@ func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(cc.NewServer(openStore(t), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), cc.RealClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)

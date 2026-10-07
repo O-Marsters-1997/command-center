@@ -94,7 +94,8 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 |---|---|
 | `internal/config` | The TOML config, repo checkout paths and the workspace layout under the data directory. |
 | `internal/app` | Wiring: `App`, the `With*` options and the flock. |
-| `internal/cc` | The imperative shell. Postgres store, the tick, the page, push, verbs, observe. |
+| `internal/cc` | The imperative shell: the tick, push, verbs, observe. |
+| `internal/web` | The page: handlers, templates and assets. `internal/web/view` shapes the plan snapshot for them. |
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
 | `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
 | `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
@@ -154,7 +155,7 @@ needs the lease. `advanceOnto` and `restackBoundary` in
 
 ### The page
 
-`internal/cc/server.go` serves the shell, the board, the launch modal, the
+`internal/web/server.go` serves the shell, the board, the launch modal, the
 confirm page and a row's detail fragment, each `html/template` over an
 embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 `confirm.tmpl` and `detail.tmpl`.
@@ -170,7 +171,7 @@ embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 | `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
 | `GET /task/{task}/log` | The run's log tail, streamed as JSON over SSE. |
 | `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
-| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/cc/assets/dist/app.css` and committed. The board needs no network. |
+| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/web/assets/dist/app.css` and committed. The board needs no network. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
 
@@ -315,7 +316,7 @@ grammar, `pill`, `ribbon`, `meter` and the rest. The header, its chips and the
 stale banner use them; the board's own rows do not yet. Go emits no utility
 class anywhere, so nothing depends on Tailwind's scan and no class can be
 purged. `just assets` compiles it into
-`internal/cc/assets/dist/app.css`, which is committed the same way
+`internal/web/assets/dist/app.css`, which is committed the same way
 `htmx.min.js` is, so `go build` and `just ci` need no bun. Change `web/app.css`
 and you must commit the rebuilt output, or the `assets` job fails.
 

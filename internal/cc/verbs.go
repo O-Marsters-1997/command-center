@@ -24,22 +24,6 @@ const (
 	followUpVerb       = plan.VerbFollowUp
 )
 
-// supportedVerbs is every verb handleVerb (server.go) accepts.
-var supportedVerbs = map[string]bool{
-	killVerb:             true,
-	retryPushVerb:        true,
-	reRunVerb:            true,
-	reCheckVerb:          true,
-	closePRVerb:          true,
-	removeWorktreeVerb:   true,
-	cancelVerb:           true,
-	plan.VerbRefresh:     true,
-	abortVerb:            true,
-	resolveVerb:          true,
-	followUpVerb:         true,
-	commitResolutionVerb: true,
-}
-
 const (
 	eventReCheckRequested         = "re_check_requested"
 	eventReCheckRefused           = "re_check_refused"

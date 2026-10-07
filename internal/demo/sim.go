@@ -22,6 +22,7 @@ import (
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
@@ -45,7 +46,7 @@ type Sim struct {
 	agent    *Agent
 	store    *store.Store
 	loop     *cc.Loop
-	server   *cc.Server
+	server   *web.Server
 	issues   []issue
 
 	authorised  map[string]bool
@@ -113,7 +114,7 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	loop.SetForge(forge)
 	loop.SetWorktrees(NewWorktrees(issues))
 	loop.SetTrackerSource(resolve)
-	server := cc.NewServer(store, clock, cfg.Repos, ws.DataDir)
+	server := web.NewServer(store, clock, cfg.Repos, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
 

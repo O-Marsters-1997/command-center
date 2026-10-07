@@ -50,6 +50,10 @@ type TickError struct {
 // on why it woke. A verdict's checking time is counted in these.
 const TickPeriod = 15 * time.Second
 
+// ImportVerb is the intent verb whose ticket id is a feature label, queued by the web and consumed
+// by the loop.
+const ImportVerb = "import"
+
 // Event kinds both the loop writes and a Store read decodes.
 const (
 	EventImportRefused         = "import_refused"

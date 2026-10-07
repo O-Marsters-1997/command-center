@@ -37,7 +37,7 @@ deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
 
 # A conflict confined to these paths is resolved in the app: merge, run build_command, commit.
 # Naming no build_command opts the repo out, and every such conflict waits for the resolve verb.
-generated     = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"]
+generated     = ["internal/web/assets/dist/**", "internal/web/testdata/*.golden.html"]
 build_command = ["just", "assets"]
 
   [[repo.checks.all_of]]

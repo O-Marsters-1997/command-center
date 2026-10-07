@@ -10,7 +10,7 @@ func TestAllGenerated(t *testing.T) {
 	t.Parallel()
 
 	policy := plan.GeneratedPolicy{
-		Paths:        []string{"internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"},
+		Paths:        []string{"internal/web/assets/dist/**", "internal/web/testdata/*.golden.html"},
 		BuildCommand: []string{"just", "assets"},
 	}
 
@@ -21,22 +21,22 @@ func TestAllGenerated(t *testing.T) {
 	}{
 		{
 			name:      "a single generated path under the dir/** entry",
-			conflicts: []string{"internal/cc/assets/dist/app.css"},
+			conflicts: []string{"internal/web/assets/dist/app.css"},
 			want:      true,
 		},
 		{
 			name:      "a leaf glob match",
-			conflicts: []string{"internal/cc/testdata/board.golden.html"},
+			conflicts: []string{"internal/web/testdata/board.golden.html"},
 			want:      true,
 		},
 		{
 			name:      "every conflicted path generated",
-			conflicts: []string{"internal/cc/assets/dist/app.css", "internal/cc/testdata/board.golden.html"},
+			conflicts: []string{"internal/web/assets/dist/app.css", "internal/web/testdata/board.golden.html"},
 			want:      true,
 		},
 		{
 			name:      "one hand-written path among generated ones refuses the whole set",
-			conflicts: []string{"internal/cc/assets/dist/app.css", "internal/cc/push.go"},
+			conflicts: []string{"internal/web/assets/dist/app.css", "internal/cc/push.go"},
 			want:      false,
 		},
 		{
@@ -58,8 +58,8 @@ func TestAllGenerated(t *testing.T) {
 func TestAllGeneratedRefusesARepoThatNamedNoBuildCommand(t *testing.T) {
 	t.Parallel()
 
-	policy := plan.GeneratedPolicy{Paths: []string{"internal/cc/assets/dist/**"}}
-	conflicts := []string{"internal/cc/assets/dist/app.css"}
+	policy := plan.GeneratedPolicy{Paths: []string{"internal/web/assets/dist/**"}}
+	conflicts := []string{"internal/web/assets/dist/app.css"}
 
 	if got := plan.AllGenerated(conflicts, policy); got {
 		t.Errorf("AllGenerated(%v) = %v, want false: no build command means the repo opted out", conflicts, got)

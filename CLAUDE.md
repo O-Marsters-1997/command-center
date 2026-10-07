@@ -11,7 +11,7 @@ Glossary: `CONTEXT.md`. Mechanism: `docs/designs/command-centre-design.md`. Deci
 Read this before touching anything visual. The stack is unusual and the wrong assumption is
 expensive.
 
-- **Go `html/template` renders every page.** The templates are `internal/cc/*.tmpl`. There is no
+- **Go `html/template` renders every page.** The templates are `internal/web/*.tmpl`. There is no
   React, no Next, no app framework.
 - **htmx drives updates.** The board polls itself every five seconds and swaps its own `outerHTML`.
   Never remove or rename an `hx-` attribute, `id="board"`, or the `hx-preserve` detail row while
@@ -59,11 +59,11 @@ just assets        # bun install && bun run build, in web/
 just test          # or: go test ./...
 ```
 
-`internal/cc/assets/dist/app.css` is committed and CI diffs it, so a styling change is not finished
+`internal/web/assets/dist/app.css` is committed and CI diffs it, so a styling change is not finished
 until `just assets` has run and the built sheet is committed. Go never depends on Node: `test`,
 `e2e` and `lint` are Go-only.
 
-Golden files in `internal/cc/testdata/` regenerate with `go test ./internal/cc -update`. Read the
+Golden files in `internal/web/testdata/` regenerate with `go test ./internal/web -update`. Read the
 diff; it is the review.
 
 ## Constraints an agent will hit

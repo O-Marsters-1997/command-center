@@ -7,6 +7,7 @@ import (
 	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -207,7 +208,7 @@ func TestReCheckResetsTheCheckingWaitSoTheRowReadsCheckingOnceTheRerunIsObserved
 		t.Fatalf("RunOnce (post-rerun tick): %v", err)
 	}
 
-	page := renderPage(t, cc.NewServer(store, fixedClock(at), repos, ""))
+	page := renderPage(t, web.NewServer(store, fixedClock(at), repos, ""))
 	if state := rowState(t, page, ticket.URL); state != "checking" {
 		t.Fatalf("state once the rerun's check goes pending = %q, want checking", state)
 	}

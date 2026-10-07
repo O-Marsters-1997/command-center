@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../internal/cc";
+@source "../internal/web";
 
 @theme {
   --color-bg: oklch(99% 0.002 250);

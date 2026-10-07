@@ -59,7 +59,7 @@ stacking = true
 # Paths the build regenerates. When a conflict is confined to these paths, the app merges,
 # runs build_command, stages and commits, then offers the row without agent involvement.
 # Empty (default) means the repo opted out of generated-file auto-resolution.
-generated = ["internal/cc/assets/dist/**", "internal/cc/testdata/*.golden.html"]
+generated = ["internal/web/assets/dist/**", "internal/web/testdata/*.golden.html"]
 
 # Argv to regenerate the paths listed in generated. Runs in the worktree after a clean merge.
 # Empty (default) means generated-file auto-resolution is off; provide one to enable it.

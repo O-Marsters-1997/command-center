@@ -18,6 +18,42 @@ const (
 	VerbCommitResolution = "commit-resolution"
 )
 
+// IsRowVerb reports whether v is a verb POST /verb accepts against an existing ticket. Launch goes
+// through POST /launch's own preview and hash check instead.
+func IsRowVerb(v string) bool {
+	switch v {
+	case VerbKill, VerbReRun, VerbReCheck, VerbRetryPush, VerbClosePR, VerbRemoveWorktree, VerbCancel,
+		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbCommitResolution:
+		return true
+	}
+	return false
+}
+
+// VerdictLabel names a run's verdict for comparison against the last recorded one and as a row's
+// BaseVerdict. Empty for a nil fact (no run yet) or when no verdict flag is set, neither of which
+// counts as a transition.
+func VerdictLabel(fact *RunFact) string {
+	if fact == nil {
+		return ""
+	}
+	switch {
+	case fact.VerdictBaseMoved:
+		return "base_moved"
+	case fact.VerdictWaitingOnProducer:
+		return "waiting_on_producer_deploy"
+	case fact.VerdictReviewMe:
+		return "review_me"
+	case fact.VerdictCIFailed:
+		return "ci_failed"
+	case fact.VerdictNeedsYou:
+		return "needs_you"
+	case fact.VerdictReason != "":
+		return "checking"
+	default:
+		return ""
+	}
+}
+
 // Verbs is the verbs a row in this state offers, in the order the page renders them
 // (docs/prds/prd-command-centre.md § The states).
 func Verbs(s State) []string {

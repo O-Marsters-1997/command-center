@@ -12,10 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// importVerb is the intent verb the loop's applyImportIntents consumes. It is not in
-// supportedVerbs (verbs.go): that map is for verbs against an existing ticket, and an import
-// intent's own "ticket" id is a feature label, not a url.
-const importVerb = "import"
+const importVerb = store.ImportVerb
 
 // QueueImport queues one import intent for feature, which applyImportIntents performs on the
 // loop's next tick.

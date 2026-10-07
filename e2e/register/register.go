@@ -19,6 +19,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
@@ -113,7 +114,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(cc.NewServer(store, cc.RealClock{}, cfg.Repos, ws.DataDir))
+	server := httptest.NewServer(web.NewServer(store, cc.RealClock{}, cfg.Repos, ws.DataDir))
 	defer server.Close()
 
 	var body io.Reader

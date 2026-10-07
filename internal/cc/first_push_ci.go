@@ -37,7 +37,7 @@ func (l *Loop) recordFirstPushCI(ctx context.Context) error {
 	return nil
 }
 
-// terminalCIVerdict switches on verdictLabel's own vocabulary (verdict_transitions.go).
+// terminalCIVerdict switches on plan.VerdictLabel's own vocabulary.
 func terminalCIVerdict(detail string) (passed, terminal bool) {
 	label, _, _ := strings.Cut(detail, ":")
 	switch label {
