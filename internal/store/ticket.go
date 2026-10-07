@@ -42,7 +42,8 @@ type TickError struct {
 	Message string    `json:"message"`
 }
 
-// TickPeriod is the sleep after the loop's work; ticks never overlap.
+// TickPeriod is the sleep after the loop's work; ticks never overlap. A verdict's checking
+// time is counted in these.
 const TickPeriod = 15 * time.Second
 
 // ImportVerb is the intent verb whose ticket id is a feature label.

@@ -31,7 +31,7 @@ type Config struct {
 	// MaxTurns caps a spawned run at this many agent turns, appended to AgentCommand as
 	// --max-turns. Zero (the default) sets no cap.
 	MaxTurns int `toml:"max_turns"`
-	// SpendLimit5h is the percent of the five-hour window at or above which nothing new
+	// SpendLimit5h is the percent of the account's five-hour window at or above which nothing new
 	// spawns; 0 means unset.
 	SpendLimit5h int `toml:"spend_limit_5h"`
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.

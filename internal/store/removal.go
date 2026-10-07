@@ -6,7 +6,7 @@ import (
 )
 
 // RemovalRefusals returns each ticket's most recent remove-worktree refusal, keyed by
-// ticket URL. A successful removal withdraws the ticket, so a stale refusal never outlives its row.
+// ticket URL.
 func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) {
 	rows, err := s.q.LatestRemovalRefusals(ctx, EventRemoveWorktreeRefused)
 	if err != nil {

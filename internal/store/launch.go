@@ -115,7 +115,8 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	return nil
 }
 
-// LaunchMemberships returns every ticket in an active launch, keyed by ticket URL.
+// LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
+// Cancelled entry for a ticket whose launch was cancelled and not relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
 	rows, err := s.q.LaunchMemberships(ctx)
 	if err != nil {

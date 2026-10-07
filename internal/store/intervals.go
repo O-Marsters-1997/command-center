@@ -33,7 +33,8 @@ func (s *Store) LatestReadingsFull(ctx context.Context) (map[agentlog.Window]age
 }
 
 // RecordReadingsAndIntervals writes readings, then closes the interval each completes
-// against the window's previous stored reading, weighing transcripts under projectsDir.
+// against the window's previous stored reading, weighing transcripts under projectsDir. Weighing
+// happens at reading time because the claude CLI prunes transcripts later.
 func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agentlog.Reading, projectsDir string) error {
 	if len(readings) == 0 {
 		return nil
