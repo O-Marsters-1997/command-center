@@ -44,7 +44,6 @@ func TestKeyedOnFirstTwoWords(t *testing.T) {
 	fixture := stageFixture(t, `{
 		"pr list":   {"stdout": "[]"},
 		"pr create": {"stdout": "https://github.com/o/r/pull/1\n"},
-		"pr close":  {"stdout": "closed\n"},
 		"pr edit":   {"stdout": "edited\n"}
 	}`)
 
@@ -57,7 +56,6 @@ func TestKeyedOnFirstTwoWords(t *testing.T) {
 		{"list", []string{"pr", "list", "--json", "number,state"}, "[]", 0},
 		{"create", []string{"pr", "create", "--base", "main", "--label", "keep-open"},
 			"https://github.com/o/r/pull/1\n", 0},
-		{"close", []string{"pr", "close", "1"}, "closed\n", 0},
 		{"edit", []string{"pr", "edit", "1", "--add-label", "keep-open"}, "edited\n", 0},
 		{"unknown verb", []string{"pr", "merge", "1"}, "", 1},
 		{"no args", nil, "", 1},

@@ -4,9 +4,7 @@ const (
 	VerbLaunch           = "launch"
 	VerbKill             = "kill"
 	VerbReRun            = "re-run"
-	VerbReCheck          = "re-check"
 	VerbRetryPush        = "retry-push"
-	VerbClosePR          = "close-pr"
 	VerbRemoveWorktree   = "remove-worktree"
 	VerbCancel           = "cancel"
 	VerbRefresh          = "refresh"
@@ -18,7 +16,7 @@ const (
 
 func IsRowVerb(v string) bool {
 	switch v {
-	case VerbKill, VerbReRun, VerbReCheck, VerbRetryPush, VerbClosePR, VerbRemoveWorktree, VerbCancel,
+	case VerbKill, VerbReRun, VerbRetryPush, VerbRemoveWorktree, VerbCancel,
 		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbCommitResolution:
 		return true
 	}
@@ -62,15 +60,13 @@ func Verbs(s State) []string {
 	case ConflictResolved:
 		return []string{VerbCommitResolution}
 	case Checking:
-		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
+		return []string{VerbReRun, VerbFollowUp}
 	case NeedsYou:
-		return []string{VerbReRun, VerbFollowUp, VerbKill, VerbClosePR}
+		return []string{VerbReRun, VerbFollowUp, VerbKill}
 	case CIFailed:
-		return []string{VerbReRun, VerbFollowUp, VerbClosePR}
+		return []string{VerbReRun, VerbFollowUp}
 	case PushFailed:
 		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
-	case ReviewMe:
-		return []string{VerbClosePR}
 	case PRMerged:
 		return []string{VerbRemoveWorktree}
 	case PRClosedUnmerged, BaseGone:
@@ -80,11 +76,11 @@ func Verbs(s State) []string {
 	case RefreshConflicted:
 		return []string{VerbAbort}
 	case ConflictsWithMain:
-		return []string{VerbResolve, VerbRefresh, VerbClosePR}
+		return []string{VerbResolve, VerbRefresh}
 	case VerificationFailed:
 		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case WaitingOnProducerDeploy:
-		return []string{VerbReCheck, VerbReRun, VerbFollowUp}
+		return []string{VerbReRun, VerbFollowUp}
 	default:
 		return nil
 	}

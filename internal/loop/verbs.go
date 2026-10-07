@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
@@ -15,8 +14,6 @@ import (
 
 const (
 	reRunVerb          = plan.VerbReRun
-	reCheckVerb        = plan.VerbReCheck
-	closePRVerb        = plan.VerbClosePR
 	removeWorktreeVerb = plan.VerbRemoveWorktree
 	cancelVerb         = plan.VerbCancel
 	abortVerb          = plan.VerbAbort
@@ -25,17 +22,12 @@ const (
 )
 
 const (
-	eventReCheckRequested         = "re_check_requested"
-	eventReCheckRefused           = "re_check_refused"
-	eventClosePRRequested         = "close_pr_requested"
-	eventClosePRFailed            = "close_pr_failed"
-	eventWorktreeRemoved          = "worktree_removed"
-	eventLaunchCancelled          = "launch_cancelled"
-	eventMergeAborted             = "merge_aborted"
-	eventMergeAbortFailed         = "merge_abort_failed"
-	eventResolveRefused           = "resolve_refused"
-	eventFollowUpRefused          = "follow_up_refused"
-	eventFollowUpCILogUnavailable = "follow_up_ci_log_unavailable"
+	eventWorktreeRemoved  = "worktree_removed"
+	eventLaunchCancelled  = "launch_cancelled"
+	eventMergeAborted     = "merge_aborted"
+	eventMergeAbortFailed = "merge_abort_failed"
+	eventResolveRefused   = "resolve_refused"
+	eventFollowUpRefused  = "follow_up_refused"
 )
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
@@ -125,7 +117,7 @@ func (l *Loop) resolveOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindResolve, "", "")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", runKindResolve, "")
 }
 
 func idleWorktreeFor(ticket store.Ticket, obs plan.Observation) (worktreePath, refusal string) {
@@ -154,19 +146,11 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 	}
 	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
-	pushFacts, err := l.store.PushFacts(ctx)
-	if err != nil {
-		return err
-	}
-	vd, err := l.store.VerdictFacts(ctx)
-	if err != nil {
-		return err
-	}
 
 	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
-			err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, vd, pushFacts, now)
+			err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, now)
 			if err != nil {
 				return err
 			}
@@ -179,8 +163,7 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 }
 
 func (l *Loop) followUpOne(
-	ctx context.Context, ticket store.Ticket, repoPath, promptText string, obs plan.Observation, vd plan.VerdictFacts,
-	pushFacts map[string]plan.PushFact, now time.Time,
+	ctx context.Context, ticket store.Ticket, repoPath, promptText string, obs plan.Observation, now time.Time,
 ) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
@@ -192,66 +175,7 @@ func (l *Loop) followUpOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
-
-	ciSection, unavailableDetail := l.fetchCIFailedLog(ctx, ticket, repoPath, obs, vd, pushFacts)
-	if unavailableDetail != "" {
-		if err := l.store.AppendEvent(ctx, store.Event{
-			At: now, TicketURL: ticket.URL, Kind: eventFollowUpCILogUnavailable, Detail: unavailableDetail,
-		}); err != nil {
-			return err
-		}
-	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", "", runKindFollowUp, promptText, ciSection)
-}
-
-const ciLogUnavailableSection = "## Failed CI log\n\n" +
-	"The failed job's log could not be retrieved. Treat the CI failure as unverified: you have not seen the log."
-
-func (l *Loop) fetchCIFailedLog(
-	ctx context.Context, ticket store.Ticket, repoPath string, obs plan.Observation, vd plan.VerdictFacts,
-	pushFacts map[string]plan.PushFact,
-) (section, unavailableDetail string) {
-	pf := pushFacts[ticket.URL]
-	if pf.Refused || pf.Failed || obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State != plan.Open {
-		return "", ""
-	}
-
-	fact := &plan.RunFact{PROpen: true}
-	l.cfg.PlanRules().ApplyVerdict(fact, ticket.Plan(), obs, vd)
-	if !fact.VerdictCIFailed {
-		return "", ""
-	}
-
-	checks := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].Checks
-	var detailsURL string
-	for _, name := range fact.RedLeaves {
-		if url := checks[name].DetailsURL; url != "" {
-			detailsURL = url
-			break
-		}
-	}
-	if detailsURL == "" {
-		return ciLogUnavailableSection, "red check names no Actions run id"
-	}
-
-	runID, err := runIDFromDetailsURL(detailsURL)
-	if err != nil {
-		return ciLogUnavailableSection, err.Error()
-	}
-
-	log, err := l.forge.RunViewLogFailed(ctx, repoPath, runID)
-	if err != nil {
-		return ciLogUnavailableSection, err.Error()
-	}
-	return "## Failed CI log\n\nLast 200 lines of the failed job's log:\n\n```\n" + lastLines(log, 200) + "\n```", ""
-}
-
-func lastLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", runKindFollowUp, promptText)
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
@@ -294,26 +218,16 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs pl
 	}
 	byTicket := ticketsByURL(tickets)
 	repoPaths := repoPathsByName(l.cfg.Repos)
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return err
-	}
 
 	now := l.clock.Now()
 	for _, intent := range intents {
 		if ticket, ok := byTicket[intent.TicketID]; ok {
-			var oldPromptPath string
-			if run, ok := latest[ticket.URL]; ok {
-				oldPromptPath = filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", run.ID))
-			}
 			entry, _ := snap.Entry(ticket.URL)
 			baseBranch := entry.Unlock.BaseBranch
 			if baseBranch == "" {
 				baseBranch = defaultBaseBranch
 			}
-			err := l.reRunOne(
-				ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, entry.PromptHash, now, oldPromptPath,
-			)
+			err := l.reRunOne(ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, entry.PromptHash)
 			if err != nil {
 				return err
 			}
@@ -327,7 +241,6 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs pl
 
 func (l *Loop) reRunOne(
 	ctx context.Context, ticket store.Ticket, repoPath, baseBranch string, obs plan.Observation, promptHash string,
-	now time.Time, oldPromptPath string,
 ) error {
 	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
@@ -343,107 +256,7 @@ func (l *Loop) reRunOne(
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, runKindAgent, "", "")
-}
-
-func (l *Loop) applyReCheckIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, reCheckVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	repoPaths := repoPathsByName(l.cfg.Repos)
-	compatChecks := l.cfg.PlanRules().CompatCheck
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if e, ok := snap.Entry(intent.TicketID); ok {
-			ticket := e.Ticket
-			err := l.reCheckOne(ctx, ticket, repoPaths[ticket.Repo], compatChecks[ticket.Repo], obs, now)
-			if err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (l *Loop) reCheckOne(
-	ctx context.Context, ticket plan.Ticket, repoPath, compatCheck string, obs plan.Observation, now time.Time,
-) error {
-	refuse := func(detail string) error {
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRefused, Detail: detail})
-	}
-	if compatCheck == "" {
-		return refuse("no compat check configured for this repo")
-	}
-
-	detailsURL := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].Checks[compatCheck].DetailsURL
-	runID, err := runIDFromDetailsURL(detailsURL)
-	if err != nil {
-		return refuse(err.Error())
-	}
-
-	if err := l.forge.Rerun(ctx, repoPath, runID); err != nil {
-		return refuse(err.Error())
-	}
-
-	if err := l.store.ResetCheckingTicks(ctx, ticket.URL); err != nil {
-		return err
-	}
-	return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: ticket.URL, Kind: eventReCheckRequested})
-}
-
-// runIDFromDetailsURL parses the run id out of a check's DetailsURL
-// (https://github.com/<owner>/<repo>/actions/runs/<run-id>/job/<job-id>).
-func runIDFromDetailsURL(detailsURL string) (string, error) {
-	const marker = "/actions/runs/"
-	i := strings.Index(detailsURL, marker)
-	if i < 0 {
-		return "", fmt.Errorf("compat check details url %q has no /actions/runs/<id> segment", detailsURL)
-	}
-	id, _, _ := strings.Cut(detailsURL[i+len(marker):], "/")
-	if id == "" {
-		return "", fmt.Errorf("compat check details url %q has no /actions/runs/<id> segment", detailsURL)
-	}
-	return id, nil
-}
-
-func (l *Loop) applyClosePRIntents(ctx context.Context, snap plan.Snapshot) error {
-	intents, err := l.store.PendingVerbIntents(ctx, closePRVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if e, ok := snap.Entry(intent.TicketID); ok {
-			ticket := e.Ticket
-			event := store.Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRRequested}
-			if err := l.forge.Close(ctx, repoPaths[ticket.Repo], ticket.Branch); err != nil {
-				event = store.Event{At: now, TicketURL: ticket.URL, Kind: eventClosePRFailed, Detail: err.Error()}
-			}
-			if err := l.store.AppendEvent(ctx, event); err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
+	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, runKindAgent, "")
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
@@ -546,7 +359,6 @@ func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
 	for _, id := range ids {
 		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", id)))
 		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", id)))
-		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.diff", id)))
 	}
 	return nil
 }

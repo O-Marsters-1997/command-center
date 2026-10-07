@@ -122,9 +122,6 @@ type Forge interface {
 	Create(ctx context.Context, repoPath, base, body string, draft bool) error
 	Ready(ctx context.Context, repoPath, branch string) error
 	Edit(ctx context.Context, repoPath, branch, base string) error
-	Close(ctx context.Context, repoPath, branch string) error
-	Rerun(ctx context.Context, repoPath, runID string) error
-	RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error)
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 }
 
@@ -157,27 +154,6 @@ func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
 	_, err := run(ctx, repoPath, "pr", "edit", branch, "--base", base)
 	return err
-}
-
-// Close closes branch's pull request without merging it.
-func (CLI) Close(ctx context.Context, repoPath, branch string) error {
-	_, err := run(ctx, repoPath, "pr", "close", branch)
-	return err
-}
-
-// Rerun re-runs a GitHub Actions run via `gh run rerun`.
-func (CLI) Rerun(ctx context.Context, repoPath, runID string) error {
-	_, err := run(ctx, repoPath, "run", "rerun", runID)
-	return err
-}
-
-// RunViewLogFailed reads a failed GitHub Actions run's log via `gh run view --log-failed`.
-func (CLI) RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
-	out, err := run(ctx, repoPath, "run", "view", "--log-failed", runID)
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
 }
 
 // CloseIssue closes issueURL's GitHub issue.

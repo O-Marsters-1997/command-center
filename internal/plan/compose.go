@@ -29,14 +29,8 @@ func ComposeResolve(t Ticket) string {
 
 const followUpSkillPath = "cc/skills/follow-up/SKILL.md"
 
-// ComposeFollowUp renders a follow-up run's prompt. ciSection is composed by the caller, since
-// this package never execs and cannot fetch a log itself.
-func ComposeFollowUp(text, ciSection string) string {
-	prompt := fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
-	if ciSection != "" {
-		prompt += "\n\n" + ciSection
-	}
-	return prompt
+func ComposeFollowUp(text string) string {
+	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
 }
 
 // Hash fingerprints a composed prompt: consent is bound to content, so a launch stores it at

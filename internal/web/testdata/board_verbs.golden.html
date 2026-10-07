@@ -238,10 +238,6 @@
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://checking">
         <button type="submit" name="verb" value="re-run">re-run</button>
-      </form>
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://checking">
-        <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
   
@@ -277,10 +273,6 @@
       <form method="get" action="/confirm">
         <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="kill">kill</button>
-      </form>
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://needs_you">
-        <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
   
@@ -343,11 +335,7 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://review_me">
-        <button type="submit" name="verb" value="close-pr">close-pr</button>
-      </form></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
   </tr>
   
 
@@ -543,10 +531,6 @@
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://ci_failed">
         <button type="submit" name="verb" value="re-run">re-run</button>
-      </form>
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://ci_failed">
-        <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
   
@@ -613,10 +597,6 @@
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://conflicts_with_main">
         <button type="submit" name="verb" value="refresh">refresh</button>
-      </form>
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://conflicts_with_main">
-        <button type="submit" name="verb" value="close-pr">close-pr</button>
       </form></td>
   </tr>
   
@@ -680,10 +660,6 @@
     <td>no spend
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
-      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
-        <input type="hidden" name="ticket" value="sandbox://waiting_on_producer_deploy">
-        <button type="submit" name="verb" value="re-check">re-check</button>
-      </form>
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://waiting_on_producer_deploy">
         <button type="submit" name="verb" value="re-run">re-run</button>
