@@ -10,8 +10,6 @@
     {{if .Draft}}<dt class="text-muted">draft</dt><dd class="m-0">{{.DraftReason}}</dd>{{end}}
     {{if .BaseVerdict}}<dt class="text-muted">base verdict</dt><dd class="m-0">{{.BaseVerdict}}</dd>{{end}}
     {{if .Warning}}<dt class="text-muted">warning</dt><dd class="m-0">{{.Warning}}</dd>{{end}}
-    {{if .FirstPushCIFailed}}<dt class="text-muted">first push</dt><dd class="m-0">CI failed</dd>{{end}}
-    {{if gt .HandChurnLines 0}}<dt class="text-muted">hand churn</dt><dd class="m-0">{{.HandChurnLines}} lines</dd>{{end}}
   </dl>
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
@@ -53,6 +51,18 @@
     </div>
   </div>
   {{- end}}
+  <form method="post" action="/ticket" class="edit-ticket mt-3 flex flex-col gap-2">
+    <input type="hidden" name="ticket" value="{{.URL}}">
+    <label class="flex items-center gap-2"><span class="text-muted">branch</span><input type="text" name="branch" value="{{.Branch}}" required class="flex-1"></label>
+    <fieldset class="m-0 flex flex-col gap-1 border-0 p-0">
+      <legend class="text-muted">blocked by</legend>
+      {{- range .BlockedBy}}
+      <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+      {{- end}}
+      <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+    </fieldset>
+    <button type="submit" class="self-end">save</button>
+  </form>
   {{- if .FollowUpAvailable}}
   <form method="post" action="/verb" hx-post="{{or .VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML" class="follow-up mt-3 flex flex-col gap-2">
     <input type="hidden" name="ticket" value="{{.URL}}">

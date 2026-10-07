@@ -312,10 +312,8 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	}
 }
 
-// TestLoopDisposesAKilledRunWithUnsettledPartials drives disposeRun's metrics write with a fake
-// MetricsParser rather than a real agent log on disk (WithMetricsParser's whole point): a killed
-// run's own parse would report partial totals with Settled false, and that shape must reach
-// Postgres exactly as RecordDisposition would store it.
+// TestLoopDisposesAKilledRunWithUnsettledPartials: a killed run's log has no result line, so its
+// partial totals must reach Postgres with metrics_settled false.
 func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
@@ -335,7 +333,13 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	logPath := filepath.Join(t.TempDir(), "1.jsonl")
+	partial := `{"type":"assistant","request_id":"r1","message":{"model":"claude-sonnet-5",` +
+		`"usage":{"input_tokens":12,"output_tokens":8},"content":[]}}` + "\n"
+	if err := os.WriteFile(logPath, []byte(partial), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(t.Context(), runID, 999, at, logPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -349,22 +353,13 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 
-	var parsedPath string
-	lp.SetMetricsParser(func(logPath string) (agentlog.RunMetrics, error) {
-		parsedPath = logPath
-		return agentlog.RunMetrics{TokensIn: 12, TokensOut: 8, ToolCalls: 2, Settled: false}, nil
-	})
-
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if parsedPath != "/state/runs/1.jsonl" {
-		t.Errorf("parsed path = %q, want the run's own log path", parsedPath)
-	}
 
 	row := readRunMetrics(t, dsn, runID)
-	if row.TokensIn.Int64 != 12 || row.TokensOut.Int64 != 8 || row.ToolCalls.Int64 != 2 {
-		t.Errorf("metrics = %+v, want the fake parser's partial totals", row)
+	if row.TokensIn.Int64 != 12 || row.TokensOut.Int64 != 8 {
+		t.Errorf("metrics = %+v, want the log's partial totals", row)
 	}
 	if !row.MetricsSettled.Valid || row.MetricsSettled.Bool {
 		t.Errorf("metrics_settled = %+v, want false (a killed run's log never reached a result line)", row.MetricsSettled)

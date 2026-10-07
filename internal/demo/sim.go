@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -185,7 +184,6 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	}()
 
 	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
-	lp.SetMetricsParser(agentlog.ParseMetrics)
 	lp.SetForge(forge)
 	lp.SetWorktrees(Worktrees{})
 	lp.SetTrackerSource(resolve)

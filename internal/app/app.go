@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
@@ -30,11 +29,10 @@ type App struct {
 }
 
 type options struct {
-	clock         loop.Clock
-	observe       loop.ObserveFunc
-	repoCheck     RepoCheckFunc
-	checkout      CheckoutFunc
-	metricsParser loop.MetricsParser
+	clock     loop.Clock
+	observe   loop.ObserveFunc
+	repoCheck RepoCheckFunc
+	checkout  CheckoutFunc
 }
 
 type Option func(*options)
@@ -63,11 +61,6 @@ type CheckoutFunc func(ctx context.Context, repos []config.Repo) error
 // WithCheckout replaces the startup checkout step.
 func WithCheckout(checkout CheckoutFunc) Option {
 	return func(o *options) { o.checkout = checkout }
-}
-
-// WithMetricsParser replaces the run-log metrics parser.
-func WithMetricsParser(p loop.MetricsParser) Option {
-	return func(o *options) { o.metricsParser = p }
 }
 
 func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
@@ -145,16 +138,8 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if observe == nil {
 		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
-	metricsParser := settings.metricsParser
-	if metricsParser == nil {
-		metricsParser = agentlog.ParseMetrics
-	}
-	if err := loop.BackfillMetrics(ctx, store, metricsParser, cfg.ClaudeProjectsDir); err != nil {
-		return nil, err
-	}
 
 	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
-	lp.SetMetricsParser(metricsParser)
 	lp.SetForge(gh.CLI{})
 	lp.SetWorktrees(git.CLI{})
 	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)

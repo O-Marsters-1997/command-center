@@ -47,8 +47,6 @@
     
     
     
-    
-    
   </dl>
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
@@ -62,6 +60,15 @@
     <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76/log?from=33" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     
   </div>
+  <form method="post" action="/ticket" class="edit-ticket mt-3 flex flex-col gap-2">
+    <input type="hidden" name="ticket" value="https://github.com/o/r/issues/76">
+    <label class="flex items-center gap-2"><span class="text-muted">branch</span><input type="text" name="branch" value="cc-76" required class="flex-1"></label>
+    <fieldset class="m-0 flex flex-col gap-1 border-0 p-0">
+      <legend class="text-muted">blocked by</legend>
+      <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+    </fieldset>
+    <button type="submit" class="self-end">save</button>
+  </form>
 </td>
 </tr>
   

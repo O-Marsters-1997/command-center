@@ -205,3 +205,32 @@ func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 		})
 	}
 }
+
+func TestDetailRowRendersEditFormPrefilled(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp, err := srv.Client().Get(srv.URL + "/board?sel=" + url.QueryEscape("sandbox://CC-2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(raw)
+	for _, want := range []string{
+		`action="/ticket"`,
+		`name="ticket" value="sandbox://CC-2"`,
+		`name="branch" value="cc-2-second"`,
+		`name="blocked_by" value="sandbox://CC-1"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("detail row missing %s", want)
+		}
+	}
+}

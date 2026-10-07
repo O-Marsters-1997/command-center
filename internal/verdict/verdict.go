@@ -31,6 +31,29 @@ const (
 	WaitingOnProducerDeploy
 )
 
+// Label names the result for comparison against the last recorded one. A red leaf under NeedsYou
+// is ci_failed; a nil result has no label.
+func (r *Result) Label() string {
+	if r == nil {
+		return ""
+	}
+	switch r.Verdict {
+	case BaseMoved:
+		return "base_moved"
+	case WaitingOnProducerDeploy:
+		return "waiting_on_producer_deploy"
+	case ReviewMe:
+		return "review_me"
+	case NeedsYou:
+		if len(r.RedLeaves) > 0 {
+			return "ci_failed"
+		}
+		return "needs_you"
+	default:
+		return "checking"
+	}
+}
+
 // BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it,
 // clocked over ticks whose observe phase succeeded so a GitHub outage cannot walk every row to needs_you.
 const BoundedWait = 10 * time.Minute

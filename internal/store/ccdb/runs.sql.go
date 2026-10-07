@@ -45,41 +45,6 @@ func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesR
 	return items, nil
 }
 
-const backfillRunMetrics = `-- name: BackfillRunMetrics :exec
-UPDATE runs SET tokens_in = $1, tokens_out = $2, turns = $3, duration_ms = $4, cost_usd = $5,
-  tool_calls = $6, tool_failures = $7, model = $8, metrics_settled = $9
-WHERE id = $10
-`
-
-type BackfillRunMetricsParams struct {
-	TokensIn       sql.NullInt64
-	TokensOut      sql.NullInt64
-	Turns          sql.NullInt64
-	DurationMs     sql.NullInt64
-	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
-	Model          sql.NullString
-	MetricsSettled sql.NullBool
-	ID             int64
-}
-
-func (q *Queries) BackfillRunMetrics(ctx context.Context, arg BackfillRunMetricsParams) error {
-	_, err := q.db.ExecContext(ctx, backfillRunMetrics,
-		arg.TokensIn,
-		arg.TokensOut,
-		arg.Turns,
-		arg.DurationMs,
-		arg.CostUsd,
-		arg.ToolCalls,
-		arg.ToolFailures,
-		arg.Model,
-		arg.MetricsSettled,
-		arg.ID,
-	)
-	return err
-}
-
 const consumeVerbIntent = `-- name: ConsumeVerbIntent :exec
 UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
@@ -513,38 +478,6 @@ func (q *Queries) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequ
 			&i.CacheReadTokens,
 			&i.OutputTokens,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const runsAwaitingMetricsBackfill = `-- name: RunsAwaitingMetricsBackfill :many
-SELECT id, log_path FROM runs WHERE log_path IS NOT NULL AND metrics_settled IS NULL
-`
-
-type RunsAwaitingMetricsBackfillRow struct {
-	ID      int64
-	LogPath sql.NullString
-}
-
-func (q *Queries) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunsAwaitingMetricsBackfillRow, error) {
-	rows, err := q.db.QueryContext(ctx, runsAwaitingMetricsBackfill)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []RunsAwaitingMetricsBackfillRow
-	for rows.Next() {
-		var i RunsAwaitingMetricsBackfillRow
-		if err := rows.Scan(&i.ID, &i.LogPath); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -43,16 +43,6 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", projectsDir, err)
 	}
-	return s.RecordReadingsAndIntervalsFrom(ctx, readings, requests)
-}
-
-// RecordReadingsAndIntervalsFrom is RecordReadingsAndIntervals over transcripts already loaded.
-func (s *Store) RecordReadingsAndIntervalsFrom(
-	ctx context.Context, readings []agentlog.Reading, requests []agentlog.RequestUsage,
-) error {
-	if len(readings) == 0 {
-		return nil
-	}
 	previous, err := s.LatestReadingsFull(ctx)
 	if err != nil {
 		return err
