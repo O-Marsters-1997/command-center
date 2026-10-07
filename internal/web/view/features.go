@@ -6,20 +6,17 @@ import (
 	"time"
 )
 
-// FeatureRow is one tracker feature on the features page.
 type FeatureRow struct {
 	Feature  string
 	Imported bool
 }
 
-// ImportError is the last failed feature import, with its age.
 type ImportError struct {
 	Age     string
 	Feature string
 	Message string
 }
 
-// Features is the features page's view model.
 type Features struct {
 	Chrome
 	Features        []FeatureRow

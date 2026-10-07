@@ -25,7 +25,6 @@ var update = flag.Bool("update", false, "regenerate golden files")
 const goldenShell = "testdata/shell.golden.html"
 const goldenBoard = "testdata/board.golden.html"
 
-// assertGolden compares got against the golden file at path, rewriting it under -update.
 func assertGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
 
@@ -43,7 +42,6 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	}
 }
 
-// noRedirect defeats http.Client's default of following a 303.
 func noRedirect(srv *httptest.Server) *http.Client {
 	client := *srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -75,7 +73,6 @@ func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	return runID
 }
 
-// seededRunning is seededStore with sandbox://CC-1 mid-run, the state that offers kill.
 func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -92,7 +89,6 @@ func seededRunning(t *testing.T) *storepkg.Store {
 	return store
 }
 
-// seededFailed is seededStore with sandbox://CC-1's run failed, the state that offers follow-up.
 func seededFailed(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -105,8 +101,6 @@ func seededFailed(t *testing.T) *storepkg.Store {
 	return store
 }
 
-// seededQueued is seededStore with sandbox://CC-1 authorised but not yet launched, the state
-// that offers cancel.
 func seededQueued(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -160,9 +154,6 @@ func seededServer(t *testing.T) *web.Server {
 	return web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
 }
 
-// TestServerRendersTheShellAroundTheBoard goldens the two fragments separately and pins the join
-// between them: GET / must nest the exact bytes GET /board serves, or the poll's swap would
-// redraw the board differently from the first paint.
 func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	t.Parallel()
 
@@ -188,8 +179,6 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 
 type swapPart struct{ name, html string }
 
-// splitBoardSwap carves GET /board into the table htmx swaps into its target and the two
-// out-of-band fragments riding along with it, so each can be pinned against the first paint.
 func splitBoardSwap(t *testing.T, swap string) []swapPart {
 	t.Helper()
 
@@ -205,9 +194,6 @@ func splitBoardSwap(t *testing.T, swap string) []swapPart {
 	}
 }
 
-// TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":
-// a red check on a descendant whose base moved may not be its own fault, so the row also renders
-// the base's own CI verdict alongside its own.
 func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	t.Parallel()
 
@@ -329,9 +315,6 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	}
 }
 
-// TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed covers inv. 12 wired end to
-// end through the repo's configured compat_check: a red compat check with every other required
-// check green renders the row as waiting_on_producer_deploy, not needs_you.
 func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testing.T) {
 	t.Parallel()
 
@@ -492,9 +475,6 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	assertSeeOtherHome(t, resp)
 }
 
-// TestGetPreviewIsGone covers phase 5 of docs/plans/feature-launch.md: the per-ticket preview page is
-// deleted along with handlePreview, so the route itself is unregistered rather than refusing a
-// bad request.
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
@@ -511,9 +491,6 @@ func TestGetPreviewIsGone(t *testing.T) {
 	}
 }
 
-// TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice proves issue #33's "no size limit anywhere
-// in the path": a fan-out is one root plus as many dependents as the plan calls for, and neither
-// /launch/candidates nor /launch may special-case a small slice.
 func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	t.Parallel()
 
@@ -571,8 +548,6 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 }
 
-// runningRowStore seeds one ticket with a live agent run, the state both a pgid/elapsed row and a
-// queued-verb row are read against.
 func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
@@ -620,8 +595,6 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	}
 }
 
-// TestLaunchStoresTheComposedHash covers issue #52's AC1 at the authorisation route:
-// launch_members.prompt_hash stores plan.Hash of the composed prompt.
 func TestLaunchStoresTheComposedHash(t *testing.T) {
 	t.Parallel()
 
@@ -701,7 +674,6 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	}
 }
 
-// TestPageShowsQueuedVerbsBesideTheState covers issue #71.
 func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	t.Parallel()
 
@@ -747,7 +719,6 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	}
 }
 
-// TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt covers issue #71's launch window.
 func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	t.Parallel()
 
@@ -770,9 +741,6 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	}
 }
 
-// TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a submitted hash
-// that is not what the ticket composes to now is caught at /launch, and the whole slice is refused
-// — including the ticket whose hash still matched.
 func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	t.Parallel()
 
@@ -824,9 +792,6 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	}
 }
 
-// TestLaunchIgnoresTheHashOfAnUncheckedRow covers what a browser actually posts when the operator
-// unchecks a row: the hidden hash still travels, its checkbox does not, and the tickets that are
-// checked still launch on their own hashes.
 func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	t.Parallel()
 
@@ -857,8 +822,6 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	}
 }
 
-// TestLaunchRejectsAMalformedHashField covers a hash field that names no ticket: it is refused
-// rather than read as a hash that matches nothing.
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 

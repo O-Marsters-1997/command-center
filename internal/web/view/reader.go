@@ -20,15 +20,12 @@ const observeStaleAfter = 20 * time.Second
 // every page wears.
 type Board struct {
 	Chrome
-	Groups []Group
-	Band   Band
-	// BoardPath feeds back into the board's own hx-get, so the next poll and the next swap both
-	// perpetuate this render's view state without the shell being involved.
+	Groups           []Group
+	Band             Band
 	BoardPath        string
 	BoardPollSeconds int
 }
 
-// Row finds the row for ticketURL among the board's groups.
 func (b Board) Row(ticketURL string) (Row, bool) {
 	for _, g := range b.Groups {
 		if g.Root != nil && g.Root.URL == ticketURL {
@@ -49,7 +46,6 @@ type InvalidError struct{ Err error }
 func (e InvalidError) Error() string { return e.Err.Error() }
 func (e InvalidError) Unwrap() error { return e.Err }
 
-// IsInvalid reports whether err came from a bad request rather than a failed read.
 func IsInvalid(err error) bool {
 	var invalid InvalidError
 	return errors.As(err, &invalid)
@@ -69,8 +65,6 @@ type Reader struct {
 	renderLine       LineRenderer
 }
 
-// NewReader reads from st for the configured repos; dataDir names the fleet in the header and
-// renderLine renders each run-log line.
 func NewReader(st *store.Store, repos []config.Repo, dataDir string, renderLine LineRenderer) *Reader {
 	return &Reader{
 		store: st, repos: repos, dataDir: dataDir, renderLine: renderLine,
@@ -80,14 +74,10 @@ func NewReader(st *store.Store, repos []config.Repo, dataDir string, renderLine 
 	}
 }
 
-// SetBoardPollSeconds replaces the interval the board's htmx poll refreshes at.
 func (r *Reader) SetBoardPollSeconds(seconds int) { r.boardPollSeconds = seconds }
 
-// SetSpendLimit5h replaces the reader's copy of spend_limit_5h, so the masthead can name the
-// same limit the loop's own launch gate reads (CC-314).
 func (r *Reader) SetSpendLimit5h(pct int) { r.spendLimit5h = pct }
 
-// Snapshot derives plan's snapshot of the stored facts as of now.
 func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, error) {
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
@@ -98,7 +88,7 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 }
 
 // Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
-// a group a member of which is in scope stays whole (ADR 7).
+// a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
 	params.Repo = normalizeRepoScope(params.Repo, r.rules.Stacking)
 
@@ -191,9 +181,6 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	return r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params), nil
 }
 
-// buildChrome derives the shell every page wears from facts its caller already holds: Board
-// already fetched tickets, the observation and the last error for its own derivation, and Chrome
-// fetches them fresh for the pages that otherwise never touch the store for them.
 func (r *Reader) buildChrome(
 	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr store.TickError, failed bool,
 	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time, params Params,
@@ -227,8 +214,6 @@ func (r *Reader) buildChrome(
 	return c
 }
 
-// gaugeSplit reads the fit and cc's own trailing spend once, keyed by window, for deriveGauges to
-// turn into each gauge's cc-vs-other split.
 func (r *Reader) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Window]windowSplit, error) {
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {

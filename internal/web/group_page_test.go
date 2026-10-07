@@ -13,8 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// renderedRow is one <tr> the board emitted: its attributes, which carry the grouping, and the
-// ticket ref in its first cell.
 type renderedRow struct {
 	Attrs  string
 	Ticket string
@@ -40,8 +38,6 @@ func ticketRefs(rows []renderedRow) []string {
 	return out
 }
 
-// failedRootAndQueuedChildren seeds one root whose only run failed and count rows authorised
-// behind it, which is the fan-out the PRD's "one problem, not four" is about.
 func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Store {
 	t.Helper()
 
@@ -91,8 +87,6 @@ func boardFor(t *testing.T, store *storepkg.Store) string {
 	return renderBoard(t, web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
 }
 
-// TestBoardRendersAFanOutAsOneGroup covers issue #74's first two acceptance criteria: four rows
-// waiting on one blocker read as one failure, and every child keeps its own state and verbs.
 func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	t.Parallel()
 
@@ -130,8 +124,6 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	}
 }
 
-// TestBoardOrdersChildrenMergeFirstAndStably covers the third criterion: the row you merge next
-// after the root is the top child, and two renders of unchanged data agree byte for byte.
 func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
 	t.Parallel()
 
@@ -150,8 +142,6 @@ func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
 	}
 }
 
-// TestBoardPutsATwoBlockerRowUnderTheFirstOnly covers the fourth criterion: fan-in names both
-// blockers in the row's reason, but the row itself belongs to one group.
 func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	t.Parallel()
 
@@ -183,8 +173,6 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	}
 }
 
-// TestBoardFlattensAChainOfBlockersIntoOneGroup covers issue cc-258's board: A blocks B blocks C
-// must render B once, under A, not a second time as the root of its own group for C.
 func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
 	t.Parallel()
 
@@ -219,8 +207,6 @@ func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
 	}
 }
 
-// TestBoardRendersATicketSetWithNoBlockersFlat covers the rest of the fourth criterion: nothing is
-// indented and nothing carries a group line when no row waits on another.
 func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	t.Parallel()
 
@@ -250,9 +236,6 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	}
 }
 
-// TestBoardShowsAMergedPRDespiteALaterRunFailing covers issue cc-256's board: the latest run's own
-// failed outcome must not starve PRMerged when the branch's PR is already merged, or the row
-// shows failed next to a merged pr.
 func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 	t.Parallel()
 
@@ -295,8 +278,6 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 
 const goldenGroupedBoard = "testdata/board_grouped.golden.html"
 
-// TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow covers issue #74's fifth acceptance criterion:
-// a golden covering a five-row fan-out plus an ungrouped row.
 func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
 	t.Parallel()
 

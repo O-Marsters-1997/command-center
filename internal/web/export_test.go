@@ -43,15 +43,11 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 	return out.String(), nil
 }
 
-// RenderLogLine exposes the one "logline" template both the detail render and the SSE stream
-// render through, so a test can build its own expected markup rather than hand-copying it.
 func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
 	html, err := renderLogLine(e, anchor)
 	return template.HTML(html), err
 }
 
-// ReadTestdata and WriteRunLog let logstream_test.go and detail_test.go, both package web_test,
-// share the one fixture-reading and fixture-writing helper logstream_internal_test.go defines.
 func ReadTestdata(name string) string              { return mustReadTestdata(name) }
 func WriteRunLog(t *testing.T, body string) string { return writeRunLog(t, body) }
 

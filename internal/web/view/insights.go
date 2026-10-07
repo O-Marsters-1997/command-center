@@ -50,11 +50,8 @@ func parseSinceOrDefault(raw string, until time.Time) time.Time {
 	return since
 }
 
-// insightsTimezone names loc for both the query's AT TIME ZONE argument and the response's own
-// field. time.Local's own String is always the literal "Local" -- by the time package's own
-// design, never the system's real IANA name -- so that one case alone falls through to
-// systemTimezoneName; any other Location (a test's explicit LoadLocation, for one) already
-// carries its own real name.
+// insightsTimezone names loc for the query and the response. time.Local's String is always the
+// literal "Local", never an IANA name, so that case alone falls through to systemTimezoneName.
 func insightsTimezone(loc *time.Location) string {
 	if name := loc.String(); name != "Local" {
 		return name
@@ -65,9 +62,8 @@ func insightsTimezone(loc *time.Location) string {
 	return "UTC"
 }
 
-// systemTimezoneName resolves the OS's own configured zone to an IANA name. TZ, checked first,
-// is what actually overrides time.Local's zone data; /etc/localtime, the fallback, is a symlink
-// into the zoneinfo tree on every platform this daemon targets.
+// systemTimezoneName resolves the OS's configured zone to an IANA name: TZ overrides time.Local,
+// else /etc/localtime is a symlink into the zoneinfo tree.
 func systemTimezoneName() string {
 	if tz := os.Getenv("TZ"); tz != "" {
 		return tz
@@ -84,12 +80,10 @@ func systemTimezoneName() string {
 	return target[i+len(zoneinfoDir):]
 }
 
-// InsightsPage is the insights page's view model: the chrome, the chart loads its own data.
 type InsightsPage struct {
 	Chrome
 }
 
-// InsightsPage builds the insights shell.
 func (r *Reader) InsightsPage(ctx context.Context, now time.Time, params Params) (InsightsPage, error) {
 	chrome, err := r.Chrome(ctx, now, params)
 	if err != nil {

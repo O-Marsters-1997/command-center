@@ -32,8 +32,6 @@ func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d
 
 func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
-// dispositionAsPushed records a run whose disposition is already known to be push, so a test can
-// read what the board shows for a pushed ticket without driving the loop through spawn and dispose.
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
 	runID, err := st.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
@@ -49,8 +47,6 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 	}
 }
 
-// oneMillionInputTokensLine is one $6.40 (at the calibrated sonnet rate) assistant request, for a
-// test to place at a chosen timestamp and request id.
 func oneMillionInputTokensLine(timestamp, requestID string) string {
 	return fmt.Sprintf(
 		`{"type":"assistant","timestamp":%q,"request_id":%q,`+

@@ -13,8 +13,6 @@ import (
 
 const goldenGraph = "testdata/graph.golden.json"
 
-// jsonRow is a loose decode of one row: the test reads only the fields it needs to cross-check
-// against the board's own rendered HTML, not the whole shape.
 type jsonRow struct {
 	URL      string   `json:"url"`
 	State    string   `json:"state"`
@@ -27,8 +25,6 @@ type jsonGroup struct {
 	Children []jsonRow `json:"children"`
 }
 
-// boardPillText reads a row's bare state-pill text off the board, without rowState's own
-// "· verb queued" suffix: row.State on the JSON side never carries that, it is PendingVerbs.
 func boardPillText(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	cell := rowCellAt(t, page, ticketURL, 1)
@@ -46,10 +42,6 @@ func fetchGraph(t *testing.T, server *web.Server) *httptest.ResponseRecorder {
 	return rec
 }
 
-// TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver covers the route's central acceptance
-// criterion by cross-referencing the two renders of one fixture, rather than trusting either in
-// isolation: CC-1 blocks CC-2, so /board nests CC-2 under CC-1 and /graph.json must carry the
-// same blocker edge on the same two URLs.
 func TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver(t *testing.T) {
 	t.Parallel()
 
@@ -90,9 +82,6 @@ func TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver(t *testing.T) {
 	}
 }
 
-// TestGraphJSONGoldensAFixedFixture pins the wire shape byte for byte: any change to row's own
-// json tags, or to which fields it carries, is a diff here rather than a silent break in the
-// island's fetch.
 func TestGraphJSONGoldensAFixedFixture(t *testing.T) {
 	t.Parallel()
 
@@ -106,9 +95,6 @@ func TestGraphJSONGoldensAFixedFixture(t *testing.T) {
 
 var hyphenatedTagRE = regexp.MustCompile(`<[a-zA-Z][a-zA-Z0-9]*-[a-zA-Z0-9-]*[\s>/]`)
 
-// TestBoardFragmentNeverContainsACustomElementTag enforces the rule an island is never a
-// descendant of a swap target: GET /board is the htmx poll's own swap target, so a custom
-// element's tag name -- the only HTML tag shape that carries a hyphen -- must never appear in it.
 func TestBoardFragmentNeverContainsACustomElementTag(t *testing.T) {
 	t.Parallel()
 
@@ -118,9 +104,6 @@ func TestBoardFragmentNeverContainsACustomElementTag(t *testing.T) {
 	}
 }
 
-// TestPageRendersCcGraphOutsideTheBoardOnlyForTheGraphView covers the other half of the same
-// rule from the shell's side: <cc-graph> appears only under ?view=graph, and even there sits
-// outside the #board table rather than inside it.
 func TestPageRendersCcGraphOutsideTheBoardOnlyForTheGraphView(t *testing.T) {
 	t.Parallel()
 

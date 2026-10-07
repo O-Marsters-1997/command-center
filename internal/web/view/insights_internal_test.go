@@ -36,9 +36,6 @@ func TestInsightsTimezoneUsesTheLocationsOwnNameWhenItHasOne(t *testing.T) {
 	}
 }
 
-// TestInsightsTimezoneResolvesTimeLocalFromTheOSRatherThanUTC is the production bug this file
-// exists to close: time.Local.String() is always the literal "Local", never the system's real
-// zone, so the default clock's own Location must not silently read as UTC.
 func TestInsightsTimezoneResolvesTimeLocalFromTheOSRatherThanUTC(t *testing.T) {
 	t.Setenv("TZ", "Europe/Paris")
 	if got := insightsTimezone(time.Local); got != "Europe/Paris" {
@@ -51,7 +48,6 @@ func TestCivilDateKeepsTheWallClockDateAtUTCMidnight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 2026-06-15 23:30 CEST (UTC+2) is still the 15th locally, but already the 16th in UTC.
 	t.Setenv("TZ", "")
 	got := civilDate(time.Date(2026, 6, 15, 23, 30, 0, 0, paris))
 	want := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)

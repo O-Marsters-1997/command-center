@@ -8,10 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-// TestBoardNamesAnOutOfScopeGroupMembersOwnRepo covers issue #219 AC2 at the template's own
-// seam: plan.Unlocked only ever counts a same-repo blocker (plan.go:60), so a group groupRows
-// forms can never itself straddle two repos through today's live blocking edges -- this drives
-// board.tmpl's row template directly, over a hand-built group, the way ADR 7 describes one.
 func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	t.Parallel()
 
@@ -37,8 +33,6 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	}
 }
 
-// TestBoardNamesAnOutOfScopeGroupMembersOwnFeature covers issue #220 AC2, following
-// TestBoardNamesAnOutOfScopeGroupMembersOwnRepo.
 func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 	t.Parallel()
 

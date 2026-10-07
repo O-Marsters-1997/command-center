@@ -13,9 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// TestBoardSendsOnlyDestructiveVerbsToConfirm covers issue #75's AC1: needs_you offers re-run,
-// kill and close-pr, and pr_merged offers remove-worktree, so the two states together show both
-// halves of the split.
 func TestBoardSendsOnlyDestructiveVerbsToConfirm(t *testing.T) {
 	t.Parallel()
 
@@ -89,8 +86,6 @@ func TestConfirmNamesTheTicketTheVerbAndTheThingAtRisk(t *testing.T) {
 	}
 }
 
-// TestConfirmQueuesNothing covers issue #75's AC3: the page is a question, so rendering it is not
-// half of a verb — only the [ confirm ] POST is.
 func TestConfirmQueuesNothing(t *testing.T) {
 	t.Parallel()
 

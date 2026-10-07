@@ -16,8 +16,6 @@ function ticketRef(url: string): string {
   return `#${parts[parts.length - 1]}`;
 }
 
-// Banner is the same markup launch_modal.tmpl's Pending/Refused/Empty branches and features.tmpl's
-// import-error banner render, so a refusal reads identically whether Go or Solid drew it (ADR 1).
 function Banner(props: { children: JSX.Element }) {
   return (
     // biome-ignore lint/a11y/useSemanticElements: <output> would break that byte-for-byte match.
@@ -39,8 +37,6 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
   const [loadError, setLoadError] = createSignal(false);
   const [loaded, setLoaded] = createSignal(false);
 
-  // One fetch for the whole modal lifetime (CONTEXT.md § Launch modal): every toggle after this
-  // reshapes the DAG from data already in hand, and only confirm talks to the server again.
   onMount(async () => {
     try {
       const query = props.tickets || `feature=${encodeURIComponent(props.feature)}`;

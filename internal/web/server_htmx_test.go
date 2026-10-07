@@ -51,7 +51,6 @@ func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 	}
 }
 
-// The no-JS path is the reason handleVerb keeps its redirect: a plain form post still navigates.
 func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
@@ -91,8 +90,6 @@ func TestBoardSwapCarriesTheBandAndMasthead(t *testing.T) {
 	}
 }
 
-// One masthead and one band on a full page render: the OOB copies are the same templates, so a
-// duplicated id would silently break every later swap.
 func TestPageRendersTheMastheadAndBandExactlyOnce(t *testing.T) {
 	t.Parallel()
 
@@ -114,7 +111,6 @@ func TestAgesCarryTheAbsoluteInstantForTheClock(t *testing.T) {
 	server := web.NewServer(store, fixedClock(observedAt.Add(90*time.Second)), nil, "")
 	body := renderPath(t, server, "/")
 
-	// The fallback text and the machine-readable instant the ticker re-reads after every swap.
 	for _, want := range []string{
 		`<time datetime="2026-08-20T12:00:00Z">1m30s ago</time>`,
 		`<time datetime="2026-08-20T12:00:15Z">`,

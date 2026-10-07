@@ -42,8 +42,6 @@ var page = template.Must(template.New("page").
 //go:embed band.tmpl
 var bandSource string
 
-// The blank identifier is deliberate, not dead code: this registers "band" into page's own tree,
-// and page.tmpl and boardswap.tmpl both call it by name via {{template "band" .}}.
 var _ = template.Must(page.New("band").Parse(bandSource))
 
 //go:embed board.tmpl
@@ -54,36 +52,25 @@ var boardFragment = template.Must(page.New("board").Parse(boardSource))
 //go:embed masthead.tmpl
 var mastheadSource string
 
-// The blank identifier is deliberate, not dead code: this registers "masthead" into the shared
-// tree that page.tmpl and boardSwap both call it from.
 var _ = template.Must(page.New("masthead").Parse(mastheadSource))
 
 //go:embed layout.tmpl
 var layoutSource string
 
-// The blank identifier is deliberate, not dead code: this registers "docHead", "topbar",
-// "sidebar" and the icon-* templates into the shared tree every page renders through --
-// page.tmpl, features.tmpl, preview.tmpl and confirm.tmpl all call them by name, so the doctype,
-// head and the chrome outside every hx-swap target are written once.
 var _ = template.Must(page.New("layout").Parse(layoutSource))
 
 //go:embed boardswap.tmpl
 var boardSwapSource string
 
-// boardSwap answers every poll and every verb: the table htmx swaps into the target, plus the
-// masthead and band as out-of-band swaps.
 var boardSwap = template.Must(page.New("boardSwap").Parse(boardSwapSource))
 
 //go:embed detail.tmpl
 var detailSource string
 
-// The blank identifier is deliberate, not dead code: this registers "detail" into boardFragment's
-// own tree, and board.tmpl calls it by name via {{template "detail" .}}.
 var _ = template.Must(boardFragment.New("detail").Parse(detailSource))
 
-// rowSlot carries LaunchVerb, CancelVerb, Scope and FeatureScope because html/template resets $ to
-// the invoked subtemplate's own argument, so "row" cannot see pageView's copies -- Scope and
-// FeatureScope are board.tmpl's own RepoScope and FeatureScope, to name a row that differs from them.
+// html/template resets $ to the invoked subtemplate's own argument, so "row" cannot see
+// pageView's copies of these fields.
 type rowSlot struct {
 	view.Row
 	Head         bool
@@ -106,8 +93,6 @@ func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) ro
 //go:embed features.tmpl
 var featuresSource string
 
-// pathEscape joins page's shared FuncMap: Funcs adds to the tree's one function map regardless of
-// which member template it is called on, so head, child, destructive and percent see it too.
 var featuresPage = template.Must(page.New("features").
 	Funcs(template.FuncMap{"pathEscape": url.PathEscape}).
 	Parse(featuresSource))
@@ -123,9 +108,8 @@ type Clock interface {
 	After(d time.Duration) <-chan time.Time
 }
 
-// Server is the status page plus the launch, launch-authorisation and features routes. It
-// never writes the database directly except to queue an intent: every state it shows is derived
-// from tickets and the last observation at render time (§5, inv. 14).
+// Server is the status page plus the launch, authorisation and features routes. It only queues
+// intents; it never writes the database directly.
 type Server struct {
 	store      *store.Store
 	clock      Clock
@@ -138,8 +122,7 @@ type Server struct {
 }
 
 // NewServer assembles the page and its routes over a store, a clock, the configured repos and
-// the data directory: stacking, the verdict predicate, the mergify hash and the compat check
-// name are all per-repo config, and dataDir is the fleet the header names.
+// the data directory.
 func NewServer(store *store.Store, clock Clock, repos []config.Repo, dataDir string) *Server {
 	s := &Server{
 		store: store, clock: clock, repos: repos,
@@ -171,20 +154,14 @@ func NewServer(store *store.Store, clock Clock, repos []config.Repo, dataDir str
 	return s
 }
 
-// SetTrackerSource replaces the server's tracker.New, so a test can drive GET /features with a
-// fake source rather than shelling out to gh.
+// SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
 
-// SetNudge replaces the server's nudge call. App.New wires this to Loop.Nudge once, after both
-// exist, which is how the server queues an import intent and wakes the loop without importing
-// the loop package itself.
+// SetNudge sets the call that wakes the loop once the server has queued an import intent.
 func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
 
-// SetBoardPollSeconds replaces the interval the board's htmx poll refreshes at.
 func (s *Server) SetBoardPollSeconds(seconds int) { s.view.SetBoardPollSeconds(seconds) }
 
-// SetSpendLimit5h replaces the server's copy of spend_limit_5h, so the masthead can name the same
-// limit the loop's own launch gate reads (CC-314).
 func (s *Server) SetSpendLimit5h(pct int) { s.view.SetSpendLimit5h(pct) }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
@@ -201,9 +178,6 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	s.renderBoard(w, r, boardSwap)
 }
 
-// handleGraph serves the board's groups verbatim: the same []view.Group the board template ranges
-// over, json-tagged rather than reshaped, so the graph island lays out exactly what the board
-// renders (docs/prds/prd-fleet-view.md § One derivation).
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(r.URL.Query()))
 	if err != nil {
@@ -236,8 +210,6 @@ func (s *Server) renderBoard(w http.ResponseWriter, r *http.Request, tmpl *templ
 	renderHTML(w, tmpl, board)
 }
 
-// handleEvents dumps the append-only audit log as JSON: what reconstructs the whole run, every
-// authorisation, launch, disposition, push and refusal (docs/prds/prd-command-centre.md § Phase 4).
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := s.store.Events(r.Context())
 	if err != nil {
@@ -327,14 +299,8 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, candidates)
 }
 
-// handleLaunch queues one launch intent per requested ticket, all sharing one fresh group token
-// so the next tick's ApplyLaunchIntents recognises them as a single authorisation. It does not
-// re-check Preview's Refused case: an authorised ticket whose blocker sits outside the slice
-// simply stays queued forever with an honest reason (§ A launch).
 func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	// ParseForm merges the posted body with the query string, so one checkbox per launchable row
-	// and a hand-built `POST /launch?ticket=...&ticket=...` are the same repeated field to r.Form.
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -394,15 +360,8 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleVerb queues one verb intent against one ticket — a handler only ever does this single
-// blind INSERT; the loop is the sole reader and actor on it (inv. 9, see loop.go's
-// applyKillIntents, push.go's applyRetryPushIntents and verbs.go's re-run/close-pr/
-// remove-worktree appliers).
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	// FormValue, not URL.Query: the page's per-row form posts both fields in the body, and
-	// reading the form falls back to the query string, which keeps a hand-built
-	// `POST /verb?verb=kill&ticket=...` working unchanged.
 	verb := r.FormValue("verb")
 	ticketURL := r.FormValue("ticket")
 	if verb == "" || ticketURL == "" {
@@ -448,8 +407,6 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// The swap shows the row's "<verb> queued" pill: the loop's next tick applies the intent, so
-	// there is nothing further to render yet.
 	if r.Header.Get("HX-Request") == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -457,9 +414,6 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) {
 	s.renderBoard(w, r, boardSwap)
 }
 
-// handleTicket edits one ticket's app-owned fields, branch and blocked_by. It writes an intent
-// row and redirects, like every other write handler (inv. 9): the next tick's
-// applyEditTicketIntents (loop.go) performs the actual write.
 func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := r.ParseForm(); err != nil {
@@ -485,8 +439,6 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Refused here rather than queued: applying it would leave the worktree and the row
-	// disagreeing on the ticket's branch.
 	if branch != ticket.Branch {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
@@ -507,8 +459,6 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleFeatures lists every feature the configured repos' trackers offer, read fresh from the
-// tracker on every request (§5, inv. 14).
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	all, err := importFeatures(ctx, s.repos, s.trackerFor)
@@ -533,8 +483,6 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 	return store.Ticket{}, false
 }
 
-// handleFeatureRedirect scopes the board to {feature}: a feature has no id or slug of its own,
-// only the tracker's own label name, which is exactly what ?feature= already matches.
 func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
 	feature := r.PathValue("feature")
 	http.Redirect(w, r, "/?feature="+url.QueryEscape(feature), http.StatusSeeOther)
@@ -556,8 +504,6 @@ func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
 	s.renderBoard(w, r, boardSwap)
 }
 
-// randomGroup mints the token that ties every intent from one POST /launch call together —
-// how N intents are recognised as one launch without a batch-key column.
 func randomGroup() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {

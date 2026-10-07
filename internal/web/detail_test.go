@@ -19,8 +19,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// detailStore seeds one running ticket with a worktree, a live PR carrying two checks and a log
-// file on disk: every value issue #76 asks the fragment to carry, in one fixture.
 func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
@@ -75,8 +73,6 @@ func selPagePath(ticketURL string) string {
 	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
 }
 
-// TestDetailFragmentCarriesEveryRowFact covers issue #76 AC2: one fragment, the parsed log,
-// checks, base SHA, elapsed and worktree.
 func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	t.Parallel()
 
@@ -254,8 +250,6 @@ func TestTheDeletedDetailRouteIs404(t *testing.T) {
 	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
 
-	// The issue's own route spelling and the pre-existing code's both 404, since either could
-	// still be bookmarked or linked.
 	for _, target := range []string{
 		"/ticket/" + url.PathEscape("sandbox://CC-1") + "/detail",
 		"/task/" + url.PathEscape("sandbox://CC-1") + "/detail",
@@ -307,8 +301,6 @@ func TestBoardLinksEveryRowToItsOwnSelection(t *testing.T) {
 	}
 }
 
-// TestHTMXIsServedFromTheBinary covers issue #76 AC1: vendored and local, so the page loads with
-// no network.
 func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	t.Parallel()
 
@@ -361,7 +353,6 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	}
 }
 
-// tc.from/tc.to model a (previously selected, now selected) pair across a board swap.
 func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	t.Parallel()
 
@@ -516,8 +507,6 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	}
 }
 
-// TestDetailSpansEveryBoardColumn keeps the fragment's colspan honest against the board's own
-// header, which lives in the other template and nothing else compares them.
 func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	t.Parallel()
 
@@ -538,12 +527,8 @@ func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	}
 }
 
-// hxAttrRE finds every htmx attribute in the rendered board, with the tag it sits on.
 var hxAttrRE = regexp.MustCompile(`<(\w+)([^>]*\shx-[\w:-]+=[^>]*)>`)
 
-// The launch checkbox and the row's own select control both carry hx-target="#board" as a
-// progressive enhancement over a plain checkbox and a plain (no-op without JS) button — neither
-// needs it to do its real job, so both are allowed here alongside the structural containers.
 func TestVerbsNeedNoJavaScript(t *testing.T) {
 	t.Parallel()
 
@@ -571,7 +556,6 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 		t.Errorf("a verb control carries htmx and so needs JavaScript: <%s%s>", tag, attrs)
 	}
 
-	// Every verb still reaches the server the way it did before htmx: a form the browser submits.
 	for _, want := range []string{
 		`<form method="post" action="/verb" hx-post=`,
 		`<form method="get" action="/confirm">`,
@@ -582,7 +566,6 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 			t.Errorf("the board is missing the scriptless path %q", want)
 		}
 	}
-	// hx-post is allowed only where the form would still post on its own with JavaScript off.
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		attrs := m[2]
 		postsOnItsOwn := strings.Contains(attrs, `method="post" action="/verb"`) ||
@@ -597,8 +580,6 @@ func selLogPagePath(ticketURL, mode string) string {
 	return "/board?" + url.Values{"sel": {ticketURL}, "log": {mode}}.Encode()
 }
 
-// TestLogFilterIsAURLParameterActiveInItsOwnLink covers the four ?log= filters: each is a plain
-// query parameter, and the render marks its own button active.
 func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 	t.Parallel()
 
@@ -622,9 +603,6 @@ func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 	}
 }
 
-// TestLogFilterSurvivesABoardSwap covers the fragment's own hx-get: the poll that swaps #board
-// every five seconds must carry the current ?log= forward, or a filtered panel would revert to
-// "all" on the very next tick.
 func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	t.Parallel()
 
@@ -641,8 +619,6 @@ func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	}
 }
 
-// TestJumpToFirstFailureIsAPlainAnchor covers the zero-JavaScript half of jump-to-first-failure:
-// a real <a href="#..."> against a real id, which a browser resolves with no script at all.
 func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 	t.Parallel()
 
@@ -663,9 +639,6 @@ func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 	}
 }
 
-// TestDroppedKindsNeverReachTheRender covers system/rate_limit_event/thinking: agentlog already
-// refuses to parse them into an Event, and this asserts that refusal actually keeps their raw
-// text out of the page rather than merely out of some intermediate value.
 func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	t.Parallel()
 

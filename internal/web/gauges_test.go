@@ -13,9 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// TestMastheadRendersTheLatestStoredReading covers "the masthead gauges render the latest stored
-// reading": the newest of two overlapping readings per window is what the board shows, and a
-// window with nothing stored yet still renders its gauge at 0% rather than being omitted.
 func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 	t.Parallel()
 
@@ -45,9 +42,6 @@ func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 	}
 }
 
-// TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker covers "survive a board poll without
-// flicker": with the underlying reading unchanged, two consecutive polls -- htmx's own 5s loop --
-// must render byte-identical gauge markup, not just the same numbers.
 func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 	t.Parallel()
 
@@ -70,9 +64,6 @@ func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 	}
 }
 
-// TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated covers CC-313's acceptance criterion: below
-// spend.MinSamples trailing intervals the gauge reads "calibrating", and once a window has
-// enough, it splits into cc's own share.
 func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 	t.Parallel()
 
@@ -85,9 +76,6 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 		t.Errorf("board masthead does not read calibrating below the sample threshold:\n%s", got)
 	}
 
-	// A real transcript in every interval's span, so leastSquares has something nonzero to fit
-	// against; no `runs` row is seeded, so cc's own share comes out 0% on a real, computed factor
-	// rather than the window simply staying uncalibrated.
 	projectsDir := t.TempDir()
 	project := filepath.Join(projectsDir, "proj")
 	if err := os.Mkdir(project, 0o755); err != nil {
@@ -103,8 +91,6 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// One more reading than spend.MinSamples, since the first has no previous reading yet to pair
-	// against and closes no interval of its own.
 	for i := range spend.MinSamples + 1 {
 		at := start.Add(time.Duration(i) * time.Hour)
 		reading := agentlog.Reading{
@@ -116,18 +102,12 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 		}
 	}
 
-	// No `runs` row was seeded, so cc's own cost_usd in the window is 0 -- the fit itself is real,
-	// it just has nothing of cc's own to attribute. Weekly is untouched by this test and stays
-	// calibrating, so the assertion is scoped to five-hour rather than the whole board.
 	board := renderBoard(t, server)
 	if !strings.Contains(board, "five-hour · 10% · 0% cc") {
 		t.Errorf("board masthead does not show five-hour's cc share once calibrated:\n%s", board)
 	}
 }
 
-// TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused covers CC-314's third acceptance
-// criterion: once the latest five-hour reading is at or above spend_limit_5h, the masthead names
-// the limit rather than merely showing the gauge.
 func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 	t.Parallel()
 
@@ -150,8 +130,6 @@ func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 	}
 }
 
-// TestMastheadStaysSilentBelowSpendLimit5h covers the flip side: a reading under the configured
-// limit renders no pause reason at all.
 func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
@@ -174,9 +152,6 @@ func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
 	}
 }
 
-// gaugeMarkup isolates the masthead's gauge spans out of a full board render, so the assertion
-// is about their own markup rather than the rest of the poll (elapsed time, live count) that is
-// expected to change tick to tick.
 func gaugeMarkup(t *testing.T, board string) string {
 	t.Helper()
 	start := strings.Index(board, `<span class="meter">`)

@@ -10,8 +10,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// testRunLog is one phase of plain tool use, a failure, a Skill boundary, a second phase and a
-// closing result -- the shape buildLogDetail is expected to cut and render.
 var testRunLog = mustReadTestdata("run.jsonl")
 
 func mustReadTestdata(name string) string {
@@ -80,7 +78,6 @@ func TestBuildLogDetailFiltersEventLinesButKeepsPhaseHeaders(t *testing.T) {
 	for _, tc := range []struct {
 		mode      string
 		wantLines [2]int // phase 0's own Fail carries the anchor, so a mode that hides it still
-		// emits one bare id="first-fail" placeholder line in phase 0's count.
 	}{
 		{"all", [2]int{2, 2}},
 		{"skills", [2]int{1, 0}},
@@ -122,9 +119,6 @@ func TestBuildLogDetailAnchorsOnlyTheRunsFirstFailure(t *testing.T) {
 	}
 }
 
-// TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure covers the "tools" and "skills"
-// modes: they filter the Fail event out of the render, but the jump-to-first-failure control
-// still renders unconditionally in the header, so #first-fail must still resolve to something.
 func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
 	t.Parallel()
 
@@ -178,9 +172,6 @@ func TestFilterLinksMarkTheActiveModeAndCarryTheSelection(t *testing.T) {
 		if l.Label == "all" && strings.Contains(l.Path, "log=all") {
 			t.Errorf("all.Path = %q, should not name the default filter", l.Path)
 		}
-		// A filter link is a plain <a href>, so it must point at the full page ("/"), not the
-		// fragment-only /board route -- /board serves the bare <table>, with no page shell, no
-		// stylesheet and no htmx script, which is what "zero JavaScript" is asked to still render.
 		if strings.HasPrefix(l.Path, "/board") {
 			t.Errorf("%s.Path = %q, points at the fragment-only /board route", l.Label, l.Path)
 		}

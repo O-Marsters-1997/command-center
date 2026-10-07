@@ -150,7 +150,6 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// A handler reading only the query string sees neither of these.
 	body := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
 	if err != nil {
@@ -175,8 +174,6 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	}
 }
 
-// TestVerbLandsTheBrowserBackOnTheBoard is the redirect from the browser's side: the default
-// client, like a browser, follows the 303 with a GET and ends up on the page.
 func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	t.Parallel()
 

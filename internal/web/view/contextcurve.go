@@ -18,8 +18,6 @@ const (
 	curvePadBottom = 16.0
 )
 
-// curveSeries is one thread's context-token series, ready for detail.tmpl's inline SVG. Class
-// names one of app.css's static chart-series-N tokens, never a computed utility string.
 type curveSeries struct {
 	Label string
 	Class string
@@ -127,8 +125,6 @@ func contextCurveTicks(maxContext int64, scaleY func(int64) float64) []curveTick
 	return ticks
 }
 
-// niceTicks is web/src/charts.tsx's own niceTicks, ported so both renderers pick the same 1/2/5
-// axis ladder.
 func niceTicks(maxValue int64, targetCount int) []int64 {
 	if maxValue <= 0 {
 		return []int64{0}
