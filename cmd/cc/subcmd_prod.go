@@ -20,8 +20,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// subcmd resolves the release binary's subcommands, open, useradd and passwd. `cc tick` and
-// `cc request` exist only under -tags=e2e.
 func subcmd(args []string) func(ctx context.Context, configPath string) error {
 	if len(args) == 0 {
 		return nil
@@ -69,63 +67,42 @@ func open(ctx context.Context, configPath string) error {
 	return exec.CommandContext(ctx, opener, target).Run()
 }
 
-func useradd(ctx context.Context, configPath string, args []string) (err error) {
-	flags := flag.NewFlagSet("useradd", flag.ContinueOnError)
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	rest := flags.Args()
-	if len(rest) != 1 {
-		return fmt.Errorf("usage: cc useradd <email>")
-	}
-	email := rest[0]
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		return err
-	}
-	store, err := store.OpenStore(cfg.DatabaseURL)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, store.Close()) }()
-
-	password, err := auth.GeneratePassword()
-	if err != nil {
-		return err
-	}
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		return err
-	}
-	if err := store.CreateUser(ctx, email, hash, time.Now()); err != nil {
-		return err
-	}
-
-	fmt.Println(password)
-	return nil
+func useradd(ctx context.Context, configPath string, args []string) error {
+	return setPassword(ctx, configPath, "useradd", args,
+		func(ctx context.Context, st *store.Store, email, hash string) error {
+			return st.CreateUser(ctx, email, hash, time.Now())
+		})
 }
 
-func passwd(ctx context.Context, configPath string, args []string) (err error) {
-	flags := flag.NewFlagSet("passwd", flag.ContinueOnError)
+func passwd(ctx context.Context, configPath string, args []string) error {
+	return setPassword(ctx, configPath, "passwd", args,
+		func(ctx context.Context, st *store.Store, email, hash string) error {
+			return st.SetPassword(ctx, email, hash)
+		})
+}
+
+func setPassword(
+	ctx context.Context, configPath, name string, args []string,
+	write func(ctx context.Context, st *store.Store, email, hash string) error,
+) (err error) {
+	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	rest := flags.Args()
-	if len(rest) != 1 {
-		return fmt.Errorf("usage: cc passwd <email>")
+	if flags.NArg() != 1 {
+		return fmt.Errorf("usage: cc %s <email>", name)
 	}
-	email := rest[0]
+	email := flags.Arg(0)
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, store.Close()) }()
+	defer func() { err = errors.Join(err, st.Close()) }()
 
 	password, err := auth.GeneratePassword()
 	if err != nil {
@@ -135,7 +112,7 @@ func passwd(ctx context.Context, configPath string, args []string) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := store.SetPassword(ctx, email, hash); err != nil {
+	if err := write(ctx, st, email, hash); err != nil {
 		return err
 	}
 
