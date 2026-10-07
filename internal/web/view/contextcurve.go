@@ -25,14 +25,14 @@ type curveSeries struct {
 	Title string
 }
 
-type curveTick struct {
+type chartTick struct {
 	Y     float64
 	Label string
 }
 
 type ContextCurve struct {
 	Series []curveSeries
-	Ticks  []curveTick
+	Ticks  []chartTick
 	Width  float64
 	Height float64
 }
@@ -91,7 +91,9 @@ func buildContextCurve(requests []store.RunRequest) ContextCurve {
 		series[i] = curveSeries{
 			Label: label,
 			Class: fmt.Sprintf("chart-series-%d", i%5),
-			Path:  linePath(points, scaleX, scaleY),
+			Path: polyline(len(points),
+				func(j int) float64 { return scaleX(points[j].x) },
+				func(j int) float64 { return scaleY(points[j].ctx) }),
 			Title: label + ": " + joinInt64s(values),
 		}
 	}
@@ -104,24 +106,24 @@ func buildContextCurve(requests []store.RunRequest) ContextCurve {
 	}
 }
 
-func linePath(points []curvePoint, scaleX func(int) float64, scaleY func(int64) float64) string {
+func polyline(count int, x, y func(i int) float64) string {
 	var b strings.Builder
-	for i, p := range points {
+	for i := range count {
 		cmd := "L"
 		if i == 0 {
 			cmd = "M"
 		}
-		fmt.Fprintf(&b, "%s %.2f %.2f ", cmd, scaleX(p.x), scaleY(p.ctx))
+		fmt.Fprintf(&b, "%s %.2f %.2f ", cmd, x(i), y(i))
 	}
 	return strings.TrimSpace(b.String())
 }
 
-func contextCurveTicks(maxContext int64, scaleY func(int64) float64) []curveTick {
+func contextCurveTicks(maxContext int64, scaleY func(int64) float64) []chartTick {
 	values := niceTicks(float64(maxContext), 4)
-	ticks := make([]curveTick, len(values))
+	ticks := make([]chartTick, len(values))
 	for i, v := range values {
 		tokens := int64(math.Round(v))
-		ticks[i] = curveTick{Y: scaleY(tokens), Label: strconv.FormatInt(tokens, 10)}
+		ticks[i] = chartTick{Y: scaleY(tokens), Label: strconv.FormatInt(tokens, 10)}
 	}
 	return ticks
 }

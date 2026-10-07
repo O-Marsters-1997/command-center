@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -16,11 +15,6 @@ const (
 	insightsMedianWindow   = 10
 )
 
-type insightsTick struct {
-	Y     float64
-	Label string
-}
-
 type insightsDot struct {
 	X, Y  float64
 	Title string
@@ -30,7 +24,7 @@ type InsightsChart struct {
 	Width, Height float64
 	PadLeft       float64
 	Count         int
-	Ticks         []insightsTick
+	Ticks         []chartTick
 	MedianPath    string
 	MedianWindow  int
 	Dots          []insightsDot
@@ -66,22 +60,15 @@ func buildInsightsChart(resp InsightsResponse) InsightsChart {
 	chart := InsightsChart{
 		Width: insightsChartWidth, Height: insightsChartHeight, PadLeft: insightsChartPadLeft,
 		Count: len(pcts), MedianWindow: insightsMedianWindow,
-		Ticks: make([]insightsTick, len(tickValues)),
+		Ticks: make([]chartTick, len(tickValues)),
 		Dots:  make([]insightsDot, len(pcts)),
 	}
 	for i, v := range tickValues {
-		chart.Ticks[i] = insightsTick{Y: scaleY(v), Label: strconv.FormatFloat(v, 'f', -1, 64) + "%"}
+		chart.Ticks[i] = chartTick{Y: scaleY(v), Label: strconv.FormatFloat(v, 'f', -1, 64) + "%"}
 	}
 
-	var path strings.Builder
-	for i, m := range rollingMedian(pcts, insightsMedianWindow) {
-		cmd := "L"
-		if i == 0 {
-			cmd = "M"
-		}
-		fmt.Fprintf(&path, "%s %.2f %.2f ", cmd, scaleX(i), scaleY(m))
-	}
-	chart.MedianPath = strings.TrimSpace(path.String())
+	medians := rollingMedian(pcts, insightsMedianWindow)
+	chart.MedianPath = polyline(len(medians), scaleX, func(i int) float64 { return scaleY(medians[i]) })
 
 	for i, p := range resp.Points {
 		name := p.Title
