@@ -30,9 +30,8 @@ type Gauge struct {
 	ResetsAt    time.Time
 }
 
-// LatestReadings returns the newest reading for every window that has one, keyed by window. A
-// window with no reading yet is simply absent, never a zero-valued Gauge. It is LatestReadingsFull
-// trimmed to the masthead's own Gauge shape, rather than a second query over the same rows.
+// LatestReadings returns the newest reading for every window that has one, keyed by
+// window. A window with no reading is absent.
 func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, error) {
 	readings, err := s.LatestReadingsFull(ctx)
 	if err != nil {

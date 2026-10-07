@@ -12,15 +12,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// editTicketPayload is an intent's free-form payload for verb "edit_ticket" -- the frozen v1
-// schema's intents.payload is JSON precisely so a new verb's own fields need no migration.
 type editTicketPayload struct {
 	Branch    string   `json:"branch"`
 	BlockedBy []string `json:"blocked_by"`
 }
 
-// QueueEditTicketIntent records one ticket's requested branch and blocked_by. A handler only
-// ever does this one blind INSERT; the loop is the sole reader and actor on it (inv. 9).
+// QueueEditTicketIntent records one ticket's requested branch and blocked_by.
 func (s *Store) QueueEditTicketIntent(
 	ctx context.Context, ticketURL, branch string, blockedBy []string, at time.Time,
 ) error {
@@ -66,9 +63,8 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 	return intents, nil
 }
 
-// EditTicket writes branch and blocked_by directly -- the only two columns POST /ticket can
-// change, refreshed only by ImportTickets otherwise. A blocked_by breaking its own feature's
-// closure is refused whole rather than written.
+// EditTicket writes branch and blocked_by directly. A blocked_by breaking its own
+// feature's closure is refused whole.
 func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

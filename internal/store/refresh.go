@@ -17,9 +17,8 @@ const (
 	EventVerificationFailed = "verification_failed"
 )
 
-// RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL. A
-// refusal or a verification failure gates the automatic pass's retry; the refresh verb ignores it
-// (docs/designs/command-centre-design.md § 4a).
+// RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL.
+// A refusal or verification failure gates the automatic retry; the refresh verb ignores it.
 func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, error) {
 	outcomes, err := s.LatestRefreshOutcomes(ctx)
 	if err != nil {
@@ -37,13 +36,11 @@ func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, 
 	return facts, nil
 }
 
-// RefreshOutcome is one ticket's latest refresh-domain event: its kind and detail.
+// RefreshOutcome is one ticket's latest refresh-domain event.
 type RefreshOutcome struct{ Kind, Detail string }
 
-// LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last recorded
-// push, keyed by ticket URL: a failure the automatic pass never retries, or a later success that
-// supersedes an earlier failure without needing its own push
-// (docs/designs/command-centre-design.md § 4a).
+// LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last
+// recorded push, keyed by ticket URL.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOutcome, error) {
 	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
 		Kind:   EventRefreshRefused,
@@ -65,5 +62,3 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOu
 	}
 	return outcomes, nil
 }
-
-// applyRefreshIntents runs every requested refresh, which bypasses the RefreshFacts gate the way
