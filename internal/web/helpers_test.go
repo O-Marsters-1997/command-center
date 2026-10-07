@@ -2,6 +2,8 @@ package web_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func openStore(t *testing.T) *store.Store {
@@ -59,3 +62,16 @@ type realClock struct{}
 
 func (realClock) Now() time.Time                         { return time.Now() }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+
+var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func newServer(st *store.Store, now time.Time) *web.Server {
+	return web.NewServer(st, fixedClock(now), nil, "")
+}
+
+func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	return rec
+}

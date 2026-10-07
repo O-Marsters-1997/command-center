@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -36,8 +35,7 @@ func TestConfirmPageIsGone(t *testing.T) {
 	t.Parallel()
 
 	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/confirm?verb=kill&ticket=sandbox://CC-1", nil))
+	rec := get(t, server, "/confirm?verb=kill&ticket=sandbox://CC-1")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}

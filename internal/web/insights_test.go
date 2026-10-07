@@ -281,7 +281,7 @@ func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 	resp, body := fetchInsights(t, server, "")
 
 	if resp.StatusCode != http.StatusOK {
@@ -309,7 +309,7 @@ func TestHandleInsightsFallsBackToThirtyDaysOnBadSince(t *testing.T) {
 
 	store := openStore(t)
 	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	for _, query := range []string{"", "since=not-a-date", "since=2026-13-40"} {
 		_, body := fetchInsights(t, server, query)

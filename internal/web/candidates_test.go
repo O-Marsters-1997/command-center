@@ -128,7 +128,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	const parentTip = "parent-tip"
 	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {

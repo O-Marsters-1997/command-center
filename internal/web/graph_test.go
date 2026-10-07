@@ -37,8 +37,7 @@ func boardPillText(t *testing.T, page, ticketURL string) string {
 
 func fetchGraph(t *testing.T, server *web.Server) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/graph.json", nil))
+	rec := get(t, server, "/graph.json")
 	return rec
 }
 

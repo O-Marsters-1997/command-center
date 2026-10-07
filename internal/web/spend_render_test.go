@@ -11,7 +11,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 const spendAliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
@@ -45,7 +44,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 
 	aliveTicket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	alivePath := filepath.Join(t.TempDir(), "1.jsonl")
@@ -53,9 +52,8 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 		t.Fatal(err)
 	}
 	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
-	aliveServer := web.NewServer(aliveStore, fixedClock(now), nil, "")
-	rec := httptest.NewRecorder()
-	aliveServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	aliveServer := newServer(aliveStore, now)
+	rec := get(t, aliveServer, "/")
 	if !strings.Contains(rec.Body.String(), "15 tok") {
 		t.Errorf("alive run's page does not contain \"15 tok\":\n%s", rec.Body)
 	}
@@ -66,7 +64,7 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 		t.Fatal(err)
 	}
 	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
-	endedServer := web.NewServer(endedStore, fixedClock(now), nil, "")
+	endedServer := newServer(endedStore, now)
 	rec = httptest.NewRecorder()
 	endedServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rec.Body.String(), "$1.23") {
@@ -77,17 +75,16 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 func TestBandSpendCardFillsFromTheSameSettledRows(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	ticket := storepkg.Ticket{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"}
 	logPath := filepath.Join(t.TempDir(), "3.jsonl")
 	if err := os.WriteFile(logPath, []byte(spendAliveLine+spendResultLine), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := spendRowStore(t, ticket, logPath, false, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 
 	body := rec.Body.String()
 	for _, want := range []string{"$1.23", "1 runs", "0 failed", "avg $1.23"} {

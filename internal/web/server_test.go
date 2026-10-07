@@ -146,12 +146,12 @@ func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 func seededServer(t *testing.T) *web.Server {
 	t.Helper()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
 		t.Fatal(err)
 	}
-	return web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	return newServer(store, observedAt.Add(45*time.Second))
 }
 
 func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
@@ -207,7 +207,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	const parentTip, childTip = "parent-tip", "child-tip"
@@ -261,7 +261,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	const tip = "ci-tip"
 	if err := store.RecordPush(ctx, ticket.URL, tip, "main", "main-tip", at); err != nil {
@@ -325,7 +325,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://CC-1", at)
 	const tip = "cc-1-tip"
 	if err := store.RecordPush(ctx, "sandbox://CC-1", tip, "main", "main-tip", at); err != nil {
@@ -371,8 +371,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 
 	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
+	rec := get(t, server, "/nope")
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
 	}
@@ -571,13 +570,12 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	t.Parallel()
 
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	server := newServer(store, now)
+	rec := get(t, server, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -636,11 +634,10 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil, "")
+	observedAt := testNow
+	server := newServer(seededStore(t, observedAt), observedAt)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 
 	body := rec.Body.String()
 	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
@@ -676,10 +673,10 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 
 	ctx := t.Context()
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
 		t.Fatal(err)
@@ -719,13 +716,13 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	store := seededStore(t, now)
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", now); err != nil {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
 		t.Errorf("state = %q, want %q", got, "ready · launch queued")
 	}

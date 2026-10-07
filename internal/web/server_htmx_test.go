@@ -106,9 +106,9 @@ func TestPageRendersTheMastheadAndBandExactlyOnce(t *testing.T) {
 func TestAgesCarryTheAbsoluteInstantForTheClock(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
-	server := web.NewServer(store, fixedClock(observedAt.Add(90*time.Second)), nil, "")
+	server := newServer(store, observedAt.Add(90*time.Second))
 	body := renderPath(t, server, "/")
 
 	for _, want := range []string{

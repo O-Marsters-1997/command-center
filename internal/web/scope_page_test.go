@@ -2,11 +2,9 @@ package web_test
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -27,7 +25,7 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +34,7 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 
 func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	repos := []config.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
 	return web.NewServer(threeRepoStore(t), fixedClock(at), repos, "")
 }
@@ -136,7 +134,7 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -145,8 +143,8 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 
 func threeFeatureServer(t *testing.T) *web.Server {
 	t.Helper()
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return web.NewServer(threeFeatureStore(t), fixedClock(at), nil, "")
+	at := testNow
+	return newServer(threeFeatureStore(t), at)
 }
 
 func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
@@ -199,7 +197,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -319,8 +317,7 @@ func TestGraphJSONRespectsTheRepoScope(t *testing.T) {
 
 func fetchGraphPath(t *testing.T, server *web.Server, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	rec := get(t, server, path)
 	return rec
 }
 

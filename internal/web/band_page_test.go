@@ -3,17 +3,14 @@ package web_test
 import (
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(store, now)
 
 	page := renderPage(t, server)
 	for _, want := range []string{
@@ -36,9 +33,9 @@ func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 func TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
-	server := web.NewServer(store, fixedClock(observedAt), nil, "")
+	server := newServer(store, observedAt)
 
 	page := renderPage(t, server)
 	if !strings.Contains(page, "2/2 yours") {

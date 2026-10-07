@@ -2,26 +2,23 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func TestRunningRowsPillPulsesUnattendedDisc(t *testing.T) {
 	t.Parallel()
 
 	ticket := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	server := newServer(store, now)
+	rec := get(t, server, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -35,11 +32,10 @@ func TestRunningRowsPillPulsesUnattendedDisc(t *testing.T) {
 func TestEndedRunsPillDoesNotPulse(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 
 	if strings.Contains(body, "pill-pulse") {
