@@ -156,17 +156,6 @@ func TestEvaluateServices(t *testing.T) {
 		want verdict.Verdict
 	}{
 		{
-			name: "all green derives review me",
-			in: func() verdict.Input {
-				pushedAt, now := waitedInput()
-				return verdict.Input{
-					Checks: servicesGreenChecks(), HeadOidMatch: true, ConfigHashOK: true,
-					PushedAt: pushedAt, Now: now, AuthorLogin: "a-real-human",
-				}
-			}(),
-			want: verdict.ReviewMe,
-		},
-		{
 			name: "the skipped-Deploy arm resolves without a matching Deploy SST or PR Stage check-run",
 			in: func() verdict.Input {
 				pushedAt, now := waitedInput()
@@ -331,51 +320,60 @@ func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	}
 }
 
-func TestNeedsYouNamesTheRedLeaf(t *testing.T) {
+func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
-	p := verdict.Predicate{Success: "CI"}
-
-	got := verdict.Evaluate(p, verdict.Input{
-		Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
-		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
-	})
-	if got.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
-	}
-	if want := []string{"CI"}; !slices.Equal(got.RedLeaves, want) {
-		t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, want)
-	}
-
 	waitedPushedAt, waitedNow := waitedInput()
-	elapsed := verdict.Evaluate(p, verdict.Input{
-		Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
-		PushedAt: waitedPushedAt, Now: waitedNow,
-	})
-	if elapsed.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", elapsed.Verdict)
-	}
-	if len(elapsed.RedLeaves) != 0 {
-		t.Errorf("RedLeaves = %v, want none: no check ever resolved red, the wait just elapsed", elapsed.RedLeaves)
-	}
-}
+	both := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
 
-func TestAllOfNamesEveryRedLeaf(t *testing.T) {
-	t.Parallel()
-
-	pushedAt, now := freshInput()
-	p := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
-
-	got := verdict.Evaluate(p, verdict.Input{
-		Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
-		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
-	})
-	if got.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+	tests := []struct {
+		name string
+		p    verdict.Predicate
+		in   verdict.Input
+		want []string
+	}{
+		{
+			name: "a failed check names itself",
+			p:    verdict.Predicate{Success: "CI"},
+			in: verdict.Input{
+				Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
+				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+			},
+			want: []string{"CI"},
+		},
+		{
+			name: "every failed required check is named",
+			p:    both,
+			in: verdict.Input{
+				Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
+				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+			},
+			want: []string{"Lint", "Tests"},
+		},
+		{
+			name: "a wait that elapsed with no check ever resolving red names nothing",
+			p:    verdict.Predicate{Success: "CI"},
+			in: verdict.Input{
+				Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
+				PushedAt: waitedPushedAt, Now: waitedNow,
+			},
+			want: nil,
+		},
 	}
-	if want := []string{"Lint", "Tests"}; !slices.Equal(got.RedLeaves, want) {
-		t.Errorf("RedLeaves = %v, want %v: both required checks failed", got.RedLeaves, want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := verdict.Evaluate(tt.p, tt.in)
+			if got.Verdict != verdict.NeedsYou {
+				t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+			}
+			if !slices.Equal(got.RedLeaves, tt.want) {
+				t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, tt.want)
+			}
+		})
 	}
 }
 

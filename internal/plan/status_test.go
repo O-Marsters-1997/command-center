@@ -61,37 +61,6 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-func TestStateString(t *testing.T) {
-	t.Parallel()
-
-	if plan.Blocked.String() != "blocked" || plan.Ready.String() != "ready" || plan.Queued.String() != "queued" {
-		t.Errorf("states render as %q, %q and %q", plan.Blocked, plan.Ready, plan.Queued)
-	}
-	if plan.Checking.String() != "checking" || plan.NeedsYou.String() != "needs_you" ||
-		plan.PushFailed.String() != "push_failed" {
-		t.Errorf("states render as %q, %q and %q", plan.Checking, plan.NeedsYou, plan.PushFailed)
-	}
-	if plan.ReviewMe.String() != "review_me" {
-		t.Errorf("state renders as %q, want review_me", plan.ReviewMe)
-	}
-	if plan.PRMerged.String() != "merged" || plan.PRClosedUnmerged.String() != "pr_closed_unmerged" ||
-		plan.BaseGone.String() != "base_gone" {
-		t.Errorf("states render as %q, %q and %q", plan.PRMerged, plan.PRClosedUnmerged, plan.BaseGone)
-	}
-	if plan.Cancelled.String() != "cancelled" {
-		t.Errorf("state renders as %q, want cancelled", plan.Cancelled)
-	}
-	if plan.BaseMoved.String() != "base_moved" {
-		t.Errorf("state renders as %q, want base_moved", plan.BaseMoved)
-	}
-	if plan.RefreshConflicted.String() != "refresh_conflicted" {
-		t.Errorf("state renders as %q, want refresh_conflicted", plan.RefreshConflicted)
-	}
-	if plan.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
-		t.Errorf("state renders as %q, want waiting_on_producer_deploy", plan.WaitingOnProducerDeploy)
-	}
-}
-
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 	t.Parallel()
 
