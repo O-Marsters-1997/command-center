@@ -1,17 +1,10 @@
 package web
 
 import (
-	_ "embed"
-	"html/template"
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
-
-//go:embed logline.tmpl
-var loglineSource string
-
-var _ = template.Must(page.New("logline").Parse(loglineSource))
 
 type logLineData struct {
 	Kind   string
@@ -23,7 +16,7 @@ type logLineData struct {
 func renderLogLine(e agentlog.Event, anchor bool) (string, error) {
 	data := logLineData{Kind: e.Kind.String(), Tool: flatten(e.Tool), Detail: flatten(e.Detail), Anchor: anchor}
 	var buf strings.Builder
-	if err := page.ExecuteTemplate(&buf, "logline", data); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "logline", data); err != nil {
 		return "", err
 	}
 	return buf.String(), nil

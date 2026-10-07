@@ -1,4 +1,4 @@
-<td colspan="10">
+{{define "detail"}}<td colspan="10">
   <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-4">
     <dt class="text-muted">base sha</dt><dd class="m-0">{{.BaselineSHA}}</dd>
     <dt class="text-muted">worktree</dt><dd class="m-0">{{if .Worktree}}{{.Worktree}}{{else}}no worktree has been cut{{end}}</dd>
@@ -72,3 +72,4 @@
   </form>
   {{- end}}
 </td>
+{{end}}

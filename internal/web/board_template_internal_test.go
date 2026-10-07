@@ -19,7 +19,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", view); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -47,7 +47,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", view); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -69,8 +69,9 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 		AgentPctWeek: 1.5, ResolvePctWeek: 0.5, FollowUpPctWeek: 0.25,
 		SpendPctWeek: 2.25, TicketOpen: true,
 	}
+	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
@@ -96,8 +97,9 @@ func TestBoardTemplateOmitsOpenForAMergedTicket(t *testing.T) {
 		URL: "sandbox://CC-1", State: "merged", Tone: "done",
 		AgentPctWeek: 1, SpendPctWeek: 1, TicketOpen: false,
 	}
+	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
