@@ -248,7 +248,10 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Verdict: verdict.WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"},
+				Verdict: &verdict.Result{
+					Verdict: verdict.WaitingOnProducerDeploy,
+					Reason:  "every required check passed except the compat check",
+				},
 			},
 			wantState: plan.WaitingOnProducerDeploy,
 			reasonHas: "except the compat check",
@@ -257,7 +260,10 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a base-moved verdict derives base moved even over a needs-you check reading",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Verdict: verdict.BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"},
+				Verdict: &verdict.Result{
+					Verdict: verdict.BaseMoved,
+					Reason:  "base moved: the parent advanced past what this branch was cut from",
+				},
 			},
 			wantState: plan.BaseMoved,
 			reasonHas: "the parent advanced",

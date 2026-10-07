@@ -285,7 +285,8 @@ func draftReason(
 		return "", false
 	}
 	gating := GatingBlockers(t, byURL)
-	draft, gateReason := DraftGate(gating, prs, run != nil && run.Verdict != nil && run.Verdict.Verdict == verdict.ReviewMe)
+	reviewMe := run != nil && run.Verdict != nil && run.Verdict.Verdict == verdict.ReviewMe
+	draft, gateReason := DraftGate(gating, prs, reviewMe)
 	if !draft {
 		return "ready to un-draft; the last gh pr ready call has not taken effect yet", true
 	}
