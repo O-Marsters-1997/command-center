@@ -411,6 +411,9 @@ func detailIDFor(t *testing.T, server *web.Server, ticketURL string) string {
 	t.Helper()
 	rec := get(t, server, selPagePath(ticketURL))
 	m := regexp.MustCompile(`<tr id="(detail-[0-9a-f]+)" hx-preserve="true">`).FindStringSubmatch(rec.Body.String())
+	if m == nil {
+		t.Fatalf("no detail row for %s", ticketURL)
+	}
 	return m[1]
 }
 
