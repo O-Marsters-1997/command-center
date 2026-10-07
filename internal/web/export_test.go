@@ -13,14 +13,14 @@ import (
 )
 
 func RenderStatesPage(states []plan.State) (string, error) {
-	return renderStates(page, states)
+	return renderStates("page.tmpl", states)
 }
 
 func RenderStatesBoard(states []plan.State) (string, error) {
-	return renderStates(boardFragment, states)
+	return renderStates("board", states)
 }
 
-func renderStates(tmpl *template.Template, states []plan.State) (string, error) {
+func renderStates(name string, states []plan.State) (string, error) {
 	board := view.Board{
 		Chrome:           view.Chrome{Observe: view.Age{Age: "0s ago"}},
 		BoardPollSeconds: config.DefaultBoardPollSeconds,
@@ -37,7 +37,7 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 	}
 
 	var out strings.Builder
-	if err := tmpl.Execute(&out, board); err != nil {
+	if err := templates.ExecuteTemplate(&out, name, board); err != nil {
 		return "", err
 	}
 	return out.String(), nil

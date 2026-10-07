@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func openStore(t *testing.T) *store.Store {
@@ -30,7 +30,7 @@ type frozenClock struct{ at time.Time }
 func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
-func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
+func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()

@@ -16,7 +16,7 @@ import (
 
 const logPollInterval = 250 * time.Millisecond
 
-func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	ticketURL := r.PathValue("ticket")
 	offset, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
@@ -29,8 +29,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -45,15 +44,15 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 			// reconnects for ever; sse-close on the <pre> retires the EventSource on this.
 			_, _ = io.WriteString(w, "event: end\ndata:\n\n")
 			_ = flusher.Flush()
-			return
+			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-s.clock.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
-			return
+			return nil
 		}
 	}
 }
