@@ -11,18 +11,12 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// retryPushVerb is the only verb push failed offers a human: the push step alone, no agent
-// (docs/prds/prd-command-centre.md § The states).
 const retryPushVerb = plan.VerbRetryPush
 
 const commitResolutionVerb = plan.VerbCommitResolution
 
 const eventCommitResolutionRefused = "commit_resolution_refused"
 
-// pushPushable is job 1's push step (docs/prds/prd-command-centre.md § The tick): every ticket whose
-// latest run disposed with commits gets its branch diffed against its base and either pushed
-// and PR-opened, or refused outright. A push or PR-create failure is not retried automatically
-// -- retry-push is your verb (see applyRetryPushIntents).
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	lastPushed, err := l.store.LastPushedTips(ctx)
 	if err != nil {
@@ -59,7 +53,7 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 	now := l.clock.Now()
 	for _, ticketURL := range toPush {
 		if facts[ticketURL].Failed || facts[ticketURL].Refused || refreshFacts[ticketURL].VerificationFailed {
-			continue // needs a human's retry-push, never an automatic one
+			continue
 		}
 		e, _ := snap.Entry(ticketURL)
 		tip := obs.LocalTips[branchKey(e.Ticket.Repo, e.Ticket.Branch)]
@@ -70,9 +64,6 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 	return nil
 }
 
-// applyRetryPushIntents consumes every pending retry-push request synchronously, bypassing
-// pushPushable's failure gate: this is the retry (docs/prds/prd-command-centre.md § The states, push
-// failed's only verb).
 func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	intents, err := l.store.PendingVerbIntents(ctx, retryPushVerb)
 	if err != nil {
@@ -168,10 +159,6 @@ func (l *Loop) commitResolutionOne(ctx context.Context, e plan.Entry, obs plan.O
 	return l.pushOne(ctx, e, tip, obs, now)
 }
 
-// pushBranch pushes branch, leasing on recordedTip only when the app's own restack is what left
-// the local branch no longer descended from it (issue #89). A rewrite the app did not perform --
-// an agent's amend or reset in the worktree -- takes the plain push and stays a push failed a
-// human is told about, and the lease still refuses if anything reached origin since that tip.
 func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, restacked bool) error {
 	if !restacked || recordedTip == "" {
 		return git.Push(ctx, repoPath, branch)
@@ -186,16 +173,12 @@ func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, resta
 	return git.PushRestacked(ctx, repoPath, branch, recordedTip)
 }
 
-// pushOne diffs the branch against the base its snapshot entry names, and either records a
-// refusal event or attempts the push-and-adopt-or-create sequence. An existing open PR is adopted,
-// never duplicated (inv. 20): recording the push only after create-or-adopt is what makes a crash
-// between them a non-event.
 func (l *Loop) pushOne(
 	ctx context.Context, e plan.Entry, localTip string, obs plan.Observation, now time.Time,
 ) error {
 	t := e.Ticket
 	if !e.Unlock.Unlocked {
-		return nil // its blocker's PR closed between run and push; nothing sane to diff against
+		return nil
 	}
 	base := e.Unlock.BaseBranch
 	repoPath := repoPathsByName(l.cfg.Repos)[t.Repo]

@@ -6,9 +6,6 @@ import (
 	"os"
 )
 
-// agentSettings is the app-owned settings file passed to every spawn: deny beats the repos'
-// own tracked and synced allows, so an agent's pre-approved push (docs/prds/prd-command-centre.md §
-// The agent edits the CI config) never reaches it.
 const agentSettings = `{
   "permissions": {
     "deny": [
@@ -73,7 +70,6 @@ type agentDefinition struct {
 	Model       string   `json:"model"`
 }
 
-// agentDigestDefinition is the --agents JSON passed to every spawned implement run.
 var agentDigestDefinition = map[string]agentDefinition{
 	"digest": {
 		Description: "Reads code or output to answer one question, without growing the caller's context.",

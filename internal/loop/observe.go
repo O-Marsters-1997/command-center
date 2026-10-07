@@ -58,9 +58,6 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			}
 			maps.Copy(obs.Titles, titles)
 
-			// defaultBaseBranch's own tip is read too (§4a), under mainTipKey rather than its plain
-			// name: unlike a ticket's own branch, every repo has a "main", so the plain name would
-			// collide the moment a second repo is configured.
 			mainTip, mainErr := git.RevParse(ctx, path, "origin/"+defaultBaseBranch)
 			if mainErr == nil {
 				obs.BranchTips[mainTipKey(repo.Name)] = mainTip
@@ -68,7 +65,7 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			for _, branch := range branches {
 				tip, err := git.RevParse(ctx, path, "origin/"+branch)
 				if err != nil {
-					continue // never pushed, so there is no remote branch to read or to cut from
+					continue
 				}
 				obs.BranchTips[branchKey(repo.Name, branch)] = tip
 				if mainErr != nil {
@@ -110,7 +107,7 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			}
 
 			if repo.MergifySHA == "" {
-				continue // no predicate opted in; nothing to hash or gate on (§7)
+				continue
 			}
 			hash, err := mergifyHash(ctx, path)
 			if err != nil {
@@ -122,9 +119,6 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 	}
 }
 
-// mergifyHash hashes .mergify.yml as origin's default branch holds it, formatted to match the
-// mergify_sha a human records after reviewing the file (docs/designs/command-centre-design.md
-// § 7). The ref, not the working tree: a dirty checkout is not a config change.
 func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	data, err := git.ShowFile(ctx, repoPath, "origin/"+defaultBaseBranch, ".mergify.yml")
 	if err != nil {
@@ -134,16 +128,8 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-// peerReader is MergesCleanly's shape, the seam a test replaces to count calls instead of
-// shelling out to git.
 type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []string, error)
 
-// recordPeerConflicts fills in ConflictsWithPeer for one repo's branches, reusing the prior
-// tick's read for any pair whose two tips have not moved since (#180,
-// docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md): a pair's answer only changes when one of
-// its two tips moves, and BranchTips already carries them, so an unmoved pair costs no
-// merge-tree call at all. A zero-value prev (nothing observed yet) never matches a real tip,
-// so a cold start falls through to merges for every pair without special-casing it.
 func recordPeerConflicts(
 	ctx context.Context, repoPath, repo string, branches []string, tips map[string]string,
 	prev plan.Observation, into map[string]map[string]bool, merges peerReader,
@@ -172,8 +158,6 @@ func recordPeerConflicts(
 	return nil
 }
 
-// cachedPeerConflict returns the prior tick's read for (branchA, branchB), valid only when both
-// tips still match what that tick observed.
 func cachedPeerConflict(prev plan.Observation, repo, branchA, tipA, branchB, tipB string) (conflicts, ok bool) {
 	if prev.BranchTips[branchKey(repo, branchA)] != tipA || prev.BranchTips[branchKey(repo, branchB)] != tipB {
 		return false, false
@@ -182,9 +166,6 @@ func cachedPeerConflict(prev plan.Observation, repo, branchA, tipA, branchB, tip
 	return conflicts, ok
 }
 
-// recordConflictsWithPeer stores one pair's result under both branch names, so a later lookup
-// works from either side once ref order (internal/loop's decide step) says which one is "this"
-// branch and which the peer.
 func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, conflicts bool) {
 	keyA, keyB := branchKey(repo, a), branchKey(repo, b)
 	if m[keyA] == nil {

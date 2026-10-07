@@ -46,8 +46,6 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 	return nil
 }
 
-// recordHandChurn diffs push.PushedTip (pushOne's own last write, cc's last commit) against the
-// merged PR's head, leaving hand_churn_lines NULL rather than 0 when there is nothing to diff.
 func (l *Loop) recordHandChurn(ctx context.Context, t store.Ticket, pr plan.PR, push plan.PushRow, repoPath string) {
 	if push.PushedTip == "" || repoPath == "" || pr.HeadOid == "" {
 		return
