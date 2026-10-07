@@ -17,7 +17,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -35,11 +34,7 @@ type options struct {
 	observe       loop.ObserveFunc
 	repoCheck     RepoCheckFunc
 	checkout      CheckoutFunc
-	runner        runner.Runner
 	metricsParser loop.MetricsParser
-	forge         gh.Forge
-	worktrees     git.Worktrees
-	trackerFor    tracker.Resolver
 }
 
 // Option configures New.
@@ -64,12 +59,6 @@ func WithRepoCheck(check RepoCheckFunc) Option {
 	return func(o *options) { o.repoCheck = check }
 }
 
-// WithRunner replaces the real process runner, so a test can drive spawn, liveness and cancel
-// without touching the OS.
-func WithRunner(r runner.Runner) Option {
-	return func(o *options) { o.runner = r }
-}
-
 // CheckoutFunc ensures every configured repo has a working checkout before the loop starts. See
 // EnsureCheckout.
 type CheckoutFunc func(ctx context.Context, repos []config.Repo) error
@@ -86,23 +75,6 @@ func WithMetricsParser(p loop.MetricsParser) Option {
 	return func(o *options) { o.metricsParser = p }
 }
 
-// WithForge replaces the gh-backed Forge, so GitHub can be faked in-process.
-func WithForge(forge gh.Forge) Option {
-	return func(o *options) { o.forge = forge }
-}
-
-// WithWorktrees replaces the tp-backed Worktrees, so worktree cuts and removals can be faked
-// in-process.
-func WithWorktrees(worktrees git.Worktrees) Option {
-	return func(o *options) { o.worktrees = worktrees }
-}
-
-// WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
-// faked in-process.
-func WithTrackerSource(resolve tracker.Resolver) Option {
-	return func(o *options) { o.trackerFor = resolve }
-}
-
 func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
 	for _, repo := range repos {
 		if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
@@ -115,7 +87,7 @@ func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{clock: loop.RealClock{}, forge: gh.CLI{}, worktrees: git.CLI{}}
+	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -178,11 +150,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	observe := settings.observe
 	if observe == nil {
-		observe = loop.NewObserver(store, settings.forge, cfg)
-	}
-	agents := settings.runner
-	if agents == nil {
-		agents = runner.ProcessRunner{}
+		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
 	metricsParser := settings.metricsParser
 	if metricsParser == nil {
@@ -192,18 +160,14 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		return nil, err
 	}
 
-	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, agents)
+	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
 	lp.SetMetricsParser(metricsParser)
-	lp.SetForge(settings.forge)
-	lp.SetWorktrees(settings.worktrees)
+	lp.SetForge(gh.CLI{})
+	lp.SetWorktrees(git.CLI{})
 	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(lp.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
-	if settings.trackerFor != nil {
-		lp.SetTrackerSource(settings.trackerFor)
-		server.SetTrackerSource(settings.trackerFor)
-	}
 
 	return &App{
 		cfg:    cfg,

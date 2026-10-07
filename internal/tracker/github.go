@@ -66,16 +66,6 @@ func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, err
 	return decodeBlockedBy(out)
 }
 
-// IssueBody reads ticketURL's body. It needs no checkout: gh resolves a full issue URL on its
-// own.
-func IssueBody(ctx context.Context, ticketURL string) (string, error) {
-	out, err := runGH(ctx, "issue", "view", ticketURL, "--json", "body", "--jq", ".body")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 func runGH(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	var stderr bytes.Buffer
