@@ -65,7 +65,7 @@ func TestDraftGate(t *testing.T) {
 			if draft != tt.wantDraft {
 				t.Errorf("draft = %v, want %v (reason %q)", draft, tt.wantDraft, reason)
 			}
-			if draft && reason == "" {
+			if reason == "" {
 				t.Error("reason is empty; the page renders it on a drafted row")
 			}
 			for _, want := range tt.reasonHas {

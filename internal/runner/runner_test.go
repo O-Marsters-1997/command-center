@@ -262,7 +262,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			if tt.script != "" {
 				raw, err := os.ReadFile(dump)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("the agent script never wrote its observation to $DUMP: %v", err)
 				}
 				got = string(raw)
 			}

@@ -103,6 +103,9 @@ func TestTpFailureNamesTheBranch(t *testing.T) {
 		{"Remove", func(t *testing.T, repoPath string) error {
 			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
 		}},
+		{"Remove forced", func(t *testing.T, repoPath string) error {
+			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
+		}},
 	}
 
 	for _, tt := range tests {
