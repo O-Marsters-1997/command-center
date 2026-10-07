@@ -10,8 +10,7 @@ import (
 )
 
 // PRState is a pull request's state as this package needs it. The zero value is Absent.
-// internal/gh owns the wire shape; the shell maps one onto the other, which is what keeps
-// this package free of gh's exec dependency.
+// internal/gh owns the wire shape; the shell maps one onto the other.
 type PRState int
 
 const (
@@ -34,24 +33,18 @@ func (s PRState) String() string {
 	}
 }
 
-// Ticket is one tracked ticket.
 type Ticket struct {
-	URL       string
-	Repo      string
-	Branch    string
-	BlockedBy []string
-	// WorkedExampleBranch is a same-repo blocker's branch, set by the caller once that
-	// blocker's pull request is open or merged (mirrors unlockedOnBlocker's PR-state cases).
-	// Compose renders it as a "## Worked example" section; empty renders no section.
+	URL                 string
+	Repo                string
+	Branch              string
+	BlockedBy           []string
 	WorkedExampleBranch string
 }
 
-// Reason is the human-readable sentence the page renders on a row.
 type Reason string
 
-// Unlock is the answer to "could this ticket be cut, and off what?" for one ticket.
-// BlockerClosed is true only when the blocker's PR closed without merging, not merely absent,
-// which lets an already-run row derive `base gone` instead of `blocked` (inv. 19).
+// Unlock is the answer to "could this ticket be cut, and off what?". BlockerClosed is true only
+// when the blocker's PR closed without merging, not merely absent.
 type Unlock struct {
 	Unlocked      bool
 	BaseBranch    string
@@ -60,12 +53,10 @@ type Unlock struct {
 	BlockerClosed bool
 }
 
-// defaultBranch is the base every row without a stacked parent is cut from.
 const defaultBranch = "main"
 
-// Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only — a
-// cross-repo blocker feeds the Phase-3 draft gate, never unlock or the base
-// (docs/prds/prd-command-centre.md § Unlock).
+// Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only: a
+// cross-repo blocker feeds the draft gate, never unlock or the base.
 func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stacking bool) Unlock {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
@@ -88,9 +79,6 @@ func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stackin
 	}
 }
 
-// unlockedOnBlocker handles the single-blocker arms: an open PR unlocks off the blocker's
-// branch when stacking is on, a merged one always unlocks off main (both repos delete
-// branches on merge, so the blocker's branch no longer exists to base on).
 func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Unlock {
 	switch prs[blocker.Branch] {
 	case Open:
@@ -117,8 +105,6 @@ func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Un
 	}
 }
 
-// unlockedOnBlockers handles fan-in: nothing can be cut from two branches at once, so two or
-// more blockers unlock only once every one has merged.
 func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 	var unresolved []string
 	for _, blocker := range blockers {
@@ -135,8 +121,7 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 	}
 }
 
-// State is a ticket's derived label. It is never stored: facts are stored, labels are derived
-// every tick (inv. 14).
+// State is a ticket's derived label. It is never stored: labels are derived every tick.
 type State int
 
 const (
@@ -151,42 +136,20 @@ const (
 	NeedsYou
 	PushFailed
 	ReviewMe
-	// PRMerged is prefixed (unlike its siblings) because plan.Merged already names a PRState
-	// value (§2's naming-collision precedent, as with Refused in issue #5) — flagged rather
-	// than silently working around it.
 	PRMerged
 	PRClosedUnmerged
 	BaseGone
 	Cancelled
-	// BaseMoved is derived from RunFact.VerdictBaseMoved, never a stored column (inv. 14), and
-	// verdict checks its expiry ahead of the predicate so a red descendant whose base moved is
-	// not read as needs_you (docs/designs/command-centre-design.md § 4a).
 	BaseMoved
-	// CIFailed is derived from RunFact.VerdictCIFailed: a required check resolved red, as opposed
-	// to needs_you's other three causes (docs/designs/command-centre-design.md § 4a).
 	CIFailed
-	// RefreshConflicted is derived from RunFact.MidMerge, read from the worktree's MERGE_HEAD
-	// every tick, so a human who resolves the conflict by hand and commits clears the state with
-	// no verb (docs/designs/command-centre-design.md § 4a).
 	RefreshConflicted
-	// ConflictsWithMain is derived from RunFact.ConflictsWithMain, this branch's own git
-	// merge-tree reading against origin/main (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md), never
-	// GitHub's mergeable field. refresh is the only verb that clears it.
 	ConflictsWithMain
-	// VerificationFailed is derived from RunFact.VerificationFailed: a clean merge-forward or
-	// restack whose repo-configured verify command then failed (issue #110).
 	VerificationFailed
-	// WaitingOnProducerDeploy is derived from RunFact.VerdictWaitingOnProducer, internal/verdict's
-	// own inv. 12 reading -- the cross-repo compat check was the sole red required check
-	// (docs/designs/command-centre-design.md § 11 inv. 12).
 	WaitingOnProducerDeploy
-	// ConflictResolved is a resolve run that left the worktree's conflict resolved and staged,
-	// but nothing committed.
 	ConflictResolved
 	stateCount
 )
 
-// StateCount is the number of States, so a test can walk every one.
 const StateCount = int(stateCount)
 
 func (s State) String() string {
@@ -240,32 +203,19 @@ func (s State) String() string {
 	}
 }
 
-// RunFact is the latest run's liveness and disposition, as the loop observed it this tick.
-// Alive is decided by pid+start-time identity (docs/prds/prd-command-centre.md § A run); HasOutcome
-// distinguishes "not yet disposed" from a genuine zero-value Outcome.
+// RunFact is the latest run's liveness and disposition as the loop observed it this tick.
+// HasOutcome distinguishes "not yet disposed" from a genuine zero-value Outcome.
 type RunFact struct {
-	Alive      bool
-	Outcome    Outcome
-	HasOutcome bool
-	LogPath    string
-	// Push* fields matter only when Outcome == OutcomePush: this tick's own push-policy and
-	// push/PR-create result (docs/prds/prd-command-centre.md § Phase 4). PROpen comes from the
-	// observation's own PR snapshot for this ticket's branch, not a stored column (inv. 14).
-	PushRefused     bool
-	PushRefusedPath string
-	PushFailed      bool
-	PROpen          bool
-	// PRMerged and PRClosedUnmerged read this ticket's own branch's PR state, never the blocker's
-	// (that is Unlock.BlockerClosed's job). Merged is checked in Status itself, ahead of any run
-	// outcome; closed-unmerged outranks every other push fact below
-	// (docs/prds/prd-command-centre.md § The states).
-	PRMerged         bool
-	PRClosedUnmerged bool
-	// Verdict* fields matter only once PROpen: internal/loop's call to internal/verdict's pure
-	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
-	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
-	// whatever cc computed, else empty. VerdictBaseMoved is internal/verdict's own expiry (§4a),
-	// checked ahead of the predicate, so it can be true however the other two read.
+	Alive                    bool
+	Outcome                  Outcome
+	HasOutcome               bool
+	LogPath                  string
+	PushRefused              bool
+	PushRefusedPath          string
+	PushFailed               bool
+	PROpen                   bool
+	PRMerged                 bool
+	PRClosedUnmerged         bool
 	VerdictReviewMe          bool
 	VerdictNeedsYou          bool
 	VerdictCIFailed          bool
@@ -273,32 +223,15 @@ type RunFact struct {
 	VerdictWaitingOnProducer bool
 	VerdictReason            Reason
 	RedLeaves                []string
-	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
-	// row reads needs_you naming the reason, and the automatic pass (internal/loop/refresh.go)
-	// never retries it -- only the refresh verb does.
-	RefreshRefused       bool
-	RefreshRefusedReason Reason
-	// MidMerge is set while the worktree holds an unresolved merge -- refresh's step 3 conflicted
-	// (docs/designs/command-centre-design.md § 4a). It is read from MERGE_HEAD, never stored, and
-	// outranks every push and verdict fact: re-run must not spawn an agent into a mid-merge worktree.
-	MidMerge bool
-	// ConflictsWithMain is set when this ticket's own pushed branch no longer merges cleanly into
-	// main, read from git merge-tree, never GitHub's mergeable field
-	// (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md). It outranks every fact below it, as MidMerge does.
-	ConflictsWithMain       bool
-	ConflictsWithMainReason Reason
-	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
-	// is empty when there is none. Ref order is decided in internal/loop, the one place that knows
-	// it (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
-	ConflictingPeer string
-	// VerificationFailed is set when a clean refresh or restack's configured verify command last
-	// failed since this ticket's last recorded push (issue #110). It outranks every push and
-	// verdict fact below, as MidMerge and ConflictsWithMain do.
+	RefreshRefused           bool
+	RefreshRefusedReason     Reason
+	MidMerge                 bool
+	ConflictsWithMain        bool
+	ConflictsWithMainReason  Reason
+	ConflictingPeer          string
 	VerificationFailed       bool
 	VerificationFailedReason Reason
-	// Resolved is set when the latest run was a resolve run that left the conflict staged in
-	// the worktree but committed nothing.
-	Resolved bool
+	Resolved                 bool
 }
 
 // Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
@@ -307,27 +240,16 @@ type Facts struct {
 	Authorised      bool
 	LatestRun       *RunFact
 	CancelledMember bool
-	// ConflictedBase names the base a launch would cut this task from when that base already
-	// carries a conflict, and is empty when it is clean. A row that has already run is described
-	// by its run instead (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
-	ConflictedBase string
+	ConflictedBase  string
 }
 
-// Status derives a ticket's state and the sentence explaining it. A run's liveness and disposition
-// outrank the unlocked × authorised facts that mattered only before its first launch. A queued
-// row must say whether it's waiting on a base (hours) or a slot (seconds)
-// (docs/prds/prd-command-centre.md § The states).
+// Status derives a ticket's state and the sentence explaining it. A run's liveness and
+// disposition outrank the unlocked and authorised facts that mattered only before its first
+// launch.
 func Status(f Facts) (State, Reason) {
-	// A row that has ever run never returns to blocked (inv. 19): once its blocker's pull
-	// request is closed without merging, the premise it launched under is withdrawn, and that
-	// outranks whatever its own run, push or verdict facts would otherwise say — running,
-	// checking, needs you, all of it.
 	if f.LatestRun != nil && f.Unlock.BlockerClosed {
 		return BaseGone, f.Unlock.Reason
 	}
-	// A merged pull request is a terminal fact, fetched every tick regardless of Outcome
-	// (inv. 14), and outranks whatever the latest run's own disposition says, the same way
-	// BlockerClosed outranks everything below it.
 	if f.LatestRun != nil && f.LatestRun.PRMerged {
 		return PRMerged, "pull request merged"
 	}
@@ -350,10 +272,6 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-// statusFromRun derives a state from the latest run, when it has anything conclusive to say: a
-// live process, or a disposed one. A run that is neither (dead but not yet disposed) reports ok
-// = false rather than guessing, since the loop always disposes a run in the same tick it finds
-// it dead — that combination should not reach a persisted Facts.
 func statusFromRun(run *RunFact) (State, Reason, bool) {
 	if run == nil {
 		return 0, "", false
@@ -382,9 +300,6 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	}
 }
 
-// statusFromPush refines a push-outcome run's state from this tick's own push facts: a policy
-// hit refuses outright, a push or PR-create failure needs a human's retry, an open PR hands off
-// to the verdict step (Phase 5), and otherwise the push is still pending.
 func statusFromPush(run RunFact) (State, Reason) {
 	switch {
 	case run.PRClosedUnmerged:
@@ -424,24 +339,16 @@ func statusFromPush(run RunFact) (State, Reason) {
 	}
 }
 
-// conflictedBaseReason is the sentence a row and a preview both show for a base that already
-// carries a conflict, so the two surfaces never explain the same refusal differently.
 func conflictedBaseReason(base string) Reason {
 	return Reason(fmt.Sprintf(
 		"%s already carries an unresolved merge conflict: a branch cut from it inherits the conflict", base))
 }
 
-// conflictingPeerReason is the sentence a row shows when it is held behind a lower-ref peer it
-// conflicts with, so the two refusals -- a conflicted base and a conflicting peer -- read alike
-// (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func conflictingPeerReason(peer string) Reason {
 	return Reason(fmt.Sprintf(
 		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))
 }
 
-// waitingOnBlockers renders the reason a queued-but-locked row is still waiting: naming a
-// single blocker reads better than the unlock reason's generic "blocked by X, not yet merged"
-// sentence, and PRD § The page requires four such rows to read as one problem, not four.
 func waitingOnBlockers(blocking []string) Reason {
 	if len(blocking) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s's PR", blocking[0]))

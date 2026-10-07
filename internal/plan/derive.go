@@ -12,13 +12,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// RunKindResolve is runs.kind for a conflict-resolution run.
 const RunKindResolve = "resolve"
 
-// BranchKey is the repo-qualified key every branch-keyed Observation map uses.
 func BranchKey(repo, branch string) string { return repo + "//" + branch }
 
-// LaunchMembership is a ticket's place in its active launch.
 type LaunchMembership struct {
 	LaunchID   int64
 	Members    int
@@ -27,7 +24,7 @@ type LaunchMembership struct {
 }
 
 // RunSummary is the latest run the board and the launch-eligibility check need per ticket.
-// Kind is runs.kind, "agent" for a launch or re-run and RunKindResolve for a conflict resolution.
+// Kind is "agent" for a launch or re-run and RunKindResolve for a conflict resolution.
 type RunSummary struct {
 	ID            int64
 	Pgid          *int
@@ -42,7 +39,6 @@ type RunSummary struct {
 	Kind          string
 }
 
-// PushRow is one ticket's latest recorded push: the tip and base it was pushed against, and when.
 type PushRow struct {
 	PushedTip     string
 	BaseBranch    string
@@ -50,16 +46,12 @@ type PushRow struct {
 	PushedAt      time.Time
 }
 
-// PushFact is a ticket's outstanding push-policy problem: refused outright, or a push or
-// PR-create failure.
 type PushFact struct {
 	Refused     bool
 	RefusedPath string
 	Failed      bool
 }
 
-// RefreshFact is a ticket's outstanding refresh problem since its last recorded push: a refused
-// fast-forward, or a clean merge whose verify command then failed.
 type RefreshFact struct {
 	Refused                  bool
 	Reason                   string
@@ -67,8 +59,6 @@ type RefreshFact struct {
 	VerificationFailedDetail string
 }
 
-// VerdictFacts is what the CI verdict reads beyond the observation: each ticket's latest push,
-// and how long its verdict has been checking.
 type VerdictFacts struct {
 	PushRows    map[string]PushRow
 	CheckingFor map[string]time.Duration
@@ -88,8 +78,7 @@ type Input struct {
 	Verdict      VerdictFacts
 	PendingVerbs map[string][]string
 	Removals     map[string]string
-	// FiveHour is the latest five-hour utilization reading, as a fraction.
-	FiveHour float64
+	FiveHour     float64
 }
 
 // Entry is one ticket's derived state: what the board shows and the verbs it may offer.
@@ -107,17 +96,12 @@ type Entry struct {
 	DraftReason    string
 	LaunchID       int64
 	Base           string
-	// ReadyToUndraft is true for an open draft pull request whose gate says it should be ready.
 	ReadyToUndraft bool
-	// OpensAsDraft is true when the ticket has a gating blocker in another repo.
-	OpensAsDraft bool
-	// PromptHash is the hash authorised for the ticket's active launch, empty outside one.
-	PromptHash string
-	// LastPush is the ticket's latest recorded push, nil before its first.
-	LastPush *PushRow
+	OpensAsDraft   bool
+	PromptHash     string
+	LastPush       *PushRow
 }
 
-// Snapshot is every ticket's Entry, in input order.
 type Snapshot struct {
 	Entries     []Entry
 	byURL       map[string]int
@@ -131,13 +115,12 @@ type Snapshot struct {
 // the free agent slots, and none while the five-hour reading is at spend_limit_5h.
 func (s Snapshot) Launch() []string { return s.LaunchAfter(0) }
 
-// LaunchAfter is Launch for a tick that has since spawned agents, so the snapshot's running count
-// is stale by that much.
+// LaunchAfter is Launch for a tick that has since spawned agents, so the snapshot's running
+// count is stale by that much.
 func (s Snapshot) LaunchAfter(spawned int) []string {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
-// Entry returns the entry for a ticket URL.
 func (s Snapshot) Entry(url string) (Entry, bool) {
 	i, ok := s.byURL[url]
 	if !ok {
@@ -146,7 +129,6 @@ func (s Snapshot) Entry(url string) (Entry, bool) {
 	return s.Entries[i], true
 }
 
-// Offers reports whether the ticket's current state offers verb.
 func (s Snapshot) Offers(url, verb string) bool {
 	e, ok := s.Entry(url)
 	return ok && slices.Contains(Verbs(e.State), verb)
@@ -160,8 +142,6 @@ func ticketsByURL(tickets []Ticket) map[string]Ticket {
 	return byURL
 }
 
-// prsByBranch reads each ticket's own PR state under its bare branch name, which is how Unlocked
-// and DraftGate index it.
 func prsByBranch(tickets []Ticket, obs Observation) map[string]PRState {
 	prs := make(map[string]PRState, len(tickets))
 	for _, t := range tickets {
@@ -171,8 +151,7 @@ func prsByBranch(tickets []Ticket, obs Observation) map[string]PRState {
 }
 
 // Derive labels every ticket from the stored facts plus this tick's observation. No status is
-// stored: facts are stored, labels are derived on every call
-// (docs/designs/command-centre-design.md § Schema, inv. 14).
+// stored: labels are derived on every call.
 func (r Rules) Derive(in Input) Snapshot {
 	byURL := ticketsByURL(in.Tickets)
 	prs := prsByBranch(in.Tickets, in.Obs)
@@ -233,8 +212,8 @@ func (r Rules) Derive(in Input) Snapshot {
 }
 
 // ConflictedBase names the base a launch would cut this ticket from when that base already
-// carries a merge conflict, and "" when it is clean. A locked row is judged on the base it would
-// get once unlocked (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
+// carries a merge conflict, and "" when it is clean. A locked row is judged on the base it
+// would get once unlocked.
 func (r Rules) ConflictedBase(t Ticket, byURL map[string]Ticket, unlock Unlock, obs Observation) string {
 	base := unlock.BaseBranch
 	if base == "" {
@@ -249,9 +228,6 @@ func (r Rules) ConflictedBase(t Ticket, byURL map[string]Ticket, unlock Unlock, 
 	return ""
 }
 
-// conflictingPeerHold names, for every open main-based ticket, the lower-ref peer its branch
-// conflicts with, keyed by ticket URL. A stacked branch is never a candidate: ConflictedBase
-// owns that case (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 func (r Rules) conflictingPeerHold(
 	tickets []Ticket, byURL map[string]Ticket, prs map[string]PRState, obs Observation,
 ) map[string]string {
@@ -282,8 +258,6 @@ func (r Rules) conflictingPeerHold(
 	return held
 }
 
-// compareByRef orders two ticket branches by the number in their cc-<number>- prefix, so cc-9
-// sorts before cc-100, and falls back to a string compare for a branch without one.
 func compareByRef(a, b string) int {
 	na, oka := branchNumber(a)
 	nb, okb := branchNumber(b)
@@ -303,9 +277,6 @@ func branchNumber(branch string) (int, bool) {
 	return n, err == nil
 }
 
-// draftReason names why a drafted row is still a draft: DraftGate's own reason or, when the gate
-// says ready but the PR is still a draft, that the last `gh pr ready` call has not taken effect
-// (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
 func draftReason(
 	pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run *RunFact,
 ) (reason string, ready bool) {
@@ -320,9 +291,6 @@ func draftReason(
 	return string(gateReason), false
 }
 
-// runFor builds Status's LatestRun input for one ticket, plus the pgid, elapsed time and log path
-// the board renders. Push facts only count once the run's outcome is push, and PROpen reads this
-// observation's PR rather than a stored column (inv. 14).
 func (r Rules) runFor(
 	t Ticket, in Input, peer string,
 ) (run *RunFact, pgid *int, elapsed *time.Duration, logPath string) {
@@ -372,8 +340,6 @@ func (r Rules) runFor(
 	return fact, summary.Pgid, elapsed, summary.LogPath
 }
 
-// ApplyVerdict fills in a pushed, open-PR run's CI verdict, if the repo has opted into one:
-// an unconfigured [repo.checks] leaves fact untouched.
 func (r Rules) ApplyVerdict(fact *RunFact, t Ticket, obs Observation, vf VerdictFacts) {
 	predicate := r.Checks[t.Repo]
 	if predicate.IsZero() {
@@ -427,7 +393,7 @@ func verdictChecks(checks map[string]CheckState) map[string]verdict.CheckState {
 }
 
 // ToVerdictCheckState reads anything completed but not exactly SUCCESS or SKIPPED as a definite
-// Failure, never a third kind of maybe (docs/designs/command-centre-design.md § 8).
+// Failure, never a third kind of maybe.
 func ToVerdictCheckState(cs CheckState) verdict.CheckState {
 	if cs.Status != "COMPLETED" {
 		return verdict.Pending

@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-// GatingBlockers returns t's blockers in another repo -- edges Unlocked skips entirely (a
-// cross-repo blocker never affects unlock or the base) but DraftGate needs
-// (docs/designs/command-centre-design.md § 4, § 6 job 2).
+// GatingBlockers returns t's blockers in another repo: edges Unlocked skips entirely but
+// DraftGate needs.
 func GatingBlockers(t Ticket, byURL map[string]Ticket) []Ticket {
 	var gating []Ticket
 	for _, blockerURL := range t.BlockedBy {
@@ -19,16 +18,15 @@ func GatingBlockers(t Ticket, byURL map[string]Ticket) []Ticket {
 	return gating
 }
 
-// OpensAsDraft decides whether a ticket's pull request should be created as a draft: any ticket
-// with a gating edge (docs/designs/command-centre-design.md § 6 job 2). DraftGate decides the
-// steady state; this is the one-off creation-time call.
+// OpensAsDraft decides whether a ticket's pull request is created as a draft: any ticket with a
+// gating edge. DraftGate decides the steady state afterwards.
 func OpensAsDraft(t Ticket, byURL map[string]Ticket) bool {
 	return len(GatingBlockers(t, byURL)) > 0
 }
 
-// DraftGate decides whether a consumer's pull request should stay a draft: any gating blocker
-// unmerged, or the consumer's own verdict not green. It never asks to re-draft -- GitHub has no
-// such affordance (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
+// DraftGate decides whether a consumer's pull request stays a draft: any gating blocker
+// unmerged, or its own verdict not green. It never asks to re-draft, as GitHub has no such
+// affordance.
 func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draft bool, reason Reason) {
 	var closed, unresolved []string
 	for _, g := range gating {
@@ -53,8 +51,6 @@ func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draf
 	return false, "every gating blocker has merged and its own checks are green"
 }
 
-// unresolvedGateReason names a gating blocker whose pull request has not yet merged -- open or
-// entirely absent, neither of which un-drafts the consumer.
 func unresolvedGateReason(tickets []string) Reason {
 	if len(tickets) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s", tickets[0]))
@@ -62,8 +58,6 @@ func unresolvedGateReason(tickets []string) Reason {
 	return Reason(fmt.Sprintf("waiting on %d blockers: %s", len(tickets), strings.Join(tickets, ", ")))
 }
 
-// closedGateReason names a gating blocker whose pull request closed without merging: the
-// consumer is drafted permanently, and the reason says so rather than reading as a transient wait.
 func closedGateReason(tickets []string) Reason {
 	if len(tickets) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s: its pull request was closed without merging", tickets[0]))

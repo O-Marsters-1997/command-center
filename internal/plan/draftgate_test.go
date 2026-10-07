@@ -7,8 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// TestDraftGate covers the four combinations of (blockers merged?) x (verdict green?)
-// (issue #57 AC7): a gating blocker never affects unlock, but it does gate the draft.
 func TestDraftGate(t *testing.T) {
 	t.Parallel()
 
@@ -61,8 +59,6 @@ func TestDraftGate(t *testing.T) {
 	}
 }
 
-// TestDraftGateUnresolvedBlockerNamesIt covers the reason a still-open or absent gating
-// blocker's PR produces: the page renders "waiting on <ticket>" on the drafted row.
 func TestDraftGateUnresolvedBlockerNamesIt(t *testing.T) {
 	t.Parallel()
 
@@ -76,8 +72,6 @@ func TestDraftGateUnresolvedBlockerNamesIt(t *testing.T) {
 	}
 }
 
-// TestDraftGateVerdictNotGreenNamesOwnChecks covers the second reason the page must be able to
-// render: every gating blocker merged, but the consumer's own CI verdict is not green yet.
 func TestDraftGateVerdictNotGreenNamesOwnChecks(t *testing.T) {
 	t.Parallel()
 
@@ -91,9 +85,6 @@ func TestDraftGateVerdictNotGreenNamesOwnChecks(t *testing.T) {
 	}
 }
 
-// TestDraftGateClosedBlockerNeverReadies covers the AC that a gating blocker whose PR closed
-// unmerged leaves the consumer drafted forever, naming the closure -- never un-drafted, and
-// never confused with `base gone` (that state is for a stacking parent, plan.Unlock's own job).
 func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	t.Parallel()
 
@@ -107,8 +98,6 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	}
 }
 
-// TestDraftGateNoGatingBlockers covers a consumer with no cross-repo edge at all: the gate is
-// decided by its own verdict alone.
 func TestDraftGateNoGatingBlockers(t *testing.T) {
 	t.Parallel()
 
@@ -146,8 +135,6 @@ func TestGatingBlockers(t *testing.T) {
 	}
 }
 
-// TestOpensAsDraft covers the reconciliation's own creation-time decision (issue #57's "opens a
-// PR as a draft for any ticket with a gating edge"): a gating edge, or none.
 func TestOpensAsDraft(t *testing.T) {
 	t.Parallel()
 

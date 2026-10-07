@@ -77,9 +77,6 @@ func TestTicketStatus(t *testing.T) {
 	}
 }
 
-// TestDecodeBlockedBy pins issue #235: a closed dependency (98, 99, 100) is dropped, since its
-// issue is already gone from the tracker's own --state open query and a stale reference to it
-// only strands the dependent at blocked forever.
 func TestDecodeBlockedBy(t *testing.T) {
 	t.Parallel()
 

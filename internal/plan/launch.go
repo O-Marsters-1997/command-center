@@ -1,27 +1,21 @@
 package plan
 
-// LaunchCandidate is one ticket's launch eligibility facts (inv. 8): unlocked, in an active
-// launch, whose recomposed prompt still hashes to what was authorised, with no prior run, off a
-// base that merges cleanly.
 type LaunchCandidate struct {
 	URL               string
 	Unlock            Unlock
 	Authorised        bool
 	PromptHashMatches bool
 	HasRun            bool
-	// ConflictedBase names the base this launch would cut from when that base already carries a
-	// conflict, and is empty when it is clean (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
-	ConflictedBase string
+	ConflictedBase    string
 }
 
 func (c LaunchCandidate) eligible() bool {
 	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun && c.ConflictedBase == ""
 }
 
-// LaunchPlan selects the ticket URLs to cut and spawn this tick: every eligible candidate, in
-// input order, capped at the number of free agent slots (maxAgents, applied globally, minus
-// currentlyRunning). spendPaused stops every new spawn without touching a run already live
-// (CC-314): the caller decides it from the latest five-hour reading against spend_limit_5h.
+// LaunchPlan selects the ticket URLs to cut and spawn: every eligible candidate in input order,
+// capped at maxAgents minus currentlyRunning. spendPaused stops every new spawn and leaves live
+// runs alone.
 func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []string {
 	if spendPaused {
 		return nil

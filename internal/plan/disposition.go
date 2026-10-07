@@ -1,9 +1,7 @@
 package plan
 
-// Outcome is a dead run's disposition, recorded on runs.outcome as data — never inferred from
-// missing events (inv. 7). Its members are prefixed (OutcomePush, not Push) because State's own
-// Running/Failed/CutFailed/PushPending would otherwise collide with these names in the same
-// package.
+// Outcome is a dead run's disposition, recorded on runs.outcome as data, never inferred from
+// missing events.
 type Outcome int
 
 const (
@@ -25,8 +23,8 @@ func (o Outcome) String() string {
 	}
 }
 
-// Disposition derives a dead run's outcome from commits after its own baseline_sha (docs/prd-
-// command-centre.md § A run): any commit at all means the agent left something behind to push.
+// Disposition derives a dead run's outcome from commits after its own baseline_sha: any commit
+// at all means the agent left something behind to push.
 func Disposition(commitsAfterBaseline int) Outcome {
 	if commitsAfterBaseline > 0 {
 		return OutcomePush

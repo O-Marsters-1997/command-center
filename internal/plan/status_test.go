@@ -376,9 +376,6 @@ func TestStatusWithLatestRun(t *testing.T) {
 	}
 }
 
-// TestStatusDerivesPRMergedOverALaterRunsOwnDisposition covers issues #234 and #251: a merged
-// pull request outranks the latest run's own outcome, whether that run is a later no-op re-run
-// or one with no push row at all.
 func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 	t.Parallel()
 
@@ -423,8 +420,6 @@ func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 	}
 }
 
-// TestStatusStillDerivesFailedWithoutAMergedPR is the control for #234/#251: a failed run with
-// no push row and no merged PR still reads failed, unchanged.
 func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
 	t.Parallel()
 
@@ -441,7 +436,6 @@ func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
 func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	t.Parallel()
 
-	// The pre-Phase-3 2x2 stays reachable and untouched when there is no run yet.
 	state, reason := plan.Status(plan.Facts{
 		Unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
 		Authorised: false,
@@ -451,10 +445,6 @@ func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	}
 }
 
-// TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun covers inv. 19: a row that has ever run
-// derives base_gone the moment its blocker's PR is closed unmerged, never blocked — and this
-// outranks even a live run or a fully-resolved push, which the design's state diagram (§5)
-// draws as transitioning into base_gone from any of them.
 func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	t.Parallel()
 
@@ -487,9 +477,6 @@ func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	}
 }
 
-// TestStatusNeverDerivesBaseGoneWithoutAPriorRun covers the other half of inv. 19: a member
-// that never launched re-derives blocked or queued, exactly the pre-Phase-3 2x2, even when its
-// blocker's PR was closed unmerged.
 func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 	t.Parallel()
 
@@ -508,9 +495,6 @@ func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 	}
 }
 
-// TestStatusBlocksOnAConflictedBase covers the launch gate's own row: a base that already
-// carries a conflict must say so, rather than leaving an authorised row queued on a slot that
-// the tick will refuse every time it comes round.
 func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 	t.Parallel()
 
@@ -529,8 +513,6 @@ func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 	}
 }
 
-// TestStatusPrefersARunToAConflictedBase: a row that has already launched is described by its
-// run, not by the state of the base it was cut from.
 func TestStatusPrefersARunToAConflictedBase(t *testing.T) {
 	t.Parallel()
 

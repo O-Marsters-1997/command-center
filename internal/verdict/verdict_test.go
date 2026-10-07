@@ -8,8 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// supportAppPredicate transcribes support-app's real predicate (docs/designs/command-centre-design.md § 8,
-// "re-verified"): five plain checks plus a three-way Linear any_of.
 func supportAppPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "Lint"},
@@ -36,10 +34,6 @@ func supportAppGreenChecks() map[string]verdict.CheckState {
 	}
 }
 
-// servicesPredicate transcribes services' real predicate (docs/designs/command-centre-design.md § 8): six
-// plain checks, a three-way deployment any_of whose third arm is itself an all_of pairing a
-// success with a skip, a four-way Linear any_of whose first arm is the dependabot author escape
-// hatch, and the path-filtered absent_ok lint check.
 func servicesPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "Lint"},
@@ -63,10 +57,6 @@ func servicesPredicate() verdict.Predicate {
 	}}
 }
 
-// servicesGreenChecks is a steady-state green rollup: the deployment arm resolves via
-// "Deploy / Deploy SST Stage" rather than the skipped-Evaluate arm, the Linear arm via a real
-// check (not the dependabot escape hatch), and "Lint GitHub Actions / Lint" is absent -- the
-// path-filtered job never triggered for this diff.
 func servicesGreenChecks() map[string]verdict.CheckState {
 	return map[string]verdict.CheckState{
 		"Lint":                            verdict.Success,
@@ -80,14 +70,11 @@ func servicesGreenChecks() map[string]verdict.CheckState {
 	}
 }
 
-// waitedInput anchors PushedAt so BoundedWait has already elapsed against Now -- the steady
-// state for a repo whose absent_ok check has had every chance to appear and hasn't.
 func waitedInput() (pushedAt, now time.Time) {
 	pushedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return pushedAt, pushedAt.Add(verdict.BoundedWait)
 }
 
-// freshInput anchors PushedAt so BoundedWait has not elapsed -- a just-pushed commit.
 func freshInput() (pushedAt, now time.Time) {
 	pushedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return pushedAt, pushedAt.Add(time.Minute)
@@ -324,11 +311,6 @@ func TestPredicateIsZero(t *testing.T) {
 	}
 }
 
-// TestBoundedWaitOnlyCountsSuccessfulTicks is the pure half of the AC: Evaluate takes whatever
-// Now the caller derives, so a caller that (correctly) derives Now only from ticks whose observe
-// phase succeeded -- never from wall time -- must see the wait hold no matter how long a real
-// outage actually lasted. internal/loop's loop test covers the other half: that its own Now really
-// is built that way.
 func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	t.Parallel()
 
@@ -338,23 +320,17 @@ func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 		PushedAt: pushedAt, Checks: map[string]verdict.CheckState{}, HeadOidMatch: true,
 	}
 
-	// A forced-failure sequence: however long the real outage ran, zero ticks observed
-	// successfully means the caller's derived Now has not moved past PushedAt at all.
 	in.Now = pushedAt
 	if got := verdict.Evaluate(p, in).Verdict; got != verdict.Checking {
 		t.Fatalf("verdict = %v after zero successful ticks, want checking", got)
 	}
 
-	// Once observe succeeds again, ticks accumulate for real and the wait can elapse.
 	in.Now = pushedAt.Add(verdict.BoundedWait)
 	if got := verdict.Evaluate(p, in).Verdict; got != verdict.NeedsYou {
 		t.Fatalf("verdict = %v once the wait elapses over successful ticks, want needs_you", got)
 	}
 }
 
-// TestNeedsYouNamesTheRedLeaf covers issue #228: the shell discriminates ci_failed from
-// needs_you on whether Result carries a red leaf's name, so a resolved-red predicate must name
-// the check that failed, and a needs_you derived only from the bounded wait elapsing must not.
 func TestNeedsYouNamesTheRedLeaf(t *testing.T) {
 	t.Parallel()
 
@@ -385,9 +361,6 @@ func TestNeedsYouNamesTheRedLeaf(t *testing.T) {
 	}
 }
 
-// TestAllOfNamesEveryRedLeaf covers issue #228: allOf must not stop naming red leaves after the
-// first one it finds, or a required-check failure sitting behind an earlier failed sibling in
-// the same all_of goes unnamed in Reason.
 func TestAllOfNamesEveryRedLeaf(t *testing.T) {
 	t.Parallel()
 
@@ -417,9 +390,6 @@ func compatPredicate() verdict.Predicate {
 
 const compatCheckName = "GraphQL production compatibility"
 
-// TestEvaluateWaitingOnProducerDeploy covers inv. 12: the state names "the seam isn't live yet"
-// apart from "this consumer is broken", which only holds when the compat check is the *sole* red
-// required check.
 func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	t.Parallel()
 
@@ -490,7 +460,6 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	}
 }
 
-// TestWaitingOnProducerDeploySurvivesTheBoundedWait covers issue #56 AC3.
 func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 	t.Parallel()
 
@@ -510,9 +479,6 @@ func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 	}
 }
 
-// TestEvaluateBaseMoved covers § 4a's expiry ahead of predicate resolution: a moved stacked base
-// reads base_moved whatever the rollup says, a red descendant included, and a root row never
-// reads it however stale BaseSHAMatch is.
 func TestEvaluateBaseMoved(t *testing.T) {
 	t.Parallel()
 

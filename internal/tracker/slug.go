@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// BranchSlug is the branch name generated for a ticket: cc-<number>-<title, slugified>.
 func BranchSlug(number int, title string) string {
 	return fmt.Sprintf("cc-%d-%s", number, slugify(title))
 }
