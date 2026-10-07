@@ -125,8 +125,6 @@ func TestUnlocked(t *testing.T) {
 			ticket: withCrossRepoEdge,
 			prs: map[string]plan.PRState{
 				"cc-1-first": plan.Open,
-				// PLA-9 has no PR entry at all: it must not matter, because it is a gating
-				// edge, not a stacking edge.
 			},
 			stacking:     true,
 			wantUnlocked: true,
@@ -180,10 +178,6 @@ func equalUnordered(got, want []string) bool {
 	return true
 }
 
-// TestUnlockedBlockerClosedFlag covers Unlock.BlockerClosed on its own: it must be true only
-// when the single blocker's own pull request was closed without merging, never for an absent
-// one — the distinction `base gone` needs to tell "never had a PR" apart from "had one, and it
-// was closed" (inv. 19).
 func TestUnlockedBlockerClosedFlag(t *testing.T) {
 	t.Parallel()
 

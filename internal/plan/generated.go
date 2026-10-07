@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// GeneratedPolicy is one repo's generated-path configuration: the paths its build regenerates
-// and the build command that regenerates them.
 type GeneratedPolicy struct {
 	Paths        []string
 	BuildCommand []string
@@ -26,10 +24,6 @@ func AllGenerated(conflictedPaths []string, policy GeneratedPolicy) bool {
 	return true
 }
 
-// generatedMatch matches one conflicted path against the generated set. A "dir/**" entry covers
-// every path under dir at any depth, which filepath.Match cannot express since its "*" never
-// crosses a separator; anything else is matched with filepath.Match, which is enough for a leaf
-// glob like "testdata/*.golden.html".
 func generatedMatch(patterns []string, path string) bool {
 	for _, pattern := range patterns {
 		if dir, ok := strings.CutSuffix(pattern, "/**"); ok {

@@ -1,6 +1,6 @@
 // Package verdict evaluates one repo's boolean check predicate over a normalised snapshot —
-// never gh's raw JSON (docs/designs/command-centre-design.md § 11 inv. 11). It declares its own
-// CheckState rather than importing gh's (issue #2 AC12); api_test.go enforces the import purity.
+// never gh's raw JSON. It declares its own CheckState rather than importing gh's;
+// api_test.go enforces the import purity.
 package verdict
 
 import (
@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-// CheckState is one gating check's outcome. The zero value, Pending, doubles as "absent from
-// the rollup" since a missing map key already returns it, so a leaf need not special-case
-// presence unless it cares (see AbsentOK).
+// CheckState is one gating check's outcome. The zero value, Pending, doubles as "absent from the
+// rollup", since a missing map key already returns it.
 type CheckState int
 
 const (
@@ -22,8 +21,6 @@ const (
 	Skipped
 )
 
-// Verdict is Evaluate's headline answer -- one of the three states the PRD names for a pushed
-// PR (docs/prds/prd-command-centre.md § The states): review me, needs you, checking.
 type Verdict int
 
 const (
@@ -31,19 +28,15 @@ const (
 	ReviewMe
 	NeedsYou
 	BaseMoved
-	// WaitingOnProducerDeploy is entered only when the configured compat check is the sole red
-	// required check (docs/designs/command-centre-design.md § 11 inv. 12).
 	WaitingOnProducerDeploy
 )
 
-// BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it.
-// It is clocked over ticks whose observe phase succeeded, never wall clock, so a GitHub outage
-// cannot walk every in-flight row to needs_you at once (docs/designs/command-centre-design.md § 11 inv. 11).
+// BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it,
+// clocked over ticks whose observe phase succeeded so a GitHub outage cannot walk every row to needs_you.
 const BoundedWait = 10 * time.Minute
 
-// Predicate is the boolean check-config grammar (docs/designs/command-centre-design.md § 8): all_of,
-// any_of, not, success, skipped, absent_ok, plus Author -- the non-check escape hatch for the
-// dependabot arm of a Linear-branch predicate, since a PR's author is not a check-run.
+// Predicate is the boolean check-config grammar: all_of, any_of, not, success, skipped,
+// absent_ok, plus Author for a PR's author, which is not a check-run.
 type Predicate struct {
 	AllOf    []Predicate `toml:"all_of"`
 	AnyOf    []Predicate `toml:"any_of"`
@@ -54,42 +47,31 @@ type Predicate struct {
 	Author   string      `toml:"author"`
 }
 
-// IsZero reports whether p carries no rule at all -- an unconfigured [repo.checks], which the
-// caller reads as "no predicate to evaluate" rather than a predicate that vacuously passes.
 func (p Predicate) IsZero() bool {
 	return len(p.AllOf) == 0 && len(p.AnyOf) == 0 && p.Not == nil &&
 		p.Success == "" && p.Skipped == "" && p.AbsentOK == "" && p.Author == ""
 }
 
-// Input is everything Evaluate needs (docs/designs/command-centre-design.md § 8), including the
-// stacked-base check, which stays unscoped from HeadOidMatch since main's own tip moving would
-// otherwise make every root row look like its base moved too.
 type Input struct {
 	Checks       map[string]CheckState
-	HeadOidMatch bool // the rollup's head == the tip the app pushed
-	StackedBase  bool // false for every Phase 1 row (stacking = false)
-	BaseSHAMatch bool // only consulted when StackedBase
-	ConfigHashOK bool // sha256(.mergify.yml) still matches the predicate it was written against
+	HeadOidMatch bool
+	StackedBase  bool
+	BaseSHAMatch bool
+	ConfigHashOK bool
 	PushedAt     time.Time
-	Now          time.Time // the bounded wait's other endpoint; not wall clock (see BoundedWait)
-	AuthorLogin  string    // the dependabot arm of services' Linear branch check
-	// CompatCheck is the repo's configured cross-repo compat check name (§8's compat_check),
-	// consulted only when the real evaluation is needs_you (inv. 12). Empty means unconfigured.
-	CompatCheck string
+	Now          time.Time
+	AuthorLogin  string
+	CompatCheck  string
 }
 
-// Result is Evaluate's answer plus the sentence the page renders alongside it. RedLeaves is
-// empty unless Verdict is NeedsYou because a leaf actually resolved red, as opposed to the
-// bounded wait elapsing (docs/designs/command-centre-design.md § 4a).
+// Result is Evaluate's answer plus the sentence the page renders. RedLeaves is empty unless
+// Verdict is NeedsYou because a leaf resolved red, rather than the bounded wait elapsing.
 type Result struct {
 	Verdict   Verdict
 	Reason    string
 	RedLeaves []string
 }
 
-// triState is a predicate node's resolution before Evaluate turns it into a Result: still
-// waiting, definitely satisfied, or definitely not -- the third value pending needs, since a
-// boolean can't tell "not yet" from "no".
 type triState int
 
 const (
@@ -98,14 +80,9 @@ const (
 	red
 )
 
-// Evaluate resolves p against in and reports the verdict (docs/designs/command-centre-design.md
-// § 11 inv. 11, § 4a, § 12). A foreign-SHA or absent rollup is never green; a resolved-red
-// predicate is needs_you, and the stacked-base expiry is checked ahead of it so base_moved
-// outranks red. A needs_you verdict gets one more look: re-resolved with the configured compat
-// check forced green, so the *rest* of the predicate is judged on its own — review-me there
-// proves the compat check was the sole red one (inv. 12); still-pending there means a sibling
-// hasn't reported yet, so the honest reading is checking, not needs_you; still red there means
-// the compat check was never the whole story, and the first verdict stands.
+// Evaluate resolves p against in. A foreign-SHA or absent rollup is never green, and the
+// stacked-base expiry outranks red. A needs_you verdict is re-resolved with the compat check
+// forced green: review-me there means the compat check was the sole red one.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
 		return Result{Verdict: BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"}
@@ -125,7 +102,7 @@ func Evaluate(p Predicate, in Input) Result {
 		return Result{Verdict: WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"}
 	case Checking:
 		return forced
-	default: // needs_you: the compat check was not the sole red one
+	default:
 		return result
 	}
 }
@@ -144,7 +121,7 @@ func evaluate(p Predicate, in Input) Result {
 			return Result{Verdict: Checking, Reason: "check config changed"}
 		}
 		return Result{Verdict: ReviewMe, Reason: "every required check passed"}
-	default: // pending
+	default:
 		if waited(in) {
 			return Result{Verdict: NeedsYou, Reason: "no matching rollup within the wait"}
 		}
@@ -159,15 +136,10 @@ func forcedGreen(checks map[string]CheckState, name string) map[string]CheckStat
 	return out
 }
 
-// waited reports whether the bounded wait has elapsed. in.Now is never wall clock in practice —
-// the caller derives it from ticks whose observe phase succeeded, which is what keeps an outage
-// from walking every row to needs_you at once (docs/designs/command-centre-design.md § 11 inv. 11).
 func waited(in Input) bool {
 	return !in.PushedAt.IsZero() && in.Now.Sub(in.PushedAt) >= BoundedWait
 }
 
-// resolve walks one predicate node. A node is exactly one of a combinator (AllOf/AnyOf/Not) or
-// a leaf; encoding/toml only ever produces that shape from [repo.checks].
 func resolve(p Predicate, in Input) (triState, []string) {
 	switch {
 	case len(p.AllOf) > 0:
@@ -182,9 +154,6 @@ func resolve(p Predicate, in Input) (triState, []string) {
 	}
 }
 
-// allOf is red once any child is, pending while nothing is red but something still is, and green
-// only once every child is. It walks every child rather than stopping at the first red, so a red
-// Reason names every leaf that failed, not just one.
 func allOf(ps []Predicate, in Input) (triState, []string) {
 	result := green
 	var redLeaves []string
@@ -199,15 +168,11 @@ func allOf(ps []Predicate, in Input) (triState, []string) {
 				result = pending
 			}
 		case green:
-			// no-op: result only ever downgrades from its green start
 		}
 	}
 	return result, redLeaves
 }
 
-// anyOf is green the moment any child is, red only once every child is, and pending otherwise —
-// a still-pending arm could yet turn the whole thing green. A red result names every arm's own
-// red leaves, since every one of them had to fail for the whole to.
 func anyOf(ps []Predicate, in Input) (triState, []string) {
 	result := red
 	var redLeaves []string
@@ -239,8 +204,6 @@ func not(t triState) triState {
 	}
 }
 
-// leaf resolves one non-combinator node: a named check's required conclusion, or the author
-// escape hatch. Exactly one of these fields is set by construction (see Predicate's doc).
 func leaf(p Predicate, in Input) (triState, []string) {
 	switch {
 	case p.Success != "":
@@ -252,12 +215,10 @@ func leaf(p Predicate, in Input) (triState, []string) {
 	case p.Author != "":
 		return leafResult(author(in.AuthorLogin, p.Author), p.Author)
 	default:
-		return pending, nil // an empty leaf (misconfigured [repo.checks]) asks forever, never lies green
+		return pending, nil
 	}
 }
 
-// leafResult names a leaf that resolved red, so a combinator walking back up can recover which
-// check actually failed.
 func leafResult(t triState, name string) (triState, []string) {
 	if t != red {
 		return t, nil
@@ -265,10 +226,6 @@ func leafResult(t triState, name string) (triState, []string) {
 	return red, []string{name}
 }
 
-// requireConclusion resolves a plain success/skipped leaf: green once the check reports exactly
-// the required conclusion, red once it reports a different final one (there is no retry-pending
-// rule -- red is red, docs/designs/command-centre-design.md § 11), pending otherwise, including a check
-// absent from the rollup (a missing map key already reads Pending).
 func requireConclusion(got, want CheckState) triState {
 	switch got {
 	case want:
@@ -280,13 +237,6 @@ func requireConclusion(got, want CheckState) triState {
 	}
 }
 
-// absentOK resolves the leniency the path-filtered "Lint GitHub Actions / Lint" check needs:
-// approximating Mergify's own "-check-neutral AND -check-pending AND -check-failure"
-// (docs/designs/command-centre-design.md § 8), a check absent from the rollup reads pending
-// until the bounded wait elapses, then passing -- never green from a young snapshot, which
-// would reopen per-check
-// the hole the rollup-level rule closes. A check that did run must still conclude success or
-// skipped; a completed failure is red regardless of the wait.
 func absentOK(checks map[string]CheckState, name string, in Input) triState {
 	got, present := checks[name]
 	if !present {
@@ -305,9 +255,6 @@ func absentOK(checks map[string]CheckState, name string, in Input) triState {
 	}
 }
 
-// author resolves the dependabot arm: a PR attribute, not a check-run, which is why the grammar
-// needed a leaf outside the success/skipped/absent_ok check-name family. It is never pending —
-// the author is known the moment the PR is.
 func author(got, want string) triState {
 	if got == want {
 		return green

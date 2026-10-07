@@ -67,8 +67,6 @@ func TestGithubSourceTickets(t *testing.T) {
 			BlockedBy: []string{},
 		},
 		{
-			// 121's only dependency (98) is closed, so it drops out (issue #235): a closed
-			// blocker's issue is already gone from the tracker's own --state open query.
 			URL:       "https://github.com/O-Marsters-1997/command-center/issues/121",
 			Number:    121,
 			Title:     "Wire the import route",
@@ -77,7 +75,6 @@ func TestGithubSourceTickets(t *testing.T) {
 			BlockedBy: []string{},
 		},
 		{
-			// status:backlog still comes back: blocking order, not status, governs launch order.
 			URL:       "https://github.com/O-Marsters-1997/command-center/issues/122",
 			Number:    122,
 			Title:     "Sketch a future idea",

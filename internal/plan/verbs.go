@@ -1,7 +1,5 @@
 package plan
 
-// The verbs a row can offer. These are the wire values the page's forms post and internal/loop's
-// handler accepts, so they are spelled exactly as the route's `verb` field, not prettified.
 const (
 	VerbLaunch           = "launch"
 	VerbKill             = "kill"
@@ -18,8 +16,6 @@ const (
 	VerbCommitResolution = "commit-resolution"
 )
 
-// IsRowVerb reports whether v is a verb POST /verb accepts against an existing ticket. Launch goes
-// through POST /launch's own preview and hash check instead.
 func IsRowVerb(v string) bool {
 	switch v {
 	case VerbKill, VerbReRun, VerbReCheck, VerbRetryPush, VerbClosePR, VerbRemoveWorktree, VerbCancel,
@@ -29,9 +25,8 @@ func IsRowVerb(v string) bool {
 	return false
 }
 
-// VerdictLabel names a run's verdict for comparison against the last recorded one and as a row's
-// BaseVerdict. Empty for a nil fact (no run yet) or when no verdict flag is set, neither of which
-// counts as a transition.
+// VerdictLabel names a run's verdict for comparison against the last recorded one. Empty for a
+// nil fact or when no verdict flag is set, neither of which counts as a transition.
 func VerdictLabel(fact *RunFact) string {
 	if fact == nil {
 		return ""
@@ -54,8 +49,6 @@ func VerdictLabel(fact *RunFact) string {
 	}
 }
 
-// Verbs is the verbs a row in this state offers, in the order the page renders them
-// (docs/prds/prd-command-centre.md § The states).
 func Verbs(s State) []string {
 	switch s {
 	case Ready, Blocked, Cancelled:
@@ -97,8 +90,6 @@ func Verbs(s State) []string {
 	}
 }
 
-// Unattended reports whether the loop advances this state without you: a tick job owns its next
-// move, so no verb is pending on the row.
 func (s State) Unattended() bool {
 	switch s {
 	case Queued, Running, PushPending, Checking, BaseMoved:
@@ -108,8 +99,7 @@ func (s State) Unattended() bool {
 	}
 }
 
-// Tone is the state's health band: done, live, wait, stop or idle, never a utility class. live is
-// work in flight, wait is parked on a party the reason names, idle is neither.
+// Tone is the state's health band: done, live, wait, stop or idle, never a utility class.
 func Tone(s State) string {
 	switch s {
 	case PRMerged:
