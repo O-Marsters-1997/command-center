@@ -73,7 +73,12 @@ func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnRe
 	//nolint:gosec // reproducible demo data, not security
 	rng := rand.New(rand.NewPCG(uint64(a.seed), uint64(owner.number)))
 	run := &agentRun{
-		issue: owner, worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(), rng: rng, attempt: a.spawns[owner.number],
+		issue:     owner,
+		worktree:  cfg.WorktreePath,
+		logPath:   cfg.LogFile.Name(),
+		started:   a.clock.Now(),
+		rng:       rng,
+		attempt:   a.spawns[owner.number],
 		resolving: strings.HasPrefix(cfg.Prompt, resolvePromptPrefix),
 	}
 	a.runs[a.nextPid] = run
