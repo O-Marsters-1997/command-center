@@ -45,7 +45,7 @@ func TestInsightsPageRendersMergedTicketsAsAnSVGChart(t *testing.T) {
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 	got := renderPath(t, server, "/insights")
 	assertGolden(t, "testdata/insights_chart.golden.html", []byte(got))
 }

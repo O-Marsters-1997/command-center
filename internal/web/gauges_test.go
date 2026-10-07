@@ -10,13 +10,12 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 
 	older := agentlog.Reading{
@@ -31,7 +30,7 @@ func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server := newServer(store, observedAt.Add(45*time.Second))
 	board := renderBoard(t, server)
 
 	if !strings.Contains(board, "five-hour · 42%") {
@@ -45,7 +44,7 @@ func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 	reading := agentlog.Reading{
 		Window: agentlog.SevenDay, Utilization: 0.19,
@@ -55,7 +54,7 @@ func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server := newServer(store, observedAt.Add(45*time.Second))
 	first := gaugeMarkup(t, renderBoard(t, server))
 	second := gaugeMarkup(t, renderBoard(t, server))
 	if first != second {
@@ -68,10 +67,10 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 
-	server := web.NewServer(store, fixedClock(observedAt), nil, "")
+	server := newServer(store, observedAt)
 	if got := renderBoard(t, server); !strings.Contains(got, "five-hour · 0% · calibrating") {
 		t.Errorf("board masthead does not read calibrating below the sample threshold:\n%s", got)
 	}
@@ -111,7 +110,7 @@ func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
 func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 	reading := agentlog.Reading{
 		Window: agentlog.FiveHour, Utilization: 0.82,
@@ -121,7 +120,7 @@ func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server := newServer(store, observedAt.Add(45*time.Second))
 	server.SetSpendLimit5h(80)
 	board := renderBoard(t, server)
 
@@ -133,7 +132,7 @@ func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 	reading := agentlog.Reading{
 		Window: agentlog.FiveHour, Utilization: 0.50,
@@ -143,7 +142,7 @@ func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	server := newServer(store, observedAt.Add(45*time.Second))
 	server.SetSpendLimit5h(80)
 	board := renderBoard(t, server)
 

@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -54,7 +53,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, "sandbox://ROOT", "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 func boardFor(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	return renderBoard(t, web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
 }
 
@@ -158,7 +157,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +185,7 @@ func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +218,7 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +245,7 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
 	if err != nil {
 		t.Fatal(err)

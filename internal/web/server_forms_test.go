@@ -21,8 +21,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
 	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -57,15 +56,14 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := web.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 
 	target := "/?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	rec := get(t, server, target)
 	body := rec.Body.String()
 
 	for _, want := range []string{

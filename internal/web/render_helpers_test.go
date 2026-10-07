@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"path"
 	"regexp"
 	"strings"
@@ -23,8 +22,7 @@ func renderBoard(t *testing.T, server *web.Server) string {
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	rec := get(t, server, path)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}

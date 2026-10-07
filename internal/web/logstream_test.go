@@ -87,16 +87,15 @@ func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 func TestLogStreamsOneEventPerLine(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	first, xss, third := jsonToolLine("first"), jsonToolLine(`<script>alert(1)</script>`), jsonToolLine("third")
 	appendLines(t, logPath, first, xss, third)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
+	rec := get(t, server, logStreamPath(0))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -121,13 +120,13 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	alreadyRead, newOne := jsonToolLine("already read"), jsonToolLine("new one")
 	appendLines(t, logPath, alreadyRead, newOne)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	rec := httptest.NewRecorder()
 	from := int64(len(alreadyRead) + 1)
@@ -145,11 +144,10 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
+	rec := get(t, server, logStreamPath(0))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -162,15 +160,14 @@ func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, "last line")
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(0), nil))
+	rec := get(t, server, logStreamPath(0))
 
 	if body := rec.Body.String(); !strings.HasSuffix(body, "event: end\ndata:\n\n") {
 		t.Errorf("the stream does not end on the sentinel sse-close listens for:\n%q", body)
@@ -180,13 +177,13 @@ func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	swappedAlready, notYet := jsonToolLine("swapped already"), jsonToolLine("not yet")
 	appendLines(t, logPath, swappedAlready, notYet)
 	store, runID := runStore(t, logPath, now)
 	endRun(t, store, runID, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil)
@@ -205,11 +202,11 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, jsonToolLine("before"))
 	store, runID := runStore(t, logPath, now)
-	httpServer := httptest.NewServer(web.NewServer(store, fixedClock(now), nil, ""))
+	httpServer := httptest.NewServer(newServer(store, now))
 	defer httpServer.Close()
 
 	resp, err := httpServer.Client().Get(httpServer.URL + logStreamPath(0))
@@ -262,11 +259,11 @@ func readEvent(t *testing.T, r *bufio.Reader) string {
 func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, "still running")
 	store, _ := runStore(t, logPath, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil).WithContext(ctx)
@@ -299,17 +296,16 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := writeLog(t, 3)
 	info, err := os.Stat(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
 	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())
@@ -330,17 +326,15 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 func TestPageCapsThePreAtAThousandLines(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	asset := httptest.NewRecorder()
-	server.ServeHTTP(asset, httptest.NewRequest(http.MethodGet, "/assets/sse.min.js", nil))
+	asset := get(t, server, "/assets/sse.min.js")
 	if asset.Code != http.StatusOK {
 		t.Fatalf("GET /assets/sse.min.js = %d, want 200", asset.Code)
 	}
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<script src="/assets/sse.min.js"></script>`,

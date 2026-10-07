@@ -76,10 +76,10 @@ func selPagePath(ticketURL string) string {
 func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	logPath := writeLog(t, 120)
-	server := web.NewServer(detailStore(t, logPath, startedAt, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, startedAt, now), now)
 
 	rec := httptest.NewRecorder()
 	target := selPagePath("https://github.com/o/r/issues/76")
@@ -123,7 +123,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 
 	withRows := detailStore(t, writeLog(t, 1), now, now)
 	runID, err := withRows.InsertRunSkeleton(ctx, "https://github.com/o/r/issues/76", "agent", "basesha1234", "hash-1")
@@ -144,7 +144,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	server := web.NewServer(withRows, fixedClock(now), nil, "")
+	server := newServer(withRows, now)
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
 	body := rec.Body.String()
 	if !strings.Contains(body, `class="context-curve`) {
@@ -156,7 +156,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 
 	noRows := detailStore(t, writeLog(t, 1), now, now)
 	rec2 := httptest.NewRecorder()
-	server2 := web.NewServer(noRows, fixedClock(now), nil, "")
+	server2 := newServer(noRows, now)
 	server2.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
 	if strings.Contains(rec2.Body.String(), `class="context-curve`) {
 		t.Errorf("a run with no run_requests rows still rendered a context curve:\n%s", rec2.Body)
@@ -173,7 +173,7 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ const goldenBoardSelected = "testdata/board_selected.golden.html"
 func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	server := web.NewServer(
 		detailStore(t, "testdata/fixtures/run.jsonl", startedAt, now), fixedClock(now), nil, "")
@@ -231,11 +231,10 @@ func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://NOPE"), nil))
+	rec := get(t, server, selPagePath("sandbox://NOPE"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -247,8 +246,8 @@ func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 func TestTheDeletedDetailRouteIs404(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
 	for _, target := range []string{
 		"/ticket/" + url.PathEscape("sandbox://CC-1") + "/detail",
@@ -265,12 +264,11 @@ func TestTheDeletedDetailRouteIs404(t *testing.T) {
 func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
-	server := web.NewServer(detailStore(t, writeLog(t, 3), startedAt, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), startedAt, now), now)
 
-	board := httptest.NewRecorder()
-	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))
+	board := get(t, server, "/")
 	selected := httptest.NewRecorder()
 	server.ServeHTTP(selected, httptest.NewRequest(
 		http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
@@ -288,11 +286,10 @@ func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 func TestBoardLinksEveryRowToItsOwnSelection(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 
 	want := `hx-get="/board?` + url.Values{"sel": {"https://github.com/o/r/issues/76"}}.Encode() + `"`
@@ -304,11 +301,10 @@ func TestBoardLinksEveryRowToItsOwnSelection(t *testing.T) {
 func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/htmx.min.js", nil))
+	rec := get(t, server, "/assets/htmx.min.js")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/htmx.min.js = %d, want 200", rec.Code)
 	}
@@ -316,8 +312,7 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 		t.Error("/assets/htmx.min.js does not serve htmx")
 	}
 
-	page := httptest.NewRecorder()
-	server.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
+	page := get(t, server, "/")
 	body := page.Body.String()
 	if !strings.Contains(body, `<script src="/assets/htmx.min.js"></script>`) {
 		t.Errorf("page does not load htmx from the binary:\n%s", body)
@@ -330,11 +325,10 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 
 	if strings.Contains(body, "http-equiv=\"refresh\"") {
@@ -366,7 +360,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +385,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 			body := rec.Body.String()
 
 			for _, url := range all {
-				id := detailIDFor(server, url)
+				id := detailIDFor(t, server, url)
 				if url == tc.to {
 					if !strings.Contains(body, id+`" hx-preserve="true"`) {
 						t.Errorf("no preserved detail row for the now-selected %s:\n%s", url, body)
@@ -413,10 +407,13 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	}
 }
 
-func detailIDFor(server *web.Server, ticketURL string) string {
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticketURL), nil))
+func detailIDFor(t *testing.T, server *web.Server, ticketURL string) string {
+	t.Helper()
+	rec := get(t, server, selPagePath(ticketURL))
 	m := regexp.MustCompile(`<tr id="(detail-[0-9a-f]+)" hx-preserve="true">`).FindStringSubmatch(rec.Body.String())
+	if m == nil {
+		t.Fatalf("no detail row for %s", ticketURL)
+	}
 	return m[1]
 }
 
@@ -435,8 +432,8 @@ func detailRowID(t *testing.T, body string) string {
 func TestDetailRowsSurviveTheBoardSwap(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 	target := selPagePath("https://github.com/o/r/issues/76")
 
 	var id, stream string
@@ -485,18 +482,16 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := web.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 
-	first := httptest.NewRecorder()
-	server.ServeHTTP(first, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://A"), nil))
+	first := get(t, server, selPagePath("sandbox://A"))
 	firstID := detailRowID(t, first.Body.String())
 
-	second := httptest.NewRecorder()
-	server.ServeHTTP(second, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://B"), nil))
+	second := get(t, server, selPagePath("sandbox://B"))
 	body := second.Body.String()
 
 	if strings.Contains(body, firstID) {
@@ -510,11 +505,10 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 
-	board := httptest.NewRecorder()
-	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))
+	board := get(t, server, "/")
 	columns := strings.Count(board.Body.String(), "<th>")
 
 	selected := httptest.NewRecorder()
@@ -582,9 +576,9 @@ func selLogPagePath(ticketURL, mode string) string {
 func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), now, now), now)
 
 	for _, mode := range []string{"all", "skills", "tools", "fails"} {
 		t.Run(mode, func(t *testing.T) {
@@ -605,12 +599,11 @@ func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selLogPagePath(ticket, "fails"), nil))
+	rec := get(t, server, selLogPagePath(ticket, "fails"))
 	body := rec.Body.String()
 
 	if !strings.Contains(body, `hx-get="/board?log=fails&amp;sel=`) {
@@ -621,13 +614,12 @@ func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := web.WriteRunLog(t, web.ReadTestdata("run_with_failure.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
 	if !strings.Contains(body, `<a href="#first-fail"`) || !strings.Contains(body, `>first failure</a>`) {
@@ -641,13 +633,12 @@ func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := web.WriteRunLog(t, web.ReadTestdata("dropped_kinds.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
 	for _, dropped := range []string{"deadbeef-session", "pondering-deeply"} {
@@ -666,8 +657,8 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
 		t.Errorf("default board does not poll every 5s:\n%s", got)
 	}
@@ -680,7 +671,6 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 
 func boardBody(t *testing.T, server *web.Server) string {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/board", nil))
+	rec := get(t, server, "/board")
 	return rec.Body.String()
 }

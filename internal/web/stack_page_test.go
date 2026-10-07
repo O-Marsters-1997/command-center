@@ -3,7 +3,6 @@ package web_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -30,7 +29,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	prs := map[string]plan.PR{}
 	dispositionAsPushed(t, store, "sandbox://ROOT", at)
 	if err := store.RecordPush(ctx, "sandbox://ROOT", "root-tip", "main", "main-tip", at); err != nil {
@@ -83,7 +82,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	if err := store.RecordPush(ctx, "sandbox://PARENT", "parent-tip", "main", "main-tip", at); err != nil {
@@ -131,7 +130,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	if err := store.RecordPush(ctx, ticket.URL, "merged-tip", "main", "main-tip", at); err != nil {
 		t.Fatal(err)
