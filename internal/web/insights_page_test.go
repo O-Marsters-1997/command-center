@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -37,19 +36,16 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	}
 }
 
-func TestInsightsPageServesInsightsJSONFromTheSameOrigin(t *testing.T) {
+func TestInsightsPageRendersMergedTicketsAsAnSVGChart(t *testing.T) {
 	t.Parallel()
 
-	server := seededServer(t)
-	got := renderPath(t, server, "/insights")
-	if !strings.Contains(got, "<cc-insights>") {
-		t.Fatalf("no cc-insights island in the page:\n%s", got)
-	}
-	if !strings.Contains(got, `src="/assets/dist/insights.js"`) {
-		t.Errorf("no script tag loading the built island:\n%s", got)
-	}
+	store := openStore(t)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
-	if resp, _ := fetchInsights(t, server, ""); resp.StatusCode != http.StatusOK {
-		t.Errorf("GET /insights.json = %d, want 200", resp.StatusCode)
-	}
+	server := web.NewServer(store, fixedClock(now), nil, "")
+	got := renderPath(t, server, "/insights")
+	assertGolden(t, "testdata/insights_chart.golden.html", []byte(got))
 }

@@ -15,7 +15,6 @@ web/node_modules/
 # (docs/prds/prd-fleet-view.md § The build, and Go's dependency on it).
 internal/web/assets/dist/graph.js
 internal/web/assets/dist/launch-modal.js
-internal/web/assets/dist/insights.js
 internal/web/assets/dist/layout-*.js
 internal/web/assets/dist/index-*.js
 

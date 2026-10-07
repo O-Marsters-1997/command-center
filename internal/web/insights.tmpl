@@ -7,15 +7,25 @@
 {{template "sidebar" .}}
 <main id="main" class="p-4">
 <h1 class="mb-3">INSIGHTS</h1>
-<!-- noShadowDOM() is cc-insights's first statement (ADR 1), so this fallback content is what a
-     Go-only build with no Node -- assets/dist/insights.js never built, the script below 404s --
-     renders: a custom element the browser never upgrades still shows its light-DOM children. -->
-<cc-insights>
-  <p class="banner ribbon" data-tone="wait" role="status">
-    insights need the built assets: run `just assets`, or switch to the board view.
-  </p>
-</cc-insights>
-<script type="module" src="/assets/dist/insights.js"></script>
+<h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
+{{with .Chart}}{{if .Dots}}
+<svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img">
+  <title>spend as a percentage of the week, {{.Count}} merged tickets</title>
+  {{range .Ticks}}<g><line class="chart-grid" x1="{{$.Chart.PadLeft}}" x2="{{$.Chart.Width}}" y1="{{.Y}}" y2="{{.Y}}"></line>
+  <text class="chart-tick" x="48" y="{{.Y}}" dy="0.32em" text-anchor="end">{{.Label}}</text></g>
+  {{end -}}
+  {{if .HasWaste}}<line class="chart-line chart-series-3" stroke-dasharray="4 3" x1="{{.PadLeft}}" x2="{{.Width}}" y1="{{.WasteY}}" y2="{{.WasteY}}"><title>{{.WasteTitle}}</title></line>
+  {{end -}}
+  <path class="chart-line chart-series-1" d="{{.MedianPath}}"></path>
+  {{range .Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="3"><title>{{.Title}}</title></circle>
+  {{end -}}
+</svg>
+<div class="mt-1 flex items-center gap-3 text-[0.8em] text-muted">
+  <span class="chart-legend"><span class="chart-legend-swatch chart-dot"></span> ticket</span>
+  <span class="chart-legend"><span class="chart-legend-swatch chart-series-1"></span> rolling median ({{.MedianWindow}})</span>
+  {{if .HasWaste}}<span class="chart-legend"><span class="chart-legend-swatch chart-series-3"></span> waste: {{.WasteLabel}}</span>{{end}}
+</div>
+{{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}{{end}}
 </main>
 </div>
 </body>

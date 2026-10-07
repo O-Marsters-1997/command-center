@@ -82,15 +82,20 @@ func systemTimezoneName() string {
 
 type InsightsPage struct {
 	Chrome
+	Chart InsightsChart
 }
 
-func (r *Reader) InsightsPage(ctx context.Context, now time.Time, params Params) (InsightsPage, error) {
-	chrome, err := r.Chrome(ctx, now, params)
+func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) (InsightsPage, error) {
+	chrome, err := r.Chrome(ctx, now, ParseParams(q))
 	if err != nil {
 		return InsightsPage{}, err
 	}
 	chrome.Section = "insights"
-	return InsightsPage{Chrome: chrome}, nil
+	resp, err := r.Insights(ctx, now, q)
+	if err != nil {
+		return InsightsPage{}, err
+	}
+	return InsightsPage{Chrome: chrome, Chart: buildInsightsChart(resp)}, nil
 }
 
 // Insights reads the merged-ticket spend between ?since= (default thirty days back) and today in

@@ -61,7 +61,7 @@
       <span class="pill-ring"></span>0 live
     </span>
     
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
+    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: never</span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -76,10 +76,6 @@
     
   </div>
   
-  <p class="banner ribbon" data-tone="stop" role="status">
-    the last tick failed <time datetime="2026-08-20T12:00:15Z">30s ago</time> and nothing below has been re-derived since. observe: gh pr list: exit status 1
-  </p>
-  
   
 </div>
 <div class="shell">
@@ -92,7 +88,20 @@
 <main id="main" class="p-4">
 <h1 class="mb-3">INSIGHTS</h1>
 <h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
-<p class="text-muted">no merged tickets in range.</p>
+
+<svg width="720" height="220" viewBox="0 0 720 220" role="img">
+  <title>spend as a percentage of the week, 1 merged tickets</title>
+  <g><line class="chart-grid" x1="52" x2="720" y1="200" y2="200"></line>
+  <text class="chart-tick" x="48" y="200" dy="0.32em" text-anchor="end">0%</text></g>
+  <path class="chart-line chart-series-1" d="M 386.00 200.00"></path>
+  <circle class="chart-dot" cx="386" cy="200" r="3"><title>sandbox://CC-1: 0.00% week (agent 0.00, resolve 0.00, follow-up 0.00), merged 2026-09-20T15:00:00Z</title></circle>
+  </svg>
+<div class="mt-1 flex items-center gap-3 text-[0.8em] text-muted">
+  <span class="chart-legend"><span class="chart-legend-swatch chart-dot"></span> ticket</span>
+  <span class="chart-legend"><span class="chart-legend-swatch chart-series-1"></span> rolling median (10)</span>
+  
+</div>
+
 </main>
 </div>
 </body>
