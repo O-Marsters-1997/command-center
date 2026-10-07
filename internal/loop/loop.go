@@ -86,11 +86,11 @@ func (l *Loop) Nudge() {
 	}
 }
 
-// SetForge replaces the real gh-backed Forge, so a test or the demo sim can fake GitHub in-process.
+// SetForge replaces the real gh-backed Forge, so a test can fake GitHub in-process.
 func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
 
-// SetWorktrees replaces the real tp-backed Worktrees, so a test or the demo sim can cut and remove
-// worktrees without the tp binary.
+// SetWorktrees replaces the real tp-backed Worktrees, so a test can cut and remove worktrees
+// without the tp binary.
 func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
 
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a

@@ -93,5 +93,5 @@ ci:
     just test
     just test-e2e
 
-demo scenario *args:
-    go run -tags=demo ./cmd/cc demo {{args}} {{scenario}}
+demo *args:
+    go run -tags=demo ./cmd/cc demo {{args}}

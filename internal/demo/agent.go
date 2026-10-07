@@ -30,6 +30,7 @@ type Agent struct {
 	mu      sync.Mutex
 	runs    map[int]*agentRun
 	nextPid int
+	spawns  map[int]int
 }
 
 type agentRun struct {
@@ -42,14 +43,14 @@ type agentRun struct {
 	tokensOut int
 	finished  bool
 	resolving bool
+	attempt   int
 	exitCode  int
 	rng       *rand.Rand
 }
 
-// NewAgent returns a Runner whose token counts come from seed.
 func NewAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
 	return &Agent{
-		clock: clock, issues: issues, runs: map[int]*agentRun{},
+		clock: clock, issues: issues, runs: map[int]*agentRun{}, spawns: map[int]int{},
 		seed: seed,
 	}
 }
@@ -67,11 +68,12 @@ func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnRe
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextPid++
+	a.spawns[a.issues[ownerIdx].number]++
 	owner := a.issues[ownerIdx]
 	//nolint:gosec // reproducible demo data, not security
 	rng := rand.New(rand.NewPCG(uint64(a.seed), uint64(owner.number)))
 	run := &agentRun{
-		issue: owner, worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(), rng: rng,
+		issue: owner, worktree: cfg.WorktreePath, logPath: cfg.LogFile.Name(), started: a.clock.Now(), rng: rng, attempt: a.spawns[owner.number],
 		resolving: strings.HasPrefix(cfg.Prompt, resolvePromptPrefix),
 	}
 	a.runs[a.nextPid] = run
@@ -95,7 +97,7 @@ func (a *Agent) Step() error {
 		if err := a.turn(run); err != nil {
 			return err
 		}
-		if now.Before(run.started.Add(time.Duration(run.issue.Agent.After))) {
+		if now.Before(run.started.Add(run.issue.AgentAfter)) {
 			continue
 		}
 		if err := run.finish(now); err != nil {
@@ -121,7 +123,7 @@ func (*Agent) turn(run *agentRun) error {
 }
 
 func (r *agentRun) finish(now time.Time) error {
-	if r.issue.Agent.Result == "crash" {
+	if r.issue.Result == resultCrash && r.attempt == 1 {
 		r.finished = true
 		r.exitCode = 1
 		return r.write(map[string]any{"type": "result", "subtype": "error_during_execution", "is_error": true})
@@ -143,11 +145,11 @@ func (r *agentRun) commitWork() error {
 		return r.resolveConflict()
 	}
 	content := "package main\n"
-	if r.issue.Agent.Result == "conflict" {
+	if r.issue.Result == resultConflict {
 		content = "package main // " + r.issue.ID + "\n"
 	}
-	files := make(map[string]string, len(r.issue.Agent.Files))
-	for _, name := range r.issue.Agent.Files {
+	files := make(map[string]string, len(r.issue.Files))
+	for _, name := range r.issue.Files {
 		files[name] = content
 	}
 	return commitAll(r.worktree, "implement "+r.issue.Title, files)
@@ -167,7 +169,7 @@ func (r *agentRun) resolveConflict() error {
 		return mergeErr
 	}
 	resolved := map[string]string{}
-	for _, name := range strings.Split(conflicted, "\n") {
+	for _, name := range strings.Fields(conflicted) {
 		resolved[name] = "package main // resolved by " + r.issue.ID + "\n"
 	}
 	if err := writeFiles(r.worktree, resolved); err != nil {
