@@ -10,7 +10,7 @@ one and prompting against it directly, which is exactly what `cloud-agents.md` �
 "repairs are always local," whatever kind produced the branch. Cloud is worth building because of
 what it is, not because local ran out of capacity.
 
-This document covers infrastructure only. Nothing in `internal/cc` or `internal/tracker` changes.
+This document covers infrastructure only. Nothing in `internal/loop` or `internal/tracker` changes.
 The DAG, authorisation, the tick, the deny gate and both existing run kinds stay exactly as they
 are; only where the process lives moves.
 
@@ -37,7 +37,7 @@ cloud run kind (§7).
 
 ## 3 · State: a managed Postgres
 
-`internal/cc/store.go` already opens Postgres by DSN (`database_url` / `CC_DATABASE_URL`), so
+`internal/loop/store.go` already opens Postgres by DSN (`database_url` / `CC_DATABASE_URL`), so
 nothing in the app cares where that instance lives. Point it at a small managed Postgres (Neon or
 Supabase's free tier fits this load) instead of running `compose.yaml`'s container on the VM
 itself. Backups and patching become the provider's job. The only cost is one more account to
@@ -61,7 +61,7 @@ for one.
 
 ## 6 · Credentials: one-time interactive login
 
-`gh` and `claude` each hold their own session, outside this app's config. `internal/cc/runner.go`
+`gh` and `claude` each hold their own session, outside this app's config. `internal/loop/runner.go`
 strips `ANTHROPIC_API_KEY` from every spawned agent on purpose (inv. 17: no run inherits the app's
 own key), so an env var on the VM doesn't authenticate the agent processes; only a logged-in
 `claude` CLI session does. SSH in once during provisioning, run `gh auth login` and `claude login`

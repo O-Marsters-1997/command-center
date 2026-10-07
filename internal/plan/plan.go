@@ -262,7 +262,7 @@ type RunFact struct {
 	// (docs/prds/prd-command-centre.md § The states).
 	PRMerged         bool
 	PRClosedUnmerged bool
-	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
+	// Verdict* fields matter only once PROpen: internal/loop's call to internal/verdict's pure
 	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
 	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
 	// whatever cc computed, else empty. VerdictBaseMoved is internal/verdict's own expiry (§4a),
@@ -275,7 +275,7 @@ type RunFact struct {
 	VerdictReason            Reason
 	RedLeaves                []string
 	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
-	// row reads needs_you naming the reason, and the automatic pass (internal/cc/refresh.go)
+	// row reads needs_you naming the reason, and the automatic pass (internal/loop/refresh.go)
 	// never retries it -- only the refresh verb does.
 	RefreshRefused       bool
 	RefreshRefusedReason Reason
@@ -289,7 +289,7 @@ type RunFact struct {
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
 	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
-	// is empty when there is none. Ref order is decided in internal/cc, the one place that knows
+	// is empty when there is none. Ref order is decided in internal/loop, the one place that knows
 	// it (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictingPeer string
 	// VerificationFailed is set when a clean refresh or restack's configured verify command last

@@ -2,7 +2,7 @@
 # run under three different fake agents and each derives the disposition its own process earns.
 # commits.sh commits and exits, so its run disposes with commits and pushes; empty.sh exits
 # having committed nothing, so its run disposes failed; sleeps.sh never exits, so its row stays
-# running until a kill verb empties its process group. internal/cc's unit tests already cover
+# running until a kill verb empties its process group. internal/loop's unit tests already cover
 # all three against a fake runner -- what this locks is that a really spawned process, a real
 # `ps` liveness read and a real Cancel agree with them.
 #

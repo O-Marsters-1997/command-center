@@ -1,0 +1,173 @@
+package loop_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
+	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
+)
+
+func TestReRunHandsTheNewRunADiffPreambleWhenTheStoredPromptDiffers(t *testing.T) {
+	root, _ := repoWithOrigin(t)
+	installFakeTp(t, false)
+
+	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
+	store := openStore(t)
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "ticket body"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	planTicket := plan.Ticket{URL: ticket.URL}
+	authoriseTicket(t, store, ticket.URL, plan.Hash(plan.Compose(planTicket)), at)
+
+	obs := &plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	observe := func(context.Context) (plan.Observation, error) { return *obs, nil }
+
+	fake := runner.NewFake()
+	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("first RunOnce: %v", err)
+	}
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns after first run = %d, want 1", len(fake.Spawns))
+	}
+	obs.Worktrees[loop.BranchKey("repo", "cc-1")] = fake.Spawns[0].WorktreePath
+
+	ticket.Body = "ticket body, edited"
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("second RunOnce: %v", err)
+	}
+	if len(fake.Spawns) != 2 {
+		t.Fatalf("spawns after re-run = %d, want 2", len(fake.Spawns))
+	}
+	reRunSpawn := fake.Spawns[1]
+
+	latest, err := store.LatestRunsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRunID := latest[ticket.URL].ID
+
+	newPrompt, err := os.ReadFile(reRunSpawn.PromptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantComposition := plan.Compose(planTicket)
+	if !strings.HasPrefix(string(newPrompt), wantComposition) {
+		t.Errorf("new .prompt file = %q, want it to start with the fresh composition %q", newPrompt, wantComposition)
+	}
+	if strings.Contains(string(newPrompt), "-ticket body\n") {
+		t.Errorf("new .prompt file = %q, must not contain the diff preamble", newPrompt)
+	}
+
+	if reRunSpawn.Prompt == string(newPrompt) {
+		t.Error("re-run's spawned prompt has no preamble, want the before/after diff prepended")
+	}
+	if !strings.Contains(reRunSpawn.Prompt, "-ticket body") ||
+		!strings.Contains(reRunSpawn.Prompt, "+ticket body, edited") {
+		t.Errorf("re-run's spawned prompt = %q, want a unified diff of the ticket body change", reRunSpawn.Prompt)
+	}
+	if !strings.HasSuffix(reRunSpawn.Prompt, string(newPrompt)) {
+		t.Errorf("re-run's spawned prompt = %q, want the fresh composition after the diff preamble", reRunSpawn.Prompt)
+	}
+	if strings.HasPrefix(reRunSpawn.Prompt, "-") {
+		t.Errorf("re-run's spawned prompt = %q, starts with '-': the CLI will parse it as a flag", reRunSpawn.Prompt)
+	}
+
+	diffPath := filepath.Join(ws.RunsDir, fmt.Sprintf("%d.diff", newRunID))
+	diffOnDisk, err := os.ReadFile(diffPath)
+	if err != nil {
+		t.Fatalf("diff file not written: %v", err)
+	}
+	if !strings.Contains(string(diffOnDisk), "-ticket body") {
+		t.Errorf("diff file = %q, want the removed line", diffOnDisk)
+	}
+}
+
+func TestReRunWithNoStoredPromptDegradesToNoDiff(t *testing.T) {
+	_, repoPath := repoWithOrigin(t)
+	installFakeGh(t, false)
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+
+	store := openStore(t)
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	firstRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(t.Context(), firstRunID, 111, at, "/state/runs/1.jsonl"); err != nil {
+		t.Fatal(err)
+	}
+	exitCode := 1
+	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := plan.Observation{
+		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+	}
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
+
+	fake := runner.NewFake()
+	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+
+	if len(fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1: a missing stored prompt must never fail the re-run", len(fake.Spawns))
+	}
+	spawned := fake.Spawns[0]
+	newPrompt, err := os.ReadFile(spawned.PromptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spawned.Prompt != string(newPrompt) {
+		t.Errorf("spawned prompt = %q, want exactly the plain composition (no diff preamble)", spawned.Prompt)
+	}
+
+	latest, err := store.LatestRunsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRunID := latest[ticket.URL].ID
+	diffPath := filepath.Join(ws.RunsDir, fmt.Sprintf("%d.diff", newRunID))
+	if _, err := os.Stat(diffPath); !os.IsNotExist(err) {
+		t.Errorf("diff file exists at %s, want none written when there is nothing to diff", diffPath)
+	}
+
+	events, err := store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "re_run_no_diff", "") {
+		t.Error("no re_run_no_diff event logged for the missing stored prompt")
+	}
+}

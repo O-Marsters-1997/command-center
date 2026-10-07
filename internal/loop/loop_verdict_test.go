@@ -1,0 +1,73 @@
+package loop_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/runner"
+)
+
+// TestCheckingTicksOnlyAdvanceOnSuccessfulObserve is the AC's forced-failure sequence over an
+// injected clock (docs/designs/command-centre-design.md § 9 inv. 10): internal/verdict.Input.Now is
+// derived from this counter, never from l.now(), so a real GitHub outage lasting hours must not
+// walk a row any closer to needs_you than the successful ticks either side of it did.
+func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	ok := loop.NewLoop(store, func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
+		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+
+	for i := range 3 {
+		if err := ok.RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce %d: %v", i, err)
+		}
+	}
+
+	// An injected clock that keeps moving, standing in for a real outage's wall-clock span,
+	// while every observe across it fails.
+	boom := errors.New("gh pr list: exit status 1")
+	failing := loop.NewLoop(store, func(context.Context) (plan.Observation, error) {
+		return plan.Observation{}, boom
+	}, fixedClock(at.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	for i := range 50 {
+		if err := failing.RunOnce(ctx); err == nil {
+			t.Fatalf("RunOnce %d returned nil for a forced-failure observe", i)
+		}
+	}
+
+	ticks, err := store.CheckingTicks(ctx)
+	if err != nil {
+		t.Fatalf("CheckingTicks: %v", err)
+	}
+	if got := ticks["sandbox://CC-1"]; got != 3 {
+		t.Errorf("checking ticks = %d after 3 successful and 50 failed observes an hour apart, want 3", got)
+	}
+
+	// Observe succeeding again resumes the count from where it left off, not from the elapsed
+	// wall time.
+	if err := ok.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	ticks, err = store.CheckingTicks(ctx)
+	if err != nil {
+		t.Fatalf("CheckingTicks: %v", err)
+	}
+	if got := ticks["sandbox://CC-1"]; got != 4 {
+		t.Errorf("checking ticks = %d after a fourth successful observe, want 4", got)
+	}
+}

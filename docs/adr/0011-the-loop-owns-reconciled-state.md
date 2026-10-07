@@ -22,7 +22,7 @@ intent because `launches` is reconciled state.
 
 ## Consequences
 
-`CreateUser` in `internal/cc/auth.go` is the one store write that bypasses the loop. Other writes to
+`CreateUser` in `internal/loop/auth.go` is the one store write that bypasses the loop. Other writes to
 `users` or `sessions` are fine only while no tick step reads either table. If one does (say
 `sessions` gating a page's auth), writes move behind an intent. Writes to `tickets` or `launches`
 outside the loop never qualify.

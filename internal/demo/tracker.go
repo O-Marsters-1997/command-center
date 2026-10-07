@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -31,7 +30,7 @@ func (f fakeSource) Tickets(_ context.Context, feature string) ([]tracker.Ticket
 	return tickets, nil
 }
 
-func trackerSource(issues []issue) cc.TrackerSource {
+func trackerSource(issues []issue) tracker.Resolver {
 	urlByID := make(map[string]string, len(issues))
 	for _, i := range issues {
 		urlByID[i.ID] = i.url

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -390,7 +389,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -402,7 +401,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -450,7 +449,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 	server.RegisterTestRoute("POST /test-route", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -476,7 +475,7 @@ func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
@@ -499,7 +498,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?ticket=sandbox://CC-1")
@@ -540,7 +539,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, query)
@@ -636,7 +635,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
@@ -790,7 +789,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
@@ -833,7 +832,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{
@@ -863,7 +862,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}

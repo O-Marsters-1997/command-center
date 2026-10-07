@@ -11,7 +11,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -83,7 +82,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -182,7 +181,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=project%3Ax")
@@ -218,7 +217,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv,
@@ -265,7 +264,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -299,7 +298,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=widgets")

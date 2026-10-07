@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/app"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
@@ -72,13 +72,13 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 	if err != nil {
 		return err
 	}
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, store.Close()) }()
+	defer func() { err = errors.Join(err, st.Close()) }()
 
-	return cc.QueueImport(ctx, store, args[0], time.Now())
+	return st.QueueVerbIntent(ctx, args[0], store.ImportVerb, time.Now())
 }
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately
@@ -114,7 +114,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(web.NewServer(store, cc.RealClock{}, cfg.Repos, ws.DataDir))
+	server := httptest.NewServer(web.NewServer(store, loop.RealClock{}, cfg.Repos, ws.DataDir))
 	defer server.Close()
 
 	var body io.Reader

@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/git"
 )
 
 // Kind names which issue tracker a repo's tickets live in. A config that names none resolves to
-// GitHub (internal/cc's LoadConfig applies that default, not this package).
+// GitHub (internal/config's LoadConfig applies that default, not this package).
 type Kind string
 
 // GitHub is the Kind a [[repo]] with no tracker key resolves to.
@@ -18,7 +20,7 @@ const GitHub Kind = "github"
 // Feature names one grouping of tickets a Source can list and import as a unit.
 type Feature string
 
-// Ticket is one in-flight issue as the tracker reports it. It is deliberately not cc.Ticket:
+// Ticket is one in-flight issue as the tracker reports it. It is deliberately not loop.Ticket:
 // this package never learns the app's columns.
 type Ticket struct {
 	URL       string
@@ -63,4 +65,20 @@ func ownerRepo(remote string) (owner, repo string, ok bool) {
 		return "", "", false
 	}
 	return owner, repo, true
+}
+
+// Resolver resolves the Source that reads one repo's tracker: New in production, a fake in a test.
+type Resolver func(kind Kind, remote string) (Source, error)
+
+// ForRemote resolves the Source for a repo's configured remote. A repo with no remote has no
+// tracker to read, which is ok=false rather than an error.
+func ForRemote(resolve Resolver, kind Kind, remote string) (src Source, ok bool, err error) {
+	if remote == "" {
+		return nil, false, nil
+	}
+	src, err = resolve(kind, git.NormaliseRemote(remote))
+	if err != nil {
+		return nil, false, err
+	}
+	return src, true, nil
 }

@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -25,20 +26,20 @@ type App struct {
 	cfg    config.Config
 	lock   *Flock
 	store  *store.Store
-	loop   *cc.Loop
+	loop   *loop.Loop
 	server *web.Server
 }
 
 type options struct {
-	clock         cc.Clock
-	observe       cc.ObserveFunc
+	clock         loop.Clock
+	observe       loop.ObserveFunc
 	repoCheck     RepoCheckFunc
 	checkout      CheckoutFunc
 	runner        runner.Runner
-	metricsParser cc.MetricsParser
+	metricsParser loop.MetricsParser
 	forge         gh.Forge
 	worktrees     git.Worktrees
-	trackerFor    cc.TrackerSource
+	trackerFor    tracker.Resolver
 }
 
 // Option configures New.
@@ -46,12 +47,12 @@ type Option func(*options)
 
 // WithClock replaces the real clock. Injecting it is what makes the rendered page byte-stable in
 // tests; no test ever sleeps.
-func WithClock(clock cc.Clock) Option {
+func WithClock(clock loop.Clock) Option {
 	return func(o *options) { o.clock = clock }
 }
 
 // WithObserver replaces the observe phase, so a tick can be driven without git or gh.
-func WithObserver(observe cc.ObserveFunc) Option {
+func WithObserver(observe loop.ObserveFunc) Option {
 	return func(o *options) { o.observe = observe }
 }
 
@@ -81,7 +82,7 @@ func WithCheckout(checkout CheckoutFunc) Option {
 
 // WithMetricsParser replaces the run-log metrics parser, so a test can substitute a fake without
 // touching the filesystem.
-func WithMetricsParser(p cc.MetricsParser) Option {
+func WithMetricsParser(p loop.MetricsParser) Option {
 	return func(o *options) { o.metricsParser = p }
 }
 
@@ -98,7 +99,7 @@ func WithWorktrees(worktrees git.Worktrees) Option {
 
 // WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
 // faked in-process.
-func WithTrackerSource(resolve cc.TrackerSource) Option {
+func WithTrackerSource(resolve tracker.Resolver) Option {
 	return func(o *options) { o.trackerFor = resolve }
 }
 
@@ -114,7 +115,7 @@ func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
 // New resolves the workspace, takes the flock and opens the store. A second instance against the
 // same workspace is refused (inv. 9).
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{clock: cc.RealClock{}, forge: gh.CLI{}, worktrees: git.CLI{}}
+	settings := options{clock: loop.RealClock{}, forge: gh.CLI{}, worktrees: git.CLI{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -137,7 +138,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	repoCheck := settings.repoCheck
 	if repoCheck == nil {
-		repoCheck = cc.AssertReposSquashOnly
+		repoCheck = loop.AssertReposSquashOnly
 	}
 	if err := repoCheck(ctx, ws, cfg.Repos); err != nil {
 		return nil, err
@@ -165,19 +166,19 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 	// Written once at startup rather than per spawn: the content never varies, and every spawn
 	// just passes the same path (inv. 17).
-	if err := cc.WriteAgentSettings(ws.SettingsPath); err != nil {
+	if err := loop.WriteAgentSettings(ws.SettingsPath); err != nil {
 		return nil, err
 	}
-	if err := cc.WriteAgentSystemPrompt(ws.SystemPromptPath); err != nil {
+	if err := loop.WriteAgentSystemPrompt(ws.SystemPromptPath); err != nil {
 		return nil, err
 	}
-	if err := cc.WriteAgentDigestDefinition(ws.AgentsPath); err != nil {
+	if err := loop.WriteAgentDigestDefinition(ws.AgentsPath); err != nil {
 		return nil, err
 	}
 
 	observe := settings.observe
 	if observe == nil {
-		observe = cc.NewObserver(store, settings.forge, cfg)
+		observe = loop.NewObserver(store, settings.forge, cfg)
 	}
 	agents := settings.runner
 	if agents == nil {
@@ -187,20 +188,20 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if metricsParser == nil {
 		metricsParser = agentlog.ParseMetrics
 	}
-	if err := cc.BackfillMetrics(ctx, store, metricsParser, cfg.ClaudeProjectsDir); err != nil {
+	if err := loop.BackfillMetrics(ctx, store, metricsParser, cfg.ClaudeProjectsDir); err != nil {
 		return nil, err
 	}
 
-	loop := cc.NewLoop(store, observe, settings.clock, cfg, ws, agents)
-	loop.SetMetricsParser(metricsParser)
-	loop.SetForge(settings.forge)
-	loop.SetWorktrees(settings.worktrees)
+	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, agents)
+	lp.SetMetricsParser(metricsParser)
+	lp.SetForge(settings.forge)
+	lp.SetWorktrees(settings.worktrees)
 	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
-	server.SetNudge(loop.Nudge)
+	server.SetNudge(lp.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
 	if settings.trackerFor != nil {
-		loop.SetTrackerSource(settings.trackerFor)
+		lp.SetTrackerSource(settings.trackerFor)
 		server.SetTrackerSource(settings.trackerFor)
 	}
 
@@ -208,7 +209,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		cfg:    cfg,
 		lock:   lock,
 		store:  store,
-		loop:   loop,
+		loop:   lp,
 		server: server,
 	}, nil
 }

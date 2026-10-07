@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
@@ -23,7 +23,7 @@ const resolvePromptPrefix = "Merge origin/main into"
 // and, when its scripted duration is up, commits the scenario's files into the worktree with real
 // git.
 type Agent struct {
-	clock  cc.Clock
+	clock  loop.Clock
 	issues []issue
 	seed   int64
 
@@ -47,7 +47,7 @@ type agentRun struct {
 }
 
 // NewAgent returns a Runner whose token counts come from seed.
-func NewAgent(clock cc.Clock, issues []issue, seed int64) *Agent {
+func NewAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
 	return &Agent{
 		clock: clock, issues: issues, runs: map[int]*agentRun{},
 		seed: seed,

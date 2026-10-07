@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -96,7 +95,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	server := web.NewServer(store, cc.RealClock{}, nil, "")
+	server := web.NewServer(store, realClock{}, nil, "")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/confirm?verb=remove-worktree&ticket=sandbox://CC-1", nil)
 	server.ServeHTTP(rec, req)
@@ -116,7 +115,7 @@ func TestConfirmQueuesNothing(t *testing.T) {
 func TestConfirmRejectsNonDestructiveVerbsAndUnknownTickets(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct{ name, query string }{

@@ -1,6 +1,6 @@
 package plan
 
-// The verbs a row can offer. These are the wire values the page's forms post and internal/cc's
+// The verbs a row can offer. These are the wire values the page's forms post and internal/loop's
 // handler accepts, so they are spelled exactly as the route's `verb` field, not prettified.
 const (
 	VerbLaunch           = "launch"

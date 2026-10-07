@@ -11,7 +11,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -22,7 +21,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
 	// seededStore's CC-1 derives ready and CC-2 blocked, and both states offer launch.
-	server := web.NewServer(seededStore(t, time.Now()), cc.RealClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != http.StatusOK {
@@ -103,7 +102,7 @@ func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(web.NewServer(store, cc.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()

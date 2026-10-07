@@ -182,7 +182,7 @@ func (CLI) Rerun(ctx context.Context, repoPath, runID string) error {
 
 // RunViewLogFailed reads a failed GitHub Actions run's log: `gh run view --log-failed <id>`, the
 // follow-up verb's way to give an agent the CI failure its own settings firewall it from seeing
-// (internal/cc/settings.go denies it Bash(gh:*), WebFetch and WebSearch; issue #232).
+// (internal/loop/settings.go denies it Bash(gh:*), WebFetch and WebSearch; issue #232).
 func (CLI) RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
 	out, err := run(ctx, repoPath, "run", "view", "--log-failed", runID)
 	if err != nil {

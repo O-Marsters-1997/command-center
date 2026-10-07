@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// SimClock is a cc.Clock that only moves when Advance is called, so a scenario plays without
+// SimClock is a loop.Clock that only moves when Advance is called, so a scenario plays without
 // sleeping.
 type SimClock struct {
 	mu      sync.Mutex

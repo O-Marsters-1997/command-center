@@ -22,7 +22,7 @@ compared them.
   `LaunchCandidate`, `Preview` and `Status` all refuse on it (`Status` reads `blocked` and names the
   base). It stays out of `Unlock`, because refreshing is how the conflict gets resolved.
 - **Observe records each peer pair** in `ConflictsWithPeer`, one `MergesCleanly` read per ordered tip
-  pair so an unmoved tick costs nothing. `conflictingPeerHold` in `internal/cc` walks open
+  pair so an unmoved tick costs nothing. `conflictingPeerHold` in `internal/loop` walks open
   `main`-based candidates in branch-name order and holds a ticket when an earlier one conflicts with
   it. The lower ref is never held, a held peer does not hold others, and stacked branches are out of
   scope. Held tickets read `blocked` naming the peer (`RunFact.ConflictingPeer`, ranked below
