@@ -8,15 +8,11 @@ import (
 	"os/exec"
 )
 
-// repoSettings is the subset of `gh api repos/{owner}/{repo}` this check reads.
 type repoSettings struct {
 	AllowMergeCommit bool `json:"allow_merge_commit"`
 	AllowRebaseMerge bool `json:"allow_rebase_merge"`
 }
 
-// assertSquashOnly decodes a repo's settings and refuses anything but squash-only: the whole
-// merge-don't-rebase design (docs/designs/command-centre-design.md §4a) rests on GitHub flattening every
-// merge, and that only holds if merge commits and rebase merges are both disabled server-side.
 func assertSquashOnly(repoName string, raw []byte) error {
 	var settings repoSettings
 	if err := json.Unmarshal(raw, &settings); err != nil {
@@ -33,8 +29,8 @@ func assertSquashOnly(repoName string, raw []byte) error {
 	return nil
 }
 
-// CheckSquashOnly reads one repo's settings via gh and asserts them. A gh failure (non-zero
-// exit or malformed JSON) is fail-closed: refuse to start rather than assume squash-only holds.
+// CheckSquashOnly refuses any repo that allows merge commits or rebase merges. A gh failure is
+// fail-closed.
 func CheckSquashOnly(ctx context.Context, repoPath, repoName string) error {
 	cmd := exec.CommandContext(ctx, "gh", "api", "repos/{owner}/{repo}",
 		"--jq", "{allow_merge_commit, allow_rebase_merge}")

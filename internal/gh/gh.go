@@ -1,5 +1,5 @@
 // Package gh is the only place that knows the gh CLI's JSON shape. It normalises a pull
-// request's status check rollup before anything else sees it (docs/designs/command-centre-design.md §3).
+// request's status check rollup before anything else sees it.
 package gh
 
 import (
@@ -57,9 +57,7 @@ type PR struct {
 	IsDraft     bool                  `json:"is_draft"`
 	State       PRState               `json:"state"`
 	Checks      map[string]CheckState `json:"checks"`
-	// Labels names every label GitHub reports, invariant 2's ready-to-merge warning among them
-	// (docs/designs/command-centre-design.md § 4a).
-	Labels []string `json:"labels"`
+	Labels      []string              `json:"labels"`
 	// MergedAt is GitHub's own merge timestamp, zero unless State is Merged.
 	MergedAt time.Time `json:"merged_at"`
 }
@@ -69,12 +67,10 @@ type Snapshot struct {
 	ByBranch map[string]PR `json:"by_branch"`
 }
 
-// bulkFields is the full read; gh pr list's own defaults (--state open --limit 30) would hide
-// merged PRs and truncate below a busy repo's open count.
+// gh pr list's own defaults (--state open --limit 30) would hide merged PRs and truncate.
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
 	"statusCheckRollup,author,labels,mergedAt"
 
-// fallbackFields is the per-branch read. It is the only call that sees MERGED and CLOSED.
 const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
@@ -136,8 +132,8 @@ type Forge interface {
 type CLI struct{}
 
 // Create opens a pull request for the branch checked out at repoPath against base, applying the
-// keep-open label that defuses both repos' 14-day auto-close. body overrides --fill's body only
-// for a stacked base's "Merge after #N" line (docs/prds/prd-command-centre.md § Phase 4); empty for a root PR.
+// keep-open label that defuses both repos' 14-day auto-close. A non-empty body overrides
+// --fill's body.
 func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
@@ -150,39 +146,32 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 	return err
 }
 
-// Ready marks branch's pull request as ready for review, undoing draft state. It is one-way:
-// the reconciliation that calls this never asks to re-draft an already-ready PR
-// (docs/designs/command-centre-design.md § 6 job 2, inv. 13).
+// Ready marks branch's pull request as ready for review, undoing draft state.
 func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "ready", branch)
 	return err
 }
 
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
-// delete-branch-on-merge retarget may have got there first, and re-pointing a pull request at
-// the base it already has is a no-op (docs/designs/command-centre-design.md § 4a).
+// delete-branch-on-merge retarget may have got there first.
 func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
 	_, err := run(ctx, repoPath, "pr", "edit", branch, "--base", base)
 	return err
 }
 
-// Close closes branch's pull request: the app can open one (Create), so it needs a sanctioned
-// way to unopen one too (docs/designs/command-centre-design.md § 5, the `close PR` verb). It never merges.
+// Close closes branch's pull request without merging it.
 func (CLI) Close(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "close", branch)
 	return err
 }
 
-// Rerun re-runs a GitHub Actions run: `gh run rerun <id>`, the re-check verb's way to ask a
-// resolved-red compat check to run again (docs/prds/prd-command-centre.md § Phase 5).
+// Rerun re-runs a GitHub Actions run via `gh run rerun`.
 func (CLI) Rerun(ctx context.Context, repoPath, runID string) error {
 	_, err := run(ctx, repoPath, "run", "rerun", runID)
 	return err
 }
 
-// RunViewLogFailed reads a failed GitHub Actions run's log: `gh run view --log-failed <id>`, the
-// follow-up verb's way to give an agent the CI failure its own settings firewall it from seeing
-// (internal/loop/settings.go denies it Bash(gh:*), WebFetch and WebSearch; issue #232).
+// RunViewLogFailed reads a failed GitHub Actions run's log via `gh run view --log-failed`.
 func (CLI) RunViewLogFailed(ctx context.Context, repoPath, runID string) (string, error) {
 	out, err := run(ctx, repoPath, "run", "view", "--log-failed", runID)
 	if err != nil {
@@ -191,17 +180,13 @@ func (CLI) RunViewLogFailed(ctx context.Context, repoPath, runID string) (string
 	return string(out), nil
 }
 
-// CloseIssue closes issueURL's GitHub issue -- the post-merge cleanup verb's own bookkeeping
-// step, closing the issue tp remove --merged's worktree teardown never touches
-// (docs/prds/prd-command-centre.md § Phase 6, issue #147).
+// CloseIssue closes issueURL's GitHub issue.
 func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 	_, err := run(ctx, repoPath, "issue", "close", issueURL)
 	return err
 }
 
 // IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
-// The URL is the join key because a task holds the whole ticket URL: reconstructing one from
-// `number` would guess at the repo's own host.
 func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
 	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", "100")
 	if err != nil {
@@ -239,7 +224,6 @@ func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// rawPR mirrors gh's JSON exactly. Nothing outside this file may read these field names.
 type rawPR struct {
 	Number      int    `json:"number"`
 	HeadRefName string `json:"headRefName"`
@@ -258,7 +242,6 @@ type rawPR struct {
 	MergedAt string `json:"mergedAt"`
 }
 
-// rawIssue mirrors gh issue list's JSON exactly.
 type rawIssue struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
@@ -327,9 +310,8 @@ func parseState(s string) PRState {
 	}
 }
 
-// normalise reduces the rollup to the latest completed run per check name. The rollup is a
-// multiset of a union type: live data shows one name five times at one head SHA with mixed
-// CANCELLED and SUCCESS, and StatusContext entries carrying no name at all.
+// normalise reduces the rollup to the latest completed run per check name. gh's rollup repeats
+// a name several times at one head SHA, and StatusContext entries can carry no name at all.
 func normalise(rollup []rawCheck) map[string]CheckState {
 	checks := make(map[string]CheckState, len(rollup))
 	for _, r := range rollup {
@@ -366,8 +348,6 @@ func collapse(r rawCheck) (CheckState, bool) {
 	return CheckState{Name: name, Status: status, Conclusion: conclusion, DetailsURL: url, StartedAt: started}, true
 }
 
-// statusContextStatus maps a commit status's state onto a check run's status vocabulary, so
-// everything downstream reads one shape.
 func statusContextStatus(state string) string {
 	switch state {
 	case "SUCCESS", "FAILURE", "ERROR":
@@ -377,8 +357,6 @@ func statusContextStatus(state string) string {
 	}
 }
 
-// better prefers a completed run over an incomplete one, and the later start otherwise: a
-// re-run in flight must not erase the last verdict the repo actually reached.
 func better(candidate, existing CheckState) bool {
 	switch {
 	case completed(candidate) && !completed(existing):
