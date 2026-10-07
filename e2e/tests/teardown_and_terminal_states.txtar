@@ -79,6 +79,7 @@ exec cc request GET /
 
 # CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
 cc-fake-gh teardown-late
+exec cc tick --count 1
 exec cc request POST '/verb?verb=close-pr&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc tick --count 1
 grep -count=1 'pr close' $WORK/gh.log

@@ -7,10 +7,10 @@
 ## What Caddy does
 
 The checked-in `Caddyfile` (repo root) terminates TLS on `$CC_DOMAIN` and reverse-proxies
-everything to `127.0.0.1:7777`, the port cc already binds by default (`internal/cc/config.go`,
+everything to `127.0.0.1:7777`, the port cc already binds by default (`internal/loop/config.go`,
 `defaultPort`). Caddy's automatic HTTPS is the whole TLS story: no certificate handling, no
 bind-address config, and no proxy-header code live in cc itself. `App.Run` keeps binding
-`127.0.0.1` exactly as it does today (`internal/cc/app.go`) — Caddy is the only thing that ever
+`127.0.0.1` exactly as it does today (`internal/loop/app.go`) — Caddy is the only thing that ever
 listens on a public interface.
 
 ## cc never trusts the proxy
@@ -26,7 +26,7 @@ would add a code path with nothing to protect. That also means the Caddyfile car
 
 This slice hardens one thing: the transport between a browser and cc. It does not touch:
 
-- **Postgres.** Still `cc:cc` with `sslmode=disable` (`internal/cc/statedir.go`,
+- **Postgres.** Still `cc:cc` with `sslmode=disable` (`internal/loop/statedir.go`,
   `defaultDatabaseURL`). Fine on loopback/localhost-only Postgres; not fine if Postgres itself is
   ever exposed off the box.
 - **`~/.config/command-centre/`.** Holds GitHub credentials and repo checkouts on disk, unencrypted,

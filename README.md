@@ -84,7 +84,7 @@ so it renders the page but cannot spawn anything.
 
 ## How it works
 
-`cmd/cc` is a thin main: flags, signal handling, `cc.New`, `app.Run`. Run starts
+`cmd/cc` is a thin main: flags, signal handling, `app.New`, `Run`. Run starts
 two goroutines. One is the reconcile loop. One is an HTTP server bound to
 127.0.0.1.
 
@@ -92,7 +92,10 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 
 | Package | What |
 |---|---|
-| `internal/cc` | The imperative shell. Config, workspace and state dir, Postgres store, the tick, the page, push, verbs, observe, the process runner, the flock. |
+| `internal/config` | The TOML config, repo checkout paths and the workspace layout under the data directory. |
+| `internal/app` | Wiring: `App`, the `With*` options and the flock. |
+| `internal/loop` | The imperative shell: the tick, push, verbs, observe. |
+| `internal/web` | The page: handlers, templates and assets. `internal/web/view` shapes the plan snapshot for them. |
 | `internal/plan` | The decisions, as pure functions over value types. Unlock, Status, Verbs, LaunchPlan, Preview, Compose and Hash, Disposition, push policy. Stdlib-only, enforced by `api_test.go`. |
 | `internal/verdict` | The CI verdict predicate engine. Also pure, also import-checked. |
 | `internal/gh` | The only place that knows the `gh` CLI's JSON shape. It normalises the status check rollup before anything else sees it. |
@@ -100,7 +103,7 @@ two goroutines. One is the reconcile loop. One is an HTTP server bound to
 
 ### The tick
 
-`Loop.RunOnce` in `internal/cc/loop.go` observes, decides, then acts. Observe
+`Loop.RunOnce` in `internal/loop/loop.go` observes, decides, then acts. Observe
 runs once; every other step is conditional on observing successfully.
 
 1. Observe: `git fetch origin --prune`, the `gh` PR snapshot, each repo's open
@@ -148,11 +151,11 @@ A restack rewrites the branch, so the next push has to force. It may only use
 row's last push. A restack that stops on a conflict records one too. It has
 already rewritten the branch, so whoever resolves the conflict by hand still
 needs the lease. `advanceOnto` and `restackBoundary` in
-`internal/cc/refresh.go` are the two functions to read.
+`internal/loop/refresh.go` are the two functions to read.
 
 ### The page
 
-`internal/cc/server.go` serves the shell, the board, the launch modal, the
+`internal/web/server.go` serves the shell, the board, the launch modal, the
 confirm page and a row's detail fragment, each `html/template` over an
 embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 `confirm.tmpl` and `detail.tmpl`.
@@ -168,7 +171,7 @@ embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 | `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
 | `GET /task/{task}/log` | The run's log tail, streamed as JSON over SSE. |
 | `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
-| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/cc/assets/dist/app.css` and committed. The board needs no network. |
+| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/web/assets/dist/app.css` and committed. The board needs no network. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
 
@@ -215,7 +218,7 @@ repos/<name>/                a repo's checkout, with the worktrees tp cuts besid
 
 The driver is `github.com/jackc/pgx/v5/stdlib`, which is pure Go, so `CGO_ENABLED=0`
 still builds. What the binary is not is self-contained: it needs a database to be
-up. goose owns the schema from `internal/cc/migrations/`, embedded in the binary
+up. goose owns the schema from `internal/loop/migrations/`, embedded in the binary
 and applied at `OpenStore`. `0001_init.sql` creates `meta`, `tickets`, `launches`,
 `launch_members`, `runs`, `pushes`, `events` and `intents`.
 
@@ -258,7 +261,7 @@ derives a verdict.
 
 `[[repo]]` also accepts `compat_check`, the name of the check that reports
 whether a consumer still builds against its producer.
-`internal/cc/draftgate.go` and `internal/cc/verdict_transitions.go` read it.
+`internal/loop/draftgate.go` and `internal/loop/verdict_transitions.go` read it.
 
 `verify_command` is the argv a clean merge-forward or restack is checked with before the
 row is offered as sound: a git merge without conflicts is not proof the result compiles
@@ -270,7 +273,7 @@ restack that itself verifies clean, clears it.
 ## Testing
 
 `go test ./...` is the unit suite. Determinism comes from four seams injected on
-`cc.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
+`app.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
 test sleeps.
 
 Every test that touches the store gets a database of its own from
@@ -313,7 +316,7 @@ grammar, `pill`, `ribbon`, `meter` and the rest. The header, its chips and the
 stale banner use them; the board's own rows do not yet. Go emits no utility
 class anywhere, so nothing depends on Tailwind's scan and no class can be
 purged. `just assets` compiles it into
-`internal/cc/assets/dist/app.css`, which is committed the same way
+`internal/web/assets/dist/app.css`, which is committed the same way
 `htmx.min.js` is, so `go build` and `just ci` need no bun. Change `web/app.css`
 and you must commit the rebuilt output, or the `assets` job fails.
 

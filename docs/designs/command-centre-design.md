@@ -308,7 +308,7 @@ unconditional comparison would have made `base moved` the steady state of every 
 The repair is a merge, not a rebase, and the justification is now *stronger* than revision 3
 claimed: squash is **server-enforced** in both repos (`allow_merge_commit: false`,
 `allow_rebase_merge: false` — verified via API, and now **asserted at startup**, not just
-recorded here — `internal/cc/repocheck.go`), so there is no history to preserve, and a
+recorded here — `internal/loop/repocheck.go`), so there is no history to preserve, and a
 descendant PR's three-dot diff stays clean under repeated refreshes (verified — merge
 commits from the parent do not pollute the review).
 
@@ -596,7 +596,7 @@ ai-development/
     internal/verdict/                 predicate evaluation — pure
     internal/gh/                      exec + decode + normalise; owns gh's JSON shape
     internal/tp/                      the two treepad commands
-    internal/cc/                      store, loop, runner, http — the imperative shell
+    internal/loop/                      store, loop, runner, http — the imperative shell
 
 plain/.claude/command-centre.toml     app config (user-edited; stays with the workspace)
 plain/.claude/seams/                  seam files (user-edited)
@@ -764,7 +764,7 @@ Numbered so each can become a test.
    group whose leader has become a zombie returns `EPERM`, not `ESRCH` — exactly the moment
    liveness must report false — and BSD `ps` has no `etimes` keyword at all, only the `etime`
    format GNU and BSD `ps` share. A `Z` stat from the same `ps` call also means dead, zombie
-   or not (`internal/cc/runner_unix.go`). No timing rule ever marks a run dead.
+   or not (`internal/loop/runner_unix.go`). No timing rule ever marks a run dead.
 7. A dead run's disposition comes from artifacts — commits since **that run's** recorded
    baseline SHA — recorded as data (`kind`, `outcome`), never from the absence of events.
 8. The tick spawns a process only for a task that is unlocked, belongs to an `active`
@@ -881,7 +881,7 @@ API, not citations inherited from earlier revisions).
 - Both repos, server-side (API): `delete_branch_on_merge: true`;
   `allow_merge_commit: false`; `allow_rebase_merge: false` (squash is enforced, not just
   configured). This was a one-time manual check; the app now re-asserts it on every
-  configured repo at startup and refuses to start on a violation (`internal/cc/repocheck.go`).
+  configured repo at startup and refuses to start on a violation (`internal/loop/repocheck.go`).
 - Both `.mergify.yml`s: `base=main` is the first `common_checks` condition (stacked PRs
   never enter the queue); `update_method: merge` (the queue merges, it does not rebase);
   `batch_size: 4`; a no-base-condition "Merge when ready" rule on `label=ready-to-merge`;

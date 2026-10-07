@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func newTestPlayer(t *testing.T) *Player { return newTestPlayerUntil(t, 0) }
@@ -71,7 +73,7 @@ func TestPauseStopsTicksAndResumeContinuesFromTheSameSimTime(t *testing.T) {
 
 	post(t, p, "/dev/resume", nil)
 	step(t, p)
-	if got, want := p.Status().Elapsed, before+tickPeriod; got != want {
+	if got, want := p.Status().Elapsed, before+store.TickPeriod; got != want {
 		t.Errorf("Elapsed after resume = %v, want %v", got, want)
 	}
 }

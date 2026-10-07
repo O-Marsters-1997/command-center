@@ -1,7 +1,7 @@
 // Package plan holds the Command Centre's decisions: pure functions over value types.
 //
-// It imports nothing outside the standard library — not even internal/gh, which execs — so
-// that "would this launch, and why is it waiting?" is a table test. api_test.go enforces it.
+// It imports only the standard library and the pure internal/verdict — never internal/gh, which
+// execs — so that "would this launch, and why is it waiting?" is a table test. api_test.go enforces it.
 package plan
 
 import (
@@ -21,6 +21,19 @@ const (
 	Merged
 	Closed
 )
+
+func (s PRState) String() string {
+	switch s {
+	case Open:
+		return "open"
+	case Merged:
+		return "merged"
+	case Closed:
+		return "closed"
+	default:
+		return "absent"
+	}
+}
 
 // Ticket is one tracked ticket.
 type Ticket struct {
@@ -249,7 +262,7 @@ type RunFact struct {
 	// (docs/prds/prd-command-centre.md § The states).
 	PRMerged         bool
 	PRClosedUnmerged bool
-	// Verdict* fields matter only once PROpen: internal/cc's call to internal/verdict's pure
+	// Verdict* fields matter only once PROpen: internal/loop's call to internal/verdict's pure
 	// Evaluate, mapped to booleans since this package cannot import that one (issue #2 AC12).
 	// Neither set means "no predicate configured, or still checking" — VerdictReason then carries
 	// whatever cc computed, else empty. VerdictBaseMoved is internal/verdict's own expiry (§4a),
@@ -262,7 +275,7 @@ type RunFact struct {
 	VerdictReason            Reason
 	RedLeaves                []string
 	// RefreshRefused is set when refresh's own fast-forward step (§4a step 2) last failed: the
-	// row reads needs_you naming the reason, and the automatic pass (internal/cc/refresh.go)
+	// row reads needs_you naming the reason, and the automatic pass (internal/loop/refresh.go)
 	// never retries it -- only the refresh verb does.
 	RefreshRefused       bool
 	RefreshRefusedReason Reason
@@ -276,7 +289,7 @@ type RunFact struct {
 	ConflictsWithMain       bool
 	ConflictsWithMainReason Reason
 	// ConflictingPeer names the lower-ref open peer this ticket's own branch conflicts with, and
-	// is empty when there is none. Ref order is decided in internal/cc, the one place that knows
+	// is empty when there is none. Ref order is decided in internal/loop, the one place that knows
 	// it (docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md).
 	ConflictingPeer string
 	// VerificationFailed is set when a clean refresh or restack's configured verify command last

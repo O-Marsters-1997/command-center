@@ -27,7 +27,7 @@ the fake agent scripts directly.
 | `./e2e/faketp` | `tp` |
 
 That is the whole mechanism. Production code never learns it is under test, and
-no test-only environment variable exists in `internal/cc`. Even the state dir
+no test-only environment variable exists in `internal/loop`. Even the state dir
 redirects on its own, because `os.UserConfigDir` honours `HOME` and every script
 runs with `HOME` set to its own work directory.
 

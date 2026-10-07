@@ -193,7 +193,7 @@ skill at `~/Documents/personal/ai-development/my-claude-code/skills/code/go-idio
 ### internal/ — what already holds
 
 The import graph is the strongest thing here. Seven leaf packages (`agentlog`, `ccdb`, `gh`,
-`plan`, `tp`, `tracker`, `verdict`) import nothing from each other, and `internal/cc` composes all
+`plan`, `tp`, `tracker`, `verdict`) import nothing from each other, and `internal/loop` composes all
 of them. No cycles, no tangle, and every leaf is testable without the control plane.
 
 Three interfaces in 10,000 lines of non-test code, and each is defined where it is consumed.
@@ -215,8 +215,8 @@ table-driven loops, golden files behind `-update`, and `testscript` for end-to-e
 ### internal/ — findings, worst first
 
 **1. `App.Run` returns a non-nil error on every clean shutdown.** Fixed 2026-09-14, with a
-regression test at `internal/cc/app_test.go:TestRunReturnsNilOnACleanShutdown`.
-`internal/cc/app.go:180` set
+regression test at `internal/loop/app_test.go:TestRunReturnsNilOnACleanShutdown`.
+`internal/loop/app.go:180` set
 `err = nil` when the server closed normally and then formats it unconditionally:
 
 ```go
@@ -247,7 +247,7 @@ right now the policy is implicit.
 audit proposed replacing them with `testing/synctest`. That was wrong. All five poll real operating
 system state (`kill(-pgid, 0)`, `ps`, a file appearing), and `synctest`'s fake clock only advances
 when every goroutine inside its bubble is durably blocked. A real subprocess is outside the bubble,
-so the clock would never move. The six-second sleep at `internal/cc/runner_unix_test.go:72` tests
+so the clock would never move. The six-second sleep at `internal/loop/runner_unix_test.go:72` tests
 pid-reuse tolerance, which inherently needs two processes started more than five seconds apart.
 Polling with a deadline is the correct shape for all five.
 
@@ -259,7 +259,7 @@ fuzzing exists for.
 **6. `log.Printf` rather than `log/slog`.** Only three calls, so this is cheap to change, and the
 first time you want to filter a run by ticket you will want structured output.
 
-**7. `internal/cc/server.go` is 1,106 lines.** The package being large is a deliberate choice and
+**7. `internal/loop/server.go` is 1,106 lines.** The package being large is a deliberate choice and
 defensible on Cheney's argument. The file is the problem: routing, handlers, template wiring and
 origin checks in one place. Splitting the route table into `routes.go` costs nothing structurally
 and makes the HTTP surface readable at a glance.
@@ -270,7 +270,7 @@ is the useful result: the 134 `%w` wraps are internally consistent and nothing c
 agent pushes, so this change has to be committed by a human.
 
 `nilerr` and `bodyclose` were also trialled and both were rejected. `nilerr` flags
-`internal/cc/runner_unix.go:126`, where a failing `kill(-pgid, 0)` means the process group is
+`internal/loop/runner_unix.go:126`, where a failing `kill(-pgid, 0)` means the process group is
 already gone and nil is the correct answer, as the comment above it explains. `bodyclose` flags all
 three `postLaunchForm` call sites in `server_test.go`, which do close the body, via
 `t.Cleanup` at line 1013. Adopting either would mean annotating correct code with `//nolint`.

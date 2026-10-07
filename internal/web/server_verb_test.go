@@ -1,0 +1,331 @@
+package web_test
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/web"
+)
+
+func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	tests := []struct {
+		name       string
+		method     string
+		origin     string
+		setOrigin  bool
+		wantStatus int
+	}{
+		{name: "GET is rejected before origin is even checked",
+			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed},
+		{name: "a foreign Origin is rejected",
+			method: http.MethodPost, origin: "http://evil.example", setOrigin: true, wantStatus: http.StatusForbidden},
+		{name: "a missing Origin is allowed by this layer",
+			method: http.MethodPost, setOrigin: false, wantStatus: http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest(tt.method, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.setOrigin {
+				req.Header.Set("Origin", tt.origin)
+			}
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
+	t.Parallel()
+
+	store := seededRunning(t)
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+
+	pending, err := store.PendingVerbIntents(t.Context(), "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+}
+
+func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
+	t.Parallel()
+
+	store := seededQueued(t)
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&ticket=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+
+	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+		t.Fatalf("pending cancel intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+}
+
+func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	tests := []struct{ name, query string }{
+		{name: "unknown ticket", query: "verb=kill&ticket=sandbox://GHOST"},
+		{name: "unsupported verb", query: "verb=bogus-verb&ticket=sandbox://CC-1"},
+		{name: "missing verb", query: "ticket=sandbox://CC-1"},
+		{name: "missing ticket", query: "verb=kill"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?"+tt.query, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Origin", srv.URL)
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestVerbAcceptsFormEncodedFields(t *testing.T) {
+	t.Parallel()
+
+	store := seededRunning(t)
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	// A handler reading only the query string sees neither of these.
+	body := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+
+	pending, err := store.PendingVerbIntents(t.Context(), "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+}
+
+// TestVerbLandsTheBrowserBackOnTheBoard is the redirect from the browser's side: the default
+// client, like a browser, follows the 303 with a GET and ends up on the page.
+func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status after following the redirect = %d, want 200", resp.StatusCode)
+	}
+	if resp.Request.Method != http.MethodGet || resp.Request.URL.Path != "/" {
+		t.Errorf("followed with %s %s, want GET /", resp.Request.Method, resp.Request.URL.Path)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), ">Command Centre<") {
+		t.Errorf("body after the redirect is not the board: %s", body)
+	}
+}
+
+func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	tests := []struct {
+		name   string
+		prompt string
+	}{
+		{name: "missing prompt field", prompt: ""},
+		{name: "whitespace-only prompt", prompt: "   \n\t  "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
+			if tt.prompt != "" {
+				body.Set("prompt", tt.prompt)
+			}
+			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body.Encode()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Origin", srv.URL)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+			resp, err := srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", resp.StatusCode)
+			}
+		})
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending follow-up intents = %+v, want none queued", pending)
+	}
+}
+
+func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
+	t.Parallel()
+
+	store := seededFailed(t)
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	body := url.Values{
+		"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"},
+	}.Encode()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertSeeOtherHome(t, resp)
+
+	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+		t.Fatalf("pending follow-up intents = %+v, want exactly one for sandbox://CC-1", pending)
+	}
+	if pending[0].Payload != "fix the flaky test" {
+		t.Errorf("payload = %q, want the typed prompt text", pending[0].Payload)
+	}
+}
+
+func TestVerbAnswers409WhenTheRowsStateDoesNotOfferIt(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", srv.URL)
+
+	resp, err := noRedirect(srv).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: a ready row does not offer kill", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "ready") || !strings.Contains(string(body), "kill") {
+		t.Errorf("body = %q, want the row's state and the refused verb named", body)
+	}
+
+	pending, err := store.PendingVerbIntents(t.Context(), "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending kill intents = %+v, want none queued on a 409", pending)
+	}
+}

@@ -1,0 +1,125 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Workspace is the tree under the data directory: state/ for everything the app owns and
+// repos/ for the checkouts, with the worktrees tp cuts beside them.
+type Workspace struct {
+	// DataDir is the root the whole layout hangs off, and the name the page's header shows.
+	DataDir  string
+	StateDir string
+	// ReposDir holds one checkout per configured repo, named after the repo.
+	ReposDir string
+	// LockPath is the file the one-instance-per-workspace flock is taken on (inv. 9).
+	LockPath string
+	// RunsDir holds one <run-id>.jsonl per run: agent stdout and stderr, redirected, never
+	// piped, outside any checkout so a crash never loses it.
+	RunsDir string
+	// SettingsPath is the app-owned deny settings file passed to every spawn (inv. 17).
+	SettingsPath string
+	// SystemPromptPath is the app-owned system prompt appended to every spawn, warning it that
+	// its session is single-shot.
+	SystemPromptPath string
+	// AgentsPath is the app-owned digest subagent definition passed to every implement spawn.
+	AgentsPath string
+}
+
+// dataDirEnv names the data directory when the config file does not.
+const dataDirEnv = "CC_DATA_DIR"
+
+// databaseURLEnv names the database when the config file does not.
+const (
+	databaseURLEnv     = "CC_DATABASE_URL"
+	defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
+)
+
+// resolveDatabaseURL answers which database the app connects to: the config's own database_url,
+// else CC_DATABASE_URL, else the local compose server.
+func resolveDatabaseURL(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	if fromEnv := os.Getenv(databaseURLEnv); fromEnv != "" {
+		return fromEnv
+	}
+	return defaultDatabaseURL
+}
+
+// ResolveDataDir answers where the app keeps everything: the config's own data_dir, else
+// CC_DATA_DIR, else os.UserConfigDir()/command-centre. A leading ~ expands.
+func ResolveDataDir(configured string) (string, error) {
+	dir := configured
+	if dir == "" {
+		dir = os.Getenv(dataDirEnv)
+	}
+	if dir == "" {
+		base, err := os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve user config dir: %w", err)
+		}
+		dir = filepath.Join(base, "command-centre")
+	}
+	dir, err := expandHome(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(dir)
+}
+
+// defaultClaudeProjectsDir names where the Claude CLI itself writes every session transcript,
+// interactive and agent alike.
+const defaultClaudeProjectsDir = "~/.claude/projects"
+
+// ResolveClaudeProjectsDir answers where usage.Weigh reads transcripts from: the config's own
+// claude_projects_dir, else defaultClaudeProjectsDir. A leading ~ expands.
+func ResolveClaudeProjectsDir(configured string) (string, error) {
+	dir := configured
+	if dir == "" {
+		dir = defaultClaudeProjectsDir
+	}
+	dir, err := expandHome(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(dir)
+}
+
+func expandHome(path string) (string, error) {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("expand %s: %w", path, err)
+	}
+	return filepath.Join(home, strings.TrimPrefix(path, "~")), nil
+}
+
+// ResolveWorkspace lays out dataDir and creates every directory in it 0700. It derives nothing
+// from where the config file happens to sit.
+func ResolveWorkspace(dataDir string) (Workspace, error) {
+	state := filepath.Join(dataDir, "state")
+	ws := Workspace{
+		DataDir:          dataDir,
+		StateDir:         state,
+		ReposDir:         filepath.Join(dataDir, "repos"),
+		LockPath:         filepath.Join(state, "command-centre.lock"),
+		RunsDir:          filepath.Join(state, "runs"),
+		SettingsPath:     filepath.Join(state, "settings", "agent.json"),
+		SystemPromptPath: filepath.Join(state, "settings", "system-prompt.md"),
+		AgentsPath:       filepath.Join(state, "settings", "agents.json"),
+	}
+	for _, dir := range []string{
+		ws.StateDir, ws.ReposDir, ws.RunsDir, filepath.Dir(ws.SettingsPath),
+	} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return Workspace{}, fmt.Errorf("create %s: %w", dir, err)
+		}
+	}
+	return ws, nil
+}

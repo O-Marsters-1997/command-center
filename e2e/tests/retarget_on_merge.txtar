@@ -1,7 +1,7 @@
 # Merging the root of a 1+4 stacked fan-out re-points all four descendants at main: one
 # `gh pr edit` per descendant, asserted off the argv, and one `pushes` row each carrying the same
 # pushed tip against the new base, which is what retires the stacked expiry (issue #38;
-# internal/cc/retarget.go). The second tick proves it is a one-shot: the recorded base is already
+# internal/loop/retarget.go). The second tick proves it is a one-shot: the recorded base is already
 # main, so nothing is re-pointed and no row is appended.
 
 cc-init-repo

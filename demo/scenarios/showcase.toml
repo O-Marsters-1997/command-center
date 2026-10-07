@@ -217,7 +217,7 @@ ticket = "needs_you"
 files = { "cache.go" = "package main // hand edit\n" }
 
 [[press]]
-at = "0s"
+at = "15s"
 ticket = "cancelled"
 verb = "cancel"
 

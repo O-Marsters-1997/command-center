@@ -17,11 +17,13 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
-
-const tickPeriod = 15 * time.Second
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 
@@ -42,9 +44,9 @@ type Sim struct {
 	sandbox  *Sandbox
 	forge    *Forge
 	agent    *Agent
-	store    *cc.Store
-	loop     *cc.Loop
-	server   *cc.Server
+	store    *store.Store
+	loop     *loop.Loop
+	server   *web.Server
 	issues   []issue
 
 	authorised  map[string]bool
@@ -82,14 +84,14 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	if err != nil {
 		return nil, err
 	}
-	template := cc.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
-	cfg := cc.Config{
+	template := config.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
+	cfg := config.Config{
 		MaxAgents:    len(issues),
 		AgentCommand: []string{"demo-agent"},
 		Repos:        sb.Repos(template),
 	}
 	for _, repo := range cfg.Repos {
-		if err := cc.EnsureCheckout(ctx, repo); err != nil {
+		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
 			return nil, err
 		}
 	}
@@ -97,32 +99,32 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := cc.OpenStore(sb.DSN)
+	st, err := store.OpenStore(sb.DSN)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, store.Close())
+			err = errors.Join(err, st.Close())
 		}
 	}()
 
-	loop := cc.NewLoop(store, cc.NewObserver(store, forge, cfg), clock, cfg, ws, agent)
-	loop.SetMetricsParser(agentlog.ParseMetrics)
-	loop.SetForge(forge)
-	loop.SetWorktrees(NewWorktrees(issues))
-	loop.SetTrackerSource(resolve)
-	server := cc.NewServer(store, clock, cfg.Repos, ws.DataDir)
+	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
+	lp.SetMetricsParser(agentlog.ParseMetrics)
+	lp.SetForge(forge)
+	lp.SetWorktrees(NewWorktrees(issues))
+	lp.SetTrackerSource(resolve)
+	server := web.NewServer(st, clock, cfg.Repos, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
 
 	s := &Sim{
-		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: store,
-		loop: loop, server: server, issues: issues,
+		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
+		loop: lp, server: server, issues: issues,
 		authorised: map[string]bool{}, last: map[string]string{},
 	}
 	for _, feature := range features(issues) {
-		if err := cc.QueueImport(ctx, store, feature, clock.Now()); err != nil {
+		if err := st.QueueVerbIntent(ctx, feature, store.ImportVerb, clock.Now()); err != nil {
 			return nil, err
 		}
 	}
@@ -139,9 +141,9 @@ func features(issues []issue) []string {
 	return out
 }
 
-func workspaceIn(sb *Sandbox) (cc.Workspace, error) {
+func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 	state := filepath.Join(sb.root, "state")
-	ws := cc.Workspace{
+	ws := config.Workspace{
 		DataDir:          sb.root,
 		StateDir:         state,
 		RunsDir:          sb.RunsDir(),
@@ -156,9 +158,9 @@ func workspaceIn(sb *Sandbox) (cc.Workspace, error) {
 		return ws, err
 	}
 	return ws, errors.Join(
-		cc.WriteAgentSettings(ws.SettingsPath),
-		cc.WriteAgentSystemPrompt(ws.SystemPromptPath),
-		cc.WriteAgentDigestDefinition(ws.AgentsPath),
+		loop.WriteAgentSettings(ws.SettingsPath),
+		loop.WriteAgentSystemPrompt(ws.SystemPromptPath),
+		loop.WriteAgentDigestDefinition(ws.AgentsPath),
 	)
 }
 
@@ -195,7 +197,7 @@ func (s *Sim) Tick(ctx context.Context) error {
 		return err
 	}
 	s.check(states)
-	s.clock.Advance(tickPeriod)
+	s.clock.Advance(store.TickPeriod)
 	return nil
 }
 

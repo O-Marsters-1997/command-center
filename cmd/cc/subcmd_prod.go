@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/auth"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // subcmd resolves the release binary's subcommands, open, useradd and passwd. `cc tick` and
@@ -38,7 +40,7 @@ func subcmd(args []string) func(ctx context.Context, configPath string) error {
 }
 
 func open(ctx context.Context, configPath string) error {
-	cfg, err := cc.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
@@ -48,7 +50,7 @@ func open(ctx context.Context, configPath string) error {
 	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
-	if name, ok := cc.RepoNameForDir(ctx, dir, cfg.Repos); ok {
+	if name, ok := loop.RepoNameForDir(ctx, dir, cfg.Repos); ok {
 		target += "?repo=" + url.QueryEscape(name)
 	} else {
 		fmt.Fprintln(os.Stderr, "cc open: no configured repo matches this directory; falling back to the unscoped board")
@@ -78,11 +80,11 @@ func useradd(ctx context.Context, configPath string, args []string) (err error) 
 	}
 	email := rest[0]
 
-	cfg, err := cc.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -115,11 +117,11 @@ func passwd(ctx context.Context, configPath string, args []string) (err error) {
 	}
 	email := rest[0]
 
-	cfg, err := cc.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	store, err := cc.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}

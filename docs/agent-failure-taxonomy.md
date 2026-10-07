@@ -62,8 +62,8 @@ comment quality.
 Written: `go-max-args`, which says three to four arguments and then a struct or
 functional options. Rung 2, via `revive` `argument-limit`.
 
-Worst offenders: `derive` in `internal/cc/server.go` takes **10 parameters**,
-`reRunOne` in `internal/cc/verbs.go` takes 8, `spawnRun` in `internal/cc/loop.go`
+Worst offenders: `derive` in `internal/loop/server.go` takes **10 parameters**,
+`reRunOne` in `internal/loop/verbs.go` takes 8, `spawnRun` in `internal/loop/loop.go`
 takes 7.
 
 The mechanism matters more than the count, and this is the most interesting thing
@@ -107,9 +107,9 @@ subprocesses. That gap is why 29 of these exist.
 Written: `test-no-sleep`, which the testing reference puts in its Don't list in as
 many words. Rung 2, via `forbidigo`.
 
-Six in tests (`e2e/agents_test.go`, `internal/cc/cancel_test.go`,
-`internal/cc/runner_test.go`, `internal/cc/runner_unix_test.go`) and one in
-production (`internal/cc/runner_unix.go:128`). These are the tests the pass 1
+Six in tests (`e2e/agents_test.go`, `internal/loop/cancel_test.go`,
+`internal/loop/runner_test.go`, `internal/loop/runner_unix_test.go`) and one in
+production (`internal/loop/runner_unix.go:128`). These are the tests the pass 1
 handoff's own history calls out for racing their own cleanup, so the cost has
 already been paid once.
 

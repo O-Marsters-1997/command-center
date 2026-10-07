@@ -65,3 +65,54 @@ func ProspectiveBase(t Ticket, byURL map[string]Ticket, stacking bool) string {
 	}
 	return defaultBranch
 }
+
+// PreviewRow is one requested ticket's row in a launch preview. BaseRun is the run of the ticket
+// whose branch Base names, nil when the row is cut from main.
+type PreviewRow struct {
+	Ticket     Ticket
+	Label      PreviewLabel
+	Reason     Reason
+	Base       string
+	BaseRun    *RunFact
+	Prompt     string
+	PromptHash string
+}
+
+// Preview is what launching selection would do, row by row in selection order. It errors on a
+// ticket the snapshot does not hold.
+func (s Snapshot) Preview(selection []string) ([]PreviewRow, error) {
+	entries := make([]Entry, 0, len(selection))
+	slice := make(map[string]bool, len(selection))
+	for _, ticketURL := range selection {
+		e, ok := s.Entry(ticketURL)
+		if !ok {
+			return nil, fmt.Errorf("unknown ticket %q", ticketURL)
+		}
+		entries = append(entries, e)
+		slice[ticketURL] = true
+	}
+
+	rows := make([]PreviewRow, 0, len(entries))
+	for _, e := range entries {
+		label, reason := Preview(e.Unlock, slice, e.LaunchID, e.ConflictedBase)
+		prompt := Compose(e.Ticket)
+		rows = append(rows, PreviewRow{
+			Ticket: e.Ticket, Label: label, Reason: reason,
+			Base: e.Base, BaseRun: s.baseRun(e.Base),
+			Prompt: prompt, PromptHash: Hash(prompt),
+		})
+	}
+	return rows, nil
+}
+
+func (s Snapshot) baseRun(base string) *RunFact {
+	if base == defaultBranch {
+		return nil
+	}
+	for _, e := range s.Entries {
+		if e.Ticket.Branch == base {
+			return e.Run
+		}
+	}
+	return nil
+}

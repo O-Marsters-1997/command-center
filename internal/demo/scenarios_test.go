@@ -88,8 +88,8 @@ func metricsOf(t *testing.T, sim *demo.Sim) []int64 {
 	return totals
 }
 
-func TestCancellingALaunchedTicketFromTheBoardReachesCancelled(t *testing.T) {
-	sc, err := demo.LoadScenario(filepath.Join(scenarioDir, "happy.toml"))
+func TestCancellingAQueuedTicketFromTheBoardReachesCancelled(t *testing.T) {
+	sc, err := demo.LoadScenario(filepath.Join(scenarioDir, "showcase.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,24 +103,18 @@ func TestCancellingALaunchedTicketFromTheBoardReachesCancelled(t *testing.T) {
 		}
 	})
 
-	if err := sim.Tick(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if err := sim.Press(t.Context(), "cancel", "A"); err != nil {
-		t.Fatal(err)
-	}
-	if err := sim.Tick(t.Context()); err != nil {
+	if err := sim.PlayTo(t.Context(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
 
 	last := ""
 	for _, tr := range sim.Transitions() {
-		if tr.Ticket == "A" {
+		if tr.Ticket == "cancelled" {
 			last = tr.State
 		}
 	}
 	if last != "cancelled" {
-		t.Errorf("ticket A is %q after cancel, want cancelled", last)
+		t.Errorf("ticket cancelled is %q after the scripted cancel, want cancelled", last)
 	}
 }
 
