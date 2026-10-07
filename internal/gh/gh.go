@@ -3,12 +3,12 @@
 package gh
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // PRState is a pull request's state. The zero value is Absent: absence is a value, not a
@@ -188,16 +188,7 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 }
 
 func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	cmd.Dir = repoPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh %s in %s: %w: %s", args[0], repoPath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return out, nil
+	return command.Output(ctx, repoPath, "gh", args...)
 }
 
 type rawPR struct {

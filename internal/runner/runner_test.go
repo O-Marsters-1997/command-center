@@ -120,7 +120,7 @@ func waitForFile(t *testing.T, path string) {
 // and testing.T reports that against the whole package rather than this one test.
 func reapExit(t *testing.T, pid int) {
 	t.Helper()
-	exitCode, ok := runner.Reap(pid)
+	exitCode, ok := runner.ProcessRunner{}.Reap(pid)
 	if !ok {
 		t.Fatalf("Reap reported no exit code for pid %d, which is our own direct child", pid)
 	}
