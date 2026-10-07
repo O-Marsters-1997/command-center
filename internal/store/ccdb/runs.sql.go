@@ -85,15 +85,14 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 
 const insertRunRequest = `-- name: InsertRunRequest :exec
 INSERT INTO run_requests
-  (run_id, request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  (run_id, request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertRunRequestParams struct {
 	RunID               int64
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -105,7 +104,6 @@ func (q *Queries) InsertRunRequest(ctx context.Context, arg InsertRunRequestPara
 		arg.RunID,
 		arg.RequestID,
 		arg.Thread,
-		arg.Tool,
 		arg.InputTokens,
 		arg.CacheCreationTokens,
 		arg.CacheReadTokens,
@@ -358,8 +356,8 @@ func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbI
 const recordDisposition = `-- name: RecordDisposition :exec
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
   tokens_in = $4, tokens_out = $5, turns = $6, duration_ms = $7, cost_usd = $8,
-  tool_calls = $9, tool_failures = $10, model = $11, metrics_settled = $12
-WHERE id = $13
+  model = $9, metrics_settled = $10
+WHERE id = $11
 `
 
 type RecordDispositionParams struct {
@@ -371,8 +369,6 @@ type RecordDispositionParams struct {
 	Turns          sql.NullInt64
 	DurationMs     sql.NullInt64
 	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 	ID             int64
@@ -388,8 +384,6 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.Turns,
 		arg.DurationMs,
 		arg.CostUsd,
-		arg.ToolCalls,
-		arg.ToolFailures,
 		arg.Model,
 		arg.MetricsSettled,
 		arg.ID,
@@ -446,14 +440,13 @@ func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64
 }
 
 const runRequestsForRun = `-- name: RunRequestsForRun :many
-SELECT request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
+SELECT request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
 FROM run_requests WHERE run_id = $1 ORDER BY id
 `
 
 type RunRequestsForRunRow struct {
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -472,7 +465,6 @@ func (q *Queries) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequ
 		if err := rows.Scan(
 			&i.RequestID,
 			&i.Thread,
-			&i.Tool,
 			&i.InputTokens,
 			&i.CacheCreationTokens,
 			&i.CacheReadTokens,

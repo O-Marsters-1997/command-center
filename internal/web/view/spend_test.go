@@ -65,9 +65,6 @@ func TestSpendCacheNeverRescansASettledLog(t *testing.T) {
 	if !settled {
 		t.Fatalf("Spend(path) settled = false, want true")
 	}
-	if entry := cache.by[path]; entry.reads != 1 {
-		t.Fatalf("reads after settling = %d, want 1", entry.reads)
-	}
 
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
@@ -75,12 +72,9 @@ func TestSpendCacheNeverRescansASettledLog(t *testing.T) {
 	for range 5 {
 		gotTokens, gotUSD, gotSettled := cache.Spend(path)
 		if gotTokens != tokens || gotUSD != usd || !gotSettled {
-			t.Errorf("Spend(path) after settling = (%d, %v, %v); want (%d, %v, true)",
+			t.Errorf("Spend(path) after settling = (%d, %v, %v); want (%d, %v, true): a settled log is never rescanned",
 				gotTokens, gotUSD, gotSettled, tokens, usd)
 		}
-	}
-	if entry := cache.by[path]; entry.reads != 1 {
-		t.Errorf("reads after 5 more calls = %d, want 1 (a settled entry is never rescanned)", entry.reads)
 	}
 }
 
@@ -97,8 +91,40 @@ func TestSpendCacheTreatsARerunsNewLogPathAsANewEntry(t *testing.T) {
 		t.Errorf("Spend(second) = (%d, %v, %v); want (15, 0, false): a fresh key, not the first's settled value",
 			tokens, usd, settled)
 	}
-	if entry := cache.by[first].reads; entry != 1 {
-		t.Errorf("first's reads = %d, want 1: the second path's own reads must not touch it", entry)
+}
+
+func TestSpendCacheRereadsALiveLogOnEveryCall(t *testing.T) {
+	t.Parallel()
+
+	cache := NewSpendCache()
+	path := writeLog(t, aliveLine)
+	cache.Spend(path)
+
+	appended := `{"type":"assistant","request_id":"r2","message":{"usage":{"input_tokens":1,"output_tokens":2}}}` + "\n"
+	if err := os.WriteFile(path, []byte(aliveLine+appended+resultLine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokens, usd, settled := cache.Spend(path)
+	if tokens != 18 || usd != 1.23 || !settled {
+		t.Errorf("Spend(path) after appending = (%d, %v, %v); want (18, 1.23, true)", tokens, usd, settled)
+	}
+}
+
+func TestSpendCacheSumsEveryDeduplicatedRequestOfAFixtureLog(t *testing.T) {
+	t.Parallel()
+
+	tokens, usd, settled := NewSpendCache().Spend(filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl"))
+	if tokens != 611097 || usd != 8.288799200000001 || !settled {
+		t.Errorf("Spend(run27) = (%d, %v, %v); want (611097, 8.288799200000001, true)", tokens, usd, settled)
+	}
+}
+
+func TestSpendCacheReportsNoSpendForALogNotYetWritten(t *testing.T) {
+	t.Parallel()
+
+	tokens, usd, settled := NewSpendCache().Spend(filepath.Join(t.TempDir(), "absent.jsonl"))
+	if tokens != 0 || usd != 0 || settled {
+		t.Errorf("Spend(absent) = (%d, %v, %v); want (0, 0, false)", tokens, usd, settled)
 	}
 }
 

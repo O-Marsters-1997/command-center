@@ -73,8 +73,6 @@ func (s *Store) RecordDisposition(
 		Turns:          m.Turns,
 		DurationMs:     m.DurationMs,
 		CostUsd:        m.CostUsd,
-		ToolCalls:      m.ToolCalls,
-		ToolFailures:   m.ToolFailures,
 		Model:          m.Model,
 		MetricsSettled: m.MetricsSettled,
 		ID:             runID,
@@ -95,7 +93,6 @@ func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, reques
 			RunID:               runID,
 			RequestID:           r.ID,
 			Thread:              r.Thread,
-			Tool:                r.Tool,
 			InputTokens:         r.InputTokens,
 			CacheCreationTokens: r.CacheCreationTokens,
 			CacheReadTokens:     r.CacheReadTokens,
@@ -108,10 +105,10 @@ func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, reques
 }
 
 type runMetricsCols struct {
-	TokensIn, TokensOut, Turns, DurationMs, ToolCalls, ToolFailures sql.NullInt64
-	CostUsd                                                         sql.NullFloat64
-	Model                                                           sql.NullString
-	MetricsSettled                                                  sql.NullBool
+	TokensIn, TokensOut, Turns, DurationMs sql.NullInt64
+	CostUsd                                sql.NullFloat64
+	Model                                  sql.NullString
+	MetricsSettled                         sql.NullBool
 }
 
 func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
@@ -128,8 +125,6 @@ func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
 		Turns:          sql.NullInt64{Int64: int64(metrics.Turns), Valid: true},
 		DurationMs:     sql.NullInt64{Int64: metrics.Duration.Milliseconds(), Valid: true},
 		CostUsd:        costUSD,
-		ToolCalls:      sql.NullInt64{Int64: int64(metrics.ToolCalls), Valid: true},
-		ToolFailures:   sql.NullInt64{Int64: int64(metrics.ToolFailures), Valid: true},
 		Model:          sql.NullString{String: metrics.Model, Valid: metrics.Model != ""},
 		MetricsSettled: sql.NullBool{Bool: metrics.Settled, Valid: true},
 	}
@@ -140,7 +135,6 @@ func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
 type RunRequest struct {
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -158,7 +152,6 @@ func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunReques
 		requests[i] = RunRequest{
 			RequestID:           row.RequestID,
 			Thread:              row.Thread,
-			Tool:                row.Tool,
 			InputTokens:         row.InputTokens,
 			CacheCreationTokens: row.CacheCreationTokens,
 			CacheReadTokens:     row.CacheReadTokens,

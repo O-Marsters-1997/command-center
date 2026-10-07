@@ -7,8 +7,8 @@ UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
 -- name: RecordDisposition :exec
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
   tokens_in = $4, tokens_out = $5, turns = $6, duration_ms = $7, cost_usd = $8,
-  tool_calls = $9, tool_failures = $10, model = $11, metrics_settled = $12
-WHERE id = $13;
+  model = $9, metrics_settled = $10
+WHERE id = $11;
 
 -- name: InsertCutFailedRun :one
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
@@ -53,9 +53,9 @@ SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 
 
 -- name: InsertRunRequest :exec
 INSERT INTO run_requests
-  (run_id, request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+  (run_id, request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: RunRequestsForRun :many
-SELECT request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
+SELECT request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
 FROM run_requests WHERE run_id = $1 ORDER BY id;

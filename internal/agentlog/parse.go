@@ -84,29 +84,21 @@ func Parse(r io.Reader) (Run, error) {
 	var run Run
 	var base time.Time
 
-	reader := bufio.NewReader(r)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return run, nil
-			}
-			return run, err
-		}
+	err := eachLine(r, func(line []byte) {
 		run.Lines++
 
 		parsed, decodeErr := decode(line)
 		if decodeErr != nil {
-			continue
+			return
 		}
 		if parsed.Type == "result" {
 			result := parsed.result()
 			run.Result = &result
-			continue
+			return
 		}
 		event, at, ok := parsed.event()
 		if !ok {
-			continue
+			return
 		}
 		if !at.IsZero() {
 			if base.IsZero() {
@@ -115,7 +107,8 @@ func Parse(r io.Reader) (Run, error) {
 			event.At = at.Sub(base)
 		}
 		run.append(event)
-	}
+	})
+	return run, err
 }
 
 // ParseLine reads one log line, reporting false for a line no reader wants: a system line, a
@@ -197,24 +190,33 @@ func forEachLine(logPath string, fn func(logLine, time.Time)) error {
 	defer func() { _ = f.Close() }()
 
 	var last time.Time
-	reader := bufio.NewReader(f)
-	for {
-		line, readErr := reader.ReadBytes('\n')
-		if readErr != nil {
-			if errors.Is(readErr, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("read agent log %s: %w", logPath, readErr)
-		}
-
+	err = eachLine(f, func(line []byte) {
 		parsed, decodeErr := decode(line)
 		if decodeErr != nil {
-			continue
+			return
 		}
 		if !parsed.Timestamp.IsZero() {
 			last = parsed.Timestamp
 		}
 		fn(parsed, last)
+	})
+	if err != nil {
+		return fmt.Errorf("read agent log %s: %w", logPath, err)
+	}
+	return nil
+}
+
+func eachLine(r io.Reader, fn func([]byte)) error {
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		fn(line)
 	}
 }
 
