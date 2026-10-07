@@ -195,9 +195,7 @@ func (r Rules) Derive(in Input) Snapshot {
 		authorised := membership.LaunchID != 0
 		conflictedBase := r.ConflictedBase(t, byURL, unlock, in.Obs)
 		state, reason := Status(Facts{
-			Ticket:          t,
 			Unlock:          unlock,
-			Now:             in.Now,
 			Authorised:      authorised,
 			LatestRun:       run,
 			CancelledMember: membership.Cancelled,

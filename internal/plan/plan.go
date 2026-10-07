@@ -7,7 +7,6 @@ package plan
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 // PRState is a pull request's state as this package needs it. The zero value is Absent.
@@ -302,13 +301,9 @@ type RunFact struct {
 	Resolved bool
 }
 
-// Facts is everything Status derives from. Now is passed in because this package never calls
-// time.Now: the clock is the shell's, which keeps the rendered page byte-stable. LatestRun is
-// nil until a ticket's first launch, which the pre-Phase-3 unlocked × authorised 2x2 still derives.
+// Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
 type Facts struct {
-	Ticket          Ticket
 	Unlock          Unlock
-	Now             time.Time
 	Authorised      bool
 	LatestRun       *RunFact
 	CancelledMember bool

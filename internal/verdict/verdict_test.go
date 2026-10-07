@@ -406,21 +406,6 @@ func TestAllOfNamesEveryRedLeaf(t *testing.T) {
 	}
 }
 
-func TestVerdictString(t *testing.T) {
-	t.Parallel()
-
-	if verdict.ReviewMe.String() != "review_me" || verdict.NeedsYou.String() != "needs_you" ||
-		verdict.Checking.String() != "checking" {
-		t.Errorf("verdicts render as %q, %q, %q", verdict.ReviewMe, verdict.NeedsYou, verdict.Checking)
-	}
-	if verdict.BaseMoved.String() != "base_moved" {
-		t.Errorf("verdict renders as %q, want base_moved", verdict.BaseMoved)
-	}
-	if verdict.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
-		t.Errorf("verdict renders as %q, want waiting_on_producer_deploy", verdict.WaitingOnProducerDeploy)
-	}
-}
-
 // compatPredicate is a two-check predicate standing in for a real repo's, one leaf named as the
 // cross-repo compat check.
 func compatPredicate() verdict.Predicate {

@@ -36,21 +36,6 @@ const (
 	WaitingOnProducerDeploy
 )
 
-func (v Verdict) String() string {
-	switch v {
-	case ReviewMe:
-		return "review_me"
-	case NeedsYou:
-		return "needs_you"
-	case BaseMoved:
-		return "base_moved"
-	case WaitingOnProducerDeploy:
-		return "waiting_on_producer_deploy"
-	default:
-		return "checking"
-	}
-}
-
 // BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it.
 // It is clocked over ticks whose observe phase succeeded, never wall clock, so a GitHub outage
 // cannot walk every in-flight row to needs_you at once (docs/designs/command-centre-design.md § 11 inv. 11).
