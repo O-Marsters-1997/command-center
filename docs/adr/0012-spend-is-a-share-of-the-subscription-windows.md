@@ -35,8 +35,7 @@ in. Both replace the daily buckets.
 `handleInsights` converts weights with one trailing seven-day `Factor` per request (`pctWeek`), as
 `deriveGauge` does; below `usage.MinSamples` every value is 0, the masthead's `Calibrating`. Merged
 tickets plot by merge date as a dot each with a rolling median over the trailing ten, and waste as a
-dashed line. Two guardrails sit beside spend: first push passed CI, and hand churn (lines changed by
-commits after the last run was disposed).
+dashed line.
 
 ## Consequences
 

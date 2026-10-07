@@ -30,5 +30,5 @@ tickets included: a withdrawn ticket is where waste lives.
 
 ## Consequences
 
-A run's row is its permanent cost record; `Accumulator` serves only live runs. `BackfillMetrics`
-covers runs whose log still resolves, idempotently. OTel egress stays deferred.
+A run's row is its permanent cost record; `Accumulator` serves only live runs. Runs disposed
+before capture existed stay unmetered. OTel egress stays deferred.
