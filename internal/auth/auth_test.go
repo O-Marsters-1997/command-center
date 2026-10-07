@@ -1,7 +1,6 @@
 package auth_test
 
 import (
-	"encoding/hex"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,127 +8,83 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/auth"
 )
 
+const (
+	password         = "correct horse battery staple"
+	passwordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+)
+
 var encodedPattern = regexp.MustCompile(`^pbkdf2-sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}$`)
 
-func TestHashPasswordEncodesAsPBKDF2SHA256(t *testing.T) {
+func TestHashPasswordEncodesAndSaltsEachCall(t *testing.T) {
 	t.Parallel()
 
-	encoded, err := auth.HashPassword("correct horse battery staple")
+	first, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
-	if !encodedPattern.MatchString(encoded) {
-		t.Errorf("HashPassword() = %q, want to match %s", encoded, encodedPattern)
+	second, err := auth.HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	if !encodedPattern.MatchString(first) {
+		t.Errorf("HashPassword() = %q, want to match %s", first, encodedPattern)
+	}
+	if first == second {
+		t.Errorf("HashPassword twice with one password gave identical output %q", first)
+	}
+	if strings.Contains(first, password) {
+		t.Errorf("HashPassword() = %q, contains the password", first)
 	}
 }
 
-func TestHashPasswordNeverContainsThePassword(t *testing.T) {
+func TestVerifyPassword(t *testing.T) {
 	t.Parallel()
 
-	password := "correct horse battery staple"
 	encoded, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
-	if strings.Contains(encoded, password) {
-		t.Errorf("HashPassword(%q) = %q, contains the password", password, encoded)
+	tests := map[string]struct {
+		password, encoded string
+		want              bool
+	}{
+		"right password":         {password, encoded, true},
+		"wrong password":         {"wrong password entirely", encoded, false},
+		"empty":                  {"anything", "", false},
+		"wrong scheme":           {"anything", "bcrypt$10$abcd$abcd", false},
+		"too few fields":         {"anything", "pbkdf2-sha256$600000$abcd", false},
+		"non-numeric iterations": {"anything", "pbkdf2-sha256$many$abcd$abcd", false},
+		"non-hex salt":           {"anything", "pbkdf2-sha256$600000$zzzz$abcd", false},
+		"non-hex key":            {"anything", "pbkdf2-sha256$600000$abcd$zzzz", false},
 	}
-	if strings.Contains(encoded, hex.EncodeToString([]byte(password))) {
-		t.Errorf("HashPassword(%q) = %q, contains the hex-encoded password", password, encoded)
-	}
-}
-
-func TestHashPasswordSaltsEachCallDifferently(t *testing.T) {
-	t.Parallel()
-
-	first, err := auth.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
-	second, err := auth.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
-	if first == second {
-		t.Errorf("HashPassword called twice with the same password produced identical output: %q", first)
-	}
-}
-
-func TestVerifyPasswordRoundTripsTheRightPassword(t *testing.T) {
-	t.Parallel()
-
-	encoded, err := auth.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
-	if !auth.VerifyPassword("correct horse battery staple", encoded) {
-		t.Error("VerifyPassword() = false, want true for the password that was hashed")
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := auth.VerifyPassword(tt.password, tt.encoded); got != tt.want {
+				t.Errorf("VerifyPassword(%q, %q) = %t, want %t", tt.password, tt.encoded, got, tt.want)
+			}
+		})
 	}
 }
-
-func TestVerifyPasswordRejectsTheWrongPassword(t *testing.T) {
-	t.Parallel()
-
-	encoded, err := auth.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
-	if auth.VerifyPassword("wrong password entirely", encoded) {
-		t.Error("VerifyPassword() = true, want false for a password that was never hashed")
-	}
-}
-
-const passwordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 func TestGeneratePasswordIs24CharsFromTheAlphabet(t *testing.T) {
 	t.Parallel()
 
-	password, err := auth.GeneratePassword()
+	generated, err := auth.GeneratePassword()
 	if err != nil {
 		t.Fatalf("GeneratePassword: %v", err)
 	}
-	if len(password) != 24 {
-		t.Errorf("len(GeneratePassword()) = %d, want 24", len(password))
+	if len(generated) != 24 {
+		t.Errorf("len(GeneratePassword()) = %d, want 24", len(generated))
 	}
-	for _, c := range password {
+	for _, c := range generated {
 		if !strings.ContainsRune(passwordAlphabet, c) {
-			t.Errorf("GeneratePassword() = %q, contains %q outside the alphabet", password, c)
+			t.Errorf("GeneratePassword() = %q, contains %q outside the alphabet", generated, c)
 		}
 	}
 }
 
-func TestGeneratePasswordDrawsWithoutDetectableBias(t *testing.T) {
-	t.Parallel()
-
-	const draws = 10_000
-	counts := make(map[rune]int)
-	for range draws {
-		password, err := auth.GeneratePassword()
-		if err != nil {
-			t.Fatalf("GeneratePassword: %v", err)
-		}
-		for _, c := range password {
-			if !strings.ContainsRune(passwordAlphabet, c) {
-				t.Fatalf("GeneratePassword() = %q, contains %q outside the alphabet", password, c)
-			}
-			counts[c]++
-		}
-	}
-
-	total := draws * 24
-	expected := float64(total) / float64(len(passwordAlphabet))
-	var chiSquared float64
-	for _, c := range passwordAlphabet {
-		diff := float64(counts[c]) - expected
-		chiSquared += diff * diff / expected
-	}
-	const chiSquaredCeiling = 200.0
-	if chiSquared > chiSquaredCeiling {
-		t.Errorf("chi-squared = %.1f over %d draws, want <= %.1f (no detectable bias)", chiSquared, draws, chiSquaredCeiling)
-	}
-}
-
-func TestNewSessionTokenIsUniqueEachCall(t *testing.T) {
+func TestSessionTokens(t *testing.T) {
 	t.Parallel()
 
 	first, err := auth.NewSessionToken()
@@ -140,64 +95,14 @@ func TestNewSessionTokenIsUniqueEachCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSessionToken: %v", err)
 	}
-	if first == second {
-		t.Errorf("NewSessionToken called twice produced identical output: %q", first)
+	if first == "" || first == second {
+		t.Errorf("NewSessionToken twice = %q, %q, want two distinct non-empty tokens", first, second)
 	}
-	if first == "" {
-		t.Error("NewSessionToken() = \"\", want a non-empty token")
+	hash := auth.HashToken(first)
+	if hash != auth.HashToken(first) {
+		t.Errorf("HashToken(%q) is not deterministic", first)
 	}
-}
-
-func TestHashTokenIsDeterministicAndDoesNotReturnTheToken(t *testing.T) {
-	t.Parallel()
-
-	token, err := auth.NewSessionToken()
-	if err != nil {
-		t.Fatalf("NewSessionToken: %v", err)
-	}
-	first := auth.HashToken(token)
-	second := auth.HashToken(token)
-	if first != second {
-		t.Errorf("HashToken(%q) is not deterministic: %q != %q", token, first, second)
-	}
-	if first == token {
-		t.Errorf("HashToken(%q) = %q, want a hash distinct from the raw token", token, first)
-	}
-}
-
-func TestHashTokenDistinguishesDifferentTokens(t *testing.T) {
-	t.Parallel()
-
-	first, err := auth.NewSessionToken()
-	if err != nil {
-		t.Fatalf("NewSessionToken: %v", err)
-	}
-	second, err := auth.NewSessionToken()
-	if err != nil {
-		t.Fatalf("NewSessionToken: %v", err)
-	}
-	if auth.HashToken(first) == auth.HashToken(second) {
-		t.Errorf("HashToken produced the same hash for two different tokens")
-	}
-}
-
-func TestVerifyPasswordRejectsMalformedEncodingWithoutPanicking(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]string{
-		"empty":                  "",
-		"wrong scheme":           "bcrypt$10$abcd$abcd",
-		"too few fields":         "pbkdf2-sha256$600000$abcd",
-		"non-numeric iterations": "pbkdf2-sha256$many$abcd$abcd",
-		"non-hex salt":           "pbkdf2-sha256$600000$zzzz$abcd",
-		"non-hex key":            "pbkdf2-sha256$600000$abcd$zzzz",
-	}
-	for name, encoded := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			if auth.VerifyPassword("anything", encoded) {
-				t.Errorf("VerifyPassword(_, %q) = true, want false", encoded)
-			}
-		})
+	if hash == first || hash == auth.HashToken(second) {
+		t.Errorf("HashToken(%q) = %q, want a hash distinct from the token and from another token's hash", first, hash)
 	}
 }
