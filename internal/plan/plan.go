@@ -7,6 +7,8 @@ package plan
 import (
 	"fmt"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 // PRState is a pull request's state as this package needs it. The zero value is Absent.
@@ -216,13 +218,7 @@ type RunFact struct {
 	PROpen                   bool
 	PRMerged                 bool
 	PRClosedUnmerged         bool
-	VerdictReviewMe          bool
-	VerdictNeedsYou          bool
-	VerdictCIFailed          bool
-	VerdictBaseMoved         bool
-	VerdictWaitingOnProducer bool
-	VerdictReason            Reason
-	RedLeaves                []string
+	Verdict                  *verdict.Result
 	RefreshRefused           bool
 	RefreshRefusedReason     Reason
 	MidMerge                 bool
@@ -318,24 +314,33 @@ func statusFromPush(run RunFact) (State, Reason) {
 		return PushFailed, "push or pull request creation failed"
 	case run.RefreshRefused:
 		return NeedsYou, run.RefreshRefusedReason
-	case run.VerdictBaseMoved:
-		return BaseMoved, run.VerdictReason
-	case run.VerdictWaitingOnProducer:
-		return WaitingOnProducerDeploy, run.VerdictReason
-	case run.VerdictReviewMe:
-		return ReviewMe, run.VerdictReason
-	case run.VerdictCIFailed:
-		return CIFailed, run.VerdictReason
-	case run.VerdictNeedsYou:
-		return NeedsYou, run.VerdictReason
+	case run.Verdict != nil && run.Verdict.Verdict != verdict.Checking:
+		return stateOfVerdict(*run.Verdict), Reason(run.Verdict.Reason)
 	case run.PROpen:
-		reason := run.VerdictReason
-		if reason == "" {
-			reason = "pull request open, no verdict yet"
+		if run.Verdict != nil {
+			return Checking, Reason(run.Verdict.Reason)
 		}
-		return Checking, reason
+		return Checking, "pull request open, no verdict yet"
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
+	}
+}
+
+func stateOfVerdict(r verdict.Result) State {
+	switch r.Verdict {
+	case verdict.BaseMoved:
+		return BaseMoved
+	case verdict.WaitingOnProducerDeploy:
+		return WaitingOnProducerDeploy
+	case verdict.ReviewMe:
+		return ReviewMe
+	case verdict.NeedsYou:
+		if len(r.RedLeaves) > 0 {
+			return CIFailed
+		}
+		return NeedsYou
+	default:
+		return Checking
 	}
 }
 

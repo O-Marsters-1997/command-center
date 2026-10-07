@@ -23,30 +23,6 @@ func IsRowVerb(v string) bool {
 	return false
 }
 
-// VerdictLabel names a run's verdict for comparison against the last recorded one. Empty for a
-// nil fact or when no verdict flag is set, neither of which counts as a transition.
-func VerdictLabel(fact *RunFact) string {
-	if fact == nil {
-		return ""
-	}
-	switch {
-	case fact.VerdictBaseMoved:
-		return "base_moved"
-	case fact.VerdictWaitingOnProducer:
-		return "waiting_on_producer_deploy"
-	case fact.VerdictReviewMe:
-		return "review_me"
-	case fact.VerdictCIFailed:
-		return "ci_failed"
-	case fact.VerdictNeedsYou:
-		return "needs_you"
-	case fact.VerdictReason != "":
-		return "checking"
-	default:
-		return ""
-	}
-}
-
 func Verbs(s State) []string {
 	switch s {
 	case Ready, Blocked, Cancelled:

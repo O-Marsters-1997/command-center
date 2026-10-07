@@ -45,7 +45,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 		fact := &plan.RunFact{PROpen: true}
 		l.cfg.PlanRules().ApplyVerdict(fact, t.Plan(), obs, vd)
-		current := plan.VerdictLabel(fact)
+		current := fact.Verdict.Label()
 		if current == "" || lastVerdicts[t.URL] == current {
 			continue
 		}
@@ -54,7 +54,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		changed = true
 		if err := l.store.AppendEvent(ctx, store.Event{
 			At: now, TicketURL: t.URL, Kind: store.EventVerdictTransition,
-			Detail: fmt.Sprintf("%s: %s", current, fact.VerdictReason),
+			Detail: fmt.Sprintf("%s: %s", current, fact.Verdict.Reason),
 		}); err != nil {
 			return err
 		}
