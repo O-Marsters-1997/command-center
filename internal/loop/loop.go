@@ -31,17 +31,13 @@ const (
 	runKindFollowUp = "follow_up"
 )
 
-// Event kinds a launch (fresh or re-run), a disposition or a verdict transition append —
-// alongside push.go's push_refused/push_failed and verbs.go's remove/close-pr kinds, what lets
-// `events` reconstruct the whole run (docs/prds/prd-command-centre.md § Phase 6).
 const (
 	eventRunLaunched = "run_launched"
 	eventRunDisposed = "run_disposed"
 	eventReRunNoDiff = "re_run_no_diff"
 )
 
-// Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state
-// (inv. 9, narrowed by ADR 11).
+// Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
 	store         *store.Store
 	observe       ObserveFunc
@@ -78,7 +74,7 @@ func (l *Loop) SetMetricsParser(parser MetricsParser) { l.metricsParser = parser
 
 // Nudge wakes Run for one tick right now rather than at the end of store.TickPeriod. A nudge that
 // finds the buffer full is dropped, not queued: the tick already in flight will pick up
-// whatever intent prompted it anyway (docs/adr/0009-a-feature-is-closed-under-blocked-by.md).
+// whatever intent prompted it anyway.
 func (l *Loop) Nudge() {
 	select {
 	case l.nudgeCh <- struct{}{}:
@@ -99,18 +95,13 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 
 // RunOnce runs one tick. A failed observe records the error and leaves the last good
 // observation in place rather than applying any transition, so the page's observe age
-// keeps growing instead of resetting (inv. 10).
+// keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
 	l.sweepExpiredSessions(ctx)
 
-	// Runs before observe, not after like every other applyXIntents: a ticket imported this
-	// tick then has its branch and PR read in the same observe pass, rather than sitting one
-	// tick behind.
 	if err := l.applyImportIntents(ctx); err != nil {
 		return err
 	}
-	// Same reasoning as the import step above: an edited branch is read by this tick's own
-	// worktree lookup and unlock decision, not next tick's.
 	if err := l.applyEditTicketIntents(ctx); err != nil {
 		return err
 	}
@@ -162,9 +153,6 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	if err := l.reconcileRuns(ctx, obs); err != nil {
 		return err
 	}
-	// reconcileRuns mutated obs.Runs (the map is shared, obs itself is a copy) with this
-	// tick's own liveness reads — saved again so the page can render them after a restart
-	// without re-probing between requests.
 	if err := l.store.SaveObservation(ctx, obs); err != nil {
 		return err
 	}
@@ -253,18 +241,12 @@ func (l *Loop) Run(ctx context.Context) error {
 	}
 }
 
-// sweepExpiredSessions deletes session rows past their expiry, so the table has a floor rather
-// than growing forever. A failure here logs and the tick carries on: losing a tick over rows
-// nobody reads would be the wrong trade.
 func (l *Loop) sweepExpiredSessions(ctx context.Context) {
 	if _, err := l.store.DeleteExpiredSessions(ctx, l.clock.Now()); err != nil {
 		log.Printf("sweep expired sessions: %v", err)
 	}
 }
 
-// applyImportIntents performs the actual upsert for every pending import request, keeping the
-// loop the tickets table's only writer (inv. 9) even for a row that arrived from a queued import
-// intent rather than a hand-authored config.
 func (l *Loop) applyImportIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, importVerb)
 	if err != nil {
@@ -318,9 +300,6 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	return err
 }
 
-// applyEditTicketIntents performs the actual write for every pending POST /ticket request,
-// keeping the loop the tickets table's only writer (inv. 9) even for a branch or blocked_by
-// edit made from the page.
 func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	intents, err := l.store.PendingEditTicketIntents(ctx)
 	if err != nil {
@@ -345,9 +324,6 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	return nil
 }
 
-// applyKillIntents consumes every pending kill request synchronously: this is the loop's own
-// read-then-signal-then-write sequence, never a handler's (a handler only ever queues the
-// intent, inv. 9 — see server.go's handleVerb).
 func (l *Loop) applyKillIntents(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, killVerb)
 	if err != nil {
@@ -376,9 +352,6 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	return nil
 }
 
-// reconcileRuns is liveness plus disposition, over every run this or a prior instance spawned
-// and never disposed of. It runs identically on tick 1 after a restart and on tick 4000 of
-// uptime: a re-attached process is found alive the same way a fresh one is (§ Crash recovery).
 func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
@@ -411,8 +384,6 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	return nil
 }
 
-// disposeRun computes and records one dead run's outcome (docs/prds/prd-command-centre.md § A run):
-// commits after its own baseline decide push vs failed, never a missing event (inv. 7).
 func (l *Loop) disposeRun(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation, now time.Time,
 ) error {
@@ -457,9 +428,6 @@ func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
 	return &metrics
 }
 
-// parseReadings reads a disposed run's own log for its rate_limit_event lines, the same log
-// parseRunMetrics already opened. A log gone missing or unreadable yields no readings rather
-// than failing the disposition.
 func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
 	if logPath == "" {
 		return nil
@@ -474,10 +442,6 @@ func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
 	return readings
 }
 
-// commitsSinceBaseline counts commits after baseline from the ticket's own worktree while it
-// still exists, and from origin/<branch> in the repo's own checkout once it does not (issue
-// #189): a remove-worktree racing a tick's disposal must not read as zero commits when
-// obs.BranchTips already carries that same tip from this tick's own fetch.
 func (l *Loop) commitsSinceBaseline(
 	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
@@ -492,8 +456,6 @@ func (l *Loop) commitsSinceBaseline(
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
-// launchEligible is job 3 of the tick: snap.Launch picks the tickets to cut and spawn this tick,
-// under max_agents applied globally over every repo's unlock results.
 func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
 	toLaunch := snap.LaunchAfter(len(l.spawned))
 	if len(toLaunch) == 0 {
@@ -522,10 +484,6 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
 	return nil
 }
 
-// tickCheckingWaits bumps every ticket's checking-wait tick count by one. It runs only after a
-// successful observe (RunOnce returns before reaching it otherwise), which is what makes the
-// count track ticks whose observe phase succeeded and never wall clock (docs/designs/command-centre-design.md
-// § 11 inv. 11) — internal/verdict.Input.Now is derived from it, not l.clock.Now().
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
@@ -546,8 +504,6 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 	return byURL
 }
 
-// launchSpec is one candidate's cut-and-spawn inputs, gathered so cutAndSpawn's own body reads
-// as the spawn sequence rather than a map-lookup dance.
 type launchSpec struct {
 	ticket     store.Ticket
 	baseBranch string
@@ -555,9 +511,6 @@ type launchSpec struct {
 	repoPath   string
 }
 
-// cutAndSpawn is the spawn sequence (docs/prds/prd-command-centre.md § A run) for a ticket with no
-// worktree yet: cut, then hand off to spawnRun. tp new failing is `cut failed`, not a crash —
-// one INSERT, no pgid, ever, and move on to the next candidate rather than failing the tick.
 func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	branch := spec.ticket.Branch
 	baseRef := "origin/" + spec.baseBranch
@@ -584,16 +537,6 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "", "")
 }
 
-// spawnRun is the part of the spawn sequence that is identical whether the worktree was just
-// cut (cutAndSpawn) or already existed (verbs.go's re-run, resolveOne and followUpOne): reserve
-// a run skeleton to get a run id, then name the prompt file and the log file after it (they
-// cannot be named before it exists), spawn, and record the process's identity in the one UPDATE
-// that is its only record.
-//
-// A failure to spawn is recorded as `failed` on the reserved row — the process never existed,
-// so there is nothing to reap. On success, nothing may run between Spawn returning and the
-// RecordSpawn call below: a crash in that gap is the one known, unclosed race in this design
-// (see the PR description).
 func (l *Loop) spawnRun(
 	ctx context.Context, ticket store.Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
 	followUpText, ciLogSection string,
@@ -639,10 +582,6 @@ func (l *Loop) spawnRun(
 	}
 	defer func() { _ = logFile.Close() }()
 
-	// The single-shot warning is implement-only: resolve and follow-up are short, scripted
-	// skill invocations that never spawn a subagent of their own, and resolve's own prompt
-	// already tells it not to commit -- directly contradicting the warning's "commit before it
-	// ends".
 	var systemPromptPath, agentsPath string
 	if kind == runKindAgent {
 		systemPromptPath = l.ws.SystemPromptPath
@@ -664,7 +603,6 @@ func (l *Loop) spawnRun(
 		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.clock.Now(), nil)
 	}
 
-	// Nothing may be added between here and the UPDATE below — see the doc comment above.
 	pgid := result.Pid
 	startedAt := l.clock.Now()
 	if err := l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath); err != nil {
