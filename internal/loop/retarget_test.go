@@ -32,7 +32,9 @@ func mergeParentIntoMain(t *testing.T, repoPath string) {
 func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
 	obs := baseObservation(f, "")
 	obs.PRs[loop.BranchKey("repo", "parent")] = plan.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged}
-	obs.PRs[loop.BranchKey("repo", "child")] = plan.PR{Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: plan.Open}
+	obs.PRs[loop.BranchKey("repo", "child")] = plan.PR{
+		Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: plan.Open,
+	}
 	delete(obs.BranchTips, loop.BranchKey("repo", "parent"))
 	return obs
 }

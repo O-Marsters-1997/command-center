@@ -72,13 +72,13 @@ func TestParse(t *testing.T) {
 					{
 						Events: []agentlog.Event{
 							{Kind: agentlog.Tool, Tool: "Bash",
-								Detail: "find internal/loop internal/plan -type f | sort"},
+								Detail: "find internal/cc internal/plan -type f | sort"},
 							{At: 744 * time.Millisecond, Kind: agentlog.File, Tool: "Read",
 								Detail: "/Users/dev/Documents/personal/ai-development/" +
-									"command-center-cc-74-grouped-board/internal/loop/group_page_test.go"},
+									"command-center-cc-74-grouped-board/internal/cc/group_page_test.go"},
 							{At: 753 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test"},
 							{At: 1328 * time.Millisecond, Kind: agentlog.Pass,
-								Detail: "internal/loop/app_test.go"},
+								Detail: "internal/cc/app_test.go"},
 						},
 					},
 					{
@@ -93,8 +93,8 @@ func TestParse(t *testing.T) {
 					},
 					{
 						Skill: "clean-comments",
-						Note: "internal/loop/export_test.go internal/loop/group_page_test.go " +
-							"internal/loop/server.go",
+						Note: "internal/cc/export_test.go internal/cc/group_page_test.go " +
+							"internal/cc/server.go",
 						At: 1572197 * time.Millisecond,
 						Events: []agentlog.Event{
 							{At: 1572209 * time.Millisecond, Kind: agentlog.Pass,
