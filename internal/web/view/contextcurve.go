@@ -117,20 +117,20 @@ func linePath(points []curvePoint, scaleX func(int) float64, scaleY func(int64) 
 }
 
 func contextCurveTicks(maxContext int64, scaleY func(int64) float64) []curveTick {
-	values := niceTicks(maxContext, 4)
+	values := niceTicks(float64(maxContext), 4)
 	ticks := make([]curveTick, len(values))
 	for i, v := range values {
-		ticks[i] = curveTick{Y: scaleY(v), Label: strconv.FormatInt(v, 10)}
+		tokens := int64(math.Round(v))
+		ticks[i] = curveTick{Y: scaleY(tokens), Label: strconv.FormatInt(tokens, 10)}
 	}
 	return ticks
 }
 
-func niceTicks(maxValue int64, targetCount int) []int64 {
+func niceTicks(maxValue float64, targetCount int) []float64 {
 	if maxValue <= 0 {
-		return []int64{0}
+		return []float64{0}
 	}
-	topValue := float64(maxValue)
-	roughStep := topValue / float64(targetCount)
+	roughStep := maxValue / float64(targetCount)
 	magnitude := math.Pow(10, math.Floor(math.Log10(roughStep)))
 	residual := roughStep / magnitude
 	rung := 10.0
@@ -143,11 +143,11 @@ func niceTicks(maxValue int64, targetCount int) []int64 {
 		rung = 5
 	}
 	step := rung * magnitude
-	top := math.Ceil(topValue/step) * step
+	top := math.Ceil(maxValue/step) * step
 
-	var values []int64
+	var values []float64
 	for v := 0.0; v <= top+step/2; v += step {
-		values = append(values, int64(math.Round(v)))
+		values = append(values, math.Round(v*1e6)/1e6)
 	}
 	return values
 }
