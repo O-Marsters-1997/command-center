@@ -60,7 +60,6 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// sandbox://CC-2 has no worktree in seededStore, so its branch is free to change too.
 	body := url.Values{
 		"ticket":     {"sandbox://CC-2"},
 		"branch":     {"cc-2-renamed"},
@@ -94,7 +93,6 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 		t.Errorf("blocked_by = %v", pending[0].BlockedBy)
 	}
 
-	// The handler only ever queues an intent; the table itself is untouched until the loop runs.
 	tickets, err := store.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +152,6 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// Same branch, only blocked_by changes: no worktree conflict since the branch is unchanged.
 	body := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-first"}, "blocked_by": {"sandbox://CC-2"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
 	if err != nil {

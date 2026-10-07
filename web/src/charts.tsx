@@ -8,7 +8,6 @@ function round(v: number): number {
   return Math.round(v * 1e6) / 1e6;
 }
 
-// niceTicks picks a step from the 1/2/5 ladder, times a power of ten.
 export function niceTicks(max: number, targetCount = 4): Ticks {
   if (!(max > 0)) return { values: [0], step: 1 };
   const roughStep = max / targetCount;
@@ -22,8 +21,6 @@ export function niceTicks(max: number, targetCount = 4): Ticks {
   return { values, step };
 }
 
-// rollingMedian is the trailing median over the last `window` values, one output per input, the
-// window shrinking to whatever is available at the start of the series.
 export function rollingMedian(values: number[], window = 10): number[] {
   return values.map((_, i) => {
     const slice = values.slice(Math.max(0, i - window + 1), i + 1).sort((a, b) => a - b);

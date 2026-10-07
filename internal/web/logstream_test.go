@@ -27,8 +27,6 @@ func logStreamPath(from int64) string {
 	return fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(logTicket), from)
 }
 
-// runStore seeds one spawned, undisposed run against a log file the test appends to, and hands
-// back the run id so a test can end the run mid-stream.
 func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int64) {
 	t.Helper()
 
@@ -63,15 +61,11 @@ func appendLines(t *testing.T, path string, lines ...string) {
 	}
 }
 
-// jsonToolLine is a valid stream-json line agentlog parses into a Bash tool_use event whose
-// command is text, so a test can look for text in the rendered line without hand-copying markup.
 func jsonToolLine(text string) string {
 	return fmt.Sprintf(`{"type":"assistant","timestamp":"2026-08-20T12:00:00Z",`+
 		`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":%q}}]}}`, text)
 }
 
-// renderedToolLine is the exact markup jsonToolLine's own event renders as, through the same
-// "logline" template the production code calls.
 func renderedToolLine(t *testing.T, text string) string {
 	t.Helper()
 
@@ -90,8 +84,6 @@ func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 	}
 }
 
-// TestLogStreamsOneEventPerLine covers AC1: text/event-stream, one event per line, and the line
-// escaped so an agent that logs markup cannot inject it into the page.
 func TestLogStreamsOneEventPerLine(t *testing.T) {
 	t.Parallel()
 
@@ -116,8 +108,6 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	firstOffset := int64(len(first) + 1)
 	for _, want := range []string{
 		fmt.Sprintf("id: %d\ndata: %s\n\n", firstOffset, renderedToolLine(t, "first")),
-		// Hardcoded, not built through renderedToolLine: a regression that stopped escaping
-		// entirely would still make renderedToolLine "match itself".
 		`data: <div class="line line-tool"><span class="line-label">tool</span> Bash ` +
 			"&lt;script&gt;alert(1)&lt;/script&gt;</div>\n\n",
 		"data: " + renderedToolLine(t, "third") + "\n\n",
@@ -128,8 +118,6 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	}
 }
 
-// TestLogStreamResumesFromTheOffsetTheFragmentRendered covers the seam between the detail
-// fragment's static tail and the stream: the bytes the tail already printed are not resent.
 func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	t.Parallel()
 
@@ -154,7 +142,6 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	}
 }
 
-// TestLogStreamIsEmptyForATicketWithNoRun covers AC2's second half: no run, and no error either.
 func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	t.Parallel()
 
@@ -172,8 +159,6 @@ func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	}
 }
 
-// TestLogStreamRetiresItselfWhenTheRunHasEnded covers the reconnect a bare close would provoke:
-// EventSource reopens a dropped stream for ever, so a finished run says so on the wire.
 func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	t.Parallel()
 
@@ -192,8 +177,6 @@ func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	}
 }
 
-// TestLogStreamResumesAReconnectFromItsLastEventID covers the other half of that reconnect: a
-// browser that drops mid-run comes back with the byte it stopped on, so nothing arrives twice.
 func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	t.Parallel()
 
@@ -219,8 +202,6 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	}
 }
 
-// TestLogStreamFollowsUntilTheRunEnds covers AC1's live half and AC2's first half: a line
-// appended after the connection opened arrives, and the stream closes once ended_at is set.
 func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	t.Parallel()
 
@@ -259,8 +240,6 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	}
 }
 
-// readEvent reads whole lines until the blank one that terminates an SSE event, and returns the
-// event's fields joined — blocking until the server sends one.
 func readEvent(t *testing.T, r *bufio.Reader) string {
 	t.Helper()
 
@@ -280,8 +259,6 @@ func readEvent(t *testing.T, r *bufio.Reader) string {
 	}
 }
 
-// TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway covers AC3: the reader owns the file and
-// nothing else, so a closed tab writes no disposition and touches no pgid (invariant 9).
 func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	t.Parallel()
 
@@ -319,8 +296,6 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	}
 }
 
-// TestDetailConnectsThePreToTheStream covers AC1's htmx half: the fragment's <pre> appends
-// events, and it resumes at the byte the static tail stopped on.
 func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	t.Parallel()
 
@@ -352,8 +327,6 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	}
 }
 
-// TestPageCapsThePreAtAThousandLines covers AC4, which only the browser can enforce: the page
-// serves the SSE extension from the binary and drops the oldest lines past the cap.
 func TestPageCapsThePreAtAThousandLines(t *testing.T) {
 	t.Parallel()
 

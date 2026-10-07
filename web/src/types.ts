@@ -1,6 +1,4 @@
-// Mirrors internal/web/view's row/group json tags verbatim: GET /graph.json marshals
-// []group directly, so this is the graph island's only view of the data too
-// (docs/prds/prd-fleet-view.md § One derivation).
+// Mirrors internal/web/view's row/group json tags verbatim.
 
 export interface Row {
   url: string;

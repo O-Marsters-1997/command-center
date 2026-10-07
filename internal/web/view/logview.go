@@ -32,7 +32,6 @@ func KindShown(mode string, k agentlog.Kind) bool {
 	}
 }
 
-// phaseView is one agentlog.Phase, its events already filtered and rendered.
 type phaseView struct {
 	Skill string   `json:"skill"`
 	Note  string   `json:"note"`
@@ -46,24 +45,18 @@ type logFilterLink struct {
 	Active bool   `json:"active"`
 }
 
-// LogDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl. It is also
-// row's own Log field, so these tags are graph.json's shape too (docs/prds/prd-fleet-view.md §
-// One derivation).
+// LogDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl.
 type LogDetail struct {
-	Path       string      `json:"path"`
-	Streaming  bool        `json:"streaming"`
-	Lines      int         `json:"lines"`
-	PhaseCount int         `json:"phase_count"`
-	Phases     []phaseView `json:"phases"`
-	// Result is the closing line's text, empty until the run has one.
+	Path       string          `json:"path"`
+	Streaming  bool            `json:"streaming"`
+	Lines      int             `json:"lines"`
+	PhaseCount int             `json:"phase_count"`
+	Phases     []phaseView     `json:"phases"`
 	Result     string          `json:"result"`
 	Filters    []logFilterLink `json:"filters"`
 	StreamPath string          `json:"stream_path"`
 }
 
-// buildLogDetail parses path's whole run and renders it under mode, ready for the selected row's
-// detail panel. streaming names whether the loop still owns this run, for the header's own
-// status pill.
 func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL string, params Params) LogDetail {
 	detail := LogDetail{Path: path, Streaming: streaming, Filters: filterLinks(params)}
 
@@ -81,9 +74,8 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 	return detail
 }
 
-// wholeLines reads path's complete lines only: an agent flushes mid-line, so parsing a trailing
-// partial one would read a line that has not finished arriving. The byte count returned is where
-// the live SSE tail resumes from, so nothing rendered here is ever sent twice.
+// wholeLines reads path's complete lines only: an agent flushes mid-line, so a trailing partial
+// line is left for the live SSE tail.
 func wholeLines(path string) ([]byte, int64) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -122,9 +114,6 @@ func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) []p
 	return views
 }
 
-// firstFailureIndex finds the first Fail event's position in run order, across every phase and
-// regardless of the current filter, so the anchor lands on the run's actual first failure and
-// not merely the first one a filtered view happens to show.
 func firstFailureIndex(phases []agentlog.Phase) int {
 	idx := 0
 	for _, phase := range phases {
@@ -166,8 +155,6 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm %ds", m, s)
 }
 
-// formatOffset is a phase's own start time, relative to the run's first event (§ Acceptance
-// criteria: "timestamps relative to the first event and monotonic").
 func formatOffset(d time.Duration) string {
 	d = d.Round(time.Second)
 	m := d / time.Minute
@@ -175,9 +162,6 @@ func formatOffset(d time.Duration) string {
 	return fmt.Sprintf("+%02d:%02d", m, s)
 }
 
-// logStreamPath is the ?sel= row's own SSE source: from is the byte its static render already
-// read up to, and mode is the row's current ?log= filter, carried onto the stream so a line
-// arriving live respects the same filter a full re-render would have applied to it.
 func logStreamPath(ticketURL string, from int64, mode string) string {
 	path := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
 	if mode != "" && mode != "all" {

@@ -13,8 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// shellStore seeds one ticket, an observation at observedAt when it is non-nil, and a tick error
-// one second later when tickErr is non-empty: a tick that failed after the last good observe.
 func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.Store {
 	t.Helper()
 
@@ -54,7 +52,6 @@ func boardFragment(t *testing.T, page string) string {
 	return page[start:end]
 }
 
-// TestPageIsAWellFormedDocument covers issue #103 AC1.
 func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
@@ -81,8 +78,6 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	}
 }
 
-// TestThemeSitsOnTheRootElement covers issue #103 AC2 and AC3: the attribute no swap can reach,
-// read from localStorage before the first paint and written back by the toggle.
 func TestThemeSitsOnTheRootElement(t *testing.T) {
 	t.Parallel()
 
@@ -113,7 +108,6 @@ func TestThemeSitsOnTheRootElement(t *testing.T) {
 	}
 }
 
-// TestObserveChipReadsStalenessAtTwentySeconds covers issue #103 AC4.
 func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	t.Parallel()
 
@@ -154,7 +148,6 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	}
 }
 
-// TestStaleBannerOnlyOpensOnAFailedTick covers issue #103 AC5.
 func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	t.Parallel()
 
@@ -179,9 +172,6 @@ func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	}
 }
 
-// TestStaleBannerClosesOnceATickSucceeds covers the other half of issue #103 AC5. Store.LastError
-// is sticky by design, so a banner keyed on it alone would keep claiming nothing below had been
-// re-derived long after a tick recovered.
 func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	t.Parallel()
 
@@ -202,7 +192,6 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	}
 }
 
-// TestHeaderCountsLiveAgents covers issue #103 AC6.
 func TestHeaderCountsLiveAgents(t *testing.T) {
 	t.Parallel()
 
@@ -222,9 +211,6 @@ func TestHeaderCountsLiveAgents(t *testing.T) {
 	}
 }
 
-// TestHeaderCountsALiveRunWhoseRowReadsBaseGone pins the count to the observation rather than
-// the row's label: a dependent whose blocker's pull request closed unmerged reads base_gone
-// while its agent is still running (internal/plan/plan.go, inv. 19).
 func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	t.Parallel()
 
@@ -260,8 +246,6 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	}
 }
 
-// TestHeaderRefreshesWithTheBoard keeps the header's own facts as live as the rows beneath it:
-// the board's five-second poll selects #board, so only an out-of-band swap updates the chips.
 func TestHeaderRefreshesWithTheBoard(t *testing.T) {
 	t.Parallel()
 
@@ -275,8 +259,6 @@ func TestHeaderRefreshesWithTheBoard(t *testing.T) {
 	}
 }
 
-// timeTag matches a relative time the page's clock owns at runtime. The server still renders the
-// wording inside it, so flattening the wrapper lets an assertion read the chip as one string.
 var timeTag = regexp.MustCompile(`<time datetime="[^"]*">([^<]*)</time>`)
 
 func flattenTimes(s string) string { return timeTag.ReplaceAllString(s, "$1") }

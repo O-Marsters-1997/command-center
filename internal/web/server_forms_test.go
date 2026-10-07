@@ -20,7 +20,6 @@ const goldenVerbsBoard = "testdata/board_verbs.golden.html"
 func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
-	// seededStore's CC-1 derives ready and CC-2 blocked, and both states offer launch.
 	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -45,7 +44,6 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	}
 }
 
-// A third launchable row proves "exactly" those two, not just "at least".
 func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	t.Parallel()
 

@@ -292,8 +292,6 @@ func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	// The refused ticket must exist for the refusal event's own FK; it belongs to project:y,
-	// leaving project:x itself with no imported ticket to show instead of the refusal.
 	claimed := "https://github.com/acme/alpha/issues/1"
 	seed := []storepkg.Ticket{{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"}}
 	if err := store.UpsertTickets(ctx, seed); err != nil {

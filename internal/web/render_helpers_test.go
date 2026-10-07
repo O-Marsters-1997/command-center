@@ -33,9 +33,6 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 
 func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
 
-// rowHTML finds the whole <tr>...</tr> whose ticket-link button names ticketURL. Go's RE2 engine
-// has no lookahead to keep a lazy ".*?" from crossing a row boundary, so this splits on literal
-// "<tr" instead of matching in one regexp.
 func rowHTML(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	ref := ticketRef(ticketURL)

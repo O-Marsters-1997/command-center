@@ -27,9 +27,6 @@ func mustReadTestdata(name string) string {
 	return string(body)
 }
 
-// TestStreamedLineAndServerRenderedLineAreByteIdentical covers the acceptance criterion directly:
-// the full-render path and sendLines (the SSE path) both render a raw log line through the same
-// "logline" template, so a line does not change shape at the streaming boundary.
 func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 	t.Parallel()
 
@@ -67,9 +64,6 @@ func extractSSEData(t *testing.T, frame string) string {
 	return strings.TrimSuffix(data, "\n\n")
 }
 
-// TestSendLinesAppliesTheCurrentFilter covers the live half of a filtered panel: a line arriving
-// over SSE while ?log=fails is selected should not sneak an unfiltered Tool event into a view
-// that otherwise only ever shows Fail events.
 func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 	t.Parallel()
 

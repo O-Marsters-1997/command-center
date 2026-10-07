@@ -8,7 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// ponytail: one mutex over the whole map. Per-path locks if 25 rows ever becomes 250.
 type SpendCache struct {
 	mu sync.Mutex
 	by map[string]*spendEntry

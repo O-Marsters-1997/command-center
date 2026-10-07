@@ -8,9 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// TestBandRendersWrittenEmptyStatesWithNoTickets covers issue #106 AC5: a project with no
-// tickets at all — so no worktree has ever been cut and no check has ever reported — reads each
-// card's own written copy rather than a blank frame or a bare "–".
 func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	t.Parallel()
 
@@ -36,9 +33,6 @@ func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	}
 }
 
-// TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist covers issue #106 AC2-AC4 against the
-// board's own two-row fixture: the fleet ribbon sums to the row count, "yours" counts the row
-// that is not unattended, and the stack card reports off the one row with a cut worktree.
 func TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist(t *testing.T) {
 	t.Parallel()
 
