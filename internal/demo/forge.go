@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 
@@ -242,10 +241,6 @@ func (f *Forge) Edit(_ context.Context, repoPath, branch, base string) error {
 	return f.update(repoPath, branch, func(pr *pullRequest) { pr.baseRef = base })
 }
 
-func (f *Forge) Close(_ context.Context, repoPath, branch string) error {
-	return f.update(repoPath, branch, func(pr *pullRequest) { pr.state = gh.Closed })
-}
-
 func (f *Forge) update(repoPath, branch string, change func(*pullRequest)) error {
 	repo, err := f.sb.repoFor(repoPath)
 	if err != nil {
@@ -259,30 +254,6 @@ func (f *Forge) update(repoPath, branch string, change func(*pullRequest)) error
 	}
 	change(pr)
 	return nil
-}
-
-func (f *Forge) Rerun(_ context.Context, repoPath, runID string) error {
-	number, err := strconv.Atoi(runID)
-	if err != nil {
-		return fmt.Errorf("run id %q: %w", runID, err)
-	}
-	repo, err := f.sb.repoFor(repoPath)
-	if err != nil {
-		return err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, pr := range f.prs {
-		if pr.issue.repo == repo && pr.number == number {
-			pr.startRun(f.clock.Now())
-			return nil
-		}
-	}
-	return fmt.Errorf("no pull request with run %s", runID)
-}
-
-func (*Forge) RunViewLogFailed(context.Context, string, string) (string, error) {
-	return "", nil
 }
 
 func (*Forge) CloseIssue(context.Context, string, string) error { return nil }

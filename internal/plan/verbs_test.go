@@ -25,12 +25,12 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.PushPending, want: nil, unattended: true, tone: "live"},
 		{
 			state:      plan.Checking,
-			want:       []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbClosePR},
+			want:       []string{plan.VerbReRun, plan.VerbFollowUp},
 			unattended: true, tone: "live",
 		},
 		{
 			state: plan.NeedsYou,
-			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill, plan.VerbClosePR},
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill},
 			tone:  "stop",
 		},
 		{
@@ -38,7 +38,7 @@ func TestStateDecisions(t *testing.T) {
 			want:  []string{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp},
 			tone:  "stop",
 		},
-		{state: plan.ReviewMe, want: []string{plan.VerbClosePR}, tone: "wait"},
+		{state: plan.ReviewMe, want: nil, tone: "wait"},
 		{state: plan.PRMerged, want: []string{plan.VerbRemoveWorktree}, tone: "done"},
 		{
 			state: plan.PRClosedUnmerged,
@@ -56,11 +56,11 @@ func TestStateDecisions(t *testing.T) {
 			want:       []string{plan.VerbRefresh, plan.VerbReRun, plan.VerbFollowUp},
 			unattended: true, tone: "live",
 		},
-		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbClosePR}, tone: "stop"},
+		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
 		{
 			state: plan.ConflictsWithMain,
-			want:  []string{plan.VerbResolve, plan.VerbRefresh, plan.VerbClosePR},
+			want:  []string{plan.VerbResolve, plan.VerbRefresh},
 			tone:  "stop",
 		},
 		{
@@ -70,7 +70,7 @@ func TestStateDecisions(t *testing.T) {
 		},
 		{
 			state: plan.WaitingOnProducerDeploy,
-			want:  []string{plan.VerbReCheck, plan.VerbReRun, plan.VerbFollowUp},
+			want:  []string{plan.VerbReRun, plan.VerbFollowUp},
 			tone:  "wait",
 		},
 		{

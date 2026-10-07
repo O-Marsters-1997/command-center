@@ -1,16 +1,13 @@
 package loop
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -34,7 +31,6 @@ const (
 const (
 	eventRunLaunched = "run_launched"
 	eventRunDisposed = "run_disposed"
-	eventReRunNoDiff = "re_run_no_diff"
 )
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
@@ -192,12 +188,6 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 	}
 	rereadLocalTips(ctx, obs, repoPathsByName(l.cfg.Repos))
 	if err := l.applyRetryPushIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyReCheckIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyClosePRIntents(ctx, snap); err != nil {
 		return err
 	}
 	if err := l.applyRemoveWorktreeIntents(ctx, snap, obs); err != nil {
@@ -534,19 +524,19 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, "", runKindAgent, "", "")
+	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, runKindAgent, "")
 }
 
 func (l *Loop) spawnRun(
-	ctx context.Context, ticket store.Ticket, worktreePath, baselineSHA, promptHash, oldPromptPath, kind string,
-	followUpText, ciLogSection string,
+	ctx context.Context, ticket store.Ticket, worktreePath, baselineSHA, promptHash, kind string,
+	followUpText string,
 ) error {
 	var prompt string
 	switch kind {
 	case runKindResolve:
 		prompt = plan.ComposeResolve(ticket.Plan())
 	case runKindFollowUp:
-		prompt = plan.ComposeFollowUp(followUpText, ciLogSection)
+		prompt = plan.ComposeFollowUp(followUpText)
 	default:
 		prompt = plan.Compose(ticket.Plan())
 		if ticket.Body != "" {
@@ -562,17 +552,6 @@ func (l *Loop) spawnRun(
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
-	}
-
-	spawnPrompt := prompt
-	if oldPromptPath != "" {
-		preamble, err := l.reRunDiffPreamble(ctx, ticket, oldPromptPath, prompt, runID)
-		if err != nil {
-			return err
-		}
-		if preamble != "" {
-			spawnPrompt = "The previous run's prompt differed from this one:\n\n" + preamble + "\n\n" + prompt
-		}
 	}
 
 	logPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", runID))
@@ -594,7 +573,7 @@ func (l *Loop) spawnRun(
 		SettingsPath:     l.ws.SettingsPath,
 		SystemPromptPath: systemPromptPath,
 		AgentsPath:       agentsPath,
-		Prompt:           spawnPrompt,
+		Prompt:           prompt,
 		PromptPath:       promptPath,
 		LogFile:          logFile,
 	}
@@ -613,50 +592,4 @@ func (l *Loop) spawnRun(
 		At: startedAt, TicketURL: ticket.URL, Kind: eventRunLaunched,
 		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
 	})
-}
-
-func (l *Loop) reRunDiffPreamble(
-	ctx context.Context, ticket store.Ticket, oldPromptPath, newPrompt string, runID int64,
-) (string, error) {
-	if _, err := os.Stat(oldPromptPath); errors.Is(err, os.ErrNotExist) {
-		return "", l.store.AppendEvent(ctx, store.Event{
-			At: l.clock.Now(), TicketURL: ticket.URL, Kind: eventReRunNoDiff,
-			Detail: fmt.Sprintf("no prompt file at %s", oldPromptPath),
-		})
-	} else if err != nil {
-		return "", fmt.Errorf("stat stored prompt %s: %w", oldPromptPath, err)
-	}
-
-	diff, err := unifiedDiff(ctx, oldPromptPath, newPrompt)
-	if err != nil {
-		return "", fmt.Errorf("diff re-run prompt for %s: %w", ticket.URL, err)
-	}
-	if diff == "" {
-		return "", nil
-	}
-
-	diffPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.diff", runID))
-	if err := os.WriteFile(diffPath, []byte(diff), 0o600); err != nil {
-		return "", fmt.Errorf("write diff for run %d: %w", runID, err)
-	}
-	return diff, nil
-}
-
-// unifiedDiff shells out to diff(1): both GNU and BSD diff (Darwin's default) accept -u and
-// --label.
-func unifiedDiff(ctx context.Context, beforePath, after string) (string, error) {
-	cmd := exec.CommandContext(ctx, "diff", "-u", "--label", "before", "--label", "after", beforePath, "-")
-	cmd.Stdin = strings.NewReader(after)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return string(out), nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("diff %s: %w: %s", beforePath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return "", nil
 }

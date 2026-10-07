@@ -17,7 +17,7 @@ recovery; push policy, push and PR create; the CI verdict; and the terminal
 states with teardown.
 
 So is the cross-repo work. A repo's `compat_check`, the draft gate that holds a
-consumer's PR, the `re-check` verb and the `waiting_on_producer_deploy` state
+consumer's PR and the `waiting_on_producer_deploy` state
 all have code on main.
 
 So is the operator surface. The board groups rows by blocker, polls itself with
@@ -119,8 +119,7 @@ runs once; every other step is conditional on observing successfully.
 7. Apply retry-push intents, push whatever is pushable, record verdict
    transitions.
 8. Apply draft gate (hold cross-repo consumers' PRs in draft).
-9. Apply re-run intents, apply re-check intents, apply close-pr intents, apply
-   remove-worktree intents.
+9. Apply re-run intents, apply remove-worktree intents.
 10. Launch whatever is now eligible, capped at `max_agents`.
 
 The period is 15 seconds, slept after the work rather than before, so ticks
@@ -189,8 +188,8 @@ cross-site POST -- read from `Sec-Fetch-Site`, with an `Origin`-vs-`Host`
 fallback for older browsers -- and allows a request carrying neither header,
 which is how non-browser clients keep working.
 
-The verbs offered on the board are launch, kill, re-run, re-check, retry-push,
-close-pr, remove-worktree, cancel, refresh and abort. Which verbs a row offers
+The verbs offered on the board are launch, kill, re-run, retry-push,
+remove-worktree, cancel, refresh and abort. Which verbs a row offers
 is `plan.Verbs`, a decision over its state, so it is table-tested.
 
 The states are blocked, ready, queued, running, failed, cut_failed,

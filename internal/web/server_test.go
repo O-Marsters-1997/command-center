@@ -361,9 +361,6 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
 		t.Fatalf("state = %q, want waiting_on_producer_deploy (only the compat check is red)", state)
 	}
-	if !strings.Contains(page, `value="re-check"`) {
-		t.Error("page has no re-check button for the waiting_on_producer_deploy row")
-	}
 	if !strings.Contains(page, `value="re-run"`) {
 		t.Error("page has no re-run button for the waiting_on_producer_deploy row")
 	}
@@ -696,10 +693,10 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
 	}
 
-	if err := store.QueueVerbIntent(ctx, ticket.URL, "close-pr", now.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · close-pr queued" {
+	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · follow-up queued" {
 		t.Errorf("state = %q, want both queued verbs", got)
 	}
 
@@ -711,7 +708,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = renderPage(t, server)
-	if got := rowState(t, page, ticket.URL); got != "running · close-pr queued" {
+	if got := rowState(t, page, ticket.URL); got != "running · follow-up queued" {
 		t.Errorf("state = %q, want the consumed kill gone", got)
 	}
 	if !strings.Contains(page, killButton) {

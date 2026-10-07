@@ -8,9 +8,6 @@
   "pr list --state all --head cc-40-x": {
     "stdout": "[{\"number\":2,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"labels\":[]}]\n"
   },
-  "run rerun": {
-    "stdout": ""
-  },
   "api repos/{owner}/{repo}": {
     "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
   },

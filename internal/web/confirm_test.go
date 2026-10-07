@@ -27,7 +27,6 @@ func TestBoardSendsOnlyDestructiveVerbsToConfirm(t *testing.T) {
 		`<button type="submit" name="verb" value="remove-worktree">remove-worktree</button>`,
 		`<form method="post" action="/verb" hx-post=`,
 		`<button type="submit" name="verb" value="re-run">re-run</button>`,
-		`<button type="submit" name="verb" value="close-pr">close-pr</button>`,
 	}
 	for _, want := range wants {
 		if !strings.Contains(body, want) {
