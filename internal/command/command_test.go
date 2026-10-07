@@ -41,3 +41,32 @@ func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
 		t.Errorf("Output stdout on failure = %q, want %q", out, "partial")
 	}
 }
+
+func TestRunDiscardsStdoutAndNamesTheFailure(t *testing.T) {
+	dir := t.TempDir()
+
+	err := command.Run(t.Context(), dir, "sh", "-c", "echo boom >&2; exit 2")
+	if err == nil {
+		t.Fatal("Run(exit 2) = nil error, want one")
+	}
+	for _, want := range []string{"sh -c", "in " + dir, "boom"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Run error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestOutputErrorTruncatesALongCommandLine(t *testing.T) {
+	body := strings.Repeat("x", 5000)
+
+	_, err := command.Output(t.Context(), "", "sh", "-c", "exit 1", body)
+	if err == nil {
+		t.Fatal("Output(exit 1) = nil error, want one")
+	}
+	if strings.Contains(err.Error(), body) || len(err.Error()) > 300 {
+		t.Errorf("Output error has %d bytes, want the command line truncated", len(err.Error()))
+	}
+	if strings.Contains(err.Error(), " in ") {
+		t.Errorf("Output error = %q, want no dir for an empty dir", err)
+	}
+}

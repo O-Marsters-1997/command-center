@@ -1,12 +1,12 @@
 package tracker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 type githubSource struct {
@@ -66,15 +66,7 @@ func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, err
 }
 
 func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", args[0], err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return out, nil
+	return command.Output(ctx, "", "gh", args...)
 }
 
 type rawLabel struct {

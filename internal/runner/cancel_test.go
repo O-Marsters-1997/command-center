@@ -48,7 +48,7 @@ func TestCancelTerminatesTheLeaderAndItsChild(t *testing.T) {
 	waitForFile(t, filepath.Join(worktree, "ready"))
 	childPid := readChildPid(t, filepath.Join(worktree, "child.pid"))
 
-	alive, err := (runner.ProcessRunner{}).Liveness(pgid, time.Now(), time.Now())
+	alive, err := runner.ProcessRunner{}.Liveness(pgid, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("Liveness before cancel: %v", err)
 	}

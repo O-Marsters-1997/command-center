@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // EnsureCheckout clones remote into checkout when absent, otherwise verifies its origin. It never
@@ -54,8 +56,7 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	_, err := git(ctx, filepath.Dir(checkout), "clone", remote, filepath.Base(checkout))
-	return err
+	return command.Run(ctx, "", "git", "clone", remote, checkout)
 }
 
 // OriginURL reads repoPath's origin remote URL.

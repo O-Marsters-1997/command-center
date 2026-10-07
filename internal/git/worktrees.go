@@ -18,8 +18,7 @@ type CLI struct{}
 
 // New cuts a worktree for branch off baseRef via `tp new`, run inside repoPath.
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	_, err := command.Output(ctx, repoPath, "tp", "new", branch, "--base", baseRef)
-	return err
+	return command.Run(ctx, repoPath, "tp", "new", branch, "--base", baseRef)
 }
 
 // RemoveMode selects which of tp's own removal checks the caller is asking it to run.
@@ -44,6 +43,5 @@ func (m RemoveMode) flag() string {
 // Remove tears down branch's worktree and deletes the branch via `tp remove`, run inside
 // repoPath.
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
-	_, err := command.Output(ctx, repoPath, "tp", "remove", mode.flag(), branch)
-	return err
+	return command.Run(ctx, repoPath, "tp", "remove", mode.flag(), branch)
 }
