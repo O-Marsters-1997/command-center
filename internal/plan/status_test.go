@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 func TestStatus(t *testing.T) {
@@ -198,7 +199,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictReason: "check config changed",
+				Verdict: &verdict.Result{Verdict: verdict.Checking, Reason: "check config changed"},
 			},
 			wantState: plan.Checking,
 			reasonHas: "check config changed",
@@ -207,7 +208,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a review-me verdict derives review me",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict: &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.ReviewMe,
 			reasonHas: "every required check passed",
@@ -216,7 +217,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictNeedsYou: true, VerdictReason: "a required check failed",
+				Verdict: &verdict.Result{Verdict: verdict.NeedsYou, Reason: "a required check failed"},
 			},
 			wantState: plan.NeedsYou,
 			reasonHas: "a required check failed",
@@ -232,7 +233,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "the pull request having merged outranks an open-PR verdict",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: false, PRMerged: true,
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict: &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.PRMerged,
 		},
@@ -247,7 +248,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictWaitingOnProducer: true, VerdictReason: "every required check passed except the compat check",
+				Verdict: &verdict.Result{Verdict: verdict.WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"},
 			},
 			wantState: plan.WaitingOnProducerDeploy,
 			reasonHas: "except the compat check",
@@ -256,7 +257,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a base-moved verdict derives base moved even over a needs-you check reading",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictBaseMoved: true, VerdictReason: "base moved: the parent advanced past what this branch was cut from",
+				Verdict: &verdict.Result{Verdict: verdict.BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"},
 			},
 			wantState: plan.BaseMoved,
 			reasonHas: "the parent advanced",
@@ -265,7 +266,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictBaseMoved: true, RefreshRefused: true,
+				Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.NeedsYou,
@@ -275,7 +276,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an unresolved merge derives refresh conflicted over base moved and a refused fast-forward",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				MidMerge: true, VerdictBaseMoved: true, RefreshRefused: true,
+				MidMerge: true, Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.RefreshConflicted,
@@ -309,7 +310,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
-				VerdictBaseMoved: true, RefreshRefused: true,
+				Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.ConflictsWithMain,
@@ -351,7 +352,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 				ConflictingPeer: "cc-9-lower-ref",
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict:         &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.Blocked,
 			reasonHas: "cc-9-lower-ref",

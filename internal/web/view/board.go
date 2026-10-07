@@ -146,12 +146,12 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		}
 		membership := in.Memberships[t.URL]
 		latestRun := in.Runs[t.URL]
-		verdictLabelByBranch[t.Branch] = plan.VerdictLabel(e.Run)
+		verdictLabelByBranch[t.Branch] = runVerdictLabel(e.Run)
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
 		pr := in.Obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
 		var redLeaves []string
-		if e.Run != nil {
-			redLeaves = e.Run.RedLeaves
+		if e.Run != nil && e.Run.Verdict != nil {
+			redLeaves = e.Run.Verdict.RedLeaves
 		}
 		var pgid, elapsed string
 		var elapsedSeconds int
@@ -391,4 +391,11 @@ func removalWarning(s plan.State, detail string) string {
 		return ""
 	}
 	return "worktree removal refused: " + detail
+}
+
+func runVerdictLabel(run *plan.RunFact) string {
+	if run == nil {
+		return ""
+	}
+	return run.Verdict.Label()
 }
