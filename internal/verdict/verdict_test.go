@@ -327,7 +327,7 @@ func TestPredicateIsZero(t *testing.T) {
 // TestBoundedWaitOnlyCountsSuccessfulTicks is the pure half of the AC: Evaluate takes whatever
 // Now the caller derives, so a caller that (correctly) derives Now only from ticks whose observe
 // phase succeeded -- never from wall time -- must see the wait hold no matter how long a real
-// outage actually lasted. internal/cc's loop test covers the other half: that its own Now really
+// outage actually lasted. internal/loop's loop test covers the other half: that its own Now really
 // is built that way.
 func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	t.Parallel()

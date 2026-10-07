@@ -36,7 +36,7 @@ func TestAllGenerated(t *testing.T) {
 		},
 		{
 			name:      "one hand-written path among generated ones refuses the whole set",
-			conflicts: []string{"internal/web/assets/dist/app.css", "internal/cc/push.go"},
+			conflicts: []string{"internal/web/assets/dist/app.css", "internal/loop/push.go"},
 			want:      false,
 		},
 		{

@@ -1,7 +1,7 @@
 # A merged PR's branch is read off the fallback `gh pr list --state all` call, the only read
 # that ever sees mergedAt for real (bulk `pr list` is --state open). The first tick that observes
 # it appends exactly one pr_merged event, stamped with GitHub's own merge time rather than the
-# tick clock; a second tick over the same merged PR appends nothing more (internal/cc/merge_events.go).
+# tick clock; a second tick over the same merged PR appends nothing more (internal/loop/merge_events.go).
 
 cc-init-repo
 cc-config single-task-commits

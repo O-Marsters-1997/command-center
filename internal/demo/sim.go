@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -45,7 +45,7 @@ type Sim struct {
 	forge    *Forge
 	agent    *Agent
 	store    *store.Store
-	loop     *cc.Loop
+	loop     *loop.Loop
 	server   *web.Server
 	issues   []issue
 
@@ -99,32 +99,32 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	if err != nil {
 		return nil, err
 	}
-	store, err := store.OpenStore(sb.DSN)
+	st, err := store.OpenStore(sb.DSN)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, store.Close())
+			err = errors.Join(err, st.Close())
 		}
 	}()
 
-	loop := cc.NewLoop(store, cc.NewObserver(store, forge, cfg), clock, cfg, ws, agent)
-	loop.SetMetricsParser(agentlog.ParseMetrics)
-	loop.SetForge(forge)
-	loop.SetWorktrees(NewWorktrees(issues))
-	loop.SetTrackerSource(resolve)
-	server := web.NewServer(store, clock, cfg.Repos, ws.DataDir)
+	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
+	lp.SetMetricsParser(agentlog.ParseMetrics)
+	lp.SetForge(forge)
+	lp.SetWorktrees(NewWorktrees(issues))
+	lp.SetTrackerSource(resolve)
+	server := web.NewServer(st, clock, cfg.Repos, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
 
 	s := &Sim{
-		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: store,
-		loop: loop, server: server, issues: issues,
+		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
+		loop: lp, server: server, issues: issues,
 		authorised: map[string]bool{}, last: map[string]string{},
 	}
 	for _, feature := range features(issues) {
-		if err := cc.QueueImport(ctx, store, feature, clock.Now()); err != nil {
+		if err := st.QueueVerbIntent(ctx, feature, store.ImportVerb, clock.Now()); err != nil {
 			return nil, err
 		}
 	}
@@ -158,9 +158,9 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 		return ws, err
 	}
 	return ws, errors.Join(
-		cc.WriteAgentSettings(ws.SettingsPath),
-		cc.WriteAgentSystemPrompt(ws.SystemPromptPath),
-		cc.WriteAgentDigestDefinition(ws.AgentsPath),
+		loop.WriteAgentSettings(ws.SettingsPath),
+		loop.WriteAgentSystemPrompt(ws.SystemPromptPath),
+		loop.WriteAgentDigestDefinition(ws.AgentsPath),
 	)
 }
 

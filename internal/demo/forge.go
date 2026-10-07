@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 )
 
 const ciCheck = "CI"
@@ -88,7 +88,7 @@ func (pr *pullRequest) check(now time.Time, repo, name, outcome string) gh.Check
 // Forge is the in-memory GitHub. It keeps pull requests and plays the scenario's CI and merge
 // steps against real git origins.
 type Forge struct {
-	clock  cc.Clock
+	clock  loop.Clock
 	sb     *Sandbox
 	issues []issue
 
@@ -98,7 +98,7 @@ type Forge struct {
 }
 
 // NewForge returns a forge holding no pull requests.
-func NewForge(clock cc.Clock, sb *Sandbox, issues []issue) *Forge {
+func NewForge(clock loop.Clock, sb *Sandbox, issues []issue) *Forge {
 	return &Forge{clock: clock, sb: sb, issues: issues, prs: map[string]*pullRequest{}}
 }
 

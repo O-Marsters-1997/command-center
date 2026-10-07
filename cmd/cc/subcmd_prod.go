@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/auth"
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -50,7 +50,7 @@ func open(ctx context.Context, configPath string) error {
 	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
-	if name, ok := cc.RepoNameForDir(ctx, dir, cfg.Repos); ok {
+	if name, ok := loop.RepoNameForDir(ctx, dir, cfg.Repos); ok {
 		target += "?repo=" + url.QueryEscape(name)
 	} else {
 		fmt.Fprintln(os.Stderr, "cc open: no configured repo matches this directory; falling back to the unscoped board")

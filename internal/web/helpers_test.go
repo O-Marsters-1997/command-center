@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func openStore(t *testing.T) *store.Store {
@@ -30,7 +30,7 @@ type frozenClock struct{ at time.Time }
 func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
-func fixedClock(at time.Time) cc.Clock { return frozenClock{at} }
+func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
 // dispositionAsPushed records a run whose disposition is already known to be push, so a test can
 // read what the board shows for a pushed ticket without driving the loop through spawn and dispose.
@@ -58,3 +58,8 @@ func oneMillionInputTokensLine(timestamp, requestID string) string {
 		timestamp, requestID,
 	)
 }
+
+type realClock struct{}
+
+func (realClock) Now() time.Time                         { return time.Now() }
+func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }

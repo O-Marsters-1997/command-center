@@ -5,7 +5,7 @@
 ## Context
 
 The board, the launch preview and the loop each rebuilt a ticket's state from the store and the
-observation, in `internal/cc`: `loadTicketFacts` made eight store reads, `derive` and `runFactFor`
+observation, in `internal/loop`: `loadTicketFacts` made eight store reads, `derive` and `runFactFor`
 turned them into labels, and `conflictedBase`, `conflictingPeerHold`, `draftReasonFor` and
 `applyVerdict` lived beside them. Three gate tests pinned the pieces separately, and a caller could
 reach a different answer than the board by composing the pieces itself.

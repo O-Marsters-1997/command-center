@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cc"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -132,7 +131,7 @@ type Server struct {
 	clock      Clock
 	repos      []config.Repo
 	view       *view.Reader
-	trackerFor cc.TrackerSource
+	trackerFor tracker.Resolver
 	rawMux     *http.ServeMux
 	mux        http.Handler
 	nudge      func()
@@ -174,7 +173,7 @@ func NewServer(store *store.Store, clock Clock, repos []config.Repo, dataDir str
 
 // SetTrackerSource replaces the server's tracker.New, so a test can drive GET /features with a
 // fake source rather than shelling out to gh.
-func (s *Server) SetTrackerSource(resolve cc.TrackerSource) { s.trackerFor = resolve }
+func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
 
 // SetNudge replaces the server's nudge call. App.New wires this to Loop.Nudge once, after both
 // exist, which is how the server queues an import intent and wakes the loop without importing
@@ -260,7 +259,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if feature := r.FormValue("feature"); feature != "" {
-		if err := cc.QueueImport(ctx, s.store, feature, s.clock.Now()); err != nil {
+		if err := s.store.QueueVerbIntent(ctx, feature, store.ImportVerb, s.clock.Now()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -512,16 +511,12 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) {
 // tracker on every request (§5, inv. 14).
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	all, err := cc.ImportFeatures(ctx, s.repos, s.trackerFor)
+	all, err := importFeatures(ctx, s.repos, s.trackerFor)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	offered := make([]string, len(all))
-	for i, f := range all {
-		offered[i] = f.Feature
-	}
-	features, err := s.view.Features(ctx, s.clock.Now(), offered, r.URL.Query().Get("q"))
+	features, err := s.view.Features(ctx, s.clock.Now(), all, r.URL.Query().Get("q"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -548,7 +543,7 @@ func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) {
 	feature := r.PathValue("feature")
 	ctx := r.Context()
-	if err := cc.QueueImport(ctx, s.store, feature, s.clock.Now()); err != nil {
+	if err := s.store.QueueVerbIntent(ctx, feature, store.ImportVerb, s.clock.Now()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

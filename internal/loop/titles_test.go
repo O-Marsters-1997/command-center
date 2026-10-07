@@ -1,0 +1,53 @@
+package loop_test
+
+import (
+	"testing"
+	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+)
+
+// TestBoardNamesEachTicketByItsIssueTitle covers issue #100's first three acceptance criteria.
+func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
+		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	obs := plan.Observation{
+		ObservedAt: at,
+		Titles: map[string]string{
+			"https://github.com/owner/repo/issues/100": "Put each ticket's issue title on its row",
+			"https://github.com/owner/repo/issues/999": "An issue no ticket on the board is working on",
+		},
+	}
+	if err := store.SaveObservation(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+
+	page := boardFor(t, store)
+
+	if got, want := rowTicket(t, page, tickets[0].URL), "#100"; got != want {
+		t.Errorf("titled row's ticket cell = %q, want %q", got, want)
+	}
+	if got, want := rowTask(t, page, tickets[0].URL),
+		"Put each ticket&#39;s issue title on its row"; got != want {
+		t.Errorf("titled row's task cell = %q, want %q", got, want)
+	}
+	if got, want := rowTicket(t, page, tickets[1].URL), "#101"; got != want {
+		t.Errorf("untitled row's ticket cell = %q, want %q", got, want)
+	}
+	if got, want := rowTask(t, page, tickets[1].URL), "untitled"; got != want {
+		t.Errorf("untitled row's task cell = %q, want %q", got, want)
+	}
+}
