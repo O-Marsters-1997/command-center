@@ -117,7 +117,7 @@ var launchModalSource string
 
 var launchModal = template.Must(template.New("launchModal").Parse(launchModalSource))
 
-// Clock is the server's only source of time, so a test or the demo can drive it without sleeping.
+// Clock is the server's only source of time, so a test can drive it without sleeping.
 type Clock interface {
 	Now() time.Time
 	After(d time.Duration) <-chan time.Time

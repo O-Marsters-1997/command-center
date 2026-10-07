@@ -119,7 +119,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 }
 
 // Forge is every GitHub call the reconcile loop and its verbs make. CLI is the real one; a test
-// or the demo sim substitutes its own.
+// substitutes its own.
 type Forge interface {
 	List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error)
 	IssueTitles(ctx context.Context, repoPath string) (map[string]string, error)

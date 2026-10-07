@@ -3,6 +3,7 @@ package demo
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -34,6 +35,7 @@ type pullRequest struct {
 	headOid  string
 	runs     int
 	runStart time.Time
+	collided bool
 }
 
 func (pr *pullRequest) ciOutcome() string {
@@ -50,21 +52,24 @@ func (pr *pullRequest) startRun(now time.Time) {
 }
 
 func (pr *pullRequest) running(now time.Time) bool {
-	return pr.ciOutcome() == ciHang || now.Before(pr.runStart.Add(time.Duration(pr.issue.CIAfter)))
+	return pr.ciOutcome() == ciHang || now.Before(pr.runStart.Add(pr.issue.CIAfter))
+}
+
+func (pr *pullRequest) compatOutcome() string {
+	if pr.issue.CompatFails && pr.runs < 2 {
+		return ciFail
+	}
+	return ciPass
 }
 
 func (pr *pullRequest) greenAt(now time.Time) bool {
-	return !pr.running(now) && pr.ciOutcome() == ciPass && pr.issue.Compat != ciFail
+	return !pr.running(now) && pr.ciOutcome() == ciPass && pr.compatOutcome() == ciPass
 }
 
 func (pr *pullRequest) checks(now time.Time, repo *sandboxRepo) map[string]gh.CheckState {
 	checks := map[string]gh.CheckState{ciCheck: pr.check(now, repo.scenarioName, ciCheck, pr.ciOutcome())}
 	if repo.compatCheck != "" {
-		outcome := ciPass
-		if pr.issue.Compat == ciFail {
-			outcome = ciFail
-		}
-		checks[repo.compatCheck] = pr.check(now, repo.scenarioName, repo.compatCheck, outcome)
+		checks[repo.compatCheck] = pr.check(now, repo.scenarioName, repo.compatCheck, pr.compatOutcome())
 	}
 	return checks
 }
@@ -97,7 +102,6 @@ type Forge struct {
 	next int
 }
 
-// NewForge returns a forge holding no pull requests.
 func NewForge(clock loop.Clock, sb *Sandbox, issues []issue) *Forge {
 	return &Forge{clock: clock, sb: sb, issues: issues, prs: map[string]*pullRequest{}}
 }
@@ -113,8 +117,9 @@ func (f *Forge) issueFor(repo *sandboxRepo, branch string) (issue, bool) {
 	return issue{}, false
 }
 
-// Advance closes every open pull request whose scripted close time has come, and merges every
-// open, non-draft one whose scripted merge time has come and whose checks are green.
+// Advance lands a main commit on a conflict ticket's file once its pull request has been open
+// half its merge time, and merges every open, non-draft pull request whose merge time has come,
+// whose checks are green and that still merges cleanly.
 func (f *Forge) Advance() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -124,23 +129,35 @@ func (f *Forge) Advance() error {
 		if pr.state != gh.Open {
 			continue
 		}
-		if closeAfter := pr.issue.Close.After; closeAfter > 0 {
-			if !now.Before(pr.openedAt.Add(time.Duration(closeAfter))) {
-				pr.state = gh.Closed
+		if pr.issue.Result == resultConflict && !pr.collided && !now.Before(pr.openedAt.Add(pr.issue.MergeAfter/2)) {
+			pr.collided = true
+			if err := f.collide(pr); err != nil {
+				return err
 			}
 			continue
 		}
-		due := pr.openedAt.Add(time.Duration(pr.issue.Merge.After))
-		if pr.draft || now.Before(due) || !pr.greenAt(now) {
+		if pr.draft || now.Before(pr.openedAt.Add(pr.issue.MergeAfter)) || !pr.greenAt(now) {
 			continue
 		}
-		if err := pr.issue.repo.squashMerge(pr.issue.branch, pr.issue.Title); err != nil {
+		err := pr.issue.repo.squashMerge(pr.issue.branch, pr.issue.Title)
+		if errors.Is(err, errMergeConflict) {
+			continue
+		}
+		if err != nil {
 			return err
 		}
 		pr.state = gh.Merged
 		pr.mergedAt = now
 	}
 	return nil
+}
+
+func (f *Forge) collide(pr *pullRequest) error {
+	files := make(map[string]string, len(pr.issue.Files))
+	for _, name := range pr.issue.Files {
+		files[name] = "package main // landed on main\n"
+	}
+	return f.sb.LandOnMain(pr.issue.Repo, files)
 }
 
 func (f *Forge) List(_ context.Context, repoPath string, tracked []string) (gh.Snapshot, error) {
@@ -188,7 +205,6 @@ func (f *Forge) IssueTitles(_ context.Context, repoPath string) (map[string]stri
 	return titles, nil
 }
 
-// Create opens a pull request for the branch checked out at worktreePath.
 func (f *Forge) Create(_ context.Context, worktreePath, base, _ string, draft bool) error {
 	repo, err := f.sb.repoFor(worktreePath)
 	if err != nil {
@@ -245,8 +261,6 @@ func (f *Forge) update(repoPath, branch string, change func(*pullRequest)) error
 	return nil
 }
 
-// Rerun starts the next entry of the ticket's ci sequence on the pull request whose check run
-// has id runID.
 func (f *Forge) Rerun(_ context.Context, repoPath, runID string) error {
 	number, err := strconv.Atoi(runID)
 	if err != nil {

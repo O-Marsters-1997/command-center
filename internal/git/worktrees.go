@@ -7,8 +7,8 @@ import (
 	"os/exec"
 )
 
-// Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; the demo
-// sim substitutes its own.
+// Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; a test
+// substitutes its own.
 type Worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
 	Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
+
+var errMergeConflict = errors.New("branch conflicts with main")
 
 // Sandbox is the real-git half of the demo world: one bare origin per repo, a checkout the loop
 // works in, and a throwaway database. Close removes all of it.
@@ -34,7 +37,6 @@ type sandboxRepo struct {
 	merger       string
 }
 
-// NewSandbox builds the repos' origins seeded from their files and a database.
 func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	root, err := os.MkdirTemp("", "cc-demo-")
 	if err != nil {
@@ -112,12 +114,11 @@ func (r *sandboxRepo) squashMerge(branch, message string) error {
 	if err := r.syncMain(); err != nil {
 		return err
 	}
-	steps := [][]string{
-		{"merge", "-q", "--squash", "origin/" + branch},
-		{"commit", "-q", "-m", message},
-		{"push", "-q", "origin", "main"},
+	if _, err := git(r.merger, "merge", "-q", "--squash", "origin/"+branch); err != nil {
+		_, resetErr := git(r.merger, "reset", "-q", "--hard")
+		return errors.Join(errMergeConflict, err, resetErr)
 	}
-	for _, args := range steps {
+	for _, args := range [][]string{{"commit", "-q", "-m", message}, {"push", "-q", "origin", "main"}} {
 		if _, err := git(r.merger, args...); err != nil {
 			return err
 		}
@@ -143,22 +144,6 @@ func (s *Sandbox) LandOnMain(repoName string, files map[string]string) error {
 	return err
 }
 
-// PushToBranch commits files to branch on the repo's origin, as a human pushing to a pull request.
-func (s *Sandbox) PushToBranch(repo *sandboxRepo, branch string, files map[string]string) error {
-	if _, err := git(repo.merger, "fetch", "-q", "origin"); err != nil {
-		return err
-	}
-	if _, err := git(repo.merger, "checkout", "-q", "-B", branch, "origin/"+branch); err != nil {
-		return err
-	}
-	if err := commitAll(repo.merger, "hand edit", files); err != nil {
-		return err
-	}
-	_, err := git(repo.merger, "push", "-q", "origin", branch)
-	return err
-}
-
-// Repos is the config.Repo for each scenario repo, pointed at its origin and sandbox checkout.
 func (s *Sandbox) Repos(template config.Repo) []config.Repo {
 	out := make([]config.Repo, 0, len(s.repos))
 	for _, r := range s.repos {
@@ -176,10 +161,8 @@ func (s *Sandbox) Repos(template config.Repo) []config.Repo {
 	return out
 }
 
-// RunsDir is where the loop writes agent logs and prompts.
 func (s *Sandbox) RunsDir() string { return filepath.Join(s.root, "runs") }
 
-// Close drops the database and deletes the sandbox tree.
 func (s *Sandbox) Close() error { return errors.Join(s.dropDB(), os.RemoveAll(s.root)) }
 
 func (s *Sandbox) repoFor(gitDir string) (*sandboxRepo, error) {
@@ -192,4 +175,46 @@ func (s *Sandbox) repoFor(gitDir string) (*sandboxRepo, error) {
 		return nil, fmt.Errorf("no sandbox repo has origin %s", origin)
 	}
 	return repo, nil
+}
+
+const (
+	authorName  = "demo"
+	authorEmail = "demo@example.com"
+)
+
+func git(dir string, args ...string) (string, error) {
+	full := append([]string{
+		"-C", dir,
+		"-c", "user.name=" + authorName, "-c", "user.email=" + authorEmail,
+		"-c", "commit.gpgsign=false",
+	}, args...)
+	out, err := exec.Command("git", full...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s in %s: %w: %s", strings.Join(args, " "), dir, err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func writeFiles(dir string, files map[string]string) error {
+	for name, contents := range files {
+		full := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+			return err
+		}
+		if err := os.WriteFile(full, []byte(contents), 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func commitAll(dir, message string, files map[string]string) error {
+	if err := writeFiles(dir, files); err != nil {
+		return err
+	}
+	if _, err := git(dir, "add", "-A"); err != nil {
+		return err
+	}
+	_, err := git(dir, "commit", "-q", "--allow-empty", "-m", message)
+	return err
 }
