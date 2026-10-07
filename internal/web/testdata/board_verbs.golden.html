@@ -115,7 +115,7 @@
     <td>no spend
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML" hx-confirm="kill on sandbox://running signals the process group of its live agent run, stopping it where it is. It cannot be undone. pgid at risk: none recorded">
         <input type="hidden" name="ticket" value="sandbox://running">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
@@ -270,7 +270,7 @@
         <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML" hx-confirm="kill on sandbox://needs_you signals the process group of its live agent run, stopping it where it is. It cannot be undone. pgid at risk: none recorded">
         <input type="hidden" name="ticket" value="sandbox://needs_you">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
@@ -363,7 +363,7 @@
     <td>no spend
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML" hx-confirm="remove-worktree on sandbox://merged closes its GitHub issue, deletes its worktree from disk, and drops it from the board. It cannot be undone. worktree at risk: none recorded">
         <input type="hidden" name="ticket" value="sandbox://merged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
@@ -398,7 +398,7 @@
         <input type="hidden" name="ticket" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML" hx-confirm="remove-worktree on sandbox://pr_closed_unmerged closes its GitHub issue, deletes its worktree from disk, and drops it from the board. It cannot be undone. worktree at risk: none recorded">
         <input type="hidden" name="ticket" value="sandbox://pr_closed_unmerged">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>
@@ -433,7 +433,7 @@
         <input type="hidden" name="ticket" value="sandbox://base_gone">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form>
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML" hx-confirm="remove-worktree on sandbox://base_gone closes its GitHub issue, deletes its worktree from disk, and drops it from the board. It cannot be undone. worktree at risk: none recorded">
         <input type="hidden" name="ticket" value="sandbox://base_gone">
         <button type="submit" name="verb" value="remove-worktree">remove-worktree</button>
       </form></td>

@@ -558,7 +558,6 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 
 	for _, want := range []string{
 		`<form method="post" action="/verb" hx-post=`,
-		`<form method="get" action="/confirm">`,
 		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket"`,
 	} {

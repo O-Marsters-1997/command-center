@@ -152,7 +152,7 @@ func (r *Reader) applyContextCurve(ctx context.Context, rows []Row) error {
 }
 
 // Chrome builds a page's chrome without Board's derivation, groups or verdicts: the one cheap
-// read /features, /insights and /confirm make for the workspace, live and observe pills, and
+// read /features and /insights make for the workspace, live and observe pills, and
 // scope links that every page's topbar and masthead show.
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
 	tickets, err := r.store.Tickets(ctx)

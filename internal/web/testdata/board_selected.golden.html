@@ -30,7 +30,7 @@
     <td>no spend
     </td>
     <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
-      <form method="get" action="/confirm">
+      <form method="post" action="/verb" hx-post="/verb?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" hx-target="#board" hx-swap="outerHTML" hx-confirm="kill on https://github.com/o/r/issues/76 signals the process group of its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 4242">
         <input type="hidden" name="ticket" value="https://github.com/o/r/issues/76">
         <button type="submit" name="verb" value="kill">kill</button>
       </form></td>
