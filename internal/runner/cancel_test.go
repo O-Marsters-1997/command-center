@@ -48,7 +48,7 @@ func TestCancelTerminatesTheLeaderAndItsChild(t *testing.T) {
 	waitForFile(t, filepath.Join(worktree, "ready"))
 	childPid := readChildPid(t, filepath.Join(worktree, "child.pid"))
 
-	alive, err := runner.Liveness(pgid, time.Now(), time.Now())
+	alive, err := (runner.ProcessRunner{}).Liveness(pgid, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("Liveness before cancel: %v", err)
 	}
@@ -56,11 +56,11 @@ func TestCancelTerminatesTheLeaderAndItsChild(t *testing.T) {
 		t.Fatal("sleeps.sh reads dead before Cancel was even called")
 	}
 
-	if err := runner.Cancel(pgid); err != nil {
+	if err := (runner.ProcessRunner{}).Cancel(pgid); err != nil {
 		t.Fatalf("Cancel: %v", err)
 	}
 
-	if aliveAfter, err := runner.Liveness(pgid, time.Now(), time.Now()); err != nil || aliveAfter {
+	if aliveAfter, err := (runner.ProcessRunner{}).Liveness(pgid, time.Now(), time.Now()); err != nil || aliveAfter {
 		t.Errorf("leader still reads alive=%v (err=%v) after Cancel", aliveAfter, err)
 	}
 	if !eventuallyNotRunning(childPid) {

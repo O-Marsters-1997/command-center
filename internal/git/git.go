@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,15 +9,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // Fetch updates a repo's remote-tracking refs. --prune because both repos delete branches on
 // merge, and a stale ref would make a deleted base look cuttable.
 func Fetch(ctx context.Context, repoPath string) error {
-	if _, err := git(ctx, repoPath, "fetch", "origin", "--prune"); err != nil {
-		return err
-	}
-	return nil
+	_, err := git(ctx, repoPath, "fetch", "origin", "--prune")
+	return err
 }
 
 // WorktreePaths reads the branch -> path map from git, including worktrees mid-rebase.
@@ -133,11 +132,7 @@ func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
+	return lines(out), nil
 }
 
 // Push pushes branch to origin, never forcing.
@@ -228,11 +223,7 @@ func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
+	return lines(out), nil
 }
 
 func Add(ctx context.Context, worktreePath string, paths []string) error {
@@ -250,11 +241,7 @@ func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
+	return lines(out), nil
 }
 
 // CommitNoEdit commits worktreePath's staged changes under the message git already wrote for
@@ -328,9 +315,9 @@ func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, []
 // conflictedPaths reads --name-only's own output shape: the result tree's oid on the first
 // line, then one conflicted path per line up to the blank line before its diagnostic messages.
 func conflictedPaths(out []byte) []string {
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	rows := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
 	var paths []string
-	for _, line := range lines[1:] {
+	for _, line := range rows[1:] {
 		if line == "" {
 			break
 		}
@@ -357,31 +344,25 @@ func Succeeds(ctx context.Context, repoPath string, args ...string) (bool, error
 }
 
 func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte, ok bool, err error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return out.Bytes(), false, nil
-		}
-		return nil, false, fmt.Errorf("git %s in %s: %w: %s",
-			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
+	out, err := git(ctx, repoPath, args...)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return out, false, nil
 	}
-	return out.Bytes(), true, nil
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	return command.Output(ctx, repoPath, "git", args...)
+}
 
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("git %s in %s: %w: %s",
-			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
+func lines(out []byte) []string {
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil
 	}
-	return out, nil
+	return strings.Split(trimmed, "\n")
 }

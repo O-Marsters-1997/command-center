@@ -16,7 +16,7 @@ const pidReuseTolerance = 5 * time.Second
 
 // Liveness reports whether pgid is still the process launched at wantStart. It uses ps, not
 // kill(-pgid, 0): on Darwin a group whose leader is a zombie returns EPERM, not ESRCH.
-func Liveness(pgid int, wantStart, now time.Time) (bool, error) {
+func (ProcessRunner) Liveness(pgid int, wantStart, now time.Time) (bool, error) {
 	stat, etime, ok := psStatAndEtime(pgid)
 	if !ok {
 		return false, nil
@@ -97,7 +97,7 @@ const (
 )
 
 // Cancel terminates every process in pgid: SIGTERM, then poll, then SIGKILL as a backstop.
-func Cancel(pgid int) error {
+func (ProcessRunner) Cancel(pgid int) error {
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return fmt.Errorf("SIGTERM process group %d: %w", pgid, err)
 	}
@@ -119,7 +119,7 @@ func Cancel(pgid int) error {
 
 // Reap collects a dead child's exit code. ok is false when pid is not our direct child, as after
 // a restart when a recovered run belongs to init.
-func Reap(pid int) (exitCode int, ok bool) {
+func (ProcessRunner) Reap(pid int) (exitCode int, ok bool) {
 	var status syscall.WaitStatus
 	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {
 		return 0, false
@@ -133,11 +133,3 @@ func Reap(pid int) (exitCode int, ok bool) {
 		return 0, true
 	}
 }
-
-func (ProcessRunner) Liveness(pgid int, wantStart, now time.Time) (bool, error) {
-	return Liveness(pgid, wantStart, now)
-}
-
-func (ProcessRunner) Cancel(pgid int) error { return Cancel(pgid) }
-
-func (ProcessRunner) Reap(pid int) (int, bool) { return Reap(pid) }

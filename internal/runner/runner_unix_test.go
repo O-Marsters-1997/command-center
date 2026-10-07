@@ -39,7 +39,7 @@ func itoaHelper(n int) string {
 func TestLivenessReportsAliveForARunningProcessWithAMatchingStartTime(t *testing.T) {
 	pid, startedAt := startRealProcess(t, 10)
 
-	alive, err := runner.Liveness(pid, startedAt, time.Now())
+	alive, err := (runner.ProcessRunner{}).Liveness(pid, startedAt, time.Now())
 	if err != nil {
 		t.Fatalf("Liveness: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestLivenessReportsDeadForANonexistentPid(t *testing.T) {
 	// A pid that (almost certainly) names nothing at all. Deliberately 5 digits: macOS's ps
 	// rejects some larger values outright ("process id too large") rather than reporting no
 	// match, which would otherwise make this assertion fragile.
-	alive, err := runner.Liveness(99999, time.Now(), time.Now())
+	alive, err := (runner.ProcessRunner{}).Liveness(99999, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("Liveness: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestLivenessDetectsAPidWhoseRealStartTimeDoesNotMatch(t *testing.T) {
 	_, startB := startRealProcess(t, 5)
 
 	now := time.Now()
-	aliveSelf, err := runner.Liveness(pidA, startA, now)
+	aliveSelf, err := (runner.ProcessRunner{}).Liveness(pidA, startA, now)
 	if err != nil {
 		t.Fatalf("Liveness(pidA, startA): %v", err)
 	}
@@ -81,7 +81,7 @@ func TestLivenessDetectsAPidWhoseRealStartTimeDoesNotMatch(t *testing.T) {
 		t.Fatal("Liveness reported process A dead against its own real start time")
 	}
 
-	aliveMismatched, err := runner.Liveness(pidA, startB, now)
+	aliveMismatched, err := (runner.ProcessRunner{}).Liveness(pidA, startB, now)
 	if err != nil {
 		t.Fatalf("Liveness(pidA, startB): %v", err)
 	}
@@ -101,7 +101,7 @@ func TestReapReturnsTheRealExitCode(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		alive, err := runner.Liveness(pid, time.Now(), time.Now())
+		alive, err := (runner.ProcessRunner{}).Liveness(pid, time.Now(), time.Now())
 		if err != nil {
 			t.Fatalf("Liveness: %v", err)
 		}
@@ -114,7 +114,7 @@ func TestReapReturnsTheRealExitCode(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	exitCode, ok := runner.Reap(pid)
+	exitCode, ok := (runner.ProcessRunner{}).Reap(pid)
 	if !ok {
 		t.Fatal("Reap reported ok=false for our own direct child")
 	}
@@ -126,7 +126,7 @@ func TestReapReturnsTheRealExitCode(t *testing.T) {
 func TestReapReportsNotOkForAPidThatIsNotOurChild(t *testing.T) {
 	t.Parallel()
 
-	if _, ok := runner.Reap(1); ok {
+	if _, ok := (runner.ProcessRunner{}).Reap(1); ok {
 		t.Error("Reap reported ok=true for pid 1, which is never our child")
 	}
 }
@@ -144,7 +144,7 @@ func TestLivenessReportsDeadForAnExitedProcess(t *testing.T) {
 	var alive bool
 	var err error
 	for time.Now().Before(deadline) {
-		alive, err = runner.Liveness(pid, startedAt, time.Now())
+		alive, err = (runner.ProcessRunner{}).Liveness(pid, startedAt, time.Now())
 		if err != nil {
 			t.Fatalf("Liveness: %v", err)
 		}

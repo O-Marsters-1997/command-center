@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -55,11 +54,8 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	cmd := exec.CommandContext(ctx, "git", "clone", remote, checkout)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("clone %s into %s: %w: %s", remote, checkout, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	_, err := git(ctx, filepath.Dir(checkout), "clone", remote, filepath.Base(checkout))
+	return err
 }
 
 // OriginURL reads repoPath's origin remote URL.

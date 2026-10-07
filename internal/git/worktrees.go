@@ -1,10 +1,9 @@
 package git
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os/exec"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; a test
@@ -19,16 +18,8 @@ type CLI struct{}
 
 // New cuts a worktree for branch off baseRef via `tp new`, run inside repoPath.
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	cmd := exec.CommandContext(ctx, "tp", "new", branch, "--base", baseRef)
-	cmd.Dir = repoPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tp new %s --base %s in %s: %w: %s",
-			branch, baseRef, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return nil
+	_, err := command.Output(ctx, repoPath, "tp", "new", branch, "--base", baseRef)
+	return err
 }
 
 // RemoveMode selects which of tp's own removal checks the caller is asking it to run.
@@ -53,15 +44,6 @@ func (m RemoveMode) flag() string {
 // Remove tears down branch's worktree and deletes the branch via `tp remove`, run inside
 // repoPath.
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
-	flag := mode.flag()
-	cmd := exec.CommandContext(ctx, "tp", "remove", flag, branch)
-	cmd.Dir = repoPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tp remove %s %s in %s: %w: %s",
-			flag, branch, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return nil
+	_, err := command.Output(ctx, repoPath, "tp", "remove", mode.flag(), branch)
+	return err
 }
