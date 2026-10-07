@@ -31,93 +31,91 @@ func itoa(n int) string {
 	return "1"
 }
 
-func TestNewInvokesTpNewWithBaseInTheRepoDir(t *testing.T) {
-	repoPath := t.TempDir()
-	argsPath := fakeTp(t, 0)
-
-	if err := (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main"); err != nil {
-		t.Fatalf("New: %v", err)
+func TestTpInvocations(t *testing.T) {
+	tests := []struct {
+		name     string
+		call     func(t *testing.T, repoPath string) error
+		wantArgv string
+	}{
+		{
+			name: "New passes the base",
+			call: func(t *testing.T, repoPath string) error {
+				return (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
+			},
+			wantArgv: "new cc-1-first --base origin/main",
+		},
+		{
+			name: "Remove merged",
+			call: func(t *testing.T, repoPath string) error {
+				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
+			},
+			wantArgv: "remove --merged cc-1-first",
+		},
+		{
+			name: "Remove forced",
+			call: func(t *testing.T, repoPath string) error {
+				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
+			},
+			wantArgv: "remove --force cc-1-first",
+		},
 	}
 
-	got, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read recorded args: %v", err)
-	}
-	lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
-	wantDir, err := filepath.EvalSymlinks(repoPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotDir, err := filepath.EvalSymlinks(lines[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotDir != wantDir {
-		t.Errorf("cmd.Dir = %q, want %q", gotDir, wantDir)
-	}
-	if want := "new cc-1-first --base origin/main"; strings.Join(lines[1:], " ") != want {
-		t.Errorf("argv = %q, want %q", strings.Join(lines[1:], " "), want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoPath := t.TempDir()
+			argsPath := fakeTp(t, 0)
+
+			if err := tt.call(t, repoPath); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+
+			got, err := os.ReadFile(argsPath)
+			if err != nil {
+				t.Fatalf("read recorded args: %v", err)
+			}
+			lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
+			wantDir, err := filepath.EvalSymlinks(repoPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotDir, err := filepath.EvalSymlinks(lines[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gotDir != wantDir {
+				t.Errorf("cmd.Dir = %q, want %q", gotDir, wantDir)
+			}
+			if gotArgv := strings.Join(lines[1:], " "); gotArgv != tt.wantArgv {
+				t.Errorf("argv = %q, want %q", gotArgv, tt.wantArgv)
+			}
+		})
 	}
 }
 
-func TestNewReturnsAWrappedErrorOnFailure(t *testing.T) {
-	repoPath := t.TempDir()
-	fakeTp(t, 1)
-
-	err := (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
-	if err == nil {
-		t.Fatal("New returned nil for a failing tp new")
-	}
-	if !strings.Contains(err.Error(), "cc-1-first") {
-		t.Errorf("error %q does not name the branch", err)
-	}
-}
-
-func TestRemoveInvokesTpRemoveWithMerged(t *testing.T) {
-	repoPath := t.TempDir()
-	argsPath := fakeTp(t, 0)
-
-	if err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged); err != nil {
-		t.Fatalf("Remove: %v", err)
+func TestTpFailureNamesTheBranch(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(t *testing.T, repoPath string) error
+	}{
+		{"New", func(t *testing.T, repoPath string) error {
+			return (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
+		}},
+		{"Remove", func(t *testing.T, repoPath string) error {
+			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
+		}},
 	}
 
-	got, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read recorded args: %v", err)
-	}
-	lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
-	if want := "remove --merged cc-1-first"; strings.Join(lines[1:], " ") != want {
-		t.Errorf("argv = %q, want %q", strings.Join(lines[1:], " "), want)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeTp(t, 1)
 
-func TestRemoveInvokesTpRemoveWithForce(t *testing.T) {
-	repoPath := t.TempDir()
-	argsPath := fakeTp(t, 0)
-
-	if err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced); err != nil {
-		t.Fatalf("Remove: %v", err)
-	}
-
-	got, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read recorded args: %v", err)
-	}
-	lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
-	if want := "remove --force cc-1-first"; strings.Join(lines[1:], " ") != want {
-		t.Errorf("argv = %q, want %q", strings.Join(lines[1:], " "), want)
-	}
-}
-
-func TestRemoveReturnsAWrappedErrorOnFailure(t *testing.T) {
-	repoPath := t.TempDir()
-	fakeTp(t, 1)
-
-	err := (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
-	if err == nil {
-		t.Fatal("Remove returned nil for a failing tp remove")
-	}
-	if !strings.Contains(err.Error(), "cc-1-first") {
-		t.Errorf("error %q does not name the branch", err)
+			err := tt.call(t, t.TempDir())
+			if err == nil {
+				t.Fatal("returned nil for a failing tp")
+			}
+			if !strings.Contains(err.Error(), "cc-1-first") {
+				t.Errorf("error %q does not name the branch", err)
+			}
+		})
 	}
 }

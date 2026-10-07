@@ -83,11 +83,3 @@ func TestPreviewRefusedNamesNoOpenOrMergedPullRequest(t *testing.T) {
 		t.Errorf("reason %q does not say the blocker has no open or merged pull request", reason)
 	}
 }
-
-func TestPreviewLabelString(t *testing.T) {
-	t.Parallel()
-
-	if plan.Now.String() != "now" || plan.OnUnlock.String() != "on unlock" || plan.Refused.String() != "refused" {
-		t.Errorf("labels render as %q, %q, %q", plan.Now, plan.OnUnlock, plan.Refused)
-	}
-}

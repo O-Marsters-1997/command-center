@@ -103,27 +103,34 @@ func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
 	}
 }
 
-func TestEnsureCheckoutRefusesAMismatchedOrigin(t *testing.T) {
+func TestEnsureCheckoutRefuses(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
 	realRemote := filepath.Join(filepath.Dir(repoPath), "remote.git")
-
+	notARepo := t.TempDir()
 	const configured = "git@github.com:someone/else.git"
-	err := EnsureCheckout(t.Context(), "r", configured, repoPath)
-	if err == nil {
-		t.Fatal("want a refusal for a checkout whose origin names a different repository")
-	}
-	for _, want := range []string{realRemote, configured} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not name %q", err, want)
-		}
-	}
-}
 
-func TestEnsureCheckoutRefusesADirectoryThatIsNotAGitRepo(t *testing.T) {
-	dir := t.TempDir()
-	err := EnsureCheckout(t.Context(), "r", "git@github.com:o/r.git", dir)
-	if err == nil || !strings.Contains(err.Error(), dir) {
-		t.Errorf("error = %v, want one naming the directory that is not a git repository", err)
+	tests := []struct {
+		name     string
+		remote   string
+		checkout string
+		wantInfo []string
+	}{
+		{"a mismatched origin", configured, repoPath, []string{realRemote, configured}},
+		{"a directory that is not a git repo", "git@github.com:o/r.git", notARepo, []string{notARepo}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := EnsureCheckout(t.Context(), "r", tt.remote, tt.checkout)
+			if err == nil {
+				t.Fatal("want a refusal")
+			}
+			for _, want := range tt.wantInfo {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not name %q", err, want)
+				}
+			}
+		})
 	}
 }
 
