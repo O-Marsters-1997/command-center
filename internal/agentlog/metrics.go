@@ -1,26 +1,20 @@
 package agentlog
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
-	"io"
-	"os"
 	"time"
 )
 
 // RunMetrics is what every dialect must produce. A field a dialect cannot supply is nil or zero
 // with Settled false, never a guess.
 type RunMetrics struct {
-	TokensIn     int64
-	TokensOut    int64
-	Turns        int
-	Duration     time.Duration
-	CostUSD      *float64
-	ToolCalls    int
-	ToolFailures int
-	Model        string
-	Settled      bool
+	TokensIn  int64
+	TokensOut int64
+	Turns     int
+	Duration  time.Duration
+	CostUSD   *float64
+	Model     string
+	Settled   bool
 	// Requests is one deduplicated request_id per element, in the order each first appeared.
 	Requests []Request
 }
@@ -29,12 +23,10 @@ type RunMetrics struct {
 const MainThread = "main"
 
 // Request is one deduplicated request_id's usage, attributed to the thread that spent it. Thread
-// is MainThread, or the tool_use id of the Task call whose subagent made the request. Tool is the
-// name of the tool the request itself called, empty for a request that called none.
+// is MainThread, or the tool_use id of the Task call whose subagent made the request.
 type Request struct {
 	ID                  string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -44,72 +36,50 @@ type Request struct {
 // ParseMetrics reads a run's log in the Claude CLI's stream-json dialect into RunMetrics. An
 // empty, truncated or absent log is an error, never a zero-valued RunMetrics.
 func ParseMetrics(logPath string) (RunMetrics, error) {
-	f, err := os.Open(logPath)
-	if err != nil {
-		return RunMetrics{}, fmt.Errorf("open agent log %s: %w", logPath, err)
-	}
-	defer func() { _ = f.Close() }()
-
 	var (
-		metrics  RunMetrics
-		result   *logLine
-		decoded  int
-		byReqIdx map[string]int
+		metrics RunMetrics
+		result  *logLine
+		decoded int
+		seen    map[string]struct{}
 	)
 
-	reader := bufio.NewReader(f)
-	for {
-		line, readErr := reader.ReadBytes('\n')
-		if readErr != nil {
-			if errors.Is(readErr, io.EOF) {
-				break
-			}
-			return RunMetrics{}, fmt.Errorf("read agent log %s: %w", logPath, readErr)
-		}
-
-		parsed, decodeErr := decode(line)
-		if decodeErr != nil {
-			continue
-		}
+	err := forEachLine(logPath, func(parsed logLine, _ time.Time) {
 		decoded++
 
 		if model := parsed.Message.Model; model != "" {
 			metrics.Model = model
 		}
-		countEvent(&metrics, parsed)
 
 		switch parsed.Type {
 		case "result":
-			resultLine := parsed
-			result = &resultLine
+			result = &parsed
 		case "assistant":
-			tool := firstToolUse(parsed.Message.Content)
-			if idx, dup := byReqIdx[parsed.RequestID]; dup {
-				if metrics.Requests[idx].Tool == "" {
-					metrics.Requests[idx].Tool = tool
-				}
-				continue
+			if _, dup := seen[parsed.RequestID]; dup {
+				return
 			}
-			if byReqIdx == nil {
-				byReqIdx = make(map[string]int)
+			if seen == nil {
+				seen = make(map[string]struct{})
 			}
-			byReqIdx[parsed.RequestID] = len(metrics.Requests)
+			seen[parsed.RequestID] = struct{}{}
 			thread := MainThread
 			if parsed.ParentToolUseID != "" {
 				thread = parsed.ParentToolUseID
 			}
+			spent := parsed.Message.Usage
 			metrics.Requests = append(metrics.Requests, Request{
 				ID:                  parsed.RequestID,
 				Thread:              thread,
-				Tool:                tool,
-				InputTokens:         int64(parsed.Message.Usage.Input),
-				CacheCreationTokens: int64(parsed.Message.Usage.CacheCreate),
-				CacheReadTokens:     int64(parsed.Message.Usage.CacheRead),
-				OutputTokens:        int64(parsed.Message.Usage.Output),
+				InputTokens:         int64(spent.Input),
+				CacheCreationTokens: int64(spent.CacheCreate),
+				CacheReadTokens:     int64(spent.CacheRead),
+				OutputTokens:        int64(spent.Output),
 			})
-			metrics.TokensIn += tokensIn(parsed.Message.Usage)
-			metrics.TokensOut += int64(parsed.Message.Usage.Output)
+			metrics.TokensIn += tokensIn(spent)
+			metrics.TokensOut += int64(spent.Output)
 		}
+	})
+	if err != nil {
+		return RunMetrics{}, err
 	}
 
 	if decoded == 0 {
@@ -130,27 +100,4 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 
 func tokensIn(u usage) int64 {
 	return int64(u.Input + u.CacheCreate + u.CacheRead)
-}
-
-func firstToolUse(content []contentBlock) string {
-	for _, block := range content {
-		if block.Type == "tool_use" {
-			return block.Name
-		}
-	}
-	return ""
-}
-
-func countEvent(metrics *RunMetrics, parsed logLine) {
-	event, _, ok := parsed.event()
-	if !ok {
-		return
-	}
-	switch event.Kind {
-	case Skill, Tool, File:
-		metrics.ToolCalls++
-	case Fail:
-		metrics.ToolFailures++
-	case Pass:
-	}
 }

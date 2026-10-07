@@ -133,7 +133,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	metrics := agentlog.RunMetrics{
 		TokensIn: 100, TokensOut: 12, Settled: true,
 		Requests: []agentlog.Request{
-			{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+			{ID: "r1", Thread: agentlog.MainThread,
 				InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
 			{ID: "r2", Thread: agentlog.MainThread,
 				InputTokens: 40, CacheCreationTokens: 50, CacheReadTokens: 60, OutputTokens: 7},

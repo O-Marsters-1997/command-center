@@ -5,7 +5,7 @@
 ## Context
 
 `pruneRunLogs` deletes `runs/<id>.jsonl` when a ticket is withdrawn, so anything not captured by then
-is lost. Nothing called `agentlog.ParseMetrics` against a stored row, and `Accumulator` only reads
+is lost. Nothing called `agentlog.ParseMetrics` against a stored row, and live spend only reads
 live logs. OTel egress (design §12) needs a collector and a second record of a number the database
 can hold, whereas reading our own log once, at disposition, needs neither.
 
@@ -18,11 +18,11 @@ first request, 256k by the fourth in the one real run). Foreground subagents app
 `RecordDisposition` parses the run's log and writes, in the transaction that records `outcome` and
 `exit_code`:
 
-- **Run totals**: tokens, turns, duration, `cost_usd`, tool calls and failures, model and
-  `metrics_settled`, all nullable. NULL means never measured (cut or spawn failure); a killed run
-  stores its partial sums with `metrics_settled = false`.
-- **One `run_requests` row per `request_id`**: tokens by kind, `context_tokens`, `model`, first
-  `tool`, and `thread` (NULL for main, else the spawning `tool_use` id).
+- **Run totals**: tokens, turns, duration, `cost_usd`, model and `metrics_settled`, all nullable.
+  NULL means never measured (cut or spawn failure); a killed run stores its partial sums with
+  `metrics_settled = false`.
+- **One `run_requests` row per `request_id`**: tokens by kind, `context_tokens`, `model` and
+  `thread` (NULL for main, else the spawning `tool_use` id).
 
 The parser is injected as `MetricsParser`, defaulting to `agentlog.ParseMetrics`. Columns are frozen
 once merged, since pruned logs cannot be re-parsed. Insights read every disposed run, withdrawn
@@ -30,5 +30,6 @@ tickets included: a withdrawn ticket is where waste lives.
 
 ## Consequences
 
-A run's row is its permanent cost record; `Accumulator` serves only live runs. Runs disposed
-before capture existed stay unmetered. OTel egress stays deferred.
+A run's row is its permanent cost record; the board's live spend re-reads only live runs' logs.
+Runs disposed before capture existed stay unmetered. Tool call, failure and per-request tool
+columns were dropped in migration 0011: nothing displayed them. OTel egress stays deferred.

@@ -18,10 +18,10 @@ import (
 // runMetricsRow reads a run's metrics columns straight from Postgres: no product code reads them
 // yet (the field set is frozen ahead of any panel, per docs/adr), so a test is the only reader.
 type runMetricsRow struct {
-	TokensIn, TokensOut, Turns, DurationMS, ToolCalls, ToolFailures sql.NullInt64
-	CostUSD                                                         sql.NullFloat64
-	Model                                                           sql.NullString
-	MetricsSettled                                                  sql.NullBool
+	TokensIn, TokensOut, Turns, DurationMS sql.NullInt64
+	CostUSD                                sql.NullFloat64
+	Model                                  sql.NullString
+	MetricsSettled                         sql.NullBool
 }
 
 func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
@@ -33,11 +33,11 @@ func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
 	defer func() { _ = db.Close() }()
 
 	var row runMetricsRow
-	query := `SELECT tokens_in, tokens_out, turns, duration_ms, cost_usd, tool_calls, tool_failures,
-		model, metrics_settled FROM runs WHERE id = $1`
+	query := `SELECT tokens_in, tokens_out, turns, duration_ms, cost_usd, model, metrics_settled
+		FROM runs WHERE id = $1`
 	err = db.QueryRow(query, runID).Scan(
 		&row.TokensIn, &row.TokensOut, &row.Turns, &row.DurationMS, &row.CostUSD,
-		&row.ToolCalls, &row.ToolFailures, &row.Model, &row.MetricsSettled,
+		&row.Model, &row.MetricsSettled,
 	)
 	if err != nil {
 		t.Fatalf("read run metrics for run %d: %v", runID, err)
@@ -172,7 +172,7 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 	cost := 0.42
 	metrics := agentlog.RunMetrics{
 		TokensIn: 100, TokensOut: 50, Turns: 3, Duration: 2500 * time.Millisecond,
-		CostUSD: &cost, ToolCalls: 4, ToolFailures: 1, Model: "claude-sonnet-5", Settled: true,
+		CostUSD: &cost, Model: "claude-sonnet-5", Settled: true,
 	}
 	exitCode := 0
 	endedAt := startedAt.Add(30 * time.Second)
@@ -186,9 +186,6 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 	}
 	if row.DurationMS.Int64 != 2500 || row.CostUSD.Float64 != 0.42 {
 		t.Errorf("duration/cost columns = %+v, want 2500ms/0.42", row)
-	}
-	if row.ToolCalls.Int64 != 4 || row.ToolFailures.Int64 != 1 {
-		t.Errorf("tool columns = %+v, want 4/1", row)
 	}
 	if row.Model.String != "claude-sonnet-5" || !row.MetricsSettled.Bool {
 		t.Errorf("model/settled columns = %+v, want claude-sonnet-5/true", row)
@@ -214,9 +211,9 @@ func TestRecordDispositionWritesRunRequestsAlongsideMetrics(t *testing.T) {
 	metrics := agentlog.RunMetrics{
 		TokensIn: 10, TokensOut: 6, Settled: true,
 		Requests: []agentlog.Request{
-			{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+			{ID: "r1", Thread: agentlog.MainThread,
 				InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
-			{ID: "r2", Thread: "toolu_task1", Tool: "Explore", InputTokens: 1, OutputTokens: 1},
+			{ID: "r2", Thread: "toolu_task1", InputTokens: 1, OutputTokens: 1},
 		},
 	}
 	endedAt := startedAt.Add(time.Second)
@@ -229,9 +226,9 @@ func TestRecordDispositionWritesRunRequestsAlongsideMetrics(t *testing.T) {
 		t.Fatalf("RunRequestsForRun: %v", err)
 	}
 	want := []storepkg.RunRequest{
-		{RequestID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+		{RequestID: "r1", Thread: agentlog.MainThread,
 			InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
-		{RequestID: "r2", Thread: "toolu_task1", Tool: "Explore", InputTokens: 1, OutputTokens: 1},
+		{RequestID: "r2", Thread: "toolu_task1", InputTokens: 1, OutputTokens: 1},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("RunRequestsForRun = %+v, want %+v", got, want)

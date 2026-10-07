@@ -70,8 +70,6 @@ type Run struct {
 	Turns          sql.NullInt64
 	DurationMs     sql.NullInt64
 	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 }
@@ -81,7 +79,6 @@ type RunRequest struct {
 	RunID               int64
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
