@@ -82,6 +82,7 @@ type Server struct {
 	nudge          func()
 	pushable       pushableCache
 	verifyPassword func(password, encoded string) bool
+	open           bool
 }
 
 const pushableTTL = time.Minute
@@ -143,9 +144,12 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /login", handler(s.handleLoginPage))
 	mux.Handle("POST /login", handler(s.handleLogin))
 	s.rawMux = mux
-	s.mux = http.NewCrossOriginProtection().Handler(mux)
+	s.mux = http.NewCrossOriginProtection().Handler(s.requireSession(mux))
 	return s
 }
+
+// AllowAnonymous turns the session gate off, for the demo build whose board is a local simulation.
+func (s *Server) AllowAnonymous() { s.open = true }
 
 // SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }

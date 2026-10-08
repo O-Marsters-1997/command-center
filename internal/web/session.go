@@ -24,6 +24,54 @@ var dummyPasswordHash = sync.OnceValue(func() string {
 	return hash
 })
 
+func publicRoute(r *http.Request) bool {
+	read := r.Method == http.MethodGet || r.Method == http.MethodHead
+	if r.URL.Path == "/login" {
+		return read || r.Method == http.MethodPost
+	}
+	return read && strings.HasPrefix(r.URL.Path, "/assets/")
+}
+
+func (s *Server) hasSession(r *http.Request) (bool, error) {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return false, nil
+	}
+	_, err = s.store.SessionOwner(r.Context(), auth.HashToken(c.Value), s.clock.Now())
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// requireSession refuses every request that carries no live session, except the login page and
+// the stylesheet it needs.
+func (s *Server) requireSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.open || publicRoute(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ok, err := s.hasSession(r)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		switch {
+		case r.Header.Get("HX-Request") == "true":
+			w.Header().Set("HX-Redirect", "/login")
+		case r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html"):
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+		default:
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		}
+	})
+}
+
 type loginView struct{ Failed bool }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, _ *http.Request) error {

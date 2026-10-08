@@ -35,7 +35,7 @@ func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
 	at := testNow
 	repos := named("repo", "services", "other")
-	return web.NewServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
+	return openServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
 }
 
 func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 		t.Fatal(err)
 	}
 	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
-	server := web.NewServer(tracked, fixedClock(testNow), "")
+	server := openServer(tracked, fixedClock(testNow), "")
 
 	page := renderPath(t, server, "/?repo=O-Marsters-1997/command-center")
 	if !strings.Contains(page, ticketRef("sandbox://MINE")) || strings.Contains(page, ticketRef("sandbox://THEIRS")) {
@@ -210,7 +210,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 		t.Fatal(err)
 	}
 	repos := named("repo", "other")
-	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), fixedClock(at), "")
 
 	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
 	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {

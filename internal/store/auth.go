@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/auth"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
@@ -117,4 +119,32 @@ func (s *Store) DeleteSession(ctx context.Context, tokenSHA string) error {
 		return fmt.Errorf("delete session: %w", err)
 	}
 	return nil
+}
+
+// SeedSession gives email a live session and returns its cookie token, creating the account with
+// a random password when it does not exist. It replaces any session email already holds.
+func (s *Store) SeedSession(ctx context.Context, email string, at, expiresAt time.Time) (string, error) {
+	row, err := s.q.UserForLogin(ctx, email)
+	if errors.Is(err, sql.ErrNoRows) {
+		password, perr := auth.GeneratePassword()
+		if perr != nil {
+			return "", perr
+		}
+		hash, perr := auth.HashPassword(password)
+		if perr != nil {
+			return "", perr
+		}
+		if perr = s.CreateUser(ctx, email, hash, at); perr != nil {
+			return "", perr
+		}
+		row, err = s.q.UserForLogin(ctx, email)
+	}
+	if err != nil {
+		return "", fmt.Errorf("select user %s: %w", email, err)
+	}
+	token, err := auth.NewSessionToken()
+	if err != nil {
+		return "", err
+	}
+	return token, s.IssueSession(ctx, row.ID, auth.HashToken(token), at, expiresAt)
 }
