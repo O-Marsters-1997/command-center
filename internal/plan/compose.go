@@ -33,9 +33,9 @@ func ComposeFollowUp(text string) string {
 	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
 }
 
-// ReviewFixLines is the size bound above which a review writes a finding down rather than fixing it.
 const ReviewFixLines = 50
 
+// ComposeReview is the prompt for a review run of the branch against base.
 func ComposeReview(base, findingsPath string) string {
 	return fmt.Sprintf(
 		"/code-review --fix origin/%[1]s...HEAD\n\n"+

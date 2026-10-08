@@ -615,8 +615,7 @@ func agentPrompt(ticket store.Ticket) string {
 type spawnSpec struct {
 	ticket                                 store.Ticket
 	worktree, baseline, hash, kind, prompt string
-	// promptFor composes the prompt once the run id exists, for a prompt that names a file under it.
-	promptFor func(runID int64) string
+	promptFor                              func(runID int64) string
 }
 
 func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {

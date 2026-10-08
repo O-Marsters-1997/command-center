@@ -20,15 +20,12 @@ const (
 	eventReviewQueuedFollowUp = "review_follow_up_queued"
 	eventReviewCommented      = "review_commented"
 	eventReviewCommentFailed  = "review_comment_failed"
-	eventReviewRefused        = "review_refused"
 )
 
 func (l *Loop) findingsPath(runID int64) string {
 	return filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.findings.md", runID))
 }
 
-// dispositionFor is a run's outcome. A review is never a failure of the ticket: its commits are
-// pushed if it made any, and a clean review leaves the ticket as the reviewed run left it.
 func dispositionFor(kind string, commits int) plan.Outcome {
 	if kind == runKindReview {
 		return plan.OutcomePush
@@ -36,8 +33,6 @@ func dispositionFor(kind string, commits int) plan.Outcome {
 	return plan.Disposition(commits)
 }
 
-// launchReviews spawns one review run for each ticket whose latest implement or follow-up run was
-// pushed in an earlier tick and has an open PR.
 func (l *Loop) launchReviews(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
@@ -73,7 +68,7 @@ func (l *Loop) launchReviews(ctx context.Context, snap plan.Snapshot, obs plan.O
 func (l *Loop) reviewOne(ctx context.Context, e plan.Entry, tip string, obs plan.Observation) error {
 	worktreePath, refusal := idleWorktreeFor(e.Ticket, obs)
 	if refusal != "" {
-		return l.event(ctx, e.Ticket.URL, eventReviewRefused, refusal)
+		return nil
 	}
 	base := e.Unlock.BaseBranch
 	if base == "" {
@@ -89,9 +84,6 @@ func (l *Loop) reviewOne(ctx context.Context, e plan.Entry, tip string, obs plan
 	})
 }
 
-// queueReviewFindings turns a disposed review's findings file into an intent for act, which runs
-// after the push step so the review's commits are on the PR before anything else spawns. A review
-// of a follow-up's push never escalates: its findings go to the PR as a comment.
 func (l *Loop) queueReviewFindings(ctx context.Context, run store.PendingRun) error {
 	data, err := os.ReadFile(l.findingsPath(run.ID))
 	if errors.Is(err, fs.ErrNotExist) {
