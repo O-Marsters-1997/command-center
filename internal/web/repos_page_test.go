@@ -245,3 +245,32 @@ func TestReposPagesMatchGoldens(t *testing.T) {
 		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
 	}
 }
+
+func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
+	t.Parallel()
+
+	st := track(t, openStore(t), alphaRepo)
+	refused := storepkg.Repo{
+		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", State: storepkg.RepoRefused,
+		RefusalKind: "clone", Refusal: "default branch is master", TrackedAt: testNow,
+	}
+	if err := st.UpsertRepo(t.Context(), refused); err != nil {
+		t.Fatal(err)
+	}
+	server := web.NewServer(st, fixedClock(testNow), "")
+
+	for name, path := range map[string]string{
+		"masthead_refused_board":  "/",
+		"masthead_refused_scoped": "/?repo=acme/alpha",
+		"masthead_refused_repos":  "/features",
+	} {
+		rec := get(t, server, path)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status = %d", path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), `<a href="/features?repo=acme/beta">acme/beta</a> is refused`) {
+			t.Errorf("GET %s missing refused-repo link:\n%s", path, rec.Body)
+		}
+		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
+	}
+}
