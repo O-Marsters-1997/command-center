@@ -129,7 +129,8 @@ func (r *Reader) SearchRepos(query string, pushable []gh.RepoSummary) []RepoRow 
 
 func (r *Reader) tracks(p gh.RepoSummary) bool {
 	return slices.ContainsFunc(r.repos, func(repo config.Repo) bool {
-		return repo.Remote != "" && git.SameRemote(repo.Remote, p.SSHURL)
+		return strings.EqualFold(fullName(repo), p.FullName) ||
+			repo.Remote != "" && git.SameRemote(repo.Remote, p.SSHURL)
 	})
 }
 
@@ -158,8 +159,11 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 		if t.Feature == "" {
 			continue
 		}
-		imported[t.Feature] = true
-		if t.Repo != repo.Name && !slices.Contains(others[t.Feature], t.Repo) {
+		if t.Repo == repo.Name {
+			imported[t.Feature] = true
+			continue
+		}
+		if !slices.Contains(others[t.Feature], t.Repo) {
 			others[t.Feature] = append(others[t.Feature], t.Repo)
 		}
 	}
