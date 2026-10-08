@@ -691,6 +691,9 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
+		if spec.kind == runKindExplore {
+			l.removeExploreWorktree(ctx, spec.launchID)
+		}
 		return l.store.RecordDisposition(ctx, runID, dispositionFor(spec.kind, 0), nil, l.clock.Now(), nil)
 	}
 

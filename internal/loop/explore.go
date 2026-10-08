@@ -69,10 +69,10 @@ func (l *Loop) briefFor(
 	}
 	run, started := st.runs[launchID]
 	if !started {
-		st.runs[launchID] = store.ExploreRun{}
+		st.runs[launchID] = store.ExploreRun{Spawned: true}
 		return "", false, l.startExplore(ctx, launchID, baseBranch, st.members[launchID], byTicket)
 	}
-	if !run.Disposed {
+	if run.Spawned && !run.Disposed {
 		return "", false, nil
 	}
 	if _, err := os.Stat(l.briefPath(launchID)); err != nil {
@@ -105,6 +105,7 @@ func (l *Loop) startExplore(
 	}
 	tree := l.exploreTree(launchID)
 	if err := git.AddDetached(ctx, l.checkout(first.Repo), tree, "origin/"+baseBranch); err != nil {
+		log.Printf("cut explore worktree for launch %d: %v", launchID, err)
 		return l.store.InsertCutFailedExploreRun(ctx, launchID, l.clock.Now())
 	}
 	return l.spawnRun(ctx, spawnSpec{
