@@ -74,7 +74,7 @@ func TestLoginSetsSessionCookieStoredOnlyAsHash(t *testing.T) {
 	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode || c.Path != "/" {
 		t.Errorf("cookie attributes wrong: %+v", c)
 	}
-	if _, err := st.SessionOwner(t.Context(), auth.HashToken(token), testNow); err != nil {
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow); err != nil {
 		t.Errorf("no session for the hash of the cookie: %v", err)
 	}
 	if _, err := st.SessionOwner(t.Context(), c.Value, testNow); !errors.Is(err, sql.ErrNoRows) {
