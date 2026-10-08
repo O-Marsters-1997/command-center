@@ -63,30 +63,25 @@ func TestLivenessReportsDeadForANonexistentPid(t *testing.T) {
 	}
 }
 
-// TestLivenessDetectsAPidWhoseRealStartTimeDoesNotMatch proves the 5s tolerance actually does
-// something: kill(-pgid, 0)/ps alone cannot tell a live process from a *different* process that
-// reused the same pid. Two real processes started more than 5s apart stand in for "the pid was
-// reused" — checking process A's own pid against process B's start time must read as dead.
-func TestLivenessDetectsAPidWhoseRealStartTimeDoesNotMatch(t *testing.T) {
-	pidA, startA := startRealProcess(t, 30)
-	time.Sleep(6 * time.Second)
-	_, startB := startRealProcess(t, 5)
+func TestLivenessReportsDeadForALivePidRecordedWithADifferentStartTime(t *testing.T) {
+	pid, startedAt := startRealProcess(t, 30)
+	reusedPidStart := startedAt.Add(6 * time.Second)
 
 	now := time.Now()
-	aliveSelf, err := runner.ProcessRunner{}.Liveness(pidA, startA, now)
+	aliveSelf, err := runner.ProcessRunner{}.Liveness(pid, startedAt, now)
 	if err != nil {
-		t.Fatalf("Liveness(pidA, startA): %v", err)
+		t.Fatalf("Liveness(pid, startedAt): %v", err)
 	}
 	if !aliveSelf {
-		t.Fatal("Liveness reported process A dead against its own real start time")
+		t.Fatal("Liveness reported the process dead against its own real start time")
 	}
 
-	aliveMismatched, err := runner.ProcessRunner{}.Liveness(pidA, startB, now)
+	aliveMismatched, err := runner.ProcessRunner{}.Liveness(pid, reusedPidStart, now)
 	if err != nil {
-		t.Fatalf("Liveness(pidA, startB): %v", err)
+		t.Fatalf("Liveness(pid, reusedPidStart): %v", err)
 	}
 	if aliveMismatched {
-		t.Error("Liveness matched pidA against a start time 6s off its real start; " +
+		t.Error("Liveness matched the pid against a start time 6s off its real start; " +
 			"the anti-pid-reuse tolerance should have caught this")
 	}
 }
@@ -99,19 +94,15 @@ func TestReapReturnsTheRealExitCode(t *testing.T) {
 	}
 	pid := cmd.Process.Pid
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	dead := func() bool {
 		alive, err := runner.ProcessRunner{}.Liveness(pid, time.Now(), time.Now())
 		if err != nil {
 			t.Fatalf("Liveness: %v", err)
 		}
-		if !alive {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("process never went dead")
-		}
-		time.Sleep(20 * time.Millisecond)
+		return !alive
+	}
+	if !pollUntil(2*time.Second, dead) {
+		t.Fatal("process never went dead")
 	}
 
 	exitCode, ok := runner.ProcessRunner{}.Reap(pid)
@@ -140,18 +131,14 @@ func TestLivenessReportsDeadForAnExitedProcess(t *testing.T) {
 	pid := cmd.Process.Pid
 	startedAt := time.Now()
 
-	deadline := time.Now().Add(2 * time.Second)
-	var alive bool
-	var err error
-	for time.Now().Before(deadline) {
-		alive, err = runner.ProcessRunner{}.Liveness(pid, startedAt, time.Now())
+	dead := func() bool {
+		alive, err := runner.ProcessRunner{}.Liveness(pid, startedAt, time.Now())
 		if err != nil {
 			t.Fatalf("Liveness: %v", err)
 		}
-		if !alive {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+		return !alive
 	}
-	t.Errorf("Liveness still reports alive=%v for a process that exited immediately", alive)
+	if !pollUntil(2*time.Second, dead) {
+		t.Error("Liveness still reports alive for a process that exited immediately")
+	}
 }

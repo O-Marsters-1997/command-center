@@ -51,14 +51,27 @@ func gitRepo(t *testing.T) string {
 // wait on the process, so the test must poll for the side effect it produces instead.
 func waitForFile(t *testing.T, path string) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+	exists := func() bool {
+		_, err := os.Stat(path)
+		return err == nil
 	}
-	t.Fatalf("%s did not appear within the deadline", path)
+	if !pollUntil(5*time.Second, exists) {
+		t.Fatalf("%s did not appear within the deadline", path)
+	}
+}
+
+func pollUntil(within time.Duration, done func() bool) bool {
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	deadline := time.After(within)
+	for !done() {
+		select {
+		case <-poll.C:
+		case <-deadline:
+			return false
+		}
+	}
+	return true
 }
 
 // reapExit blocks until a spawned agent has exited, asserting it exited cleanly. Every Spawn
@@ -113,12 +126,14 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			name:    "substitutes the worktree, settings and prompt file into argv and commits in the worktree",
 			command: []string{commitsScript(t), "{worktree}", "{settings}", "{prompt_file}"},
 			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				t.Helper()
 				cfg.WorktreePath = gitRepo(t)
 				cfg.SettingsPath = writeFile(t, "{}")
 				cfg.PromptPath = writeFile(t, "/implement sandbox://CC-1")
 				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 			},
-			check: func(t *testing.T, cfg runner.SpawnConfig, pid int, _ string) {
+			check: func(t *testing.T, cfg runner.SpawnConfig, _ int, _ string) {
+				t.Helper()
 				out, err := exec.Command("git", "-C", cfg.WorktreePath, "log", "--oneline").CombinedOutput()
 				if err != nil {
 					t.Fatalf("git log: %v: %s", err, out)
@@ -139,9 +154,11 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			name:   "strips ANTHROPIC_API_KEY from the environment",
 			script: "#!/bin/sh\nenv > $DUMP\n",
 			configure: func(t *testing.T, _ *runner.SpawnConfig) {
+				t.Helper()
 				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 			},
 			check: func(t *testing.T, _ runner.SpawnConfig, _ int, dump string) {
+				t.Helper()
 				if strings.Contains(dump, "ANTHROPIC_API_KEY=") {
 					t.Errorf("spawned process environment still carries ANTHROPIC_API_KEY:\n%s", dump)
 				}
@@ -151,6 +168,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			name:   "makes the agent its own process group leader",
 			script: "#!/bin/sh\nps -o pgid= -p $$ > $DUMP\n",
 			check: func(t *testing.T, _ runner.SpawnConfig, pid int, dump string) {
+				t.Helper()
 				gotPgid, err := strconv.Atoi(strings.TrimSpace(dump))
 				if err != nil {
 					t.Fatalf("parse recorded pgid %q: %v", dump, err)
@@ -172,6 +190,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			script:  dumpArg,
 			command: []string{"{system_prompt}"},
 			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				t.Helper()
 				cfg.SystemPromptPath = writeFile(t, "{}")
 			},
 			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.SystemPromptPath }),
@@ -181,6 +200,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			script:  dumpArg,
 			command: []string{"{agents}"},
 			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				t.Helper()
 				cfg.AgentsPath = writeFile(t, "{}")
 			},
 			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.AgentsPath }),
@@ -202,6 +222,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			script:      "#!/bin/sh\npwd > $DUMP\n",
 			dumpOutside: true,
 			check: func(t *testing.T, cfg runner.SpawnConfig, _ int, dump string) {
+				t.Helper()
 				want, err := filepath.EvalSymlinks(cfg.WorktreePath)
 				if err != nil {
 					t.Fatal(err)

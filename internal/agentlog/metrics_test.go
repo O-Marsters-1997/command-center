@@ -3,7 +3,7 @@ package agentlog_test
 import (
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -140,11 +140,15 @@ func TestParseMetricsRejectsUnusableLogs(t *testing.T) {
 	}{
 		{
 			name: "an absent log",
-			path: func(t *testing.T) string { return filepath.Join(t.TempDir(), "missing.jsonl") },
+			path: func(t *testing.T) string {
+				t.Helper()
+				return filepath.Join(t.TempDir(), "missing.jsonl")
+			},
 		},
 		{
 			name: "an empty log",
 			path: func(t *testing.T) string {
+				t.Helper()
 				path := filepath.Join(t.TempDir(), "empty.jsonl")
 				if err := os.WriteFile(path, nil, 0o600); err != nil {
 					t.Fatalf("write empty log: %v", err)
@@ -154,7 +158,7 @@ func TestParseMetricsRejectsUnusableLogs(t *testing.T) {
 		},
 		{
 			name: "a log truncated before its first complete line",
-			path: func(t *testing.T) string { return filepath.Join("testdata", "corrupt.jsonl") },
+			path: func(*testing.T) string { return filepath.Join("testdata", "corrupt.jsonl") },
 		},
 	}
 
@@ -172,11 +176,14 @@ func TestParseMetricsRejectsUnusableLogs(t *testing.T) {
 func assertMetrics(t *testing.T, got, want agentlog.RunMetrics) {
 	t.Helper()
 
-	gotCost, wantCost := got.CostUSD, want.CostUSD
-	got.CostUSD, want.CostUSD = nil, nil
-	if !reflect.DeepEqual(got, want) {
+	if got.TokensIn != want.TokensIn || got.TokensOut != want.TokensOut || got.Turns != want.Turns ||
+		got.Duration != want.Duration || got.Model != want.Model || got.Settled != want.Settled {
 		t.Errorf("ParseMetrics = %+v; want %+v", got, want)
 	}
+	if !slices.Equal(got.Requests, want.Requests) || (got.Requests == nil) != (want.Requests == nil) {
+		t.Errorf("Requests = %+v; want %+v", got.Requests, want.Requests)
+	}
+	gotCost, wantCost := got.CostUSD, want.CostUSD
 	switch {
 	case wantCost == nil && gotCost != nil:
 		t.Errorf("CostUSD = %v; want nil", *gotCost)

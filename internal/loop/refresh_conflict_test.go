@@ -24,7 +24,7 @@ func conflictingAdvance(t *testing.T, repoPath string, store *store.Store, f sta
 	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(context.Background(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
 		t.Fatal(err)
 	}
 

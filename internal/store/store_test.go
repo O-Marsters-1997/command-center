@@ -11,7 +11,10 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func openStore(t *testing.T) *storepkg.Store { return openStoreAt(t, cctest.DSN(t)) }
+func openStore(t *testing.T) *storepkg.Store {
+	t.Helper()
+	return openStoreAt(t, cctest.DSN(t))
+}
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()

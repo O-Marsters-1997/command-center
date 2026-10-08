@@ -379,6 +379,7 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 		{
 			name: "dirty worktree", pr: plan.Merged, reason: "dirty",
 			setup: func(t *testing.T, f removeWorktreeFixture) {
+				t.Helper()
 				if err := os.WriteFile(filepath.Join(f.worktreePath, "scratch.txt"), []byte("oops\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
@@ -387,12 +388,14 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 		{
 			name: "unpushed commits", pr: plan.Merged, reason: "unpushed",
 			setup: func(t *testing.T, f removeWorktreeFixture) {
+				t.Helper()
 				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
 			},
 		},
 		{
 			name: "pruned ref and a tip that moved past the last push", pr: plan.Merged, reason: "unpushed",
 			setup: func(t *testing.T, f removeWorktreeFixture) {
+				t.Helper()
 				tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
 				if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
 					t.Fatal(err)

@@ -286,14 +286,20 @@ func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 		_ = logFile.Close()
 	})
 
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		if body, err := os.ReadFile(logPath); err == nil && strings.Contains(string(body), daemonReady) {
+	poll := time.NewTicker(5 * time.Millisecond)
+	defer poll.Stop()
+	deadline := time.After(30 * time.Second)
+	for {
+		body, err := os.ReadFile(logPath)
+		if err == nil && strings.Contains(string(body), daemonReady) {
 			return
 		}
-		time.Sleep(5 * time.Millisecond)
+		select {
+		case <-poll.C:
+		case <-deadline:
+			ts.Fatalf("cc did not log %q within the deadline:\n%s", daemonReady, body)
+		}
 	}
-	ts.Fatalf("cc did not log %q within the deadline:\n%s", daemonReady, ts.ReadFile(logPath))
 }
 
 func setup(env *testscript.Env) error {
