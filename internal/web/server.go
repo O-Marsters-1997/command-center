@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
@@ -11,9 +12,13 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"regexp"
+	"slices"
 	"strings"
+	"sync"
+	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -39,6 +44,7 @@ var templates = template.Must(template.New("").
 		"percent":      view.PercentOf,
 		"raw":          func(s string) template.HTML { return template.HTML(s) },
 		"pathEscape":   url.PathEscape,
+		"queryEscape":  url.QueryEscape,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
 
@@ -68,22 +74,47 @@ func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) ro
 type Server struct {
 	store      *store.Store
 	clock      loop.Clock
-	repos      []config.Repo
 	view       *view.Reader
 	trackerFor tracker.Resolver
 	rawMux     *http.ServeMux
 	mux        http.Handler
 	nudge      func()
+	pushable   pushableCache
 }
 
-// NewServer assembles the page and its routes over a store, a clock, the configured repos and
-// the data directory.
-func NewServer(store *store.Store, clock loop.Clock, repos []config.Repo, dataDir string) *Server {
+const pushableTTL = time.Minute
+
+// pushableCache holds the last successful gh listing for pushableTTL, so a burst of keystrokes
+// makes one gh call.
+type pushableCache struct {
+	mu      sync.Mutex
+	list    func(context.Context) ([]gh.RepoSummary, error)
+	repos   []gh.RepoSummary
+	fetched time.Time
+}
+
+func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummary, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.fetched.IsZero() && now.Sub(c.fetched) < pushableTTL {
+		return c.repos, nil
+	}
+	repos, err := c.list(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.repos, c.fetched = repos, now
+	return repos, nil
+}
+
+// NewServer assembles the page and its routes over a store, a clock and the data directory.
+func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	s := &Server{
-		store: store, clock: clock, repos: repos,
-		view:       view.NewReader(store, repos, dataDir, renderLogLine),
+		store: store, clock: clock,
+		view:       view.NewReader(store, dataDir, renderLogLine),
 		trackerFor: tracker.New,
 		nudge:      func() {},
+		pushable:   pushableCache{list: gh.PushableRepos},
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
@@ -95,6 +126,9 @@ func NewServer(store *store.Store, clock loop.Clock, repos []config.Repo, dataDi
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
 	mux.Handle("GET /features", handler(s.handleFeatures))
+	mux.Handle("GET /features/search", handler(s.handleRepoSearch))
+	mux.Handle("GET /features/banner", handler(s.handleBanner))
+	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
 	mux.Handle("GET /launch/candidates", handler(s.handleCandidates))
@@ -110,6 +144,11 @@ func NewServer(store *store.Store, clock loop.Clock, repos []config.Repo, dataDi
 
 // SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
+
+// SetPushableSource replaces the gh listing behind repo search so a test can drive it without gh.
+func (s *Server) SetPushableSource(list func(context.Context) ([]gh.RepoSummary, error)) {
+	s.pushable.list = list
+}
 
 // SetNudge sets the call that wakes the loop once the server has queued an import intent.
 func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
@@ -422,15 +461,94 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	all, err := importFeatures(ctx, s.repos, s.trackerFor)
+	scope := r.URL.Query().Get("repo")
+	if scope == "" {
+		page, err := s.view.Repos(ctx, s.clock.Now())
+		if err != nil {
+			return err
+		}
+		return renderHTML(w, "features.tmpl", page)
+	}
+
+	repo, known, err := s.view.KnownRepo(ctx, scope)
 	if err != nil {
 		return err
 	}
-	features, err := s.view.Features(ctx, s.clock.Now(), all, r.URL.Query().Get("q"))
+	var offered []string
+	if known && repo.State == store.RepoReady {
+		obs, _, err := s.store.LastObservation(ctx)
+		if err != nil {
+			return err
+		}
+		if offered, err = importFeatures(ctx, []store.Repo{repo}, obs.Settings, s.trackerFor); err != nil {
+			return err
+		}
+	}
+	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered)
 	if err != nil {
 		return err
 	}
-	return renderHTML(w, "features.tmpl", features)
+	return renderHTML(w, "repo.tmpl", page)
+}
+
+func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
+	banner, err := s.view.Banner(r.Context(), r.URL.Query().Get("repo"))
+	if err != nil {
+		return err
+	}
+	if seen := r.URL.Query().Get("seen"); seen != "" && seen != banner.State {
+		w.Header().Set("HX-Refresh", "true")
+	}
+	return renderHTML(w, "repoBanner", banner)
+}
+
+var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+func hasDotSegment(repo string) bool {
+	return slices.ContainsFunc(strings.Split(repo, "/"), func(seg string) bool { return seg == "." || seg == ".." })
+}
+
+func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
+	repo := strings.TrimSpace(r.FormValue("repo"))
+	if !repoName.MatchString(repo) || hasDotSegment(repo) {
+		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	}
+	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
+	if err != nil {
+		return err
+	}
+	if queued {
+		s.nudge()
+	}
+	if r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, view.RepoPath(repo), http.StatusSeeOther)
+		return nil
+	}
+	banner, err := s.view.Banner(r.Context(), repo)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "repoBanner", banner)
+}
+
+func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error {
+	query := r.URL.Query().Get("q")
+	var (
+		pushable []gh.RepoSummary
+		search   view.RepoSearch
+	)
+	if strings.TrimSpace(query) != "" {
+		var err error
+		if pushable, err = s.pushable.get(r.Context(), s.clock.Now()); err != nil {
+			search.SearchError = err.Error()
+		}
+	}
+	rows, err := s.view.SearchRepos(r.Context(), query, pushable)
+	if err != nil {
+		return err
+	}
+	search.Rows = rows
+	return renderHTML(w, "repoResults", search)
 }
 
 func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {

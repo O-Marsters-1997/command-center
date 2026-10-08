@@ -1,0 +1,18 @@
+{{define "repoBanner" -}}
+<section id="repo-banner" class="banner ribbon mb-3" data-tone="{{.Tone}}" data-state="{{.State}}" role="status"
+  {{- if .Polling}} hx-get="/features/banner?repo={{.Repo | queryEscape}}&amp;seen={{.State}}" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
+  <p>{{.Text}}
+    {{- with .BoardPath}} <a href="{{.}}">board &rarr;</a>{{end}}</p>
+  <ul class="flex flex-wrap gap-3 mt-1">
+    {{range .Steps -}}
+    <li><span class="pill" data-tone="{{.Tone}}">{{.Mark}}</span> {{.Label}}</li>
+    {{end -}}
+  </ul>
+  {{if .CanTrack -}}
+  <form class="mt-1" hx-post="/repos/track" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
+    <input type="hidden" name="repo" value="{{.Repo}}">
+    <button type="submit">[ {{.TrackLabel}} ]</button>
+  </form>
+  {{end -}}
+</section>
+{{end}}

@@ -140,7 +140,7 @@ func (l *Loop) refreshOne(
 	if err := l.event(ctx, ticket.URL, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
 		return err
 	}
-	return l.verifyOne(ctx, ticket, worktreePath, l.repo(ticket.Repo).VerifyCommand)
+	return l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand)
 }
 
 const maxVerifyDetail = 4000

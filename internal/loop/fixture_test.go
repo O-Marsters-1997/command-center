@@ -1,7 +1,7 @@
 package loop_test
 
 import (
-	"path/filepath"
+	"os"
 	"testing"
 	"time"
 
@@ -66,7 +66,9 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	cfg, ws := testConfigAndWorkspace(t, root, fc.maxAgents, []string{"true"})
 	cfg.SpendLimit5h = fc.spendLimit
 	if fc.extraRepo != "" {
-		cfg.Repos = append(cfg.Repos, config.Repo{Name: fc.extraRepo, Checkout: filepath.Join(root, "repo")})
+		if err := os.Symlink(config.CheckoutPath(root, "repo"), config.CheckoutPath(root, fc.extraRepo)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	store := openStore(t)
 	if err := store.UpsertTickets(t.Context(), fc.tickets); err != nil {

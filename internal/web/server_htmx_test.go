@@ -33,7 +33,7 @@ func postVerb(t *testing.T, srv *httptest.Server, target string, headers map[str
 func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", map[string]string{"HX-Request": "true"})
@@ -54,7 +54,7 @@ func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", nil)
@@ -65,7 +65,7 @@ func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 func TestVerbSwapKeepsTheSelectedRowExpanded(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededRunning(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	q := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}, "sel": {"sandbox://CC-1"}}
@@ -80,7 +80,7 @@ func TestVerbSwapKeepsTheSelectedRowExpanded(t *testing.T) {
 func TestBoardSwapCarriesTheBandAndMasthead(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
 	body := renderPath(t, server, "/board")
 
 	for _, want := range []string{`id="masthead" hx-swap-oob="true"`, `id="band" hx-swap-oob="true"`} {
@@ -93,7 +93,7 @@ func TestBoardSwapCarriesTheBandAndMasthead(t *testing.T) {
 func TestPageRendersTheMastheadAndBandExactlyOnce(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
 	body := renderPath(t, server, "/")
 
 	for _, id := range []string{`id="masthead"`, `id="band"`} {

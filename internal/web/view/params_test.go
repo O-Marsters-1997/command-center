@@ -3,6 +3,8 @@ package view
 import (
 	"net/url"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestParseViewParamsTakesTheFirstSel(t *testing.T) {
@@ -108,20 +110,21 @@ func TestNormalizeFeatureScope(t *testing.T) {
 func TestNormalizeRepoScope(t *testing.T) {
 	t.Parallel()
 
-	stacking := map[string]bool{"support-app": true, "services": false}
+	repos := []store.Repo{{Name: "acme/support-app"}, {Name: "acme/services"}}
 	for _, tc := range []struct {
 		name string
 		repo string
 		want string
 	}{
 		{"absent stays blank", "", ""},
-		{"a configured repo passes through", "support-app", "support-app"},
-		{"an unconfigured repo falls back to blank", "bogus", ""},
+		{"a tracked repo passes through", "acme/support-app", "acme/support-app"},
+		{"an untracked repo falls back to blank", "bogus", ""},
+		{"a tracked repo in another case reads as its tracked name", "ACME/Support-App", "acme/support-app"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := normalizeRepoScope(tc.repo, stacking); got != tc.want {
+			if got := normalizeRepoScope(tc.repo, repos); got != tc.want {
 				t.Errorf("normalizeRepoScope(%q) = %q, want %q", tc.repo, got, tc.want)
 			}
 		})

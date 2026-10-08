@@ -131,7 +131,7 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -159,7 +159,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	fake.ReapCode[999] = 0
 	// alive defaults to false in the map (zero value), i.e. the run reads dead this tick.
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -207,7 +207,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 }
 
 func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -241,7 +241,7 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	fake.CanReap[999] = true
 	fake.ReapCode[999] = 137 // killed
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -266,7 +266,7 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 }
 
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -300,7 +300,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	fake.CanReap[999] = true
 	fake.ReapCode[999] = 0
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -319,7 +319,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -355,7 +355,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	fake.CanReap[999] = true
 	fake.ReapCode[999] = 0
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -372,7 +372,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 }
 
 func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -403,7 +403,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	fake.CanReap[4242] = true
 	fake.ReapCode[4242] = 143
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -467,7 +467,7 @@ func TestLoopSpendLimit5h(t *testing.T) {
 }
 
 func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
@@ -497,7 +497,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	fake := runner.NewFake()
 	fake.Alive[4242] = true
 
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.SpendLimit5h = 80
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {

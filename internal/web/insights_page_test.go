@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -24,8 +23,8 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	repos := []config.Repo{{Name: "cc-sandbox"}}
-	server := web.NewServer(store, fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), repos, "")
+	repos := named("cc-sandbox")
+	server := web.NewServer(track(t, store, repos...), fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), "")
 
 	got := renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a")
 	if !strings.Contains(got, `href="/insights?feature=feat-a"`) {

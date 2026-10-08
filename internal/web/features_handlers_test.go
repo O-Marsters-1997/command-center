@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -38,72 +37,6 @@ func resolveByRemote(byRemote map[string]tracker.Source) tracker.Resolver {
 	}
 }
 
-func TestHandleFeaturesListsEveryFeatureImportedOrNot(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	seed := []storepkg.ImportedTicket{
-		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
-	}
-	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
-		t.Fatalf("seed ImportTickets: %v", err)
-	}
-
-	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
-	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
-
-	server := web.NewServer(store, loop.RealClock{}, repos, "")
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
-
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"project:x", "project:y"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
-	}
-	if strings.Index(body, "yes") > strings.Index(body, "project:y") {
-		t.Errorf("project:y, which has no imported tickets, reads as imported:\n%s", body)
-	}
-}
-
-func TestHandleFeaturesRowOffersReimportOnlyOnceImported(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	seed := []storepkg.ImportedTicket{
-		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}, Repo: "alpha"},
-	}
-	if err := store.ImportTickets(ctx, "project:x", seed, time.Now()); err != nil {
-		t.Fatalf("seed ImportTickets: %v", err)
-	}
-
-	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
-	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
-
-	server := web.NewServer(store, loop.RealClock{}, repos, "")
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
-
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `action="/features/project:x/import"`) {
-		t.Errorf("imported feature's row is missing the reimport action:\n%s", body)
-	}
-	if strings.Contains(body, `action="/features/project:y/import"`) {
-		t.Errorf("unimported feature's row should not offer reimport:\n%s", body)
-	}
-}
-
 func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	t.Parallel()
 
@@ -120,7 +53,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, loop.RealClock{}, nil, "")
+	server := web.NewServer(store, loop.RealClock{}, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
 	if rec.Code != http.StatusOK {
@@ -134,33 +67,10 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	}
 }
 
-func TestHandleFeaturesFiltersByQuery(t *testing.T) {
-	t.Parallel()
-
-	repos := []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}
-	src := fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}}
-
-	server := web.NewServer(openStore(t), loop.RealClock{}, repos, "")
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
-
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features?q=X", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, "project:x") {
-		t.Errorf("?q=X (case-insensitive) should still match project:x:\n%s", body)
-	}
-	if strings.Contains(body, "project:y") {
-		t.Errorf("?q=X should not match project:y:\n%s", body)
-	}
-}
-
 func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := noRedirect(srv).Get(srv.URL + "/features/" + url.PathEscape("project:x"))
@@ -181,7 +91,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := web.NewServer(store, loop.RealClock{}, nil, "")
+	server := web.NewServer(store, loop.RealClock{}, "")
 	var nudged atomic.Bool
 	server.SetNudge(func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
@@ -218,7 +128,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
@@ -239,7 +149,7 @@ func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
@@ -255,7 +165,7 @@ func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)

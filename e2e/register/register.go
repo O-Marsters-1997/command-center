@@ -49,7 +49,7 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 		return err
 	}
 
-	instance, err := app.New(ctx, configPath, app.WithCheckout(SandboxCheckout))
+	instance, err := app.New(ctx, configPath, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote))
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(web.NewServer(store, loop.RealClock{}, cfg.Repos, ws.DataDir))
+	server := httptest.NewServer(web.NewServer(store, loop.RealClock{}, ws.DataDir))
 	defer server.Close()
 
 	var body io.Reader

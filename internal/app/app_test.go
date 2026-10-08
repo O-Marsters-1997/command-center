@@ -2,12 +2,10 @@ package app_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -27,12 +25,12 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{"cc-sandbox//cc-1-first": {Number: 41, State: plan.Open}},
+		PRs: map[string]plan.PR{sandboxRepo + "//cc-1-first": {Number: 41, State: plan.Open}},
 	}
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
-	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -69,41 +67,54 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := app.New(ctx, configPath, stubSquashOnly)
+	first, err := app.New(ctx, configPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
 
-	if _, err := app.New(ctx, configPath, stubSquashOnly); err == nil {
+	if _, err := app.New(ctx, configPath); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
 
-// appConfig writes a repo-only config beside a real checkout of the repo it names and seeds two
-// tickets straight into the workspace's database: the loop's reconcile doesn't care whether a
-// row arrived by import or was seeded directly, so this skips the tracker entirely.
+const sandboxRepo = "sandbox-org/cc-sandbox"
+
 func appConfig(t *testing.T) string {
 	t.Helper()
 	dataDir := t.TempDir()
 	t.Setenv("CC_DATA_DIR", dataDir)
 
 	root, repoPath := repoWithOrigin(t)
-	if err := os.Rename(repoPath, filepath.Join(root, "cc-sandbox")); err != nil {
+	checkout := config.CheckoutPath(dataDir, sandboxRepo)
+	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(repoPath, checkout); err != nil {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
-	body := "port = 0\n[[repo]]\nname = \"cc-sandbox\"\npath = \"cc-sandbox\"\n"
-	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("port = 0\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dsn := cctest.DSN(t)
 	t.Setenv("CC_DATABASE_URL", dsn)
-	seedTickets(t, dsn)
+	seed(t, dsn, func(db *store.Store) error {
+		repo := store.Repo{
+			Name: sandboxRepo, Remote: filepath.Join(root, "remote.git"), State: store.RepoReady, TrackedAt: time.Now(),
+		}
+		if err := db.UpsertRepo(t.Context(), repo); err != nil {
+			return err
+		}
+		return db.UpsertTickets(t.Context(), []store.Ticket{
+			{URL: "sandbox://CC-1", Repo: sandboxRepo, Branch: "cc-1-first"},
+			{URL: "sandbox://CC-2", Repo: sandboxRepo, Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+		})
+	})
 	return configPath
 }
 
-func seedTickets(t *testing.T, dsn string) {
+func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	t.Helper()
 	db, err := store.OpenStore(dsn)
 	if err != nil {
@@ -114,68 +125,8 @@ func seedTickets(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 	}()
-	err = db.UpsertTickets(t.Context(), []store.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
-	})
-	if err != nil {
+	if err := write(db); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out
-// to: none of their fixture repos are real git checkouts with a GitHub remote.
-var stubSquashOnly = app.WithRepoCheck(func(context.Context, []config.Repo) error { return nil })
-
-func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
-	configPath := appConfig(t)
-
-	notSquashOnly := app.WithRepoCheck(func(_ context.Context, repos []config.Repo) error {
-		return fmt.Errorf("repo %s allows merge commits (allow_merge_commit=true): "+
-			"command-centre requires squash-only merges, refusing to start", repos[0].Name)
-	})
-
-	_, err := app.New(t.Context(), configPath, notSquashOnly)
-	if err == nil {
-		t.Fatal("New started despite a repo that allows merge commits")
-	}
-	if !strings.Contains(err.Error(), "cc-sandbox") || !strings.Contains(err.Error(), "allow_merge_commit") {
-		t.Errorf("error %q does not name the offending repo and setting", err)
-	}
-}
-
-// TestNewClonesARemoteRepoIntoAnEmptyDataDir: a config naming only a remote, and an empty data
-// directory, reach a serving state with no directory prepared by hand.
-func TestNewClonesARemoteRepoIntoAnEmptyDataDir(t *testing.T) {
-	dataDir := t.TempDir()
-	t.Setenv("CC_DATA_DIR", dataDir)
-	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
-
-	_, repoPath := repoWithOrigin(t)
-	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
-
-	configPath := filepath.Join(t.TempDir(), "config.toml")
-	body := "[[repo]]\nname = \"cc-sandbox\"\nremote = " + strconv.Quote(remote) + "\n"
-	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	inst, err := app.New(t.Context(), configPath, app.WithObserver(stub), stubSquashOnly)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	t.Cleanup(func() { _ = inst.Close() })
-
-	checkout := filepath.Join(dataDir, "repos", "cc-sandbox")
-	if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
-		t.Fatalf("startup did not clone into %s: %v", checkout, err)
-	}
-
-	rec := httptest.NewRecorder()
-	inst.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
 	}
 }
 
@@ -187,7 +138,7 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	inst, err := app.New(ctx, configPath, app.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -213,3 +164,22 @@ func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
+
+func TestNewStartsWithNoTrackedRepos(t *testing.T) {
+	t.Setenv("CC_DATA_DIR", t.TempDir())
+	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inst, err := app.New(t.Context(), configPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = inst.Close() })
+
+	if err := inst.RunOnce(t.Context()); err != nil {
+		t.Errorf("RunOnce with no repos = %v, want nil", err)
+	}
+}

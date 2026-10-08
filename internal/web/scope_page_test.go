@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -35,8 +34,8 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
 	at := testNow
-	repos := []config.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
-	return web.NewServer(threeRepoStore(t), fixedClock(at), repos, "")
+	repos := named("repo", "services", "other")
+	return web.NewServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
 }
 
 func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
@@ -65,6 +64,26 @@ func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	}
 }
 
+func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://MINE", Repo: "O-Marsters-1997/command-center", Branch: "mine"},
+		{URL: "sandbox://THEIRS", Repo: "acme/other", Branch: "theirs"},
+	}
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
+		t.Fatal(err)
+	}
+	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
+	server := web.NewServer(tracked, fixedClock(testNow), "")
+
+	page := renderPath(t, server, "/?repo=O-Marsters-1997/command-center")
+	if !strings.Contains(page, ticketRef("sandbox://MINE")) || strings.Contains(page, ticketRef("sandbox://THEIRS")) {
+		t.Errorf("?repo=O-Marsters-1997/command-center did not scope the board to that repo:\n%s", page)
+	}
+}
+
 func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	t.Parallel()
 
@@ -88,36 +107,25 @@ func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
 	}
 }
 
-func TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope(t *testing.T) {
+func TestBreadcrumbIsPlainLinksWithTheRepoSegmentOnlyWhenScoped(t *testing.T) {
 	t.Parallel()
 
 	server := threeRepoServer(t)
 
 	unscoped := renderPath(t, server, "/")
-	for _, want := range []string{`href="/"`, `href="/?repo=repo"`, `href="/?repo=services"`, `href="/?repo=other"`} {
-		if !strings.Contains(unscoped, want) {
-			t.Errorf("masthead missing repo link %s:\n%s", want, unscoped)
-		}
+	if !strings.Contains(unscoped, `<a href="/features">repos</a>`) {
+		t.Errorf("breadcrumb missing the repos link:\n%s", unscoped)
 	}
-	if !strings.Contains(unscoped, `href="/" aria-current="page"`) {
-		t.Errorf("unscoped masthead should mark \"all\" current:\n%s", unscoped)
+	if strings.Contains(unscoped, "repo-switcher") || strings.Contains(unscoped, "popover") {
+		t.Errorf("breadcrumb still carries the repo switcher popover:\n%s", unscoped)
+	}
+	if strings.Contains(unscoped, `href="/features?repo=`) {
+		t.Errorf("unscoped breadcrumb has a repo segment:\n%s", unscoped)
 	}
 
 	scoped := renderPath(t, server, "/?repo=services")
-	if !strings.Contains(scoped, `href="/?repo=services" aria-current="page"`) {
-		t.Errorf("?repo=services should mark its own pill current:\n%s", scoped)
-	}
-	if strings.Contains(scoped, `href="/" aria-current="page"`) {
-		t.Errorf("?repo=services should not also mark \"all\" current:\n%s", scoped)
-	}
-}
-
-func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
-	t.Parallel()
-
-	page := renderPage(t, seededServer(t))
-	if strings.Contains(page, "repo=") {
-		t.Errorf("masthead rendered a repo link though no repo is configured:\n%s", page)
+	if !strings.Contains(scoped, `<a href="/features?repo=services">services</a>`) {
+		t.Errorf("?repo=services breadcrumb missing its repo segment:\n%s", scoped)
 	}
 }
 
@@ -201,8 +209,8 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
-	repos := []config.Repo{{Name: "repo"}, {Name: "other"}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo", "other")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 
 	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
 	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {

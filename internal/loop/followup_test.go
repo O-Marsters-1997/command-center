@@ -16,7 +16,7 @@ import (
 )
 
 func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
@@ -38,7 +38,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -97,7 +97,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 }
 
 func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, _ := repoWithOrigin(t)
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -116,7 +116,7 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)

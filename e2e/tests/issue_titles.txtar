@@ -16,11 +16,10 @@ stdout '>#CC-2</button>'
 ! stdout 'An issue nobody is working on'
 ! stdout '>sandbox://CC-1<'
 
-# A failed issue list ends the tick like any other observe read, and the page falls back to the
-# last good observation -- titles and all.
+# A failed issue list fails that repo's observe, not the tick, and the page falls back to the
+# repo's last good observation -- titles and all.
 cc-fake-gh issue-titles-fail
-! exec cc tick --count 1
-stderr 'gh is unavailable'
+exec cc tick --count 1
 
 exec cc request GET /
 stdout 'the last tick failed'

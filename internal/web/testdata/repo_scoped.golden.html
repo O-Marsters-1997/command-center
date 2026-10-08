@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Centre</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script>
+  var stored = localStorage.getItem("theme");
+  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
+  function toggleTheme() {
+    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("theme", next);
+  }
+  
+  
+  function ago(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
+    var h = Math.floor(m / 60);
+    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
+  }
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      var at = Date.parse(el.dateTime);
+      if (!isNaN(at)) el.textContent = ago(now - at);
+    });
+  }, 1000);
+</script>
+<script src="/assets/htmx.min.js"></script>
+<script src="/assets/sse.min.js"></script>
+<script>
+  document.addEventListener("htmx:sseMessage", function (e) {
+    var pre = e.target;
+    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
+  });
+</script>
+</head>
+<body>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
+<header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
+  
+  <span class="text-muted">/</span>
+  <a href="/features">repos</a>
+  
+  <span class="text-muted">/</span>
+  <a href="/features?repo=acme/alpha">acme/alpha</a>
+  
+  
+  <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
+</header>
+<div id="masthead" hx-swap-oob="true">
+  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
+    <span class="pill">
+      <span class="pill-ring"></span>0 live
+    </span>
+    
+    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: never</span>
+    
+    
+    <span class="flex items-center gap-[0.4em]">
+      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
+      five-hour · 0% · calibrating
+    </span>
+    
+    <span class="flex items-center gap-[0.4em]">
+      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
+      weekly · 0% · calibrating
+    </span>
+    
+  </div>
+  
+  
+</div>
+<div class="shell">
+<nav class="sidebar" id="sidebar-nav" aria-label="sections">
+  <a class="sidebar-item" href="/features" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span class="sidebar-label">repos</span></a>
+  <a class="sidebar-item" href="/?view=board"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span class="sidebar-label">board</span></a>
+  <a class="sidebar-item" href="/?view=graph"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg><span class="sidebar-label">graph</span></a>
+  <a class="sidebar-item" href="/insights"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span class="sidebar-label">insights</span></a>
+</nav>
+<main id="main" class="p-4">
+<input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
+  class="block border border-border rounded px-2 py-1 mb-1"
+  hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
+<div id="repo-results" class="mb-3"></div>
+<h1>acme/alpha</h1>
+<p class="text-muted mb-2">git@github.com:acme/alpha.git</p>
+<section id="repo-banner" class="banner ribbon mb-3" data-tone="done" data-state="ready" role="status">
+  <p>No .command-centre.toml on main: defaults are in use. <a href="/?repo=acme%2Falpha">board &rarr;</a></p>
+  <ul class="flex flex-wrap gap-3 mt-1">
+    <li><span class="pill" data-tone="done">ok</span> clone</li>
+    <li><span class="pill" data-tone="done">ok</span> squash-only merges</li>
+    <li><span class="pill" data-tone="done">ok</span> default branch is main</li>
+    <li><span class="pill" data-tone="done">ok</span> settings file</li>
+    </ul>
+  </section>
+
+
+
+<table class="w-full max-w-3xl">
+  <tr><th>feature</th><th>imported</th><th></th></tr>
+  
+  <tr>
+    <td>
+      <a href="/features/project:x">project:x</a>
+      
+    </td>
+    <td>no</td>
+    <td>
+      <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+        <input type="hidden" name="feature" value="project:x">
+        <button type="submit">[ launch ]</button>
+      </form>
+      
+    </td>
+  </tr>
+  
+</table>
+
+<div id="launch-modal"></div>
+</main>
+</div>
+</body>
+</html>

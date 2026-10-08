@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -61,6 +62,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
+		obs.Settings["repo"] = config.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
@@ -71,13 +73,12 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 
 	// Without a predicate every verdict flag stays false and the row reads `checking`.
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	cfg.Repos[0].Checks = verdict.Predicate{Success: "CI"}
 	clock := fixedClock(at.Add(time.Minute))
 	return conflictFixture{
 		f:         f,
 		aliveRuns: aliveRuns,
 		loop:      loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
-		server:    web.NewServer(store, clock, cfg.Repos, ""),
+		server:    web.NewServer(store, clock, ""),
 		store:     store,
 	}
 }

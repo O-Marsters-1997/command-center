@@ -1,0 +1,17 @@
+stacking = true
+deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
+
+[[checks.all_of]]
+success = "test"
+[[checks.all_of]]
+success = "e2e"
+[[checks.all_of]]
+success = "lint"
+[[checks.all_of]]
+success = "build (ubuntu-latest)"
+[[checks.all_of]]
+success = "build (macos-latest)"
+[[checks.all_of]]
+success = "tidy"
+[[checks.all_of]]
+success = "assets"

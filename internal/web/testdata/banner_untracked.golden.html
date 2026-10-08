@@ -1,0 +1,13 @@
+<section id="repo-banner" class="banner ribbon mb-3" data-tone="idle" data-state="untracked" role="status">
+  <p>Not tracked.</p>
+  <ul class="flex flex-wrap gap-3 mt-1">
+    <li><span class="pill" data-tone="idle">-</span> clone</li>
+    <li><span class="pill" data-tone="idle">-</span> squash-only merges</li>
+    <li><span class="pill" data-tone="idle">-</span> default branch is main</li>
+    <li><span class="pill" data-tone="idle">-</span> settings file</li>
+    </ul>
+  <form class="mt-1" hx-post="/repos/track" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
+    <input type="hidden" name="repo" value="acme/unknown">
+    <button type="submit">[ Track ]</button>
+  </form>
+  </section>

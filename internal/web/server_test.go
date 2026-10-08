@@ -233,13 +233,14 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://PARENT"); state != "ci_failed" {
@@ -280,15 +281,16 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 				},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+			{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
+		}}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-		{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
-	}}}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, ticket.URL); state != "ci_failed" {
@@ -344,18 +346,19 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 				},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {
+			CompatCheck: "GraphQL production compatibility",
+			Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+				{Success: "GraphQL production compatibility"}, {Success: "Tests"},
+			}},
+		}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{
-		Name: "repo", CompatCheck: "GraphQL production compatibility",
-		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
-		}},
-	}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
@@ -369,7 +372,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
 
 	rec := get(t, server, "/nope")
 	if rec.Code != http.StatusNotFound {
@@ -380,7 +383,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	tests := []struct {
@@ -428,7 +431,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
+	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
 	server.RegisterTestRoute("POST /test-route", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -454,7 +457,7 @@ func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
@@ -474,7 +477,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/preview?ticket=sandbox://CC-1")
@@ -512,7 +515,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, query)
@@ -603,7 +606,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
@@ -751,7 +754,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
@@ -791,7 +794,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 
 	ctx := t.Context()
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{
@@ -819,7 +822,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(seededStore(t, time.Now()), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
@@ -849,4 +852,45 @@ func postLaunchForm(t *testing.T, srv *httptest.Server, form url.Values) (*http.
 		t.Fatal(err)
 	}
 	return resp, string(body)
+}
+
+func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
+	t.Parallel()
+
+	stateWith := func(t *testing.T, checks verdict.Predicate) string {
+		t.Helper()
+		ctx := t.Context()
+		store := openStore(t)
+		ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
+		if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+			t.Fatal(err)
+		}
+		at := testNow
+		dispositionAsPushed(t, store, ticket.URL, at)
+		if err := store.RecordPush(ctx, ticket.URL, "ci-tip", "main", "main-tip", at); err != nil {
+			t.Fatal(err)
+		}
+		obs := plan.Observation{
+			BranchTips: map[string]string{web.MainTipKey("repo"): "main-tip"},
+			PRs: map[string]plan.PR{
+				plan.BranchKey("repo", "ci"): {
+					Number: 1, State: plan.Open, HeadOid: "ci-tip",
+					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+				},
+			},
+			Settings: map[string]config.RepoSettings{"repo": {Checks: checks}},
+		}
+		if err := store.SaveObservation(ctx, obs); err != nil {
+			t.Fatal(err)
+		}
+		server := web.NewServer(track(t, store, named("repo")...), fixedClock(at), "")
+		return rowState(t, renderPage(t, server), ticket.URL)
+	}
+
+	if got := stateWith(t, verdict.Predicate{Success: "CI"}); got != "review_me" {
+		t.Fatalf("state with CI required = %q, want review_me: the control this test rests on", got)
+	}
+	if got := stateWith(t, verdict.Predicate{Success: "Lint"}); got == "review_me" {
+		t.Errorf("state with a never-reported check required = %q, want the verdict to follow the observed checks", got)
+	}
 }

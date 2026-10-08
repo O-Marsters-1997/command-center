@@ -82,7 +82,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -143,13 +143,14 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
-	srv := httptest.NewServer(web.NewServer(store, fixedClock(at), repos, ""))
+	repos := named("repo")
+	srv := httptest.NewServer(web.NewServer(track(t, store, repos...), fixedClock(at), ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CHILD")
@@ -178,7 +179,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=project%3Ax")
@@ -210,7 +211,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv,
@@ -253,7 +254,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
@@ -287,7 +288,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	candidates := fetchCandidates(t, srv, "feature=widgets")

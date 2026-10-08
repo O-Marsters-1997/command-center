@@ -126,9 +126,19 @@ func ShowFile(ctx context.Context, repoPath, ref, path string) (string, error) {
 	return string(out), nil
 }
 
+// HasFile reports whether path exists in ref's tree. A ref that does not resolve is an error, not
+// an absent file.
+func HasFile(ctx context.Context, repoPath, ref, path string) (bool, error) {
+	out, err := git(ctx, repoPath, "ls-tree", "--name-only", ref, "--", path)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
 // ChangedPaths lists the paths branch changed relative to its merge base with base.
 func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
-	out, err := git(ctx, repoPath, "diff", "--name-only", base+"..."+branch)
+	out, err := git(ctx, repoPath, "diff", "--name-only", "--no-renames", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}

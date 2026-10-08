@@ -60,7 +60,7 @@ type draftGateFixture struct {
 func newDraftGateFixture(t *testing.T) draftGateFixture {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "repo"), 0o700); err != nil {
+	if err := os.MkdirAll(config.CheckoutPath(root, "repo"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,9 +81,7 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 		t.Fatal(err)
 	}
 
-	cfg := config.Config{
-		Repos: []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
-	}
+	cfg := config.Config{DataDir: root}
 	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
 }
@@ -103,6 +101,7 @@ func draftConsumerPR(
 			plan.BranchKey("services", "pla-40"): {State: blockerState},
 		},
 		BranchTips: map[string]string{loop.MainTipKey("repo"): "main-tip"},
+		Settings:   map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{Success: "CI"}}},
 	}
 }
 
@@ -214,7 +213,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
-	server := web.NewServer(f.store, fixedClock(f.at), f.cfg.Repos, "")
+	server := web.NewServer(f.store, fixedClock(f.at), "")
 	page := renderPage(t, server)
 	state := rowState(t, page, "sandbox://CC-1")
 	if state == "base_gone" {
@@ -280,13 +279,13 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	obs := plan.Observation{
 		Worktrees: map[string]string{plan.BranchKey("repo", "parent"): "/repos/parent"},
 		PRs:       map[string]plan.PR{plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
+		Settings:  map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	server := web.NewServer(store, fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if stack := rowCellAt(t, page, "sandbox://CHILD", 4); stack != "L2 ← parent" {

@@ -5,12 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 func writeConfig(t *testing.T, body string) string {
@@ -49,8 +47,8 @@ path = "cc-sandbox"
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
 	}
-	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
-		t.Errorf("repos = %+v", got.Repos)
+	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
+		t.Errorf("legacy repos = %+v", got.LegacyRepos)
 	}
 }
 
@@ -79,22 +77,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
-	}
-	if got.Repos[0].Tracker != "github" {
-		t.Errorf("tracker = %q, want default github for a [[repo]] naming none", got.Repos[0].Tracker)
-	}
-}
-
-func TestLoadConfigKeepsAnExplicitTracker(t *testing.T) {
-	t.Parallel()
-
-	body := "[[repo]]\nname = \"r\"\npath = \"r\"\ntracker = \"linear\"\n"
-	got, err := config.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if got.Repos[0].Tracker != "linear" {
-		t.Errorf("tracker = %q, want the configured linear left untouched", got.Repos[0].Tracker)
 	}
 }
 
@@ -283,83 +265,6 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 	}
 }
 
-const oneRepoWithChecks = `
-[[repo]]
-name        = "r"
-path        = "r"
-mergify_sha = "sha256:deadbeef"
-
-  [repo.checks]
-  all_of = [
-    { success = "Lint" },
-    { any_of = [
-        { success = "verify / Linear issue is linked" },
-        { author = "dependabot[bot]" },
-    ] },
-  ]
-`
-
-// TestLoadConfigParsesChecks decodes [repo.checks] straight into verdict.Predicate — the same
-// struct internal/verdict.Evaluate takes, with no intermediate DTO.
-func TestLoadConfigParsesChecks(t *testing.T) {
-	t.Parallel()
-
-	got, err := config.LoadConfig(writeConfig(t, oneRepoWithChecks))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.Repos) != 1 {
-		t.Fatalf("repos = %+v", got.Repos)
-	}
-	repo := got.Repos[0]
-	if repo.MergifySHA != "sha256:deadbeef" {
-		t.Errorf("mergify_sha = %q", repo.MergifySHA)
-	}
-	if repo.Checks.IsZero() {
-		t.Fatal("checks decoded as zero-value")
-	}
-	if len(repo.Checks.AllOf) != 2 {
-		t.Fatalf("all_of = %+v, want 2 entries", repo.Checks.AllOf)
-	}
-	if repo.Checks.AllOf[0].Success != "Lint" {
-		t.Errorf("all_of[0] = %+v", repo.Checks.AllOf[0])
-	}
-	anyOf := repo.Checks.AllOf[1].AnyOf
-	if len(anyOf) != 2 || anyOf[1].Author != "dependabot[bot]" {
-		t.Errorf("all_of[1].any_of = %+v", anyOf)
-	}
-}
-
-// TestLoadConfigResolvesRepoPathsAgainstTheConfigFile covers phase 3: a relative path is
-// relative to the directory the config file is in, and an absolute one is taken as written.
-func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
-	t.Parallel()
-
-	elsewhere := t.TempDir()
-	path := writeConfig(t, "[[repo]]\nname = \"rel\"\npath = \"checkouts/rel\"\n\n"+
-		"[[repo]]\nname = \"abs\"\npath = "+strconv.Quote(elsewhere)+"\n")
-
-	got, err := config.LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if want := filepath.Join(filepath.Dir(path), "checkouts", "rel"); got.Repos[0].Checkout != want {
-		t.Errorf("relative checkout = %q, want %q", got.Repos[0].Checkout, want)
-	}
-	if got.Repos[1].Checkout != elsewhere {
-		t.Errorf("absolute checkout = %q, want %q", got.Repos[1].Checkout, elsewhere)
-	}
-}
-
-func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
-	t.Parallel()
-
-	_, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
-	if err == nil || !strings.Contains(err.Error(), "r") {
-		t.Errorf("error = %v, want one naming the repo with no path", err)
-	}
-}
-
 // TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
 // on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
@@ -426,37 +331,29 @@ func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 	}
 }
 
-func TestPlanRulesIndexesEachRepoByName(t *testing.T) {
+func TestLoadConfigRejectsAPerRepoKeyAndPointsToTheSettingsFile(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{
-		MaxAgents: 3, SpendLimit5h: 80,
-		Repos: []config.Repo{
-			{Name: "a", Stacking: true, Deny: []string{".github/**"}, CompatCheck: "compat", MergifySHA: "sha256:1",
-				Checks: verdict.Predicate{Success: "CI"}},
-			{Name: "b"},
-		},
-	}
+	for _, tt := range []struct{ key, line string }{
+		{"tracker", `tracker = "github"`},
+		{"stacking", "stacking = true"},
+		{"deny", `deny = ["go.mod"]`},
+		{"compat_check", `compat_check = "x"`},
+		{"mergify_sha", `mergify_sha = "sha256:1"`},
+		{"verify_command", `verify_command = ["true"]`},
+		{"checks", "[repo.checks]\nsuccess = \"CI\""},
+	} {
+		t.Run(tt.key, func(t *testing.T) {
+			t.Parallel()
 
-	rules := cfg.PlanRules()
-
-	if rules.MaxAgents != 3 || rules.SpendLimit5h != 80 {
-		t.Errorf("max_agents/spend_limit_5h = %d/%d, want 3/80", rules.MaxAgents, rules.SpendLimit5h)
-	}
-	if !rules.Stacking["a"] || rules.Stacking["b"] {
-		t.Errorf("stacking = %v, want a only", rules.Stacking)
-	}
-	if !slices.Equal(rules.Deny["a"], []string{".github/**"}) || len(rules.Deny["b"]) != 0 {
-		t.Errorf("deny = %v", rules.Deny)
-	}
-	if rules.Checks["a"].Success != "CI" || !rules.Checks["b"].IsZero() {
-		t.Errorf("checks = %v", rules.Checks)
-	}
-	if rules.MergifySHA["a"] != "sha256:1" || rules.CompatCheck["a"] != "compat" {
-		t.Errorf("mergify/compat = %v/%v", rules.MergifySHA, rules.CompatCheck)
-	}
-	if _, ok := rules.Stacking["b"]; !ok {
-		t.Error("a repo that never opted in must still be present, so scope checks see it")
+			_, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"+tt.line+"\n"))
+			if err == nil {
+				t.Fatalf("LoadConfig accepted %q in a [[repo]] block", tt.key)
+			}
+			if !strings.Contains(err.Error(), `"`+tt.key+`"`) || !strings.Contains(err.Error(), config.SettingsFile) {
+				t.Errorf("err = %v, want it to name %q and %s", err, tt.key, config.SettingsFile)
+			}
+		})
 	}
 }
 
@@ -474,8 +371,8 @@ build_command = ["just", "assets"]
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
-		t.Errorf("repos = %+v", got.Repos)
+	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
+		t.Errorf("legacy repos = %+v", got.LegacyRepos)
 	}
 }
 

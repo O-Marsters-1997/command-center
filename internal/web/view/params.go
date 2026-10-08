@@ -4,6 +4,9 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 var logFilters = []string{"all", "skills", "tools", "fails"}
@@ -47,11 +50,12 @@ func normalizePhase(phase string) string {
 	return phase
 }
 
-func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
-	if _, ok := configuredRepos[repo]; ok {
-		return repo
+func normalizeRepoScope(repo string, tracked []store.Repo) string {
+	i := slices.IndexFunc(tracked, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo) })
+	if i < 0 || repo == "" {
+		return ""
 	}
-	return ""
+	return tracked[i].Name
 }
 
 func normalizeFeatureScope(feature string, fleetFeatures []string) string {

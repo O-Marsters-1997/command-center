@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -38,7 +39,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	verifyScript := writeVerifyScript(t, "#!/bin/sh\necho 'undefined: dup' >&2\nexit 1\n")
-	cfg.Repos[0].VerifyCommand = []string{verifyScript}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{verifyScript}}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -68,7 +69,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 		t.Errorf("remote child tip = %s, want unchanged %s: a failed verification must not push", remoteChildTip, childTip0)
 	}
 
-	server := web.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
 		t.Fatalf("child's state = %q, want verification_failed", state)
@@ -127,7 +128,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 		"exit 1\n")
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	cfg.Repos[0].VerifyCommand = []string{script}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{script}}
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
@@ -158,7 +159,8 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	cfg.Repos[0].VerifyCommand = []string{writeVerifyScript(t, "#!/bin/sh\nexit 1\n")}
+	failing := writeVerifyScript(t, "#!/bin/sh\nexit 1\n")
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{failing}}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -231,7 +233,8 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	cfg.Repos[0].VerifyCommand = []string{mustLookPath(t, "go"), "vet", "./..."}
+	vet := []string{mustLookPath(t, "go"), "vet", "./..."}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: vet}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -262,7 +265,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 			remoteParentTip1, remoteParentTip0)
 	}
 
-	server := web.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, "")
 	if state := rowState(t, renderPage(t, server), f.parent.URL); state != "verification_failed" {
 		t.Fatalf("parent's state = %q, want verification_failed", state)
 	}

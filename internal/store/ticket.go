@@ -26,7 +26,7 @@ func (t Ticket) Plan() plan.Ticket {
 	return plan.Ticket{URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
 }
 
-// ImportedTicket is one tracker.Ticket with the configured repo it came from.
+// ImportedTicket is one tracker.Ticket with the tracked repo it came from.
 type ImportedTicket struct {
 	tracker.Ticket
 	Repo   string
@@ -45,6 +45,9 @@ const TickPeriod = 15 * time.Second
 
 // ImportVerb is the intent verb whose ticket id is a feature label.
 const ImportVerb = "import"
+
+// TrackVerb is the intent verb whose ticket id is a repo's owner/name.
+const TrackVerb = "track"
 
 // Event kinds both the loop writes and a Store read decodes.
 const (

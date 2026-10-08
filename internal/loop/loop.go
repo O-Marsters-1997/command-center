@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -40,35 +41,33 @@ type Loop struct {
 	clock      Clock
 	forge      gh.Forge
 	worktrees  git.Worktrees
+	validate   ValidateFunc
+	remoteOf   RemoteFunc
 	runner     runner.Runner
 	cfg        config.Config
 	ws         config.Workspace
 	trackerFor tracker.Resolver
-	repos      map[string]config.Repo
 	nudgeCh    chan struct{}
 	spawned    []string
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
-// and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
+// and spawn steps need (data_dir, agent_command, max_agents, the state dir's runs and settings
 // paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(
 	store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
 ) *Loop {
-	repos := make(map[string]config.Repo, len(cfg.Repos))
-	for _, r := range cfg.Repos {
-		repos[r.Name] = r
-	}
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
+		validate:   ValidateRepo,
+		remoteOf:   git.RepoRemote,
 		trackerFor: tracker.New,
-		repos:      repos,
 		nudgeCh:    make(chan struct{}, 1),
 	}
 }
 
-func (l *Loop) repo(name string) config.Repo { return l.repos[name] }
+func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
 
 func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error {
 	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
@@ -128,6 +127,14 @@ func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
 // without the tp binary.
 func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
 
+// SetValidator replaces the gh- and git-backed repo validation, so a test or the e2e build can
+// settle a cloning repo without GitHub.
+func (l *Loop) SetValidator(validate ValidateFunc) { l.validate = validate }
+
+// SetRemoteSource replaces the gh-backed remote lookup Track makes, so a test can track a repo
+// without GitHub.
+func (l *Loop) SetRemoteSource(remoteOf RemoteFunc) { l.remoteOf = remoteOf }
+
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
 func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resolve }
@@ -138,6 +145,12 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 func (l *Loop) RunOnce(ctx context.Context) error {
 	l.sweepExpiredSessions(ctx)
 
+	if err := l.applyTrackIntents(ctx); err != nil {
+		return err
+	}
+	if err := l.validateCloningRepos(ctx); err != nil {
+		return err
+	}
 	if err := l.applyImportIntents(ctx); err != nil {
 		return err
 	}
@@ -165,15 +178,23 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.absorb(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.recordRepoProblems(ctx, obs); err != nil {
+		return err
+	}
+	skipped, err := l.skippedRepos(ctx, obs)
+	if err != nil {
+		return err
+	}
 	snap, err := l.derive(ctx, obs)
 	if err != nil {
 		return err
 	}
-	return l.act(ctx, snap, obs)
+	return l.act(ctx, snap.Skipping(skipped), obs)
 }
 
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	return runSteps(
+		func() error { return l.recordRepoStates(ctx, obs) },
 		func() error { return l.tickCheckingWaits(ctx) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
@@ -219,7 +240,86 @@ func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot,
 	}
 	in.Now = l.clock.Now()
 	in.Obs = obs
-	return l.cfg.PlanRules().Derive(in), nil
+	return l.rules(obs).Derive(in), nil
+}
+
+func (l *Loop) rules(obs plan.Observation) plan.Rules {
+	return plan.RulesFor(plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h}, obs)
+}
+
+// recordRepoStates writes what this tick's settings read says about each repo onto its row: a
+// ready repo whose file would not parse is refused, and a clean read heals that refusal alone.
+func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {
+	repos, err := l.store.Repos(ctx)
+	if err != nil {
+		return err
+	}
+	for _, repo := range repos {
+		current := plan.RepoStatus{
+			Name: repo.Name, State: string(repo.State), RefusalKind: repo.RefusalKind, Refusal: repo.Refusal,
+		}
+		next := plan.NextRepoStatus(current, obs)
+		source, read := obs.SettingsSources[repo.Name]
+		if next == current && (!read || source == repo.SettingsSource) {
+			continue
+		}
+		repo.State, repo.RefusalKind, repo.Refusal = store.RepoState(next.State), next.RefusalKind, next.Refusal
+		if read {
+			repo.SettingsSource, repo.SettingsReadAt = source, l.clock.Now()
+		}
+		if err := l.store.SetRepoState(ctx, repo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recordRepoProblems puts every repo the loop cannot drive this tick on the masthead's last
+// error: unreadable settings, a failed observe, or a refusal that waits for Track.
+func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
+	repos, err := l.store.Repos(ctx)
+	if err != nil {
+		return err
+	}
+	var parts []string
+	for repo, reason := range obs.SettingsErrors {
+		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, reason))
+	}
+	for repo, reason := range obs.RepoErrors {
+		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
+	}
+	for _, repo := range repos {
+		if repo.State == store.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
+			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	slices.Sort(parts)
+	return l.recordTickError(ctx, strings.Join(parts, "; "))
+}
+
+// skippedRepos is every repo the act steps must leave alone this tick: those not ready, and those
+// whose observation failed or whose settings would not read.
+func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
+	repos, err := l.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	skipped := map[string]bool{}
+	for _, repo := range repos {
+		if repo.State != store.RepoReady {
+			skipped[repo.Name] = true
+		}
+	}
+	for repo := range obs.SettingsErrors {
+		skipped[repo] = true
+	}
+	for repo := range obs.RepoErrors {
+		skipped[repo] = true
+	}
+	return skipped, nil
 }
 
 // Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is
@@ -251,9 +351,21 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 }
 
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
+	lastObs, _, err := l.store.LastObservation(ctx)
+	if err != nil {
+		return err
+	}
+	repos, err := ReadyRepos(ctx, l.store)
+	if err != nil {
+		return err
+	}
 	var matched []store.ImportedTicket
-	for _, repo := range l.cfg.Repos {
-		src, ok, err := tracker.ForRemote(l.trackerFor, tracker.Kind(repo.Tracker), repo.Remote)
+	for _, repo := range repos {
+		trackerKind := config.DefaultRepoSettings().Tracker
+		if settings, ok := lastObs.Settings[repo.Name]; ok {
+			trackerKind = settings.Tracker
+		}
+		src, ok, err := tracker.ForRemote(l.trackerFor, tracker.Kind(trackerKind), repo.Remote)
 		if err != nil {
 			return fmt.Errorf("import %s: %w", feature, err)
 		}
@@ -266,11 +378,11 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			return fmt.Errorf("import %s from %s: %w", feature, repo.Name, err)
 		}
 		for _, t := range tickets {
-			matched = append(matched, store.ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
+			matched = append(matched, store.ImportedTicket{Ticket: t, Repo: repo.Name, Source: trackerKind})
 		}
 	}
 
-	err := l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
+	err = l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
 	var conflict *store.FeatureConflictError
 	if errors.As(err, &conflict) {
 		return l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
@@ -409,7 +521,7 @@ func (l *Loop) commitsSinceBaseline(
 	if !ok {
 		return 0, nil
 	}
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
@@ -456,7 +568,7 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 
 func (l *Loop) cutAndSpawn(ctx context.Context, ticket store.Ticket, baseBranch, promptHash string) error {
 	branch := ticket.Branch
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
 		_, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now())

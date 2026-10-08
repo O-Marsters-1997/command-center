@@ -1,0 +1,48 @@
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+{{template "topbar" .}}
+{{template "masthead" .}}
+<div class="shell">
+{{template "sidebar" .}}
+<main id="main" class="p-4">
+<input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
+  class="block border border-border rounded px-2 py-1 mb-1"
+  hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
+<div id="repo-results" class="mb-3"></div>
+<h1>{{.Title}}</h1>
+{{with .Remote}}<p class="text-muted mb-2">{{.}}</p>{{end}}
+{{template "repoBanner" .Banner}}
+{{if .Ready}}
+{{template "importRefusal" .LastImportError}}
+<table class="w-full max-w-3xl">
+  <tr><th>feature</th><th>imported</th><th></th></tr>
+  {{range .Features}}
+  <tr>
+    <td>
+      <a href="/features/{{.Feature | pathEscape}}">{{.Feature}}</a>
+      {{if .OtherRepos}}<span class="text-muted">also in {{range $i, $r := .OtherRepos}}{{if $i}}, {{end}}{{$r}}{{end}}</span>{{end}}
+    </td>
+    <td>{{if .Imported}}yes{{else}}no{{end}}</td>
+    <td>
+      <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+        <input type="hidden" name="feature" value="{{.Feature}}">
+        <button type="submit">[ launch ]</button>
+      </form>
+      {{if .Imported}}
+      <form method="post" action="/features/{{.Feature | pathEscape}}/import">
+        <button type="submit">[ reimport ]</button>
+      </form>
+      {{end}}
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="3" class="text-muted">no project: labels found in this repo's tracker.</td></tr>
+  {{end}}
+</table>
+{{end}}
+<div id="launch-modal"></div>
+</main>
+</div>
+</body>
+</html>

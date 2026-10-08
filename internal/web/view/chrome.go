@@ -17,20 +17,15 @@ type Chrome struct {
 	LastError         *TickError
 	Gauges            []Gauge
 	SpendPaused       *SpendPaused
+	RefusedRepos      []RefusedRepo
 	View              string
 	Section           string
 	RepoScope         string
-	RepoLinks         []ScopeLink
+	RepoCrumb         string
+	RepoCrumbPath     string
 	FeatureScope      string
 	FeatureImportPath string
 	FeatureQuery      string
-}
-
-// ScopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
-type ScopeLink struct {
-	Name    string
-	Path    string
-	Current bool
 }
 
 // Age is a relative time the server renders and the page's clock keeps current. Stamp is the
@@ -38,6 +33,13 @@ type ScopeLink struct {
 type Age struct {
 	Age   string
 	Stamp string
+}
+
+// RefusedRepo is a tracked repo the loop refused to work, linked to its own page.
+type RefusedRepo struct {
+	Name   string
+	Reason string
+	Path   string
 }
 
 type TickError struct {

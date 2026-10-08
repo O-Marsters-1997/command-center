@@ -56,8 +56,6 @@ func IsInvalid(err error) bool {
 // intent.
 type Reader struct {
 	store            *store.Store
-	rules            plan.Rules
-	repos            []config.Repo
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -65,10 +63,9 @@ type Reader struct {
 	renderLine       LineRenderer
 }
 
-func NewReader(st *store.Store, repos []config.Repo, dataDir string, renderLine LineRenderer) *Reader {
+func NewReader(st *store.Store, dataDir string, renderLine LineRenderer) *Reader {
 	return &Reader{
-		store: st, repos: repos, dataDir: dataDir, renderLine: renderLine,
-		rules:            config.Config{Repos: repos}.PlanRules(),
+		store: st, dataDir: dataDir, renderLine: renderLine,
 		boardPollSeconds: config.DefaultBoardPollSeconds,
 		spend:            NewSpendCache(),
 	}
@@ -84,16 +81,17 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 		return plan.Snapshot{}, err
 	}
 	in.Now = now
-	return r.rules.Derive(in), nil
+	return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil
 }
 
 // Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
 // a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
-	params.Repo = normalizeRepoScope(params.Repo, r.rules.Stacking)
-
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
+		return Board{}, err
+	}
+	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
 		return Board{}, err
 	}
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
@@ -120,7 +118,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, err
 	}
 
-	rows := deriveRows(tickets, in, r.rules.Derive(in))
+	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in))
 	applySpend(rows, r.spend)
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	applyViewState(rows, params, r.renderLine)
@@ -128,8 +126,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, err
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
+	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+		return Board{}, err
+	}
 	return Board{
-		Chrome:           r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params),
+		Chrome:           chrome,
 		Groups:           groups,
 		Band:             deriveBand(rowsIn(groups)),
 		BoardPath:        params.boardPath(),
@@ -159,7 +161,9 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, err
 	}
-	params.Repo = normalizeRepoScope(params.Repo, r.rules.Stacking)
+	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
+		return Chrome{}, err
+	}
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 
 	obs, observed, err := r.store.LastObservation(ctx)
@@ -178,7 +182,25 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, err
 	}
-	return r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params), nil
+	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
+	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+		return Chrome{}, err
+	}
+	return chrome, nil
+}
+
+func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var refused []RefusedRepo
+	for _, repo := range repos {
+		if repo.State == store.RepoRefused {
+			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: RepoPath(repo.Name)})
+		}
+	}
+	return refused, nil
 }
 
 func (r *Reader) buildChrome(
@@ -194,7 +216,7 @@ func (r *Reader) buildChrome(
 		View:         params.View,
 		Section:      params.View,
 		RepoScope:    params.Repo,
-		RepoLinks:    repoLinksFor(r.repos, params),
+		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
 	}
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
@@ -206,6 +228,9 @@ func (r *Reader) buildChrome(
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
 		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
+	}
+	if params.Repo != "" {
+		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	if params.Feature != "" {
 		c.FeatureImportPath = params.featureImportPath()

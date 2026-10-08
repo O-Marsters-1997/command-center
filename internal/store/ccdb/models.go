@@ -53,6 +53,17 @@ type Push struct {
 	PushedAt      time.Time
 }
 
+type Repo struct {
+	Name           string
+	Remote         string
+	State          string
+	RefusalKind    sql.NullString
+	Refusal        sql.NullString
+	SettingsSource sql.NullString
+	SettingsReadAt sql.NullTime
+	TrackedAt      time.Time
+}
+
 type Run struct {
 	ID             int64
 	TicketID       string

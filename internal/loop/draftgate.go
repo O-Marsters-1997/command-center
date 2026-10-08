@@ -24,7 +24,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
 }
 
 func (l *Loop) readyOne(ctx context.Context, t plan.Ticket) error {
-	if err := l.forge.Ready(ctx, l.repo(t.Repo).Checkout, t.Branch); err != nil {
+	if err := l.forge.Ready(ctx, l.checkout(t.Repo), t.Branch); err != nil {
 		return l.event(ctx, t.URL, eventDraftReadyFailed, err.Error())
 	}
 	return l.event(ctx, t.URL, eventDraftReady, "")

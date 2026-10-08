@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -73,9 +73,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	pathWithGitAndTpOnly(t)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	cfg.Repos[0].Remote = "git@github.com:acme/repo.git"
-	cfg.Repos[0].Tracker = string(tracker.GitHub)
-	cfg.Repos[0].Checks = verdict.Predicate{Success: "CI"}
+	pushSettingsFile(t, config.CheckoutPath(root, "repo"), "[checks]\nsuccess = \"CI\"\n")
 
 	issue := tracker.Ticket{URL: "https://github.com/acme/repo/issues/1", Number: 1, Title: "Add x"}
 	source := fakeTrackerSource{
@@ -85,6 +83,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	resolve := func(tracker.Kind, string) (tracker.Source, error) { return source, nil }
 
 	store := openStore(t)
+	trackRepo(t, store, "repo", "git@github.com:acme/repo.git")
 	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	forge := &fakeForge{t: t, remote: filepath.Join(root, "remote.git")}
 	runner := runner.NewFake()
@@ -105,7 +104,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	}
 	state := func() string {
 		t.Helper()
-		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), cfg.Repos, "")), issue.URL)
+		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), "")), issue.URL)
 	}
 
 	tick()

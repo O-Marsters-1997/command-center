@@ -44,4 +44,13 @@ type Observation struct {
 	MidMerge          map[string]bool            `json:"mid_merge"`
 	ConflictsWithBase map[string]bool            `json:"conflicts_with_base"`
 	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
+	// Settings is each repo's .command-centre.toml as origin/main held it this tick, keyed by repo
+	// name. A repo whose file would not read is in SettingsErrors instead.
+	Settings       map[string]RepoSettings `json:"settings"`
+	SettingsErrors map[string]string       `json:"settings_errors"`
+	// SettingsSources says where each Settings entry came from: "defaults" or "origin/main".
+	SettingsSources map[string]string `json:"settings_sources"`
+	// RepoErrors is each repo this tick could not observe, keyed by repo name. Its other entries
+	// carry the last tick's values.
+	RepoErrors map[string]string `json:"repo_errors"`
 }

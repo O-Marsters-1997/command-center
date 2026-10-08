@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +15,7 @@ import (
 )
 
 func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
@@ -39,7 +38,7 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -76,7 +75,7 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 }
 
 func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
@@ -97,7 +96,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
@@ -124,7 +123,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 		t.Fatalf("summary = %+v, want failed (zero commits after baseline)", summary)
 	}
 
-	server := web.NewServer(store, fixedClock(at), cfg.Repos, "")
+	server := web.NewServer(store, fixedClock(at), "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state != "conflict_resolved" {
 		t.Fatalf("child's state = %q, want conflict_resolved", state)
@@ -148,7 +147,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 }
 
 func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
@@ -168,7 +167,7 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce (resolve): %v", err)
@@ -261,7 +260,7 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 		t.Fatalf("second RunOnce: %v", err)
 	}
 
-	server := web.NewServer(store, fixedClock(at.Add(time.Second)), cfg.Repos, "")
+	server := web.NewServer(store, fixedClock(at.Add(time.Second)), "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state == "conflict_resolved" {
 		t.Fatalf("state = %q, want the row to have left conflict_resolved once the fresh run disposed", state)
