@@ -51,11 +51,11 @@ func (b Banner) TrackLabel() string {
 // Banner shapes the tracking banner for scope. A pending Track reads as cloning before the loop
 // has written the row.
 func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
-	repo, known, err := r.KnownRepo(ctx, scope)
+	pending, err := r.store.TrackPending(ctx, scope)
 	if err != nil {
 		return Banner{}, err
 	}
-	pending, err := r.store.TrackPending(ctx, scope)
+	repo, known, err := r.KnownRepo(ctx, scope)
 	if err != nil {
 		return Banner{}, err
 	}

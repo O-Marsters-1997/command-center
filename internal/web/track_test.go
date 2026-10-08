@@ -78,7 +78,7 @@ func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
 func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	server := web.NewServer(openStore(t), fixedClock(testNow), "")
 
-	for _, repo := range []string{"", "acme", "acme/a/b", "acme/ x"} {
+	for _, repo := range []string{"", "acme", "acme/a/b", "acme/ x", "../..", "./."} {
 		if rec := postTrack(t, server, repo, true); rec.Code != http.StatusBadRequest {
 			t.Errorf("Track %q = %d, want 400", repo, rec.Code)
 		}

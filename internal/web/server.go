@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -503,9 +504,13 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 
 var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
+func hasDotSegment(repo string) bool {
+	return slices.ContainsFunc(strings.Split(repo, "/"), func(seg string) bool { return seg == "." || seg == ".." })
+}
+
 func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	repo := strings.TrimSpace(r.FormValue("repo"))
-	if !repoName.MatchString(repo) {
+	if !repoName.MatchString(repo) || hasDotSegment(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
 	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
