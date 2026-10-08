@@ -38,7 +38,8 @@ func (l *Loop) retargetOne(
 		return l.event(ctx, t.URL, eventRetargetFailed, err.Error())
 	}
 
-	if err := l.store.RecordPush(ctx, t.URL, row.PushedTip, plan.DefaultBaseBranch, row.BaseSHAAtPush, l.clock.Now()); err != nil {
+	err := l.store.RecordPush(ctx, t.URL, row.PushedTip, plan.DefaultBaseBranch, row.BaseSHAAtPush, l.clock.Now())
+	if err != nil {
 		return err
 	}
 	detail := fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, plan.DefaultBaseBranch)

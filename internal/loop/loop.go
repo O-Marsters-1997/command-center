@@ -191,12 +191,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		func() error { return l.applyFollowUpIntents(ctx, obs) },
 		func() error { return l.applyAbortIntents(ctx, snap, obs) },
 		func() error { return l.applyResolveIntents(ctx, obs) },
-		func() error {
-			for _, url := range l.spawned {
-				obs.Runs[url] = plan.RunObservation{Alive: true}
-			}
-			return nil
-		},
+		func() error { l.markSpawnedAlive(obs); return nil },
 		func() error { return l.retargetMerged(ctx, snap, obs) },
 		func() error { return l.applyRefreshIntents(ctx, snap, obs) },
 		func() error { l.rereadLocalTips(ctx, obs); return nil },
@@ -207,6 +202,12 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		func() error { return l.applyDraftGate(ctx, snap) },
 		func() error { return l.launchEligible(ctx, snap) },
 	)
+}
+
+func (l *Loop) markSpawnedAlive(obs plan.Observation) {
+	for _, url := range l.spawned {
+		obs.Runs[url] = plan.RunObservation{Alive: true}
+	}
 }
 
 func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {

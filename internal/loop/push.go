@@ -169,7 +169,8 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs p
 
 	if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
 		body := plan.PRBody(base, obs.PRs[plan.BranchKey(t.Repo, base)].Number)
-		if err := l.forge.Create(ctx, obs.Worktrees[plan.BranchKey(t.Repo, t.Branch)], base, body, e.OpensAsDraft); err != nil {
+		worktree := obs.Worktrees[plan.BranchKey(t.Repo, t.Branch)]
+		if err := l.forge.Create(ctx, worktree, base, body, e.OpensAsDraft); err != nil {
 			return l.event(ctx, t.URL, store.EventPushFailed, err.Error())
 		}
 	}
