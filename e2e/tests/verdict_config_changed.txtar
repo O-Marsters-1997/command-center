@@ -37,6 +37,8 @@ stdout '>review_me</span>'
 # to checking, not shown as review_me from a stale predicate.
 cc-config verdict-single-task-stale-sha
 exec cc tick --count 1
+cc-fake-gh-head verdict-review-me cc-1-x
+exec cc tick --count 1
 exec cc request GET /
 ! stdout '>review_me</span>'
 stdout '>checking</span>'
@@ -44,6 +46,8 @@ stdout 'check config changed'
 
 # Recording the hash of the file the ref actually holds brings review_me back.
 cc-config verdict-single-task
+exec cc tick --count 1
+cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'
