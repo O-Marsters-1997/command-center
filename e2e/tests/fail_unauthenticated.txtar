@@ -1,0 +1,15 @@
+# A request with no session cookie is refused by the mux-wide requireSession gate, so deleting
+# that wrapper from NewServer makes the first request below succeed and this script fail.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+! exec cc request -session=false GET /events
+stderr '401'
+! exec cc request -session=false POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1'
+stderr '401'
+exec cc request GET /
+stdout '>ready</span>'

@@ -19,7 +19,7 @@ const goldenVerbsBoard = "testdata/board_verbs.golden.html"
 func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
+	server := openServer(seededStore(t, time.Now()), realClock{}, "")
 	rec := get(t, server, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
@@ -59,7 +59,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := web.NewServer(track(t, store, named("repo")...), fixedClock(now), "")
+	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 
 	target := "/?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
 	rec := get(t, server, target)
@@ -97,7 +97,7 @@ func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 	t.Parallel()
 
 	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
+	srv := httptest.NewServer(openServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()

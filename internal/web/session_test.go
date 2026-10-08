@@ -131,3 +131,75 @@ func TestWrongPasswordAndUnknownEmailAreIdenticalAndBothRunTheKDF(t *testing.T) 
 		t.Error("a failed login set a cookie")
 	}
 }
+
+func gatedGet(
+	t *testing.T, server *web.Server, path string, cookie *http.Cookie, headers map[string]string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestSessionGate(t *testing.T) {
+	t.Parallel()
+
+	st := seededStore(t, testNow)
+	server := web.NewServer(st, fixedClock(testNow), "")
+	live, err := st.SeedSession(t.Context(), "live@example.com", testNow, testNow.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, err := st.SeedSession(t.Context(), "stale@example.com", testNow.Add(-2*time.Hour), testNow.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := map[string]string{"Accept": "text/html"}
+	htmx := map[string]string{"HX-Request": "true"}
+	sse := map[string]string{"Accept": "text/event-stream"}
+	session := func(value string) *http.Cookie { return &http.Cookie{Name: "cc_session", Value: value} }
+
+	tests := []struct {
+		name     string
+		path     string
+		cookie   *http.Cookie
+		headers  map[string]string
+		status   int
+		location string
+		hxRedir  string
+	}{
+		{"no cookie redirects a page", "/", nil, html, http.StatusSeeOther, "/login", ""},
+		{"valid cookie renders the board", "/", session(live), html, http.StatusOK, "", ""},
+		{"htmx poll gets an HX-Redirect", "/board", nil, htmx, http.StatusOK, "", "/login"},
+		{"event stream gets 401", "/events", nil, sse, http.StatusUnauthorized, "", ""},
+		{"unknown cookie is refused", "/", session("nope"), html, http.StatusSeeOther, "/login", ""},
+		{"expired session is refused", "/", session(stale), html, http.StatusSeeOther, "/login", ""},
+		{"login page is public", "/login", nil, html, http.StatusOK, "", ""},
+		{"stylesheet is public", "/assets/app.css", nil, nil, http.StatusOK, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rec := gatedGet(t, server, tt.path, tt.cookie, tt.headers)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.status, rec.Body)
+			}
+			if got := rec.Header().Get("Location"); got != tt.location {
+				t.Errorf("Location = %q, want %q", got, tt.location)
+			}
+			if got := rec.Header().Get("HX-Redirect"); got != tt.hxRedir {
+				t.Errorf("HX-Redirect = %q, want %q", got, tt.hxRedir)
+			}
+			if tt.hxRedir != "" && rec.Body.Len() != 0 {
+				t.Errorf("HX-Redirect response has a body: %q", rec.Body)
+			}
+		})
+	}
+}

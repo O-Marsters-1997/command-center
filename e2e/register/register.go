@@ -87,6 +87,7 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 func request(ctx context.Context, configPath string, args []string) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
+	session := flags.Bool("session", true, "seed a user and send its session cookie (false sends none)")
 	// -form is how a script drives a route the way the page's own forms do, with the fields in
 	// the body: a path-only `cc request POST /verb` cannot express that.
 	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
@@ -95,7 +96,7 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: cc request [-origin url] <method> <path>")
+		return fmt.Errorf("usage: cc request [-origin url] [-session=false] <method> <path>")
 	}
 	method, path := rest[0], rest[1]
 
@@ -132,6 +133,15 @@ func request(ctx context.Context, configPath string, args []string) (err error) 
 	// Sec-Fetch-Site, which is what a real non-browser client sends.
 	if *origin != "" {
 		req.Header.Set("Origin", *origin)
+	}
+
+	if *session {
+		now := time.Now()
+		token, err := store.SeedSession(ctx, fmt.Sprintf("e2e-%d@example.com", now.UnixNano()), now, now.Add(time.Hour))
+		if err != nil {
+			return err
+		}
+		req.AddCookie(&http.Cookie{Name: "cc_session", Value: token})
 	}
 
 	// http.Client follows a 303 by default.

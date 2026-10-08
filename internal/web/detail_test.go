@@ -193,7 +193,7 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(track(t, store, named("repo")...), fixedClock(at), "")
+	server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state != "failed" {
 		t.Fatalf("state = %q, want failed", state)
@@ -220,7 +220,7 @@ func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 
 	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
-	server := web.NewServer(
+	server := openServer(
 		detailStore(t, "testdata/fixtures/run.jsonl", startedAt, now), fixedClock(now), "")
 
 	target := "/board?" + url.Values{"sel": {"https://github.com/o/r/issues/76"}}.Encode()
@@ -232,7 +232,7 @@ func TestBoardGoldensARunLogAsASession(t *testing.T) {
 
 	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
-	server := web.NewServer(
+	server := openServer(
 		detailStore(t, "testdata/fixtures/session.jsonl", startedAt, now), fixedClock(now), "")
 
 	for _, tc := range []struct {
@@ -387,7 +387,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := web.NewServer(track(t, store, named("repo")...), fixedClock(now), "")
+	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 	all := []string{"sandbox://A", "sandbox://B", "sandbox://C"}
 
 	for _, tc := range []struct{ from, to string }{
@@ -509,7 +509,7 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	server := web.NewServer(track(t, store, named("repo")...), fixedClock(now), "")
+	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 
 	first := get(t, server, selPagePath("sandbox://A"))
 	firstID := detailRowID(t, first.Body.String())

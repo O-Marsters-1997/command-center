@@ -8,7 +8,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.Store {
@@ -54,7 +53,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
+	server := openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
 	body := renderPage(t, server)
 
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {
