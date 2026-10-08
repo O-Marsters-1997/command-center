@@ -281,7 +281,7 @@ restack that itself verifies clean, clears it.
 ## Testing
 
 `go test ./...` is the unit suite. Determinism comes from four seams injected on
-`app.New`: `WithClock`, `WithObserver`, `WithRepoCheck` and `WithRunner`. No unit
+`app.New`: `WithClock`, `WithObserver`, `WithValidator` and `WithRunner`. No unit
 test sleeps.
 
 Every test that touches the store gets a database of its own from

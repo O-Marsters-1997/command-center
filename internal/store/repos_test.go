@@ -61,10 +61,13 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.SetRepoState(ctx, repo.Name, storepkg.RepoRefused, "", ""); err == nil {
+	refused := repo
+	refused.State = storepkg.RepoRefused
+	if err := store.SetRepoState(ctx, refused); err == nil {
 		t.Error("SetRepoState(refused, no refusal) = nil, want the check constraint to refuse it")
 	}
-	if err := store.SetRepoState(ctx, repo.Name, storepkg.RepoRefused, "merge", "merge commits allowed"); err != nil {
+	refused.RefusalKind, refused.Refusal = "merge", "merge commits allowed"
+	if err := store.SetRepoState(ctx, refused); err != nil {
 		t.Fatalf("SetRepoState: %v", err)
 	}
 
@@ -74,6 +77,32 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 	}
 	repo.State, repo.RefusalKind, repo.Refusal = storepkg.RepoRefused, "merge", "merge commits allowed"
 	assertRepos(t, repos, repo)
+}
+
+func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	repo := storepkg.Repo{
+		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", State: storepkg.RepoCloning, TrackedAt: trackedAt,
+	}
+	if err := store.UpsertRepo(ctx, repo); err != nil {
+		t.Fatal(err)
+	}
+
+	repo.State, repo.SettingsSource, repo.SettingsReadAt = storepkg.RepoReady, "origin/main", trackedAt.Add(time.Hour)
+	if err := store.SetRepoState(ctx, repo); err != nil {
+		t.Fatalf("SetRepoState: %v", err)
+	}
+
+	repos, err := store.Repos(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 1 || repos[0].State != storepkg.RepoReady || repos[0].SettingsSource != "origin/main" ||
+		!repos[0].SettingsReadAt.Equal(repo.SettingsReadAt) {
+		t.Errorf("Repos() = %+v, want one ready repo read from origin/main at %v", repos, repo.SettingsReadAt)
+	}
 }
 
 func assertRepos(t *testing.T, got []storepkg.Repo, want ...storepkg.Repo) {

@@ -224,7 +224,7 @@ func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
 			ts.Check(os.Symlink(filepath.Join(ts.Getenv("WORK"), name), checkout))
 		}
 		ts.Check(st.UpsertRepo(context.Background(), store.Repo{
-			Name: fullName, Remote: remote, State: store.RepoReady, TrackedAt: time.Now(),
+			Name: fullName, Remote: remote, State: store.RepoCloning, TrackedAt: time.Now(),
 		}))
 	}
 }

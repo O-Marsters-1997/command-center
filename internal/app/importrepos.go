@@ -56,7 +56,7 @@ func legacyImports(legacy []config.LegacyRepo, now time.Time) ([]store.RepoImpor
 		owners[owner] = fullName
 		imports = append(imports, store.RepoImport{
 			ShortName: block.Name,
-			Repo:      store.Repo{Name: fullName, Remote: block.Remote, State: store.RepoReady, TrackedAt: now},
+			Repo:      store.Repo{Name: fullName, Remote: block.Remote, State: store.RepoCloning, TrackedAt: now},
 		})
 	}
 	for _, imp := range imports {
