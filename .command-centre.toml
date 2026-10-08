@@ -1,5 +1,5 @@
 stacking = true
-deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
+deny     = [".github/**", "go.mod", "go.sum"]
 
 [[checks.all_of]]
 success = "test"

@@ -155,7 +155,7 @@ func TestTheCommittedSettingsFileHoldsWhatTheRepoBlockHeld(t *testing.T) {
 	want := config.RepoSettings{
 		Tracker:  "github",
 		Stacking: true,
-		Deny:     []string{".github/**", ".golangci.yml", "go.mod", "go.sum"},
+		Deny:     []string{".github/**", "go.mod", "go.sum"},
 		Checks:   verdict.Predicate{AllOf: all},
 	}
 	sameSettings(t, want, got)

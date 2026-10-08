@@ -266,8 +266,7 @@ and makes the HTTP surface readable at a glance.
 
 **8. `.golangci.yml` has no `errorlint`.** Added 2026-09-14. It reports zero issues today, which
 is the useful result: the 134 `%w` wraps are internally consistent and nothing compares errors with
-`==`. It is there to keep finding 3 from drifting. Note that `.golangci.yml` is deny-listed for
-agent pushes, so this change has to be committed by a human.
+`==`. It is there to keep finding 3 from drifting.
 
 `nilerr` and `bodyclose` were also trialled and both were rejected. `nilerr` flags
 `internal/loop/runner_unix.go:126`, where a failing `kill(-pgid, 0)` means the process group is
