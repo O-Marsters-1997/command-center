@@ -422,7 +422,11 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	all, err := importFeatures(ctx, s.repos, s.trackerFor)
+	obs, _, err := s.store.LastObservation(ctx)
+	if err != nil {
+		return err
+	}
+	all, err := importFeatures(ctx, s.repos, obs.Settings, s.trackerFor)
 	if err != nil {
 		return err
 	}

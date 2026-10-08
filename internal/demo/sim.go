@@ -23,7 +23,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -158,11 +157,10 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	agent := NewAgent(clock, issues, sc.Seed)
 	resolve := trackerSource(issues)
 
-	template := config.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}}
 	cfg := config.Config{
 		MaxAgents:    maxAgents,
 		AgentCommand: []string{"demo-agent"},
-		Repos:        sb.Repos(template),
+		Repos:        sb.Repos(),
 	}
 	for _, repo := range cfg.Repos {
 		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {

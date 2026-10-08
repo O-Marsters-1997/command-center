@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -165,11 +167,14 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.absorb(ctx, obs); err != nil {
 		return err
 	}
+	if err := l.recordSettingsErrors(ctx, obs); err != nil {
+		return err
+	}
 	snap, err := l.derive(ctx, obs)
 	if err != nil {
 		return err
 	}
-	return l.act(ctx, snap, obs)
+	return l.act(ctx, snap.Skipping(skippedRepos(obs)), obs)
 }
 
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
@@ -219,7 +224,39 @@ func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot,
 	}
 	in.Now = l.clock.Now()
 	in.Obs = obs
-	return l.cfg.PlanRules().Derive(in), nil
+	return l.rules(obs).Derive(in), nil
+}
+
+func (l *Loop) rules(obs plan.Observation) plan.Rules {
+	return plan.RulesFor(plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h}, obs)
+}
+
+func (l *Loop) recordSettingsErrors(ctx context.Context, obs plan.Observation) error {
+	if len(obs.SettingsErrors) == 0 {
+		return nil
+	}
+	repos := slices.Sorted(maps.Keys(obs.SettingsErrors))
+	parts := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, obs.SettingsErrors[repo]))
+	}
+	message := strings.Join(parts, "; ")
+	last, found, err := l.store.LastError(ctx)
+	if err != nil {
+		return err
+	}
+	if found && last.Message == message {
+		return nil
+	}
+	return l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message})
+}
+
+func skippedRepos(obs plan.Observation) map[string]bool {
+	skipped := make(map[string]bool, len(obs.SettingsErrors))
+	for repo := range obs.SettingsErrors {
+		skipped[repo] = true
+	}
+	return skipped
 }
 
 // Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is
@@ -251,9 +288,17 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 }
 
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
+	lastObs, _, err := l.store.LastObservation(ctx)
+	if err != nil {
+		return err
+	}
 	var matched []store.ImportedTicket
 	for _, repo := range l.cfg.Repos {
-		src, ok, err := tracker.ForRemote(l.trackerFor, tracker.Kind(repo.Tracker), repo.Remote)
+		trackerKind := config.DefaultRepoSettings().Tracker
+		if settings, ok := lastObs.Settings[repo.Name]; ok {
+			trackerKind = settings.Tracker
+		}
+		src, ok, err := tracker.ForRemote(l.trackerFor, tracker.Kind(trackerKind), repo.Remote)
 		if err != nil {
 			return fmt.Errorf("import %s: %w", feature, err)
 		}
@@ -266,11 +311,11 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 			return fmt.Errorf("import %s from %s: %w", feature, repo.Name, err)
 		}
 		for _, t := range tickets {
-			matched = append(matched, store.ImportedTicket{Ticket: t, Repo: repo.Name, Source: repo.Tracker})
+			matched = append(matched, store.ImportedTicket{Ticket: t, Repo: repo.Name, Source: trackerKind})
 		}
 	}
 
-	err := l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
+	err = l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
 	var conflict *store.FeatureConflictError
 	if errors.As(err, &conflict) {
 		return l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())

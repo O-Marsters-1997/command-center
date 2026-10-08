@@ -143,12 +143,13 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []config.Repo{{Name: "repo"}}
 	srv := httptest.NewServer(web.NewServer(store, fixedClock(at), repos, ""))
 	t.Cleanup(srv.Close)
 

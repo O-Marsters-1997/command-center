@@ -143,7 +143,7 @@ func testConfigAndWorkspace(
 	cfg := config.Config{
 		MaxAgents:    maxAgents,
 		AgentCommand: agentCommand,
-		Repos:        []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: false}},
+		Repos:        []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
 	}
 	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
@@ -171,4 +171,14 @@ func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
 		t.Fatalf("read run metrics for run %d: %v", runID, err)
 	}
 	return row
+}
+
+func pushSettingsFile(t *testing.T, repoPath, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(repoPath, config.SettingsFile), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, "-C", repoPath, "add", config.SettingsFile)
+	runGit(t, "-C", repoPath, "commit", "-q", "-m", "settings")
+	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
 }

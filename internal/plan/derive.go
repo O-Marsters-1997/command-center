@@ -122,6 +122,31 @@ func (s Snapshot) LaunchAfter(spawned int) []string {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
+// Skipping is the snapshot without the tickets of the named repos: nothing is acted on for a repo
+// whose settings could not be read this tick.
+func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
+	if len(repos) == 0 {
+		return s
+	}
+	out := Snapshot{
+		byURL: make(map[string]int, len(s.Entries)), running: s.running,
+		maxAgents: s.maxAgents, spendPaused: s.spendPaused,
+	}
+	for _, e := range s.Entries {
+		if repos[e.Ticket.Repo] {
+			continue
+		}
+		out.byURL[e.Ticket.URL] = len(out.Entries)
+		out.Entries = append(out.Entries, e)
+	}
+	for _, c := range s.launch {
+		if _, ok := out.byURL[c.URL]; ok {
+			out.launch = append(out.launch, c)
+		}
+	}
+	return out
+}
+
 func (s Snapshot) Entry(url string) (Entry, bool) {
 	i, ok := s.byURL[url]
 	if !ok {

@@ -38,7 +38,7 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 		return src, nil
 	}
 
-	got, err := importFeatures(t.Context(), repos, resolve)
+	got, err := importFeatures(t.Context(), repos, nil, resolve)
 	if err != nil {
 		t.Fatalf("importFeatures: %v", err)
 	}
@@ -51,16 +51,17 @@ func TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind(t *testing.T) 
 	t.Parallel()
 
 	repos := []config.Repo{
-		{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "github"},
-		{Name: "beta", Remote: "git@github.com:acme/beta.git", Tracker: "linear"},
+		{Name: "alpha", Remote: "git@github.com:acme/alpha.git"},
+		{Name: "beta", Remote: "git@github.com:acme/beta.git"},
 	}
+	settings := map[string]config.RepoSettings{"alpha": {Tracker: "github"}, "beta": {Tracker: "linear"}}
 	var gotKinds []tracker.Kind
 	resolve := func(kind tracker.Kind, _ string) (tracker.Source, error) {
 		gotKinds = append(gotKinds, kind)
 		return featureSource{}, nil
 	}
 
-	if _, err := importFeatures(t.Context(), repos, resolve); err != nil {
+	if _, err := importFeatures(t.Context(), repos, settings, resolve); err != nil {
 		t.Fatalf("importFeatures: %v", err)
 	}
 	if want := []tracker.Kind{"github", "linear"}; !slices.Equal(gotKinds, want) {

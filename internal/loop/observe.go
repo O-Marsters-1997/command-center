@@ -37,11 +37,19 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			BranchTips: map[string]string{}, LocalTips: map[string]string{}, MidMerge: map[string]bool{},
 			Titles: map[string]string{}, ConflictsWithBase: map[string]bool{},
 			ConflictsWithPeer: map[string]map[string]bool{},
+			Settings:          map[string]config.RepoSettings{}, SettingsErrors: map[string]string{},
 		}
 		for _, repo := range cfg.Repos {
 			path := repo.Checkout
 			if err := git.Fetch(ctx, path); err != nil {
 				return plan.Observation{}, err
+			}
+
+			settings, _, settingsErr := config.ReadRepoSettings(ctx, path)
+			if settingsErr != nil {
+				obs.SettingsErrors[repo.Name] = settingsErr.Error()
+			} else {
+				obs.Settings[repo.Name] = settings
 			}
 
 			branches := branchesFor(tickets, repo.Name)
@@ -103,7 +111,7 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 				obs.MidMerge[plan.BranchKey(repo.Name, branch)] = mid
 			}
 
-			if repo.MergifySHA == "" {
+			if settings.MergifySHA == "" {
 				continue
 			}
 			hash, err := mergifyHash(ctx, path)

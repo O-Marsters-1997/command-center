@@ -50,11 +50,12 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{
 		BranchTips: map[string]string{plan.BranchKey("repo", "root"): "root-tip"},
 		PRs:        prs,
+		Settings:   map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -102,12 +103,13 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 				Number: 2, State: plan.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 

@@ -82,7 +82,7 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	}
 
 	cfg := config.Config{
-		Repos: []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Checks: verdict.Predicate{Success: "CI"}}},
+		Repos: []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
 	}
 	ws := config.Workspace{RunsDir: t.TempDir(), SettingsPath: filepath.Join(t.TempDir(), "agent.json")}
 	return draftGateFixture{store: store, cfg: cfg, ws: ws, at: at, tip: tip}
@@ -103,6 +103,7 @@ func draftConsumerPR(
 			plan.BranchKey("services", "pla-40"): {State: blockerState},
 		},
 		BranchTips: map[string]string{loop.MainTipKey("repo"): "main-tip"},
+		Settings:   map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{Success: "CI"}}},
 	}
 }
 
@@ -280,12 +281,13 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	obs := plan.Observation{
 		Worktrees: map[string]string{plan.BranchKey("repo", "parent"): "/repos/parent"},
 		PRs:       map[string]plan.PR{plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
+		Settings:  map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 

@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 var logFilters = []string{"all", "skills", "tools", "fails"}
@@ -47,8 +49,8 @@ func normalizePhase(phase string) string {
 	return phase
 }
 
-func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
-	if _, ok := configuredRepos[repo]; ok {
+func normalizeRepoScope(repo string, configuredRepos []config.Repo) string {
+	if slices.ContainsFunc(configuredRepos, func(r config.Repo) bool { return r.Name == repo }) {
 		return repo
 	}
 	return ""

@@ -14,6 +14,7 @@ type Policy struct {
 
 var defaultDeny = []string{
 	".github/**",
+	SettingsFile,
 	".mergify.yml",
 	"CODEOWNERS",
 	"**/package.json",
