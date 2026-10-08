@@ -17,6 +17,7 @@ type Chrome struct {
 	LastError         *TickError
 	Gauges            []Gauge
 	SpendPaused       *SpendPaused
+	RefusedRepos      []RefusedRepo
 	View              string
 	Section           string
 	RepoScope         string
@@ -32,6 +33,13 @@ type Chrome struct {
 type Age struct {
 	Age   string
 	Stamp string
+}
+
+// RefusedRepo is a tracked repo the loop refused to work, linked to its own page.
+type RefusedRepo struct {
+	Name   string
+	Reason string
+	Path   string
 }
 
 type TickError struct {

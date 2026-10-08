@@ -126,8 +126,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, err
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
+	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+		return Board{}, err
+	}
 	return Board{
-		Chrome:           r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params),
+		Chrome:           chrome,
 		Groups:           groups,
 		Band:             deriveBand(rowsIn(groups)),
 		BoardPath:        params.boardPath(),
@@ -178,7 +182,25 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, err
 	}
-	return r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params), nil
+	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
+	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+		return Chrome{}, err
+	}
+	return chrome, nil
+}
+
+func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var refused []RefusedRepo
+	for _, repo := range repos {
+		if repo.State == store.RepoRefused {
+			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: repoPath(repo.Name)})
+		}
+	}
+	return refused, nil
 }
 
 func (r *Reader) buildChrome(
