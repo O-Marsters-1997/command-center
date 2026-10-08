@@ -80,7 +80,8 @@ func TestLoginSetsSessionCookieStoredOnlyAsHash(t *testing.T) {
 	if _, err := st.SessionOwner(t.Context(), c.Value, testNow); !errors.Is(err, sql.ErrNoRows) {
 		t.Error("raw token is stored as a session key")
 	}
-	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow.Add(31*24*time.Hour)); !errors.Is(err, sql.ErrNoRows) {
+	expired := testNow.Add(31 * 24 * time.Hour)
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), expired); !errors.Is(err, sql.ErrNoRows) {
 		t.Error("session still valid after 30 days")
 	}
 }
