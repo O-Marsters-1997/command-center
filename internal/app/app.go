@@ -47,33 +47,34 @@ func WithObserver(observe loop.ObserveFunc) Option {
 	return func(o *options) { o.observe = observe }
 }
 
-// RepoCheckFunc asserts the configured repos' merge settings.
-type RepoCheckFunc func(ctx context.Context, repos []config.Repo) error
+// RepoCheckFunc asserts the tracked repos' merge settings.
+type RepoCheckFunc func(ctx context.Context, dataDir string, repos []store.Repo) error
 
 // WithRepoCheck replaces the startup squash-only check, so a test runs without gh.
 func WithRepoCheck(check RepoCheckFunc) Option {
 	return func(o *options) { o.repoCheck = check }
 }
 
-// CheckoutFunc ensures every configured repo has a working checkout before the loop starts.
-type CheckoutFunc func(ctx context.Context, repos []config.Repo) error
+// CheckoutFunc ensures every tracked repo has a working checkout under dataDir before the loop
+// starts.
+type CheckoutFunc func(ctx context.Context, dataDir string, repos []store.Repo) error
 
 // WithCheckout replaces the startup checkout step.
 func WithCheckout(checkout CheckoutFunc) Option {
 	return func(o *options) { o.checkout = checkout }
 }
 
-func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
+func ensureAllCheckouts(ctx context.Context, dataDir string, repos []store.Repo) error {
 	for _, repo := range repos {
-		if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
+		if err := git.EnsureCheckout(ctx, repo.Name, repo.Remote, config.CheckoutPath(dataDir, repo.Name)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// New resolves the workspace, takes the flock and opens the store. A second
-// instance against the same workspace is refused.
+// New resolves the workspace, takes the flock, opens the store and imports any [[repo]] blocks
+// into it on first boot. A second instance against the same workspace is refused.
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
@@ -88,22 +89,6 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err != nil {
 		return nil, err
 	}
-	checkout := settings.checkout
-	if checkout == nil {
-		checkout = ensureAllCheckouts
-	}
-	if err := checkout(ctx, cfg.Repos); err != nil {
-		return nil, err
-	}
-
-	repoCheck := settings.repoCheck
-	if repoCheck == nil {
-		repoCheck = loop.AssertReposSquashOnly
-	}
-	if err := repoCheck(ctx, cfg.Repos); err != nil {
-		return nil, err
-	}
-
 	lock, err := Lock(ws.LockPath)
 	if err != nil {
 		return nil, err
@@ -124,6 +109,28 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
+	if err := importLegacyRepos(ctx, store, configPath, cfg, settings.clock.Now()); err != nil {
+		return nil, err
+	}
+	repos, err := loop.ReadyRepos(ctx, store)
+	if err != nil {
+		return nil, err
+	}
+	checkout := settings.checkout
+	if checkout == nil {
+		checkout = ensureAllCheckouts
+	}
+	if err := checkout(ctx, cfg.DataDir, repos); err != nil {
+		return nil, err
+	}
+	repoCheck := settings.repoCheck
+	if repoCheck == nil {
+		repoCheck = loop.AssertReposSquashOnly
+	}
+	if err := repoCheck(ctx, cfg.DataDir, repos); err != nil {
+		return nil, err
+	}
+
 	if err := loop.WriteAgentFiles(ws); err != nil {
 		return nil, err
 	}
@@ -136,7 +143,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
 	lp.SetForge(gh.CLI{})
 	lp.SetWorktrees(git.CLI{})
-	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
+	server := web.NewServer(store, settings.clock, ws.DataDir)
 	server.SetNudge(lp.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)

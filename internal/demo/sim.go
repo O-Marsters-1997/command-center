@@ -157,16 +157,6 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	agent := NewAgent(clock, issues, sc.Seed)
 	resolve := trackerSource(issues)
 
-	cfg := config.Config{
-		MaxAgents:    maxAgents,
-		AgentCommand: []string{"demo-agent"},
-		Repos:        sb.Repos(),
-	}
-	for _, repo := range cfg.Repos {
-		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, repo.Checkout); err != nil {
-			return nil, err
-		}
-	}
 	ws, err := workspaceIn(sb)
 	if err != nil {
 		return nil, err
@@ -181,11 +171,21 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 		}
 	}()
 
+	cfg := config.Config{DataDir: ws.DataDir, MaxAgents: maxAgents, AgentCommand: []string{"demo-agent"}}
+	for _, repo := range sb.Repos(clock.Now()) {
+		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, config.CheckoutPath(cfg.DataDir, repo.Name)); err != nil {
+			return nil, err
+		}
+		if err := st.UpsertRepo(ctx, repo); err != nil {
+			return nil, err
+		}
+	}
+
 	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
 	lp.SetForge(forge)
 	lp.SetWorktrees(Worktrees{})
 	lp.SetTrackerSource(resolve)
-	server := web.NewServer(st, clock, cfg.Repos, ws.DataDir)
+	server := web.NewServer(st, clock, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
 

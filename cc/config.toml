@@ -9,9 +9,11 @@
 #
 #   cc --config cc/config.toml
 #
-# The repo below is named by its remote, so startup clones it to <data_dir>/repos/command-center
-# rather than expecting a directory someone made by hand. The fleet itself is no longer here:
-# label an issue project:<name> and browse what's importable at GET /features.
+# The [[repo]] below is imported once, on the first boot against an empty repos table, as
+# O-Marsters-1997/command-center, cloned to <data_dir>/repos/O-Marsters-1997/command-center.
+# Every later boot refuses while it is still here, so delete it after that first boot. The fleet
+# itself is no longer here: label an issue project:<name> and browse what's importable at
+# GET /features.
 
 max_agents = 3
 port       = 7777

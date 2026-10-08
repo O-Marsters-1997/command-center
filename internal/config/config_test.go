@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -48,8 +47,8 @@ path = "cc-sandbox"
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
 	}
-	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
-		t.Errorf("repos = %+v", got.Repos)
+	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
+		t.Errorf("legacy repos = %+v", got.LegacyRepos)
 	}
 }
 
@@ -266,36 +265,6 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 	}
 }
 
-// TestLoadConfigResolvesRepoPathsAgainstTheConfigFile covers phase 3: a relative path is
-// relative to the directory the config file is in, and an absolute one is taken as written.
-func TestLoadConfigResolvesRepoPathsAgainstTheConfigFile(t *testing.T) {
-	t.Parallel()
-
-	elsewhere := t.TempDir()
-	path := writeConfig(t, "[[repo]]\nname = \"rel\"\npath = \"checkouts/rel\"\n\n"+
-		"[[repo]]\nname = \"abs\"\npath = "+strconv.Quote(elsewhere)+"\n")
-
-	got, err := config.LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if want := filepath.Join(filepath.Dir(path), "checkouts", "rel"); got.Repos[0].Checkout != want {
-		t.Errorf("relative checkout = %q, want %q", got.Repos[0].Checkout, want)
-	}
-	if got.Repos[1].Checkout != elsewhere {
-		t.Errorf("absolute checkout = %q, want %q", got.Repos[1].Checkout, elsewhere)
-	}
-}
-
-func TestLoadConfigRefusesARepoWithNoPath(t *testing.T) {
-	t.Parallel()
-
-	_, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\n"))
-	if err == nil || !strings.Contains(err.Error(), "r") {
-		t.Errorf("error = %v, want one naming the repo with no path", err)
-	}
-}
-
 // TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
 // on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
@@ -402,8 +371,8 @@ build_command = ["just", "assets"]
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
-		t.Errorf("repos = %+v", got.Repos)
+	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
+		t.Errorf("legacy repos = %+v", got.LegacyRepos)
 	}
 }
 

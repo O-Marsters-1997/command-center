@@ -54,7 +54,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "/data/fleet-hq")
+	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
 	body := renderPage(t, server)
 
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {

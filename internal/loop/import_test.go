@@ -67,7 +67,8 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 			}},
 		},
 	}
-	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+	cfg := config.Config{}
 
 	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})
 	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
@@ -114,7 +115,8 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 			"project:y": {{URL: contested, Number: 1, Title: "Add x"}},
 		},
 	}
-	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+	cfg := config.Config{}
 
 	lp := loop.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{})
 	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
@@ -186,7 +188,8 @@ func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
 			"project:y": {{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}}},
 		},
 	}
-	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+	cfg := config.Config{}
 
 	lp := loop.NewLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{})
 	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
@@ -251,7 +254,8 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 			}},
 		},
 	}
-	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+	cfg := config.Config{}
 	seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}
 	if err := store.SaveObservation(ctx, seed); err != nil {
 		t.Fatal(err)

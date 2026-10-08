@@ -55,8 +55,8 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo"}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://ROOT", 4); got != "L1" {
@@ -109,8 +109,8 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo"}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://PARENT", 1); strings.Contains(got, "flag-warning") {
@@ -150,7 +150,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, "")
+	server := web.NewServer(track(t, store, named("repo")...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	got := rowCellAt(t, page, ticket.URL, 1)

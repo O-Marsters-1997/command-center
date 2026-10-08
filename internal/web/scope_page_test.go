@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -35,8 +34,8 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
 	at := testNow
-	repos := []config.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
-	return web.NewServer(threeRepoStore(t), fixedClock(at), repos, "")
+	repos := named("repo", "services", "other")
+	return web.NewServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
 }
 
 func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
@@ -62,6 +61,26 @@ func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 		if strings.Contains(underOther, want) {
 			t.Errorf("?repo=other rendered %s, from a group with no member in other:\n%s", want, underOther)
 		}
+	}
+}
+
+func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://MINE", Repo: "O-Marsters-1997/command-center", Branch: "mine"},
+		{URL: "sandbox://THEIRS", Repo: "acme/other", Branch: "theirs"},
+	}
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
+		t.Fatal(err)
+	}
+	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
+	server := web.NewServer(tracked, fixedClock(testNow), "")
+
+	page := renderPath(t, server, "/?repo=O-Marsters-1997/command-center")
+	if !strings.Contains(page, ticketRef("sandbox://MINE")) || strings.Contains(page, ticketRef("sandbox://THEIRS")) {
+		t.Errorf("?repo=O-Marsters-1997/command-center did not scope the board to that repo:\n%s", page)
 	}
 }
 
@@ -190,8 +209,8 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
-	repos := []config.Repo{{Name: "repo"}, {Name: "other"}}
-	server := web.NewServer(store, fixedClock(at), repos, "")
+	repos := named("repo", "other")
+	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
 
 	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
 	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {

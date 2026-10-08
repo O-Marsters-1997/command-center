@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -18,8 +17,8 @@ import (
 )
 
 var (
-	alphaRepo = config.Repo{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}
-	betaRepo  = config.Repo{Name: "beta", Remote: "https://github.com/acme/beta.git"}
+	alphaRepo = storepkg.Repo{Name: "acme/alpha", Remote: "git@github.com:acme/alpha.git"}
+	betaRepo  = storepkg.Repo{Name: "acme/beta", Remote: "https://github.com/acme/beta.git"}
 )
 
 var pushable = []gh.RepoSummary{
@@ -30,7 +29,7 @@ var pushable = []gh.RepoSummary{
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 	t.Helper()
-	server := web.NewServer(openStore(t), fixedClock(testNow), []config.Repo{alphaRepo, betaRepo}, "")
+	server := web.NewServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		calls.Add(1)
 		return pushable, nil
@@ -134,7 +133,7 @@ func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 
 	var calls atomic.Int32
 	clock := &steppingClock{at: testNow}
-	server := web.NewServer(openStore(t), clock, nil, "")
+	server := web.NewServer(openStore(t), clock, "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		calls.Add(1)
 		return pushable, nil
@@ -156,7 +155,7 @@ func (*steppingClock) After(d time.Duration) <-chan time.Time { return time.Afte
 func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(openStore(t), fixedClock(testNow), []config.Repo{alphaRepo}, "")
+	server := web.NewServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		return nil, errors.New("gh: not logged in")
 	})
@@ -175,14 +174,14 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 	ctx := t.Context()
 	store := openStore(t)
 	seed := []storepkg.ImportedTicket{
-		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "a"}, Repo: "alpha"},
-		{Ticket: tracker.Ticket{URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "b"}, Repo: "beta"},
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "a"}, Repo: "acme/alpha"},
+		{Ticket: tracker.Ticket{URL: "https://github.com/acme/beta/issues/2", Number: 2, Title: "b"}, Repo: "acme/beta"},
 	}
 	if err := store.ImportTickets(ctx, "project:x", seed, testNow); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := web.NewServer(store, fixedClock(testNow), []config.Repo{alphaRepo, betaRepo}, "")
+	server := web.NewServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{
 		"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}},
 		"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
@@ -190,8 +189,8 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 
 	body := renderPath(t, server, "/features?repo="+url.QueryEscape("acme/alpha"))
 	for _, want := range []string{
-		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git", `href="/?repo=alpha"`,
-		"project:x", "project:y", "also in beta",
+		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git", `href="/?repo=acme%2Falpha"`,
+		"project:x", "project:y", "also in acme/beta",
 		`<a href="/features?repo=acme/alpha">acme/alpha</a>`,
 	} {
 		if !strings.Contains(body, want) {

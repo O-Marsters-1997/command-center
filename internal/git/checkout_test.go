@@ -184,3 +184,26 @@ func assertRerereOn(t *testing.T, checkout string) {
 		}
 	}
 }
+
+func TestFullNameKeepsCaseAcrossURLForms(t *testing.T) {
+	t.Parallel()
+
+	for _, remote := range []string{
+		"git@github.com:O-Marsters-1997/command-center.git",
+		"https://github.com/O-Marsters-1997/command-center",
+		"ssh://git@github.com/O-Marsters-1997/command-center.git/",
+	} {
+		got, err := FullName(remote)
+		if err != nil || got != "O-Marsters-1997/command-center" {
+			t.Errorf("FullName(%q) = %q, %v, want O-Marsters-1997/command-center", remote, got, err)
+		}
+	}
+	for _, remote := range []string{
+		"", "/tmp/remote.git", "https://github.com/o", "https://host/a/b/c", "git@github.com:../evil.git",
+		"https://github.com/o/..",
+	} {
+		if got, err := FullName(remote); err == nil {
+			t.Errorf("FullName(%q) = %q, want an error", remote, got)
+		}
+	}
+}

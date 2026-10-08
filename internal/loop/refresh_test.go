@@ -20,10 +20,7 @@ import (
 // refresh's own base recompute (plan.Unlocked) only ever names a non-main base under stacking.
 func stackedConfigAndWorkspace(t *testing.T, root string) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := config.Config{
-		MaxAgents: 0,
-		Repos:     []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
-	}
+	cfg := config.Config{DataDir: root, MaxAgents: 0}
 	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),

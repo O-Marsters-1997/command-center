@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 var errMergeConflict = errors.New("branch conflicts with main")
@@ -30,7 +32,6 @@ type Sandbox struct {
 type sandboxRepo struct {
 	scenarioName string
 	compatCheck  string
-	name         string
 	origin       string
 	checkout     string
 	merger       string
@@ -69,9 +70,8 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	repo := &sandboxRepo{
 		scenarioName: r.Name,
 		compatCheck:  r.CompatCheck,
-		name:         name,
 		origin:       filepath.Join(s.root, "origins", filepath.FromSlash(r.Name)+".git"),
-		checkout:     filepath.Join(s.root, "repos", name),
+		checkout:     config.CheckoutPath(s.root, r.Name),
 		merger:       filepath.Join(s.root, "mergers", name),
 	}
 	if err := os.MkdirAll(repo.origin, 0o750); err != nil {
@@ -159,10 +159,10 @@ func (s *Sandbox) LandOnMain(repoName string, files map[string]string) error {
 	return err
 }
 
-func (s *Sandbox) Repos() []config.Repo {
-	out := make([]config.Repo, 0, len(s.repos))
+func (s *Sandbox) Repos(trackedAt time.Time) []store.Repo {
+	out := make([]store.Repo, 0, len(s.repos))
 	for _, r := range s.repos {
-		out = append(out, config.Repo{Name: r.name, Remote: r.origin, Checkout: r.checkout})
+		out = append(out, store.Repo{Name: r.scenarioName, Remote: r.origin, State: store.RepoReady, TrackedAt: trackedAt})
 	}
 	return out
 }

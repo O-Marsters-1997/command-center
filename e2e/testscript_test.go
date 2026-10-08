@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // testdataDir is absolute because the harness commands run with the script's work directory as
@@ -177,6 +180,8 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	settingsDir := filepath.Join(ts.Getenv("WORK"), "cc", "repo-settings")
 	ts.Check(os.MkdirAll(settingsDir, 0o700))
 	repos, _ := doc["repo"].([]map[string]any)
+	delete(doc, "repo")
+	trackRepos(ts, repos)
 	var names []string
 	for _, block := range repos {
 		name, _ := block["name"].(string)
@@ -201,6 +206,26 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(os.WriteFile(filepath.Join(ts.Getenv("WORK"), "cc", "config.toml"), out.Bytes(), 0o600))
 	for _, name := range names {
 		publishRepoSettings(ts, name)
+	}
+}
+
+func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
+	st, err := store.OpenStore(ts.Getenv("CC_DATABASE_URL"))
+	ts.Check(err)
+	defer func() { ts.Check(st.Close()) }()
+	for _, block := range blocks {
+		name, _ := block["name"].(string)
+		remote, _ := block["remote"].(string)
+		fullName, err := git.FullName(remote)
+		ts.Check(err)
+		checkout := config.CheckoutPath(ts.Getenv("CC_DATA_DIR"), fullName)
+		if _, err := os.Lstat(checkout); errors.Is(err, os.ErrNotExist) {
+			ts.Check(os.MkdirAll(filepath.Dir(checkout), 0o700))
+			ts.Check(os.Symlink(filepath.Join(ts.Getenv("WORK"), name), checkout))
+		}
+		ts.Check(st.UpsertRepo(context.Background(), store.Repo{
+			Name: fullName, Remote: remote, State: store.RepoReady, TrackedAt: time.Now(),
+		}))
 	}
 }
 
@@ -303,10 +328,6 @@ func scriptEnv(work, databaseURL string) []string {
 		// One database per script, exactly as each script gets its own CC_DATA_DIR: scripts
 		// run in parallel against one server.
 		"CC_DATABASE_URL=" + databaseURL,
-		// Read by e2e/register's SandboxCheckout: a remote-based [[repo]]'s checkout is
-		// symlinked to $CC_WORK_DIR/<name>, the sandbox cc-init-repo built, rather than cloned
-		// from its (undialable) configured remote.
-		"CC_WORK_DIR=" + work,
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),

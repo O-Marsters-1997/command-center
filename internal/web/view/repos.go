@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 type FeatureRow struct {
@@ -63,39 +63,48 @@ func repoPath(fullName string) string {
 	return "/features?" + strings.ReplaceAll(q, "%2F", "/")
 }
 
-// fullName is a repo's owner/name, read from its remote; a path repo has none and keeps its name.
-func fullName(r config.Repo) string {
-	remote := git.NormaliseRemote(r.Remote)
-	if _, rest, ok := strings.Cut(remote, "/"); ok && r.Remote != "" {
-		return rest
+func trackedRow(r store.Repo) RepoRow {
+	return RepoRow{FullName: r.Name, Tracked: true, Path: repoPath(r.Name)}
+}
+
+func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
+	if scope == "" {
+		return "", nil
 	}
-	return r.Name
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return "", err
+	}
+	return normalizeRepoScope(scope, repos), nil
 }
 
-func trackedRow(r config.Repo) RepoRow {
-	name := fullName(r)
-	return RepoRow{FullName: name, Tracked: true, Path: repoPath(name)}
-}
-
-// KnownRepo finds the configured repo that scope names, by owner/name or by configured name.
-func (r *Reader) KnownRepo(scope string) (config.Repo, bool) {
-	for _, repo := range r.repos {
-		if scope != "" && (strings.EqualFold(fullName(repo), scope) || repo.Name == scope) {
-			return repo, true
+// KnownRepo finds the tracked repo whose owner/name is scope, ignoring case.
+func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return store.Repo{}, false, err
+	}
+	for _, repo := range repos {
+		if scope != "" && strings.EqualFold(repo.Name, scope) {
+			return repo, true, nil
 		}
 	}
-	return config.Repo{}, false
+	return store.Repo{}, false, nil
 }
 
-// Repos shapes the unscoped page: the configured repos, each tracked.
+// Repos shapes the unscoped page: the tracked repos.
 func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
 		return ReposPage{}, err
 	}
 	chrome.Section = "repos"
-	rows := make([]RepoRow, 0, len(r.repos))
-	for _, repo := range r.repos {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return ReposPage{}, err
+	}
+	rows := make([]RepoRow, 0, len(repos))
+	for _, repo := range repos {
 		rows = append(rows, trackedRow(repo))
 	}
 	importErr, err := r.importError(ctx, now)
@@ -105,22 +114,26 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	return ReposPage{Chrome: chrome, Results: RepoSearch{Rows: rows}, LastImportError: importErr}, nil
 }
 
-// SearchRepos merges the pushable repos whose name contains query with the configured repos that
-// match it. An empty query is the configured repos alone.
-func (r *Reader) SearchRepos(query string, pushable []gh.RepoSummary) []RepoRow {
+// SearchRepos merges the pushable repos whose name contains query with the tracked repos that
+// match it. An empty query is the tracked repos alone.
+func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
+	tracked, err := r.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
 	q := strings.ToLower(strings.TrimSpace(query))
-	rows := make([]RepoRow, 0, len(r.repos))
-	for _, repo := range r.repos {
-		if row := trackedRow(repo); strings.Contains(strings.ToLower(row.FullName), q) {
-			rows = append(rows, row)
+	rows := make([]RepoRow, 0, len(tracked))
+	for _, repo := range tracked {
+		if strings.Contains(strings.ToLower(repo.Name), q) {
+			rows = append(rows, trackedRow(repo))
 		}
 	}
 	if q == "" {
-		return rows
+		return rows, nil
 	}
 	var untracked []RepoRow
 	for _, p := range pushable {
-		if !strings.Contains(strings.ToLower(p.FullName), q) || r.tracks(p) {
+		if !strings.Contains(strings.ToLower(p.FullName), q) || tracks(tracked, p) {
 			continue
 		}
 		row := RepoRow{FullName: p.FullName, Path: repoPath(p.FullName)}
@@ -130,13 +143,12 @@ func (r *Reader) SearchRepos(query string, pushable []gh.RepoSummary) []RepoRow 
 		untracked = append(untracked, row)
 	}
 	slices.SortFunc(untracked, func(a, b RepoRow) int { return strings.Compare(a.FullName, b.FullName) })
-	return append(rows, untracked...)
+	return append(rows, untracked...), nil
 }
 
-func (r *Reader) tracks(p gh.RepoSummary) bool {
-	return slices.ContainsFunc(r.repos, func(repo config.Repo) bool {
-		return strings.EqualFold(fullName(repo), p.FullName) ||
-			repo.Remote != "" && git.SameRemote(repo.Remote, p.SSHURL)
+func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
+	return slices.ContainsFunc(tracked, func(repo store.Repo) bool {
+		return strings.EqualFold(repo.Name, p.FullName) || git.SameRemote(repo.Remote, p.SSHURL)
 	})
 }
 
@@ -151,9 +163,9 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, repoPath(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 
-	repo, known := r.KnownRepo(scope)
-	if !known {
-		return page, nil
+	repo, known, err := r.KnownRepo(ctx, scope)
+	if err != nil || !known {
+		return page, err
 	}
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
@@ -177,7 +189,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 		slices.Sort(repos)
 	}
 
-	page.Title = fullName(repo)
+	page.Title = repo.Name
 	page.RepoCrumb, page.RepoCrumbPath = page.Title, repoPath(page.Title)
 	page.Remote = repo.Remote
 	page.BoardPath = Params{Repo: repo.Name}.pagePath()

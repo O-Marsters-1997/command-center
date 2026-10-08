@@ -66,7 +66,7 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 func newServer(st *store.Store, now time.Time) *web.Server {
-	return web.NewServer(st, fixedClock(now), nil, "")
+	return web.NewServer(st, fixedClock(now), "")
 }
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
@@ -74,4 +74,23 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
+}
+
+func track(t *testing.T, st *store.Store, repos ...store.Repo) *store.Store {
+	t.Helper()
+	for _, repo := range repos {
+		repo.State, repo.TrackedAt = store.RepoReady, testNow
+		if err := st.UpsertRepo(t.Context(), repo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return st
+}
+
+func named(names ...string) []store.Repo {
+	repos := make([]store.Repo, 0, len(names))
+	for _, name := range names {
+		repos = append(repos, store.Repo{Name: name})
+	}
+	return repos
 }

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -31,19 +30,14 @@ type Config struct {
 	// spawns; 0 means unset.
 	SpendLimit5h int `toml:"spend_limit_5h"`
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
-	BoardPollSeconds int    `toml:"board_poll_seconds"`
-	Repos            []Repo `toml:"repo"`
+	BoardPollSeconds int `toml:"board_poll_seconds"`
+	// LegacyRepos is the [[repo]] blocks, read only by the first-boot import into the repos table.
+	LegacyRepos []LegacyRepo `toml:"repo"`
 }
 
-// Repo is one [[repo]] block, located by Remote (a git URL the app clones) or Path (an
-// existing checkout); exactly one. Everything else about a repo lives in its SettingsFile.
-type Repo struct {
+type LegacyRepo struct {
 	Name   string `toml:"name"`
 	Remote string `toml:"remote"`
-	Path   string `toml:"path"`
-	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
-	// downstream reads this and derives no path of its own. Not a config key.
-	Checkout string `toml:"-"`
 }
 
 const (
@@ -64,9 +58,7 @@ var defaultAgentCommand = []string{
 	"--model", "claude-sonnet-5-5",
 }
 
-// LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and
-// rejects a ticket whose repo has no [[repo]] block. Where the config file sits decides one thing
-// only: what a relative repo path is relative to.
+// LoadConfig decodes the config file and resolves the data directory, database and agent command.
 func LoadConfig(path string) (Config, error) {
 	cfg := Config{
 		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: DefaultBoardPollSeconds,
@@ -84,10 +76,6 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
 	}
 
-	configDir, err := filepath.Abs(filepath.Dir(path))
-	if err != nil {
-		return Config{}, fmt.Errorf("resolve config path %s: %w", path, err)
-	}
 	dataDir, err := ResolveDataDir(cfg.DataDir)
 	if err != nil {
 		return Config{}, err
@@ -107,13 +95,6 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
 		cfg.AgentCommand = append(cfg.AgentCommand, "--max-turns", strconv.Itoa(cfg.MaxTurns))
-	}
-	for i, r := range cfg.Repos {
-		checkout, err := r.CheckoutPath(dataDir, configDir)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.Repos[i].Checkout = checkout
 	}
 	return cfg, nil
 }
@@ -150,37 +131,9 @@ func requireAgentCommandParts(argv []string) error {
 	return nil
 }
 
-// CheckoutPath answers where a repo's working copy is. A remote repo's checkout is one the app
-// makes and names, at <dataDir>/repos/<name>; a path repo's is one the operator made, absolute
-// or relative to configDir. Exactly one of the two forms is allowed.
-func (r Repo) CheckoutPath(dataDir, configDir string) (string, error) {
-	switch {
-	case r.Remote != "" && r.Path != "":
-		return "", fmt.Errorf("repo %s sets both remote and path: pick one", r.Name)
-	case r.Remote == "" && r.Path == "":
-		return "", fmt.Errorf("repo %s sets neither remote nor path", r.Name)
-	case r.Remote != "":
-		if err := validRepoName(r.Name); err != nil {
-			return "", err
-		}
-		return filepath.Join(dataDir, "repos", r.Name), nil
-	}
-
-	path, err := expandHome(r.Path)
-	if err != nil {
-		return "", err
-	}
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(configDir, path)
-	}
-	return filepath.Clean(path), nil
-}
-
-func validRepoName(name string) error {
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
-		return fmt.Errorf("repo name %q is not a single directory name", name)
-	}
-	return nil
+// CheckoutPath is where the app keeps the working copy of the repo named owner/name.
+func CheckoutPath(dataDir, fullName string) string {
+	return filepath.Join(dataDir, "repos", filepath.FromSlash(fullName))
 }
 
 var perRepoKeys = []string{

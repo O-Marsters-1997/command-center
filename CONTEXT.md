@@ -115,7 +115,7 @@ blocker outside the scope stays visible.
 _Avoid_: Filter (that is the run log's four log modes), view, selection, narrowing
 
 **Repo**:
-One tracked repository, named by its remote and cloned by the app. A ticket belongs to exactly
+One tracked repository, named `owner/name` from its remote and cloned by the app. A ticket belongs to exactly
 one repo, matched from its URL. The second scope axis, and the one a working directory can imply.
 A GitHub repository the app does not track is not a repo here; it is a search result until you
 track it.
