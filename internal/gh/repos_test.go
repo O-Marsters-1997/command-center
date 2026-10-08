@@ -12,7 +12,8 @@ func TestDecodePushableKeepsWritableUnarchivedReposAcrossPages(t *testing.T) {
 	  {"full_name":"acme/api","ssh_url":"git@github.com:acme/api.git","default_branch":"main","permissions":{"push":true}},
 	  {"full_name":"acme/ro","ssh_url":"git@github.com:acme/ro.git","default_branch":"main","permissions":{"push":false}}
 	][
-	  {"full_name":"acme/old","ssh_url":"git@github.com:acme/old.git","default_branch":"main","archived":true,"permissions":{"push":true}},
+	  {"full_name":"acme/old","ssh_url":"git@github.com:acme/old.git","default_branch":"main",
+	   "archived":true,"permissions":{"push":true}},
 	  {"full_name":"acme/web","ssh_url":"git@github.com:acme/web.git","default_branch":"trunk","permissions":{"push":true}}
 	]`)
 

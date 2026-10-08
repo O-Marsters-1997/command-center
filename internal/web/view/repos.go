@@ -172,7 +172,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 	}
 
 	page.Title = fullName(repo)
-	page.Chrome.RepoCrumb, page.Chrome.RepoCrumbPath = page.Title, repoPath(page.Title)
+	page.RepoCrumb, page.RepoCrumbPath = page.Title, repoPath(page.Title)
 	page.Remote = repo.Remote
 	page.BoardPath = Params{Repo: repo.Name}.pagePath()
 	page.Known = true
