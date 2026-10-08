@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -182,14 +183,15 @@ const (
 	// still check the branch itself.
 	RemovableByMerged RemovalState = iota
 	// RemovableByForce: the ref is gone, but the branch sits exactly where this app last
-	// pushed it (docs/adr/0008-cc-proves-what-tp-cannot.md).
+	// pushed it or at the merged PR's head (docs/adr/0008-cc-proves-what-tp-cannot.md).
 	RemovableByForce
-	// NotRemovable: the ref is gone and the branch has moved past the last recorded push.
+	// NotRemovable: the ref is gone and the branch has moved past every tip cc can prove.
 	NotRemovable
 )
 
-// RemovalStateFor resolves branch's RemovalState.
-func RemovalStateFor(ctx context.Context, repoPath, branch, lastPushedTip string) (RemovalState, error) {
+// RemovalStateFor resolves branch's RemovalState; a local tip equal to any of provenTips counts
+// as removable by force.
+func RemovalStateFor(ctx context.Context, repoPath, branch string, provenTips ...string) (RemovalState, error) {
 	if _, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch); err == nil {
 		return RemovableByMerged, nil
 	}
@@ -197,7 +199,7 @@ func RemovalStateFor(ctx context.Context, repoPath, branch, lastPushedTip string
 	if err != nil {
 		return NotRemovable, err
 	}
-	if local != lastPushedTip {
+	if local == "" || !slices.Contains(provenTips, local) {
 		return NotRemovable, nil
 	}
 	return RemovableByForce, nil
