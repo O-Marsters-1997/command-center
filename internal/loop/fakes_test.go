@@ -1,13 +1,80 @@
 package loop_test
 
 import (
+	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
+
+func openStore(t *testing.T) *storepkg.Store { return openStoreAt(t, cctest.DSN(t)) }
+
+func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
+	t.Helper()
+	store, err := storepkg.OpenStore(dsn)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close store: %v", err)
+		}
+	})
+	return store
+}
+
+func execSQL(t *testing.T, dsn, query string, args ...any) {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(query, args...); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+}
+
+func seedUserWithSessions(t *testing.T, dsn string, tokens map[string]time.Time) {
+	t.Helper()
+	execSQL(t, dsn, `INSERT INTO users (id, email, password_hash, created_at) VALUES (1, 'olly@example.com', 'hash', now())`)
+	for token, expiresAt := range tokens {
+		execSQL(t, dsn,
+			`INSERT INTO sessions (user_id, token_sha, created_at, expires_at) VALUES (1, $1, now(), $2)`,
+			token, expiresAt)
+	}
+}
+
+func sessionTokens(t *testing.T, dsn string) []string {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query(`SELECT token_sha FROM sessions ORDER BY token_sha`)
+	if err != nil {
+		t.Fatalf("query sessions: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var tokens []string
+	for rows.Next() {
+		var token string
+		if err := rows.Scan(&token); err != nil {
+			t.Fatalf("scan session token: %v", err)
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens
+}
 
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so
 // internal/git.CLI.New is genuinely exercised. exitCode non-zero simulates `tp new` failing
@@ -81,4 +148,25 @@ func testConfigAndWorkspace(
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
 	}
 	return cfg, ws
+}
+
+type runMetricsRow struct {
+	TokensIn, TokensOut sql.NullInt64
+	MetricsSettled      sql.NullBool
+}
+
+func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
+	t.Helper()
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var row runMetricsRow
+	err = db.QueryRow(`SELECT tokens_in, tokens_out, metrics_settled FROM runs WHERE id = $1`, runID).
+		Scan(&row.TokensIn, &row.TokensOut, &row.MetricsSettled)
+	if err != nil {
+		t.Fatalf("read run metrics for run %d: %v", runID, err)
+	}
+	return row
 }

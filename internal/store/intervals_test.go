@@ -1,4 +1,4 @@
-package loop_test
+package store_test
 
 import (
 	"fmt"

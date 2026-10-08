@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"flag"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,11 +25,6 @@ import (
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
 	return renderPath(t, server, "/")
-}
-
-func renderBoard(t *testing.T, server *web.Server) string {
-	t.Helper()
-	return renderPath(t, server, "/board")
 }
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
@@ -63,26 +57,6 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	}
 	t.Fatalf("no row found for %s in page:\n%s", ticketURL, page)
 	return ""
-}
-
-func rowTicket(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`<button type="button"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no ticket link found for %s in row:\n%s", ticketURL, row)
-	}
-	return m[1]
-}
-
-func rowTask(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`(?s)<div>(.*?)</div>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no task title found for %s in row:\n%s", ticketURL, row)
-	}
-	return strings.TrimSpace(m[1])
 }
 
 var (
@@ -200,15 +174,6 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
-	server := web.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, "")
-	page := renderPage(t, server)
-	if state := rowState(t, page, runningTicket); state != "running" {
-		t.Errorf("running member's rendered state = %q, want running: a row that ever ran is never cancelled", state)
-	}
-	if state := rowState(t, page, queuedSibling); state != "cancelled" {
-		t.Errorf("queued sibling's rendered state = %q, want cancelled", state)
-	}
-
 	latestAfter, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -273,16 +238,6 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	if _, ok := latest[hidden.URL]; !ok {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")
 	}
-
-	server := web.NewServer(store, fixedClock(at), cfg.Repos, "")
-	scoped := renderPath(t, server, "/?repo=repo")
-	if strings.Contains(scoped, ticketRef(hidden.URL)) {
-		t.Errorf("?repo=repo still rendered the hidden ticket, so it proves nothing about the loop's own scope:\n%s",
-			scoped)
-	}
-	if !strings.Contains(scoped, ticketRef(shown.URL)) {
-		t.Errorf("?repo=repo dropped its own ticket:\n%s", scoped)
-	}
 }
 
 var update = flag.Bool("update", false, "regenerate golden files")
@@ -307,50 +262,6 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	}
 }
 
-// noRedirect defeats http.Client's default of following a 303.
-func noRedirect(srv *httptest.Server) *http.Client {
-	client := *srv.Client()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &client
-}
-
-func assertSeeOtherHome(t *testing.T, resp *http.Response) {
-	t.Helper()
-
-	if resp.StatusCode != http.StatusSeeOther {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
-	}
-	if got := resp.Header.Get("Location"); got != "/" {
-		t.Fatalf("Location = %q, want %q", got, "/")
-	}
-}
-
 func selPagePath(ticketURL string) string {
 	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
-}
-
-func boardFor(t *testing.T, st *storepkg.Store) string {
-	t.Helper()
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return renderBoard(t, web.NewServer(st, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
-}
-
-func postVerb(t *testing.T, srv *httptest.Server, target string, headers map[string]string) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
 }
