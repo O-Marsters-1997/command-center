@@ -3,7 +3,6 @@ package view
 import (
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -123,32 +122,5 @@ func TestRowsInFlattensRootAndChildren(t *testing.T) {
 	got := rowsIn(groups)
 	if len(got) != 3 {
 		t.Fatalf("rowsIn(groups) = %+v, want 3 rows", got)
-	}
-}
-
-func TestRepoLinksForIsNilWithNoConfiguredRepos(t *testing.T) {
-	t.Parallel()
-
-	if got := repoLinksFor(nil, Params{}); got != nil {
-		t.Errorf("repoLinksFor(nil, ...) = %+v, want nil", got)
-	}
-}
-
-func TestRepoLinksForNamesAllPlusEveryConfiguredRepo(t *testing.T) {
-	t.Parallel()
-
-	repos := []config.Repo{{Name: "repo"}, {Name: "services"}}
-	got := repoLinksFor(repos, Params{Repo: "services"})
-	if len(got) != 3 {
-		t.Fatalf("repoLinksFor(repos, {Repo: services}) = %+v, want 3 links", got)
-	}
-	if got[0].Name != "all" || got[0].Current {
-		t.Errorf("all link = %+v, want Current=false since a repo is scoped", got[0])
-	}
-	if got[1].Name != "repo" || got[1].Current {
-		t.Errorf("repo link = %+v, want Current=false", got[1])
-	}
-	if got[2].Name != "services" || !got[2].Current || got[2].Path != "/?repo=services" {
-		t.Errorf("services link = %+v, want Current=true and Path=/?repo=services", got[2])
 	}
 }

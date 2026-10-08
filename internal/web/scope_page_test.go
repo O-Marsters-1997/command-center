@@ -88,36 +88,25 @@ func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
 	}
 }
 
-func TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope(t *testing.T) {
+func TestBreadcrumbIsPlainLinksWithTheRepoSegmentOnlyWhenScoped(t *testing.T) {
 	t.Parallel()
 
 	server := threeRepoServer(t)
 
 	unscoped := renderPath(t, server, "/")
-	for _, want := range []string{`href="/"`, `href="/?repo=repo"`, `href="/?repo=services"`, `href="/?repo=other"`} {
-		if !strings.Contains(unscoped, want) {
-			t.Errorf("masthead missing repo link %s:\n%s", want, unscoped)
-		}
+	if !strings.Contains(unscoped, `<a href="/features">repos</a>`) {
+		t.Errorf("breadcrumb missing the repos link:\n%s", unscoped)
 	}
-	if !strings.Contains(unscoped, `href="/" aria-current="page"`) {
-		t.Errorf("unscoped masthead should mark \"all\" current:\n%s", unscoped)
+	if strings.Contains(unscoped, "repo-switcher") || strings.Contains(unscoped, "popover") {
+		t.Errorf("breadcrumb still carries the repo switcher popover:\n%s", unscoped)
+	}
+	if strings.Contains(unscoped, `href="/features?repo=`) {
+		t.Errorf("unscoped breadcrumb has a repo segment:\n%s", unscoped)
 	}
 
 	scoped := renderPath(t, server, "/?repo=services")
-	if !strings.Contains(scoped, `href="/?repo=services" aria-current="page"`) {
-		t.Errorf("?repo=services should mark its own pill current:\n%s", scoped)
-	}
-	if strings.Contains(scoped, `href="/" aria-current="page"`) {
-		t.Errorf("?repo=services should not also mark \"all\" current:\n%s", scoped)
-	}
-}
-
-func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
-	t.Parallel()
-
-	page := renderPage(t, seededServer(t))
-	if strings.Contains(page, "repo=") {
-		t.Errorf("masthead rendered a repo link though no repo is configured:\n%s", page)
+	if !strings.Contains(scoped, `<a href="/features?repo=services">services</a>`) {
+		t.Errorf("?repo=services breadcrumb missing its repo segment:\n%s", scoped)
 	}
 }
 

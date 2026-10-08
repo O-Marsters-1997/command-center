@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -355,19 +354,6 @@ func rowsIn(groups []Group) []Row {
 		rows = append(rows, g.Children...)
 	}
 	return rows
-}
-
-func repoLinksFor(repos []config.Repo, params Params) []ScopeLink {
-	if len(repos) == 0 {
-		return nil
-	}
-	links := make([]ScopeLink, 0, len(repos)+1)
-	links = append(links, ScopeLink{Name: "all", Path: params.withRepo("").pagePath(), Current: params.Repo == ""})
-	for _, r := range repos {
-		links = append(links,
-			ScopeLink{Name: r.Name, Path: params.withRepo(r.Name).pagePath(), Current: params.Repo == r.Name})
-	}
-	return links
 }
 
 func distinctFeatures(tickets []store.Ticket) []string {
