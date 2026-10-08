@@ -76,3 +76,13 @@ func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
 	}
 	return strings.TrimSpace(cells[column][1])
 }
+
+func rowCellText(t *testing.T, page, ticketURL, open, closeTag string) string {
+	t.Helper()
+	row := rowHTML(t, page, ticketURL)
+	m := regexp.MustCompile(`(?s)<` + open + `>(.*?)</` + closeTag + `>`).FindStringSubmatch(row)
+	if m == nil {
+		t.Fatalf("no <%s> found for %s in row:\n%s", closeTag, ticketURL, row)
+	}
+	return strings.TrimSpace(m[1])
+}

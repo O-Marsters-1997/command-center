@@ -7,9 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// TestRecordPeerConflictsReusesUnmovedTips covers the observe-phase cache (#180,
-// docs/adr/0004-conflicts-resolve-once-and-one-peer-at-a-time.md): a tick in which no tracked tip moved makes
-// no merge-tree call for any peer pair.
 func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	t.Parallel()
 
@@ -46,8 +43,6 @@ func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	}
 }
 
-// TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip covers the other acceptance
-// criterion: a tick in which one tip moved recomputes only the pairs involving that branch.
 func TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip(t *testing.T) {
 	t.Parallel()
 
@@ -87,8 +82,6 @@ func TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip(t *testing.T) {
 	}
 }
 
-// TestRecordPeerConflictsWithNoPriorObservation covers the cold-start case: nothing to reuse,
-// so every pair is read.
 func TestRecordPeerConflictsWithNoPriorObservation(t *testing.T) {
 	t.Parallel()
 

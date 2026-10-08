@@ -51,7 +51,6 @@ func commitResolutionFixture(t *testing.T, root, repoPath string) (*storepkg.Sto
 }
 
 func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin and installFakeGh both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
@@ -109,7 +108,6 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 }
 
 func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
@@ -145,7 +143,6 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 }
 
 func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
@@ -184,7 +181,6 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 }
 
 func TestCommitResolutionRefusesALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
@@ -215,7 +211,6 @@ func TestCommitResolutionRefusesALiveRun(t *testing.T) {
 }
 
 func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, ".github/workflows/ci.yml")
@@ -255,7 +250,6 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 }
 
 func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin and installFakeGh both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")

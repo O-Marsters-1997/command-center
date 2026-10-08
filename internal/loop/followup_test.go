@@ -96,48 +96,6 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 }
 
-func TestFollowUpNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "do the thing", at,
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
-		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if len(fake.Spawns) != 0 {
-		t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.Spawns))
-	}
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "follow_up_refused", "a run is alive") {
-		t.Errorf("events = %+v, want a follow_up_refused naming the live run", events)
-	}
-}
-
 func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
 

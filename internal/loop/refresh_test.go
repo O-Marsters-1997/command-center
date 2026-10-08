@@ -120,7 +120,6 @@ func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 }
 
 func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -172,12 +171,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	}
 }
 
-// TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow covers issue #85's fourth incident: a
-// row whose recorded base is main (never stacked, or retargeted there already) is exactly as
-// stale as a still-stacked row once a sibling chain's own merge moves main, and baseMoved must
-// fire for it the same way.
 func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -214,7 +208,6 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 }
 
 func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -246,11 +239,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 }
 
-// TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive covers the refresh verb's own
-// silent no-op: clicking it while the guard above trips left the row reverting to base_moved with
-// no event at all, so there was nothing on the row to say why the click did nothing.
 func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -282,7 +271,6 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 }
 
 func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -409,11 +397,7 @@ func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixtur
 	return strings.TrimSpace(runGitOutput(t, "-C", f.parentWorktree, "rev-parse", "refs/heads/parent"))
 }
 
-// TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp is issue #188's repro: a
-// conflict resolved and pushed with plain git, from entirely outside the app-managed worktree,
-// must not leave the row parked at base_moved forever once abort clears the stale MERGE_HEAD.
 func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -480,11 +464,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	}
 }
 
-// TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge covers the ponytail comment's own
-// named case: a base that advances again after a conflict, past the tip the failed merge
-// attempted, is a genuinely different merge and must not wait for the refresh verb either.
 func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -548,11 +528,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 }
 
-// TestAutoRefreshDoesNotRetryAnUnchangedConflict is the control: nothing about the failed merge's
-// two tips has moved, so autoRefresh must still leave it for the refresh verb -- otherwise every
-// tick would spin re-attempting the same failing merge.
 func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -608,7 +584,6 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 }
 
 func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

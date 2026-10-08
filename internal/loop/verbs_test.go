@@ -71,7 +71,6 @@ func installFakeTpRemove(t *testing.T) {
 
 func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture {
 	t.Helper()
-	// Not t.Parallel(): repoWithOrigin, installFakeTpRemove and installFakeGh all use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeTpRemove(t)
 	ghLog := installFakeGh(t, false)
@@ -216,8 +215,6 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 	}
 }
 
-// TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone covers issue #196: a worktree removed by
-// something other than this verb must not leave a merged row stuck refusing forever.
 func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := plan.Observation{
@@ -306,11 +303,6 @@ func installFakeGhFailingIssueClose(t *testing.T) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
-// TestRemoveWorktreeTearsDownBeforeClosingTheIssue covers the reordering
-// (docs/adr/0008-cc-proves-what-tp-cannot.md): tp remove runs before gh issue close, so a close
-// failure leaves the worktree already gone, and the row stays to retry -- issue #196's own guard
-// (a missing worktree is the state this verb is trying to reach) means the retry skips straight
-// to the close instead of refusing on a worktree that no longer needs tearing down.
 func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	installFakeGhFailingIssueClose(t)
@@ -342,59 +334,6 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktreeRefusesADirtyWorktree(t *testing.T) {
-	f := newRemoveWorktreeFixture(t, "cc-1")
-	if err := os.WriteFile(filepath.Join(f.worktreePath, "scratch.txt"), []byte("oops\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
-	}
-
-	if err := f.requestRemoveWorktree(t, obs); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if _, err := os.Stat(f.worktreePath); err != nil {
-		t.Fatalf("a dirty worktree must never be removed: %v", err)
-	}
-	events, err := f.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "remove_worktree_refused", "dirty") {
-		t.Error("no refusal event naming the worktree as dirty")
-	}
-}
-
-func TestRemoveWorktreeRefusesUnpushedCommits(t *testing.T) {
-	f := newRemoveWorktreeFixture(t, "cc-1")
-	runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
-	}
-
-	if err := f.requestRemoveWorktree(t, obs); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if _, err := os.Stat(f.worktreePath); err != nil {
-		t.Fatalf("a worktree with unpushed commits must never be removed: %v", err)
-	}
-	events, err := f.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "remove_worktree_refused", "unpushed") {
-		t.Error("no refusal event naming unpushed commits")
-	}
-}
-
-// TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches covers the fix
-// (docs/adr/0008-cc-proves-what-tp-cannot.md): GitHub's delete-branch-on-merge, followed by this
-// app's own fetch --prune, can leave tp with no remote ref left to check unpushed commits
-// against -- at exactly the tip this app itself last pushed. cc proves that itself and forces
-// past tp's own check, rather than refusing forever on a fact tp can no longer verify.
 func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
@@ -430,58 +369,114 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 	}
 }
 
-// TestRemoveWorktreeRefusesWhenTheRefIsPrunedAndTheTipHasDiverged covers the other half of the
-// same gap: once the ref is gone, cc is the only thing left that can tell a safe force apart from
-// a branch that has genuinely moved past what this app last pushed.
-func TestRemoveWorktreeRefusesWhenTheRefIsPrunedAndTheTipHasDiverged(t *testing.T) {
-	f := newRemoveWorktreeFixture(t, "cc-1")
-	tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-	if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
-		t.Fatal(err)
+func TestRemoveWorktreeRefusals(t *testing.T) {
+	tests := []struct {
+		name   string
+		pr     plan.PRState
+		setup  func(t *testing.T, f removeWorktreeFixture)
+		reason string
+	}{
+		{
+			name: "dirty worktree", pr: plan.Merged, reason: "dirty",
+			setup: func(t *testing.T, f removeWorktreeFixture) {
+				if err := os.WriteFile(filepath.Join(f.worktreePath, "scratch.txt"), []byte("oops\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "unpushed commits", pr: plan.Merged, reason: "unpushed",
+			setup: func(t *testing.T, f removeWorktreeFixture) {
+				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
+			},
+		},
+		{
+			name: "pruned ref and a tip that moved past the last push", pr: plan.Merged, reason: "unpushed",
+			setup: func(t *testing.T, f removeWorktreeFixture) {
+				tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
+				if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
+					t.Fatal(err)
+				}
+				runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
+			},
+		},
+		{
+			name: "open row, neither merged nor base gone", pr: plan.Open, reason: "neither merged nor base gone",
+			setup: func(*testing.T, removeWorktreeFixture) {},
+		},
 	}
-	runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
-	runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newRemoveWorktreeFixture(t, "cc-1")
+			tt.setup(t, f)
+			obs := plan.Observation{
+				Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
+				PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: tt.pr}},
+			}
 
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
-	}
-	if err := f.requestRemoveWorktree(t, obs); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if _, err := os.Stat(f.worktreePath); err != nil {
-		t.Fatalf("a branch that moved past its last pushed tip must never be removed: %v", err)
-	}
-	events, err := f.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "remove_worktree_refused", "unpushed") {
-		t.Error("no refusal event naming unpushed commits")
+			if err := f.requestRemoveWorktree(t, obs); err != nil {
+				t.Fatalf("RunOnce: %v", err)
+			}
+			if _, err := os.Stat(f.worktreePath); err != nil {
+				t.Fatalf("a refused worktree must never be removed: %v", err)
+			}
+			events, err := f.store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !hasEvent(events, "remove_worktree_refused", tt.reason) {
+				t.Errorf("no remove_worktree_refused event naming %q", tt.reason)
+			}
+		})
 	}
 }
 
-func TestRemoveWorktreeRefusesANonEligibleRow(t *testing.T) {
-	f := newRemoveWorktreeFixture(t, "cc-1")
-	// Open, not merged and not base_gone: still under review, nothing about it says it may
-	// be torn down.
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Open}},
+func TestSpawningVerbsNeverTouchAWorktreeWithALiveRun(t *testing.T) {
+	tests := []struct {
+		name        string
+		verb        string
+		payload     string
+		refusedKind string
+	}{
+		{"resolve", plan.VerbResolve, "", "resolve_refused"},
+		{"follow-up", plan.VerbFollowUp, "do the thing", "follow_up_refused"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, repoPath := repoWithOrigin(t)
+			worktreePath := cutWorktree(t, repoPath, "cc-1")
+			store := openStore(t)
+			ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+			if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.QueueVerbIntentWithPayload(t.Context(), ticket.URL, tt.verb, tt.payload, testAt); err != nil {
+				t.Fatal(err)
+			}
+			obs := plan.Observation{
+				Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
+				Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
+			}
+			observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	if err := f.requestRemoveWorktree(t, obs); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if _, err := os.Stat(f.worktreePath); err != nil {
-		t.Fatalf("an open, unmerged row must never be removed: %v", err)
-	}
-	events, err := f.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "remove_worktree_refused", "neither merged nor base gone") {
-		t.Error("no refusal event explaining why")
+			fake := runner.NewFake()
+			cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+			lp := loop.NewLoop(store, observe, fixedClock(testAt), cfg, ws, fake)
+			if err := lp.RunOnce(t.Context()); err != nil {
+				t.Fatalf("RunOnce: %v", err)
+			}
+
+			if len(fake.Spawns) != 0 {
+				t.Fatalf("spawns = %d, want 0: a live run must never be spawned into again", len(fake.Spawns))
+			}
+			events, err := store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !hasEvent(events, tt.refusedKind, "a run is alive") {
+				t.Errorf("events = %+v, want a %s naming the live run", events, tt.refusedKind)
+			}
+		})
 	}
 }

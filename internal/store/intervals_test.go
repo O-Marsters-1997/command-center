@@ -1,4 +1,4 @@
-package loop_test
+package store_test
 
 import (
 	"fmt"
@@ -22,9 +22,6 @@ func oneMillionInputTokensLine(timestamp, requestID string) string {
 	)
 }
 
-// TestRecordReadingsAndIntervalsFitsAKnownFactor drives the whole pipeline end to end: six
-// readings an hour apart, a transcripts dir holding one $6.40 request per hour, and asserts
-// FitFactors recovers the factor those figures imply (0.02 utilization rise per $6.40 spent).
 func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 	t.Parallel()
 
@@ -76,8 +73,6 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 	}
 }
 
-// TestFitFactorsOmitsAWindowBelowMinSamples covers the masthead's own "calibrating" reading: with
-// fewer than spend.MinSamples trailing intervals, the window is simply absent.
 func TestFitFactorsOmitsAWindowBelowMinSamples(t *testing.T) {
 	t.Parallel()
 
@@ -105,9 +100,6 @@ func TestFitFactorsOmitsAWindowBelowMinSamples(t *testing.T) {
 	}
 }
 
-// TestCCCostUSDSumsWithinEachWindowsOwnTrailingSpan covers the masthead's "cost_usd of cc runs in
-// the window" input: a run inside the span counts, one before it does not, and each window uses
-// its own span length.
 func TestCCCostUSDSumsWithinEachWindowsOwnTrailingSpan(t *testing.T) {
 	t.Parallel()
 

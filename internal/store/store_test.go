@@ -1,4 +1,4 @@
-package loop_test
+package store_test
 
 import (
 	"database/sql"
@@ -169,8 +169,6 @@ func TestBlockedByRejectsInvalidJSONAtTheDatabase(t *testing.T) {
 	}
 }
 
-// TestWithdrawTicketHidesItButKeepsItsHistory covers why withdrawal is a flag, not a delete:
-// runs and pushes both hold a foreign key back to the ticket's url.
 func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	t.Parallel()
 
