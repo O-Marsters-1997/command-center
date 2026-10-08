@@ -112,7 +112,6 @@ func (s *Store) SessionOwner(ctx context.Context, tokenSHA string, now time.Time
 	return id, nil
 }
 
-// DeleteSession removes the session whose token hash is tokenSHA.
 func (s *Store) DeleteSession(ctx context.Context, tokenSHA string) error {
 	if err := s.q.DeleteSession(ctx, tokenSHA); err != nil {
 		return fmt.Errorf("delete session: %w", err)

@@ -16,8 +16,6 @@ const (
 	sessionTTL    = 30 * 24 * time.Hour
 )
 
-// dummyPasswordHash is verified against when no account matches, so the KDF cost is paid at the
-// current iteration count either way.
 var dummyPasswordHash = sync.OnceValue(func() string {
 	hash, err := auth.HashPassword("dummy")
 	if err != nil {

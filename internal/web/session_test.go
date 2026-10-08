@@ -1,6 +1,8 @@
 package web_test
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -75,10 +77,10 @@ func TestLoginSetsSessionCookieStoredOnlyAsHash(t *testing.T) {
 	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow); err != nil {
 		t.Errorf("no session for the hash of the cookie: %v", err)
 	}
-	if _, err := st.SessionOwner(t.Context(), c.Value, testNow); err == nil {
+	if _, err := st.SessionOwner(t.Context(), c.Value, testNow); !errors.Is(err, sql.ErrNoRows) {
 		t.Error("raw token is stored as a session key")
 	}
-	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow.Add(31*24*time.Hour)); err == nil {
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow.Add(31*24*time.Hour)); !errors.Is(err, sql.ErrNoRows) {
 		t.Error("session still valid after 30 days")
 	}
 }
@@ -92,7 +94,7 @@ func TestSecondLoginDeletesFirstSession(t *testing.T) {
 	first := sessionCookie(t, postLogin(t, server, "me@example.com", loginPassword))
 	second := sessionCookie(t, postLogin(t, server, "me@example.com", loginPassword))
 
-	if _, err := st.SessionOwner(t.Context(), auth.HashToken(first.Value), testNow); err == nil {
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(first.Value), testNow); !errors.Is(err, sql.ErrNoRows) {
 		t.Error("first session survived a second login")
 	}
 	if _, err := st.SessionOwner(t.Context(), auth.HashToken(second.Value), testNow); err != nil {
