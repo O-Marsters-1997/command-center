@@ -199,7 +199,7 @@ func RemovalStateFor(ctx context.Context, repoPath, branch string, provenTips ..
 	if err != nil {
 		return NotRemovable, err
 	}
-	if !slices.Contains(provenTips, local) {
+	if local == "" || !slices.Contains(provenTips, local) {
 		return NotRemovable, nil
 	}
 	return RemovableByForce, nil

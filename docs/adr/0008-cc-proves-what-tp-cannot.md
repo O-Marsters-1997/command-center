@@ -30,5 +30,5 @@ merged PR's head is already observed, so a branch exactly there is equally prove
 ## Consequences
 
 No confirmation gates the forced path: merged, pruned, at the last pushed tip and clean is what a
-confirm button would ask a human to assert and they could not verify. Dirty worktrees and branches ahead of both tips
+confirm button would ask a human to assert and they could not verify. Dirty worktrees and branches ahead of every proven tip
 still refuse. tp is unchanged; only who reaches for `--force` changed.
