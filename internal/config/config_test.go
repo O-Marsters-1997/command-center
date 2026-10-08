@@ -278,7 +278,10 @@ func TestLoadConfigReviewMaxTurns(t *testing.T) {
 		{name: "unset halves a low implement cap", body: "max_turns = 10\n", want: "5"},
 		{name: "unset keeps the default under a high implement cap", body: "max_turns = 100\n", want: "20"},
 		{name: "explicit value below the implement cap", body: "max_turns = 60\nreview_max_turns = 15\n", want: "15"},
-		{name: "explicit value not below the implement cap", body: "max_turns = 20\nreview_max_turns = 20\n", wantErr: "must be below"},
+		{
+			name: "explicit value not below the implement cap",
+			body: "max_turns = 20\nreview_max_turns = 20\n", wantErr: "must be below",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

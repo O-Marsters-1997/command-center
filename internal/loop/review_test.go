@@ -71,7 +71,8 @@ func newReviewFixture(t *testing.T, lastKind string) *reviewFixture {
 	lp := loop.NewLoop(store, observe, fixedClock(testAt), cfg, ws, fake)
 	lp.SetForge(forge)
 	return &reviewFixture{
-		store: store, loop: lp, fake: fake, forge: forge, runsDir: ws.RunsDir, worktree: worktree, ticket: ticket, obs: shared,
+		store: store, loop: lp, fake: fake, forge: forge, runsDir: ws.RunsDir,
+		worktree: worktree, ticket: ticket, obs: shared,
 	}
 }
 
@@ -101,20 +102,6 @@ func (f *reviewFixture) finishReview(t *testing.T, findings string) {
 		}
 	}
 	f.fake.Alive[*run.Pgid] = false
-}
-
-func itoa(n int64) string { return strings.TrimSpace(strings.Repeat(" ", 0) + formatInt(n)) }
-
-func formatInt(n int64) string {
-	if n == 0 {
-		return "0"
-	}
-	var digits []byte
-	for ; n > 0; n /= 10 {
-		digits = append(digits, byte('0'+n%10))
-	}
-	slices.Reverse(digits)
-	return string(digits)
 }
 
 func TestAPushedImplementRunIsFollowedByExactlyOneReviewRun(t *testing.T) {
