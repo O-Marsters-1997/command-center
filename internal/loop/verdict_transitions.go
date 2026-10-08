@@ -42,7 +42,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		}
 
 		fact := &plan.RunFact{PROpen: true}
-		l.cfg.PlanRules().ApplyVerdict(fact, t.Plan(), obs, vd)
+		l.rules(obs).ApplyVerdict(fact, t.Plan(), obs, vd)
 		current := fact.Verdict.Label()
 		if current == "" || lastVerdicts[t.URL] == current {
 			continue

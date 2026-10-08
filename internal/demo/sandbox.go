@@ -3,6 +3,7 @@ package demo
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 var errMergeConflict = errors.New("branch conflicts with main")
@@ -29,7 +29,6 @@ type Sandbox struct {
 
 type sandboxRepo struct {
 	scenarioName string
-	stacking     bool
 	compatCheck  string
 	name         string
 	origin       string
@@ -69,7 +68,6 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	name := strings.ReplaceAll(r.Name, "/", "-")
 	repo := &sandboxRepo{
 		scenarioName: r.Name,
-		stacking:     r.Stacking,
 		compatCheck:  r.CompatCheck,
 		name:         name,
 		origin:       filepath.Join(s.root, "origins", filepath.FromSlash(r.Name)+".git"),
@@ -88,13 +86,30 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	if _, err := git(repo.merger, "checkout", "-q", "-b", "main"); err != nil {
 		return nil, err
 	}
-	if err := commitAll(repo.merger, "seed "+path.Base(r.Name), r.Files); err != nil {
+	seed := maps.Clone(r.Files)
+	if seed == nil {
+		seed = map[string]string{}
+	}
+	seed[config.SettingsFile] = settingsBody(r)
+	if err := commitAll(repo.merger, "seed "+path.Base(r.Name), seed); err != nil {
 		return nil, err
 	}
 	if _, err := git(repo.merger, "push", "-q", "origin", "main"); err != nil {
 		return nil, err
 	}
 	return repo, nil
+}
+
+func settingsBody(r Repo) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "stacking = %t\n", r.Stacking)
+	if r.CompatCheck == "" {
+		fmt.Fprintf(&b, "\n[checks]\nsuccess = %q\n", ciCheck)
+		return b.String()
+	}
+	fmt.Fprintf(&b, "compat_check = %q\n\n[checks]\nall_of = [{ success = %q }, { success = %q }]\n",
+		r.CompatCheck, ciCheck, r.CompatCheck)
+	return b.String()
 }
 
 func (r *sandboxRepo) syncMain() error {
@@ -144,19 +159,10 @@ func (s *Sandbox) LandOnMain(repoName string, files map[string]string) error {
 	return err
 }
 
-func (s *Sandbox) Repos(template config.Repo) []config.Repo {
+func (s *Sandbox) Repos() []config.Repo {
 	out := make([]config.Repo, 0, len(s.repos))
 	for _, r := range s.repos {
-		repo := template
-		repo.Name = r.name
-		repo.Remote = r.origin
-		repo.Checkout = r.checkout
-		repo.Stacking = r.stacking
-		if r.compatCheck != "" {
-			repo.Checks = verdict.Predicate{AllOf: []verdict.Predicate{{Success: ciCheck}, {Success: r.compatCheck}}}
-			repo.CompatCheck = r.compatCheck
-		}
-		out = append(out, repo)
+		out = append(out, config.Repo{Name: r.name, Remote: r.origin, Checkout: r.checkout})
 	}
 	return out
 }

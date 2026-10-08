@@ -16,6 +16,7 @@ func TestPushRefused(t *testing.T) {
 	}{
 		{name: "workflow file refuses", path: ".github/workflows/ci.yml", refused: true},
 		{name: "root mergify config refuses", path: ".mergify.yml", refused: true},
+		{name: "the repo settings file refuses", path: plan.SettingsFile, refused: true},
 		{name: "nested package.json refuses", path: "packages/foo/package.json", refused: true},
 		{name: "pnpm lockfile refuses", path: "pnpm-lock.yaml", refused: true},
 		{name: "bun lockfile refuses", path: "web/bun.lock", refused: true},
@@ -113,5 +114,14 @@ func TestPRBody(t *testing.T) {
 	}
 	if got := plan.PRBody("feat-parent", 42); got != "Merge after #42" {
 		t.Errorf("PRBody(feat-parent, 42) = %q, want %q", got, "Merge after #42")
+	}
+}
+
+func TestPushRefusedDeniesTheSettingsFileWhateverTheRepoDenyListSays(t *testing.T) {
+	t.Parallel()
+
+	refused, path := plan.PushRefused([]string{plan.SettingsFile}, plan.Policy{Deny: []string{"nothing/**"}})
+	if !refused || path != plan.SettingsFile {
+		t.Errorf("PushRefused = %v, %q, want true, %q", refused, path, plan.SettingsFile)
 	}
 }

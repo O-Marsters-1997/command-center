@@ -151,7 +151,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs p
 	if err != nil {
 		return fmt.Errorf("diff %s against origin/%s: %w", t.Branch, base, err)
 	}
-	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: l.cfg.PlanRules().Deny[t.Repo]}); refused {
+	if refused, path := plan.PushRefused(changed, plan.Policy{Deny: obs.Settings[t.Repo].Deny}); refused {
 		return l.event(ctx, t.URL, store.EventPushRefused, path)
 	}
 

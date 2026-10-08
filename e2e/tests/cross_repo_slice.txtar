@@ -32,7 +32,7 @@ grep -count=1 'commits_slow.sh .*services-cc-40-x' $WORK/agent.log
 grep -count=1 'commits_slow.sh .*repo-cc-1-x' $WORK/agent.log
 
 # Real wall time for both agents to finish committing.
-exec sleep 1.5
+exec sleep 2.5
 exec cc tick --count 1
 
 # Both push. The producer has no gating edge, so its pull request opens normally; the consumer's

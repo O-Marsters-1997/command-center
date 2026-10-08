@@ -1,6 +1,6 @@
 # 2. A repo is a remote, and a clone carries its own config
 
-**Date:** 2026-08-27 · **Status:** accepted
+**Date:** 2026-08-27 · **Status:** accepted, partly superseded by [ADR 16](0016-repos-are-tracked-not-configured.md) (per-repo settings no longer live in `[[repo]]`)
 
 ## Context
 

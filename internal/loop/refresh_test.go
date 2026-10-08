@@ -22,7 +22,7 @@ func stackedConfigAndWorkspace(t *testing.T, root string) (config.Config, config
 	t.Helper()
 	cfg := config.Config{
 		MaxAgents: 0,
-		Repos:     []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo"), Stacking: true}},
+		Repos:     []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
 	}
 	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
@@ -116,6 +116,7 @@ func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
 		Runs:       map[string]plan.RunObservation{},
 		MidMerge:   map[string]bool{},
+		Settings:   map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 }
 

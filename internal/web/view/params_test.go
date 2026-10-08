@@ -3,6 +3,8 @@ package view
 import (
 	"net/url"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 func TestParseViewParamsTakesTheFirstSel(t *testing.T) {
@@ -108,7 +110,7 @@ func TestNormalizeFeatureScope(t *testing.T) {
 func TestNormalizeRepoScope(t *testing.T) {
 	t.Parallel()
 
-	stacking := map[string]bool{"support-app": true, "services": false}
+	repos := []config.Repo{{Name: "support-app"}, {Name: "services"}}
 	for _, tc := range []struct {
 		name string
 		repo string
@@ -121,7 +123,7 @@ func TestNormalizeRepoScope(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := normalizeRepoScope(tc.repo, stacking); got != tc.want {
+			if got := normalizeRepoScope(tc.repo, repos); got != tc.want {
 				t.Errorf("normalizeRepoScope(%q) = %q, want %q", tc.repo, got, tc.want)
 			}
 		})

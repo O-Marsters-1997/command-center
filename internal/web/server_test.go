@@ -233,12 +233,13 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -280,14 +281,15 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 				},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+			{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
+		}}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{Name: "repo", Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-		{Success: "CI"}, {Success: "Deploy"}, {Success: "Lint"},
-	}}}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -344,17 +346,18 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 				},
 			},
 		},
+		Settings: map[string]config.RepoSettings{"repo": {
+			CompatCheck: "GraphQL production compatibility",
+			Checks: verdict.Predicate{AllOf: []verdict.Predicate{
+				{Success: "GraphQL production compatibility"}, {Success: "Tests"},
+			}},
+		}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	repos := []config.Repo{{
-		Name: "repo", CompatCheck: "GraphQL production compatibility",
-		Checks: verdict.Predicate{AllOf: []verdict.Predicate{
-			{Success: "GraphQL production compatibility"}, {Success: "Tests"},
-		}},
-	}}
+	repos := []config.Repo{{Name: "repo"}}
 	server := web.NewServer(store, fixedClock(at), repos, "")
 	page := renderPage(t, server)
 
@@ -849,4 +852,45 @@ func postLaunchForm(t *testing.T, srv *httptest.Server, form url.Values) (*http.
 		t.Fatal(err)
 	}
 	return resp, string(body)
+}
+
+func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
+	t.Parallel()
+
+	stateWith := func(t *testing.T, checks verdict.Predicate) string {
+		t.Helper()
+		ctx := t.Context()
+		store := openStore(t)
+		ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
+		if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+			t.Fatal(err)
+		}
+		at := testNow
+		dispositionAsPushed(t, store, ticket.URL, at)
+		if err := store.RecordPush(ctx, ticket.URL, "ci-tip", "main", "main-tip", at); err != nil {
+			t.Fatal(err)
+		}
+		obs := plan.Observation{
+			BranchTips: map[string]string{web.MainTipKey("repo"): "main-tip"},
+			PRs: map[string]plan.PR{
+				plan.BranchKey("repo", "ci"): {
+					Number: 1, State: plan.Open, HeadOid: "ci-tip",
+					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
+				},
+			},
+			Settings: map[string]config.RepoSettings{"repo": {Checks: checks}},
+		}
+		if err := store.SaveObservation(ctx, obs); err != nil {
+			t.Fatal(err)
+		}
+		server := web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, "")
+		return rowState(t, renderPage(t, server), ticket.URL)
+	}
+
+	if got := stateWith(t, verdict.Predicate{Success: "CI"}); got != "review_me" {
+		t.Fatalf("state with CI required = %q, want review_me: the control this test rests on", got)
+	}
+	if got := stateWith(t, verdict.Predicate{Success: "Lint"}); got == "review_me" {
+		t.Errorf("state with a never-reported check required = %q, want the verdict to follow the observed checks", got)
+	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -250,8 +251,10 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 			}},
 		},
 	}
-	cfg := config.Config{
-		Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git", Tracker: "linear"}},
+	cfg := config.Config{Repos: []config.Repo{{Name: "alpha", Remote: "git@github.com:acme/alpha.git"}}}
+	seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}
+	if err := store.SaveObservation(ctx, seed); err != nil {
+		t.Fatal(err)
 	}
 
 	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})

@@ -32,20 +32,3 @@ agent_command = [
 [[repo]]
 name     = "command-center"
 remote   = "git@github.com:O-Marsters-1997/command-center.git"
-stacking = true
-deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
-
-  [[repo.checks.all_of]]
-  success = "test"
-  [[repo.checks.all_of]]
-  success = "e2e"
-  [[repo.checks.all_of]]
-  success = "lint"
-  [[repo.checks.all_of]]
-  success = "build (ubuntu-latest)"
-  [[repo.checks.all_of]]
-  success = "build (macos-latest)"
-  [[repo.checks.all_of]]
-  success = "tidy"
-  [[repo.checks.all_of]]
-  success = "assets"

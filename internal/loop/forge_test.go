@@ -15,7 +15,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -74,8 +73,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	cfg.Repos[0].Remote = "git@github.com:acme/repo.git"
-	cfg.Repos[0].Tracker = string(tracker.GitHub)
-	cfg.Repos[0].Checks = verdict.Predicate{Success: "CI"}
+	pushSettingsFile(t, filepath.Join(root, "repo"), "[checks]\nsuccess = \"CI\"\n")
 
 	issue := tracker.Ticket{URL: "https://github.com/acme/repo/issues/1", Number: 1, Title: "Add x"}
 	source := fakeTrackerSource{

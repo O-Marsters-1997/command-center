@@ -234,7 +234,7 @@ path is relative to.
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. A non-empty argv must name `--permission-mode` and carry `{agents}` and `{system_prompt}`; startup refuses one that does not. |
 | `max_turns` | Caps a spawned run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, then exactly one of `remote` and `path`, plus `stacking`, `mergify_sha`, `deny`, `checks`, `verify_command`. |
+| `[[repo]]` | `name`, then exactly one of `remote` and `path`. Per-repo settings live in the repo's own `.command-centre.toml` (below); a block that still carries one is refused at load. |
 
 A repo is located by `remote`, a git URL cloned to `<data_dir>/repos/<name>`, or by `path`,
 a checkout that already exists, absolute or relative to the config file's own
@@ -250,6 +250,11 @@ command only when the prompt arrives as argv text, so a path is read back as
 inert text and `/implement` never fires. `{prompt_file}` stays for anything that
 would rather take a path.
 
+Each repo's `.command-centre.toml`, read from its `origin/main` on every tick (never from a
+branch), holds `tracker`, `stacking`, `deny`, `checks`, `compat_check`, `mergify_sha` and
+`verify_command`. A missing file means defaults; a malformed one skips that repo for the tick and
+shows as the last error. The file's own path is always denied to agent pushes.
+
 `checks` is the repo's boolean predicate over its gating checks, evaluated by
 `internal/verdict` against a normalised rollup. `mergify_sha` is the
 `sha256(.mergify.yml)` that predicate was written against. When the file's hash
@@ -258,7 +263,7 @@ per-repo path patterns to the push policy's default refusals. A repo that
 configures neither `checks` nor `mergify_sha` stops at `checking` and never
 derives a verdict.
 
-`[[repo]]` also accepts `compat_check`, the name of the check that reports
+The file also accepts `compat_check`, the name of the check that reports
 whether a consumer still builds against its producer.
 `internal/loop/draftgate.go` and `internal/loop/verdict_transitions.go` read it.
 

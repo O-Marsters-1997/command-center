@@ -11,10 +11,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-
-	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 // Config is the user-edited TOML file named by --config.
@@ -40,22 +36,11 @@ type Config struct {
 }
 
 // Repo is one [[repo]] block, located by Remote (a git URL the app clones) or Path (an
-// existing checkout); exactly one. Checks, MergifySHA and CompatCheck are empty until the repo
-// opts into a CI verdict.
+// existing checkout); exactly one. Everything else about a repo lives in its SettingsFile.
 type Repo struct {
 	Name   string `toml:"name"`
 	Remote string `toml:"remote"`
-	// Tracker names which issue tracker this repo's tickets live in. Absent, LoadConfig defaults
-	// it to "github".
-	Tracker     string            `toml:"tracker"`
-	Path        string            `toml:"path"`
-	Stacking    bool              `toml:"stacking"`
-	CompatCheck string            `toml:"compat_check"`
-	MergifySHA  string            `toml:"mergify_sha"`
-	Deny        []string          `toml:"deny"`
-	Checks      verdict.Predicate `toml:"checks"`
-	// VerifyCommand is the argv a clean refresh or restack is verified with; empty means opted out.
-	VerifyCommand []string `toml:"verify_command"`
+	Path   string `toml:"path"`
 	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
 	// downstream reads this and derives no path of its own. Not a config key.
 	Checkout string `toml:"-"`
@@ -91,6 +76,10 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}
 
+	if err := rejectPerRepoKeys(path); err != nil {
+		return Config{}, err
+	}
+
 	if cfg.BoardPollSeconds < 1 {
 		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
 	}
@@ -120,9 +109,6 @@ func LoadConfig(path string) (Config, error) {
 		cfg.AgentCommand = append(cfg.AgentCommand, "--max-turns", strconv.Itoa(cfg.MaxTurns))
 	}
 	for i, r := range cfg.Repos {
-		if r.Tracker == "" {
-			cfg.Repos[i].Tracker = string(tracker.GitHub)
-		}
 		checkout, err := r.CheckoutPath(dataDir, configDir)
 		if err != nil {
 			return Config{}, err
@@ -164,28 +150,6 @@ func requireAgentCommandParts(argv []string) error {
 	return nil
 }
 
-// PlanRules builds the rules every decision reads, indexing each configured repo's settings by
-// name. It is the only place those per-repo maps are built.
-func (c Config) PlanRules() plan.Rules {
-	rules := plan.Rules{
-		Stacking:     make(map[string]bool, len(c.Repos)),
-		Deny:         make(map[string][]string, len(c.Repos)),
-		Checks:       make(map[string]verdict.Predicate, len(c.Repos)),
-		MergifySHA:   make(map[string]string, len(c.Repos)),
-		CompatCheck:  make(map[string]string, len(c.Repos)),
-		MaxAgents:    c.MaxAgents,
-		SpendLimit5h: c.SpendLimit5h,
-	}
-	for _, r := range c.Repos {
-		rules.Stacking[r.Name] = r.Stacking
-		rules.Deny[r.Name] = r.Deny
-		rules.Checks[r.Name] = r.Checks
-		rules.MergifySHA[r.Name] = r.MergifySHA
-		rules.CompatCheck[r.Name] = r.CompatCheck
-	}
-	return rules
-}
-
 // CheckoutPath answers where a repo's working copy is. A remote repo's checkout is one the app
 // makes and names, at <dataDir>/repos/<name>; a path repo's is one the operator made, absolute
 // or relative to configDir. Exactly one of the two forms is allowed.
@@ -215,6 +179,28 @@ func (r Repo) CheckoutPath(dataDir, configDir string) (string, error) {
 func validRepoName(name string) error {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
 		return fmt.Errorf("repo name %q is not a single directory name", name)
+	}
+	return nil
+}
+
+var perRepoKeys = []string{
+	"tracker", "stacking", "deny", "checks", "compat_check", "mergify_sha", "verify_command",
+}
+
+func rejectPerRepoKeys(path string) error {
+	var raw struct {
+		Repos []map[string]any `toml:"repo"`
+	}
+	if _, err := toml.DecodeFile(path, &raw); err != nil {
+		return fmt.Errorf("read config %s: %w", path, err)
+	}
+	for _, block := range raw.Repos {
+		for _, key := range perRepoKeys {
+			if _, ok := block[key]; ok {
+				return fmt.Errorf("config %s: [[repo]] %v sets %q; per-repo settings now live in %s on the repo's origin/main",
+					path, block["name"], key, SettingsFile)
+			}
+		}
 	}
 	return nil
 }

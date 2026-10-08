@@ -240,7 +240,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
 	}
-	repos := []config.Repo{{Name: "repo", Stacking: true, Checks: verdict.Predicate{Success: "CI"}}}
+	repos := []config.Repo{{Name: "repo"}}
 
 	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
 		t.Helper()
@@ -262,6 +262,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			Worktrees:  map[string]string{plan.BranchKey("repo", "child"): "/repos/child"},
 			BranchTips: map[string]string{loop.MainTipKey("repo"): observedMainTip},
 			PRs:        prs,
+			Settings:   map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 		}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)

@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -12,9 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 // testdataDir is absolute because the harness commands run with the script's work directory as
@@ -127,6 +130,32 @@ func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(ts.Exec("git", "init", "-q", "--bare", remote))
 	ts.Check(ts.Exec("git", "-C", repo, "remote", "add", "origin", remote))
 	ts.Check(ts.Exec("git", "-C", repo, "push", "-q", "-u", "origin", "main"))
+	publishRepoSettings(ts, name)
+}
+
+var perRepoKeys = []string{"tracker", "stacking", "deny", "checks", "compat_check", "mergify_sha", "verify_command"}
+
+func pendingSettingsPath(ts *testscript.TestScript, name string) string {
+	return filepath.Join(ts.Getenv("WORK"), "cc", "repo-settings", name+".toml")
+}
+
+func publishRepoSettings(ts *testscript.TestScript, name string) {
+	body, err := os.ReadFile(pendingSettingsPath(ts, name))
+	if err != nil {
+		return
+	}
+	repo := filepath.Join(ts.Getenv("WORK"), name)
+	if _, err := os.Stat(filepath.Join(repo, ".git")); err != nil {
+		return
+	}
+	dest := filepath.Join(repo, config.SettingsFile)
+	if current, err := os.ReadFile(dest); err == nil && string(current) == string(body) {
+		return
+	}
+	ts.Check(os.WriteFile(dest, body, 0o600))
+	ts.Check(ts.Exec("git", "-C", repo, "add", config.SettingsFile))
+	ts.Check(ts.Exec("git", "-C", repo, "commit", "-q", "-m", "repo settings"))
+	ts.Check(ts.Exec("git", "-C", repo, "push", "-q", "origin", "main"))
 }
 
 // ccConfig installs a named config fixture at cc's default path, so no script ever passes
@@ -141,9 +170,38 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(err)
 	body = []byte(strings.ReplaceAll(string(body), "{{agents}}", agentsDir))
 
-	dir := filepath.Join(ts.Getenv("WORK"), "cc")
-	ts.Check(os.MkdirAll(dir, 0o700))
-	ts.Check(os.WriteFile(filepath.Join(dir, "config.toml"), append([]byte("port = 0\n"), body...), 0o600))
+	var doc map[string]any
+	ts.Check(toml.Unmarshal(body, &doc))
+	doc["port"] = 0
+
+	settingsDir := filepath.Join(ts.Getenv("WORK"), "cc", "repo-settings")
+	ts.Check(os.MkdirAll(settingsDir, 0o700))
+	repos, _ := doc["repo"].([]map[string]any)
+	var names []string
+	for _, block := range repos {
+		name, _ := block["name"].(string)
+		settings := map[string]any{}
+		for _, key := range perRepoKeys {
+			if v, ok := block[key]; ok {
+				settings[key] = v
+				delete(block, key)
+			}
+		}
+		if len(settings) == 0 {
+			continue
+		}
+		var buf bytes.Buffer
+		ts.Check(toml.NewEncoder(&buf).Encode(settings))
+		ts.Check(os.WriteFile(pendingSettingsPath(ts, name), buf.Bytes(), 0o600))
+		names = append(names, name)
+	}
+
+	var out bytes.Buffer
+	ts.Check(toml.NewEncoder(&out).Encode(doc))
+	ts.Check(os.WriteFile(filepath.Join(ts.Getenv("WORK"), "cc", "config.toml"), out.Bytes(), 0o600))
+	for _, name := range names {
+		publishRepoSettings(ts, name)
+	}
 }
 
 // ccFakeGh stages the fixture the fake gh answers from. It is read at exec time, so a script
