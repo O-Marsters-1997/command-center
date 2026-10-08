@@ -10,6 +10,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 type FeatureRow struct {
@@ -26,9 +27,10 @@ type ImportError struct {
 
 // RepoRow is one line of the repos page: a repo the app tracks, or a pushable one it does not.
 type RepoRow struct {
-	FullName string
-	Tracked  bool
-	Path     string
+	FullName      string
+	Tracked       bool
+	Path          string
+	RefusedBranch string
 }
 
 // ReposPage is the unscoped /features page: every repo the app knows.
@@ -121,7 +123,11 @@ func (r *Reader) SearchRepos(query string, pushable []gh.RepoSummary) []RepoRow 
 		if !strings.Contains(strings.ToLower(p.FullName), q) || r.tracks(p) {
 			continue
 		}
-		untracked = append(untracked, RepoRow{FullName: p.FullName, Path: repoPath(p.FullName)})
+		row := RepoRow{FullName: p.FullName, Path: repoPath(p.FullName)}
+		if p.DefaultBranch != plan.DefaultBaseBranch {
+			row.RefusedBranch = p.DefaultBranch
+		}
+		untracked = append(untracked, row)
 	}
 	slices.SortFunc(untracked, func(a, b RepoRow) int { return strings.Compare(a.FullName, b.FullName) })
 	return append(rows, untracked...)

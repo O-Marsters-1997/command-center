@@ -6,7 +6,7 @@
   {{range .Rows}}
   <tr>
     <td><a href="{{.Path}}">{{.FullName}}</a></td>
-    <td>{{if .Tracked}}<span class="pill pill-done">ready</span>{{else}}<span class="text-muted">not tracked</span>{{end}}</td>
+    <td>{{if .Tracked}}<span class="pill pill-done">ready</span>{{else}}<span class="text-muted">not tracked</span>{{with .RefusedBranch}} <span class="pill pill-stop text-xs">will be refused: default branch is <code>{{.}}</code></span>{{end}}{{end}}</td>
     <td>{{if not .Tracked}}<a href="{{.Path}}">track &rarr;</a>{{end}}</td>
   </tr>
   {{else}}
