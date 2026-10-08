@@ -33,13 +33,17 @@ server and wires them together.
   of reconciled state** ([ADR 11](docs/adr/0011-the-loop-owns-reconciled-state.md)): anything a tick
   observes or derives from, or a page renders. Verbs queue intents for it. `users` and `sessions` sit
   outside, which is why `cc useradd` writes directly.
-- `internal/store`: Postgres. It returns `plan.Input` (`Store.PlanInput`) and holds the generated
-  `internal/store/ccdb` unexported. Migrations live in `internal/store/migrations` (goose).
+- `internal/store`: Postgres. It returns `plan.Input` (`Store.PlanInput`) and is the only importer
+  of the generated `internal/store/ccdb`. The compiler does not enforce that; keep it so.
+  Migrations live in `internal/store/migrations` (goose).
 - `internal/web`: handlers and `html/template` pages. `internal/web/view` builds what a template
   renders. The web derives per render through `plan` and caches nothing between requests.
-- `internal/gh` is the only package that knows the gh CLI's JSON shape. `internal/tracker` owns
-  reading an issue tracker, so nothing above it knows GitHub exists. `internal/verdict` evaluates a
-  repo's check predicate over a normalised snapshot, never gh's raw JSON.
+- `internal/gh` normalises the gh CLI's pull request and check JSON. Two other packages call `gh`
+  and decode its JSON themselves: `internal/tracker` (issues, behind the tracker interface) and
+  `internal/git` (`repocheck.go`, repo settings). A change to gh output handling checks all three.
+  `internal/verdict` evaluates a repo's check predicate over a normalised snapshot, never raw JSON.
+- `internal/git`: git and worktree operations, plus the GitHub repo check. It imports `command` and
+  `plan`.
 - Leaves that import no other `internal` package: `command` (runs a CLI), `runner` (agent process
   groups), `agentlog` (reads a run's stream-json), `auth`, `verdict`. `spend` imports only
   `agentlog`.
@@ -50,7 +54,8 @@ server and wires them together.
 
 - SQL is generated from the schema ([ADR 5](docs/adr/0005-sql-is-generated-from-the-schema.md)).
   sqlc reads the schema from `internal/store/migrations` and the queries from
-  `internal/store/queries`, one `.sql` per store Go file, and generates `internal/store/ccdb`.
+  `internal/store/queries`, usually named after the store Go file that runs them, and generates
+  `internal/store/ccdb`.
 - `just sqlc` regenerates. Commit the generated code with the query or migration change; never
   hand-edit it. A query sqlc cannot parse stays hand-written on `s.db`.
 - Add a migration with `just migrate-create <name>`. Never edit an applied one.
@@ -131,7 +136,7 @@ just sqlc          # regenerate internal/store/ccdb
 just assets        # bun install && bun run build, in web/
 just up / down     # the Postgres the app connects to
 just migrate-up    # also migrate-status, -down, -redo, -create <name>, -reset
-just ci            # conflicts check, build, lint, test, e2e
+just ci            # conflicts check, build, lint (golangci-lint on PATH), test, e2e
 ```
 
 ## Gotchas
