@@ -34,6 +34,16 @@ func (s *Store) UserForLogin(ctx context.Context, email string) (ccdb.UserForLog
 	return row, nil
 }
 
+// RecordLoginFailure counts one more failed login for the user and holds further attempts off
+// until now plus 2^n seconds, n being the new failure count, capped at 60.
+func (s *Store) RecordLoginFailure(ctx context.Context, userID int64, now time.Time) error {
+	err := s.q.RecordLoginFailure(ctx, ccdb.RecordLoginFailureParams{ID: userID, Now: now.UTC()})
+	if err != nil {
+		return fmt.Errorf("record login failure for user %d: %w", userID, err)
+	}
+	return nil
+}
+
 // DeleteExpiredSessions deletes every session whose expiry is at or before now, and returns how
 // many rows that was.
 func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64, error) {
@@ -74,7 +84,7 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 }
 
 // IssueSession replaces every session the user holds with one row for tokenSHA, so a token
-// captured before a login is dead after it.
+// captured before a login is dead after it, and clears the user's login backoff.
 func (s *Store) IssueSession(ctx context.Context, userID int64, tokenSHA string, at, expiresAt time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -89,6 +99,9 @@ func (s *Store) IssueSession(ctx context.Context, userID int64, tokenSHA string,
 	qtx := s.q.WithTx(tx)
 	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions for user %d: %w", userID, err)
+	}
+	if err = qtx.ResetLoginFailures(ctx, userID); err != nil {
+		return fmt.Errorf("reset login failures for user %d: %w", userID, err)
 	}
 	err = qtx.IssueSession(ctx, ccdb.IssueSessionParams{
 		UserID:    userID,
