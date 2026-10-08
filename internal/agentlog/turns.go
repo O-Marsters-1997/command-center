@@ -4,6 +4,7 @@ type requestLedger struct {
 	order []string
 	phase map[string]int
 	usage map[string]RequestUsage
+	main  map[string]bool
 }
 
 func (l *requestLedger) note(parsed logLine, phase int) {
@@ -13,11 +14,13 @@ func (l *requestLedger) note(parsed logLine, phase int) {
 	if l.phase == nil {
 		l.phase = make(map[string]int)
 		l.usage = make(map[string]RequestUsage)
+		l.main = make(map[string]bool)
 	}
 	id := parsed.RequestID
 	if seen, ok := l.phase[id]; !ok {
 		l.order = append(l.order, id)
 		l.phase[id] = phase
+		l.main[id] = parsed.ParentToolUseID == ""
 	} else if seen < 0 {
 		l.phase[id] = phase
 	}
@@ -32,7 +35,9 @@ func (l *requestLedger) settle(phases []Phase) {
 	}
 	for _, id := range l.order {
 		phase := &phases[max(0, l.phase[id])]
-		phase.Turns++
+		if l.main[id] {
+			phase.Turns++
+		}
 		phase.Spend += Weight(l.usage[id])
 	}
 }

@@ -3,6 +3,7 @@ package view
 import (
 	"net/url"
 	"slices"
+	"strconv"
 )
 
 var logFilters = []string{"all", "skills", "tools", "fails"}
@@ -28,7 +29,7 @@ type Params struct {
 func ParseParams(q url.Values) Params {
 	v := Params{
 		Tickets: q["ticket"], View: q.Get("view"), Log: NormalizeLogFilter(q.Get("log")),
-		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: q.Get("phase"),
+		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: normalizePhase(q.Get("phase")),
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
@@ -37,6 +38,13 @@ func ParseParams(q url.Values) Params {
 		v.View = "board"
 	}
 	return v
+}
+
+func normalizePhase(phase string) string {
+	if i, err := strconv.Atoi(phase); err != nil || i < 0 {
+		return ""
+	}
+	return phase
 }
 
 func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
@@ -122,6 +130,7 @@ func withQuery(path, query string) string {
 
 func (v Params) toggleSel(ticketURL string) Params {
 	next := v
+	next.Phase = ""
 	if v.Sel == ticketURL {
 		next.Sel = ""
 	} else {

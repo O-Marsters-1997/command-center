@@ -57,7 +57,9 @@
           {{- end}}
         </section>
         {{- end}}
-        <div class="run-log-live" hx-ext="sse" sse-connect="{{.Log.StreamPath}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+        {{- with .Log.StreamPath}}
+        <div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+        {{- end}}
       </div>
       {{- with .Log.Final}}
       <div class="run-final">{{raw .}}</div>

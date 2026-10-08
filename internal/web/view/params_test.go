@@ -274,3 +274,21 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestParseParamsKeepsOnlyAPhaseIndex(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ in, want string }{{"2", "2"}, {"abc", ""}, {"-1", ""}, {"", ""}} {
+		if got := ParseParams(url.Values{"phase": {tc.in}}).Phase; got != tc.want {
+			t.Errorf("ParseParams(phase=%q).Phase = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestToggleSelDropsThePhaseOfTheTicketItLeaves(t *testing.T) {
+	t.Parallel()
+
+	if got := (Params{Sel: "a", Phase: "2"}).toggleSel("b").Phase; got != "" {
+		t.Errorf("toggleSel kept Phase = %q, an index into another ticket's phases", got)
+	}
+}

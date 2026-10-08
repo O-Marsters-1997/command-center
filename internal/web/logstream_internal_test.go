@@ -46,7 +46,7 @@ func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	if sent := sendLines(&buf, path, &offset, "all"); sent != 1 {
+	if sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	fromStream := extractSSEData(t, buf.String())
@@ -72,7 +72,7 @@ func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	sent := sendLines(&buf, path, &offset, "fails")
+	sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "fails")
 
 	if sent != 1 {
 		t.Fatalf("sendLines(mode=fails) sent %d events, want 1 (just the run's one Fail)", sent)
@@ -91,7 +91,7 @@ func TestSendLinesCarriesAMultiLineOutputAsOneDataLinePerLine(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	if sent := sendLines(&buf, path, &offset, "all"); sent != 1 {
+	if sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	frame := buf.String()

@@ -36,8 +36,9 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Cache-Control", "no-cache")
 	flusher := http.NewResponseController(w)
 
+	var tail agentlog.Tail
 	for {
-		sent := sendLines(w, path, &offset, mode)
+		sent := sendLines(w, &tail, path, &offset, mode)
 		_ = flusher.Flush()
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
@@ -57,7 +58,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
-func sendLines(w io.Writer, path string, offset *int64, mode string) int {
+func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) int {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0
@@ -76,7 +77,7 @@ func sendLines(w io.Writer, path string, offset *int64, mode string) int {
 		}
 		*offset += int64(len(line))
 
-		for _, event := range agentlog.ParseLine([]byte(strings.TrimRight(line, "\r\n"))) {
+		for _, event := range tail.Read([]byte(strings.TrimRight(line, "\r\n"))) {
 			if !view.KindShown(mode, event.Kind) {
 				continue
 			}

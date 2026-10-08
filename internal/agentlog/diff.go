@@ -1,6 +1,9 @@
 package agentlog
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type DiffOp int
 
@@ -61,8 +64,8 @@ func lineDiff(before, after string) Diff {
 	diff.Lines = appendRows(diff.Lines, Remove, removed)
 	diff.Lines = appendRows(diff.Lines, Add, added)
 	diff.Lines = appendRows(diff.Lines, Keep, old[len(old)-suffix:min(len(old), len(old)-suffix+diffContext)])
-	if len(diff.Lines) > maxDiffLines {
-		diff.Lines = diff.Lines[:maxDiffLines]
+	if cut := len(diff.Lines) - maxDiffLines; cut > 0 {
+		diff.Lines = append(diff.Lines[:maxDiffLines], DiffLine{Op: Keep, Text: fmt.Sprintf("… %d more lines", cut)})
 	}
 	return diff
 }

@@ -317,8 +317,12 @@ func TestParseLineBoundsAResultsOutputButCountsItWhole(t *testing.T) {
 	if got[0].OutputLines != 100 {
 		t.Errorf("OutputLines = %d; want 100", got[0].OutputLines)
 	}
-	if kept := strings.Count(got[0].Output, "\n") + 1; kept != 40 {
-		t.Errorf("Output keeps %d lines; want 40", kept)
+	kept, marker, _ := strings.Cut(got[0].Output, "\n… ")
+	if lines := strings.Count(kept, "\n") + 1; lines != 40 {
+		t.Errorf("Output keeps %d lines; want 40", lines)
+	}
+	if marker != "output cut short, 60 more lines" {
+		t.Errorf("Output ends %q; want it to say what was cut", marker)
 	}
 }
 
@@ -373,5 +377,86 @@ func TestParseCountsEachPhasesTurnsAndPricesItsSpend(t *testing.T) {
 	}
 	if run.End != 4*time.Second {
 		t.Errorf("End = %v; want 4s, the last kept event", run.End)
+	}
+}
+
+func TestParseDiffMarksTheRowsItCuts(t *testing.T) {
+	t.Parallel()
+
+	line := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":` +
+		`{"file_path":"a.go","old_string":"","new_string":"` + strings.Repeat("x\\n", 99) + `x"}}]}}`
+
+	got := agentlog.ParseLine([]byte(line))
+	if len(got) != 1 {
+		t.Fatalf("ParseLine = %+v; want one event", got)
+	}
+	rows := got[0].Diff.Lines
+	if len(rows) != 81 || rows[80] != (agentlog.DiffLine{Op: agentlog.Keep, Text: "… 21 more lines"}) {
+		t.Errorf("diff ends %+v after %d rows; want 80 rows and a marker for the 21 cut", rows[len(rows)-1], len(rows))
+	}
+	if got[0].Diff.Added != 100 {
+		t.Errorf("Added = %d; want every added line counted", got[0].Diff.Added)
+	}
+}
+
+func parseString(t *testing.T, log string) agentlog.Run {
+	t.Helper()
+
+	run, err := agentlog.Parse(strings.NewReader(log))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	return run
+}
+
+func TestParseFilesAResultUnderItsCallsPhase(t *testing.T) {
+	t.Parallel()
+
+	run := parseString(t, `{"type":"assistant","message":{"content":[`+
+		`{"type":"tool_use","id":"b","name":"Bash","input":{"command":"ls"}},`+
+		`{"type":"tool_use","id":"s","name":"Skill","input":{"skill":"tdd"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":"x"}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"s","content":"Launching skill: tdd"}]}}
+`)
+	if len(run.Phases) != 2 {
+		t.Fatalf("%d phases; want 2", len(run.Phases))
+	}
+	if got := run.Phases[0].Events; len(got) != 2 || got[1].Kind != agentlog.Pass || got[1].CallID != "b" {
+		t.Errorf("phase 0 events = %+v; want the Bash call and its result", got)
+	}
+	if got := run.Phases[1].Events; len(got) != 0 {
+		t.Errorf("phase 1 events = %+v; want none (the skill's launch result is dropped)", got)
+	}
+}
+
+func TestParseKeepsASubagentsSkillAndTurnsOutOfTheMainRun(t *testing.T) {
+	t.Parallel()
+
+	run := parseString(t, `{"type":"assistant","request_id":"r1","message":{"content":[`+
+		`{"type":"tool_use","id":"task","name":"Task","input":{"prompt":"go"}}]}}
+{"type":"assistant","request_id":"r2","parent_tool_use_id":"task","message":{"content":[`+
+		`{"type":"tool_use","id":"s","name":"Skill","input":{"skill":"tdd"}}]}}
+`)
+	if len(run.Phases) != 1 {
+		t.Fatalf("%d phases; want 1, a subagent's skill opens no phase of the main run", len(run.Phases))
+	}
+	want := agentlog.Event{Kind: agentlog.Tool, Tool: "Skill", Detail: "tdd", CallID: "s"}
+	if got := run.Phases[0].Events; len(got) != 2 || !sameEvent(got[1], want) {
+		t.Errorf("events = %+v; want the subagent's skill as a plain tool call", got)
+	}
+	if run.Phases[0].Turns != 1 {
+		t.Errorf("Turns = %d; want 1, the subagent's request is not a turn of the main run", run.Phases[0].Turns)
+	}
+}
+
+func TestTailDropsSkillLaunchResultsAcrossLines(t *testing.T) {
+	t.Parallel()
+
+	var tail agentlog.Tail
+	tail.Read([]byte(`{"type":"assistant","message":{"content":[` +
+		`{"type":"tool_use","id":"s","name":"Skill","input":{"skill":"tdd"}}]}}`))
+	launch := `{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"s","content":"Launching"}]}}`
+	if got := tail.Read([]byte(launch)); len(got) != 0 {
+		t.Errorf("Tail.Read(launch result) = %+v; want dropped, as Parse drops it", got)
 	}
 }

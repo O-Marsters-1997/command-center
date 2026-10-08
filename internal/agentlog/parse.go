@@ -94,7 +94,8 @@ func Parse(r io.Reader) (Run, error) {
 	var run Run
 	var base time.Time
 	var ledger requestLedger
-	skillCalls := map[string]bool{}
+	var tail Tail
+	callPhase := map[string]int{}
 
 	err := eachLine(r, func(line []byte) {
 		run.Lines++
@@ -108,13 +109,7 @@ func Parse(r io.Reader) (Run, error) {
 			run.Result = &result
 			return
 		}
-		for _, event := range parsed.events() {
-			if event.Kind == Skill && event.CallID != "" {
-				skillCalls[event.CallID] = true
-			}
-			if event.Kind == Pass && skillCalls[event.CallID] {
-				continue
-			}
+		for _, event := range tail.keep(parsed.events()) {
 			if !parsed.Timestamp.IsZero() {
 				if base.IsZero() {
 					base = parsed.Timestamp
@@ -122,7 +117,14 @@ func Parse(r io.Reader) (Run, error) {
 				event.At = parsed.Timestamp.Sub(base)
 				run.End = max(run.End, event.At)
 			}
+			if phase, ok := callPhase[event.CallID]; ok && (event.Kind == Pass || event.Kind == Fail) {
+				run.Phases[phase].Events = append(run.Phases[phase].Events, event)
+				continue
+			}
 			run.append(event)
+			if event.CallID != "" && event.Kind != Skill {
+				callPhase[event.CallID] = len(run.Phases) - 1
+			}
 		}
 		ledger.note(parsed, len(run.Phases)-1)
 	})
@@ -254,12 +256,38 @@ func (l logLine) result() Result {
 	}
 }
 
+// Tail reads a live log one line at a time, dropping the results that only announce a Skill
+// launch, as Parse does.
+type Tail struct {
+	skillCalls map[string]bool
+}
+
+func (t *Tail) Read(line []byte) []Event {
+	return t.keep(ParseLine(line))
+}
+
+func (t *Tail) keep(events []Event) []Event {
+	return slices.DeleteFunc(events, func(e Event) bool {
+		if e.Kind == Skill && e.CallID != "" {
+			if t.skillCalls == nil {
+				t.skillCalls = make(map[string]bool)
+			}
+			t.skillCalls[e.CallID] = true
+		}
+		return e.Kind == Pass && t.skillCalls[e.CallID]
+	})
+}
+
 func (l logLine) events() []Event {
 	var events []Event
 	for _, block := range l.Message.Content {
 		switch {
 		case l.Type == "assistant" && block.Type == "tool_use":
-			events = append(events, block.toolEvent())
+			event := block.toolEvent()
+			if event.Kind == Skill && l.ParentToolUseID != "" {
+				event = Event{Kind: Tool, Tool: block.Name, Detail: event.Tool, CallID: event.CallID}
+			}
+			events = append(events, event)
 		case l.Type == "assistant" && block.Type == "text" && l.ParentToolUseID == "":
 			if say := strings.TrimSpace(block.Text); say != "" {
 				events = append(events, Event{Kind: Say, Detail: say})
@@ -333,6 +361,12 @@ func boundOutput(whole string) (string, int) {
 	kept := strings.Join(lines[:min(len(lines), maxOutputLines)], "\n")
 	if len(kept) > maxOutputBytes {
 		kept = strings.ToValidUTF8(kept[:maxOutputBytes], "")
+	}
+	if kept != whole {
+		kept += "\n… output cut short"
+		if len(lines) > maxOutputLines {
+			kept += fmt.Sprintf(", %d more lines", len(lines)-maxOutputLines)
+		}
 	}
 	return kept, len(lines)
 }

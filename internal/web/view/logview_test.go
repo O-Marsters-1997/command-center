@@ -215,6 +215,13 @@ func TestBuildLogDetailShowsOnlyTheSelectedPhase(t *testing.T) {
 		t.Errorf("ClearPath = %q, want the whole run", detail.Readout.ClearPath)
 	}
 
+	if detail.StreamPath == "" {
+		t.Error("StreamPath is empty on the last phase, where the live tail lands")
+	}
+	if first := buildLogDetail(testLine, path, true, "x", Params{Phase: "0"}); first.StreamPath != "" {
+		t.Errorf("StreamPath = %q on an earlier phase, whose view the tail would append to", first.StreamPath)
+	}
+
 	for _, param := range []string{"", "9", "-1", "tdd"} {
 		if got := buildLogDetail(testLine, path, false, "x", Params{Phase: param}); len(got.Phases) != 2 {
 			t.Errorf("phase=%q renders %d phases, want the whole run", param, len(got.Phases))
