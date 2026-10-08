@@ -37,30 +37,30 @@ func TestRemovalStateFor(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		setup func(t *testing.T) (dir, pushedTip string)
+		setup func(t *testing.T) (dir string, provenTips []string)
 		want  RemovalState
 	}{
 		{
 			name: "removable by merged while the remote ref still resolves",
-			setup: func(t *testing.T) (string, string) {
+			setup: func(t *testing.T) (string, []string) {
 				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				commitEmpty(t, dir, "not yet pushed")
-				return dir, ""
+				return dir, nil
 			},
 			want: RemovableByMerged,
 		},
 		{
 			name: "not removable with no remote-tracking ref at all",
-			setup: func(t *testing.T) (string, string) {
+			setup: func(t *testing.T) (string, []string) {
 				t.Helper()
-				return initRepoForGitTest(t), ""
+				return initRepoForGitTest(t), nil
 			},
 			want: NotRemovable,
 		},
 		{
 			name: "removable by force when the ref is gone but the tip was recorded as pushed",
-			setup: func(t *testing.T) (string, string) {
+			setup: func(t *testing.T) (string, []string) {
 				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
@@ -68,13 +68,27 @@ func TestRemovalStateFor(t *testing.T) {
 					t.Fatal(err)
 				}
 				pruneRemoteTrackingRef(t, dir, "main")
-				return dir, tip
+				return dir, []string{tip}
+			},
+			want: RemovableByForce,
+		},
+		{
+			name: "removable by force at a second proven tip when the recorded push is stale",
+			setup: func(t *testing.T) (string, []string) {
+				t.Helper()
+				dir := initRepoWithOriginForGitTest(t)
+				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
+				if err != nil {
+					t.Fatal(err)
+				}
+				pruneRemoteTrackingRef(t, dir, "main")
+				return dir, []string{"stale", tip}
 			},
 			want: RemovableByForce,
 		},
 		{
 			name: "not removable when the ref is gone and the tip moved past the recorded push",
-			setup: func(t *testing.T) (string, string) {
+			setup: func(t *testing.T) (string, []string) {
 				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
@@ -83,7 +97,7 @@ func TestRemovalStateFor(t *testing.T) {
 				}
 				pruneRemoteTrackingRef(t, dir, "main")
 				commitEmpty(t, dir, "committed after the merge, never pushed")
-				return dir, tip
+				return dir, []string{tip}
 			},
 			want: NotRemovable,
 		},
@@ -93,8 +107,8 @@ func TestRemovalStateFor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			dir, pushedTip := tt.setup(t)
-			got, err := RemovalStateFor(t.Context(), dir, "main", pushedTip)
+			dir, provenTips := tt.setup(t)
+			got, err := RemovalStateFor(t.Context(), dir, "main", provenTips...)
 			if err != nil {
 				t.Fatalf("RemovalStateFor: %v", err)
 			}

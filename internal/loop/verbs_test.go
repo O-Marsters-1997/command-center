@@ -369,6 +369,49 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 	}
 }
 
+func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		advance   bool
+		wantFound bool
+	}{
+		{name: "tip equals the merged head", wantFound: false},
+		{name: "tip ahead of the merged head", advance: true, wantFound: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newRemoveWorktreeFixture(t, "cc-1")
+			head := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
+			if err := f.store.RecordPush(t.Context(), f.ticket.URL, "stale", "main", "basesha", f.at); err != nil {
+				t.Fatal(err)
+			}
+			runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+			if tt.advance {
+				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "after the merged head")
+			}
+
+			obs := plan.Observation{
+				Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
+				PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged, HeadOid: head}},
+			}
+			if err := f.requestRemoveWorktree(t, obs); err != nil {
+				t.Fatalf("RunOnce: %v", err)
+			}
+
+			_, err := os.Stat(f.worktreePath)
+			if gotFound := err == nil; gotFound != tt.wantFound {
+				t.Errorf("worktree present = %v, want %v", gotFound, tt.wantFound)
+			}
+			events, err := f.store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if refused := hasEvent(events, "remove_worktree_refused", "unpushed"); refused != tt.wantFound {
+				t.Errorf("refused for unpushed commits = %v, want %v", refused, tt.wantFound)
+			}
+		})
+	}
+}
+
 func TestRemoveWorktreeRefusals(t *testing.T) {
 	tests := []struct {
 		name   string
