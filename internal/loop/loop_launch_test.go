@@ -438,11 +438,11 @@ func TestLoopSpendLimit5h(t *testing.T) {
 	tests := []struct {
 		name         string
 		utilizations []float64
-		wantSpawns   int
+		wantSpawns   []int
 	}{
-		{"pauses at the limit", []float64{0.80}, 0},
-		{"launches under the limit", []float64{0.50}, 1},
-		{"resumes once a newer reading drops below the limit", []float64{0.85, 0.50}, 1},
+		{"pauses at the limit", []float64{0.80}, []int{0}},
+		{"launches under the limit", []float64{0.50}, []int{1}},
+		{"resumes once a newer reading drops below the limit", []float64{0.85, 0.50}, []int{0, 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -458,9 +458,9 @@ func TestLoopSpendLimit5h(t *testing.T) {
 					t.Fatal(err)
 				}
 				f.Tick(t)
-			}
-			if len(f.Fake.Spawns) != tt.wantSpawns {
-				t.Errorf("spawns = %d, want %d", len(f.Fake.Spawns), tt.wantSpawns)
+				if len(f.Fake.Spawns) != tt.wantSpawns[i] {
+					t.Errorf("spawns after tick %d = %d, want %d", i+1, len(f.Fake.Spawns), tt.wantSpawns[i])
+				}
 			}
 		})
 	}

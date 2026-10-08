@@ -52,8 +52,6 @@ func sandboxTicket(n string) storepkg.Ticket {
 	return storepkg.Ticket{URL: "sandbox://CC-" + n, Repo: "repo", Branch: "cc-" + n}
 }
 
-// newLoopFixture builds a loop over a real origin-backed repo, the fake tp and gh, a seeded store
-// and a fake runner, with no ticket authorised yet. Defaults: max_agents 1, one ticket CC-1.
 func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	t.Helper()
 	fc := fixtureConfig{maxAgents: 1, tickets: []storepkg.Ticket{sandboxTicket("1")}}
