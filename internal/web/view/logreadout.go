@@ -165,7 +165,7 @@ func (s runStats) strip(phases []agentlog.Phase, params Params, selected int) []
 	return segments
 }
 
-func (s runStats) readout(run agentlog.Run, params Params, selected int) readout {
+func (s runStats) readout(params Params, selected int) readout {
 	if len(s.phases) == 0 {
 		return readout{}
 	}

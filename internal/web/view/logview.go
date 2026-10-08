@@ -96,7 +96,7 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 	}
 	detail.Worked = stats.worked(streaming || selected >= 0 || mode != "all")
 	detail.Strip = stats.strip(run.Phases, params, selected)
-	detail.Readout = stats.readout(run, params, selected)
+	detail.Readout = stats.readout(params, selected)
 	detail.Phases = renderPhases(render, run.Phases, mode, selected)
 	detail.Changed = changedFilesOf(run.Phases)
 	detail.Jump = jumpOf(run.Phases, params)
