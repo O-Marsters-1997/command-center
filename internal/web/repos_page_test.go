@@ -25,7 +25,7 @@ var (
 var pushable = []gh.RepoSummary{
 	{FullName: "acme/alpha", SSHURL: "git@github.com:acme/alpha.git", DefaultBranch: "main"},
 	{FullName: "acme/api", SSHURL: "git@github.com:acme/api.git", DefaultBranch: "main"},
-	{FullName: "acme/payments-api", SSHURL: "git@github.com:acme/payments-api.git", DefaultBranch: "main"},
+	{FullName: "acme/payments-api", SSHURL: "git@github.com:acme/payments-api.git", DefaultBranch: "master"},
 }
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
@@ -83,6 +83,36 @@ func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T)
 	if strings.Count(tracked, "acme/alpha") != 2 {
 		t.Errorf("acme/alpha rendered a duplicate row:\n%s", tracked)
 	}
+}
+
+func TestRepoSearchMarksARepoWhoseDefaultBranchIsNotMain(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	server := reposServer(t, &calls)
+
+	body := renderPath(t, server, "/features/search?q=api")
+	paymentsRow, apiRow := searchRow(t, body, "acme/payments-api"), searchRow(t, body, "acme/api")
+	if !strings.Contains(paymentsRow, "will be refused: default branch is <code>master</code>") {
+		t.Errorf("master-default repo is not marked:\n%s", paymentsRow)
+	}
+	if !strings.Contains(paymentsRow, `<a href="/features?repo=acme/payments-api">track &rarr;</a>`) {
+		t.Errorf("marked row lost its track link:\n%s", paymentsRow)
+	}
+	if strings.Contains(apiRow, "will be refused") {
+		t.Errorf("main-default repo is marked:\n%s", apiRow)
+	}
+}
+
+func searchRow(t *testing.T, body, fullName string) string {
+	t.Helper()
+	for row := range strings.SplitSeq(body, "<tr>") {
+		if strings.Contains(row, ">"+fullName+"</a>") {
+			return row
+		}
+	}
+	t.Fatalf("no search row for %s:\n%s", fullName, body)
+	return ""
 }
 
 func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
