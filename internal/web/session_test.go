@@ -273,3 +273,51 @@ func TestSuccessfulLoginResetsBackoff(t *testing.T) {
 		t.Errorf("after success failed_count = %d, next_attempt_at valid = %v", user.FailedCount, user.NextAttemptAt.Valid)
 	}
 }
+
+func postLogout(server *web.Server, c *http.Cookie) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.AddCookie(c)
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestLogoutDeletesSessionClearsCookieAndRedirects(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	server := newServer(st, testNow)
+	token, err := st.SeedSession(t.Context(), "me@example.com", testNow, testNow.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := postLogout(server, &http.Cookie{Name: "cc_session", Value: token})
+
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+		t.Fatalf("got %d to %q, want 303 to /login", rec.Code, rec.Header().Get("Location"))
+	}
+	cleared := sessionCookie(t, rec)
+	if cleared.Value != "" || cleared.MaxAge >= 0 {
+		t.Errorf("cookie not cleared: %+v", cleared)
+	}
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(token), testNow); !errors.Is(err, sql.ErrNoRows) {
+		t.Error("session row survived logout")
+	}
+}
+
+func TestGetLogoutIsNotRouted(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	token, err := st.SeedSession(t.Context(), "me@example.com", testNow, testNow.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := gatedGet(t, newServer(st, testNow), "/logout", &http.Cookie{Name: "cc_session", Value: token}, nil)
+	if rec.Code != http.StatusMethodNotAllowed && rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /logout status = %d", rec.Code)
+	}
+}

@@ -136,3 +136,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 	return nil
 }
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if err := s.store.DeleteSession(r.Context(), auth.HashToken(c.Value)); err != nil {
+			return err
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	return nil
+}

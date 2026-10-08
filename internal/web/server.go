@@ -143,6 +143,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("POST /ticket", handler(s.handleTicket))
 	mux.Handle("GET /login", handler(s.handleLoginPage))
 	mux.Handle("POST /login", handler(s.handleLogin))
+	mux.Handle("POST /logout", handler(s.handleLogout))
 	s.rawMux = mux
 	s.mux = http.NewCrossOriginProtection().Handler(s.requireSession(mux))
 	return s
