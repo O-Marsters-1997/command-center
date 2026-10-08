@@ -48,7 +48,7 @@ func open(ctx context.Context, configPath string) error {
 	}
 	repos, err := trackedRepos(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "cc open: cannot read tracked repos: %v\n", err)
 	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)

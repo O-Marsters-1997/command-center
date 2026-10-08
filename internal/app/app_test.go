@@ -81,9 +81,6 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 
 const sandboxRepo = "sandbox-org/cc-sandbox"
 
-// appConfig writes a daemon-only config, tracks one repo whose checkout is already in place, and
-// seeds two tickets straight into the workspace's database: the loop's reconcile doesn't care
-// whether a row arrived by import or was seeded directly, so this skips the tracker entirely.
 func appConfig(t *testing.T) string {
 	t.Helper()
 	dataDir := t.TempDir()
@@ -155,8 +152,6 @@ func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
 	}
 }
 
-// TestNewClonesATrackedRepoIntoAnEmptyDataDir: a tracked repo, and an empty data directory,
-// reach a serving state with no directory prepared by hand.
 func TestNewClonesATrackedRepoIntoAnEmptyDataDir(t *testing.T) {
 	dataDir := t.TempDir()
 	t.Setenv("CC_DATA_DIR", dataDir)

@@ -198,7 +198,10 @@ func TestFullNameKeepsCaseAcrossURLForms(t *testing.T) {
 			t.Errorf("FullName(%q) = %q, %v, want O-Marsters-1997/command-center", remote, got, err)
 		}
 	}
-	for _, remote := range []string{"", "/tmp/remote.git", "https://github.com/o", "https://host/a/b/c"} {
+	for _, remote := range []string{
+		"", "/tmp/remote.git", "https://github.com/o", "https://host/a/b/c", "git@github.com:../evil.git",
+		"https://github.com/o/..",
+	} {
 		if got, err := FullName(remote); err == nil {
 			t.Errorf("FullName(%q) = %q, want an error", remote, got)
 		}

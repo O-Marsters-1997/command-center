@@ -84,3 +84,63 @@ func TestFirstBootImportsRepoBlocksAndASecondBootRefusesThem(t *testing.T) {
 		t.Errorf("second boot with [[repo]] = %v, want a refusal telling the operator to delete them", err)
 	}
 }
+
+func TestFirstBootRefusesAnImportItCannotLayOut(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		config string
+		want   string
+	}{
+		{
+			name:   "a repo located by path",
+			config: "[[repo]]\nname = \"cc\"\npath = \"cc\"\n",
+			want:   "no longer supported",
+		},
+		{
+			name: "a short name that is another repo's owner",
+			config: "[[repo]]\nname = \"acme\"\nremote = \"git@github.com:other/acme.git\"\n" +
+				"[[repo]]\nname = \"tool\"\nremote = \"git@github.com:acme/tool.git\"\n",
+			want: "owner directory",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CC_DATA_DIR", t.TempDir())
+			t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
+			configPath := filepath.Join(t.TempDir(), "config.toml")
+			if err := os.WriteFile(configPath, []byte(tt.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("New = %v, want an error containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestFirstBootRelinksACheckoutAnEarlierAttemptAlreadyMoved(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("CC_DATA_DIR", dataDir)
+	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
+
+	moved := config.CheckoutPath(dataDir, "O-Marsters-1997/command-center")
+	if err := os.MkdirAll(moved, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte(legacyConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inst, err := app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = inst.Close() })
+
+	legacy := filepath.Join(dataDir, "repos", "command-center")
+	if info, err := os.Lstat(legacy); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("%s is not a symlink to the moved checkout: %v", legacy, err)
+	}
+}

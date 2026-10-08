@@ -83,10 +83,14 @@ func NormaliseRemote(url string) string {
 func FullName(remote string) (string, error) {
 	host, fullName, _ := strings.Cut(hostPath(remote), "/")
 	owner, name, ok := strings.Cut(fullName, "/")
-	if !ok || host == "" || owner == "" || name == "" || strings.Contains(name, "/") {
+	if !ok || host == "" || !pathSegment(owner) || !pathSegment(name) || strings.Contains(name, "/") {
 		return "", fmt.Errorf("remote %q does not name an owner/name repository", remote)
 	}
 	return fullName, nil
+}
+
+func pathSegment(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.Contains(s, `\`)
 }
 
 func hostPath(url string) string {

@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -50,10 +51,11 @@ func normalizePhase(phase string) string {
 }
 
 func normalizeRepoScope(repo string, tracked []store.Repo) string {
-	if slices.ContainsFunc(tracked, func(r store.Repo) bool { return r.Name == repo }) {
-		return repo
+	i := slices.IndexFunc(tracked, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo) })
+	if i < 0 || repo == "" {
+		return ""
 	}
-	return ""
+	return tracked[i].Name
 }
 
 func normalizeFeatureScope(feature string, fleetFeatures []string) string {

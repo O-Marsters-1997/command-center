@@ -112,7 +112,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if err := importLegacyRepos(ctx, store, configPath, cfg, settings.clock.Now()); err != nil {
 		return nil, err
 	}
-	repos, err := store.Repos(ctx)
+	repos, err := loop.ReadyRepos(ctx, store)
 	if err != nil {
 		return nil, err
 	}

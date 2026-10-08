@@ -119,6 +119,7 @@ func TestNormalizeRepoScope(t *testing.T) {
 		{"absent stays blank", "", ""},
 		{"a tracked repo passes through", "acme/support-app", "acme/support-app"},
 		{"an untracked repo falls back to blank", "bogus", ""},
+		{"a tracked repo in another case reads as its tracked name", "ACME/Support-App", "acme/support-app"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

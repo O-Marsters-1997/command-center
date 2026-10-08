@@ -24,7 +24,7 @@ type ObserveFunc func(ctx context.Context) (plan.Observation, error)
 // plan.BranchKey(repo.Name, branch), since two tracked repos can hold the same branch name.
 func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc {
 	return func(ctx context.Context) (plan.Observation, error) {
-		repos, err := readyRepos(ctx, store)
+		repos, err := ReadyRepos(ctx, store)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -188,7 +188,8 @@ func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, co
 	m[keyB][keyA] = conflicts
 }
 
-func readyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
+// ReadyRepos returns the tracked repos in the ready state: the only ones the loop works on.
+func ReadyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {
 		return nil, err

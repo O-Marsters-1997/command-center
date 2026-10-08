@@ -286,7 +286,7 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	if err != nil {
 		return err
 	}
-	repos, err := readyRepos(ctx, l.store)
+	repos, err := ReadyRepos(ctx, l.store)
 	if err != nil {
 		return err
 	}
