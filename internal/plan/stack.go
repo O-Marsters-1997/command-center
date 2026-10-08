@@ -7,7 +7,7 @@ func StackDepth(branch string, baseByBranch map[string]string) int {
 	visited := map[string]bool{branch: true}
 	for {
 		base := baseByBranch[branch]
-		if base == "" || base == defaultBranch || visited[base] {
+		if base == "" || base == DefaultBaseBranch || visited[base] {
 			return depth
 		}
 		visited[base] = true

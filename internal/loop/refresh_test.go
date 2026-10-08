@@ -107,13 +107,13 @@ func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 	return plan.Observation{
 		Worktrees: map[string]string{
-			loop.BranchKey("repo", "parent"): f.parentWorktree, loop.BranchKey("repo", "child"): f.childWorktree,
+			plan.BranchKey("repo", "parent"): f.parentWorktree, plan.BranchKey("repo", "child"): f.childWorktree,
 		},
 		PRs: map[string]plan.PR{
-			loop.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
-			loop.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
+			plan.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
+			plan.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
 		},
-		BranchTips: map[string]string{loop.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
+		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
 		Runs:       map[string]plan.RunObservation{},
 		MidMerge:   map[string]bool{},
 	}
@@ -422,7 +422,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = strings.TrimSpace(
+	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
 	)
 	observe := func(context.Context) (plan.Observation, error) {
@@ -430,7 +430,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -461,7 +461,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
 	// same as advanceMain's (retarget_test.go).
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
-	obs.BranchTips[loop.BranchKey("repo", "child")] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -494,13 +494,13 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -529,7 +529,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 
 	parentTip2 := advanceParentPastTheConflict(t, repoPath, f)
-	obs.BranchTips[loop.BranchKey("repo", "parent")] = parentTip2
+	obs.BranchTips[plan.BranchKey("repo", "parent")] = parentTip2
 
 	if err := lp.RunOnce(t.Context()); err != nil { // the base moved past the failed attempt
 		t.Fatalf("retry RunOnce: %v", err)
@@ -562,13 +562,13 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -617,7 +617,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	delete(obs.PRs, loop.BranchKey("repo", "parent"))
+	delete(obs.PRs, plan.BranchKey("repo", "parent"))
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)

@@ -5,20 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-)
-
-const (
-	reRunVerb          = plan.VerbReRun
-	removeWorktreeVerb = plan.VerbRemoveWorktree
-	cancelVerb         = plan.VerbCancel
-	abortVerb          = plan.VerbAbort
-	resolveVerb        = plan.VerbResolve
-	followUpVerb       = plan.VerbFollowUp
 )
 
 const (
@@ -31,97 +21,56 @@ const (
 )
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, abortVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if e, ok := snap.Entry(intent.TicketID); ok {
-			if err := l.abortOne(ctx, e.Ticket, obs, now); err != nil {
-				return err
-			}
+	return l.eachIntent(ctx, plan.VerbAbort, func(intent store.VerbIntent) error {
+		e, ok := snap.Entry(intent.TicketID)
+		if !ok {
+			return nil
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
+		return l.abortOne(ctx, e.Ticket, obs)
+	})
 }
 
-func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation, now time.Time) error {
-	fail := func(detail string) error {
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAbortFailed, Detail: detail})
-	}
-
-	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
-	if !ok {
-		return fail(fmt.Sprintf("no worktree for %s", ticket.Branch))
-	}
-	if obs.Runs[ticket.URL].Alive {
-		return fail(fmt.Sprintf("a run is alive in %s", worktreePath))
+func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation) error {
+	worktreePath, refusal := idleWorktreeFor(ticket, obs)
+	if refusal != "" {
+		return l.event(ctx, ticket.URL, eventMergeAbortFailed, refusal)
 	}
 	if err := git.MergeAbort(ctx, worktreePath); err != nil {
-		return fail(err.Error())
+		return l.event(ctx, ticket.URL, eventMergeAbortFailed, err.Error())
 	}
 
-	delete(obs.MidMerge, branchKey(ticket.Repo, ticket.Branch))
-	return l.store.AppendEvent(ctx, store.Event{At: now, TicketURL: ticket.URL, Kind: eventMergeAborted})
+	delete(obs.MidMerge, plan.BranchKey(ticket.Repo, ticket.Branch))
+	return l.event(ctx, ticket.URL, eventMergeAborted, "")
 }
 
 func (l *Loop) applyResolveIntents(ctx context.Context, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, resolveVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			if err := l.resolveOne(ctx, ticket, repoPaths[ticket.Repo], obs, now); err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+	return l.eachIntent(ctx, plan.VerbResolve, func(intent store.VerbIntent) error {
+		ticket, ok, err := l.ticket(ctx, intent.TicketID)
+		if err != nil || !ok {
 			return err
 		}
-	}
-	return nil
+		return l.resolveOne(ctx, ticket, obs)
+	})
 }
 
-func (l *Loop) resolveOne(
-	ctx context.Context, ticket store.Ticket, repoPath string, obs plan.Observation, now time.Time,
-) error {
-	worktreePath, refusal := idleWorktreeFor(ticket, obs)
+func (l *Loop) resolveOne(ctx context.Context, ticket store.Ticket, obs plan.Observation) error {
+	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
 	if refusal != "" {
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: eventResolveRefused, Detail: refusal})
+		return l.event(ctx, ticket.URL, eventResolveRefused, refusal)
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, l.repo(ticket.Repo).Checkout, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", runKindResolve, "")
+	return l.spawnRun(ctx, spawnSpec{
+		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
+		kind: runKindResolve, prompt: plan.ComposeResolve(ticket.Plan()),
+	})
 }
 
-func idleWorktreeFor(ticket store.Ticket, obs plan.Observation) (worktreePath, refusal string) {
-	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
+func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, refusal string) {
+	worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return "", fmt.Sprintf("no worktree for %s", ticket.Branch)
 	}
@@ -132,178 +81,106 @@ func idleWorktreeFor(ticket store.Ticket, obs plan.Observation) (worktreePath, r
 }
 
 func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, followUpVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			err := l.followUpOne(ctx, ticket, repoPaths[ticket.Repo], intent.Payload, obs, now)
-			if err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+	return l.eachIntent(ctx, plan.VerbFollowUp, func(intent store.VerbIntent) error {
+		ticket, ok, err := l.ticket(ctx, intent.TicketID)
+		if err != nil || !ok {
 			return err
 		}
-	}
-	return nil
+		return l.followUpOne(ctx, ticket, intent.Payload, obs)
+	})
 }
 
-func (l *Loop) followUpOne(
-	ctx context.Context, ticket store.Ticket, repoPath, promptText string, obs plan.Observation, now time.Time,
-) error {
-	worktreePath, refusal := idleWorktreeFor(ticket, obs)
+func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText string, obs plan.Observation) error {
+	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
 	if refusal != "" {
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: eventFollowUpRefused, Detail: refusal})
+		return l.event(ctx, ticket.URL, eventFollowUpRefused, refusal)
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, l.repo(ticket.Repo).Checkout, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, "", runKindFollowUp, promptText)
+	return l.spawnRun(ctx, spawnSpec{
+		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
+		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText),
+	})
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {
-	intents, err := l.store.PendingVerbIntents(ctx, cancelVerb)
-	if err != nil {
-		return err
-	}
-
-	now := l.clock.Now()
-	for _, intent := range intents {
+	return l.eachIntent(ctx, plan.VerbCancel, func(intent store.VerbIntent) error {
 		members, err := l.store.CancelLaunchesFor(ctx, intent.TicketID)
 		if err != nil {
 			return err
 		}
-		if err := l.store.AppendEvent(ctx, store.Event{
-			At: now, TicketURL: intent.TicketID, Kind: eventLaunchCancelled,
-			Detail: fmt.Sprintf("launch cancelled, %d member(s)", members),
-		}); err != nil {
-			return err
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
+		return l.event(ctx, intent.TicketID, eventLaunchCancelled, fmt.Sprintf("launch cancelled, %d member(s)", members))
+	})
 }
 
 func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, reRunVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return err
-	}
-	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if ticket, ok := byTicket[intent.TicketID]; ok {
-			entry, _ := snap.Entry(ticket.URL)
-			baseBranch := entry.Unlock.BaseBranch
-			if baseBranch == "" {
-				baseBranch = defaultBaseBranch
-			}
-			err := l.reRunOne(ctx, ticket, repoPaths[ticket.Repo], baseBranch, obs, entry.PromptHash)
-			if err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+	return l.eachIntent(ctx, plan.VerbReRun, func(intent store.VerbIntent) error {
+		ticket, ok, err := l.ticket(ctx, intent.TicketID)
+		if err != nil || !ok {
 			return err
 		}
-	}
-	return nil
+		entry, _ := snap.Entry(ticket.URL)
+		baseBranch := entry.Unlock.BaseBranch
+		if baseBranch == "" {
+			baseBranch = plan.DefaultBaseBranch
+		}
+		return l.reRunOne(ctx, ticket, baseBranch, obs, entry.PromptHash)
+	})
 }
 
 func (l *Loop) reRunOne(
-	ctx context.Context, ticket store.Ticket, repoPath, baseBranch string, obs plan.Observation, promptHash string,
+	ctx context.Context, ticket store.Ticket, baseBranch string, obs plan.Observation, promptHash string,
 ) error {
-	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
+	repoPath := l.repo(ticket.Repo).Checkout
+	worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		return l.cutAndSpawn(ctx, launchSpec{
-			ticket: ticket, baseBranch: baseBranch, promptHash: promptHash, repoPath: repoPath,
-		})
+		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash)
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, ticket, worktreePath, baselineSHA, promptHash, runKindAgent, "")
+	return l.spawnRun(ctx, spawnSpec{
+		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
+		kind: runKindAgent, prompt: agentPrompt(ticket),
+	})
 }
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	intents, err := l.store.PendingVerbIntents(ctx, removeWorktreeVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	lastPushed, err := l.store.LastPushedTips(ctx)
-	if err != nil {
-		return err
-	}
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if e, ok := snap.Entry(intent.TicketID); ok {
-			if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL], now); err != nil {
-				return err
-			}
+	return l.eachIntent(ctx, plan.VerbRemoveWorktree, func(intent store.VerbIntent) error {
+		e, ok := snap.Entry(intent.TicketID)
+		if !ok {
+			return nil
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
+		lastPushed, err := l.store.LastPushedTips(ctx)
+		if err != nil {
 			return err
 		}
-	}
-	return nil
+		return l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL])
+	})
 }
 
-func (l *Loop) removeWorktreeOne(
-	ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed string, now time.Time,
-) error {
+func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed string) error {
 	ticket := e.Ticket
 	refuse := func(detail string) error {
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: store.EventRemoveWorktreeRefused, Detail: detail})
+		return l.event(ctx, ticket.URL, store.EventRemoveWorktreeRefused, detail)
 	}
 
-	merged := obs.PRs[branchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
+	merged := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
 	baseGone := e.Run != nil && e.Unlock.BlockerClosed
 	if !merged && !baseGone {
 		return refuse("neither merged nor base gone")
 	}
 
-	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
-	worktreePath, worktreePresent := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]
+	repoPath := l.repo(ticket.Repo).Checkout
+	worktreePath, worktreePresent := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 
 	mode := git.RemoveMerged
 	if worktreePresent {
@@ -325,9 +202,7 @@ func (l *Loop) removeWorktreeOne(
 		if state == git.RemovableByForce {
 			mode = git.RemoveForced
 		}
-	}
 
-	if worktreePresent {
 		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
 			return refuse(err.Error())
 		}
@@ -344,11 +219,10 @@ func (l *Loop) removeWorktreeOne(
 	if mode == git.RemoveForced {
 		detail = "forced: origin ref pruned, branch at last pushed tip"
 	}
-	if err := l.store.AppendEvent(ctx,
-		store.Event{At: now, TicketURL: ticket.URL, Kind: eventWorktreeRemoved, Detail: detail}); err != nil {
+	if err := l.event(ctx, ticket.URL, eventWorktreeRemoved, detail); err != nil {
 		return err
 	}
-	return l.store.WithdrawTicket(ctx, ticket.URL, now, merged)
+	return l.store.WithdrawTicket(ctx, ticket.URL, l.clock.Now(), merged)
 }
 
 func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {

@@ -79,7 +79,7 @@ func PushPlan(candidates []PushCandidate) []string {
 // PRBody composes the body gh pr create --fill needs only for a stacked base: the "Merge after
 // #N" line, since `gh pr create --base` makes an ordinary PR, not a GitHub Stack.
 func PRBody(baseBranch string, blockerPRNumber int) string {
-	if baseBranch == defaultBranch || blockerPRNumber == 0 {
+	if baseBranch == DefaultBaseBranch || blockerPRNumber == 0 {
 		return ""
 	}
 	return fmt.Sprintf("Merge after #%d", blockerPRNumber)

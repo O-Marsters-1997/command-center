@@ -230,11 +230,7 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 	if err := os.MkdirAll(state, 0o750); err != nil {
 		return ws, err
 	}
-	return ws, errors.Join(
-		loop.WriteAgentSettings(ws.SettingsPath),
-		loop.WriteAgentSystemPrompt(ws.SystemPromptPath),
-		loop.WriteAgentDigestDefinition(ws.AgentsPath),
-	)
+	return ws, loop.WriteAgentFiles(ws)
 }
 
 // Tick plays one loop tick: the world moves, the loop runs, then the sim reads every board state

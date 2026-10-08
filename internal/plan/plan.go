@@ -55,7 +55,8 @@ type Unlock struct {
 	BlockerClosed bool
 }
 
-const defaultBranch = "main"
+// DefaultBaseBranch is the branch an unstacked ticket cuts from and merges into.
+const DefaultBaseBranch = "main"
 
 // Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only: a
 // cross-repo blocker feeds the draft gate, never unlock or the base.
@@ -73,7 +74,7 @@ func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stackin
 
 	switch len(sameRepo) {
 	case 0:
-		return Unlock{Unlocked: true, BaseBranch: defaultBranch, Reason: "no blockers"}
+		return Unlock{Unlocked: true, BaseBranch: DefaultBaseBranch, Reason: "no blockers"}
 	case 1:
 		return unlockedOnBlocker(sameRepo[0], prs, stacking)
 	default:
@@ -84,13 +85,13 @@ func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stackin
 func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Unlock {
 	switch prs[blocker.Branch] {
 	case Open:
-		base := defaultBranch
+		base := DefaultBaseBranch
 		if stacking {
 			base = blocker.Branch
 		}
 		return Unlock{Unlocked: true, BaseBranch: base, Reason: "every blocker has a pull request"}
 	case Merged:
-		return Unlock{Unlocked: true, BaseBranch: defaultBranch, Reason: "every blocker has a pull request"}
+		return Unlock{Unlocked: true, BaseBranch: DefaultBaseBranch, Reason: "every blocker has a pull request"}
 	case Closed:
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
@@ -115,7 +116,7 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 		}
 	}
 	if len(unresolved) == 0 {
-		return Unlock{Unlocked: true, BaseBranch: defaultBranch, Reason: "every blocker has merged"}
+		return Unlock{Unlocked: true, BaseBranch: DefaultBaseBranch, Reason: "every blocker has merged"}
 	}
 	return Unlock{
 		Reason:   Reason(fmt.Sprintf("blocked by %s, not yet merged", strings.Join(unresolved, ", "))),

@@ -1,9 +1,11 @@
 package loop
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 const agentSettings = `{
@@ -17,15 +19,6 @@ const agentSettings = `{
   }
 }
 `
-
-// WriteAgentSettings writes the static deny settings to path. Idempotent: the content never
-// varies by call, so writing it again (e.g. on every App.New()) is a no-op in effect.
-func WriteAgentSettings(path string) error {
-	if err := os.WriteFile(path, []byte(agentSettings), 0o600); err != nil {
-		return fmt.Errorf("write agent settings %s: %w", path, err)
-	}
-	return nil
-}
 
 // agentSystemPrompt is appended to every spawned agent's own system prompt via
 // --append-system-prompt-file: a Task-spawned subagent's completion notification is delivered
@@ -54,43 +47,30 @@ The shell is zsh. Prefer rg over grep --include for searching.
 Commit before your turn ends.
 `
 
-// WriteAgentSystemPrompt writes the default system prompt to path. Idempotent: the content never
-// varies by call, so writing it again (e.g. on every App.New()) is a no-op in effect.
-func WriteAgentSystemPrompt(path string) error {
-	if err := os.WriteFile(path, []byte(agentSystemPrompt), 0o600); err != nil {
-		return fmt.Errorf("write agent system prompt %s: %w", path, err)
-	}
-	return nil
+const agentDigestDefinition = `{
+  "digest": {
+    "description": "Reads code or output to answer one question, without growing the caller's context.",
+    "prompt": "If the repo root has a .codegraph/ directory, start with one ` +
+	`codegraph explore \"<symbols or question>\" in Bash and treat the source it prints as already read. ` +
+	`Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
+    "tools": ["Read", "Grep", "Glob", "Bash"],
+    "model": "haiku"
+  }
 }
+`
 
-type agentDefinition struct {
-	Description string   `json:"description"`
-	Prompt      string   `json:"prompt"`
-	Tools       []string `json:"tools"`
-	Model       string   `json:"model"`
-}
-
-var agentDigestDefinition = map[string]agentDefinition{
-	"digest": {
-		Description: "Reads code or output to answer one question, without growing the caller's context.",
-		Prompt: "If the repo root has a .codegraph/ directory, start with one " +
-			`codegraph explore "<symbols or question>" in Bash and treat the source it prints as already read. ` +
-			"Read only what it takes to answer. Reply with the answer, at most 1000 tokens, no preamble.",
-		Tools: []string{"Read", "Grep", "Glob", "Bash"},
-		Model: "haiku",
-	},
-}
-
-// WriteAgentDigestDefinition writes the digest subagent definition to path. Idempotent: the
-// content never varies by call, so writing it again (e.g. on every App.New()) is a no-op in
-// effect.
-func WriteAgentDigestDefinition(path string) error {
-	data, err := json.MarshalIndent(agentDigestDefinition, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode agent digest definition: %w", err)
+// WriteAgentFiles writes the static deny settings, system prompt and digest subagent definition
+// to the workspace's paths. Idempotent: the content never varies by call.
+func WriteAgentFiles(ws config.Workspace) error {
+	var errs []error
+	for _, f := range []struct{ path, content string }{
+		{ws.SettingsPath, agentSettings},
+		{ws.SystemPromptPath, agentSystemPrompt},
+		{ws.AgentsPath, agentDigestDefinition},
+	} {
+		if err := os.WriteFile(f.path, []byte(f.content), 0o600); err != nil {
+			errs = append(errs, fmt.Errorf("write agent file %s: %w", f.path, err))
+		}
 	}
-	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
-		return fmt.Errorf("write agent digest definition %s: %w", path, err)
-	}
-	return nil
+	return errors.Join(errs...)
 }

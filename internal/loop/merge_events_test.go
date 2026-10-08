@@ -28,7 +28,7 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
+			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
 	lp := loop.NewLoop(store,
@@ -81,7 +81,7 @@ func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
 	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
+			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
 	lp := loop.NewLoop(store,
@@ -125,7 +125,7 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Closed},
+			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Closed},
 		},
 	}
 	lp := loop.NewLoop(store,

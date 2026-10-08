@@ -13,7 +13,7 @@ func Compose(t Ticket) string {
 	if t.WorkedExampleBranch != "" {
 		prompt += fmt.Sprintf(
 			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",
-			t.WorkedExampleBranch, defaultBranch)
+			t.WorkedExampleBranch, DefaultBaseBranch)
 	}
 	return prompt
 }

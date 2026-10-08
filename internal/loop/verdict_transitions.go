@@ -2,7 +2,6 @@ package loop
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -31,7 +30,6 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		return err
 	}
 
-	now := l.clock.Now()
 	changed := false
 	for _, t := range tickets {
 		summary, ok := latest[t.URL]
@@ -39,7 +37,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 			continue
 		}
 		pf := pushFacts[t.URL]
-		if pf.Refused || pf.Failed || obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
+		if pf.Refused || pf.Failed || obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
 
@@ -52,10 +50,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 		lastVerdicts[t.URL] = current
 		changed = true
-		if err := l.store.AppendEvent(ctx, store.Event{
-			At: now, TicketURL: t.URL, Kind: store.EventVerdictTransition,
-			Detail: fmt.Sprintf("%s: %s", current, fact.Verdict.Reason),
-		}); err != nil {
+		if err := l.event(ctx, t.URL, store.EventVerdictTransition, current+": "+fact.Verdict.Reason); err != nil {
 			return err
 		}
 	}

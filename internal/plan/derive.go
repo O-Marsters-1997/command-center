@@ -220,7 +220,7 @@ func (r Rules) ConflictedBase(t Ticket, byURL map[string]Ticket, unlock Unlock, 
 	if base == "" {
 		base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
 	}
-	if base == defaultBranch {
+	if base == DefaultBaseBranch {
 		return ""
 	}
 	if obs.ConflictsWithBase[BranchKey(t.Repo, base)] || obs.MidMerge[BranchKey(t.Repo, base)] {
@@ -237,7 +237,7 @@ func (r Rules) conflictingPeerHold(
 		if prs[t.Branch] != Open {
 			continue
 		}
-		if ProspectiveBase(byURL[t.URL], byURL, r.Stacking[t.Repo]) != defaultBranch {
+		if ProspectiveBase(byURL[t.URL], byURL, r.Stacking[t.Repo]) != DefaultBaseBranch {
 			continue
 		}
 		candidates = append(candidates, t)

@@ -48,7 +48,7 @@ func WithObserver(observe loop.ObserveFunc) Option {
 }
 
 // RepoCheckFunc asserts the configured repos' merge settings.
-type RepoCheckFunc func(ctx context.Context, ws config.Workspace, repos []config.Repo) error
+type RepoCheckFunc func(ctx context.Context, repos []config.Repo) error
 
 // WithRepoCheck replaces the startup squash-only check, so a test runs without gh.
 func WithRepoCheck(check RepoCheckFunc) Option {
@@ -100,7 +100,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if repoCheck == nil {
 		repoCheck = loop.AssertReposSquashOnly
 	}
-	if err := repoCheck(ctx, ws, cfg.Repos); err != nil {
+	if err := repoCheck(ctx, cfg.Repos); err != nil {
 		return nil, err
 	}
 
@@ -124,13 +124,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	if err := loop.WriteAgentSettings(ws.SettingsPath); err != nil {
-		return nil, err
-	}
-	if err := loop.WriteAgentSystemPrompt(ws.SystemPromptPath); err != nil {
-		return nil, err
-	}
-	if err := loop.WriteAgentDigestDefinition(ws.AgentsPath); err != nil {
+	if err := loop.WriteAgentFiles(ws); err != nil {
 		return nil, err
 	}
 
