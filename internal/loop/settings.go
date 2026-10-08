@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -61,14 +62,15 @@ const agentDigestDefinition = `{
 // WriteAgentFiles writes the static deny settings, system prompt and digest subagent definition
 // to the workspace's paths. Idempotent: the content never varies by call.
 func WriteAgentFiles(ws config.Workspace) error {
-	for path, content := range map[string]string{
-		ws.SettingsPath:     agentSettings,
-		ws.SystemPromptPath: agentSystemPrompt,
-		ws.AgentsPath:       agentDigestDefinition,
+	var errs []error
+	for _, f := range []struct{ path, content string }{
+		{ws.SettingsPath, agentSettings},
+		{ws.SystemPromptPath, agentSystemPrompt},
+		{ws.AgentsPath, agentDigestDefinition},
 	} {
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			return fmt.Errorf("write agent file %s: %w", path, err)
+		if err := os.WriteFile(f.path, []byte(f.content), 0o600); err != nil {
+			errs = append(errs, fmt.Errorf("write agent file %s: %w", f.path, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }

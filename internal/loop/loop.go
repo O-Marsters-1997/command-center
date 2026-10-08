@@ -1,3 +1,5 @@
+// Package loop is the Command Centre's imperative shell: the tick loop and its steps.
+// The pure decisions live in internal/plan; gh's JSON shape lives in internal/gh.
 package loop
 
 import (
