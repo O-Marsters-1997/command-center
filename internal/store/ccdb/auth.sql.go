@@ -11,6 +11,27 @@ import (
 	"time"
 )
 
+const claimLoginAttempt = `-- name: ClaimLoginAttempt :execrows
+UPDATE users
+SET failed_count = failed_count + 1,
+    next_attempt_at = $2::timestamptz
+        + LEAST(power(2, LEAST(failed_count + 1, 6)), 60) * interval '1 second'
+WHERE id = $1 AND (next_attempt_at IS NULL OR next_attempt_at <= $2::timestamptz)
+`
+
+type ClaimLoginAttemptParams struct {
+	ID  int64
+	Now time.Time
+}
+
+func (q *Queries) ClaimLoginAttempt(ctx context.Context, arg ClaimLoginAttemptParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, claimLoginAttempt, arg.ID, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (email, password_hash, created_at)
 VALUES ($1, $2, $3)
@@ -76,24 +97,6 @@ func (q *Queries) IssueSession(ctx context.Context, arg IssueSessionParams) erro
 		arg.CreatedAt,
 		arg.ExpiresAt,
 	)
-	return err
-}
-
-const recordLoginFailure = `-- name: RecordLoginFailure :exec
-UPDATE users
-SET failed_count = failed_count + 1,
-    next_attempt_at = $2::timestamptz
-        + LEAST(power(2, LEAST(failed_count + 1, 6)), 60) * interval '1 second'
-WHERE id = $1
-`
-
-type RecordLoginFailureParams struct {
-	ID  int64
-	Now time.Time
-}
-
-func (q *Queries) RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) error {
-	_, err := q.db.ExecContext(ctx, recordLoginFailure, arg.ID, arg.Now)
 	return err
 }
 

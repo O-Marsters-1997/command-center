@@ -98,8 +98,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	now := s.clock.Now()
-	if !missing && user.NextAttemptAt.Valid && now.Before(user.NextAttemptAt.Time) {
-		return loginFailed(w)
+	if !missing {
+		admitted, err := s.store.ClaimLoginAttempt(ctx, user.ID, now)
+		if err != nil {
+			return err
+		}
+		if !admitted {
+			return loginFailed(w)
+		}
 	}
 	encoded := user.PasswordHash
 	if missing {
@@ -107,11 +113,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 	ok := s.verifyPassword(password, encoded)
 	if missing || !ok {
-		if !missing {
-			if err := s.store.RecordLoginFailure(ctx, user.ID, now); err != nil {
-				return err
-			}
-		}
 		return loginFailed(w)
 	}
 

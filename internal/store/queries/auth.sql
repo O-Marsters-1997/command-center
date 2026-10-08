@@ -5,12 +5,12 @@ VALUES ($1, $2, $3);
 -- name: UserForLogin :one
 SELECT id, email, password_hash, failed_count, next_attempt_at FROM users WHERE email = $1;
 
--- name: RecordLoginFailure :exec
+-- name: ClaimLoginAttempt :execrows
 UPDATE users
 SET failed_count = failed_count + 1,
     next_attempt_at = sqlc.arg(now)::timestamptz
         + LEAST(power(2, LEAST(failed_count + 1, 6)), 60) * interval '1 second'
-WHERE id = $1;
+WHERE id = $1 AND (next_attempt_at IS NULL OR next_attempt_at <= sqlc.arg(now)::timestamptz);
 
 -- name: ResetLoginFailures :exec
 UPDATE users SET failed_count = 0, next_attempt_at = NULL WHERE id = $1;

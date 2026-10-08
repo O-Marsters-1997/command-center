@@ -34,14 +34,16 @@ func (s *Store) UserForLogin(ctx context.Context, email string) (ccdb.UserForLog
 	return row, nil
 }
 
-// RecordLoginFailure counts one more failed login for the user and holds further attempts off
-// until now plus 2^n seconds, n being the new failure count, capped at 60.
-func (s *Store) RecordLoginFailure(ctx context.Context, userID int64, now time.Time) error {
-	err := s.q.RecordLoginFailure(ctx, ccdb.RecordLoginFailureParams{ID: userID, Now: now.UTC()})
+// ClaimLoginAttempt atomically admits one password check for the user: it reports false, changing
+// nothing, while the user's backoff window is open. Otherwise it counts the attempt as a failure
+// and holds further attempts off until now plus 2^n seconds, n being the new count, capped at 60.
+// A successful login clears the count through IssueSession.
+func (s *Store) ClaimLoginAttempt(ctx context.Context, userID int64, now time.Time) (bool, error) {
+	n, err := s.q.ClaimLoginAttempt(ctx, ccdb.ClaimLoginAttemptParams{ID: userID, Now: now.UTC()})
 	if err != nil {
-		return fmt.Errorf("record login failure for user %d: %w", userID, err)
+		return false, fmt.Errorf("claim login attempt for user %d: %w", userID, err)
 	}
-	return nil
+	return n == 1, nil
 }
 
 // DeleteExpiredSessions deletes every session whose expiry is at or before now, and returns how
@@ -54,7 +56,8 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64
 	return deleted, nil
 }
 
-// SetPassword replaces email's password hash and deletes every session for that account.
+// SetPassword replaces email's password hash, deletes every session for that account and clears
+// its login backoff.
 func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -76,6 +79,9 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 	}
 	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions for %s: %w", email, err)
+	}
+	if err = qtx.ResetLoginFailures(ctx, userID); err != nil {
+		return fmt.Errorf("reset login failures for %s: %w", email, err)
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
