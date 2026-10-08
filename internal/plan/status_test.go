@@ -72,6 +72,17 @@ func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
 		t.Fatalf("Status = %v, %q; want push pending naming #259", state, reason)
 	}
 
+	state, reason = plan.Status(plan.Facts{Unlock: plan.Unlock{Blocking: []string{"#259", "#260"}}, LatestRun: run})
+	if state != plan.PushPending || !strings.Contains(string(reason), "#259, #260") {
+		t.Fatalf("Status = %v, %q; want both blockers named", state, reason)
+	}
+
+	untracked := plan.Unlock{Reason: "blocked by #9, which is not a tracked ticket"}
+	state, reason = plan.Status(plan.Facts{Unlock: untracked, LatestRun: run})
+	if state != plan.PushPending || !strings.Contains(string(reason), "not a tracked ticket") {
+		t.Fatalf("Status = %v, %q; want the unlock reason", state, reason)
+	}
+
 	free := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
 	state, reason = plan.Status(plan.Facts{Unlock: free, LatestRun: run})
 	if state != plan.PushPending || reason != "agent finished with commits, waiting to push" {

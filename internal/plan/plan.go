@@ -323,8 +323,9 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		}
 		return Checking, "pull request open, no verdict yet"
 	case !unlock.Unlocked && len(unlock.Blocking) > 0:
-		return PushPending, Reason(fmt.Sprintf(
-			"waiting on %s to merge before pushing", strings.Join(unlock.Blocking, ", ")))
+		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", strings.Join(unlock.Blocking, ", ")))
+	case !unlock.Unlocked:
+		return PushPending, Reason("push held: " + string(unlock.Reason))
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}
