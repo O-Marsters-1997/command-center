@@ -16,24 +16,58 @@
       <span class="run-log-path font-medium">{{.Log.Path}}</span>
       {{if .Log.Streaming}}<span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
       {{- else}}<span class="pill"><span class="pill-ring"></span>ended</span>{{end}}
+      {{- with .Log.Outcome}}
+      <span class="run-log-outcome text-muted">{{.}}</span>
+      {{- end}}
       <nav class="log-filters flex gap-2">
         {{- range .Log.Filters}}<a href="{{.Path}}" class="px-1{{if .Active}} active font-semibold{{end}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end -}}
       </nav>
-      <a href="#first-fail" class="jump-first-fail ml-auto">first failure</a>
+      {{- with .Log.Jump.Path}}
+      <a href="{{.}}" class="jump-first-fail ml-auto">{{$.Log.Jump.Label}}</a>
+      {{- end}}
     </div>
     <p class="run-log-meta text-muted">{{.Log.Lines}} lines · {{.Log.PhaseCount}} phases</p>
-    {{range .Log.Phases}}
-    <section class="phase">
-      <header class="flex items-baseline gap-2 mt-5 mb-1 pb-1 border-b border-border text-muted text-xs tracking-wide uppercase">
-        {{if .Skill}}<span class="phase-skill font-semibold">skill {{.Skill}}</span>{{with .Note}} · {{.}}{{end}}{{end}}
-        <span class="phase-at ml-auto normal-case">{{.At}}</span>
-      </header>
-      {{range .Lines}}{{raw .}}
-      {{end -}}
-    </section>
-    {{end}}
-    <div class="run-log-live" hx-ext="sse" sse-connect="{{.Log.StreamPath}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
-    {{with .Log.Result}}<p class="run-log-result mt-2">{{.}}</p>{{end}}
+    <div class="run-thread">
+      {{- if .Log.PhaseCount}}
+      <details class="worked"{{if .Log.Worked.Open}} open{{end}}>
+        <summary><span class="worked-spark" aria-hidden="true">✻</span> {{.Log.Worked.Label}}{{with .Log.Worked.Stats}} <span class="worked-stats">{{.}}</span>{{end}}</summary>
+      </details>
+      {{- end}}
+      {{- with .Log.Strip}}
+      <nav class="phase-strip flex" aria-label="Phases">
+        {{- range .}}<a href="{{.Path}}" class="phase-seg" style="flex: {{.Weight}}"{{with .Title}} title="{{.}}"{{end}}{{if .Active}} aria-current="true"{{end}}><span class="phase-bar"></span><span class="phase-name"><b>{{.Label}}</b>{{if .Failed}}<span class="phase-dot" aria-label="a check failed"></span>{{end}}<span>{{.Duration}}</span></span></a>{{end -}}
+      </nav>
+      {{- end}}
+      {{- with .Log.Readout.Metrics}}
+      <div class="readout flex flex-wrap items-baseline">
+        {{- range .}}<span class="metric"{{if .Failed}} data-tone="stop"{{end}}><span class="metric-label">{{.Label}}</span> <span class="metric-value">{{.Value}}{{with .Note}} <small>{{.}}</small>{{end}}</span></span>{{end}}
+        {{- with $.Log.Readout.Insight}}<p class="readout-insight"><b>{{$.Log.Readout.Lead}}</b> {{.}}{{with $.Log.Readout.ClearPath}} <a href="{{.}}" class="readout-clear">Whole run</a>{{end}}</p>{{end}}
+      </div>
+      {{- end}}
+      <div class="run-work">
+        {{- range .Log.Phases}}
+        <section class="phase">
+          <header class="phase-head flex items-baseline gap-2">
+            <span class="phase-skill">{{if .Skill}}{{.Skill}}{{else}}start{{end}}</span>{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
+            <span class="phase-rule"></span>
+            <span class="phase-at">{{.At}}</span>
+          </header>
+          {{- range .Items}}
+          {{if eq .Kind "say"}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+          {{- end}}
+        </section>
+        {{- end}}
+        {{- with .Log.StreamPath}}
+        <div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+        {{- end}}
+      </div>
+      {{- with .Log.Final}}
+      <div class="run-final">{{raw .}}</div>
+      {{- end}}
+      {{- if .Log.Changed.Count}}
+      <p class="changed-files flex items-center gap-2"><span class="changed-files-label">{{.Log.Changed.Count}} changed {{if eq .Log.Changed.Count 1}}file{{else}}files{{end}}</span>{{if or .Log.Changed.Added .Log.Changed.Removed}} <span class="diff-plus">+{{.Log.Changed.Added}}</span> <span class="diff-minus">−{{.Log.Changed.Removed}}</span>{{end}}</p>
+      {{- end}}
+    </div>
   </div>
   {{- if .ContextCurve.Series}}
   <div class="context-curve mt-3">

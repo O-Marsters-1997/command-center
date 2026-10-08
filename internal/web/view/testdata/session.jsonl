@@ -1,0 +1,13 @@
+{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","request_id":"r1","message":{"usage":{"output_tokens":1000},"content":[{"type":"text","text":"Reading first."}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","request_id":"r1","message":{"content":[{"type":"tool_use","id":"a","name":"Read","input":{"file_path":"a.go"}}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","request_id":"r1","message":{"content":[{"type":"tool_use","id":"b","name":"Read","input":{"file_path":"b.go"}}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","request_id":"r1","message":{"content":[{"type":"tool_use","id":"c","name":"Grep","input":{"pattern":"x"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"c","content":"hit"}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"a","content":"1\n2\n3"}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":"1"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:10Z","request_id":"r2","message":{"usage":{"output_tokens":1000},"content":[{"type":"tool_use","id":"s","name":"Skill","input":{"skill":"tdd"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:10Z","message":{"content":[{"type":"tool_result","tool_use_id":"s","content":"Launching skill: tdd"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:20Z","request_id":"r3","message":{"usage":{"output_tokens":3000},"content":[{"type":"tool_use","id":"d","name":"Bash","input":{"command":"go test"}}]}}
+{"type":"user","timestamp":"2026-01-01T00:00:40Z","message":{"content":[{"type":"tool_result","tool_use_id":"d","is_error":true,"content":"FAIL"}]}}
+{"type":"assistant","timestamp":"2026-01-01T00:00:40Z","request_id":"r4","message":{"content":[{"type":"text","text":"All green."}]}}
+{"type":"result","subtype":"success","duration_ms":40000,"num_turns":4,"total_cost_usd":2.00}

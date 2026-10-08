@@ -7,6 +7,14 @@
   --color-muted: oklch(58% 0.014 250);
   --color-border: oklch(90% 0.006 250);
   --color-track: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
+  --color-surface: oklch(97.4% 0.003 250);
+  --color-sunken: oklch(95.6% 0.004 250);
+  --color-soft: oklch(42% 0.012 250);
+  --color-spark: oklch(66% 0.15 45);
+  --color-add-bg: oklch(95.5% 0.04 150);
+  --color-del-bg: oklch(95.5% 0.035 25);
+  --color-add-mark: oklch(62% 0.14 150);
+  --color-del-mark: oklch(60% 0.17 25);
 
   --color-s-done: oklch(62% 0.148 150);
   --color-s-live: oklch(60% 0.158 250);
@@ -19,6 +27,7 @@
   --color-k-follow-up: oklch(72% 0.146 80);
 
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -26,6 +35,14 @@
   --color-fg: oklch(93% 0.006 250);
   --color-muted: oklch(65% 0.014 250);
   --color-border: oklch(30% 0.012 250);
+  --color-surface: oklch(20.5% 0.007 260);
+  --color-sunken: oklch(14.5% 0.006 260);
+  --color-soft: oklch(80% 0.008 250);
+  --color-spark: oklch(74% 0.14 45);
+  --color-add-bg: oklch(28% 0.05 150);
+  --color-del-bg: oklch(28% 0.055 25);
+  --color-add-mark: oklch(74% 0.14 150);
+  --color-del-mark: oklch(70% 0.16 25);
 
   --color-s-done: oklch(72% 0.148 150);
   --color-s-live: oklch(70% 0.148 250);
@@ -374,8 +391,385 @@
   .line-file,
   .line-tool,
   .line-fail,
-  .line-pass {
+  .line-pass,
+  .line-say {
     --tone: var(--color-s-idle);
+  }
+
+  .run-thread {
+    max-width: 46rem;
+    margin-top: 0.75rem;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .run-thread code,
+  .run-thread pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .worked > summary,
+  .fold > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .worked > summary::-webkit-details-marker,
+  .fold > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .worked > summary::before,
+  .fold > summary::before {
+    content: "›";
+    display: inline-block;
+    width: 0.75em;
+    transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .worked[open] > summary::before,
+  .fold[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .worked > summary {
+    padding: 0 0 0.6rem;
+    color: var(--color-muted);
+  }
+
+  .worked > summary:hover,
+  .fold > summary:hover {
+    color: var(--color-fg);
+  }
+
+  .worked-spark {
+    color: var(--color-spark);
+  }
+
+  .worked-stats {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .worked:not([open]) ~ .run-work {
+    display: none;
+  }
+
+  .phase-strip {
+    gap: 3px;
+    margin: 0 0 0.35rem;
+  }
+
+  .phase-seg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 4.75rem;
+    padding: 0.3rem 0 0.35rem;
+    color: var(--color-muted);
+    text-decoration: none;
+  }
+
+  .phase-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--color-s-live) 22%, var(--color-track));
+    transition: background 180ms;
+  }
+
+  .phase-strip:has([aria-current]) .phase-bar {
+    background: var(--color-track);
+  }
+
+  .phase-seg:hover .phase-bar {
+    background: color-mix(in oklch, var(--color-s-live) 35%, var(--color-track));
+  }
+
+  .phase-strip .phase-seg[aria-current] .phase-bar {
+    background: var(--color-s-live);
+  }
+
+  .phase-name {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding-right: 0.4rem;
+    font-size: 12.5px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .phase-name b {
+    font-weight: 500;
+    color: var(--color-soft);
+  }
+
+  .phase-seg:hover .phase-name b,
+  .phase-seg[aria-current] .phase-name b {
+    color: var(--color-fg);
+  }
+
+  .phase-seg[aria-current] .phase-name b {
+    font-weight: 600;
+  }
+
+  .phase-dot {
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-s-stop);
+  }
+
+  .readout {
+    gap: 0.25rem 1.4rem;
+    margin-bottom: 1.4rem;
+    padding: 0.7rem 0 0.9rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13.5px;
+  }
+
+  .metric {
+    white-space: nowrap;
+  }
+
+  .metric-label {
+    color: var(--color-muted);
+  }
+
+  .metric-value {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-value small {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  .metric[data-tone] .metric-value {
+    color: var(--tone);
+  }
+
+  .readout-insight {
+    flex-basis: 100%;
+    margin: 0.3rem 0 0;
+    font-size: 14px;
+    color: var(--color-soft);
+  }
+
+  .readout-clear {
+    margin-left: 1rem;
+    color: var(--color-muted);
+  }
+
+  .phase {
+    margin: 0 0 1.75rem;
+  }
+
+  .phase-head {
+    margin: 0 0 0.6rem;
+    font-size: 13px;
+    color: var(--color-muted);
+  }
+
+  .phase-skill {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+
+  .phase-rule {
+    flex: 1;
+    align-self: center;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  .phase-at {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .line.line-say,
+  .line.call {
+    display: block;
+  }
+
+  .prose p {
+    max-width: 70ch;
+    margin: 0 0 0.9rem;
+  }
+
+  .prose ul {
+    margin: 0 0 0.9rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+
+  .prose li::marker {
+    color: var(--color-muted);
+  }
+
+  .code-chip {
+    padding: 0.08em 0.4em;
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    background: var(--color-surface);
+    font-size: 0.86em;
+  }
+
+  .fold {
+    margin: 0.1rem 0 0.6rem;
+  }
+
+  .fold > summary {
+    padding: 0.3rem 0;
+    color: var(--color-muted);
+  }
+
+  .fold-fail {
+    color: var(--color-s-stop);
+  }
+
+  .fold-body {
+    margin: -0.2rem 0 1rem 0.35rem;
+    padding-left: 1.1rem;
+    border-left: 1px solid var(--color-border);
+  }
+
+  .call {
+    padding: 0.35rem 0;
+  }
+
+  .call-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    font-size: 13.5px;
+  }
+
+  .call-verb {
+    flex: none;
+    font-weight: 500;
+    color: var(--color-soft);
+  }
+
+  .call-arg {
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+  }
+
+  .call-res {
+    flex: none;
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+
+  .call[data-tone] .call-verb,
+  .call[data-tone] .call-res,
+  .call[data-tone] .call-out {
+    color: var(--tone);
+  }
+
+  .call-out {
+    margin: 0.4rem 0 0.2rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    background: var(--color-sunken);
+    font-size: 12.5px;
+    color: var(--color-soft);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .call-diff {
+    margin: 0.45rem 0 0.2rem;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+
+  .diff-row {
+    padding: 0 0.75rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .diff-add {
+    background: var(--color-add-bg);
+    box-shadow: inset 2px 0 var(--color-add-mark);
+  }
+
+  .diff-del {
+    background: var(--color-del-bg);
+    box-shadow: inset 2px 0 var(--color-del-mark);
+  }
+
+  .diff-plus {
+    color: var(--color-add-mark);
+  }
+
+  .diff-minus {
+    color: var(--color-del-mark);
+  }
+
+  .run-final {
+    margin-top: 0.5rem;
+  }
+
+  .changed-files {
+    margin: 0.4rem 0 1rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+  }
+
+  .changed-files-label {
+    font-weight: 500;
+  }
+
+  .jump-first-fail {
+    color: var(--color-s-stop);
+  }
+
+  @media (max-width: 640px) {
+    .phase-strip {
+      overflow-x: auto;
+      padding-bottom: 0.2rem;
+    }
+
+    .phase-strip .phase-seg {
+      flex: none !important;
+    }
+
+    .call-head {
+      flex-wrap: wrap;
+    }
+
+    .call-res {
+      margin-left: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .worked > summary::before,
+    .fold > summary::before,
+    .phase-bar {
+      transition: none;
+    }
   }
 
 

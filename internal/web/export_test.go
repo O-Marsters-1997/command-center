@@ -44,7 +44,9 @@ func renderStates(name string, states []plan.State) (string, error) {
 }
 
 func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
-	html, err := renderLogLine(e, anchor)
+	line := view.LineOf(e)
+	line.Anchor = anchor
+	html, err := renderLogLine(line)
 	return template.HTML(html), err
 }
 

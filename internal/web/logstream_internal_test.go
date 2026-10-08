@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 func writeRunLog(t *testing.T, body string) string {
@@ -34,18 +35,18 @@ func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 		`[{"type":"tool_use","name":"Bash","input":{"command":"go test ./..."}}]}}` + "\n"
 	path := writeRunLog(t, line)
 
-	event, ok := agentlog.ParseLine([]byte(strings.TrimRight(line, "\n")))
-	if !ok {
-		t.Fatal("fixture line did not parse")
+	events := agentlog.ParseLine([]byte(strings.TrimRight(line, "\n")))
+	if len(events) != 1 {
+		t.Fatalf("fixture line parsed to %d events, want 1", len(events))
 	}
-	fromServerRender, err := renderLogLine(event, false)
+	fromServerRender, err := renderLogLine(view.LineOf(events[0]))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var buf strings.Builder
 	offset := int64(0)
-	if sent := sendLines(&buf, path, &offset, "all"); sent != 1 {
+	if sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	fromStream := extractSSEData(t, buf.String())
@@ -71,12 +72,33 @@ func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	sent := sendLines(&buf, path, &offset, "fails")
+	sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "fails")
 
 	if sent != 1 {
 		t.Fatalf("sendLines(mode=fails) sent %d events, want 1 (just the run's one Fail)", sent)
 	}
 	if got := buf.String(); !strings.Contains(got, "line-fail") || strings.Contains(got, "line-tool") {
 		t.Errorf("sendLines(mode=fails) sent a non-Fail line: %q", got)
+	}
+}
+
+func TestSendLinesCarriesAMultiLineOutputAsOneDataLinePerLine(t *testing.T) {
+	t.Parallel()
+
+	line := `{"type":"user","message":{"content":[{"type":"tool_result","is_error":true,` +
+		`"content":"--- FAIL: TestX\nwant y"}]}}` + "\n"
+	path := writeRunLog(t, line)
+
+	var buf strings.Builder
+	offset := int64(0)
+	if sent := sendLines(&buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
+		t.Fatalf("sendLines sent %d events, want 1", sent)
+	}
+	frame := buf.String()
+	if !strings.Contains(frame, "<pre class=\"call-out\">--- FAIL: TestX\ndata: want y</pre>") {
+		t.Errorf("the output's second line is not its own data line, so EventSource would drop it: %q", frame)
+	}
+	if !strings.HasSuffix(frame, "</div>\n\n") || strings.Count(frame, "\n\n") != 1 {
+		t.Errorf("frame = %q, want exactly one event", frame)
 	}
 }

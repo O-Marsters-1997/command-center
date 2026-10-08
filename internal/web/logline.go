@@ -3,26 +3,18 @@ package web
 import (
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-type logLineData struct {
-	Kind   string
-	Tool   string
-	Detail string
-	Anchor bool
-}
-
-func renderLogLine(e agentlog.Event, anchor bool) (string, error) {
-	data := logLineData{Kind: e.Kind.String(), Tool: flatten(e.Tool), Detail: flatten(e.Detail), Anchor: anchor}
+func renderLogLine(line view.LogLine) (string, error) {
+	line.Verb, line.Arg = flatten(line.Verb), flatten(line.Arg)
 	var buf strings.Builder
-	if err := templates.ExecuteTemplate(&buf, "logline", data); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "logline", line); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-// flatten keeps a rendered line on one physical line: SSE carries one "data:" line per event.
 func flatten(s string) string {
 	return strings.ReplaceAll(s, "\n", " ")
 }
