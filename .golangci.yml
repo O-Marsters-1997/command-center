@@ -52,6 +52,8 @@ linters:
               desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0015)
             - pkg: os/exec
               desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0015)
+            - pkg: net/http
+              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0015)
         ccdb-in-store:
           files: ["$all", "!**/internal/store/**"]
           deny:
@@ -61,7 +63,7 @@ linters:
           files: ["**/*_test.go"]
           deny:
             - pkg: github.com/stretchr/testify
-              desc: use cmp.Diff and errors.Is/As instead
+              desc: compare with == and slices.Equal, and match errors with errors.Is/As
   exclusions:
     rules:
       - path-except: _test\.go

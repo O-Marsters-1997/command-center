@@ -180,7 +180,7 @@ func assertMetrics(t *testing.T, got, want agentlog.RunMetrics) {
 		got.Duration != want.Duration || got.Model != want.Model || got.Settled != want.Settled {
 		t.Errorf("ParseMetrics = %+v; want %+v", got, want)
 	}
-	if !slices.Equal(got.Requests, want.Requests) {
+	if !slices.Equal(got.Requests, want.Requests) || (got.Requests == nil) != (want.Requests == nil) {
 		t.Errorf("Requests = %+v; want %+v", got.Requests, want.Requests)
 	}
 	gotCost, wantCost := got.CostUSD, want.CostUSD

@@ -290,13 +290,14 @@ func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 	defer poll.Stop()
 	deadline := time.After(30 * time.Second)
 	for {
-		if body, err := os.ReadFile(logPath); err == nil && strings.Contains(string(body), daemonReady) {
+		body, err := os.ReadFile(logPath)
+		if err == nil && strings.Contains(string(body), daemonReady) {
 			return
 		}
 		select {
 		case <-poll.C:
 		case <-deadline:
-			ts.Fatalf("cc did not log %q within the deadline:\n%s", daemonReady, ts.ReadFile(logPath))
+			ts.Fatalf("cc did not log %q within the deadline:\n%s", daemonReady, body)
 		}
 	}
 }

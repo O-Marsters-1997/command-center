@@ -209,7 +209,6 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 }
 
 func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
-	t.Parallel()
 
 	store := seededStore(t, time.Now())
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, ""))
@@ -224,7 +223,6 @@ func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			body := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
 			if tt.prompt != "" {
 				body.Set("prompt", tt.prompt)

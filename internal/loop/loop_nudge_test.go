@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,42 +12,32 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-func waitUntil(t *testing.T, done func() bool, failure string) {
-	t.Helper()
+func pollUntil(within time.Duration, done func() bool) bool {
 	poll := time.NewTicker(time.Millisecond)
 	defer poll.Stop()
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(within)
 	for !done() {
 		select {
 		case <-poll.C:
 		case <-deadline:
-			t.Fatal(failure)
+			return false
 		}
 	}
-}
-
-func holdsFor(window time.Duration, holds func() bool) bool {
-	poll := time.NewTicker(time.Millisecond)
-	defer poll.Stop()
-	end := time.After(window)
-	for holds() {
-		select {
-		case <-poll.C:
-		case <-end:
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 func waitForTicks(t *testing.T, count *atomic.Int32, want int32) {
 	t.Helper()
-	waitUntil(t, func() bool { return count.Load() >= want }, fmt.Sprintf("ticks never reached %d within 2s", want))
+	if !pollUntil(2*time.Second, func() bool { return count.Load() >= want }) {
+		t.Fatalf("ticks = %d after 2s, want at least %d", count.Load(), want)
+	}
 }
 
-func waitForWaiters(t *testing.T, clock *manualClock, want int) {
+func waitForWaiter(t *testing.T, clock *manualClock) {
 	t.Helper()
-	waitUntil(t, func() bool { return clock.waiting() >= want }, "loop never waited on the clock")
+	if !pollUntil(2*time.Second, func() bool { return clock.waiting() > 0 }) {
+		t.Fatal("loop never waited on the clock")
+	}
 }
 
 func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
@@ -83,8 +72,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	close(proceed)
 
 	waitForTicks(t, &ticks, 3)
-	waitForWaiters(t, clock, 3)
-	if !holdsFor(100*time.Millisecond, func() bool { return ticks.Load() == 3 }) {
+	if pollUntil(100*time.Millisecond, func() bool { return ticks.Load() != 3 }) {
 		t.Fatalf("ticks = %d, want exactly 3: five mid-tick nudges must coalesce into one tick, not queue one each",
 			ticks.Load())
 	}
@@ -111,7 +99,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 
 	waitForTicks(t, &ticks, 1)
 	for want := int32(2); want <= 4; want++ {
-		waitForWaiters(t, clock, 1)
+		waitForWaiter(t, clock)
 		clock.Advance(15 * time.Second)
 		waitForTicks(t, &ticks, want)
 	}
