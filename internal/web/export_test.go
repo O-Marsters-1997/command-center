@@ -58,3 +58,7 @@ func (s *Server) RegisterTestRoute(pattern string, h http.HandlerFunc) {
 }
 
 func MainTipKey(repo string) string { return plan.BranchKey(repo, "main") }
+
+func (s *Server) SetVerifyPassword(verify func(password, encoded string) bool) {
+	s.verifyPassword = verify
+}
