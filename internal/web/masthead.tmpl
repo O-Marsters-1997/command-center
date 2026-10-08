@@ -23,11 +23,11 @@
     the last tick failed {{template "age" .Age}} and nothing below has been re-derived since. {{.Message}}
   </p>
   {{end}}
-  {{range .RefusedRepos}}
+  {{- range .RefusedRepos}}
   <p class="banner ribbon" data-tone="stop" role="status">
-    <a href="{{.Path}}">{{.Name}}</a> is refused: {{.Reason}}
+    <a href="{{.Path}}">{{.Name}}</a> is refused{{with .Reason}}: {{.}}{{end}}
   </p>
-  {{end}}
+  {{- end}}
   {{with .SpendPaused}}
   <p class="banner ribbon" data-tone="wait" role="status">
     spawning paused: five-hour usage is {{.Pct}}%, at or above the spend_limit_5h of {{.Limit}}%.
