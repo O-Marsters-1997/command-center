@@ -56,12 +56,6 @@ type Repo struct {
 	Checks      verdict.Predicate `toml:"checks"`
 	// VerifyCommand is the argv a clean refresh or restack is verified with; empty means opted out.
 	VerifyCommand []string `toml:"verify_command"`
-	// Generated names the paths this repo's build regenerates, glob-matched against a conflict
-	// with origin/main; empty means the repo opted out.
-	Generated []string `toml:"generated"`
-	// BuildCommand is the argv that regenerates Generated's paths, run in the ticket's own
-	// worktree before they are staged and committed; empty means the repo opted out.
-	BuildCommand []string `toml:"build_command"`
 	// Checkout is where this repo's working copy is, resolved once by LoadConfig. Everything
 	// downstream reads this and derives no path of its own. Not a config key.
 	Checkout string `toml:"-"`

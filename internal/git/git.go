@@ -226,16 +226,6 @@ func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	return lines(out), nil
 }
 
-func Add(ctx context.Context, worktreePath string, paths []string) error {
-	_, err := git(ctx, worktreePath, append([]string{"add", "--"}, paths...)...)
-	return err
-}
-
-func Commit(ctx context.Context, worktreePath, message string) error {
-	_, err := git(ctx, worktreePath, "commit", "-m", message)
-	return err
-}
-
 func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	out, err := git(ctx, worktreePath, "diff", "--cached", "--name-only")
 	if err != nil {
@@ -301,29 +291,12 @@ func midRebase(ctx context.Context, worktreePath string) (bool, error) {
 	return false, nil
 }
 
-// MergesCleanly reports whether merging branch into base is conflict-free, else the conflicted
-// paths. merge-tree exits 0 clean and 1 conflicted, but also 1 for an unresolvable ref, so
-// both arguments must already resolve.
-func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, []string, error) {
-	out, ok, err := gitRun(ctx, repoPath, "merge-tree", "--write-tree", "--name-only", base, branch)
-	if err != nil || ok {
-		return ok, nil, err
-	}
-	return false, conflictedPaths(out), nil
-}
-
-// conflictedPaths reads --name-only's own output shape: the result tree's oid on the first
-// line, then one conflicted path per line up to the blank line before its diagnostic messages.
-func conflictedPaths(out []byte) []string {
-	rows := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	var paths []string
-	for _, line := range rows[1:] {
-		if line == "" {
-			break
-		}
-		paths = append(paths, line)
-	}
-	return paths
+// MergesCleanly reports whether merging branch into base is conflict-free. merge-tree exits 0
+// clean and 1 conflicted, but also 1 for an unresolvable ref, so both arguments must already
+// resolve.
+func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, error) {
+	_, ok, err := gitRun(ctx, repoPath, "merge-tree", "--write-tree", base, branch)
+	return ok, err
 }
 
 // Ancestor reports whether commit is reachable from ref.
