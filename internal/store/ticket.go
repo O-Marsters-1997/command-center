@@ -46,6 +46,9 @@ const TickPeriod = 15 * time.Second
 // ImportVerb is the intent verb whose ticket id is a feature label.
 const ImportVerb = "import"
 
+// TrackVerb is the intent verb whose ticket id is a repo's owner/name.
+const TrackVerb = "track"
+
 // Event kinds both the loop writes and a Store read decodes.
 const (
 	EventImportRefused         = "import_refused"

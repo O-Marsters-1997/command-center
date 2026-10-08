@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -102,6 +104,25 @@ func (s *Store) ImportRepos(ctx context.Context, imports []RepoImport) (err erro
 		}
 	}
 	return tx.Commit()
+}
+
+// QueueTrackIntent queues a Track for repo unless one is already pending, and reports whether it
+// queued.
+func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time) (bool, error) {
+	pending, err := s.TrackPending(ctx, repo)
+	if err != nil || pending {
+		return false, err
+	}
+	return true, s.QueueVerbIntent(ctx, repo, TrackVerb, at)
+}
+
+// TrackPending reports whether a Track for repo, ignoring case, has been queued and not yet applied.
+func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
+	intents, err := s.PendingVerbIntents(ctx, TrackVerb)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(intents, func(i VerbIntent) bool { return strings.EqualFold(i.TicketID, repo) }), nil
 }
 
 func nullIfEmpty(s string) sql.NullString {

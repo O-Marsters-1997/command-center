@@ -25,3 +25,8 @@ func SandboxValidate(ctx context.Context, dataDir string, repo store.Repo, now t
 	repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 	return repo, nil
 }
+
+// SandboxRemote is the e2e build's loop.RemoteFunc: a fixed SSH URL, so Track needs no GitHub.
+func SandboxRemote(_ context.Context, fullName string) (string, error) {
+	return "git@github.com:" + fullName + ".git", nil
+}

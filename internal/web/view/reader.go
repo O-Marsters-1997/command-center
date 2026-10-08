@@ -197,7 +197,7 @@ func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
 	var refused []RefusedRepo
 	for _, repo := range repos {
 		if repo.State == store.RepoRefused {
-			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: repoPath(repo.Name)})
+			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: RepoPath(repo.Name)})
 		}
 	}
 	return refused, nil
@@ -230,7 +230,7 @@ func (r *Reader) buildChrome(
 		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
 	}
 	if params.Repo != "" {
-		c.RepoCrumbPath = repoPath(params.Repo)
+		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	if params.Feature != "" {
 		c.FeatureImportPath = params.featureImportPath()

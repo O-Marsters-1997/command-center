@@ -32,6 +32,7 @@ type options struct {
 	clock    loop.Clock
 	observe  loop.ObserveFunc
 	validate loop.ValidateFunc
+	remoteOf loop.RemoteFunc
 }
 
 type Option func(*options)
@@ -50,6 +51,12 @@ func WithObserver(observe loop.ObserveFunc) Option {
 // e2e build runs without GitHub.
 func WithValidator(validate loop.ValidateFunc) Option {
 	return func(o *options) { o.validate = validate }
+}
+
+// WithRemoteSource replaces the gh lookup of a tracked repo's clone URL, so a test or the e2e
+// build runs without GitHub.
+func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
+	return func(o *options) { o.remoteOf = remoteOf }
 }
 
 // New resolves the workspace, takes the flock, opens the store and imports any [[repo]] blocks
@@ -106,6 +113,9 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	lp.SetWorktrees(git.CLI{})
 	if settings.validate != nil {
 		lp.SetValidator(settings.validate)
+	}
+	if settings.remoteOf != nil {
+		lp.SetRemoteSource(settings.remoteOf)
 	}
 	server := web.NewServer(store, settings.clock, ws.DataDir)
 	server.SetNudge(lp.Nudge)

@@ -49,7 +49,7 @@ func tick(ctx context.Context, configPath string, args []string) (err error) {
 		return err
 	}
 
-	instance, err := app.New(ctx, configPath, app.WithValidator(SandboxValidate))
+	instance, err := app.New(ctx, configPath, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote))
 	if err != nil {
 		return err
 	}
