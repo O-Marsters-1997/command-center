@@ -75,7 +75,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
-		"--model", "claude-sonnet-5",
+		"--model", "claude-sonnet-5-5",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
@@ -245,7 +245,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5",
+				"--model", "claude-sonnet-5-5",
 			},
 		},
 		{
@@ -258,7 +258,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5",
+				"--model", "claude-sonnet-5-5",
 				"--max-turns", "40",
 			},
 		},
@@ -476,5 +476,21 @@ build_command = ["just", "assets"]
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
 		t.Errorf("repos = %+v", got.Repos)
+	}
+}
+
+func TestCheckedInConfigPinsTheDefaultModel(t *testing.T) {
+	t.Parallel()
+
+	shipped, err := config.LoadConfig("../../cc/config.toml")
+	if err != nil {
+		t.Fatalf("LoadConfig(cc/config.toml): %v", err)
+	}
+	defaults, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !slices.Equal(shipped.AgentCommand, defaults.AgentCommand) {
+		t.Errorf("cc/config.toml agent_command = %q, want the default %q", shipped.AgentCommand, defaults.AgentCommand)
 	}
 }

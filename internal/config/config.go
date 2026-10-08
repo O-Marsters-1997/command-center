@@ -76,7 +76,7 @@ var defaultAgentCommand = []string{
 	"--agents", "{agents}",
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
-	"--model", "claude-sonnet-5",
+	"--model", "claude-sonnet-5-5",
 }
 
 // LoadConfig decodes the config file, resolves the data directory and each repo's checkout, and
