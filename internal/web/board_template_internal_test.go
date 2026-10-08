@@ -8,10 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
-// TestBoardNamesAnOutOfScopeGroupMembersOwnRepo covers issue #219 AC2 at the template's own
-// seam: plan.Unlocked only ever counts a same-repo blocker (plan.go:60), so a group groupRows
-// forms can never itself straddle two repos through today's live blocking edges -- this drives
-// board.tmpl's row template directly, over a hand-built group, the way ADR 7 describes one.
 func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	t.Parallel()
 
@@ -23,7 +19,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", view); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -37,8 +33,6 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	}
 }
 
-// TestBoardNamesAnOutOfScopeGroupMembersOwnFeature covers issue #220 AC2, following
-// TestBoardNamesAnOutOfScopeGroupMembersOwnRepo.
 func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 	t.Parallel()
 
@@ -53,7 +47,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", view); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -75,8 +69,9 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 		AgentPctWeek: 1.5, ResolvePctWeek: 0.5, FollowUpPctWeek: 0.25,
 		SpendPctWeek: 2.25, TicketOpen: true,
 	}
+	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
@@ -102,8 +97,9 @@ func TestBoardTemplateOmitsOpenForAMergedTicket(t *testing.T) {
 		URL: "sandbox://CC-1", State: "merged", Tone: "done",
 		AgentPctWeek: 1, SpendPctWeek: 1, TicketOpen: false,
 	}
+	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
 	var buf bytes.Buffer
-	if err := boardFragment.Execute(&buf, view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 

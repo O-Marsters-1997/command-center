@@ -8,50 +8,42 @@ import (
 )
 
 // Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
-// tracker's own, refreshed on every import; Repo is matched from URL against a [[repo]]'s remote.
-// Branch and BlockedBy are the app's own, seeded once on a URL's first import, then left alone.
-// FirstPushCI and HandChurnLines are nil until recordFirstPushCI/recordMergedEvents observe the
-// fact they report, and never overwritten after that.
+// tracker's, refreshed on every import; Branch and BlockedBy are the app's, seeded once.
 type Ticket struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      []string
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	FirstPushCI    *bool
-	HandChurnLines *int
+	URL       string
+	Repo      string
+	Branch    string
+	BlockedBy []string
+	Source    string
+	Title     string
+	Body      string
+	Status    string
+	Feature   string
+	SyncedAt  string
 }
 
-// Plan is the slice of t that internal/plan reads.
 func (t Ticket) Plan() plan.Ticket {
 	return plan.Ticket{URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
 }
 
-// ImportedTicket is one tracker.Ticket paired with the configured repo it came from and that
-// repo's tracker kind -- Store.ImportTickets's own upsert unit.
+// ImportedTicket is one tracker.Ticket with the configured repo it came from.
 type ImportedTicket struct {
 	tracker.Ticket
 	Repo   string
 	Source string
 }
 
-// TickError is the last failed tick, rendered on the page with its age.
+// TickError is the last failed tick, with its age shown on the page.
 type TickError struct {
 	At      time.Time `json:"at"`
 	Message string    `json:"message"`
 }
 
-// TickPeriod is the sleep after the loop's work: ticks never overlap, and the loop never branches
-// on why it woke. A verdict's checking time is counted in these.
+// TickPeriod is the sleep after the loop's work; ticks never overlap. A verdict's checking
+// time is counted in these.
 const TickPeriod = 15 * time.Second
 
-// ImportVerb is the intent verb whose ticket id is a feature label, queued by the web and consumed
-// by the loop.
+// ImportVerb is the intent verb whose ticket id is a feature label.
 const ImportVerb = "import"
 
 // Event kinds both the loop writes and a Store read decodes.

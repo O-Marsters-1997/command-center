@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-// Runner spawns agent processes and reads back their liveness, and signals them dead on
-// request. The real implementation is ProcessRunner; the loop's tests substitute a fake so
-// liveness, disposition and cancellation are exercised without touching the OS.
+// Runner spawns agent processes, reads back their liveness and signals them dead. ProcessRunner
+// is the real one; Fake stands in for tests.
 type Runner interface {
 	Spawn(ctx context.Context, cfg SpawnConfig) (SpawnResult, error)
 	Liveness(pgid int, wantStart, now time.Time) (bool, error)
@@ -29,13 +28,10 @@ type SpawnConfig struct {
 	WorktreePath     string
 	SettingsPath     string
 	SystemPromptPath string
-	// AgentsPath names the --agents JSON file (WriteAgentDigestDefinition's output). Empty for a
-	// kind that gets no digest subagent, like SystemPromptPath.
-	AgentsPath string
-	Prompt     string
-	PromptPath string
-	// LogFile is both stdout and stderr, opened by the caller and never a pipe: piping would
-	// need a goroutine per run to drain it, which the design forbids (§3).
+	AgentsPath       string
+	Prompt           string
+	PromptPath       string
+	// LogFile is both stdout and stderr and is never a pipe, which would need a draining goroutine.
 	LogFile *os.File
 }
 
@@ -57,9 +53,6 @@ func substitute(arg string, cfg SpawnConfig) string {
 	return arg
 }
 
-// buildArgv resolves cfg.AgentCommand into a concrete argv. When a placeholder's own path is
-// empty (e.g. {system_prompt} or {agents} on a resolve or follow-up run, see spawnRun), the flag
-// preceding it is dropped along with it rather than left pointing at nothing.
 func buildArgv(cfg SpawnConfig) []string {
 	omitWhenEmpty := map[string]string{
 		"{system_prompt}": cfg.SystemPromptPath,
@@ -78,8 +71,6 @@ func buildArgv(cfg SpawnConfig) []string {
 	return argv
 }
 
-// stripAPIKey removes ANTHROPIC_API_KEY from an environment list: every agent runs under the
-// app-owned settings file instead of inheriting the app's own key.
 func stripAPIKey(environ []string) []string {
 	out := make([]string, 0, len(environ))
 	for _, kv := range environ {
@@ -91,15 +82,9 @@ func stripAPIKey(environ []string) []string {
 	return out
 }
 
-// Spawn starts one agent process as the leader of its own process group, so Cancel can later
-// signal every subprocess it spawns, not just itself. It deliberately skips exec.CommandContext:
-// since Go 1.20 that kills only the leader pid on ctx cancellation, which is wrong for crash
-// recovery — a graceful shutdown must leave agents running exactly like a crash does (§3).
-//
-// Dir is always cfg.WorktreePath, never left to default to this process's own cwd: an
-// agent_command that never references {worktree} in its argv (real claude -p takes no such
-// argument) must still run in the cut worktree, not wherever the daemon happens to be running
-// from.
+// Spawn starts one agent process as its own process group leader, so Cancel reaches its
+// subprocesses. exec.CommandContext is avoided: since Go 1.20 it kills only the leader pid on
+// ctx cancellation, but a graceful shutdown must leave agents running as a crash does.
 func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
 	if len(cfg.AgentCommand) == 0 {
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")

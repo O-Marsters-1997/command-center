@@ -45,41 +45,6 @@ func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesR
 	return items, nil
 }
 
-const backfillRunMetrics = `-- name: BackfillRunMetrics :exec
-UPDATE runs SET tokens_in = $1, tokens_out = $2, turns = $3, duration_ms = $4, cost_usd = $5,
-  tool_calls = $6, tool_failures = $7, model = $8, metrics_settled = $9
-WHERE id = $10
-`
-
-type BackfillRunMetricsParams struct {
-	TokensIn       sql.NullInt64
-	TokensOut      sql.NullInt64
-	Turns          sql.NullInt64
-	DurationMs     sql.NullInt64
-	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
-	Model          sql.NullString
-	MetricsSettled sql.NullBool
-	ID             int64
-}
-
-func (q *Queries) BackfillRunMetrics(ctx context.Context, arg BackfillRunMetricsParams) error {
-	_, err := q.db.ExecContext(ctx, backfillRunMetrics,
-		arg.TokensIn,
-		arg.TokensOut,
-		arg.Turns,
-		arg.DurationMs,
-		arg.CostUsd,
-		arg.ToolCalls,
-		arg.ToolFailures,
-		arg.Model,
-		arg.MetricsSettled,
-		arg.ID,
-	)
-	return err
-}
-
 const consumeVerbIntent = `-- name: ConsumeVerbIntent :exec
 UPDATE intents SET consumed_at = $1 WHERE id = $2
 `
@@ -120,15 +85,14 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 
 const insertRunRequest = `-- name: InsertRunRequest :exec
 INSERT INTO run_requests
-  (run_id, request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  (run_id, request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertRunRequestParams struct {
 	RunID               int64
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -140,7 +104,6 @@ func (q *Queries) InsertRunRequest(ctx context.Context, arg InsertRunRequestPara
 		arg.RunID,
 		arg.RequestID,
 		arg.Thread,
-		arg.Tool,
 		arg.InputTokens,
 		arg.CacheCreationTokens,
 		arg.CacheReadTokens,
@@ -393,8 +356,8 @@ func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbI
 const recordDisposition = `-- name: RecordDisposition :exec
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
   tokens_in = $4, tokens_out = $5, turns = $6, duration_ms = $7, cost_usd = $8,
-  tool_calls = $9, tool_failures = $10, model = $11, metrics_settled = $12
-WHERE id = $13
+  model = $9, metrics_settled = $10
+WHERE id = $11
 `
 
 type RecordDispositionParams struct {
@@ -406,8 +369,6 @@ type RecordDispositionParams struct {
 	Turns          sql.NullInt64
 	DurationMs     sql.NullInt64
 	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 	ID             int64
@@ -423,8 +384,6 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.Turns,
 		arg.DurationMs,
 		arg.CostUsd,
-		arg.ToolCalls,
-		arg.ToolFailures,
 		arg.Model,
 		arg.MetricsSettled,
 		arg.ID,
@@ -481,14 +440,13 @@ func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64
 }
 
 const runRequestsForRun = `-- name: RunRequestsForRun :many
-SELECT request_id, thread, tool, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
+SELECT request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
 FROM run_requests WHERE run_id = $1 ORDER BY id
 `
 
 type RunRequestsForRunRow struct {
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -507,44 +465,11 @@ func (q *Queries) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequ
 		if err := rows.Scan(
 			&i.RequestID,
 			&i.Thread,
-			&i.Tool,
 			&i.InputTokens,
 			&i.CacheCreationTokens,
 			&i.CacheReadTokens,
 			&i.OutputTokens,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const runsAwaitingMetricsBackfill = `-- name: RunsAwaitingMetricsBackfill :many
-SELECT id, log_path FROM runs WHERE log_path IS NOT NULL AND metrics_settled IS NULL
-`
-
-type RunsAwaitingMetricsBackfillRow struct {
-	ID      int64
-	LogPath sql.NullString
-}
-
-func (q *Queries) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunsAwaitingMetricsBackfillRow, error) {
-	rows, err := q.db.QueryContext(ctx, runsAwaitingMetricsBackfill)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []RunsAwaitingMetricsBackfillRow
-	for rows.Next() {
-		var i RunsAwaitingMetricsBackfillRow
-		if err := rows.Scan(&i.ID, &i.LogPath); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

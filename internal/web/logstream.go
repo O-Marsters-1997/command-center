@@ -16,15 +16,12 @@ import (
 
 const logPollInterval = 250 * time.Millisecond
 
-// handleLog streams the run's log as Server-Sent Events, one event per whole line, from the
-// ?from= byte the detail fragment's own tail stopped at. It reads the file and nothing else: the
-// loop owns the agent process, so a reader arriving or leaving cannot touch it (inv. 9).
-func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	ticketURL := r.PathValue("ticket")
 	offset, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
-	// A browser that reconnects sends back the byte offset of the last event it swapped, which
-	// outranks the offset the fragment was rendered with (WHATWG HTML § server-sent events).
+	// A reconnecting browser sends the offset of the last event it swapped, which outranks the
+	// offset the fragment was rendered with (WHATWG HTML § server-sent events).
 	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil {
 		offset = resumed
 	}
@@ -32,39 +29,36 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	flusher := http.NewResponseController(w)
 
+	var tail agentlog.Tail
 	for {
-		sent := sendLines(w, path, &offset, mode)
+		sent := sendLines(w, &tail, path, &offset, mode)
 		_ = flusher.Flush()
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
 			// reconnects for ever; sse-close on the <pre> retires the EventSource on this.
 			_, _ = io.WriteString(w, "event: end\ndata:\n\n")
 			_ = flusher.Flush()
-			return
+			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-s.clock.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
-			return
+			return nil
 		}
 	}
 }
 
-// sendLines writes one SSE event per whole line from offset onwards through renderLogLine, and
-// returns how many it sent. A trailing partial line is left for the next read, and a log that
-// will not open yet is no lines rather than an error.
-func sendLines(w io.Writer, path string, offset *int64, mode string) int {
+func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) int {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0
@@ -83,20 +77,29 @@ func sendLines(w io.Writer, path string, offset *int64, mode string) int {
 		}
 		*offset += int64(len(line))
 
-		event, ok := agentlog.ParseLine([]byte(strings.TrimRight(line, "\r\n")))
-		if !ok || !view.KindShown(mode, event.Kind) {
-			continue
+		for _, event := range tail.Read([]byte(strings.TrimRight(line, "\r\n"))) {
+			if !view.KindShown(mode, event.Kind) {
+				continue
+			}
+			rendered, err := renderLogLine(view.LineOf(event))
+			if err != nil {
+				continue
+			}
+			if err := writeEvent(w, *offset, rendered); err != nil {
+				return sent
+			}
+			sent++
 		}
-		// ponytail: a failure streamed in live never carries id="first-fail", even when it's the
-		// run's first -- the anchor only lands on the next full re-render. Upgrade by tracking
-		// whether a Fail has already crossed this connection, once that gap is worth closing.
-		rendered, err := renderLogLine(event, false)
-		if err != nil {
-			continue
-		}
-		if _, err := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", *offset, rendered); err != nil {
-			return sent
-		}
-		sent++
 	}
+}
+
+func writeEvent(w io.Writer, id int64, data string) error {
+	var frame strings.Builder
+	fmt.Fprintf(&frame, "id: %d\n", id)
+	for _, line := range strings.Split(data, "\n") {
+		fmt.Fprintf(&frame, "data: %s\n", line)
+	}
+	frame.WriteString("\n")
+	_, err := io.WriteString(w, frame.String())
+	return err
 }

@@ -3,7 +3,6 @@ package web_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -12,9 +11,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// TestPageRendersStackDepthAndMergeOrderForAFiveRowStack covers issue #34's "the page shows
-// stack depth and merge order" for a one-root, four-dependent fan-out (issue #33's own shape):
-// the root merges first, and every dependent sits one hop below it, whichever order they cut in.
 func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	t.Parallel()
 
@@ -33,7 +29,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	prs := map[string]plan.PR{}
 	dispositionAsPushed(t, store, "sandbox://ROOT", at)
 	if err := store.RecordPush(ctx, "sandbox://ROOT", "root-tip", "main", "main-tip", at); err != nil {
@@ -73,9 +69,6 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 }
 
-// TestPageWarnsOnANonMainReadyToMergeLabel covers issue #34's invariant 2 rendering: a stacked
-// row's PR carrying ready-to-merge is flagged, since both repos would squash it into its parent
-// branch with the parent's own checks unseen — and the app never applies that label itself.
 func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	t.Parallel()
 
@@ -89,7 +82,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	if err := store.RecordPush(ctx, "sandbox://PARENT", "parent-tip", "main", "main-tip", at); err != nil {
@@ -127,11 +120,6 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 }
 
-// TestPageWarnsOnARemoveWorktreeRefusal covers the fix
-// (docs/adr/0008-cc-proves-what-tp-cannot.md): a remove-worktree refusal was write-only, an
-// event with nothing reading it back, so pressing the verb again looked like nothing happened.
-// The row now carries its own last refusal as a warning, worded for whichever verb it names
-// rather than the ready-to-merge flag's own fixed label.
 func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	t.Parallel()
 
@@ -142,7 +130,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	if err := store.RecordPush(ctx, ticket.URL, "merged-tip", "main", "main-tip", at); err != nil {
 		t.Fatal(err)

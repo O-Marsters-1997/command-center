@@ -3,14 +3,12 @@ package view
 import (
 	"net/url"
 	"slices"
+	"strconv"
 )
 
-// logFilters names the four ?log= modes the run log accepts, in the order they render as
-// buttons. "all" is the default and is never written into a URL.
 var logFilters = []string{"all", "skills", "tools", "fails"}
 
-// NormalizeLogFilter rejects anything but the four named modes, onto "all" — a query string is
-// user input, and an unrecognised mode is silently the default rather than an error.
+// NormalizeLogFilter maps anything but the four named modes onto "all".
 func NormalizeLogFilter(mode string) string {
 	if slices.Contains(logFilters, mode) {
 		return mode
@@ -19,26 +17,19 @@ func NormalizeLogFilter(mode string) string {
 }
 
 type Params struct {
-	// Sel is the one expanded row. At most one: ParseParams takes the first ?sel= and drops
-	// the rest.
 	Sel     string
 	Tickets []string
 	View    string
-	// Log is the selected row's run-log filter (docs/prds/prd-fleet-view.md § The run log).
-	Log string
-	// Repo is the board's repo scope, raw off the query string. render blanks it against the
-	// configured repo names, since that list is not available at parse time (CONTEXT.md § Scope).
-	Repo string
-	// Feature is the board's feature scope, raw off the query string. render blanks it against the
-	// distinct features among the loaded tickets, since that set is not available at parse time
-	// (CONTEXT.md § Feature).
+	Log     string
+	Repo    string
 	Feature string
+	Phase   string
 }
 
 func ParseParams(q url.Values) Params {
 	v := Params{
 		Tickets: q["ticket"], View: q.Get("view"), Log: NormalizeLogFilter(q.Get("log")),
-		Repo: q.Get("repo"), Feature: q.Get("feature"),
+		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: normalizePhase(q.Get("phase")),
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
@@ -49,10 +40,13 @@ func ParseParams(q url.Values) Params {
 	return v
 }
 
-// normalizeRepoScope blanks a ?repo= value unrecognised against the configured repos, following
-// NormalizeLogFilter: a query string is user input, and an unknown scope shows the unscoped board
-// rather than an error. configuredRepos is keyed by repo name; the caller passes the stacking map
-// since it is already indexed that way, though this reads it purely as a membership set.
+func normalizePhase(phase string) string {
+	if i, err := strconv.Atoi(phase); err != nil || i < 0 {
+		return ""
+	}
+	return phase
+}
+
 func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
 	if _, ok := configuredRepos[repo]; ok {
 		return repo
@@ -60,9 +54,6 @@ func normalizeRepoScope(repo string, configuredRepos map[string]bool) string {
 	return ""
 }
 
-// normalizeFeatureScope blanks a ?feature= value unrecognised against the features currently in
-// the fleet, following NormalizeLogFilter -- features are the tracker's own and unconfigured, so
-// the membership set is the distinct Feature values render already read off store.Tickets.
 func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	if slices.Contains(fleetFeatures, feature) {
 		return feature
@@ -70,8 +61,8 @@ func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	return ""
 }
 
-// url.Values.Encode sorts by key, so this always renders feature/log/repo/sel/ticket/view in that
-// order.
+// url.Values.Encode sorts by key, so this always renders feature/log/phase/repo/sel/ticket/view
+// in that order.
 func (v Params) query() string {
 	q := url.Values{}
 	if v.Feature != "" {
@@ -79,6 +70,9 @@ func (v Params) query() string {
 	}
 	if v.Log != "" && v.Log != "all" {
 		q.Set("log", v.Log)
+	}
+	if v.Phase != "" {
+		q.Set("phase", v.Phase)
 	}
 	if v.Repo != "" {
 		q.Set("repo", v.Repo)
@@ -98,6 +92,12 @@ func (v Params) query() string {
 func (v Params) withLog(mode string) Params {
 	next := v
 	next.Log = mode
+	return next
+}
+
+func (v Params) withPhase(phase string) Params {
+	next := v
+	next.Phase = phase
 	return next
 }
 
@@ -130,6 +130,7 @@ func withQuery(path, query string) string {
 
 func (v Params) toggleSel(ticketURL string) Params {
 	next := v
+	next.Phase = ""
 	if v.Sel == ticketURL {
 		next.Sel = ""
 	} else {
@@ -138,7 +139,6 @@ func (v Params) toggleSel(ticketURL string) Params {
 	return next
 }
 
-// toggleTicket never mutates v.Tickets's own backing array: v is still rendered after this call.
 func (v Params) toggleTicket(ticketURL string) Params {
 	next := v
 	if slices.Contains(v.Tickets, ticketURL) {

@@ -9,9 +9,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// RecordPush writes one successful push -- the row Phase 4's crash-safety hinges on:
-// pushed_tip is compared against on every later tick's plan.PushPlan, so a duplicate push or a
-// duplicate PR create both stop the moment this lands (inv. 20).
+// RecordPush writes one successful push row; its pushed_tip is what later ticks
+// compare against, so a duplicate push or PR create stops once it lands.
 func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch, baseSHA string, at time.Time) error {
 	err := s.q.RecordPush(ctx, ccdb.RecordPushParams{
 		TicketID:      ticketID,
@@ -26,10 +25,9 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 	return s.ResetCheckingTicks(ctx, ticketID)
 }
 
-// RestackedSinceLastPush names every ticket whose branch the app itself rebased since it last
-// recorded a push of it, which is the only licence the push step has to lease-force (issue #89).
-// The comparison is >= rather than >: retargetOne stamps its push row and the restack that
-// follows it with one tick's single clock reading, so a strict > would never see its own work.
+// RestackedSinceLastPush names every ticket whose branch the app rebased since it last
+// recorded a push of it, the only licence the push step has to lease-force.
+// The comparison is >= because a retarget stamps its push and restack with one clock reading.
 func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, error) {
 	rows, err := s.q.RestackedSinceLastPush(ctx, EventRestacked)
 	if err != nil {
@@ -46,8 +44,7 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, er
 	return restacked, nil
 }
 
-// LastPushedTips returns each ticket's most recently recorded pushed_tip -- what plan.PushPlan
-// compares a branch's current local tip against.
+// LastPushedTips returns each ticket's most recently recorded pushed_tip.
 func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
 	rows, err := s.q.LastPushedTips(ctx)
 	if err != nil {
@@ -61,8 +58,7 @@ func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
 	return tips, nil
 }
 
-// LatestPushes returns each ticket's latest recorded push in full, keyed by ticket URL -- the CI
-// verdict step's own per-ticket facts, read fresh every render (inv. 14).
+// LatestPushes returns each ticket's latest recorded push, keyed by ticket URL.
 func (s *Store) LatestPushes(ctx context.Context) (map[string]plan.PushRow, error) {
 	rows, err := s.q.LatestPushes(ctx)
 	if err != nil {
@@ -88,9 +84,8 @@ const (
 	EventPushed      = "pushed"
 )
 
-// PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL: what the
-// automatic push step's auto-retry gate (a failure, never a refusal, blocks it -- retry-push is
-// your verb) and the page's needs-you/push-failed rendering both read.
+// PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL.
+// A failure blocks the automatic retry; a refusal never does.
 func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error) {
 	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: EventPushRefused, Kind_2: EventPushFailed})
 	if err != nil {

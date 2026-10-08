@@ -8,9 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
-// TestSumWeightPrefersASettledRequestsOwnExactCost covers a settled run's own reported
-// total_cost_usd taking priority over agentlog.Weight's token-price estimate, which the token
-// counts here would put nowhere near.
 func TestSumWeightPrefersASettledRequestsOwnExactCost(t *testing.T) {
 	t.Parallel()
 

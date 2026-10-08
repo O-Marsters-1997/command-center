@@ -51,7 +51,6 @@ func commitResolutionFixture(t *testing.T, root, repoPath string) (*storepkg.Sto
 }
 
 func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin and installFakeGh both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
@@ -60,7 +59,7 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -109,14 +108,13 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 }
 
 func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -145,7 +143,6 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 }
 
 func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
@@ -155,7 +152,7 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -184,13 +181,12 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 }
 
 func TestCommitResolutionRefusesALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store, ticket, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
 		PRs:       map[string]plan.PR{},
 		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 	}
@@ -215,7 +211,6 @@ func TestCommitResolutionRefusesALiveRun(t *testing.T) {
 }
 
 func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	conflictedWorktree(t, repoPath, worktreePath, ".github/workflows/ci.yml")
@@ -223,7 +218,7 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -255,7 +250,6 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 }
 
 func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin and installFakeGh both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
@@ -266,7 +260,7 @@ func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testi
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 

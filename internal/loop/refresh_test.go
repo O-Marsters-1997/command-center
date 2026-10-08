@@ -107,20 +107,19 @@ func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 	return plan.Observation{
 		Worktrees: map[string]string{
-			loop.BranchKey("repo", "parent"): f.parentWorktree, loop.BranchKey("repo", "child"): f.childWorktree,
+			plan.BranchKey("repo", "parent"): f.parentWorktree, plan.BranchKey("repo", "child"): f.childWorktree,
 		},
 		PRs: map[string]plan.PR{
-			loop.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
-			loop.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
+			plan.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
+			plan.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
 		},
-		BranchTips: map[string]string{loop.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
+		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
 		Runs:       map[string]plan.RunObservation{},
 		MidMerge:   map[string]bool{},
 	}
 }
 
 func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -172,12 +171,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	}
 }
 
-// TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow covers issue #85's fourth incident: a
-// row whose recorded base is main (never stacked, or retargeted there already) is exactly as
-// stale as a still-stacked row once a sibling chain's own merge moves main, and baseMoved must
-// fire for it the same way.
 func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -214,7 +208,6 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 }
 
 func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -246,11 +239,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 }
 
-// TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive covers the refresh verb's own
-// silent no-op: clicking it while the guard above trips left the row reverting to base_moved with
-// no event at all, so there was nothing on the row to say why the click did nothing.
 func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -282,7 +271,6 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 }
 
 func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -409,11 +397,7 @@ func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixtur
 	return strings.TrimSpace(runGitOutput(t, "-C", f.parentWorktree, "rev-parse", "refs/heads/parent"))
 }
 
-// TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp is issue #188's repro: a
-// conflict resolved and pushed with plain git, from entirely outside the app-managed worktree,
-// must not leave the row parked at base_moved forever once abort clears the stale MERGE_HEAD.
 func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -422,7 +406,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = strings.TrimSpace(
+	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
 	)
 	observe := func(context.Context) (plan.Observation, error) {
@@ -430,7 +414,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -461,7 +445,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
 	// same as advanceMain's (retarget_test.go).
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
-	obs.BranchTips[loop.BranchKey("repo", "child")] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -480,11 +464,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	}
 }
 
-// TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge covers the ponytail comment's own
-// named case: a base that advances again after a conflict, past the tip the failed merge
-// attempted, is a genuinely different merge and must not wait for the refresh verb either.
 func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -494,13 +474,13 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -529,7 +509,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 
 	parentTip2 := advanceParentPastTheConflict(t, repoPath, f)
-	obs.BranchTips[loop.BranchKey("repo", "parent")] = parentTip2
+	obs.BranchTips[plan.BranchKey("repo", "parent")] = parentTip2
 
 	if err := lp.RunOnce(t.Context()); err != nil { // the base moved past the failed attempt
 		t.Fatalf("retry RunOnce: %v", err)
@@ -548,11 +528,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 }
 
-// TestAutoRefreshDoesNotRetryAnUnchangedConflict is the control: nothing about the failed merge's
-// two tips has moved, so autoRefresh must still leave it for the refresh verb -- otherwise every
-// tick would spin re-attempting the same failing merge.
 func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -562,13 +538,13 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[loop.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
 	observe := func(context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(context.Background(), f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -608,7 +584,6 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 }
 
 func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -617,7 +592,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	delete(obs.PRs, loop.BranchKey("repo", "parent"))
+	delete(obs.PRs, plan.BranchKey("repo", "parent"))
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)

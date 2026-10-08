@@ -3,7 +3,7 @@
 # ticket's issue, and drops its row from the board; a closed-unmerged fixture on a row that has
 # run derives base_gone, not blocked; remove-worktree refuses a dirty worktree, before tp is ever
 # called; re-run on a failed row creates a second runs row in the same worktree and pushes its
-# commits through the same push step; close-pr derives pr_closed_unmerged.
+# commits through the same push step.
 
 cc-init-repo
 cc-config teardown-cc7-empty
@@ -77,12 +77,9 @@ stdout '"TicketURL":"https://github.com/sandbox-org/teardown/issues/CC-1","Kind"
 exec cc request GET /
 ! stdout '>#CC-1</button>'
 
-# CC-3's PR is closed without merging, and close-pr is requested against CC-7's still-open one.
+# CC-3's PR is closed without merging.
 cc-fake-gh teardown-late
 exec cc tick --count 1
-exec cc request POST '/verb?verb=close-pr&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
-exec cc tick --count 1
-grep -count=1 'pr close' $WORK/gh.log
 
 # CC-4 has already run (it cut, committed and pushed above), so its blocker's pull request
 # closing unmerged derives base_gone -- never blocked (inv. 19).

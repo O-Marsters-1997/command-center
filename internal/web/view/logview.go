@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-const hiddenFirstFailAnchor = `<span id="first-fail"></span>`
-
-// LineRenderer turns one log event into the markup of its line. The anchor flag asks for the
-// first-failure id.
-type LineRenderer func(e agentlog.Event, anchor bool) (string, error)
+// LineRenderer turns one log line into its markup.
+type LineRenderer func(LogLine) (string, error)
 
 // KindShown decides, for one of the four ?log= modes, whether an event's kind renders as a line.
 // Phase headers always render regardless of mode; this only gates the lines inside them.
@@ -32,12 +30,24 @@ func KindShown(mode string, k agentlog.Kind) bool {
 	}
 }
 
-// phaseView is one agentlog.Phase, its events already filtered and rendered.
 type phaseView struct {
-	Skill string   `json:"skill"`
-	Note  string   `json:"note"`
-	At    string   `json:"at"`
-	Lines []string `json:"lines"`
+	Skill string    `json:"skill"`
+	Note  string    `json:"note"`
+	At    string    `json:"at"`
+	Items []logItem `json:"items"`
+}
+
+type logItem struct {
+	Kind  string    `json:"kind"`
+	Line  string    `json:"line,omitempty"`
+	Group callGroup `json:"group"`
+}
+
+type callGroup struct {
+	Summary  string   `json:"summary"`
+	FailNote string   `json:"fail_note"`
+	Open     bool     `json:"open"`
+	Lines    []string `json:"lines"`
 }
 
 type logFilterLink struct {
@@ -46,24 +56,24 @@ type logFilterLink struct {
 	Active bool   `json:"active"`
 }
 
-// LogDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl. It is also
-// row's own Log field, so these tags are graph.json's shape too (docs/prds/prd-fleet-view.md §
-// One derivation).
+// LogDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl.
 type LogDetail struct {
-	Path       string      `json:"path"`
-	Streaming  bool        `json:"streaming"`
-	Lines      int         `json:"lines"`
-	PhaseCount int         `json:"phase_count"`
-	Phases     []phaseView `json:"phases"`
-	// Result is the closing line's text, empty until the run has one.
-	Result     string          `json:"result"`
+	Path       string          `json:"path"`
+	Streaming  bool            `json:"streaming"`
+	Lines      int             `json:"lines"`
+	PhaseCount int             `json:"phase_count"`
+	Phases     []phaseView     `json:"phases"`
+	Outcome    string          `json:"outcome"`
 	Filters    []logFilterLink `json:"filters"`
 	StreamPath string          `json:"stream_path"`
+	Worked     workedLine      `json:"worked"`
+	Strip      []phaseSegment  `json:"strip"`
+	Readout    readout         `json:"readout"`
+	Final      string          `json:"final"`
+	Changed    changedFiles    `json:"changed"`
+	Jump       jumpLink        `json:"jump"`
 }
 
-// buildLogDetail parses path's whole run and renders it under mode, ready for the selected row's
-// detail panel. streaming names whether the loop still owns this run, for the header's own
-// status pill.
 func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL string, params Params) LogDetail {
 	detail := LogDetail{Path: path, Streaming: streaming, Filters: filterLinks(params)}
 
@@ -74,16 +84,35 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 	}
 
 	run, _ := agentlog.Parse(bytes.NewReader(whole))
+	final := takeFinalAnswer(&run)
+	stats := measure(run)
+	selected := selectedPhase(params.Phase, len(run.Phases))
+	mode := NormalizeLogFilter(params.Log)
+
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
-	detail.Result = formatResult(run.Result)
-	detail.Phases = renderPhases(render, run.Phases, params.Log)
+	if run.Result != nil {
+		detail.Outcome = run.Result.Outcome
+	}
+	detail.Worked = stats.worked(streaming || selected >= 0 || mode != "all")
+	detail.Strip = stats.strip(run.Phases, params, selected)
+	detail.Readout = stats.readout(params, selected)
+	detail.Phases = renderPhases(render, run.Phases, mode, selected)
+	if selected >= 0 && selected < len(run.Phases)-1 {
+		detail.StreamPath = ""
+	}
+	detail.Changed = changedFilesOf(run.Phases)
+	detail.Jump = jumpOf(run.Phases, params)
+	if final != "" {
+		if line, err := render(sayLine(final)); err == nil {
+			detail.Final = line
+		}
+	}
 	return detail
 }
 
-// wholeLines reads path's complete lines only: an agent flushes mid-line, so parsing a trailing
-// partial one would read a line that has not finished arriving. The byte count returned is where
-// the live SSE tail resumes from, so nothing rendered here is ever sent twice.
+// wholeLines reads path's complete lines only: an agent flushes mid-line, so a trailing partial
+// line is left for the live SSE tail.
 func wholeLines(path string) ([]byte, int64) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -96,35 +125,119 @@ func wholeLines(path string) ([]byte, int64) {
 	return data[:end+1], int64(end + 1)
 }
 
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) []phaseView {
+func takeFinalAnswer(run *agentlog.Run) string {
+	if run.Result == nil || len(run.Phases) == 0 {
+		return ""
+	}
+	last := &run.Phases[len(run.Phases)-1]
+	if len(last.Events) == 0 || last.Events[len(last.Events)-1].Kind != agentlog.Say {
+		return ""
+	}
+	final := last.Events[len(last.Events)-1].Detail
+	last.Events = last.Events[:len(last.Events)-1]
+	return final
+}
+
+func selectedPhase(param string, phases int) int {
+	i, err := strconv.Atoi(param)
+	if err != nil || i < 0 || i >= phases {
+		return -1
+	}
+	return i
+}
+
+func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string, selected int) []phaseView {
 	firstFail := firstFailureIndex(phases)
+	openGroups := mode == "tools" || mode == "fails"
 	idx := 0
-	views := make([]phaseView, len(phases))
+	var views []phaseView
 	for i, phase := range phases {
-		pv := phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At)}
+		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
-			anchor := idx == firstFail
+			b.add(event, idx == firstFail)
 			idx++
-			if !KindShown(mode, event.Kind) {
-				if anchor {
-					pv.Lines = append(pv.Lines, hiddenFirstFailAnchor)
-				}
-				continue
-			}
-			line, err := render(event, anchor)
-			if err != nil {
-				continue
-			}
-			pv.Lines = append(pv.Lines, line)
 		}
-		views[i] = pv
+		b.flush()
+		if selected >= 0 && i != selected {
+			continue
+		}
+		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
 	return views
 }
 
-// firstFailureIndex finds the first Fail event's position in run order, across every phase and
-// regardless of the current filter, so the anchor lands on the run's actual first failure and
-// not merely the first one a filtered view happens to show.
+type phaseBuilder struct {
+	render     LineRenderer
+	mode       string
+	openGroups bool
+	items      []logItem
+	pending    []callPair
+}
+
+func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
+	switch event.Kind {
+	case agentlog.Say:
+		b.flush()
+		if !KindShown(b.mode, event.Kind) {
+			return
+		}
+		if line, err := b.render(sayLine(event.Detail)); err == nil {
+			b.items = append(b.items, logItem{Kind: "say", Line: line})
+		}
+	case agentlog.Pass, agentlog.Fail:
+		b.answer(event, anchor)
+	default:
+		b.pending = append(b.pending, callPair{call: event, called: true})
+	}
+}
+
+func (b *phaseBuilder) answer(result agentlog.Event, anchor bool) {
+	for i := range b.pending {
+		p := &b.pending[i]
+		if p.called && !p.answered && (result.CallID == "" || p.call.CallID == result.CallID) {
+			p.result, p.answered, p.anchor = result, true, anchor
+			return
+		}
+	}
+	b.pending = append(b.pending, callPair{result: result, answered: true, anchor: anchor})
+}
+
+func (b *phaseBuilder) flush() {
+	defer func() { b.pending = nil }()
+
+	var shown []callPair
+	hiddenAnchor := false
+	for _, p := range b.pending {
+		if p.shown(b.mode) {
+			shown = append(shown, p)
+		} else if p.anchor {
+			hiddenAnchor = true
+		}
+	}
+	if len(shown) > 0 {
+		group := callGroup{Summary: mixOf(shown).summary(), Open: b.openGroups}
+		failed := 0
+		for _, p := range shown {
+			line, err := b.render(p.line())
+			if err != nil {
+				continue
+			}
+			group.Lines = append(group.Lines, line)
+			group.Open = group.Open || p.anchor
+			if p.failed() {
+				failed++
+			}
+		}
+		if failed > 0 {
+			group.FailNote = fmt.Sprintf("%d failed", failed)
+		}
+		b.items = append(b.items, logItem{Kind: "calls", Group: group})
+	}
+	if hiddenAnchor {
+		b.items = append(b.items, logItem{Kind: "anchor"})
+	}
+}
+
 func firstFailureIndex(phases []agentlog.Phase) int {
 	idx := 0
 	for _, phase := range phases {
@@ -146,28 +259,6 @@ func filterLinks(params Params) []logFilterLink {
 	return links
 }
 
-func formatResult(r *agentlog.Result) string {
-	if r == nil {
-		return ""
-	}
-	return fmt.Sprintf("%s · %s · %d turns · $%.2f", r.Outcome, formatDuration(r.Duration), r.Turns, r.CostUSD)
-}
-
-func formatDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := d / time.Hour
-	d -= h * time.Hour
-	m := d / time.Minute
-	d -= m * time.Minute
-	s := d / time.Second
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	}
-	return fmt.Sprintf("%dm %ds", m, s)
-}
-
-// formatOffset is a phase's own start time, relative to the run's first event (§ Acceptance
-// criteria: "timestamps relative to the first event and monotonic").
 func formatOffset(d time.Duration) string {
 	d = d.Round(time.Second)
 	m := d / time.Minute
@@ -175,9 +266,6 @@ func formatOffset(d time.Duration) string {
 	return fmt.Sprintf("+%02d:%02d", m, s)
 }
 
-// logStreamPath is the ?sel= row's own SSE source: from is the byte its static render already
-// read up to, and mode is the row's current ?log= filter, carried onto the stream so a line
-// arriving live respects the same filter a full re-render would have applied to it.
 func logStreamPath(ticketURL string, from int64, mode string) string {
 	path := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
 	if mode != "" && mode != "all" {

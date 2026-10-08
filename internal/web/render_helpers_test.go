@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"path"
 	"regexp"
 	"strings"
@@ -23,8 +22,7 @@ func renderBoard(t *testing.T, server *web.Server) string {
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	rec := get(t, server, path)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}
@@ -33,9 +31,6 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 
 func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
 
-// rowHTML finds the whole <tr>...</tr> whose ticket-link button names ticketURL. Go's RE2 engine
-// has no lookahead to keep a lazy ".*?" from crossing a row boundary, so this splits on literal
-// "<tr" instead of matching in one regexp.
 func rowHTML(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	ref := ticketRef(ticketURL)
@@ -80,4 +75,14 @@ func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
 		t.Fatalf("no column %d found for %s in page:\n%s", column, ticketURL, page)
 	}
 	return strings.TrimSpace(cells[column][1])
+}
+
+func rowCellText(t *testing.T, page, ticketURL, open, closeTag string) string {
+	t.Helper()
+	row := rowHTML(t, page, ticketURL)
+	m := regexp.MustCompile(`(?s)<` + open + `>(.*?)</` + closeTag + `>`).FindStringSubmatch(row)
+	if m == nil {
+		t.Fatalf("no <%s> found for %s in row:\n%s", closeTag, ticketURL, row)
+	}
+	return strings.TrimSpace(m[1])
 }

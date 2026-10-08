@@ -14,9 +14,6 @@
   "pr list --state all --head cc-4-x": {
     "stdout": "[]\n"
   },
-  "pr close": {
-    "stdout": ""
-  },
   "api repos/{owner}/{repo}": {
     "stdout": "{\"allow_merge_commit\":false,\"allow_rebase_merge\":false}\n"
   },

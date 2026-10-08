@@ -10,39 +10,20 @@ import (
 // error, the current board/graph view, and the repo/feature scope links. layout.tmpl's topbar and
 // masthead render it once per page load; every page's view model embeds it.
 type Chrome struct {
-	Workspace  string
-	LiveAgents int
-	Observe    Age
-	// ObserveStale is decided here rather than in the template, which cannot compare durations.
-	ObserveStale bool
-	LastError    *TickError
-	// Gauges is the masthead's own read of account utilization, five-hour then weekly, always both
-	// (CC-310), each split into cc's own share and other use once its fit has enough samples
-	// (CC-313).
-	Gauges []Gauge
-	// SpendPaused names spend_limit_5h as the reason launchEligible spawned nothing this tick, nil
-	// whenever the five-hour reading is below the limit or no limit is configured (CC-314).
-	SpendPaused *SpendPaused
-	// View picks which of board and graph page.tmpl shows; parseViewParams defaults it to board.
-	View string
-	// Section names the sidebar's current destination: "board", "graph" or "features". It tracks
-	// View except on /features, which has no ?view= of its own.
-	Section string
-	// RepoScope is this render's normalised ?repo= value, empty when unscoped. The board's own
-	// Row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Scope).
-	RepoScope string
-	// RepoLinks is the breadcrumb's own repo switcher (CONTEXT.md § Scope), empty when no repo is
-	// configured so the breadcrumb renders no switcher at all.
-	RepoLinks []ScopeLink
-	// FeatureScope is this render's normalised ?feature= value, empty when unscoped. The board's
-	// own row template reads it to name a kept group's out-of-scope member (CONTEXT.md § Feature).
-	FeatureScope string
-	// FeatureImportPath is the breadcrumb's reimport action, set only when FeatureScope names one
-	// feature to reimport.
+	Workspace         string
+	LiveAgents        int
+	Observe           Age
+	ObserveStale      bool
+	LastError         *TickError
+	Gauges            []Gauge
+	SpendPaused       *SpendPaused
+	View              string
+	Section           string
+	RepoScope         string
+	RepoLinks         []ScopeLink
+	FeatureScope      string
 	FeatureImportPath string
-	// FeatureQuery is FeatureScope, url.QueryEscape'd for the sidebar's board/graph links to carry
-	// the scope across views; empty whenever FeatureScope is.
-	FeatureQuery string
+	FeatureQuery      string
 }
 
 // ScopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
@@ -64,9 +45,8 @@ type TickError struct {
 	Message string
 }
 
-// Gauge is one window's masthead gauge: a fixed label so the DOM shape never changes between
-// polls, and the meter's own fill percentage, 0 for a window with no reading yet. Calibrating is
-// true below spend.MinSamples trailing intervals, when CCPct -- cc's own share -- has no meaning.
+// Gauge is one window's masthead gauge. Calibrating is true below spend.MinSamples trailing
+// intervals, when CCPct has no meaning.
 type Gauge struct {
 	Label       string
 	Pct         int
@@ -74,15 +54,11 @@ type Gauge struct {
 	CCPct       int
 }
 
-// windowSplit is one window's cc-vs-other input: the fit and cc's own recorded cost_usd within
-// that window's trailing span, fetched once per render by Server.gaugeSplit.
 type windowSplit struct {
 	Fit   spend.Result
 	CCUSD float64
 }
 
-// deriveGauges always returns the five-hour and weekly gauges in that fixed order, whether or not
-// either window has a reading yet (CC-310).
 func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit) []Gauge {
 	return []Gauge{
 		deriveGauge("five-hour", agentlog.FiveHour, gauges, split),

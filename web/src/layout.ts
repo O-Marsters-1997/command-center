@@ -1,5 +1,3 @@
-// Shared DAG layout math for both islands (graph.tsx's ticket board and launch-modal.tsx's
-// candidate DAG). Neither island imports the other -- they each import this instead.
 
 export const COL_W = 260;
 export const ROW_H = 64;
@@ -22,9 +20,6 @@ export interface Placed<Row> {
   y: number;
 }
 
-// layoutGroups places one column-0 node per group's root and one column-1 node per waiting
-// child, stacking each group's own rows together so the next group starts below all of them
-// (CONTEXT.md's "group": one blocker ticket and zero or more waiting tickets).
 export function layoutGroups<Row>(groups: LayoutGroup<Row>[]): Placed<Row>[] {
   const placed: Placed<Row>[] = [];
   let y = MARGIN;
@@ -47,8 +42,6 @@ export function layoutGroups<Row>(groups: LayoutGroup<Row>[]): Placed<Row>[] {
   return placed;
 }
 
-// stackByColumn assigns x from col and y from each column's own independent row count, in input
-// order -- for a DAG with no group structure to keep contiguous, unlike layoutGroups above.
 export function stackByColumn<T extends { col: number }>(nodes: T[]): (T & { x: number; y: number })[] {
   const yByCol = new Map<number, number>();
   return nodes.map((n) => {
@@ -63,9 +56,6 @@ export interface Edge<T> {
   to: T;
 }
 
-// edgesFor draws one edge per (blocker, node) pair, reading each node's own blocked-by list
-// through the caller's accessor -- graph.tsx's Row names it "blocking", a candidate names it
-// "blocked_by", and both mean the same thing: the URLs that must land before this node does.
 export function edgesFor<T extends { url: string }>(
   nodes: T[],
   blockedBy: (node: T) => string[] | null | undefined,

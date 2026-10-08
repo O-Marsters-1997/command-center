@@ -37,8 +37,7 @@ type stackCard struct {
 type depthBar struct {
 	Depth int
 	Count int
-	// Pct sizes the bar against the histogram's own largest bucket: a template cannot divide.
-	Pct int
+	Pct   int
 }
 
 type checksCard struct {

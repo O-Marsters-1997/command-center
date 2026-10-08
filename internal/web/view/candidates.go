@@ -89,7 +89,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]Candidate, err
 			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
 			Label: row.Label.String(), Reason: string(row.Reason),
 			Base:        "origin/" + row.Base,
-			BaseVerdict: plan.VerdictLabel(row.BaseRun),
+			BaseVerdict: runVerdictLabel(row.BaseRun),
 			PromptHash:  row.PromptHash, BlockedBy: t.BlockedBy, Prompt: row.Prompt,
 		})
 	}

@@ -10,14 +10,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -31,76 +29,38 @@ type App struct {
 }
 
 type options struct {
-	clock         loop.Clock
-	observe       loop.ObserveFunc
-	repoCheck     RepoCheckFunc
-	checkout      CheckoutFunc
-	runner        runner.Runner
-	metricsParser loop.MetricsParser
-	forge         gh.Forge
-	worktrees     git.Worktrees
-	trackerFor    tracker.Resolver
+	clock     loop.Clock
+	observe   loop.ObserveFunc
+	repoCheck RepoCheckFunc
+	checkout  CheckoutFunc
 }
 
-// Option configures New.
 type Option func(*options)
 
-// WithClock replaces the real clock. Injecting it is what makes the rendered page byte-stable in
-// tests; no test ever sleeps.
+// WithClock replaces the real clock, making the rendered page byte-stable in tests.
 func WithClock(clock loop.Clock) Option {
 	return func(o *options) { o.clock = clock }
 }
 
-// WithObserver replaces the observe phase, so a tick can be driven without git or gh.
+// WithObserver replaces the observe phase, so a tick runs without git or gh.
 func WithObserver(observe loop.ObserveFunc) Option {
 	return func(o *options) { o.observe = observe }
 }
 
-// RepoCheckFunc asserts the configured repos' merge settings. See AssertReposSquashOnly.
-type RepoCheckFunc func(ctx context.Context, ws config.Workspace, repos []config.Repo) error
+// RepoCheckFunc asserts the configured repos' merge settings.
+type RepoCheckFunc func(ctx context.Context, repos []config.Repo) error
 
-// WithRepoCheck replaces the startup squash-only check, so a test can run without gh.
+// WithRepoCheck replaces the startup squash-only check, so a test runs without gh.
 func WithRepoCheck(check RepoCheckFunc) Option {
 	return func(o *options) { o.repoCheck = check }
 }
 
-// WithRunner replaces the real process runner, so a test can drive spawn, liveness and cancel
-// without touching the OS.
-func WithRunner(r runner.Runner) Option {
-	return func(o *options) { o.runner = r }
-}
-
-// CheckoutFunc ensures every configured repo has a working checkout before the loop starts. See
-// EnsureCheckout.
+// CheckoutFunc ensures every configured repo has a working checkout before the loop starts.
 type CheckoutFunc func(ctx context.Context, repos []config.Repo) error
 
-// WithCheckout replaces the startup checkout step, so a test can substitute its own checkout
-// preparation for a repo whose remote isn't really dialable.
+// WithCheckout replaces the startup checkout step.
 func WithCheckout(checkout CheckoutFunc) Option {
 	return func(o *options) { o.checkout = checkout }
-}
-
-// WithMetricsParser replaces the run-log metrics parser, so a test can substitute a fake without
-// touching the filesystem.
-func WithMetricsParser(p loop.MetricsParser) Option {
-	return func(o *options) { o.metricsParser = p }
-}
-
-// WithForge replaces the gh-backed Forge, so GitHub can be faked in-process.
-func WithForge(forge gh.Forge) Option {
-	return func(o *options) { o.forge = forge }
-}
-
-// WithWorktrees replaces the tp-backed Worktrees, so worktree cuts and removals can be faked
-// in-process.
-func WithWorktrees(worktrees git.Worktrees) Option {
-	return func(o *options) { o.worktrees = worktrees }
-}
-
-// WithTrackerSource replaces tracker.New for the loop and the server, so the issue tracker can be
-// faked in-process.
-func WithTrackerSource(resolve tracker.Resolver) Option {
-	return func(o *options) { o.trackerFor = resolve }
 }
 
 func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
@@ -112,10 +72,10 @@ func ensureAllCheckouts(ctx context.Context, repos []config.Repo) error {
 	return nil
 }
 
-// New resolves the workspace, takes the flock and opens the store. A second instance against the
-// same workspace is refused (inv. 9).
+// New resolves the workspace, takes the flock and opens the store. A second
+// instance against the same workspace is refused.
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
-	settings := options{clock: loop.RealClock{}, forge: gh.CLI{}, worktrees: git.CLI{}}
+	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
@@ -140,7 +100,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if repoCheck == nil {
 		repoCheck = loop.AssertReposSquashOnly
 	}
-	if err := repoCheck(ctx, ws, cfg.Repos); err != nil {
+	if err := repoCheck(ctx, cfg.Repos); err != nil {
 		return nil, err
 	}
 
@@ -164,46 +124,22 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	// Written once at startup rather than per spawn: the content never varies, and every spawn
-	// just passes the same path (inv. 17).
-	if err := loop.WriteAgentSettings(ws.SettingsPath); err != nil {
-		return nil, err
-	}
-	if err := loop.WriteAgentSystemPrompt(ws.SystemPromptPath); err != nil {
-		return nil, err
-	}
-	if err := loop.WriteAgentDigestDefinition(ws.AgentsPath); err != nil {
+	if err := loop.WriteAgentFiles(ws); err != nil {
 		return nil, err
 	}
 
 	observe := settings.observe
 	if observe == nil {
-		observe = loop.NewObserver(store, settings.forge, cfg)
-	}
-	agents := settings.runner
-	if agents == nil {
-		agents = runner.ProcessRunner{}
-	}
-	metricsParser := settings.metricsParser
-	if metricsParser == nil {
-		metricsParser = agentlog.ParseMetrics
-	}
-	if err := loop.BackfillMetrics(ctx, store, metricsParser, cfg.ClaudeProjectsDir); err != nil {
-		return nil, err
+		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
 
-	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, agents)
-	lp.SetMetricsParser(metricsParser)
-	lp.SetForge(settings.forge)
-	lp.SetWorktrees(settings.worktrees)
+	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
+	lp.SetForge(gh.CLI{})
+	lp.SetWorktrees(git.CLI{})
 	server := web.NewServer(store, settings.clock, cfg.Repos, ws.DataDir)
 	server.SetNudge(lp.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
-	if settings.trackerFor != nil {
-		lp.SetTrackerSource(settings.trackerFor)
-		server.SetTrackerSource(settings.trackerFor)
-	}
 
 	return &App{
 		cfg:    cfg,
@@ -216,10 +152,9 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 
 func (a *App) RunOnce(ctx context.Context) error { return a.loop.RunOnce(ctx) }
 
-// Handler is the status page.
 func (a *App) Handler() http.Handler { return a.server }
 
-// Run ticks and serves until the context is cancelled. Two goroutines, not five (§3).
+// Run ticks and serves until the context is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(a.cfg.Port)),
@@ -249,5 +184,4 @@ func (a *App) Run(ctx context.Context) error {
 	return errors.Join(srv.Shutdown(shutdown), <-errs, <-errs)
 }
 
-// Close releases the store and the flock.
 func (a *App) Close() error { return errors.Join(a.store.Close(), a.lock.Close()) }

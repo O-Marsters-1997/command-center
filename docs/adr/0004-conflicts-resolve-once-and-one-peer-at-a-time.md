@@ -40,7 +40,5 @@ conflicting pair shows `review_me`, so the second is resolved once, not at a sur
 A `path` repo gets `rerere` set in the operator's own checkout; an older checkout needs it set once.
 After the gates:
 
-- A conflict confined to build-regenerated paths needs no agent (#177): the app merges, runs
-  `build_command`, commits and pushes. A repo with no `build_command` waits for `resolve`.
 - `resolve` (#178) spawns an agent on `cc/skills/resolve-merge-conflict/SKILL.md` that commits
   nothing. The row lands at `conflict_resolved` with the resolution staged for a human.

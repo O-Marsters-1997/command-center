@@ -9,8 +9,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// importFeatures reads every configured repo's tracker features, gathered fresh on every render
-// (inv. 14): one gh label list per repo, and no per-feature ticket call.
 func importFeatures(ctx context.Context, repos []config.Repo, resolve tracker.Resolver) ([]string, error) {
 	var names []string
 	seen := map[string]bool{}

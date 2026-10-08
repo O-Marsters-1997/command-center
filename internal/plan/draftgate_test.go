@@ -7,8 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// TestDraftGate covers the four combinations of (blockers merged?) x (verdict green?)
-// (issue #57 AC7): a gating blocker never affects unlock, but it does gate the draft.
 func TestDraftGate(t *testing.T) {
 	t.Parallel()
 
@@ -17,111 +15,65 @@ func TestDraftGate(t *testing.T) {
 
 	tests := []struct {
 		name         string
+		gating       []plan.Ticket
 		prs          map[string]plan.PRState
 		verdictGreen bool
 		wantDraft    bool
+		reasonHas    []string
 	}{
 		{
-			name:         "blocker unmerged, verdict red",
-			prs:          map[string]plan.PRState{"pla-40": plan.Open},
-			verdictGreen: false,
-			wantDraft:    true,
+			name: "blocker unmerged, verdict red", gating: gating,
+			prs: map[string]plan.PRState{"pla-40": plan.Open}, wantDraft: true,
 		},
 		{
-			name:         "blocker unmerged, verdict green",
-			prs:          map[string]plan.PRState{"pla-40": plan.Open},
-			verdictGreen: true,
-			wantDraft:    true,
+			name: "blocker unmerged, verdict green", gating: gating,
+			prs: map[string]plan.PRState{"pla-40": plan.Open}, verdictGreen: true, wantDraft: true,
 		},
 		{
-			name:         "blocker merged, verdict red",
-			prs:          map[string]plan.PRState{"pla-40": plan.Merged},
-			verdictGreen: false,
-			wantDraft:    true,
+			name: "blocker merged, verdict red", gating: gating,
+			prs: map[string]plan.PRState{"pla-40": plan.Merged}, wantDraft: true,
 		},
 		{
-			name:         "blocker merged, verdict green",
-			prs:          map[string]plan.PRState{"pla-40": plan.Merged},
-			verdictGreen: true,
-			wantDraft:    false,
+			name: "blocker merged, verdict green", gating: gating,
+			prs: map[string]plan.PRState{"pla-40": plan.Merged}, verdictGreen: true,
+		},
+		{
+			name: "an absent gating blocker stays draft and is named", gating: gating,
+			prs: map[string]plan.PRState{}, verdictGreen: true, wantDraft: true,
+			reasonHas: []string{"sandbox://PLA-40"},
+		},
+		{
+			name: "a blocker closed without merging never readies", gating: gating,
+			prs: map[string]plan.PRState{"pla-40": plan.Closed}, verdictGreen: true, wantDraft: true,
+			reasonHas: []string{"sandbox://PLA-40", "closed"},
+		},
+		{
+			name: "no gating blockers and a green verdict is ready",
+			prs:  map[string]plan.PRState{}, verdictGreen: true,
+		},
+		{
+			name: "no gating blockers and a red verdict waits on its own checks",
+			prs:  map[string]plan.PRState{}, wantDraft: true,
+			reasonHas: []string{"waiting on its own checks"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			draft, reason := plan.DraftGate(gating, tt.prs, tt.verdictGreen)
+			draft, reason := plan.DraftGate(tt.gating, tt.prs, tt.verdictGreen)
 			if draft != tt.wantDraft {
 				t.Errorf("draft = %v, want %v (reason %q)", draft, tt.wantDraft, reason)
 			}
 			if reason == "" {
 				t.Error("reason is empty; the page renders it on a drafted row")
 			}
+			for _, want := range tt.reasonHas {
+				if !strings.Contains(string(reason), want) {
+					t.Errorf("reason %q does not contain %q", reason, want)
+				}
+			}
 		})
-	}
-}
-
-// TestDraftGateUnresolvedBlockerNamesIt covers the reason a still-open or absent gating
-// blocker's PR produces: the page renders "waiting on <ticket>" on the drafted row.
-func TestDraftGateUnresolvedBlockerNamesIt(t *testing.T) {
-	t.Parallel()
-
-	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{}, true)
-	if !draft {
-		t.Fatal("an absent gating blocker must stay draft")
-	}
-	if !strings.Contains(string(reason), "sandbox://PLA-40") {
-		t.Errorf("reason %q does not name the gating blocker", reason)
-	}
-}
-
-// TestDraftGateVerdictNotGreenNamesOwnChecks covers the second reason the page must be able to
-// render: every gating blocker merged, but the consumer's own CI verdict is not green yet.
-func TestDraftGateVerdictNotGreenNamesOwnChecks(t *testing.T) {
-	t.Parallel()
-
-	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{"pla-40": plan.Merged}, false)
-	if !draft {
-		t.Fatal("a red verdict must stay draft even once every gating blocker has merged")
-	}
-	if reason != "waiting on its own checks" {
-		t.Errorf("reason = %q, want %q", reason, "waiting on its own checks")
-	}
-}
-
-// TestDraftGateClosedBlockerNeverReadies covers the AC that a gating blocker whose PR closed
-// unmerged leaves the consumer drafted forever, naming the closure -- never un-drafted, and
-// never confused with `base gone` (that state is for a stacking parent, plan.Unlock's own job).
-func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
-	t.Parallel()
-
-	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	draft, reason := plan.DraftGate([]plan.Ticket{blocker}, map[string]plan.PRState{"pla-40": plan.Closed}, true)
-	if !draft {
-		t.Fatal("a gating blocker closed without merging must never un-draft the consumer")
-	}
-	if !strings.Contains(string(reason), "sandbox://PLA-40") || !strings.Contains(string(reason), "closed") {
-		t.Errorf("reason %q does not name the closure", reason)
-	}
-}
-
-// TestDraftGateNoGatingBlockers covers a consumer with no cross-repo edge at all: the gate is
-// decided by its own verdict alone.
-func TestDraftGateNoGatingBlockers(t *testing.T) {
-	t.Parallel()
-
-	draft, _ := plan.DraftGate(nil, map[string]plan.PRState{}, true)
-	if draft {
-		t.Error("no gating blockers and a green verdict must not stay draft")
-	}
-	draft, reason := plan.DraftGate(nil, map[string]plan.PRState{}, false)
-	if !draft {
-		t.Error("no gating blockers but a red verdict must stay draft")
-	}
-	if reason != "waiting on its own checks" {
-		t.Errorf("reason = %q, want %q", reason, "waiting on its own checks")
 	}
 }
 
@@ -146,8 +98,6 @@ func TestGatingBlockers(t *testing.T) {
 	}
 }
 
-// TestOpensAsDraft covers the reconciliation's own creation-time decision (issue #57's "opens a
-// PR as a draft for any ticket with a gating edge"): a gating edge, or none.
 func TestOpensAsDraft(t *testing.T) {
 	t.Parallel()
 

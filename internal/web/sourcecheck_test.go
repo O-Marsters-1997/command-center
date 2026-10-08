@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// TestBuiltStylesheetScansTemplates fails if internal/web stops being scanned into the built
-// sheet: Tailwind's CLI runs from web/ and never walks up into internal/web on its own.
 func TestBuiltStylesheetScansTemplates(t *testing.T) {
 	css, err := os.ReadFile("assets/dist/app.css")
 	if err != nil {

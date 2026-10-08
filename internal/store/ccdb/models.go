@@ -70,8 +70,6 @@ type Run struct {
 	Turns          sql.NullInt64
 	DurationMs     sql.NullInt64
 	CostUsd        sql.NullFloat64
-	ToolCalls      sql.NullInt64
-	ToolFailures   sql.NullInt64
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 }
@@ -81,7 +79,6 @@ type RunRequest struct {
 	RunID               int64
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
@@ -97,19 +94,17 @@ type Session struct {
 }
 
 type Ticket struct {
-	URL            string
-	Repo           string
-	Branch         string
-	BlockedBy      json.RawMessage
-	Source         string
-	Title          string
-	Body           string
-	Status         string
-	Feature        string
-	SyncedAt       string
-	WithdrawnAt    sql.NullTime
-	FirstPushCI    sql.NullBool
-	HandChurnLines sql.NullInt64
+	URL         string
+	Repo        string
+	Branch      string
+	BlockedBy   json.RawMessage
+	Source      string
+	Title       string
+	Body        string
+	Status      string
+	Feature     string
+	SyncedAt    string
+	WithdrawnAt sql.NullTime
 }
 
 type User struct {

@@ -7,12 +7,6 @@ import (
 	"testing"
 )
 
-// TestNoImpureImports keeps this package pure. Go cannot fail compilation on an import nobody
-// wrote, so "fails the build" means a red go test — which is what CI gates on.
-//
-// Naming os/exec, database/sql and net/http alone would leave a transitive hole: importing any
-// module that itself execs would smuggle them back in. Requiring every import to be stdlib
-// closes it, because a package is Go's unit of dependency.
 func TestNoImpureImports(t *testing.T) {
 	t.Parallel()
 
@@ -43,8 +37,6 @@ func TestNoImpureImports(t *testing.T) {
 	}
 }
 
-// isStdlib reports whether an import path is in the standard library. Every module path has a
-// dot in its first element (a domain); no stdlib path does.
 func isStdlib(path string) bool {
 	first, _, _ := strings.Cut(path, "/")
 	return !strings.Contains(first, ".")

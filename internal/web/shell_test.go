@@ -1,8 +1,6 @@
 package web_test
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -13,8 +11,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// shellStore seeds one ticket, an observation at observedAt when it is non-nil, and a tick error
-// one second later when tickErr is non-empty: a tick that failed after the last good observe.
 func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.Store {
 	t.Helper()
 
@@ -54,11 +50,10 @@ func boardFragment(t *testing.T, page string) string {
 	return page[start:end]
 }
 
-// TestPageIsAWellFormedDocument covers issue #103 AC1.
 func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "/data/fleet-hq")
 	body := renderPage(t, server)
 
@@ -81,13 +76,11 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	}
 }
 
-// TestThemeSitsOnTheRootElement covers issue #103 AC2 and AC3: the attribute no swap can reach,
-// read from localStorage before the first paint and written back by the toggle.
 func TestThemeSitsOnTheRootElement(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
 	body := renderPage(t, server)
 
 	if strings.Contains(boardFragment(t, body), "data-theme") {
@@ -113,11 +106,10 @@ func TestThemeSitsOnTheRootElement(t *testing.T) {
 	}
 }
 
-// TestObserveChipReadsStalenessAtTwentySeconds covers issue #103 AC4.
 func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	tests := []struct {
 		name     string
 		age      time.Duration
@@ -141,7 +133,7 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 				at = nil
 			}
 			now := observedAt.Add(tt.age)
-			server := web.NewServer(shellStore(t, at, ""), fixedClock(now), nil, "")
+			server := newServer(shellStore(t, at, ""), now)
 			body := flattenTimes(renderPage(t, server))
 
 			if !strings.Contains(body, tt.wantChip) {
@@ -154,19 +146,18 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	}
 }
 
-// TestStaleBannerOnlyOpensOnAFailedTick covers issue #103 AC5.
 func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	now := observedAt.Add(45 * time.Second)
 
-	quiet := web.NewServer(shellStore(t, &observedAt, ""), fixedClock(now), nil, "")
+	quiet := newServer(shellStore(t, &observedAt, ""), now)
 	if body := renderPage(t, quiet); strings.Contains(body, "banner") {
 		t.Errorf("a banner opened with no failed tick:\n%s", body)
 	}
 
-	failed := web.NewServer(shellStore(t, &observedAt, "gh is unavailable"), fixedClock(now), nil, "")
+	failed := newServer(shellStore(t, &observedAt, "gh is unavailable"), now)
 	body := flattenTimes(renderPage(t, failed))
 	for _, want := range []string{
 		"the last tick failed 44s ago",
@@ -179,13 +170,10 @@ func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	}
 }
 
-// TestStaleBannerClosesOnceATickSucceeds covers the other half of issue #103 AC5. Store.LastError
-// is sticky by design, so a banner keyed on it alone would keep claiming nothing below had been
-// re-derived long after a tick recovered.
 func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	now := observedAt.Add(2 * time.Second)
 	store := shellStore(t, &observedAt, "")
 	tickErr := storepkg.TickError{At: observedAt.Add(-30 * time.Second), Message: "gh is unavailable"}
@@ -193,7 +181,7 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := flattenTimes(renderPage(t, web.NewServer(store, fixedClock(now), nil, "")))
+	body := flattenTimes(renderPage(t, newServer(store, now)))
 	if strings.Contains(body, "banner") {
 		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
 	}
@@ -202,17 +190,16 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	}
 }
 
-// TestHeaderCountsLiveAgents covers issue #103 AC6.
 func TestHeaderCountsLiveAgents(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	live := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	live := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 	if body := renderPage(t, live); !strings.Contains(body, "1 live") {
 		t.Errorf("header does not count the one live agent:\n%s", body)
 	}
 
-	idle := web.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
+	idle := newServer(shellStore(t, &now, ""), now)
 	body := renderPage(t, idle)
 	if !strings.Contains(body, "0 live") {
 		t.Errorf("header does not count zero live agents:\n%s", body)
@@ -222,14 +209,11 @@ func TestHeaderCountsLiveAgents(t *testing.T) {
 	}
 }
 
-// TestHeaderCountsALiveRunWhoseRowReadsBaseGone pins the count to the observation rather than
-// the row's label: a dependent whose blocker's pull request closed unmerged reads base_gone
-// while its agent is still running (internal/plan/plan.go, inv. 19).
 func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	store := openStore(t)
 	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	dependent := storepkg.Ticket{
@@ -254,29 +238,24 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPage(t, web.NewServer(store, fixedClock(now), nil, ""))
+	body := renderPage(t, newServer(store, now))
 	if !strings.Contains(body, "1 live") {
 		t.Errorf("header does not count the live agent behind a base_gone row:\n%s", body)
 	}
 }
 
-// TestHeaderRefreshesWithTheBoard keeps the header's own facts as live as the rows beneath it:
-// the board's five-second poll selects #board, so only an out-of-band swap updates the chips.
 func TestHeaderRefreshesWithTheBoard(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(shellStore(t, &now, ""), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	if got := rec.Body.String(); !strings.Contains(got, `id="masthead" hx-swap-oob="true"`) {
 		t.Errorf("the masthead is not an out-of-band swap target:\n%s", got)
 	}
 }
 
-// timeTag matches a relative time the page's clock owns at runtime. The server still renders the
-// wording inside it, so flattening the wrapper lets an assertion read the chip as one string.
 var timeTag = regexp.MustCompile(`<time datetime="[^"]*">([^<]*)</time>`)
 
 func flattenTimes(s string) string { return timeTag.ReplaceAllString(s, "$1") }

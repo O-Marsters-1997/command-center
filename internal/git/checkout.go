@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
-// EnsureCheckout clones remote into checkout when that directory is absent, and otherwise
-// verifies that what is there has the configured origin. It never resets, pulls or checks
-// anything out: work happens in the worktrees tp cuts beside the checkout, not in it. An empty
-// remote means a path repo, which is never cloned and never origin-checked.
+// EnsureCheckout clones remote into checkout when absent, otherwise verifies its origin. It never
+// resets, pulls or checks anything out. An empty remote means a path repo, never cloned or
+// origin-checked.
 func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 	switch _, err := os.Stat(checkout); {
 	case errors.Is(err, os.ErrNotExist):
@@ -41,10 +41,8 @@ func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 	return Fetch(ctx, checkout)
 }
 
-// enableRerere has git record how a conflict was resolved and replay that resolution, already
-// staged, the next time the same conflict comes back -- a rebase drops the merge commit a
-// resolution was committed as, so every restack re-hits it. Local config, set here rather than
-// by hand, because a re-clone on a bare machine would otherwise lose it.
+// A rebase drops the merge commit a resolution was committed as, so every restack re-hits the
+// same conflict unless rerere replays it.
 func enableRerere(ctx context.Context, repoPath string) error {
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
 		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
@@ -58,11 +56,7 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	cmd := exec.CommandContext(ctx, "git", "clone", remote, checkout)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("clone %s into %s: %w: %s", remote, checkout, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return command.Run(ctx, "", "git", "clone", remote, checkout)
 }
 
 // OriginURL reads repoPath's origin remote URL.

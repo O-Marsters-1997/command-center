@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,19 +9,18 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // Fetch updates a repo's remote-tracking refs. --prune because both repos delete branches on
 // merge, and a stale ref would make a deleted base look cuttable.
 func Fetch(ctx context.Context, repoPath string) error {
-	if _, err := git(ctx, repoPath, "fetch", "origin", "--prune"); err != nil {
-		return err
-	}
-	return nil
+	_, err := git(ctx, repoPath, "fetch", "origin", "--prune")
+	return err
 }
 
-// WorktreePaths reads the authoritative branch -> path map (inv. 5: never a reimplemented
-// derivation of where treepad puts things).
+// WorktreePaths reads the branch -> path map from git, including worktrees mid-rebase.
 func WorktreePaths(ctx context.Context, repoPath string) (map[string]string, error) {
 	out, err := git(ctx, repoPath, "worktree", "list", "--porcelain")
 	if err != nil {
@@ -58,9 +56,7 @@ func parseWorktrees(out []byte) (worktrees map[string]string, detached []string)
 	return worktrees, detached
 }
 
-// rebasingBranch names the branch a detached worktree's in-progress rebase lands back on, and
-// "" for one detached for any other reason. git calls a rebasing worktree "detached", so keying
-// on the branch line alone drops it from every branch-keyed observation (issue #91).
+// git lists a rebasing worktree as detached, so its branch comes from the rebase state.
 func rebasingBranch(ctx context.Context, worktreePath string) (string, error) {
 	for _, dir := range rebaseDirs {
 		headName, err := gitPath(ctx, worktreePath, dir+"/head-name")
@@ -76,19 +72,16 @@ func rebasingBranch(ctx context.Context, worktreePath string) (string, error) {
 		}
 		name := strings.TrimSpace(string(ref))
 		if !strings.HasPrefix(name, "refs/heads/") {
-			return "", nil // a rebase started from a detached HEAD has no branch to key it under
+			return "", nil
 		}
 		return strings.TrimPrefix(name, "refs/heads/"), nil
 	}
 	return "", nil
 }
 
-// rebaseDirs are the two state directories git keeps a rebase in, one per backend. Either one
-// existing is what git itself treats as "a rebase is in progress".
 var rebaseDirs = []string{"rebase-merge", "rebase-apply"}
 
-// gitPath resolves a name inside worktreePath's own git directory. --git-path answers relatively
-// in a plain repo and absolutely in a linked worktree, so a caller can never simply join it.
+// --git-path answers relatively in a plain repo and absolutely in a linked worktree.
 func gitPath(ctx context.Context, worktreePath, name string) (string, error) {
 	out, err := git(ctx, worktreePath, "rev-parse", "--git-path", name)
 	if err != nil {
@@ -101,8 +94,7 @@ func gitPath(ctx context.Context, worktreePath, name string) (string, error) {
 	return filepath.Join(worktreePath, path), nil
 }
 
-// BranchTip reads a branch's current tip SHA, from the shared object database so it resolves
-// equally well from the main checkout or from any of its worktrees.
+// BranchTip reads a branch's current tip SHA.
 func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
 	return RevParse(ctx, repoPath, "refs/heads/"+branch)
 }
@@ -116,9 +108,7 @@ func DeleteBranchIfExists(ctx context.Context, repoPath, branch string) error {
 	return err
 }
 
-// RevParse resolves any ref to its commit SHA -- BranchTip's underlying primitive, reused for
-// pushes.base_sha_at_push, whose ref is a remote-tracking branch (origin/<base>), not a local
-// one.
+// RevParse resolves any ref to its commit SHA.
 func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 	out, err := git(ctx, repoPath, "rev-parse", ref)
 	if err != nil {
@@ -127,8 +117,7 @@ func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// ShowFile reads path's content at ref without touching the working tree -- the retirement
-// pointer's read (docs/designs/command-centre-design.md § 6 job 3).
+// ShowFile reads path's content at ref without touching the working tree.
 func ShowFile(ctx context.Context, repoPath, ref, path string) (string, error) {
 	out, err := git(ctx, repoPath, "show", ref+":"+path)
 	if err != nil {
@@ -137,39 +126,31 @@ func ShowFile(ctx context.Context, repoPath, ref, path string) (string, error) {
 	return string(out), nil
 }
 
-// ChangedPaths lists the paths base and branch differ on -- the diff the push policy is
-// evaluated against (docs/prds/prd-command-centre.md § Phase 4). Three dots diffs against the merge
-// base, so only what branch itself added over base is named.
+// ChangedPaths lists the paths branch changed relative to its merge base with base.
 func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
 	out, err := git(ctx, repoPath, "diff", "--name-only", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
+	return lines(out), nil
 }
 
-// Push pushes branch to origin. Never force: a refused diff never reaches this call, and a
-// non-fast-forward here is a genuine push failed, not something to override.
+// Push pushes branch to origin, never forcing.
 func Push(ctx context.Context, repoPath, branch string) error {
 	_, err := git(ctx, repoPath, "push", "origin", branch)
 	return err
 }
 
-// PushRestacked pushes a branch a restack rewrote, leasing on expectedRemote so anything that
-// reached origin since the app last recorded a push -- a reviewer's committed suggestion,
-// Mergify's own update -- refuses instead of being discarded (issue #89).
+// PushRestacked pushes a rewritten branch, leasing on expectedRemote so commits that reached
+// origin since the last recorded push (a reviewer's suggestion, Mergify) refuse instead of
+// being discarded.
 func PushRestacked(ctx context.Context, repoPath, branch, expectedRemote string) error {
 	lease := "--force-with-lease=" + branch + ":" + expectedRemote
 	_, err := git(ctx, repoPath, "push", lease, "origin", branch)
 	return err
 }
 
-// CommitsSince counts commits reachable from ref but not from baselineSHA, run in repoPath — a
-// dead run's disposition rests on this count, never on missing events (inv. 7).
+// CommitsSince counts commits reachable from ref but not from baselineSHA.
 func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, error) {
 	out, err := git(ctx, repoPath, "rev-list", "--count", baselineSHA+".."+ref)
 	if err != nil {
@@ -182,31 +163,8 @@ func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, 
 	return n, nil
 }
 
-// LinesChanged sums insertions and deletions between baseline and ref, skipping binary files.
-func LinesChanged(ctx context.Context, repoPath, baseline, ref string) (int, error) {
-	out, err := git(ctx, repoPath, "diff", "--numstat", baseline, ref)
-	if err != nil {
-		return 0, err
-	}
-	total := 0
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		added, errA := strconv.Atoi(fields[0])
-		deleted, errD := strconv.Atoi(fields[1])
-		if errA != nil || errD != nil {
-			continue
-		}
-		total += added + deleted
-	}
-	return total, nil
-}
-
-// RemovalState is which of tp's own removal checks a branch has left to run, or -- once
-// GitHub's delete-branch-on-merge has pruned the remote-tracking ref tp would check against --
-// whether cc can prove the same thing in tp's place (issue #147).
+// RemovalState is which of tp's own removal checks a branch has left to run, or whether cc can
+// prove the same thing once delete-branch-on-merge has pruned the ref tp would check against.
 type RemovalState int
 
 const (
@@ -235,8 +193,7 @@ func RemovalStateFor(ctx context.Context, repoPath, branch, lastPushedTip string
 	return RemovableByForce, nil
 }
 
-// Dirty reports whether worktreePath has any uncommitted change -- checked before cc forces a
-// removal past tp's own dirty-worktree guard, which --force also bypasses (issue #147).
+// Dirty reports whether worktreePath has any uncommitted change.
 func Dirty(ctx context.Context, worktreePath string) (bool, error) {
 	out, err := git(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
@@ -247,15 +204,14 @@ func Dirty(ctx context.Context, worktreePath string) (bool, error) {
 
 // MergeFFOnly fast-forwards worktreePath's own branch to ref, refusing if that is not possible.
 // Reviewers' "commit suggestion" clicks and Mergify's update_method: merge both push to the app's
-// head branches, and the app never rewrites history to make a divergent push fit (§ 4a).
+// head branches, and the app never rewrites history to make a divergent push fit.
 func MergeFFOnly(ctx context.Context, worktreePath, ref string) error {
 	_, err := git(ctx, worktreePath, "merge", "--ff-only", ref)
 	return err
 }
 
-// Merge merges ref into worktreePath's own branch -- refresh's own step 3 (§4a). A conflict
-// leaves the worktree mid-merge for a human, which is what the next tick's MidMerge read derives
-// `refresh conflicted` from.
+// Merge merges ref into worktreePath's own branch. A conflict leaves the worktree mid-merge
+// for a human, which MidMerge reads.
 func Merge(ctx context.Context, worktreePath, ref string) error {
 	_, err := git(ctx, worktreePath, "merge", ref)
 	return err
@@ -267,21 +223,7 @@ func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
-}
-
-func Add(ctx context.Context, worktreePath string, paths []string) error {
-	_, err := git(ctx, worktreePath, append([]string{"add", "--"}, paths...)...)
-	return err
-}
-
-func Commit(ctx context.Context, worktreePath, message string) error {
-	_, err := git(ctx, worktreePath, "commit", "-m", message)
-	return err
+	return lines(out), nil
 }
 
 func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
@@ -289,11 +231,7 @@ func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	trimmed := strings.TrimSpace(string(out))
-	if trimmed == "" {
-		return nil, nil
-	}
-	return strings.Split(trimmed, "\n"), nil
+	return lines(out), nil
 }
 
 // CommitNoEdit commits worktreePath's staged changes under the message git already wrote for
@@ -304,16 +242,14 @@ func CommitNoEdit(ctx context.Context, worktreePath string) error {
 }
 
 // Rebase replays worktreePath's own branch onto onto, dropping every commit reachable from
-// upstream. That is the shape a squash-merged base needs: the squash carries the base's work
-// under a commit with no ancestry, so replaying the branch's own copies conflicts against it
-// (issue #89). A conflict leaves the worktree mid-rebase, which MidMerge reads.
+// upstream, because a squash-merged base has no ancestry to replay the branch's copies against.
+// A conflict leaves the worktree mid-rebase, which MidMerge reads.
 func Rebase(ctx context.Context, worktreePath, onto, upstream string) error {
 	_, err := git(ctx, worktreePath, "rebase", "--onto", onto, upstream)
 	return err
 }
 
-// MergeAbort undoes an unresolved merge or restack in worktreePath, restoring the pre-merge tip
-// -- `refresh conflicted`'s only verb (docs/designs/command-centre-design.md § 4a).
+// MergeAbort undoes an unresolved merge or restack in worktreePath, restoring the pre-merge tip.
 func MergeAbort(ctx context.Context, worktreePath string) error {
 	rebasing, err := midRebase(ctx, worktreePath)
 	if err != nil {
@@ -328,8 +264,7 @@ func MergeAbort(ctx context.Context, worktreePath string) error {
 }
 
 // MidMerge reports whether worktreePath is left mid-merge or mid-rebase. It is read, never
-// recorded: a human resolving the conflict and committing clears it with no bookkeeping
-// (docs/designs/command-centre-design.md § 4a).
+// recorded: a human resolving the conflict and committing clears it with no bookkeeping.
 func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	merging, err := refExists(ctx, worktreePath, "MERGE_HEAD")
 	if err != nil || merging {
@@ -338,9 +273,7 @@ func MidMerge(ctx context.Context, worktreePath string) (bool, error) {
 	return midRebase(ctx, worktreePath)
 }
 
-// midRebase asks whether git's own rebase state directory is there, not whether REBASE_HEAD
-// resolves: git leaves that ref behind after `rebase --continue`, which pinned the row to
-// refresh_conflicted for good and left `rebase --abort` no rebase to abort (issue #91).
+// git leaves REBASE_HEAD behind after `rebase --continue`, so the state directory is the test.
 func midRebase(ctx context.Context, worktreePath string) (bool, error) {
 	for _, dir := range rebaseDirs {
 		path, err := gitPath(ctx, worktreePath, dir)
@@ -358,41 +291,15 @@ func midRebase(ctx context.Context, worktreePath string) (bool, error) {
 	return false, nil
 }
 
-// MergesCleanly reports whether merging branch into base would conflict, naming every conflicted
-// path when it would not. --write-tree is the modern form of merge-tree, whose exit status is
-// the answer: 0 clean, 1 conflicted, anything else a real failure. --name-only lists each
-// conflicted path on its own line, right after the result tree's oid and before the blank line
-// that separates them from its diagnostic messages. The deprecated three-argument form reports a
-// conflict only in its diff output, which is what made `just check-conflicts` a no-op (issue
-// #131).
-//
-// Both arguments must already resolve. git exits 1 for a ref it cannot merge just as it does
-// for a conflict, so an unresolved ref would come back as a conflicted one: callers pass the
-// SHAs they read this tick, never a name they have not resolved.
-func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, []string, error) {
-	out, ok, err := gitRun(ctx, repoPath, "merge-tree", "--write-tree", "--name-only", base, branch)
-	if err != nil || ok {
-		return ok, nil, err
-	}
-	return false, conflictedPaths(out), nil
+// MergesCleanly reports whether merging branch into base is conflict-free. merge-tree exits 0
+// clean and 1 conflicted, but also 1 for an unresolvable ref, so both arguments must already
+// resolve.
+func MergesCleanly(ctx context.Context, repoPath, base, branch string) (bool, error) {
+	_, ok, err := gitRun(ctx, repoPath, "merge-tree", "--write-tree", base, branch)
+	return ok, err
 }
 
-// conflictedPaths reads --name-only's own output shape: the result tree's oid on the first
-// line, then one conflicted path per line up to the blank line before its diagnostic messages.
-func conflictedPaths(out []byte) []string {
-	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	var paths []string
-	for _, line := range lines[1:] {
-		if line == "" {
-			break
-		}
-		paths = append(paths, line)
-	}
-	return paths
-}
-
-// Ancestor reports whether commit is reachable from ref -- false once a squash or a force-push
-// has replaced the history commit sat on (issue #89).
+// Ancestor reports whether commit is reachable from ref.
 func Ancestor(ctx context.Context, repoPath, commit, ref string) (bool, error) {
 	return Succeeds(ctx, repoPath, "merge-base", "--is-ancestor", commit, ref)
 }
@@ -410,31 +317,25 @@ func Succeeds(ctx context.Context, repoPath string, args ...string) (bool, error
 }
 
 func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte, ok bool, err error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return out.Bytes(), false, nil
-		}
-		return nil, false, fmt.Errorf("git %s in %s: %w: %s",
-			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
+	out, err := git(ctx, repoPath, args...)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return out, false, nil
 	}
-	return out.Bytes(), true, nil
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repoPath}, args...)...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	return command.Output(ctx, repoPath, "git", args...)
+}
 
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("git %s in %s: %w: %s",
-			strings.Join(args, " "), repoPath, err, bytes.TrimSpace(stderr.Bytes()))
+func lines(out []byte) []string {
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil
 	}
-	return out, nil
+	return strings.Split(trimmed, "\n")
 }

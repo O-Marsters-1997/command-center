@@ -15,9 +15,8 @@ const (
 	sevenDayDuration = 7 * 24 * time.Hour
 )
 
-// LatestReadingsFull returns the newest reading for every window that has one, keyed by window --
-// RecordReadingsAndIntervals' own "previous" argument, kept distinct from LatestReadings because
-// Intervals needs each reading's own At, not the masthead's trimmed Gauge view.
+// LatestReadingsFull returns the newest reading for every window that has one, keyed by
+// window, with each reading's own At.
 func (s *Store) LatestReadingsFull(ctx context.Context) (map[agentlog.Window]agentlog.Reading, error) {
 	rows, err := s.q.LatestReadingsFull(ctx)
 	if err != nil {
@@ -33,9 +32,9 @@ func (s *Store) LatestReadingsFull(ctx context.Context) (map[agentlog.Window]age
 	return readings, nil
 }
 
-// RecordReadingsAndIntervals writes readings, then closes the interval each one completes against
-// the previous reading already stored for its window, weighing every transcript under projectsDir
-// in that span -- at the moment the reading lands, since transcripts get pruned later (CC-313).
+// RecordReadingsAndIntervals writes readings, then closes the interval each completes
+// against the window's previous stored reading, weighing transcripts under projectsDir. Weighing
+// happens at reading time because the claude CLI prunes transcripts later.
 func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agentlog.Reading, projectsDir string) error {
 	if len(readings) == 0 {
 		return nil
@@ -43,18 +42,6 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	requests, err := agentlog.LoadRequests(projectsDir)
 	if err != nil {
 		return fmt.Errorf("load transcripts under %s: %w", projectsDir, err)
-	}
-	return s.RecordReadingsAndIntervalsFrom(ctx, readings, requests)
-}
-
-// RecordReadingsAndIntervalsFrom is RecordReadingsAndIntervals's own core, taking transcripts already
-// loaded -- BackfillMetrics calls this directly, loading once for every run it backfills rather
-// than once per run.
-func (s *Store) RecordReadingsAndIntervalsFrom(
-	ctx context.Context, readings []agentlog.Reading, requests []agentlog.RequestUsage,
-) error {
-	if len(readings) == 0 {
-		return nil
 	}
 	previous, err := s.LatestReadingsFull(ctx)
 	if err != nil {
@@ -81,9 +68,8 @@ func (s *Store) RecordReadingsAndIntervalsFrom(
 	return nil
 }
 
-// FitFactors reads every trailing-seven-day interval and returns each window's least-squares
-// dollars-to-utilization factor. A window below spend.MinSamples is simply absent, the same
-// convention LatestReadings uses for a window with no reading yet.
+// FitFactors returns each window's least-squares dollars-to-utilization factor over the
+// trailing seven days. A window below spend.MinSamples is absent.
 func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Window]spend.Result, error) {
 	rows, err := s.q.IntervalsSince(ctx, now.Add(-sevenDayDuration))
 	if err != nil {
@@ -100,8 +86,7 @@ func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Win
 	return spend.Fit(samples, now), nil
 }
 
-// CCCostUSD returns cc's own runs' recorded cost_usd within each window's own trailing span as of
-// now, keyed by window -- the masthead gauge's "cost_usd of cc runs in the window" input.
+// CCCostUSD returns cc's own runs' cost_usd within each window's trailing span as of now.
 func (s *Store) CCCostUSD(ctx context.Context, now time.Time) (map[agentlog.Window]float64, error) {
 	row, err := s.q.CCCostSince(ctx, ccdb.CCCostSinceParams{
 		FiveHourSince: notNullTime(now.Add(-fiveHourDuration)),

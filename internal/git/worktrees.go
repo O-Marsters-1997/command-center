@@ -1,14 +1,13 @@
 package git
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os/exec"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
-// Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; the demo
-// sim substitutes its own.
+// Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; a test
+// substitutes its own.
 type Worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
 	Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error
@@ -17,27 +16,16 @@ type Worktrees interface {
 // CLI is the Worktrees that shells out to the tp binary.
 type CLI struct{}
 
-// New cuts a worktree for branch off baseRef via `tp new <branch> --base <baseRef>`, run inside
-// repoPath. A failure here is the caller's "cut failed", not a crash.
+// New cuts a worktree for branch off baseRef via `tp new`, run inside repoPath.
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	cmd := exec.CommandContext(ctx, "tp", "new", branch, "--base", baseRef)
-	cmd.Dir = repoPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tp new %s --base %s in %s: %w: %s",
-			branch, baseRef, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return nil
+	return command.Run(ctx, repoPath, "tp", "new", branch, "--base", baseRef)
 }
 
 // RemoveMode selects which of tp's own removal checks the caller is asking it to run.
 type RemoveMode int
 
 const (
-	// RemoveMerged skips only the ancestor check a squash merge always fails; tp still refuses
-	// a dirty worktree or unpushed commits itself (issue #147).
+	// RemoveMerged skips only the ancestor check a squash merge always fails.
 	RemoveMerged RemoveMode = iota
 	// RemoveForced skips every check tp performs, for a caller that has already proven them
 	// itself once GitHub's delete-branch-on-merge leaves tp with no ref left to check against
@@ -52,18 +40,8 @@ func (m RemoveMode) flag() string {
 	return "--merged"
 }
 
-// Remove tears down branch's worktree and deletes the branch via `tp remove <flag> <branch>`,
-// run inside repoPath, where mode picks the flag (see RemoveMode).
+// Remove tears down branch's worktree and deletes the branch via `tp remove`, run inside
+// repoPath.
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
-	flag := mode.flag()
-	cmd := exec.CommandContext(ctx, "tp", "remove", flag, branch)
-	cmd.Dir = repoPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("tp remove %s %s in %s: %w: %s",
-			flag, branch, repoPath, err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return nil
+	return command.Run(ctx, repoPath, "tp", "remove", mode.flag(), branch)
 }

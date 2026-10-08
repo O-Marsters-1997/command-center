@@ -32,105 +32,109 @@ func initRepoWithOriginForGitTest(t *testing.T) (repoPath string) {
 	return repoPath
 }
 
-func TestRemovalStateForIsRemovableByMergedWhileTheRemoteRefStillResolves(t *testing.T) {
+func TestRemovalStateFor(t *testing.T) {
 	t.Parallel()
 
-	dir := initRepoWithOriginForGitTest(t)
-	commitEmpty(t, dir, "not yet pushed")
-
-	state, err := RemovalStateFor(t.Context(), dir, "main", "")
-	if err != nil {
-		t.Fatalf("RemovalStateFor: %v", err)
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) (dir, pushedTip string)
+		want  RemovalState
+	}{
+		{
+			name: "removable by merged while the remote ref still resolves",
+			setup: func(t *testing.T) (string, string) {
+				dir := initRepoWithOriginForGitTest(t)
+				commitEmpty(t, dir, "not yet pushed")
+				return dir, ""
+			},
+			want: RemovableByMerged,
+		},
+		{
+			name: "not removable with no remote-tracking ref at all",
+			setup: func(t *testing.T) (string, string) {
+				return initRepoForGitTest(t), ""
+			},
+			want: NotRemovable,
+		},
+		{
+			name: "removable by force when the ref is gone but the tip was recorded as pushed",
+			setup: func(t *testing.T) (string, string) {
+				dir := initRepoWithOriginForGitTest(t)
+				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
+				if err != nil {
+					t.Fatal(err)
+				}
+				pruneRemoteTrackingRef(t, dir, "main")
+				return dir, tip
+			},
+			want: RemovableByForce,
+		},
+		{
+			name: "not removable when the ref is gone and the tip moved past the recorded push",
+			setup: func(t *testing.T) (string, string) {
+				dir := initRepoWithOriginForGitTest(t)
+				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
+				if err != nil {
+					t.Fatal(err)
+				}
+				pruneRemoteTrackingRef(t, dir, "main")
+				commitEmpty(t, dir, "committed after the merge, never pushed")
+				return dir, tip
+			},
+			want: NotRemovable,
+		},
 	}
-	if state != RemovableByMerged {
-		t.Errorf("state = %v, want RemovableByMerged: tp should still check the branch itself "+
-			"while the remote-tracking ref resolves", state)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir, pushedTip := tt.setup(t)
+			got, err := RemovalStateFor(t.Context(), dir, "main", pushedTip)
+			if err != nil {
+				t.Fatalf("RemovalStateFor: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("state = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestRemovalStateForIsNotRemovableWithNoRemoteTrackingRefAtAll(t *testing.T) {
+func TestDirty(t *testing.T) {
 	t.Parallel()
 
-	dir := initRepoForGitTest(t) // no origin remote configured at all
-	state, err := RemovalStateFor(t.Context(), dir, "main", "")
-	if err != nil {
-		t.Fatalf("RemovalStateFor: %v", err)
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, dir string)
+		want   bool
+	}{
+		{name: "a clean worktree", mutate: func(*testing.T, string) {}, want: false},
+		{
+			name: "an uncommitted change",
+			mutate: func(t *testing.T, dir string) {
+				if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("x\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
 	}
-	if state != NotRemovable {
-		t.Errorf("state = %v, want NotRemovable (conservative default) for a branch with no "+
-			"remote-tracking ref at all", state)
-	}
-}
 
-// The merged-and-deleted case: GitHub deletes the branch on merge, then the app's own
-// `git fetch origin --prune` drops the remote-tracking ref. The recorded push is the only
-// surviving evidence the branch ever reached the remote.
-func TestRemovalStateForIsRemovableByForceWhenTheRefIsGoneButTheTipWasRecordedAsPushed(t *testing.T) {
-	t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	dir := initRepoWithOriginForGitTest(t)
-	tip, err := RevParse(t.Context(), dir, "refs/heads/main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pruneRemoteTrackingRef(t, dir, "main")
-
-	state, err := RemovalStateFor(t.Context(), dir, "main", tip)
-	if err != nil {
-		t.Fatalf("RemovalStateFor: %v", err)
-	}
-	if state != RemovableByForce {
-		t.Errorf("state = %v, want RemovableByForce for a branch at its recorded pushed tip "+
-			"once the pruned ref is gone", state)
-	}
-}
-
-func TestRemovalStateForIsNotRemovableWhenTheRefIsGoneAndTheTipMovedPastTheRecordedPush(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoWithOriginForGitTest(t)
-	tip, err := RevParse(t.Context(), dir, "refs/heads/main")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pruneRemoteTrackingRef(t, dir, "main")
-	commitEmpty(t, dir, "committed after the merge, never pushed")
-
-	state, err := RemovalStateFor(t.Context(), dir, "main", tip)
-	if err != nil {
-		t.Fatalf("RemovalStateFor: %v", err)
-	}
-	if state != NotRemovable {
-		t.Errorf("state = %v, want NotRemovable for a commit made after the recorded push", state)
-	}
-}
-
-func TestDirtyIsFalseForACleanWorktree(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoForGitTest(t)
-	dirty, err := Dirty(t.Context(), dir)
-	if err != nil {
-		t.Fatalf("Dirty: %v", err)
-	}
-	if dirty {
-		t.Error("a freshly committed repo read as dirty")
-	}
-}
-
-func TestDirtyIsTrueForAnUncommittedChange(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoForGitTest(t)
-	if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("x\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	dirty, err := Dirty(t.Context(), dir)
-	if err != nil {
-		t.Fatalf("Dirty: %v", err)
-	}
-	if !dirty {
-		t.Error("an uncommitted file did not read as dirty")
+			dir := initRepoForGitTest(t)
+			tt.mutate(t, dir)
+			got, err := Dirty(t.Context(), dir)
+			if err != nil {
+				t.Fatalf("Dirty: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("Dirty = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

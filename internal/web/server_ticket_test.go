@@ -60,7 +60,6 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// sandbox://CC-2 has no worktree in seededStore, so its branch is free to change too.
 	body := url.Values{
 		"ticket":     {"sandbox://CC-2"},
 		"branch":     {"cc-2-renamed"},
@@ -94,7 +93,6 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 		t.Errorf("blocked_by = %v", pending[0].BlockedBy)
 	}
 
-	// The handler only ever queues an intent; the table itself is untouched until the loop runs.
 	tickets, err := store.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +152,6 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
 	t.Cleanup(srv.Close)
 
-	// Same branch, only blocked_by changes: no worktree conflict since the branch is unchanged.
 	body := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-first"}, "blocked_by": {"sandbox://CC-2"}}.Encode()
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
 	if err != nil {
@@ -206,5 +203,34 @@ func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestDetailRowRendersEditFormPrefilled(t *testing.T) {
+	t.Parallel()
+
+	store := seededStore(t, time.Now())
+	srv := httptest.NewServer(web.NewServer(store, realClock{}, nil, ""))
+	t.Cleanup(srv.Close)
+
+	resp, err := srv.Client().Get(srv.URL + "/board?sel=" + url.QueryEscape("sandbox://CC-2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(raw)
+	for _, want := range []string{
+		`action="/ticket"`,
+		`name="ticket" value="sandbox://CC-2"`,
+		`name="branch" value="cc-2-second"`,
+		`name="blocked_by" value="sandbox://CC-1"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("detail row missing %s", want)
+		}
 	}
 }

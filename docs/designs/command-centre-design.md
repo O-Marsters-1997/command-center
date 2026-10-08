@@ -373,11 +373,6 @@ B and B with C but A and C do not, that order holds C behind a B which is itself
 be held. Sweeping in ref order while carrying the ready set leaves A ready, holds B behind
 A, and lets C go, because C's only conflict is no longer ready.
 
-**A generated-only conflict needs no agent.** A conflict confined to paths the build
-regenerates (config keys `generated` and `build_command`, §8) merges, runs the build, stages
-and commits, then offers the row without agent work. A conflict touching any hand-written
-path is left alone, even when every other conflicted path is generated.
-
 **`resolve` is the verb for everything else.** `conflicts_with_main` offers `resolve`, which
 spawns an agent composed against `cc/skills/resolve-merge-conflict/SKILL.md` rather than
 `/implement` — the skill ADR 4 named and left unwired. The agent resolves in the worktree
@@ -629,10 +624,6 @@ deny = [                              # on top of the default set (§7)
   "scripts/**", "codegen.yml", "next.config.js",
   "vite.config.ts", "eslint-ci.config.ts",
 ]
-generated     = [                     # paths the build regenerates; empty opts out
-  "dist/**", "types/**",
-]
-build_command = ["npm", "run", "build"]  # argv to regenerate; empty opts out
   [repo.checks]
   all_of = [
     { success = "Lint" },
@@ -651,17 +642,6 @@ build_command = ["npm", "run", "build"]  # argv to regenerate; empty opts out
 # "sst.config.ts", ".pnpmfile.mjs", "patches/**", "vitest/**", "vitest.config.js";
 # its predicate needs the full grammar below — write it as a fixture in Phase 1.
 ```
-
-**`generated` and `build_command` drive generated-file auto-resolution (§4c).** `generated`
-is a glob list of paths the repo's build regenerates: `dist/**` for a bundle directory,
-`testdata/*.golden.html` for golden fixtures. A `dir/**` entry covers every path under `dir`
-at any depth; anything else is matched with `filepath.Match`, whose `*` never crosses a
-separator.
-
-`build_command` is the argv that regenerates them, and an empty one opts the repo out.
-`plan.AllGenerated` returns false when it is empty, so a repo that names `generated` paths
-but no `build_command` auto-resolves nothing — every conflict waits for `resolve` instead.
-Naming both is what turns the feature on.
 
 **The predicate grammar** is `all_of` / `any_of` / **`not`** / `success` / `skipped` /
 `absent_ok`. Verified against both files:

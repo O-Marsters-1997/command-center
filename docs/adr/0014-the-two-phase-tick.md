@@ -17,7 +17,7 @@ A tick is observe, **absorb**, one `PlanInput` and `Derive`, then **act**.
   and interval fit, verdict transitions, merge and first-CI events. It spawns and pushes nothing.
   Kill intents are applied first in absorb, so the run they stop is disposed in the same tick.
 - Act runs the operator's verbs (re-run, follow-up, abort, resolve, refresh, retry-push,
-  re-check, close-pr, remove-worktree, commit-resolution) before retarget, push, the draft gate and
+  remove-worktree, commit-resolution) before retarget, push, the draft gate and
   launch.
 - Retarget runs after the spawning verbs and before refresh, so a refresh never repeats a restack.
 - Import and edit-ticket intents still run before observe, so the observation reads the new branch.

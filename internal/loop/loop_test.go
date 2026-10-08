@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
 	"sync"
@@ -84,9 +83,9 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
+			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
 		},
-		Worktrees: map[string]string{loop.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
+		Worktrees: map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
 	lp := loop.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
@@ -102,7 +101,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	if !got.ObservedAt.Equal(at) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
-	if got.PRs[loop.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
+	if got.PRs[plan.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
 		t.Errorf("prs = %+v", got.PRs)
 	}
 }
@@ -150,7 +149,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
+		PRs: map[string]plan.PR{plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
 	ok := loop.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
@@ -230,9 +229,10 @@ func TestRunOnceSweepsExpiredSessionsAndLeavesLiveOnes(t *testing.T) {
 	store := openStoreAt(t, dsn)
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 
-	userID := seedUser(t, dsn, "olly@example.com")
-	seedSession(t, dsn, userID, "expired-token", now.Add(-time.Hour))
-	seedSession(t, dsn, userID, "live-token", now.Add(time.Hour))
+	seedUserWithSessions(t, dsn, map[string]time.Time{
+		"expired-token": now.Add(-time.Hour),
+		"live-token":    now.Add(time.Hour),
+	})
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	lp := loop.NewLoop(store, stub, fixedClock(now), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
@@ -252,7 +252,7 @@ func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
 	ctx := t.Context()
 	dsn := cctest.DSN(t)
 	store := openStoreAt(t, dsn)
-	dropSessionsTable(t, dsn)
+	execSQL(t, dsn, `DROP TABLE sessions`)
 
 	at := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
@@ -275,17 +275,5 @@ func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
 	}
 	if memberships["sandbox://CC-1"].LaunchID == 0 {
 		t.Error("RunOnce aborted the tick after the sweeper failed")
-	}
-}
-
-func dropSessionsTable(t *testing.T, dsn string) {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.Exec(`DROP TABLE sessions`); err != nil {
-		t.Fatalf("drop sessions table: %v", err)
 	}
 }

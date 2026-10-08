@@ -48,12 +48,9 @@ func (f *fakeForge) Create(context.Context, string, string, string, bool) error 
 	return nil
 }
 
-func (*fakeForge) Ready(context.Context, string, string) error                      { return nil }
-func (*fakeForge) Edit(context.Context, string, string, string) error               { return nil }
-func (*fakeForge) Close(context.Context, string, string) error                      { return nil }
-func (*fakeForge) Rerun(context.Context, string, string) error                      { return nil }
-func (*fakeForge) RunViewLogFailed(context.Context, string, string) (string, error) { return "", nil }
-func (*fakeForge) CloseIssue(context.Context, string, string) error                 { return nil }
+func (*fakeForge) Ready(context.Context, string, string) error        { return nil }
+func (*fakeForge) Edit(context.Context, string, string, string) error { return nil }
+func (*fakeForge) CloseIssue(context.Context, string, string) error   { return nil }
 
 func pathWithGitAndTpOnly(t *testing.T) {
 	t.Helper()

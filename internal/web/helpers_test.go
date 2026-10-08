@@ -2,10 +2,13 @@ package web_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -30,10 +33,8 @@ type frozenClock struct{ at time.Time }
 func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
-func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
+func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 
-// dispositionAsPushed records a run whose disposition is already known to be push, so a test can
-// read what the board shows for a pushed ticket without driving the loop through spawn and dispose.
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
 	runID, err := st.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
@@ -49,8 +50,6 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 	}
 }
 
-// oneMillionInputTokensLine is one $6.40 (at the calibrated sonnet rate) assistant request, for a
-// test to place at a chosen timestamp and request id.
 func oneMillionInputTokensLine(timestamp, requestID string) string {
 	return fmt.Sprintf(
 		`{"type":"assistant","timestamp":%q,"request_id":%q,`+
@@ -63,3 +62,16 @@ type realClock struct{}
 
 func (realClock) Now() time.Time                         { return time.Now() }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+
+var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func newServer(st *store.Store, now time.Time) *web.Server {
+	return web.NewServer(st, fixedClock(now), nil, "")
+}
+
+func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	return rec
+}

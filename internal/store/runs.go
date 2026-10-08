@@ -12,9 +12,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// InsertRunSkeleton reserves a runs row before the process exists: ticket_id, kind, baseline_sha
-// and prompt_hash are known at cut time, but pgid and log_path are named after the row's own id
-// (docs/prds/prd-command-centre.md § A run), so they land in a later RecordSpawn.
+// InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
+// land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
 	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    ticketID,
@@ -28,8 +27,7 @@ func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineS
 	return id, nil
 }
 
-// RecordSpawn writes the pgid, its process start time and the log path onto a reserved run row,
-// in the one UPDATE that must happen immediately after Spawn returns and nothing else.
+// RecordSpawn writes the pgid, its process start time and the log path onto a reserved run.
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
 	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
@@ -43,9 +41,8 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 	return nil
 }
 
-// RecordDisposition writes a dead run's outcome, its metrics and its per-request rows in one
-// transaction. exitCode and metrics are both nil when there is nothing to report: a spawn
-// failure, an unreapable process, or no log to parse.
+// RecordDisposition writes a dead run's outcome, metrics and per-request rows in one
+// transaction. exitCode and metrics are nil when there is nothing to report.
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
 	metrics *agentlog.RunMetrics,
@@ -76,8 +73,6 @@ func (s *Store) RecordDisposition(
 		Turns:          m.Turns,
 		DurationMs:     m.DurationMs,
 		CostUsd:        m.CostUsd,
-		ToolCalls:      m.ToolCalls,
-		ToolFailures:   m.ToolFailures,
 		Model:          m.Model,
 		MetricsSettled: m.MetricsSettled,
 		ID:             runID,
@@ -98,7 +93,6 @@ func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, reques
 			RunID:               runID,
 			RequestID:           r.ID,
 			Thread:              r.Thread,
-			Tool:                r.Tool,
 			InputTokens:         r.InputTokens,
 			CacheCreationTokens: r.CacheCreationTokens,
 			CacheReadTokens:     r.CacheReadTokens,
@@ -111,13 +105,12 @@ func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, reques
 }
 
 type runMetricsCols struct {
-	TokensIn, TokensOut, Turns, DurationMs, ToolCalls, ToolFailures sql.NullInt64
-	CostUsd                                                         sql.NullFloat64
-	Model                                                           sql.NullString
-	MetricsSettled                                                  sql.NullBool
+	TokensIn, TokensOut, Turns, DurationMs sql.NullInt64
+	CostUsd                                sql.NullFloat64
+	Model                                  sql.NullString
+	MetricsSettled                         sql.NullBool
 }
 
-// runMetricsColumns zero-values every field when metrics is nil, which database/sql writes as NULL.
 func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
 	if metrics == nil {
 		return runMetricsCols{}
@@ -132,69 +125,9 @@ func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
 		Turns:          sql.NullInt64{Int64: int64(metrics.Turns), Valid: true},
 		DurationMs:     sql.NullInt64{Int64: metrics.Duration.Milliseconds(), Valid: true},
 		CostUsd:        costUSD,
-		ToolCalls:      sql.NullInt64{Int64: int64(metrics.ToolCalls), Valid: true},
-		ToolFailures:   sql.NullInt64{Int64: int64(metrics.ToolFailures), Valid: true},
 		Model:          sql.NullString{String: metrics.Model, Valid: metrics.Model != ""},
 		MetricsSettled: sql.NullBool{Bool: metrics.Settled, Valid: true},
 	}
-}
-
-// RunAwaitingMetricsBackfill is one disposed run a backfill pass must try: it has a log path but
-// no metrics written yet.
-type RunAwaitingMetricsBackfill struct {
-	ID      int64
-	LogPath string
-}
-
-// RunsAwaitingMetricsBackfill returns every run with a log_path but no metrics written yet. A run
-// already resolved -- settled true or false -- is excluded, which is what makes a second backfill
-// pass safe to run.
-func (s *Store) RunsAwaitingMetricsBackfill(ctx context.Context) ([]RunAwaitingMetricsBackfill, error) {
-	rows, err := s.q.RunsAwaitingMetricsBackfill(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select runs awaiting metrics backfill: %w", err)
-	}
-	var runs []RunAwaitingMetricsBackfill
-	for _, row := range rows {
-		runs = append(runs, RunAwaitingMetricsBackfill{ID: row.ID, LogPath: row.LogPath.String})
-	}
-	return runs, nil
-}
-
-// BackfillRunMetrics writes one run's metrics columns and its per-request rows in one
-// transaction, leaving outcome, exit_code and ended_at -- already written at disposition --
-// untouched.
-func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics agentlog.RunMetrics) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-	qtx := s.q.WithTx(tx)
-
-	m := runMetricsColumns(&metrics)
-	if err = qtx.BackfillRunMetrics(ctx, ccdb.BackfillRunMetricsParams{
-		TokensIn:       m.TokensIn,
-		TokensOut:      m.TokensOut,
-		Turns:          m.Turns,
-		DurationMs:     m.DurationMs,
-		CostUsd:        m.CostUsd,
-		ToolCalls:      m.ToolCalls,
-		ToolFailures:   m.ToolFailures,
-		Model:          m.Model,
-		MetricsSettled: m.MetricsSettled,
-		ID:             runID,
-	}); err != nil {
-		return fmt.Errorf("backfill metrics for run %d: %w", runID, err)
-	}
-	if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 // RunRequest is one run_requests row: one deduplicated request_id's usage, attributed to its
@@ -202,16 +135,13 @@ func (s *Store) BackfillRunMetrics(ctx context.Context, runID int64, metrics age
 type RunRequest struct {
 	RequestID           string
 	Thread              string
-	Tool                string
 	InputTokens         int64
 	CacheCreationTokens int64
 	CacheReadTokens     int64
 	OutputTokens        int64
 }
 
-// RunRequestsForRun returns one run's per-request rows in the order they were recorded, ready for
-// the detail row's context-curve chart. Empty for a run with none, whether because it has not
-// disposed yet, disposed before this feature shipped, or its log held no requests.
+// RunRequestsForRun returns one run's per-request rows in recorded order.
 func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequest, error) {
 	rows, err := s.q.RunRequestsForRun(ctx, runID)
 	if err != nil {
@@ -222,7 +152,6 @@ func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunReques
 		requests[i] = RunRequest{
 			RequestID:           row.RequestID,
 			Thread:              row.Thread,
-			Tool:                row.Tool,
 			InputTokens:         row.InputTokens,
 			CacheCreationTokens: row.CacheCreationTokens,
 			CacheReadTokens:     row.CacheReadTokens,
@@ -232,8 +161,7 @@ func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunReques
 	return requests, nil
 }
 
-// InsertCutFailedRun records a run that never got a worktree, in one INSERT: no baseline, no
-// pgid, ever (docs/prds/prd-command-centre.md § The states, cut failed).
+// InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
 		TicketID:   ticketID,
@@ -257,8 +185,7 @@ type PendingRun struct {
 	LogPath       string
 }
 
-// PendingRunsAwaitingDisposition returns every run with a pgid but no outcome yet: the exact
-// set the loop's liveness+disposition pass must check, every tick, restart or not.
+// PendingRunsAwaitingDisposition returns every run with a pgid but no outcome yet.
 func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRun, error) {
 	rows, err := s.q.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
@@ -277,8 +204,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	return pending, nil
 }
 
-// LatestRunsByTicket returns each ticket's single most recent run (highest id). Its presence alone
-// is what LaunchPlan's "no prior run" rule and the page's pgid/elapsed/log-path columns need.
+// LatestRunsByTicket returns each ticket's most recent run (highest id).
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSummary, error) {
 	rows, err := s.q.LatestRunsByTicket(ctx)
 	if err != nil {
@@ -324,16 +250,14 @@ func outcomeFromString(s string) plan.Outcome {
 	}
 }
 
-// VerbIntent is one queued action against a ticket — the loop's own read-then-act sequence, never
-// a handler's (see server.go's handleVerb). Payload is empty for every verb that carries none.
+// VerbIntent is one queued action against a ticket. Payload is empty for verbs that carry none.
 type VerbIntent struct {
 	ID       int64
 	TicketID string
 	Payload  string
 }
 
-// QueueVerbIntent records one requested verb against a ticket. A handler only ever does this one
-// blind INSERT; the loop is the sole reader and actor (inv. 9).
+// QueueVerbIntent records one requested verb against a ticket.
 func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at time.Time) error {
 	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:       at.UTC(),
@@ -346,8 +270,7 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 	return nil
 }
 
-// QueueVerbIntentWithPayload is QueueVerbIntent's sibling for a verb that carries its own
-// argument, such as follow-up's typed prompt text.
+// QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
 func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, payload string, at time.Time) error {
 	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       at.UTC(),
@@ -375,7 +298,7 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 	return intents, nil
 }
 
-// PendingIntentsByTicket is every unconsumed intent, keyed by ticket, most recent last.
+// PendingIntentsByTicket returns every unconsumed intent, keyed by ticket, most recent last.
 func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string, error) {
 	rows, err := s.q.PendingIntentsByTicket(ctx)
 	if err != nil {
@@ -401,8 +324,7 @@ func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) e
 	return nil
 }
 
-// ActiveLaunchHashes returns the authorised prompt hash per ticket, for every ticket in an active
-// launch — what the loop's launch-eligibility check compares the recomposed hash against.
+// ActiveLaunchHashes returns the authorised prompt hash per ticket in an active launch.
 func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, error) {
 	rows, err := s.q.ActiveLaunchHashes(ctx)
 	if err != nil {
@@ -416,9 +338,7 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 	return hashes, nil
 }
 
-// RunIDsForTicket returns every run id ever recorded for a ticket, oldest first -- what
-// remove-worktree's log pruning needs to find every runs/<id>.jsonl, runs/<id>.prompt and
-// runs/<id>.diff it left behind (docs/prds/prd-command-centre.md § Phase 6).
+// RunIDsForTicket returns every run id recorded for a ticket, oldest first.
 func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
 	ids, err := s.q.RunIDsForTicket(ctx, ticketID)
 	if err != nil {
@@ -427,9 +347,8 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 	return ids, nil
 }
 
-// LatestRunLog returns the newest run's log path for a ticket and whether that run has ended. A
-// ticket with no run at all reads as ended with no path, so a caller tailing the log streams
-// nothing rather than failing.
+// LatestRunLog returns the newest run's log path for a ticket and whether it has ended.
+// A ticket with no run reads as ended with no path.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
 	row, err := s.q.LatestRunLog(ctx, ticketURL)
 	switch {

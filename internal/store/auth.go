@@ -65,5 +65,8 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions for %s: %w", email, err)
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }

@@ -3,20 +3,14 @@ package web_test
 import (
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// TestBandRendersWrittenEmptyStatesWithNoTickets covers issue #106 AC5: a project with no
-// tickets at all — so no worktree has ever been cut and no check has ever reported — reads each
-// card's own written copy rather than a blank frame or a bare "–".
 func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(store, now)
 
 	page := renderPage(t, server)
 	for _, want := range []string{
@@ -36,15 +30,12 @@ func TestBandRendersWrittenEmptyStatesWithNoTickets(t *testing.T) {
 	}
 }
 
-// TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist covers issue #106 AC2-AC4 against the
-// board's own two-row fixture: the fleet ribbon sums to the row count, "yours" counts the row
-// that is not unattended, and the stack card reports off the one row with a cut worktree.
 func TestBandRendersLiveNumbersOnceCutWorktreesAndChecksExist(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
-	server := web.NewServer(store, fixedClock(observedAt), nil, "")
+	server := newServer(store, observedAt)
 
 	page := renderPage(t, server)
 	if !strings.Contains(page, "2/2 yours") {

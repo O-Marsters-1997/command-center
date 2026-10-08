@@ -128,7 +128,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	const parentTip = "parent-tip"
 	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
@@ -160,9 +160,6 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 }
 
-// TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused covers relaunching a feature with an
-// active launch: a member already authorised labels refused, naming the launch, so the launch
-// modal island never offers it a checkbox to re-launch (candidate.Label feeds that guard).
 func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 	t.Parallel()
 
@@ -192,10 +189,6 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 	}
 }
 
-// TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice covers issue #72's slice of
-// five: CC-2 is left out of a slice sitting on top of it, so both of its direct dependents are
-// refused and the three rows above them still read on unlock -- the "blocker outside this slice"
-// refusal plan.Preview keeps for a hand-picked, cross-feature slice (docs/plans/feature-launch.md phase 5).
 func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *testing.T) {
 	t.Parallel()
 
@@ -236,10 +229,6 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 	}
 }
 
-// TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused covers issue #260's
-// AC2 directly: a hand-picked slice spanning two features is not itself a feature, so closure is
-// not guaranteed by construction -- CC-1 and CC-2 (two different features) are both launchable,
-// while CC-3's blocker sits outside the slice entirely and is refused naming it.
 func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused(t *testing.T) {
 	t.Parallel()
 

@@ -8,8 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// supportAppPredicate transcribes support-app's real predicate (docs/designs/command-centre-design.md § 8,
-// "re-verified"): five plain checks plus a three-way Linear any_of.
 func supportAppPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "Lint"},
@@ -36,10 +34,6 @@ func supportAppGreenChecks() map[string]verdict.CheckState {
 	}
 }
 
-// servicesPredicate transcribes services' real predicate (docs/designs/command-centre-design.md § 8): six
-// plain checks, a three-way deployment any_of whose third arm is itself an all_of pairing a
-// success with a skip, a four-way Linear any_of whose first arm is the dependabot author escape
-// hatch, and the path-filtered absent_ok lint check.
 func servicesPredicate() verdict.Predicate {
 	return verdict.Predicate{AllOf: []verdict.Predicate{
 		{Success: "Lint"},
@@ -63,10 +57,6 @@ func servicesPredicate() verdict.Predicate {
 	}}
 }
 
-// servicesGreenChecks is a steady-state green rollup: the deployment arm resolves via
-// "Deploy / Deploy SST Stage" rather than the skipped-Evaluate arm, the Linear arm via a real
-// check (not the dependabot escape hatch), and "Lint GitHub Actions / Lint" is absent -- the
-// path-filtered job never triggered for this diff.
 func servicesGreenChecks() map[string]verdict.CheckState {
 	return map[string]verdict.CheckState{
 		"Lint":                            verdict.Success,
@@ -80,14 +70,11 @@ func servicesGreenChecks() map[string]verdict.CheckState {
 	}
 }
 
-// waitedInput anchors PushedAt so BoundedWait has already elapsed against Now -- the steady
-// state for a repo whose absent_ok check has had every chance to appear and hasn't.
 func waitedInput() (pushedAt, now time.Time) {
 	pushedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return pushedAt, pushedAt.Add(verdict.BoundedWait)
 }
 
-// freshInput anchors PushedAt so BoundedWait has not elapsed -- a just-pushed commit.
 func freshInput() (pushedAt, now time.Time) {
 	pushedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	return pushedAt, pushedAt.Add(time.Minute)
@@ -168,17 +155,6 @@ func TestEvaluateServices(t *testing.T) {
 		in   verdict.Input
 		want verdict.Verdict
 	}{
-		{
-			name: "all green derives review me",
-			in: func() verdict.Input {
-				pushedAt, now := waitedInput()
-				return verdict.Input{
-					Checks: servicesGreenChecks(), HeadOidMatch: true, ConfigHashOK: true,
-					PushedAt: pushedAt, Now: now, AuthorLogin: "a-real-human",
-				}
-			}(),
-			want: verdict.ReviewMe,
-		},
 		{
 			name: "the skipped-Deploy arm resolves without a matching Deploy SST or PR Stage check-run",
 			in: func() verdict.Input {
@@ -324,11 +300,6 @@ func TestPredicateIsZero(t *testing.T) {
 	}
 }
 
-// TestBoundedWaitOnlyCountsSuccessfulTicks is the pure half of the AC: Evaluate takes whatever
-// Now the caller derives, so a caller that (correctly) derives Now only from ticks whose observe
-// phase succeeded -- never from wall time -- must see the wait hold no matter how long a real
-// outage actually lasted. internal/loop's loop test covers the other half: that its own Now really
-// is built that way.
 func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	t.Parallel()
 
@@ -338,86 +309,71 @@ func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 		PushedAt: pushedAt, Checks: map[string]verdict.CheckState{}, HeadOidMatch: true,
 	}
 
-	// A forced-failure sequence: however long the real outage ran, zero ticks observed
-	// successfully means the caller's derived Now has not moved past PushedAt at all.
 	in.Now = pushedAt
 	if got := verdict.Evaluate(p, in).Verdict; got != verdict.Checking {
 		t.Fatalf("verdict = %v after zero successful ticks, want checking", got)
 	}
 
-	// Once observe succeeds again, ticks accumulate for real and the wait can elapse.
 	in.Now = pushedAt.Add(verdict.BoundedWait)
 	if got := verdict.Evaluate(p, in).Verdict; got != verdict.NeedsYou {
 		t.Fatalf("verdict = %v once the wait elapses over successful ticks, want needs_you", got)
 	}
 }
 
-// TestNeedsYouNamesTheRedLeaf covers issue #228: the shell discriminates ci_failed from
-// needs_you on whether Result carries a red leaf's name, so a resolved-red predicate must name
-// the check that failed, and a needs_you derived only from the bounded wait elapsing must not.
-func TestNeedsYouNamesTheRedLeaf(t *testing.T) {
+func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 	t.Parallel()
 
 	pushedAt, now := freshInput()
-	p := verdict.Predicate{Success: "CI"}
-
-	got := verdict.Evaluate(p, verdict.Input{
-		Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
-		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
-	})
-	if got.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
-	}
-	if want := []string{"CI"}; !slices.Equal(got.RedLeaves, want) {
-		t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, want)
-	}
-
 	waitedPushedAt, waitedNow := waitedInput()
-	elapsed := verdict.Evaluate(p, verdict.Input{
-		Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
-		PushedAt: waitedPushedAt, Now: waitedNow,
-	})
-	if elapsed.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", elapsed.Verdict)
-	}
-	if len(elapsed.RedLeaves) != 0 {
-		t.Errorf("RedLeaves = %v, want none: no check ever resolved red, the wait just elapsed", elapsed.RedLeaves)
-	}
-}
+	both := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
 
-// TestAllOfNamesEveryRedLeaf covers issue #228: allOf must not stop naming red leaves after the
-// first one it finds, or a required-check failure sitting behind an earlier failed sibling in
-// the same all_of goes unnamed in Reason.
-func TestAllOfNamesEveryRedLeaf(t *testing.T) {
-	t.Parallel()
-
-	pushedAt, now := freshInput()
-	p := verdict.Predicate{AllOf: []verdict.Predicate{{Success: "Lint"}, {Success: "Tests"}}}
-
-	got := verdict.Evaluate(p, verdict.Input{
-		Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
-		HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
-	})
-	if got.Verdict != verdict.NeedsYou {
-		t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+	tests := []struct {
+		name string
+		p    verdict.Predicate
+		in   verdict.Input
+		want []string
+	}{
+		{
+			name: "a failed check names itself",
+			p:    verdict.Predicate{Success: "CI"},
+			in: verdict.Input{
+				Checks:       map[string]verdict.CheckState{"CI": verdict.Failure},
+				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+			},
+			want: []string{"CI"},
+		},
+		{
+			name: "every failed required check is named",
+			p:    both,
+			in: verdict.Input{
+				Checks:       map[string]verdict.CheckState{"Lint": verdict.Failure, "Tests": verdict.Failure},
+				HeadOidMatch: true, ConfigHashOK: true, PushedAt: pushedAt, Now: now,
+			},
+			want: []string{"Lint", "Tests"},
+		},
+		{
+			name: "a wait that elapsed with no check ever resolving red names nothing",
+			p:    verdict.Predicate{Success: "CI"},
+			in: verdict.Input{
+				Checks: map[string]verdict.CheckState{}, HeadOidMatch: true, ConfigHashOK: true,
+				PushedAt: waitedPushedAt, Now: waitedNow,
+			},
+			want: nil,
+		},
 	}
-	if want := []string{"Lint", "Tests"}; !slices.Equal(got.RedLeaves, want) {
-		t.Errorf("RedLeaves = %v, want %v: both required checks failed", got.RedLeaves, want)
-	}
-}
 
-func TestVerdictString(t *testing.T) {
-	t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if verdict.ReviewMe.String() != "review_me" || verdict.NeedsYou.String() != "needs_you" ||
-		verdict.Checking.String() != "checking" {
-		t.Errorf("verdicts render as %q, %q, %q", verdict.ReviewMe, verdict.NeedsYou, verdict.Checking)
-	}
-	if verdict.BaseMoved.String() != "base_moved" {
-		t.Errorf("verdict renders as %q, want base_moved", verdict.BaseMoved)
-	}
-	if verdict.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
-		t.Errorf("verdict renders as %q, want waiting_on_producer_deploy", verdict.WaitingOnProducerDeploy)
+			got := verdict.Evaluate(tt.p, tt.in)
+			if got.Verdict != verdict.NeedsYou {
+				t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+			}
+			if !slices.Equal(got.RedLeaves, tt.want) {
+				t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, tt.want)
+			}
+		})
 	}
 }
 
@@ -432,9 +388,6 @@ func compatPredicate() verdict.Predicate {
 
 const compatCheckName = "GraphQL production compatibility"
 
-// TestEvaluateWaitingOnProducerDeploy covers inv. 12: the state names "the seam isn't live yet"
-// apart from "this consumer is broken", which only holds when the compat check is the *sole* red
-// required check.
 func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	t.Parallel()
 
@@ -505,7 +458,6 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	}
 }
 
-// TestWaitingOnProducerDeploySurvivesTheBoundedWait covers issue #56 AC3.
 func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 	t.Parallel()
 
@@ -525,9 +477,6 @@ func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 	}
 }
 
-// TestEvaluateBaseMoved covers § 4a's expiry ahead of predicate resolution: a moved stacked base
-// reads base_moved whatever the rollup says, a red descendant included, and a root row never
-// reads it however stale BaseSHAMatch is.
 func TestEvaluateBaseMoved(t *testing.T) {
 	t.Parallel()
 

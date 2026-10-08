@@ -47,59 +47,6 @@ func gitRepo(t *testing.T) string {
 	return dir
 }
 
-func TestProcessRunnerSpawnRunsTheAgentWithSubstitutedArgvAndRedirectedOutput(t *testing.T) {
-	worktree := gitRepo(t)
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	if err := os.WriteFile(settingsPath, []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("/implement sandbox://CC-1"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	logFile, err := os.Create(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{commitsScript(t), "{worktree}", "{settings}", "{prompt_file}"},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := runner.ProcessRunner{}.Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	if result.Pid == 0 {
-		t.Fatal("Spawn returned a zero pid")
-	}
-
-	reapExit(t, result.Pid)
-
-	out, err := exec.Command("git", "-C", worktree, "log", "--oneline").CombinedOutput()
-	if err != nil {
-		t.Fatalf("git log: %v: %s", err, out)
-	}
-	if !strings.Contains(string(out), "commit from commits.sh") {
-		t.Errorf("git log = %q, want the agent's commit", out)
-	}
-
-	logged, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(logged) != 0 {
-		t.Errorf("commits.sh wrote no stdout/stderr, but the log file has content: %q", logged)
-	}
-}
-
 // waitForFile polls for path to exist, failing the test after a short deadline. Spawn does not
 // wait on the process, so the test must poll for the side effect it produces instead.
 func waitForFile(t *testing.T, path string) {
@@ -120,7 +67,7 @@ func waitForFile(t *testing.T, path string) {
 // and testing.T reports that against the whole package rather than this one test.
 func reapExit(t *testing.T, pid int) {
 	t.Helper()
-	exitCode, ok := runner.Reap(pid)
+	exitCode, ok := runner.ProcessRunner{}.Reap(pid)
 	if !ok {
 		t.Fatalf("Reap reported no exit code for pid %d, which is our own direct child", pid)
 	}
@@ -129,369 +76,197 @@ func reapExit(t *testing.T, pid int) {
 	}
 }
 
-func TestProcessRunnerSpawnStripsAnthropicAPIKey(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	envDump := filepath.Join(worktree, "env.txt")
-	script := "#!/bin/sh\nenv > " + envDump + "\n"
-	scriptPath := filepath.Join(t.TempDir(), "dump-env.sh")
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	env, err := os.ReadFile(envDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(env), "ANTHROPIC_API_KEY") {
-		t.Errorf("spawned process environment still carries ANTHROPIC_API_KEY:\n%s", env)
-	}
+// spawnCase describes one ProcessRunner.Spawn run. script is the body of a throwaway agent that
+// writes its observation to dump; command, when set, replaces the script as AgentCommand[0].
+type spawnCase struct {
+	name        string
+	script      string
+	command     []string
+	configure   func(t *testing.T, cfg *runner.SpawnConfig)
+	dumpOutside bool
+	check       func(t *testing.T, cfg runner.SpawnConfig, pid int, dump string)
 }
 
-func TestProcessRunnerSpawnSetsANewProcessGroup(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
+func TestProcessRunnerSpawn(t *testing.T) {
+	writeFile := func(t *testing.T, content string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "input")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
 	}
-	pgidDump := filepath.Join(worktree, "pgid.txt")
-	script := "#!/bin/sh\nps -o pgid= -p $$ > " + pgidDump + "\n"
-	scriptPath := filepath.Join(t.TempDir(), "dump-pgid.sh")
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	wantArgv := func(want func(cfg runner.SpawnConfig) string) func(*testing.T, runner.SpawnConfig, int, string) {
+		return func(t *testing.T, cfg runner.SpawnConfig, _ int, dump string) {
+			t.Helper()
+			if got := want(cfg); dump != got {
+				t.Errorf("agent received argv %q, want %q", dump, got)
+			}
+		}
 	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
+	dumpArg := "#!/bin/sh\nprintf '%s' \"$1\" > $DUMP\n"
+	dumpArgs := "#!/bin/sh\nprintf '%s' \"$*\" > $DUMP\n"
+	const prompt = "/implement sandbox://CC-1\n\n## Ticket\n\nMake it work."
 
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
+	tests := []spawnCase{
+		{
+			name:    "substitutes the worktree, settings and prompt file into argv and commits in the worktree",
+			command: []string{commitsScript(t), "{worktree}", "{settings}", "{prompt_file}"},
+			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				cfg.WorktreePath = gitRepo(t)
+				cfg.SettingsPath = writeFile(t, "{}")
+				cfg.PromptPath = writeFile(t, "/implement sandbox://CC-1")
+				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
+			},
+			check: func(t *testing.T, cfg runner.SpawnConfig, pid int, _ string) {
+				out, err := exec.Command("git", "-C", cfg.WorktreePath, "log", "--oneline").CombinedOutput()
+				if err != nil {
+					t.Fatalf("git log: %v: %s", err, out)
+				}
+				if !strings.Contains(string(out), "commit from commits.sh") {
+					t.Errorf("git log = %q, want the agent's commit", out)
+				}
+				logged, err := os.ReadFile(cfg.LogFile.Name())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(logged) != 0 {
+					t.Errorf("commits.sh wrote no stdout/stderr, but the log file has content: %q", logged)
+				}
+			},
+		},
+		{
+			name:   "strips ANTHROPIC_API_KEY from the environment",
+			script: "#!/bin/sh\nenv > $DUMP\n",
+			configure: func(t *testing.T, _ *runner.SpawnConfig) {
+				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
+			},
+			check: func(t *testing.T, _ runner.SpawnConfig, _ int, dump string) {
+				if strings.Contains(dump, "ANTHROPIC_API_KEY=") {
+					t.Errorf("spawned process environment still carries ANTHROPIC_API_KEY:\n%s", dump)
+				}
+			},
+		},
+		{
+			name:   "makes the agent its own process group leader",
+			script: "#!/bin/sh\nps -o pgid= -p $$ > $DUMP\n",
+			check: func(t *testing.T, _ runner.SpawnConfig, pid int, dump string) {
+				gotPgid, err := strconv.Atoi(strings.TrimSpace(dump))
+				if err != nil {
+					t.Fatalf("parse recorded pgid %q: %v", dump, err)
+				}
+				if gotPgid != pid {
+					t.Errorf("pgid = %d, want the leader's own pid %d", gotPgid, pid)
+				}
+			},
+		},
+		{
+			name:      "substitutes the prompt text into argv",
+			script:    dumpArg,
+			command:   []string{"{prompt}"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) { cfg.Prompt = prompt },
+			check:     wantArgv(func(runner.SpawnConfig) string { return prompt }),
+		},
+		{
+			name:    "substitutes the system prompt path into argv",
+			script:  dumpArg,
+			command: []string{"{system_prompt}"},
+			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				cfg.SystemPromptPath = writeFile(t, "{}")
+			},
+			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.SystemPromptPath }),
+		},
+		{
+			name:    "substitutes the agents path into argv",
+			script:  dumpArg,
+			command: []string{"{agents}"},
+			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
+				cfg.AgentsPath = writeFile(t, "{}")
+			},
+			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.AgentsPath }),
+		},
+		{
+			name:    "drops the agents flag when the path is empty",
+			script:  dumpArgs,
+			command: []string{"before", "--agents", "{agents}", "after"},
+			check:   wantArgv(func(runner.SpawnConfig) string { return "before after" }),
+		},
+		{
+			name:    "drops the system prompt flag when the path is empty",
+			script:  dumpArgs,
+			command: []string{"before", "--append-system-prompt-file", "{system_prompt}", "after"},
+			check:   wantArgv(func(runner.SpawnConfig) string { return "before after" }),
+		},
+		{
+			name:        "runs in the worktree even when argv never mentions it",
+			script:      "#!/bin/sh\npwd > $DUMP\n",
+			dumpOutside: true,
+			check: func(t *testing.T, cfg runner.SpawnConfig, _ int, dump string) {
+				want, err := filepath.EvalSymlinks(cfg.WorktreePath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := filepath.EvalSymlinks(strings.TrimSpace(dump))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != want {
+					t.Errorf("agent ran in %q, want the worktree %q", got, want)
+				}
+			},
+		},
 	}
 
-	reapExit(t, result.Pid)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := runner.SpawnConfig{
+				WorktreePath: t.TempDir(),
+				SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
+				PromptPath:   writeFile(t, "prompt"),
+			}
+			logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = logFile.Close() })
+			cfg.LogFile = logFile
 
-	raw, err := os.ReadFile(pgidDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotPgid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
-	if err != nil {
-		t.Fatalf("parse recorded pgid %q: %v", raw, err)
-	}
-	if gotPgid != result.Pid {
-		t.Errorf("pgid = %d, want the leader's own pid %d (Setpgid should make it its own group leader)",
-			gotPgid, result.Pid)
-	}
-}
+			if tt.configure != nil {
+				tt.configure(t, &cfg)
+			}
+			dump := filepath.Join(cfg.WorktreePath, "dump.txt")
+			if tt.dumpOutside {
+				dump = filepath.Join(t.TempDir(), "dump.txt")
+			}
+			if tt.script != "" {
+				scriptPath := filepath.Join(t.TempDir(), "agent.sh")
+				body := strings.ReplaceAll(tt.script, "$DUMP", dump)
+				if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				cfg.AgentCommand = append([]string{scriptPath}, tt.command...)
+			} else {
+				cfg.AgentCommand = tt.command
+			}
 
-func TestProcessRunnerSpawnSubstitutesThePromptTextIntoArgv(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	prompt := "/implement sandbox://CC-1\n\n## Ticket\n\nMake it work."
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	argvDump := filepath.Join(worktree, "argv.txt")
-	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
-	script := "#!/bin/sh\nprintf '%s' \"$1\" > " + argvDump + "\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
+			result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
+			if err != nil {
+				t.Fatalf("Spawn: %v", err)
+			}
+			if result.Pid == 0 {
+				t.Fatal("Spawn returned a zero pid")
+			}
+			reapExit(t, result.Pid)
 
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath, "{prompt}"},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		Prompt:       prompt,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	got, err := os.ReadFile(argvDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != prompt {
-		t.Errorf("agent received argv %q, want the composed prompt text %q", got, prompt)
-	}
-}
-
-func TestProcessRunnerSpawnSubstitutesTheSystemPromptPathIntoArgv(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	systemPromptPath := filepath.Join(t.TempDir(), "system-prompt.md")
-	if err := os.WriteFile(systemPromptPath, []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	argvDump := filepath.Join(worktree, "argv.txt")
-	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
-	script := "#!/bin/sh\nprintf '%s' \"$1\" > " + argvDump + "\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	cfg := runner.SpawnConfig{
-		AgentCommand:     []string{scriptPath, "{system_prompt}"},
-		WorktreePath:     worktree,
-		SettingsPath:     settingsPath,
-		SystemPromptPath: systemPromptPath,
-		PromptPath:       promptPath,
-		LogFile:          logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	got, err := os.ReadFile(argvDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != systemPromptPath {
-		t.Errorf("agent received argv %q, want the system prompt path %q", got, systemPromptPath)
-	}
-}
-
-func TestProcessRunnerSpawnSubstitutesTheAgentsPathIntoArgv(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	agentsPath := filepath.Join(t.TempDir(), "agents.json")
-	if err := os.WriteFile(agentsPath, []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	argvDump := filepath.Join(worktree, "argv.txt")
-	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
-	script := "#!/bin/sh\nprintf '%s' \"$1\" > " + argvDump + "\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath, "{agents}"},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		AgentsPath:   agentsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	got, err := os.ReadFile(argvDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != agentsPath {
-		t.Errorf("agent received argv %q, want the agents path %q", got, agentsPath)
-	}
-}
-
-// TestProcessRunnerSpawnDropsTheAgentsFlagWhenPathIsEmpty covers resolve and follow-up runs
-// (spawnRun leaves AgentsPath unset for them): the flag naming {agents} must vanish from argv
-// entirely, never survive pointed at an empty path.
-func TestProcessRunnerSpawnDropsTheAgentsFlagWhenPathIsEmpty(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	argvDump := filepath.Join(worktree, "argv.txt")
-	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
-	script := "#!/bin/sh\nprintf '%s' \"$*\" > " + argvDump + "\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath, "before", "--agents", "{agents}", "after"},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	got, err := os.ReadFile(argvDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "before after" {
-		t.Errorf("agent received argv %q, want %q: the flag and its placeholder both dropped", got, "before after")
-	}
-}
-
-// TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty covers resolve and follow-up
-// runs (spawnRun leaves SystemPromptPath unset for them): the flag naming {system_prompt} must
-// vanish from argv entirely, never survive pointed at an empty path.
-func TestProcessRunnerSpawnDropsTheSystemPromptFlagWhenPathIsEmpty(t *testing.T) {
-	worktree := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	argvDump := filepath.Join(worktree, "argv.txt")
-	scriptPath := filepath.Join(t.TempDir(), "dump-argv.sh")
-	script := "#!/bin/sh\nprintf '%s' \"$*\" > " + argvDump + "\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath, "before", "--append-system-prompt-file", "{system_prompt}", "after"},
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	got, err := os.ReadFile(argvDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "before after" {
-		t.Errorf("agent received argv %q, want %q: the flag and its placeholder both dropped", got, "before after")
-	}
-}
-
-// TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt guards against Spawn ever
-// again defaulting to this test binary's own cwd: real claude -p takes no {worktree} argument
-// (its positional argument is prompt text, not a path), so Dir is the only thing that puts the
-// agent in the right place. dump-pwd.sh below deliberately ignores argv.
-func TestProcessRunnerSpawnRunsInTheWorktreeEvenWhenArgvNeverMentionsIt(t *testing.T) {
-	worktree := t.TempDir()
-	outsideDir := t.TempDir()
-	settingsPath := filepath.Join(t.TempDir(), "agent.json")
-	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
-	if err := os.WriteFile(promptPath, []byte("prompt"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	pwdDump := filepath.Join(outsideDir, "pwd.txt")
-	script := "#!/bin/sh\npwd > " + pwdDump + "\n"
-	scriptPath := filepath.Join(t.TempDir(), "dump-pwd.sh")
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = logFile.Close() })
-
-	cfg := runner.SpawnConfig{
-		AgentCommand: []string{scriptPath}, // no {worktree} anywhere in argv, on purpose
-		WorktreePath: worktree,
-		SettingsPath: settingsPath,
-		PromptPath:   promptPath,
-		LogFile:      logFile,
-	}
-	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("Spawn: %v", err)
-	}
-	reapExit(t, result.Pid)
-
-	raw, err := os.ReadFile(pwdDump)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantWorktree, err := filepath.EvalSymlinks(worktree)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotDir, err := filepath.EvalSymlinks(strings.TrimSpace(string(raw)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotDir != wantWorktree {
-		t.Errorf("agent ran in %q, want the worktree %q", gotDir, wantWorktree)
+			var got string
+			if tt.script != "" {
+				raw, err := os.ReadFile(dump)
+				if err != nil {
+					t.Fatalf("the agent script never wrote its observation to $DUMP: %v", err)
+				}
+				got = string(raw)
+			}
+			tt.check(t, cfg, result.Pid, got)
+		})
 	}
 }

@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,30 +15,113 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
+
+const maxAgents = 4
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 
 var pillRE = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
 
-// Transition is one ticket's board state changing, at a sim time since the run started.
-type Transition struct {
-	At     time.Duration
-	Ticket string
-	State  string
+type issue struct {
+	Ticket
+	repo   *sandboxRepo
+	number int
+	url    string
+	branch string
+}
+
+func (i issue) tracker(urlByID map[string]string) tracker.Ticket {
+	blockedBy := make([]string, 0, len(i.BlockedBy))
+	for _, id := range i.BlockedBy {
+		blockedBy = append(blockedBy, urlByID[id])
+	}
+	return tracker.Ticket{URL: i.url, Number: i.number, Title: i.Title, BlockedBy: blockedBy}
+}
+
+func buildIssues(sc Scenario, sb *Sandbox) ([]issue, error) {
+	repos := map[string]*sandboxRepo{}
+	for _, r := range sb.repos {
+		repos[r.scenarioName] = r
+	}
+	issues := make([]issue, 0, len(sc.Tickets))
+	for n, t := range sc.Tickets {
+		repo, ok := repos[t.Repo]
+		if !ok {
+			return nil, fmt.Errorf("ticket %q: no sandbox repo %q", t.ID, t.Repo)
+		}
+		number := n + 1
+		issues = append(issues, issue{
+			Ticket: t,
+			repo:   repo,
+			number: number,
+			url:    fmt.Sprintf("https://github.com/%s/issues/%d", t.Repo, number),
+			branch: tracker.BranchSlug(number, t.Title),
+		})
+	}
+	return issues, nil
+}
+
+// SimClock is a loop.Clock that only moves when Advance is called, so a run plays without
+// sleeping.
+type SimClock struct {
+	mu      sync.Mutex
+	now     time.Time
+	waiters []waiter
+}
+
+type waiter struct {
+	at time.Time
+	ch chan time.Time
+}
+
+func NewSimClock(start time.Time) *SimClock { return &SimClock{now: start} }
+
+func (c *SimClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *SimClock) After(d time.Duration) <-chan time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := make(chan time.Time, 1)
+	if d <= 0 {
+		ch <- c.now
+		return ch
+	}
+	c.waiters = append(c.waiters, waiter{at: c.now.Add(d), ch: ch})
+	return ch
+}
+
+func (c *SimClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+	pending := c.waiters[:0]
+	for _, w := range c.waiters {
+		if w.at.After(c.now) {
+			pending = append(pending, w)
+			continue
+		}
+		w.ch <- c.now
+	}
+	c.waiters = pending
 }
 
 // Sim plays a Scenario: the real loop and board over real git, against the fake forge, tracker
-// and agent. It only changes the world the loop observes and presses the buttons a human would.
+// and agent. It only changes the world the loop observes and presses launch as a human would.
 type Sim struct {
 	scenario Scenario
 	clock    *SimClock
@@ -49,17 +133,11 @@ type Sim struct {
 	server   *web.Server
 	issues   []issue
 
-	authorised  map[string]bool
-	last        map[string]string
-	transitions []Transition
-	checked     int
-	landed      int
-	pushed      int
-	pressed     int
-	mismatches  []error
+	authorised map[string]bool
+	board      map[string]string
+	landed     int
 }
 
-// NewSim builds the sandbox and the loop for sc and queues the import of every ticket's feature.
 func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	sb, err := NewSandbox(sc.Repos)
 	if err != nil {
@@ -80,13 +158,9 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	agent := NewAgent(clock, issues, sc.Seed)
 	resolve := trackerSource(issues)
 
-	verifyCommand, err := installFailureScripts(sb, issues)
-	if err != nil {
-		return nil, err
-	}
-	template := config.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}, VerifyCommand: verifyCommand}
+	template := config.Repo{Tracker: "github", Checks: verdict.Predicate{Success: ciCheck}}
 	cfg := config.Config{
-		MaxAgents:    len(issues),
+		MaxAgents:    maxAgents,
 		AgentCommand: []string{"demo-agent"},
 		Repos:        sb.Repos(template),
 	}
@@ -110,9 +184,8 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	}()
 
 	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
-	lp.SetMetricsParser(agentlog.ParseMetrics)
 	lp.SetForge(forge)
-	lp.SetWorktrees(NewWorktrees(issues))
+	lp.SetWorktrees(Worktrees{})
 	lp.SetTrackerSource(resolve)
 	server := web.NewServer(st, clock, cfg.Repos, ws.DataDir)
 	server.SetTrackerSource(resolve)
@@ -121,7 +194,7 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
 		loop: lp, server: server, issues: issues,
-		authorised: map[string]bool{}, last: map[string]string{},
+		authorised: map[string]bool{}, board: map[string]string{},
 	}
 	for _, feature := range features(issues) {
 		if err := st.QueueVerbIntent(ctx, feature, store.ImportVerb, clock.Now()); err != nil {
@@ -157,23 +230,13 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 	if err := os.MkdirAll(state, 0o750); err != nil {
 		return ws, err
 	}
-	return ws, errors.Join(
-		loop.WriteAgentSettings(ws.SettingsPath),
-		loop.WriteAgentSystemPrompt(ws.SystemPromptPath),
-		loop.WriteAgentDigestDefinition(ws.AgentsPath),
-	)
+	return ws, loop.WriteAgentFiles(ws)
 }
 
-// Elapsed is the sim time since the run started.
-func (s *Sim) Elapsed() time.Duration { return s.clock.Now().Sub(simStart) }
-
-// Tick plays one loop tick: the world moves, the loop runs, then the sim records every board
-// state, presses launch for tickets that reached ready, and checks the checkpoints now due.
+// Tick plays one loop tick: the world moves, the loop runs, then the sim reads every board state
+// and presses launch for tickets that reached ready.
 func (s *Sim) Tick(ctx context.Context) error {
 	if err := s.landMain(); err != nil {
-		return err
-	}
-	if err := s.landPushes(); err != nil {
 		return err
 	}
 	if err := s.forge.Advance(); err != nil {
@@ -189,45 +252,66 @@ func (s *Sim) Tick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.record(states)
+	s.board = states
 	if err := s.launchReady(states); err != nil {
 		return err
 	}
-	if err := s.pressDue(); err != nil {
-		return err
-	}
-	s.check(states)
 	s.clock.Advance(store.TickPeriod)
 	return nil
 }
 
-// Play ticks until every checkpoint has been checked, and returns the mismatches.
-func (s *Sim) Play(ctx context.Context) error {
-	for s.checked < len(s.scenario.Expect) {
-		if err := s.Tick(ctx); err != nil {
-			return err
-		}
+// Serve runs the sim at speed sim seconds per real second and serves its board on addr until ctx
+// is cancelled.
+func Serve(ctx context.Context, sc Scenario, speed float64, addr string) error {
+	sim, err := NewSim(ctx, sc)
+	if err != nil {
+		return err
 	}
-	return errors.Join(s.mismatches...)
+	defer func() {
+		if err := sim.Close(); err != nil {
+			log.Printf("demo: close: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           sim.server,
+		ReadHeaderTimeout: 5 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
+	errs := make(chan error, 2)
+	go func() { errs <- sim.run(ctx, speed) }()
+	go func() {
+		err := srv.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		errs <- err
+	}()
+
+	first := <-errs
+	cancel()
+	shutdown, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer stop()
+	return errors.Join(first, srv.Shutdown(shutdown), <-errs)
 }
 
-// PlayTo ticks until the sim has run to at, without checking any checkpoint.
-func (s *Sim) PlayTo(ctx context.Context, at time.Duration) error {
-	for s.Elapsed() <= at {
-		if err := s.Tick(ctx); err != nil {
+func (s *Sim) run(ctx context.Context, speed float64) error {
+	wait := time.Duration(float64(store.TickPeriod) / speed)
+	for ctx.Err() == nil {
+		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
 			return err
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(wait):
 		}
 	}
 	return nil
 }
 
-// Board is each ticket's state as of the last tick, by scenario ticket id.
-func (s *Sim) Board() map[string]string { return maps.Clone(s.last) }
-
-// Transitions is every state change so far, in order.
-func (s *Sim) Transitions() []Transition { return slices.Clone(s.transitions) }
-
-// Close tears down the store and the sandbox.
 func (s *Sim) Close() error { return errors.Join(s.store.Close(), s.sandbox.Close()) }
 
 func (s *Sim) states() (map[string]string, error) {
@@ -252,40 +336,18 @@ func (s *Sim) states() (map[string]string, error) {
 	return states, nil
 }
 
-func (s *Sim) record(states map[string]string) {
-	for _, i := range s.issues {
-		state, ok := states[i.ID]
-		if !ok || state == s.last[i.ID] {
-			continue
-		}
-		s.last[i.ID] = state
-		s.transitions = append(s.transitions, Transition{At: s.Elapsed(), Ticket: i.ID, State: state})
-	}
-}
-
 func (s *Sim) launchReady(states map[string]string) error {
-	var ready []string
+	form := url.Values{}
 	for _, i := range s.issues {
-		if s.authorised[i.ID] || !i.launchDue(states[i.ID]) {
+		if s.authorised[i.ID] || states[i.ID] != "ready" {
 			continue
 		}
 		s.authorised[i.ID] = true
-		if i.Launch == launchEarly {
-			if err := s.postLaunch([]string{i.url}); err != nil {
-				return err
-			}
-			continue
-		}
-		ready = append(ready, i.url)
+		form.Add("ticket", i.url)
 	}
-	return s.postLaunch(ready)
-}
-
-func (s *Sim) postLaunch(tickets []string) error {
-	if len(tickets) == 0 {
+	if len(form) == 0 {
 		return nil
 	}
-	form := url.Values{"ticket": tickets}
 	req := httptest.NewRequest(http.MethodPost, "/launch", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -296,21 +358,11 @@ func (s *Sim) postLaunch(tickets []string) error {
 	return nil
 }
 
-func (i issue) launchDue(state string) bool {
-	switch i.Launch {
-	case launchHold:
-		return false
-	case launchEarly:
-		return true
-	default:
-		return state == "ready"
-	}
-}
-
 func (s *Sim) landMain() error {
+	elapsed := s.clock.Now().Sub(simStart)
 	for ; s.landed < len(s.scenario.Main); s.landed++ {
 		m := s.scenario.Main[s.landed]
-		if time.Duration(m.At) > s.Elapsed() {
+		if m.At > elapsed {
 			return nil
 		}
 		if err := s.sandbox.LandOnMain(m.Repo, m.Files); err != nil {
@@ -318,59 +370,4 @@ func (s *Sim) landMain() error {
 		}
 	}
 	return nil
-}
-
-func (s *Sim) landPushes() error {
-	for ; s.pushed < len(s.scenario.Push); s.pushed++ {
-		p := s.scenario.Push[s.pushed]
-		if time.Duration(p.At) > s.Elapsed() {
-			return nil
-		}
-		owner := s.issueByID(p.Ticket)
-		if err := s.sandbox.PushToBranch(owner.repo, owner.branch, p.Files); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Sim) pressDue() error {
-	for ; s.pressed < len(s.scenario.Press); s.pressed++ {
-		p := s.scenario.Press[s.pressed]
-		if time.Duration(p.At) > s.Elapsed() {
-			return nil
-		}
-		form := url.Values{"verb": {p.Verb}, "ticket": {s.issueByID(p.Ticket).url}}
-		req := httptest.NewRequest(http.MethodPost, "/verb", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		rec := httptest.NewRecorder()
-		s.server.ServeHTTP(rec, req)
-		if rec.Code != http.StatusSeeOther {
-			return fmt.Errorf("POST /verb %s %s: %d: %s", p.Verb, p.Ticket, rec.Code, rec.Body)
-		}
-	}
-	return nil
-}
-
-func (s *Sim) issueByID(id string) issue {
-	return s.issues[slices.IndexFunc(s.issues, func(i issue) bool { return i.ID == id })]
-}
-
-func (s *Sim) check(states map[string]string) {
-	for ; s.checked < len(s.scenario.Expect); s.checked++ {
-		e := s.scenario.Expect[s.checked]
-		if time.Duration(e.At) > s.Elapsed() {
-			return
-		}
-		if got := states[e.Ticket]; got != e.State {
-			s.mismatches = append(s.mismatches,
-				fmt.Errorf("at %s ticket %s is %q, want %q", s.Elapsed(), e.Ticket, got, e.State))
-		}
-	}
-}
-
-// RunLogs is the path of every agent log the loop has opened, in run order.
-func (s *Sim) RunLogs() []string {
-	logs, _ := filepath.Glob(filepath.Join(s.sandbox.RunsDir(), "*.jsonl"))
-	return logs
 }

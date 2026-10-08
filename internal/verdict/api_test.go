@@ -7,9 +7,6 @@ import (
 	"testing"
 )
 
-// TestNoImpureImports keeps this package pure, mirroring internal/plan's api_test.go exactly
-// (issue #2 AC12): every import must be stdlib, or the transitive hole reopens the moment
-// something importable itself execs.
 func TestNoImpureImports(t *testing.T) {
 	t.Parallel()
 
@@ -34,7 +31,6 @@ func TestNoImpureImports(t *testing.T) {
 	}
 }
 
-// Every module path has a dot in its first element (a domain); no stdlib path does.
 func isStdlib(path string) bool {
 	first, _, _ := strings.Cut(path, "/")
 	return !strings.Contains(first, ".")

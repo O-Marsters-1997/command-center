@@ -70,9 +70,6 @@ func TestIntervalsWithNoPreviousReadingClosesNothingYet(t *testing.T) {
 	}
 }
 
-// TestIntervalsIgnoresADuplicateOrOlderReading covers the same overlapping-run dedupe
-// RecordReadings already relies on: a reading no newer than what's already latest for its window
-// closes nothing and does not regress latest.
 func TestIntervalsIgnoresADuplicateOrOlderReading(t *testing.T) {
 	t.Parallel()
 
@@ -94,9 +91,6 @@ func TestIntervalsIgnoresADuplicateOrOlderReading(t *testing.T) {
 	}
 }
 
-// TestIntervalsSkipsAPairStraddlingAReset covers a window's own periodic reset: a reading whose
-// utilization has fallen below the previous one can only mean the window reset in between, so
-// the pair is skipped rather than closed against a spurious negative rise.
 func TestIntervalsSkipsAPairStraddlingAReset(t *testing.T) {
 	t.Parallel()
 

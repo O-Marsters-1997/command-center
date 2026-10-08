@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
 func TestStatus(t *testing.T) {
@@ -57,37 +58,6 @@ func TestStatus(t *testing.T) {
 				t.Errorf("reason = %q, want %q", reason, tt.wantReason)
 			}
 		})
-	}
-}
-
-func TestStateString(t *testing.T) {
-	t.Parallel()
-
-	if plan.Blocked.String() != "blocked" || plan.Ready.String() != "ready" || plan.Queued.String() != "queued" {
-		t.Errorf("states render as %q, %q and %q", plan.Blocked, plan.Ready, plan.Queued)
-	}
-	if plan.Checking.String() != "checking" || plan.NeedsYou.String() != "needs_you" ||
-		plan.PushFailed.String() != "push_failed" {
-		t.Errorf("states render as %q, %q and %q", plan.Checking, plan.NeedsYou, plan.PushFailed)
-	}
-	if plan.ReviewMe.String() != "review_me" {
-		t.Errorf("state renders as %q, want review_me", plan.ReviewMe)
-	}
-	if plan.PRMerged.String() != "merged" || plan.PRClosedUnmerged.String() != "pr_closed_unmerged" ||
-		plan.BaseGone.String() != "base_gone" {
-		t.Errorf("states render as %q, %q and %q", plan.PRMerged, plan.PRClosedUnmerged, plan.BaseGone)
-	}
-	if plan.Cancelled.String() != "cancelled" {
-		t.Errorf("state renders as %q, want cancelled", plan.Cancelled)
-	}
-	if plan.BaseMoved.String() != "base_moved" {
-		t.Errorf("state renders as %q, want base_moved", plan.BaseMoved)
-	}
-	if plan.RefreshConflicted.String() != "refresh_conflicted" {
-		t.Errorf("state renders as %q, want refresh_conflicted", plan.RefreshConflicted)
-	}
-	if plan.WaitingOnProducerDeploy.String() != "waiting_on_producer_deploy" {
-		t.Errorf("state renders as %q, want waiting_on_producer_deploy", plan.WaitingOnProducerDeploy)
 	}
 }
 
@@ -198,7 +168,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictReason: "check config changed",
+				Verdict: &verdict.Result{Verdict: verdict.Checking, Reason: "check config changed"},
 			},
 			wantState: plan.Checking,
 			reasonHas: "check config changed",
@@ -207,7 +177,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a review-me verdict derives review me",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict: &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.ReviewMe,
 			reasonHas: "every required check passed",
@@ -216,7 +186,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictNeedsYou: true, VerdictReason: "a required check failed",
+				Verdict: &verdict.Result{Verdict: verdict.NeedsYou, Reason: "a required check failed"},
 			},
 			wantState: plan.NeedsYou,
 			reasonHas: "a required check failed",
@@ -232,7 +202,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "the pull request having merged outranks an open-PR verdict",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: false, PRMerged: true,
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict: &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.PRMerged,
 		},
@@ -247,7 +217,10 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictWaitingOnProducer: true, VerdictReason: "every required check passed except the compat check",
+				Verdict: &verdict.Result{
+					Verdict: verdict.WaitingOnProducerDeploy,
+					Reason:  "every required check passed except the compat check",
+				},
 			},
 			wantState: plan.WaitingOnProducerDeploy,
 			reasonHas: "except the compat check",
@@ -256,7 +229,10 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a base-moved verdict derives base moved even over a needs-you check reading",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictBaseMoved: true, VerdictReason: "base moved: the parent advanced past what this branch was cut from",
+				Verdict: &verdict.Result{
+					Verdict: verdict.BaseMoved,
+					Reason:  "base moved: the parent advanced past what this branch was cut from",
+				},
 			},
 			wantState: plan.BaseMoved,
 			reasonHas: "the parent advanced",
@@ -265,7 +241,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				VerdictBaseMoved: true, RefreshRefused: true,
+				Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.NeedsYou,
@@ -275,7 +251,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			name: "an unresolved merge derives refresh conflicted over base moved and a refused fast-forward",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				MidMerge: true, VerdictBaseMoved: true, RefreshRefused: true,
+				MidMerge: true, Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.RefreshConflicted,
@@ -309,7 +285,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
-				VerdictBaseMoved: true, RefreshRefused: true,
+				Verdict: &verdict.Result{Verdict: verdict.BaseMoved}, RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
 			},
 			wantState: plan.ConflictsWithMain,
@@ -351,7 +327,7 @@ func TestStatusWithLatestRun(t *testing.T) {
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
 				ConflictingPeer: "cc-9-lower-ref",
-				VerdictReviewMe: true, VerdictReason: "every required check passed",
+				Verdict:         &verdict.Result{Verdict: verdict.ReviewMe, Reason: "every required check passed"},
 			},
 			wantState: plan.Blocked,
 			reasonHas: "cc-9-lower-ref",
@@ -376,9 +352,6 @@ func TestStatusWithLatestRun(t *testing.T) {
 	}
 }
 
-// TestStatusDerivesPRMergedOverALaterRunsOwnDisposition covers issues #234 and #251: a merged
-// pull request outranks the latest run's own outcome, whether that run is a later no-op re-run
-// or one with no push row at all.
 func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 	t.Parallel()
 
@@ -423,8 +396,6 @@ func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 	}
 }
 
-// TestStatusStillDerivesFailedWithoutAMergedPR is the control for #234/#251: a failed run with
-// no push row and no merged PR still reads failed, unchanged.
 func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
 	t.Parallel()
 
@@ -441,7 +412,6 @@ func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
 func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	t.Parallel()
 
-	// The pre-Phase-3 2x2 stays reachable and untouched when there is no run yet.
 	state, reason := plan.Status(plan.Facts{
 		Unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
 		Authorised: false,
@@ -451,10 +421,6 @@ func TestStatusIgnoresANilLatestRun(t *testing.T) {
 	}
 }
 
-// TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun covers inv. 19: a row that has ever run
-// derives base_gone the moment its blocker's PR is closed unmerged, never blocked — and this
-// outranks even a live run or a fully-resolved push, which the design's state diagram (§5)
-// draws as transitioning into base_gone from any of them.
 func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	t.Parallel()
 
@@ -487,9 +453,6 @@ func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	}
 }
 
-// TestStatusNeverDerivesBaseGoneWithoutAPriorRun covers the other half of inv. 19: a member
-// that never launched re-derives blocked or queued, exactly the pre-Phase-3 2x2, even when its
-// blocker's PR was closed unmerged.
 func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 	t.Parallel()
 
@@ -508,9 +471,6 @@ func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 	}
 }
 
-// TestStatusBlocksOnAConflictedBase covers the launch gate's own row: a base that already
-// carries a conflict must say so, rather than leaving an authorised row queued on a slot that
-// the tick will refuse every time it comes round.
 func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 	t.Parallel()
 
@@ -529,8 +489,6 @@ func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 	}
 }
 
-// TestStatusPrefersARunToAConflictedBase: a row that has already launched is described by its
-// run, not by the state of the base it was cut from.
 func TestStatusPrefersARunToAConflictedBase(t *testing.T) {
 	t.Parallel()
 

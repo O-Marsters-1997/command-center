@@ -16,7 +16,7 @@ import (
 )
 
 // Kind is what a kept line is to a reader: the skill that opens a phase, a file touched, any
-// other tool call, and the two outcomes a tool result carries.
+// other tool call, the two outcomes a tool result carries, and the agent's own prose.
 type Kind int
 
 const (
@@ -25,6 +25,7 @@ const (
 	Tool
 	Fail
 	Pass
+	Say
 )
 
 func (k Kind) String() string {
@@ -39,6 +40,8 @@ func (k Kind) String() string {
 		return "fail"
 	case Pass:
 		return "pass"
+	case Say:
+		return "say"
 	default:
 		return "unknown"
 	}
@@ -47,10 +50,14 @@ func (k Kind) String() string {
 // Event is one kept line. At is measured off the run's first kept event, so it is zero on an
 // Event from ParseLine, which has no run to measure against.
 type Event struct {
-	At     time.Duration
-	Kind   Kind
-	Tool   string
-	Detail string
+	At          time.Duration
+	Kind        Kind
+	Tool        string
+	Detail      string
+	CallID      string
+	Output      string
+	OutputLines int
+	Diff        Diff
 }
 
 // Phase is the work between one Skill tool use and the next. A run's first phase has no skill:
@@ -60,6 +67,8 @@ type Phase struct {
 	Note   string
 	At     time.Duration
 	Events []Event
+	Turns  int
+	Spend  float64
 }
 
 // Result is the run's own last word on itself, taken from the final result line.
@@ -76,6 +85,7 @@ type Run struct {
 	Phases []Phase
 	Result *Result
 	Lines  int
+	End    time.Duration
 }
 
 // Parse reads a log into phases. A run that is still writing ends in a partial line, which is
@@ -83,50 +93,53 @@ type Run struct {
 func Parse(r io.Reader) (Run, error) {
 	var run Run
 	var base time.Time
+	var ledger requestLedger
+	var tail Tail
+	callPhase := map[string]int{}
 
-	reader := bufio.NewReader(r)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return run, nil
-			}
-			return run, err
-		}
+	err := eachLine(r, func(line []byte) {
 		run.Lines++
 
 		parsed, decodeErr := decode(line)
 		if decodeErr != nil {
-			continue
+			return
 		}
 		if parsed.Type == "result" {
 			result := parsed.result()
 			run.Result = &result
-			continue
+			return
 		}
-		event, at, ok := parsed.event()
-		if !ok {
-			continue
-		}
-		if !at.IsZero() {
-			if base.IsZero() {
-				base = at
+		for _, event := range tail.keep(parsed.events()) {
+			if !parsed.Timestamp.IsZero() {
+				if base.IsZero() {
+					base = parsed.Timestamp
+				}
+				event.At = parsed.Timestamp.Sub(base)
+				run.End = max(run.End, event.At)
 			}
-			event.At = at.Sub(base)
+			if phase, ok := callPhase[event.CallID]; ok && (event.Kind == Pass || event.Kind == Fail) {
+				run.Phases[phase].Events = append(run.Phases[phase].Events, event)
+				continue
+			}
+			run.append(event)
+			if event.CallID != "" && event.Kind != Skill {
+				callPhase[event.CallID] = len(run.Phases) - 1
+			}
 		}
-		run.append(event)
-	}
+		ledger.note(parsed, len(run.Phases)-1)
+	})
+	ledger.settle(run.Phases)
+	return run, err
 }
 
-// ParseLine reads one log line, reporting false for a line no reader wants: a system line, a
-// rate limit, the agent's thinking or prose, and anything it cannot decode.
-func ParseLine(line []byte) (Event, bool) {
+// ParseLine reads one log line into its events, none for a line no reader wants: a system line,
+// a rate limit, the agent's thinking, and anything it cannot decode.
+func ParseLine(line []byte) []Event {
 	parsed, err := decode(line)
 	if err != nil {
-		return Event{}, false
+		return nil
 	}
-	event, _, ok := parsed.event()
-	return event, ok
+	return parsed.events()
 }
 
 func (run *Run) append(event Event) {
@@ -176,11 +189,14 @@ type usage struct {
 }
 
 type contentBlock struct {
-	Type    string          `json:"type"`
-	Name    string          `json:"name"`
-	Input   json.RawMessage `json:"input"`
-	Content json.RawMessage `json:"content"`
-	IsError bool            `json:"is_error"`
+	Type      string          `json:"type"`
+	ID        string          `json:"id"`
+	ToolUseID string          `json:"tool_use_id"`
+	Name      string          `json:"name"`
+	Text      string          `json:"text"`
+	Input     json.RawMessage `json:"input"`
+	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"`
 }
 
 func decode(line []byte) (logLine, error) {
@@ -189,9 +205,6 @@ func decode(line []byte) (logLine, error) {
 	return parsed, err
 }
 
-// forEachLine reads a transcript line by line, calling fn with each decoded line and the last
-// non-zero timestamp seen so far -- what a line carrying none of its own (a result line, a
-// rate_limit_event) is tagged with instead. A line that fails to decode is skipped, not failed.
 func forEachLine(logPath string, fn func(logLine, time.Time)) error {
 	f, err := os.Open(logPath)
 	if err != nil {
@@ -200,24 +213,33 @@ func forEachLine(logPath string, fn func(logLine, time.Time)) error {
 	defer func() { _ = f.Close() }()
 
 	var last time.Time
-	reader := bufio.NewReader(f)
-	for {
-		line, readErr := reader.ReadBytes('\n')
-		if readErr != nil {
-			if errors.Is(readErr, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("read agent log %s: %w", logPath, readErr)
-		}
-
+	err = eachLine(f, func(line []byte) {
 		parsed, decodeErr := decode(line)
 		if decodeErr != nil {
-			continue
+			return
 		}
 		if !parsed.Timestamp.IsZero() {
 			last = parsed.Timestamp
 		}
 		fn(parsed, last)
+	})
+	if err != nil {
+		return fmt.Errorf("read agent log %s: %w", logPath, err)
+	}
+	return nil
+}
+
+func eachLine(r io.Reader, fn func([]byte)) error {
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		fn(line)
 	}
 }
 
@@ -234,20 +256,47 @@ func (l logLine) result() Result {
 	}
 }
 
-func (l logLine) event() (Event, time.Time, bool) {
+// Tail reads a live log one line at a time, dropping the results that only announce a Skill
+// launch, as Parse does.
+type Tail struct {
+	skillCalls map[string]bool
+}
+
+func (t *Tail) Read(line []byte) []Event {
+	return t.keep(ParseLine(line))
+}
+
+func (t *Tail) keep(events []Event) []Event {
+	return slices.DeleteFunc(events, func(e Event) bool {
+		if e.Kind == Skill && e.CallID != "" {
+			if t.skillCalls == nil {
+				t.skillCalls = make(map[string]bool)
+			}
+			t.skillCalls[e.CallID] = true
+		}
+		return e.Kind == Pass && t.skillCalls[e.CallID]
+	})
+}
+
+func (l logLine) events() []Event {
+	var events []Event
 	for _, block := range l.Message.Content {
 		switch {
 		case l.Type == "assistant" && block.Type == "tool_use":
-			return block.toolEvent(), l.Timestamp, true
-		case l.Type == "user" && block.Type == "tool_result":
-			kind := Pass
-			if block.IsError {
-				kind = Fail
+			event := block.toolEvent()
+			if event.Kind == Skill && l.ParentToolUseID != "" {
+				event = Event{Kind: Tool, Tool: block.Name, Detail: event.Tool, CallID: event.CallID}
 			}
-			return Event{Kind: kind, Detail: firstLine(block.resultText())}, l.Timestamp, true
+			events = append(events, event)
+		case l.Type == "assistant" && block.Type == "text" && l.ParentToolUseID == "":
+			if say := strings.TrimSpace(block.Text); say != "" {
+				events = append(events, Event{Kind: Say, Detail: say})
+			}
+		case l.Type == "user" && block.Type == "tool_result":
+			events = append(events, block.resultEvent())
 		}
 	}
-	return Event{}, time.Time{}, false
+	return events
 }
 
 var fileTools = []string{"Read", "Write", "Edit", "NotebookEdit"}
@@ -257,17 +306,30 @@ func (b contentBlock) toolEvent() Event {
 	_ = json.Unmarshal(b.Input, &input)
 
 	if b.Name == "Skill" {
-		return Event{Kind: Skill, Tool: text(input["skill"]), Detail: text(input["args"])}
+		return Event{Kind: Skill, Tool: text(input["skill"]), Detail: text(input["args"]), CallID: b.ID}
 	}
 	kind := Tool
 	if slices.Contains(fileTools, b.Name) {
 		kind = File
 	}
-	return Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input)}
+	event := Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input), CallID: b.ID}
+	if b.Name == "Edit" {
+		event.Diff = lineDiff(text(input["old_string"]), text(input["new_string"]))
+	}
+	return event
 }
 
-// resultText reads a tool result's content, which the CLI writes either as a bare string or as
-// the Messages API's content blocks.
+func (b contentBlock) resultEvent() Event {
+	kind := Pass
+	if b.IsError {
+		kind = Fail
+	}
+	whole := strings.TrimRight(b.resultText(), "\n")
+	output, lines := boundOutput(whole)
+	return Event{Kind: kind, Detail: firstLine(whole), CallID: b.ToolUseID, Output: output, OutputLines: lines}
+}
+
+// The CLI writes a tool result's content either as a bare string or as Messages API blocks.
 func (b contentBlock) resultText() string {
 	var whole string
 	if json.Unmarshal(b.Content, &whole) == nil {
@@ -276,14 +338,40 @@ func (b contentBlock) resultText() string {
 	var blocks []struct {
 		Text string `json:"text"`
 	}
-	if json.Unmarshal(b.Content, &blocks) != nil || len(blocks) == 0 {
+	if json.Unmarshal(b.Content, &blocks) != nil {
 		return ""
 	}
-	return blocks[0].Text
+	texts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		texts = append(texts, block.Text)
+	}
+	return strings.Join(texts, "\n")
 }
 
-// primaryInputKeys is ordered most specific first because a tool's input schema carries several
-// of them at once: Bash has both command and description, and the command is the one to show.
+const (
+	maxOutputLines = 40
+	maxOutputBytes = 4000
+)
+
+func boundOutput(whole string) (string, int) {
+	if whole == "" {
+		return "", 0
+	}
+	lines := strings.Split(whole, "\n")
+	kept := strings.Join(lines[:min(len(lines), maxOutputLines)], "\n")
+	if len(kept) > maxOutputBytes {
+		kept = strings.ToValidUTF8(kept[:maxOutputBytes], "")
+	}
+	if kept != whole {
+		kept += "\n… output cut short"
+		if len(lines) > maxOutputLines {
+			kept += fmt.Sprintf(", %d more lines", len(lines)-maxOutputLines)
+		}
+	}
+	return kept, len(lines)
+}
+
+// Ordered most specific first: Bash input has both command and description.
 var primaryInputKeys = []string{"command", "file_path", "pattern", "path", "url", "query", "description", "prompt"}
 
 func primaryInput(input map[string]any) string {

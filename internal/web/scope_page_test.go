@@ -2,11 +2,9 @@ package web_test
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -14,11 +12,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// threeRepoStore seeds a same-repo fan-out -- ROOT and CHILD both in "repo", CHILD blocked by
-// ROOT -- plus LONE, an unrelated ticket in "other" that no scope below shares a group with
-// (issue #219). plan.Unlocked only ever counts a same-repo blocker (plan.go:60), so a group as
-// groupRows renders it can never itself straddle two repos; filterGroupsByRepo's own
-// admit-whole rule for a group that did is proven directly against []group in scope_test.go.
 func threeRepoStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -32,7 +25,7 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -41,13 +34,11 @@ func threeRepoStore(t *testing.T) *storepkg.Store {
 
 func threeRepoServer(t *testing.T) *web.Server {
 	t.Helper()
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	repos := []config.Repo{{Name: "repo"}, {Name: "services"}, {Name: "other"}}
 	return web.NewServer(threeRepoStore(t), fixedClock(at), repos, "")
 }
 
-// TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne covers issue #219 AC1: a scope keeps a
-// group with a member in scope and drops a group with none.
 func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	t.Parallel()
 
@@ -74,7 +65,6 @@ func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	}
 }
 
-// TestRepoScopeUnknownFallsBackToUnscoped covers issue #219 AC1's other half.
 func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	t.Parallel()
 
@@ -86,7 +76,6 @@ func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	}
 }
 
-// TestRepoScopeNarrowsTheBandButNotLiveAgents covers issue #219 AC3.
 func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
 	t.Parallel()
 
@@ -99,8 +88,6 @@ func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
 	}
 }
 
-// TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope covers issue #219's masthead
-// nav row: "all" plus one pill per configured repo, with aria-current tracking the query.
 func TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope(t *testing.T) {
 	t.Parallel()
 
@@ -125,8 +112,6 @@ func TestMastheadRepoLinksNameEveryConfiguredRepoAndTheCurrentScope(t *testing.T
 	}
 }
 
-// TestMastheadOmitsRepoLinksWithNoConfiguredRepos protects the many single-repo fixtures across
-// this package's other tests: a server built with no [[repo]] renders no repo nav row at all.
 func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
 	t.Parallel()
 
@@ -136,9 +121,6 @@ func TestMastheadOmitsRepoLinksWithNoConfiguredRepos(t *testing.T) {
 	}
 }
 
-// threeFeatureStore seeds a same-feature fan-out -- ROOT and CHILD both in "board-scope", CHILD
-// blocked by ROOT -- plus LONE, an unrelated ticket in "sqlc-migration", following
-// threeRepoStore (issue #220).
 func threeFeatureStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -152,7 +134,7 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -161,12 +143,10 @@ func threeFeatureStore(t *testing.T) *storepkg.Store {
 
 func threeFeatureServer(t *testing.T) *web.Server {
 	t.Helper()
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return web.NewServer(threeFeatureStore(t), fixedClock(at), nil, "")
+	at := testNow
+	return newServer(threeFeatureStore(t), at)
 }
 
-// TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne covers issue #220 AC1: a scope keeps a
-// group with a member in scope and drops a group with none.
 func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	t.Parallel()
 
@@ -193,7 +173,6 @@ func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	}
 }
 
-// TestFeatureScopeUnknownFallsBackToUnscoped covers issue #220 AC1's other half.
 func TestFeatureScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	t.Parallel()
 
@@ -205,7 +184,6 @@ func TestFeatureScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	}
 }
 
-// TestFeatureAndRepoScopeComposeNeitherOverridingTheOther covers issue #220 AC3.
 func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	t.Parallel()
 
@@ -219,7 +197,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +215,6 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	}
 }
 
-// TestClearingOneScopeAxisLeavesTheOtherApplied covers issue #220 AC4.
 func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 	t.Parallel()
 
@@ -254,8 +231,6 @@ func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 	}
 }
 
-// TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature protects the many fixtures across this
-// package's other tests that never set Feature on a ticket.
 func TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
 	t.Parallel()
 
@@ -316,8 +291,6 @@ func scopeJSONURLs(t *testing.T, groups []scopeJSONGroup) []string {
 	return urls
 }
 
-// TestGraphJSONRespectsTheRepoScope covers issue #219 AC5: /graph.json carries the same scoped
-// groups the board renders, through the same parseViewParams.
 func TestGraphJSONRespectsTheRepoScope(t *testing.T) {
 	t.Parallel()
 
@@ -344,14 +317,10 @@ func TestGraphJSONRespectsTheRepoScope(t *testing.T) {
 
 func fetchGraphPath(t *testing.T, server *web.Server, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	rec := get(t, server, path)
 	return rec
 }
 
-// TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths covers issue #219 AC4: the poll's own hx-get,
-// a row's select path and a row's toggle path all carry the scope forward, since applyViewState
-// copies params the same way it already does for Log, Sel and Tickets.
 func TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths(t *testing.T) {
 	t.Parallel()
 

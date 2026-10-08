@@ -13,14 +13,14 @@ import (
 )
 
 func RenderStatesPage(states []plan.State) (string, error) {
-	return renderStates(page, states)
+	return renderStates("page.tmpl", states)
 }
 
 func RenderStatesBoard(states []plan.State) (string, error) {
-	return renderStates(boardFragment, states)
+	return renderStates("board", states)
 }
 
-func renderStates(tmpl *template.Template, states []plan.State) (string, error) {
+func renderStates(name string, states []plan.State) (string, error) {
 	board := view.Board{
 		Chrome:           view.Chrome{Observe: view.Age{Age: "0s ago"}},
 		BoardPollSeconds: config.DefaultBoardPollSeconds,
@@ -37,21 +37,19 @@ func renderStates(tmpl *template.Template, states []plan.State) (string, error) 
 	}
 
 	var out strings.Builder
-	if err := tmpl.Execute(&out, board); err != nil {
+	if err := templates.ExecuteTemplate(&out, name, board); err != nil {
 		return "", err
 	}
 	return out.String(), nil
 }
 
-// RenderLogLine exposes the one "logline" template both the detail render and the SSE stream
-// render through, so a test can build its own expected markup rather than hand-copying it.
 func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
-	html, err := renderLogLine(e, anchor)
+	line := view.LineOf(e)
+	line.Anchor = anchor
+	html, err := renderLogLine(line)
 	return template.HTML(html), err
 }
 
-// ReadTestdata and WriteRunLog let logstream_test.go and detail_test.go, both package web_test,
-// share the one fixture-reading and fixture-writing helper logstream_internal_test.go defines.
 func ReadTestdata(name string) string              { return mustReadTestdata(name) }
 func WriteRunLog(t *testing.T, body string) string { return writeRunLog(t, body) }
 

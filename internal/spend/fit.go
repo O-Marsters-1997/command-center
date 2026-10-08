@@ -7,8 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// MinSamples is the fewest trailing samples a window needs before its factor is trusted; below
-// it, the gauge reads "calibrating" rather than a split nobody should act on yet.
+// MinSamples is the fewest trailing samples a window needs before its factor is trusted.
 const MinSamples = 5
 
 const (
@@ -16,15 +15,13 @@ const (
 	outlierZ       = 2.5
 )
 
-// Result is one window's fit: the least-squares factor and how many trailing samples fed it.
 type Result struct {
 	Factor  float64
 	Samples int
 }
 
-// Fit finds each window's least-squares-through-the-origin factor relating a sample's dollar
-// weight to its utilization rise, over samples ending within the trailing seven days of now, with
-// a second pass dropping any sample whose residual sits more than outlierZ standard deviations out.
+// Fit finds each window's least-squares-through-the-origin factor relating dollar weight to
+// utilization rise, over samples in the trailing seven days, dropping outliers on a second pass.
 func Fit(samples []Interval, now time.Time) map[agentlog.Window]Result {
 	cutoff := now.Add(-trailingWindow)
 	byWindow := make(map[agentlog.Window][]Interval)
@@ -78,7 +75,6 @@ func residual(s Interval, factor float64) float64 {
 	return (s.UtilizationEnd - s.UtilizationStart) - factor*s.WeightUSD
 }
 
-// leastSquares fits factor for y = factor*x through the origin: factor = sum(x*y)/sum(x*x).
 func leastSquares(samples []Interval) (float64, bool) {
 	var num, den float64
 	for _, s := range samples {

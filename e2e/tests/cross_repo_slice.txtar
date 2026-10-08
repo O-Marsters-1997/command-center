@@ -1,6 +1,6 @@
 # The cross-repo slice, end to end (issue #60): authorise both tickets, the producer runs and
 # opens its own pull request, the consumer runs and opens a draft one, its compat check goes red
-# (waiting_on_producer_deploy), the producer merges, re-check flips the compat check green, and
+# (waiting_on_producer_deploy), the producer merges, the compat check flips green, and
 # only then does the consumer un-draft and read review_me (docs/prds/prd-command-centre.md §
 # Phase 3). Two repos are needed for the same reason draft_gate.txtar needs them: a gating edge
 # is a cross-repo blocker one repo cannot express. DraftGate's two conditions -- the gating
@@ -70,14 +70,6 @@ exec cc tick --count 1
 exec cc request GET /
 stdout '>merged</span>'
 stdout '>waiting_on_producer_deploy</span>'
-! grep 'pr ready cc-1-x' $WORK/gh.log
-
-# re-check reruns the compat check's own Actions run, parsed out of its details URL (issue #56).
-exec cc request POST '/verb?verb=re-check&ticket=https://github.com/sandbox-org/repo/issues/CC-1'
-exec cc tick --count 1
-grep -count=1 'run rerun 4242' $WORK/gh.log
-exec cc request GET /events
-stdout 're_check_requested'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
 
 # The rerun comes back green: every required check has passed and the gating blocker is merged.

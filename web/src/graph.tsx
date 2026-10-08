@@ -21,9 +21,8 @@ interface GraphNode extends Row {
 
 type Edge = ReturnType<typeof edgesFor<GraphNode>>[number];
 
-// nodeCache keeps one object per URL across polls: <For> keys its children by object identity,
-// so mutating a cached node in place (rather than spreading a fresh one every layoutGroups call)
-// is what keeps a node button's own DOM -- and its keyboard focus -- stable across a 5s poll.
+// <For> keys children by object identity, so nodes are mutated in place to keep a node button's
+// DOM and keyboard focus stable across a poll.
 const nodeCache = new Map<string, GraphNode>();
 
 function toNode(row: Row, col: number, x: number, y: number): GraphNode {
@@ -54,8 +53,6 @@ customElement("cc-graph", {}, () => {
 
   async function load() {
     try {
-      // Carries the page's own scope (e.g. ?repo=X) so /graph.json answers the same groups the
-      // board renders (CONTEXT.md § Scope).
       const res = await fetch(`/graph.json${window.location.search}`);
       if (!res.ok) return;
       setGroups(await res.json());
@@ -105,8 +102,6 @@ customElement("cc-graph", {}, () => {
     setScale(1);
   }
 
-  // Pan and zoom are local signals only -- neither handler below ever calls fetch, which is the
-  // property this island exists to prove (docs/prds/prd-fleet-view.md § The graph).
   let dragging: { x: number; y: number; pan: { x: number; y: number } } | null = null;
   function onPointerDown(e: PointerEvent) {
     if ((e.target as HTMLElement).closest("[data-node]")) return;
@@ -122,8 +117,6 @@ customElement("cc-graph", {}, () => {
     dragging = null;
     viewport?.classList.replace("cursor-grabbing", "cursor-grab");
   }
-  // Zoom to cursor (nice to have): keep the content point under the pointer fixed while scale
-  // changes, by solving pan from the point's own before/after content-space coordinates.
   function onWheel(e: WheelEvent) {
     e.preventDefault();
     if (!viewport) return;

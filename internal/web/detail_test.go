@@ -19,8 +19,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// detailStore seeds one running ticket with a worktree, a live PR carrying two checks and a log
-// file on disk: every value issue #76 asks the fragment to carry, in one fixture.
 func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
@@ -75,15 +73,13 @@ func selPagePath(ticketURL string) string {
 	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
 }
 
-// TestDetailFragmentCarriesEveryRowFact covers issue #76 AC2: one fragment, the parsed log,
-// checks, base SHA, elapsed and worktree.
 func TestDetailFragmentCarriesEveryRowFact(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	logPath := writeLog(t, 120)
-	server := web.NewServer(detailStore(t, logPath, startedAt, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, startedAt, now), now)
 
 	rec := httptest.NewRecorder()
 	target := selPagePath("https://github.com/o/r/issues/76")
@@ -127,7 +123,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 
 	withRows := detailStore(t, writeLog(t, 1), now, now)
 	runID, err := withRows.InsertRunSkeleton(ctx, "https://github.com/o/r/issues/76", "agent", "basesha1234", "hash-1")
@@ -137,7 +133,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	metrics := agentlog.RunMetrics{
 		TokensIn: 100, TokensOut: 12, Settled: true,
 		Requests: []agentlog.Request{
-			{ID: "r1", Thread: agentlog.MainThread, Tool: "Bash",
+			{ID: "r1", Thread: agentlog.MainThread,
 				InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
 			{ID: "r2", Thread: agentlog.MainThread,
 				InputTokens: 40, CacheCreationTokens: 50, CacheReadTokens: 60, OutputTokens: 7},
@@ -148,7 +144,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	server := web.NewServer(withRows, fixedClock(now), nil, "")
+	server := newServer(withRows, now)
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
 	body := rec.Body.String()
 	if !strings.Contains(body, `class="context-curve`) {
@@ -160,7 +156,7 @@ func TestDetailShowsTheContextCurveOnlyForADisposedRunWithRows(t *testing.T) {
 
 	noRows := detailStore(t, writeLog(t, 1), now, now)
 	rec2 := httptest.NewRecorder()
-	server2 := web.NewServer(noRows, fixedClock(now), nil, "")
+	server2 := newServer(noRows, now)
 	server2.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
 	if strings.Contains(rec2.Body.String(), `class="context-curve`) {
 		t.Errorf("a run with no run_requests rows still rendered a context curve:\n%s", rec2.Body)
@@ -177,7 +173,7 @@ func TestDetailFragmentOffersFollowUpOnlyInTheDetailNotTheRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +219,7 @@ const goldenBoardSelected = "testdata/board_selected.golden.html"
 func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	server := web.NewServer(
 		detailStore(t, "testdata/fixtures/run.jsonl", startedAt, now), fixedClock(now), nil, "")
@@ -232,14 +228,37 @@ func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 	assertGolden(t, goldenBoardSelected, []byte(renderPath(t, server, target)))
 }
 
+func TestBoardGoldensARunLogAsASession(t *testing.T) {
+	t.Parallel()
+
+	startedAt := testNow
+	now := startedAt.Add(90 * time.Second)
+	server := web.NewServer(
+		detailStore(t, "testdata/fixtures/session.jsonl", startedAt, now), fixedClock(now), nil, "")
+
+	for _, tc := range []struct {
+		golden string
+		query  url.Values
+	}{
+		{"testdata/board_runlog.golden.html", url.Values{}},
+		{"testdata/board_runlog_phase.golden.html", url.Values{"phase": {"1"}}},
+	} {
+		t.Run(tc.golden, func(t *testing.T) {
+			t.Parallel()
+
+			tc.query.Set("sel", "https://github.com/o/r/issues/76")
+			assertGolden(t, tc.golden, []byte(renderPath(t, server, "/board?"+tc.query.Encode())))
+		})
+	}
+}
+
 func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://NOPE"), nil))
+	rec := get(t, server, selPagePath("sandbox://NOPE"))
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -251,11 +270,9 @@ func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 func TestTheDeletedDetailRouteIs404(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	// The issue's own route spelling and the pre-existing code's both 404, since either could
-	// still be bookmarked or linked.
 	for _, target := range []string{
 		"/ticket/" + url.PathEscape("sandbox://CC-1") + "/detail",
 		"/task/" + url.PathEscape("sandbox://CC-1") + "/detail",
@@ -271,12 +288,11 @@ func TestTheDeletedDetailRouteIs404(t *testing.T) {
 func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 	t.Parallel()
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
-	server := web.NewServer(detailStore(t, writeLog(t, 3), startedAt, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), startedAt, now), now)
 
-	board := httptest.NewRecorder()
-	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))
+	board := get(t, server, "/")
 	selected := httptest.NewRecorder()
 	server.ServeHTTP(selected, httptest.NewRequest(
 		http.MethodGet, selPagePath("https://github.com/o/r/issues/76"), nil))
@@ -294,11 +310,10 @@ func TestDetailIsTheSameDerivationAsTheBoardRow(t *testing.T) {
 func TestBoardLinksEveryRowToItsOwnSelection(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 
 	want := `hx-get="/board?` + url.Values{"sel": {"https://github.com/o/r/issues/76"}}.Encode() + `"`
@@ -307,16 +322,13 @@ func TestBoardLinksEveryRowToItsOwnSelection(t *testing.T) {
 	}
 }
 
-// TestHTMXIsServedFromTheBinary covers issue #76 AC1: vendored and local, so the page loads with
-// no network.
 func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/htmx.min.js", nil))
+	rec := get(t, server, "/assets/htmx.min.js")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/htmx.min.js = %d, want 200", rec.Code)
 	}
@@ -324,8 +336,7 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 		t.Error("/assets/htmx.min.js does not serve htmx")
 	}
 
-	page := httptest.NewRecorder()
-	server.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
+	page := get(t, server, "/")
 	body := page.Body.String()
 	if !strings.Contains(body, `<script src="/assets/htmx.min.js"></script>`) {
 		t.Errorf("page does not load htmx from the binary:\n%s", body)
@@ -338,11 +349,10 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 	body := rec.Body.String()
 
 	if strings.Contains(body, "http-equiv=\"refresh\"") {
@@ -361,7 +371,6 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	}
 }
 
-// tc.from/tc.to model a (previously selected, now selected) pair across a board swap.
 func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	t.Parallel()
 
@@ -375,7 +384,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +409,7 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 			body := rec.Body.String()
 
 			for _, url := range all {
-				id := detailIDFor(server, url)
+				id := detailIDFor(t, server, url)
 				if url == tc.to {
 					if !strings.Contains(body, id+`" hx-preserve="true"`) {
 						t.Errorf("no preserved detail row for the now-selected %s:\n%s", url, body)
@@ -422,10 +431,13 @@ func TestOnlyTheSelectedRowCarriesADetailRow(t *testing.T) {
 	}
 }
 
-func detailIDFor(server *web.Server, ticketURL string) string {
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticketURL), nil))
+func detailIDFor(t *testing.T, server *web.Server, ticketURL string) string {
+	t.Helper()
+	rec := get(t, server, selPagePath(ticketURL))
 	m := regexp.MustCompile(`<tr id="(detail-[0-9a-f]+)" hx-preserve="true">`).FindStringSubmatch(rec.Body.String())
+	if m == nil {
+		t.Fatalf("no detail row for %s", ticketURL)
+	}
 	return m[1]
 }
 
@@ -444,8 +456,8 @@ func detailRowID(t *testing.T, body string) string {
 func TestDetailRowsSurviveTheBoardSwap(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 	target := selPagePath("https://github.com/o/r/issues/76")
 
 	var id, stream string
@@ -494,18 +506,16 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	server := web.NewServer(store, fixedClock(now), []config.Repo{{Name: "repo"}}, "")
 
-	first := httptest.NewRecorder()
-	server.ServeHTTP(first, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://A"), nil))
+	first := get(t, server, selPagePath("sandbox://A"))
 	firstID := detailRowID(t, first.Body.String())
 
-	second := httptest.NewRecorder()
-	server.ServeHTTP(second, httptest.NewRequest(http.MethodGet, selPagePath("sandbox://B"), nil))
+	second := get(t, server, selPagePath("sandbox://B"))
 	body := second.Body.String()
 
 	if strings.Contains(body, firstID) {
@@ -516,16 +526,13 @@ func TestSelectingASecondRowRemovesTheFirstsDetail(t *testing.T) {
 	}
 }
 
-// TestDetailSpansEveryBoardColumn keeps the fragment's colspan honest against the board's own
-// header, which lives in the other template and nothing else compares them.
 func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(detailStore(t, writeLog(t, 1), now, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(detailStore(t, writeLog(t, 1), now, now), now)
 
-	board := httptest.NewRecorder()
-	server.ServeHTTP(board, httptest.NewRequest(http.MethodGet, "/", nil))
+	board := get(t, server, "/")
 	columns := strings.Count(board.Body.String(), "<th>")
 
 	selected := httptest.NewRecorder()
@@ -538,12 +545,8 @@ func TestDetailSpansEveryBoardColumn(t *testing.T) {
 	}
 }
 
-// hxAttrRE finds every htmx attribute in the rendered board, with the tag it sits on.
 var hxAttrRE = regexp.MustCompile(`<(\w+)([^>]*\shx-[\w:-]+=[^>]*)>`)
 
-// The launch checkbox and the row's own select control both carry hx-target="#board" as a
-// progressive enhancement over a plain checkbox and a plain (no-op without JS) button — neither
-// needs it to do its real job, so both are allowed here alongside the structural containers.
 func TestVerbsNeedNoJavaScript(t *testing.T) {
 	t.Parallel()
 
@@ -571,10 +574,8 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 		t.Errorf("a verb control carries htmx and so needs JavaScript: <%s%s>", tag, attrs)
 	}
 
-	// Every verb still reaches the server the way it did before htmx: a form the browser submits.
 	for _, want := range []string{
 		`<form method="post" action="/verb" hx-post=`,
-		`<form method="get" action="/confirm">`,
 		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket"`,
 	} {
@@ -582,7 +583,6 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 			t.Errorf("the board is missing the scriptless path %q", want)
 		}
 	}
-	// hx-post is allowed only where the form would still post on its own with JavaScript off.
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		attrs := m[2]
 		postsOnItsOwn := strings.Contains(attrs, `method="post" action="/verb"`) ||
@@ -597,14 +597,12 @@ func selLogPagePath(ticketURL, mode string) string {
 	return "/board?" + url.Values{"sel": {ticketURL}, "log": {mode}}.Encode()
 }
 
-// TestLogFilterIsAURLParameterActiveInItsOwnLink covers the four ?log= filters: each is a plain
-// query parameter, and the render marks its own button active.
 func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), now, now), now)
 
 	for _, mode := range []string{"all", "skills", "tools", "fails"} {
 		t.Run(mode, func(t *testing.T) {
@@ -622,18 +620,14 @@ func TestLogFilterIsAURLParameterActiveInItsOwnLink(t *testing.T) {
 	}
 }
 
-// TestLogFilterSurvivesABoardSwap covers the fragment's own hx-get: the poll that swaps #board
-// every five seconds must carry the current ?log= forward, or a filtered panel would revert to
-// "all" on the very next tick.
 func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, writeLog(t, 3), now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, writeLog(t, 3), now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selLogPagePath(ticket, "fails"), nil))
+	rec := get(t, server, selLogPagePath(ticket, "fails"))
 	body := rec.Body.String()
 
 	if !strings.Contains(body, `hx-get="/board?log=fails&amp;sel=`) {
@@ -641,41 +635,36 @@ func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	}
 }
 
-// TestJumpToFirstFailureIsAPlainAnchor covers the zero-JavaScript half of jump-to-first-failure:
-// a real <a href="#..."> against a real id, which a browser resolves with no script at all.
-func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
+func TestJumpToFirstFailureSelectsItsPhase(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := web.WriteRunLog(t, web.ReadTestdata("run_with_failure.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `<a href="#first-fail"`) || !strings.Contains(body, `>first failure</a>`) {
-		t.Errorf("no plain anchor jumps to the first failure:\n%s", body)
+	jump := `<a href="/?phase=0&amp;sel=` + url.QueryEscape(ticket) + `#first-fail" class="jump-first-fail ml-auto">` +
+		`1 check failed along the way</a>`
+	if !strings.Contains(body, jump) {
+		t.Errorf("no link jumps to the first failure's phase:\n%s", body)
 	}
 	if !strings.Contains(body, `id="first-fail"`) {
 		t.Errorf("no line carries the id the jump anchor targets:\n%s", body)
 	}
 }
 
-// TestDroppedKindsNeverReachTheRender covers system/rate_limit_event/thinking: agentlog already
-// refuses to parse them into an Event, and this asserts that refusal actually keeps their raw
-// text out of the page rather than merely out of some intermediate value.
 func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	logPath := web.WriteRunLog(t, web.ReadTestdata("dropped_kinds.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
-	server := web.NewServer(detailStore(t, logPath, now, now), fixedClock(now), nil, "")
+	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, selPagePath(ticket), nil))
+	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
 	for _, dropped := range []string{"deadbeef-session", "pondering-deeply"} {
@@ -694,8 +683,8 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, now), fixedClock(now), nil, "")
+	now := testNow
+	server := newServer(seededStore(t, now), now)
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
 		t.Errorf("default board does not poll every 5s:\n%s", got)
 	}
@@ -708,7 +697,6 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 
 func boardBody(t *testing.T, server *web.Server) string {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/board", nil))
+	rec := get(t, server, "/board")
 	return rec.Body.String()
 }

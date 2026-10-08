@@ -2,35 +2,25 @@ package loop_test
 
 import (
 	"flag"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
 	return renderPath(t, server, "/")
-}
-
-func renderBoard(t *testing.T, server *web.Server) string {
-	t.Helper()
-	return renderPath(t, server, "/board")
 }
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
@@ -65,26 +55,6 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	return ""
 }
 
-func rowTicket(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`<button type="button"[^>]*>([^<]*)</button>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no ticket link found for %s in row:\n%s", ticketURL, row)
-	}
-	return m[1]
-}
-
-func rowTask(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	m := regexp.MustCompile(`(?s)<div>(.*?)</div>`).FindStringSubmatch(row)
-	if m == nil {
-		t.Fatalf("no task title found for %s in row:\n%s", ticketURL, row)
-	}
-	return strings.TrimSpace(m[1])
-}
-
 var (
 	pillTextRE   = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
 	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)
@@ -115,46 +85,22 @@ func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
 }
 
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-
-	ticketURLs := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4"}
-	tickets := make([]storepkg.Ticket, len(ticketURLs))
-	for i, ticketURL := range ticketURLs {
-		branch := strings.TrimPrefix(ticketURL, "sandbox://")
-		tickets[i] = storepkg.Ticket{URL: ticketURL, Repo: "repo", Branch: strings.ToLower(branch)}
-	}
-	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, ticketURL := range ticketURLs {
-		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticketURL}))
-		if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-a", at); err != nil {
+	f := newLoopFixture(t,
+		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
+	for _, ticket := range f.Tickets {
+		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+		if err := f.Store.QueueLaunchIntent(t.Context(), ticket.URL, hash, "group-a", testAt); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("first RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 1 {
-		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(fake.Spawns))
+	f.Tick(t)
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(f.Fake.Spawns))
 	}
 
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var runningTicket string
-	for ticketURL, summary := range latest {
+	for ticketURL, summary := range f.Latest(t) {
 		if summary.Pgid != nil {
 			runningTicket = ticketURL
 		}
@@ -162,62 +108,45 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	if runningTicket == "" {
 		t.Fatal("no ticket recorded a run after tick 1")
 	}
-	runningPgid := *latest[runningTicket].Pgid
+	runningPgid := *f.Latest(t)[runningTicket].Pgid
 
 	var queuedSibling string
-	for _, ticketURL := range ticketURLs {
-		if ticketURL != runningTicket {
-			queuedSibling = ticketURL
+	for _, ticket := range f.Tickets {
+		if ticket.URL != runningTicket {
+			queuedSibling = ticket.URL
 			break
 		}
 	}
-	if err := store.QueueVerbIntent(t.Context(), queuedSibling, "cancel", at.Add(time.Second)); err != nil {
+	if err := f.Store.QueueVerbIntent(t.Context(), queuedSibling, "cancel", testAt.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
+	f.Tick(t)
 
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-
-	if len(fake.Spawns) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Errorf("spawns after tick 2 = %d, want still 1: launchEligible must start nothing from a cancelled launch",
-			len(fake.Spawns))
+			len(f.Fake.Spawns))
 	}
-	if len(fake.Canceled) != 0 {
-		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", fake.Canceled)
+	if len(f.Fake.Canceled) != 0 {
+		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", f.Fake.Canceled)
 	}
-	if !fake.Alive[runningPgid] {
+	if !f.Fake.Alive[runningPgid] {
 		t.Error("the running member's process was stopped; cancel must leave it running")
 	}
 
-	memberships, err := store.LaunchMemberships(t.Context())
+	memberships, err := f.Store.LaunchMemberships(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ticketURL := range ticketURLs {
-		if !memberships[ticketURL].Cancelled {
-			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticketURL)
+	for _, ticket := range f.Tickets {
+		if !memberships[ticket.URL].Cancelled {
+			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticket.URL)
 		}
 	}
-
-	server := web.NewServer(store, fixedClock(at.Add(2*time.Second)), cfg.Repos, "")
-	page := renderPage(t, server)
-	if state := rowState(t, page, runningTicket); state != "running" {
-		t.Errorf("running member's rendered state = %q, want running: a row that ever ran is never cancelled", state)
-	}
-	if state := rowState(t, page, queuedSibling); state != "cancelled" {
-		t.Errorf("queued sibling's rendered state = %q, want cancelled", state)
-	}
-
-	latestAfter, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if latestAfter[runningTicket].HasOutcome {
+	if f.Latest(t)[runningTicket].HasOutcome {
 		t.Error("the running member was disposed; cancel must not touch a live run")
 	}
 
-	events, err := store.Events(t.Context())
+	events, err := f.Store.Events(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,53 +164,18 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 }
 
-// TestLoopReconcilesATicketTheRepoScopeHides covers issue #219 AC6: the loop never reads a view
-// parameter, so a tick still authorises and spawns a ticket that a repo scope's own board would
-// never show.
 func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 2, []string{"true"})
-	cfg.Repos = append(cfg.Repos, config.Repo{Name: "other", Checkout: filepath.Join(root, "repo")})
-
-	store := openStore(t)
-	shown := storepkg.Ticket{URL: "sandbox://SHOWN", Repo: "repo", Branch: "shown"}
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{shown, hidden}); err != nil {
-		t.Fatal(err)
-	}
+	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
+	authoriseTicket(t, f.Store, hidden.URL, plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL})), testAt)
+	f.Tick(t)
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL}))
-	authoriseTicket(t, store, hidden.URL, hash, at)
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(fake.Spawns))
+			len(f.Fake.Spawns))
 	}
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := latest[hidden.URL]; !ok {
+	if _, ok := f.Latest(t)[hidden.URL]; !ok {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")
-	}
-
-	server := web.NewServer(store, fixedClock(at), cfg.Repos, "")
-	scoped := renderPath(t, server, "/?repo=repo")
-	if strings.Contains(scoped, ticketRef(hidden.URL)) {
-		t.Errorf("?repo=repo still rendered the hidden ticket, so it proves nothing about the loop's own scope:\n%s",
-			scoped)
-	}
-	if !strings.Contains(scoped, ticketRef(shown.URL)) {
-		t.Errorf("?repo=repo dropped its own ticket:\n%s", scoped)
 	}
 }
 
@@ -307,50 +201,6 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	}
 }
 
-// noRedirect defeats http.Client's default of following a 303.
-func noRedirect(srv *httptest.Server) *http.Client {
-	client := *srv.Client()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &client
-}
-
-func assertSeeOtherHome(t *testing.T, resp *http.Response) {
-	t.Helper()
-
-	if resp.StatusCode != http.StatusSeeOther {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
-	}
-	if got := resp.Header.Get("Location"); got != "/" {
-		t.Fatalf("Location = %q, want %q", got, "/")
-	}
-}
-
 func selPagePath(ticketURL string) string {
 	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
-}
-
-func boardFor(t *testing.T, st *storepkg.Store) string {
-	t.Helper()
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	return renderBoard(t, web.NewServer(st, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
-}
-
-func postVerb(t *testing.T, srv *httptest.Server, target string, headers map[string]string) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
 }

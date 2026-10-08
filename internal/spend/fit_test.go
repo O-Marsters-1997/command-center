@@ -9,10 +9,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
-// TestFitRecoversAKnownFactorThroughContamination covers CC-313's acceptance criterion: least
-// squares through the origin, fit over clean samples built from one known factor, recovers that
-// factor even once a handful of contaminated outliers -- spend with no matching utilization rise,
-// and the reverse -- are mixed in.
 func TestFitRecoversAKnownFactorThroughContamination(t *testing.T) {
 	t.Parallel()
 

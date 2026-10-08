@@ -1,15 +1,14 @@
 package tracker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
-// githubSource reads one GitHub repo's issues through the gh CLI, exactly as internal/gh does.
 type githubSource struct {
 	owner, repo string
 	run         func(ctx context.Context, args ...string) ([]byte, error)
@@ -66,29 +65,10 @@ func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, err
 	return decodeBlockedBy(out)
 }
 
-// IssueBody reads ticketURL's body. It needs no checkout: gh resolves a full issue URL on its
-// own.
-func IssueBody(ctx context.Context, ticketURL string) (string, error) {
-	out, err := runGH(ctx, "issue", "view", ticketURL, "--json", "body", "--jq", ".body")
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", args[0], err, bytes.TrimSpace(stderr.Bytes()))
-	}
-	return out, nil
+	return command.Output(ctx, "", "gh", args...)
 }
 
-// rawLabel mirrors gh label list's JSON exactly.
 type rawLabel struct {
 	Name string `json:"name"`
 }
@@ -107,7 +87,6 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 	return features, nil
 }
 
-// rawIssue mirrors gh issue list's JSON exactly.
 type rawIssue struct {
 	Number int        `json:"number"`
 	Title  string     `json:"title"`
@@ -124,8 +103,6 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 	return decoded, nil
 }
 
-// ticketStatus reads a ticket's status:* label for display; blocking order (blocked_by), not
-// this string, is what governs whether a ticket can launch.
 func ticketStatus(labels []rawLabel) string {
 	for _, label := range labels {
 		if status, ok := strings.CutPrefix(label.Name, "status:"); ok {
@@ -135,16 +112,11 @@ func ticketStatus(labels []rawLabel) string {
 	return ""
 }
 
-// rawDependency mirrors the fields this package reads from GitHub's
-// GET /repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by.
 type rawDependency struct {
 	HTMLURL string `json:"html_url"`
 	State   string `json:"state"`
 }
 
-// decodeBlockedBy drops a closed dependency: once its issue is gone, the tracker's own
-// --state open query stops returning it too, so keeping it here would only hand plan a
-// blocker it can never resolve (issue #235).
 func decodeBlockedBy(raw []byte) ([]string, error) {
 	var decoded []rawDependency
 	if err := json.Unmarshal(raw, &decoded); err != nil {

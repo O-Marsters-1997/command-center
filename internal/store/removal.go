@@ -5,9 +5,8 @@ import (
 	"fmt"
 )
 
-// RemovalRefusals returns each ticket's most recent remove-worktree refusal, keyed by ticket
-// URL -- the row's own removal warning. A successful removal withdraws the ticket, so a stale
-// refusal from before a fix can never outlive the row it warns about.
+// RemovalRefusals returns each ticket's most recent remove-worktree refusal, keyed by
+// ticket URL.
 func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) {
 	rows, err := s.q.LatestRemovalRefusals(ctx, EventRemoveWorktreeRefused)
 	if err != nil {

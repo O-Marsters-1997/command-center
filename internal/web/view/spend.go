@@ -8,22 +8,18 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// ponytail: one mutex over the whole map. Per-path locks if 25 rows ever becomes 250.
 type SpendCache struct {
-	mu sync.Mutex
-	by map[string]*spendEntry
+	mu      sync.Mutex
+	settled map[string]runSpend
 }
 
-type spendEntry struct {
-	acc     agentlog.Accumulator
-	tokens  int
-	usd     float64
-	settled bool
-	reads   int
+type runSpend struct {
+	tokens int
+	usd    float64
 }
 
 func NewSpendCache() *SpendCache {
-	return &SpendCache{by: make(map[string]*spendEntry)}
+	return &SpendCache{settled: make(map[string]runSpend)}
 }
 
 func (c *SpendCache) Spend(path string) (tokens int, usd float64, settled bool) {
@@ -34,21 +30,30 @@ func (c *SpendCache) Spend(path string) (tokens int, usd float64, settled bool) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry, ok := c.by[path]
-	if !ok {
-		entry = &spendEntry{}
-		c.by[path] = entry
-	}
-	if entry.settled {
-		return entry.tokens, entry.usd, true
+	if spent, ok := c.settled[path]; ok {
+		return spent.tokens, spent.usd, true
 	}
 
-	entry.reads++
-	if err := entry.acc.Advance(path); err != nil {
-		return entry.tokens, entry.usd, false
+	metrics, err := agentlog.ParseMetrics(path)
+	if err != nil {
+		return 0, 0, false
 	}
-	entry.tokens, entry.usd, entry.settled = entry.acc.Spend()
-	return entry.tokens, entry.usd, entry.settled
+	spent := spendOf(metrics)
+	if metrics.Settled {
+		c.settled[path] = spent
+	}
+	return spent.tokens, spent.usd, metrics.Settled
+}
+
+func spendOf(metrics agentlog.RunMetrics) runSpend {
+	var spent runSpend
+	for _, r := range metrics.Requests {
+		spent.tokens += int(r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens + r.OutputTokens)
+	}
+	if metrics.Settled && metrics.CostUSD != nil {
+		spent.usd = *metrics.CostUSD
+	}
+	return spent
 }
 
 func applySpend(rows []Row, cache *SpendCache) {

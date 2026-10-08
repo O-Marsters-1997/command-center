@@ -25,7 +25,6 @@ var update = flag.Bool("update", false, "regenerate golden files")
 const goldenShell = "testdata/shell.golden.html"
 const goldenBoard = "testdata/board.golden.html"
 
-// assertGolden compares got against the golden file at path, rewriting it under -update.
 func assertGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
 
@@ -43,7 +42,6 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	}
 }
 
-// noRedirect defeats http.Client's default of following a 303.
 func noRedirect(srv *httptest.Server) *http.Client {
 	client := *srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -75,7 +73,6 @@ func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	return runID
 }
 
-// seededRunning is seededStore with sandbox://CC-1 mid-run, the state that offers kill.
 func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -92,7 +89,6 @@ func seededRunning(t *testing.T) *storepkg.Store {
 	return store
 }
 
-// seededFailed is seededStore with sandbox://CC-1's run failed, the state that offers follow-up.
 func seededFailed(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -105,8 +101,6 @@ func seededFailed(t *testing.T) *storepkg.Store {
 	return store
 }
 
-// seededQueued is seededStore with sandbox://CC-1 authorised but not yet launched, the state
-// that offers cancel.
 func seededQueued(t *testing.T) *storepkg.Store {
 	t.Helper()
 
@@ -152,17 +146,14 @@ func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 func seededServer(t *testing.T) *web.Server {
 	t.Helper()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	observedAt := testNow
 	store := seededStore(t, observedAt)
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
 		t.Fatal(err)
 	}
-	return web.NewServer(store, fixedClock(observedAt.Add(45*time.Second)), nil, "")
+	return newServer(store, observedAt.Add(45*time.Second))
 }
 
-// TestServerRendersTheShellAroundTheBoard goldens the two fragments separately and pins the join
-// between them: GET / must nest the exact bytes GET /board serves, or the poll's swap would
-// redraw the board differently from the first paint.
 func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	t.Parallel()
 
@@ -188,8 +179,6 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 
 type swapPart struct{ name, html string }
 
-// splitBoardSwap carves GET /board into the table htmx swaps into its target and the two
-// out-of-band fragments riding along with it, so each can be pinned against the first paint.
 func splitBoardSwap(t *testing.T, swap string) []swapPart {
 	t.Helper()
 
@@ -205,9 +194,6 @@ func splitBoardSwap(t *testing.T, swap string) []swapPart {
 	}
 }
 
-// TestPageRendersTheParentsVerdictOnAStackedRow covers the last of issue #32's "what to build":
-// a red check on a descendant whose base moved may not be its own fault, so the row also renders
-// the base's own CI verdict alongside its own.
 func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	t.Parallel()
 
@@ -221,7 +207,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	const parentTip, childTip = "parent-tip", "child-tip"
@@ -275,7 +261,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	const tip = "ci-tip"
 	if err := store.RecordPush(ctx, ticket.URL, tip, "main", "main-tip", at); err != nil {
@@ -329,9 +315,6 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	}
 }
 
-// TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed covers inv. 12 wired end to
-// end through the repo's configured compat_check: a red compat check with every other required
-// check green renders the row as waiting_on_producer_deploy, not needs_you.
 func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testing.T) {
 	t.Parallel()
 
@@ -342,7 +325,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	dispositionAsPushed(t, store, "sandbox://CC-1", at)
 	const tip = "cc-1-tip"
 	if err := store.RecordPush(ctx, "sandbox://CC-1", tip, "main", "main-tip", at); err != nil {
@@ -378,9 +361,6 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
 		t.Fatalf("state = %q, want waiting_on_producer_deploy (only the compat check is red)", state)
 	}
-	if !strings.Contains(page, `value="re-check"`) {
-		t.Error("page has no re-check button for the waiting_on_producer_deploy row")
-	}
 	if !strings.Contains(page, `value="re-run"`) {
 		t.Error("page has no re-run button for the waiting_on_producer_deploy row")
 	}
@@ -391,8 +371,7 @@ func TestServerRejectsUnknownPaths(t *testing.T) {
 
 	server := web.NewServer(seededStore(t, time.Now()), realClock{}, nil, "")
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
+	rec := get(t, server, "/nope")
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
 	}
@@ -492,9 +471,6 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	assertSeeOtherHome(t, resp)
 }
 
-// TestGetPreviewIsGone covers phase 5 of docs/plans/feature-launch.md: the per-ticket preview page is
-// deleted along with handlePreview, so the route itself is unregistered rather than refusing a
-// bad request.
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
@@ -511,9 +487,6 @@ func TestGetPreviewIsGone(t *testing.T) {
 	}
 }
 
-// TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice proves issue #33's "no size limit anywhere
-// in the path": a fan-out is one root plus as many dependents as the plan calls for, and neither
-// /launch/candidates nor /launch may special-case a small slice.
 func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	t.Parallel()
 
@@ -571,8 +544,6 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 }
 
-// runningRowStore seeds one ticket with a live agent run, the state both a pgid/elapsed row and a
-// queued-verb row are read against.
 func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.Time) *storepkg.Store {
 	t.Helper()
 
@@ -599,13 +570,12 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	t.Parallel()
 
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	server := newServer(store, now)
+	rec := get(t, server, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -620,8 +590,6 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	}
 }
 
-// TestLaunchStoresTheComposedHash covers issue #52's AC1 at the authorisation route:
-// launch_members.prompt_hash stores plan.Hash of the composed prompt.
 func TestLaunchStoresTheComposedHash(t *testing.T) {
 	t.Parallel()
 
@@ -666,11 +634,10 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	t.Parallel()
 
-	observedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	server := web.NewServer(seededStore(t, observedAt), fixedClock(observedAt), nil, "")
+	observedAt := testNow
+	server := newServer(seededStore(t, observedAt), observedAt)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	rec := get(t, server, "/")
 
 	body := rec.Body.String()
 	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
@@ -701,16 +668,15 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	}
 }
 
-// TestPageShowsQueuedVerbsBesideTheState covers issue #71.
 func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	now := startedAt.Add(90 * time.Second)
 	store := runningRowStore(t, ticket, startedAt, now)
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
 		t.Fatal(err)
@@ -724,10 +690,10 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
 	}
 
-	if err := store.QueueVerbIntent(ctx, ticket.URL, "close-pr", now.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · close-pr queued" {
+	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · follow-up queued" {
 		t.Errorf("state = %q, want both queued verbs", got)
 	}
 
@@ -739,7 +705,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = renderPage(t, server)
-	if got := rowState(t, page, ticket.URL); got != "running · close-pr queued" {
+	if got := rowState(t, page, ticket.URL); got != "running · follow-up queued" {
 		t.Errorf("state = %q, want the consumed kill gone", got)
 	}
 	if !strings.Contains(page, killButton) {
@@ -747,17 +713,16 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	}
 }
 
-// TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt covers issue #71's launch window.
 func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	now := testNow
 	store := seededStore(t, now)
 	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", now); err != nil {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, fixedClock(now), nil, "")
+	server := newServer(store, now)
 	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
 		t.Errorf("state = %q, want %q", got, "ready · launch queued")
 	}
@@ -770,9 +735,6 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	}
 }
 
-// TestLaunchRefusesASubmittedHashThatNoLongerComposes covers issue #73's AC2: a submitted hash
-// that is not what the ticket composes to now is caught at /launch, and the whole slice is refused
-// — including the ticket whose hash still matched.
 func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	t.Parallel()
 
@@ -824,9 +786,6 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	}
 }
 
-// TestLaunchIgnoresTheHashOfAnUncheckedRow covers what a browser actually posts when the operator
-// unchecks a row: the hidden hash still travels, its checkbox does not, and the tickets that are
-// checked still launch on their own hashes.
 func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	t.Parallel()
 
@@ -857,8 +816,6 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	}
 }
 
-// TestLaunchRejectsAMalformedHashField covers a hash field that names no ticket: it is refused
-// rather than read as a hash that matches nothing.
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 

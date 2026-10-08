@@ -2,7 +2,6 @@ package agentlog
 
 import "strings"
 
-// price is one model tier's published per-token API rate, in dollars per token.
 type price struct {
 	input, output, cacheRead, cacheCreate float64
 }
@@ -17,8 +16,6 @@ var prices = map[string]price{
 	"haiku":  {input: 1.28e-6, output: 6.40e-6, cacheRead: 0.128e-6, cacheCreate: 2.56e-6},
 }
 
-// defaultTier is the rate an unrecognized model falls back to, so an unpriced future model still
-// counts for something rather than silently dropping out of the fit.
 const defaultTier = "sonnet"
 
 func priceFor(model string) price {
