@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -15,6 +17,9 @@ import (
 // ValidateFunc settles one tracked repo into ready or refused. An error means the answer is not
 // known yet (gh unreachable), so the repo keeps its state and is tried again.
 type ValidateFunc func(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error)
+
+// RemoteFunc finds the clone URL of the GitHub repo named owner/name.
+type RemoteFunc func(ctx context.Context, fullName string) (string, error)
 
 // ValidateRepo checks repo on GitHub, ensures its checkout and reads its settings, ending ready
 // with the settings read or refused with the kind that stopped it. The GitHub check runs first, so
@@ -83,4 +88,32 @@ func (l *Loop) recordTickError(ctx context.Context, message string) error {
 		return nil
 	}
 	return l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message})
+}
+
+// applyTrackIntents puts each tracked repo into cloning, so the validation that follows in the
+// same tick settles it. A ready repo is left alone; a refused one is validated afresh. A repo
+// whose remote GitHub will not give is refused for Track again.
+func (l *Loop) applyTrackIntents(ctx context.Context) error {
+	return l.eachIntent(ctx, store.TrackVerb, func(intent store.VerbIntent) error {
+		repos, err := l.store.Repos(ctx)
+		if err != nil {
+			return err
+		}
+		repo := store.Repo{Name: intent.TicketID, TrackedAt: l.clock.Now()}
+		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
+			if repos[i].State == store.RepoReady {
+				return nil
+			}
+			repo = repos[i]
+		}
+		if repo.Remote == "" {
+			remote, err := l.remoteOf(ctx, repo.Name)
+			if err != nil {
+				return l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error()))
+			}
+			repo.Remote = remote
+		}
+		repo.State, repo.RefusalKind, repo.Refusal = store.RepoCloning, "", ""
+		return l.store.UpsertRepo(ctx, repo)
+	})
 }

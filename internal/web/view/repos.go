@@ -54,17 +54,20 @@ type RepoPage struct {
 	Remote          string
 	BoardPath       string
 	Known           bool
+	Ready           bool
+	Banner          Banner
 	Features        []FeatureRow
 	LastImportError *ImportError
 }
 
-func repoPath(fullName string) string {
+// RepoPath is the scoped repos page for fullName.
+func RepoPath(fullName string) string {
 	q := url.Values{"repo": {fullName}}.Encode()
 	return "/features?" + strings.ReplaceAll(q, "%2F", "/")
 }
 
 func trackedRow(r store.Repo) RepoRow {
-	return RepoRow{FullName: r.Name, Tracked: true, Path: repoPath(r.Name)}
+	return RepoRow{FullName: r.Name, Tracked: true, Path: RepoPath(r.Name)}
 }
 
 func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
@@ -136,7 +139,7 @@ func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.Re
 		if !strings.Contains(strings.ToLower(p.FullName), q) || tracks(tracked, p) {
 			continue
 		}
-		row := RepoRow{FullName: p.FullName, Path: repoPath(p.FullName)}
+		row := RepoRow{FullName: p.FullName, Path: RepoPath(p.FullName)}
 		if p.DefaultBranch != plan.DefaultBaseBranch {
 			row.RefusedBranch = p.DefaultBranch
 		}
@@ -160,8 +163,11 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 		return RepoPage{}, err
 	}
 	chrome.Section = "repos"
-	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, repoPath(scope)
+	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
+	if page.Banner, err = r.Banner(ctx, scope); err != nil {
+		return RepoPage{}, err
+	}
 
 	repo, known, err := r.KnownRepo(ctx, scope)
 	if err != nil || !known {
@@ -190,10 +196,11 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 	}
 
 	page.Title = repo.Name
-	page.RepoCrumb, page.RepoCrumbPath = page.Title, repoPath(page.Title)
+	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
 	page.Remote = repo.Remote
 	page.BoardPath = Params{Repo: repo.Name}.pagePath()
 	page.Known = true
+	page.Ready = repo.State == store.RepoReady
 	for _, f := range offered {
 		page.Features = append(page.Features, FeatureRow{Feature: f, Imported: imported[f], OtherRepos: others[f]})
 	}

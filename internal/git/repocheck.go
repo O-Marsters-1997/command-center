@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -44,4 +45,17 @@ func assertRepoSettings(fullName string, raw []byte) (kind, reason string, err e
 			"then Track again.", settings.DefaultBranch, plan.DefaultBaseBranch), nil
 	}
 	return "", "", nil
+}
+
+// RepoRemote reads fullName's SSH clone URL from GitHub.
+func RepoRemote(ctx context.Context, fullName string) (string, error) {
+	out, err := command.Output(ctx, "", "gh", "api", "repos/"+fullName, "--jq", ".ssh_url")
+	if err != nil {
+		return "", fmt.Errorf("remote of %s: %w", fullName, err)
+	}
+	remote := strings.TrimSpace(string(out))
+	if remote == "" {
+		return "", fmt.Errorf("remote of %s: GitHub returned no ssh_url", fullName)
+	}
+	return remote, nil
 }

@@ -208,7 +208,7 @@ func (r *Reader) buildChrome(
 		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
 	}
 	if params.Repo != "" {
-		c.RepoCrumbPath = repoPath(params.Repo)
+		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	if params.Feature != "" {
 		c.FeatureImportPath = params.featureImportPath()

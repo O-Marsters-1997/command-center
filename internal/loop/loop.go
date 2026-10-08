@@ -42,6 +42,7 @@ type Loop struct {
 	forge      gh.Forge
 	worktrees  git.Worktrees
 	validate   ValidateFunc
+	remoteOf   RemoteFunc
 	runner     runner.Runner
 	cfg        config.Config
 	ws         config.Workspace
@@ -60,6 +61,7 @@ func NewLoop(
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
 		validate:   ValidateRepo,
+		remoteOf:   git.RepoRemote,
 		trackerFor: tracker.New,
 		nudgeCh:    make(chan struct{}, 1),
 	}
@@ -129,6 +131,10 @@ func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
 // settle a cloning repo without GitHub.
 func (l *Loop) SetValidator(validate ValidateFunc) { l.validate = validate }
 
+// SetRemoteSource replaces the gh-backed remote lookup Track makes, so a test can track a repo
+// without GitHub.
+func (l *Loop) SetRemoteSource(remoteOf RemoteFunc) { l.remoteOf = remoteOf }
+
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
 func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resolve }
@@ -139,6 +145,9 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 func (l *Loop) RunOnce(ctx context.Context) error {
 	l.sweepExpiredSessions(ctx)
 
+	if err := l.applyTrackIntents(ctx); err != nil {
+		return err
+	}
 	if err := l.validateCloningRepos(ctx); err != nil {
 		return err
 	}

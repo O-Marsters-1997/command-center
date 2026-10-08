@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ var templates = template.Must(template.New("").
 		"percent":      view.PercentOf,
 		"raw":          func(s string) template.HTML { return template.HTML(s) },
 		"pathEscape":   url.PathEscape,
+		"queryEscape":  url.QueryEscape,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
 
@@ -124,6 +126,8 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
 	mux.Handle("GET /features", handler(s.handleFeatures))
 	mux.Handle("GET /features/search", handler(s.handleRepoSearch))
+	mux.Handle("GET /features/banner", handler(s.handleBanner))
+	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
 	mux.Handle("GET /launch/candidates", handler(s.handleCandidates))
@@ -470,7 +474,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var offered []string
-	if known {
+	if known && repo.State == store.RepoReady {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
 			return err
@@ -484,6 +488,42 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return renderHTML(w, "repo.tmpl", page)
+}
+
+func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
+	banner, err := s.view.Banner(r.Context(), r.URL.Query().Get("repo"))
+	if err != nil {
+		return err
+	}
+	if seen := r.URL.Query().Get("seen"); seen != "" && seen != banner.State {
+		w.Header().Set("HX-Refresh", "true")
+	}
+	return renderHTML(w, "repoBanner", banner)
+}
+
+var repoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
+	repo := strings.TrimSpace(r.FormValue("repo"))
+	if !repoName.MatchString(repo) {
+		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	}
+	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
+	if err != nil {
+		return err
+	}
+	if queued {
+		s.nudge()
+	}
+	if r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, view.RepoPath(repo), http.StatusSeeOther)
+		return nil
+	}
+	banner, err := s.view.Banner(r.Context(), repo)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "repoBanner", banner)
 }
 
 func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error {
