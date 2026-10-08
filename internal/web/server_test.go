@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -197,7 +196,7 @@ func splitBoardSwap(t *testing.T, swap string) []swapPart {
 func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	store := openStore(t)
 	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
@@ -255,7 +254,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
@@ -320,7 +319,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
@@ -409,6 +408,7 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req, err := http.NewRequest(tt.method, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
 			if err != nil {
 				t.Fatal(err)

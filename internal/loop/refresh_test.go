@@ -55,7 +55,7 @@ type stackedFixture struct {
 
 func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at time.Time) stackedFixture {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parentWorktree := cutWorktree(t, repoPath, "parent")
 	commitFile(t, parentWorktree, "parent.txt", "parent's original work\n")
@@ -407,8 +407,8 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
 	)
-	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := git.MidMerge(context.Background(), f.childWorktree)
+	observe := func(ctx context.Context) (plan.Observation, error) {
+		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -473,8 +473,8 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
-	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := git.MidMerge(context.Background(), f.childWorktree)
+	observe := func(ctx context.Context) (plan.Observation, error) {
+		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
@@ -537,8 +537,8 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
-	observe := func(context.Context) (plan.Observation, error) {
-		mid, err := git.MidMerge(context.Background(), f.childWorktree)
+	observe := func(ctx context.Context) (plan.Observation, error) {
+		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}

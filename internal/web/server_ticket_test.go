@@ -189,6 +189,7 @@ func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket?"+tt.query, nil)
 			if err != nil {
 				t.Fatal(err)
