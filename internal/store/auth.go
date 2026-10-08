@@ -34,6 +34,18 @@ func (s *Store) UserForLogin(ctx context.Context, email string) (ccdb.UserForLog
 	return row, nil
 }
 
+// ClaimLoginAttempt atomically admits one password check for the user: it reports false, changing
+// nothing, while the user's backoff window is open. Otherwise it counts the attempt as a failure
+// and holds further attempts off until now plus 2^n seconds, n being the new count, capped at 60.
+// A successful login clears the count through IssueSession.
+func (s *Store) ClaimLoginAttempt(ctx context.Context, userID int64, now time.Time) (bool, error) {
+	n, err := s.q.ClaimLoginAttempt(ctx, ccdb.ClaimLoginAttemptParams{ID: userID, Now: now.UTC()})
+	if err != nil {
+		return false, fmt.Errorf("claim login attempt for user %d: %w", userID, err)
+	}
+	return n == 1, nil
+}
+
 // DeleteExpiredSessions deletes every session whose expiry is at or before now, and returns how
 // many rows that was.
 func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64, error) {
@@ -44,7 +56,8 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) (int64
 	return deleted, nil
 }
 
-// SetPassword replaces email's password hash and deletes every session for that account.
+// SetPassword replaces email's password hash, deletes every session for that account and clears
+// its login backoff.
 func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -67,6 +80,9 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions for %s: %w", email, err)
 	}
+	if err = qtx.ResetLoginFailures(ctx, userID); err != nil {
+		return fmt.Errorf("reset login failures for %s: %w", email, err)
+	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
@@ -74,7 +90,7 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 }
 
 // IssueSession replaces every session the user holds with one row for tokenSHA, so a token
-// captured before a login is dead after it.
+// captured before a login is dead after it, and clears the user's login backoff.
 func (s *Store) IssueSession(ctx context.Context, userID int64, tokenSHA string, at, expiresAt time.Time) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -89,6 +105,9 @@ func (s *Store) IssueSession(ctx context.Context, userID int64, tokenSHA string,
 	qtx := s.q.WithTx(tx)
 	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
 		return fmt.Errorf("delete sessions for user %d: %w", userID, err)
+	}
+	if err = qtx.ResetLoginFailures(ctx, userID); err != nil {
+		return fmt.Errorf("reset login failures for user %d: %w", userID, err)
 	}
 	err = qtx.IssueSession(ctx, ccdb.IssueSessionParams{
 		UserID:    userID,

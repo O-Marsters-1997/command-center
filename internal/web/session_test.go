@@ -203,3 +203,73 @@ func TestSessionGate(t *testing.T) {
 		})
 	}
 }
+
+func TestFailuresBackOffTwoToTheNSecondsCappedAtSixty(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	seedUser(t, st)
+	now := testNow
+	for n, want := range []time.Duration{2, 4, 8, 16, 32, 60, 60} {
+		postLogin(t, newServer(st, now), "me@example.com", "nope")
+		user, err := st.UserForLogin(t.Context(), "me@example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if user.FailedCount != int32(n+1) {
+			t.Errorf("failed_count = %d, want %d", user.FailedCount, n+1)
+		}
+		if got := user.NextAttemptAt.Time.Sub(now); got != want*time.Second {
+			t.Errorf("failure %d backs off %v, want %v", n+1, got, want*time.Second)
+		}
+		now = user.NextAttemptAt.Time
+	}
+}
+
+func TestAttemptBeforeNextAttemptIsRefusedWithoutTheKDF(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	seedUser(t, st)
+	wrong := postLogin(t, newServer(st, testNow), "me@example.com", "nope")
+
+	early := newServer(st, testNow.Add(time.Second))
+	early.SetVerifyPassword(func(string, string) bool {
+		t.Error("KDF ran for an attempt inside the backoff window")
+		return true
+	})
+	refused := postLogin(t, early, "me@example.com", loginPassword)
+
+	if refused.Code != wrong.Code || refused.Body.String() != wrong.Body.String() {
+		t.Errorf("refused response differs from a wrong password:\n%d %s\n---\n%d %s",
+			refused.Code, refused.Body, wrong.Code, wrong.Body)
+	}
+	if len(refused.Result().Cookies()) != 0 {
+		t.Error("a refused attempt set a cookie")
+	}
+	user, err := st.UserForLogin(t.Context(), "me@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.FailedCount != 1 {
+		t.Errorf("failed_count = %d after a refused attempt, want 1", user.FailedCount)
+	}
+}
+
+func TestSuccessfulLoginResetsBackoff(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	seedUser(t, st)
+	postLogin(t, newServer(st, testNow), "me@example.com", "nope")
+	later := testNow.Add(2 * time.Second)
+	sessionCookie(t, postLogin(t, newServer(st, later), "me@example.com", loginPassword))
+
+	user, err := st.UserForLogin(t.Context(), "me@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.FailedCount != 0 || user.NextAttemptAt.Valid {
+		t.Errorf("after success failed_count = %d, next_attempt_at valid = %v", user.FailedCount, user.NextAttemptAt.Valid)
+	}
+}

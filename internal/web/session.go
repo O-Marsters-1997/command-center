@@ -79,6 +79,11 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, _ *http.Request) error {
 	return renderHTML(w, "login.tmpl", loginView{})
 }
 
+func loginFailed(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", "no-store")
+	return renderHTMLStatus(w, http.StatusUnauthorized, "login.tmpl", loginView{Failed: true})
+}
+
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if err := r.ParseForm(); err != nil {
 		return withStatus(http.StatusBadRequest, err)
@@ -92,21 +97,29 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if err != nil && !missing {
 		return err
 	}
+	now := s.clock.Now()
+	if !missing {
+		admitted, err := s.store.ClaimLoginAttempt(ctx, user.ID, now)
+		if err != nil {
+			return err
+		}
+		if !admitted {
+			return loginFailed(w)
+		}
+	}
 	encoded := user.PasswordHash
 	if missing {
 		encoded = dummyPasswordHash()
 	}
 	ok := s.verifyPassword(password, encoded)
 	if missing || !ok {
-		w.Header().Set("Cache-Control", "no-store")
-		return renderHTMLStatus(w, http.StatusUnauthorized, "login.tmpl", loginView{Failed: true})
+		return loginFailed(w)
 	}
 
 	token, err := auth.NewSessionToken()
 	if err != nil {
 		return err
 	}
-	now := s.clock.Now()
 	expires := now.Add(sessionTTL)
 	if err := s.store.IssueSession(ctx, user.ID, auth.HashToken(token), now, expires); err != nil {
 		return err
