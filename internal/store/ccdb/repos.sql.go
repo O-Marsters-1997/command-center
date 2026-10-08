@@ -63,14 +63,17 @@ func (q *Queries) Repos(ctx context.Context) ([]Repo, error) {
 }
 
 const setRepoState = `-- name: SetRepoState :exec
-UPDATE repos SET state = $2, refusal_kind = $3, refusal = $4 WHERE name = $1
+UPDATE repos SET state = $2, refusal_kind = $3, refusal = $4, settings_source = $5, settings_read_at = $6
+WHERE name = $1
 `
 
 type SetRepoStateParams struct {
-	Name        string
-	State       string
-	RefusalKind sql.NullString
-	Refusal     sql.NullString
+	Name           string
+	State          string
+	RefusalKind    sql.NullString
+	Refusal        sql.NullString
+	SettingsSource sql.NullString
+	SettingsReadAt sql.NullTime
 }
 
 func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) error {
@@ -79,6 +82,8 @@ func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) erro
 		arg.State,
 		arg.RefusalKind,
 		arg.Refusal,
+		arg.SettingsSource,
+		arg.SettingsReadAt,
 	)
 	return err
 }

@@ -2,7 +2,6 @@ package app_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,7 +30,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
-	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -68,13 +67,13 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := app.New(ctx, configPath, stubSquashOnly)
+	first, err := app.New(ctx, configPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
 
-	if _, err := app.New(ctx, configPath, stubSquashOnly); err == nil {
+	if _, err := app.New(ctx, configPath); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
@@ -131,64 +130,6 @@ func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	}
 }
 
-// stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out
-// to: none of their fixture repos are real git checkouts with a GitHub remote.
-var stubSquashOnly = app.WithRepoCheck(func(context.Context, string, []store.Repo) error { return nil })
-
-func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
-	configPath := appConfig(t)
-
-	notSquashOnly := app.WithRepoCheck(func(_ context.Context, _ string, repos []store.Repo) error {
-		return fmt.Errorf("repo %s allows merge commits (allow_merge_commit=true): "+
-			"command-centre requires squash-only merges, refusing to start", repos[0].Name)
-	})
-
-	_, err := app.New(t.Context(), configPath, notSquashOnly)
-	if err == nil {
-		t.Fatal("New started despite a repo that allows merge commits")
-	}
-	if !strings.Contains(err.Error(), sandboxRepo) || !strings.Contains(err.Error(), "allow_merge_commit") {
-		t.Errorf("error %q does not name the offending repo and setting", err)
-	}
-}
-
-func TestNewClonesATrackedRepoIntoAnEmptyDataDir(t *testing.T) {
-	dataDir := t.TempDir()
-	t.Setenv("CC_DATA_DIR", dataDir)
-	dsn := cctest.DSN(t)
-	t.Setenv("CC_DATABASE_URL", dsn)
-
-	root, _ := repoWithOrigin(t)
-	seed(t, dsn, func(db *store.Store) error {
-		return db.UpsertRepo(t.Context(), store.Repo{
-			Name: sandboxRepo, Remote: filepath.Join(root, "remote.git"), State: store.RepoReady, TrackedAt: time.Now(),
-		})
-	})
-
-	configPath := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	inst, err := app.New(t.Context(), configPath, app.WithObserver(stub), stubSquashOnly)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	t.Cleanup(func() { _ = inst.Close() })
-
-	checkout := config.CheckoutPath(dataDir, sandboxRepo)
-	if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
-		t.Fatalf("startup did not clone into %s: %v", checkout, err)
-	}
-
-	rec := httptest.NewRecorder()
-	inst.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
-	}
-}
-
 // TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main calls log.Fatalf on any
 // non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
 // exit status 1.
@@ -197,7 +138,7 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	inst, err := app.New(ctx, configPath, app.WithObserver(stub), stubSquashOnly)
+	inst, err := app.New(ctx, configPath, app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -223,3 +164,22 @@ func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
+
+func TestNewStartsWithNoTrackedRepos(t *testing.T) {
+	t.Setenv("CC_DATA_DIR", t.TempDir())
+	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inst, err := app.New(t.Context(), configPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = inst.Close() })
+
+	if err := inst.RunOnce(t.Context()); err != nil {
+		t.Errorf("RunOnce with no repos = %v, want nil", err)
+	}
+}

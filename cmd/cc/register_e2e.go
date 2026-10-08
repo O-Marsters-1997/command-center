@@ -14,5 +14,5 @@ func subcmd(args []string) func(ctx context.Context, configPath string) error {
 }
 
 func init() {
-	runOptions = []app.Option{app.WithCheckout(register.SandboxCheckout)}
+	runOptions = []app.Option{app.WithValidator(register.SandboxValidate)}
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func readRepoSettingsFixture(t *testing.T, name string) []byte {
@@ -16,40 +18,46 @@ func readRepoSettingsFixture(t *testing.T, name string) []byte {
 	return raw
 }
 
-func TestAssertSquashOnly(t *testing.T) {
+func TestAssertRepoSettings(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		fixture string
-		wantErr string // substring, "" means no error
+		name       string
+		fixture    string
+		wantKind   string
+		wantReason string
 	}{
-		{name: "squash only passes", fixture: "squash_only.json", wantErr: ""},
-		{name: "allows merge commit refuses", fixture: "allows_merge_commit.json", wantErr: "allow_merge_commit"},
-		{name: "allows rebase merge refuses", fixture: "allows_rebase_merge.json", wantErr: "allow_rebase_merge"},
-		{name: "malformed json refuses fail-closed", fixture: "malformed_repo_settings.json", wantErr: "decode"},
+		{name: "squash only on main passes", fixture: "squash_only.json"},
+		{name: "merge commits refuse", fixture: "allows_merge_commit.json",
+			wantKind: plan.RefusalMergeSettings, wantReason: "allow_merge_commit"},
+		{name: "rebase merges refuse", fixture: "allows_rebase_merge.json",
+			wantKind: plan.RefusalMergeSettings, wantReason: "allow_rebase_merge"},
+		{name: "a master default refuses with the rename hint", fixture: "master_default.json",
+			wantKind: plan.RefusalDefaultBranch, wantReason: "default branch is `master`, not `main`; rename it on GitHub, then Track again."},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := assertSquashOnly("cc-sandbox", readRepoSettingsFixture(t, tt.fixture))
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("assertSquashOnly: %v, want no error", err)
-				}
-				return
+			kind, reason, err := assertRepoSettings("acme/cc", readRepoSettingsFixture(t, tt.fixture))
+			if err != nil {
+				t.Fatalf("assertRepoSettings: %v", err)
 			}
-			if err == nil {
-				t.Fatalf("assertSquashOnly: want error containing %q, got nil", tt.wantErr)
+			if kind != tt.wantKind {
+				t.Errorf("kind = %q, want %q", kind, tt.wantKind)
 			}
-			if !strings.Contains(err.Error(), "cc-sandbox") {
-				t.Errorf("error %q does not name the offending repo", err)
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("error %q does not contain %q", err, tt.wantErr)
+			if !strings.Contains(reason, tt.wantReason) {
+				t.Errorf("reason %q does not contain %q", reason, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestAssertRepoSettingsFailsClosedOnMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	if _, _, err := assertRepoSettings("acme/cc", readRepoSettingsFixture(t, "malformed_repo_settings.json")); err == nil {
+		t.Error("assertRepoSettings(malformed) = nil error, want one")
 	}
 }

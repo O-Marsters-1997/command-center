@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,8 +14,6 @@ import (
 
 const legacyConfig = "port = 0\n[[repo]]\nname = \"command-center\"\n" +
 	"remote = \"git@github.com:O-Marsters-1997/command-center.git\"\n"
-
-var skipCheckout = app.WithCheckout(func(context.Context, string, []store.Repo) error { return nil })
 
 func TestFirstBootImportsRepoBlocksAndASecondBootRefusesThem(t *testing.T) {
 	dataDir := t.TempDir()
@@ -41,7 +38,7 @@ func TestFirstBootImportsRepoBlocksAndASecondBootRefusesThem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+	first, err := app.New(t.Context(), configPath)
 	if err != nil {
 		t.Fatalf("first boot: %v", err)
 	}
@@ -55,8 +52,8 @@ func TestFirstBootImportsRepoBlocksAndASecondBootRefusesThem(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if len(repos) != 1 || repos[0].Name != fullName || repos[0].State != store.RepoReady {
-			t.Errorf("repos after first boot = %+v, want one ready %s", repos, fullName)
+		if len(repos) != 1 || repos[0].Name != fullName || repos[0].State != store.RepoCloning {
+			t.Errorf("repos after first boot = %+v, want one cloning %s", repos, fullName)
 		}
 		tickets, err := db.Tickets(t.Context())
 		if err != nil {
@@ -79,7 +76,7 @@ func TestFirstBootImportsRepoBlocksAndASecondBootRefusesThem(t *testing.T) {
 		t.Errorf("the old checkout path no longer resolves: %v", err)
 	}
 
-	_, err = app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+	_, err = app.New(t.Context(), configPath)
 	if err == nil || !strings.Contains(err.Error(), "still has [[repo]] blocks") {
 		t.Errorf("second boot with [[repo]] = %v, want a refusal telling the operator to delete them", err)
 	}
@@ -111,7 +108,7 @@ func TestFirstBootRefusesAnImportItCannotLayOut(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err := app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+			_, err := app.New(t.Context(), configPath)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("New = %v, want an error containing %q", err, tt.want)
 			}
@@ -133,7 +130,7 @@ func TestFirstBootRelinksACheckoutAnEarlierAttemptAlreadyMoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inst, err := app.New(t.Context(), configPath, skipCheckout, stubSquashOnly)
+	inst, err := app.New(t.Context(), configPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

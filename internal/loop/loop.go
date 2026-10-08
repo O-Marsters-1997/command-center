@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,6 +41,7 @@ type Loop struct {
 	clock      Clock
 	forge      gh.Forge
 	worktrees  git.Worktrees
+	validate   ValidateFunc
 	runner     runner.Runner
 	cfg        config.Config
 	ws         config.Workspace
@@ -59,6 +59,7 @@ func NewLoop(
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
+		validate:   ValidateRepo,
 		trackerFor: tracker.New,
 		nudgeCh:    make(chan struct{}, 1),
 	}
@@ -124,6 +125,10 @@ func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
 // without the tp binary.
 func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
 
+// SetValidator replaces the gh- and git-backed repo validation, so a test or the e2e build can
+// settle a cloning repo without GitHub.
+func (l *Loop) SetValidator(validate ValidateFunc) { l.validate = validate }
+
 // SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
 // fake source rather than shelling out to gh.
 func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resolve }
@@ -134,6 +139,9 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 func (l *Loop) RunOnce(ctx context.Context) error {
 	l.sweepExpiredSessions(ctx)
 
+	if err := l.validateCloningRepos(ctx); err != nil {
+		return err
+	}
 	if err := l.applyImportIntents(ctx); err != nil {
 		return err
 	}
@@ -161,18 +169,23 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.absorb(ctx, obs); err != nil {
 		return err
 	}
-	if err := l.recordSettingsErrors(ctx, obs); err != nil {
+	if err := l.recordRepoProblems(ctx, obs); err != nil {
+		return err
+	}
+	skipped, err := l.skippedRepos(ctx, obs)
+	if err != nil {
 		return err
 	}
 	snap, err := l.derive(ctx, obs)
 	if err != nil {
 		return err
 	}
-	return l.act(ctx, snap.Skipping(skippedRepos(obs)), obs)
+	return l.act(ctx, snap.Skipping(skipped), obs)
 }
 
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	return runSteps(
+		func() error { return l.recordRepoStates(ctx, obs) },
 		func() error { return l.tickCheckingWaits(ctx) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
@@ -225,32 +238,79 @@ func (l *Loop) rules(obs plan.Observation) plan.Rules {
 	return plan.RulesFor(plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h}, obs)
 }
 
-func (l *Loop) recordSettingsErrors(ctx context.Context, obs plan.Observation) error {
-	if len(obs.SettingsErrors) == 0 {
-		return nil
-	}
-	repos := slices.Sorted(maps.Keys(obs.SettingsErrors))
-	parts := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, obs.SettingsErrors[repo]))
-	}
-	message := strings.Join(parts, "; ")
-	last, found, err := l.store.LastError(ctx)
+// recordRepoStates writes what this tick's settings read says about each repo onto its row: a
+// ready repo whose file would not parse is refused, and a clean read heals that refusal alone.
+func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {
+	repos, err := l.store.Repos(ctx)
 	if err != nil {
 		return err
 	}
-	if found && last.Message == message {
-		return nil
+	for _, repo := range repos {
+		current := plan.RepoStatus{
+			Name: repo.Name, State: string(repo.State), RefusalKind: repo.RefusalKind, Refusal: repo.Refusal,
+		}
+		next := plan.NextRepoStatus(current, obs)
+		source, read := obs.SettingsSources[repo.Name]
+		if next == current && (!read || source == repo.SettingsSource) {
+			continue
+		}
+		repo.State, repo.RefusalKind, repo.Refusal = store.RepoState(next.State), next.RefusalKind, next.Refusal
+		if read {
+			repo.SettingsSource, repo.SettingsReadAt = source, l.clock.Now()
+		}
+		if err := l.store.SetRepoState(ctx, repo); err != nil {
+			return err
+		}
 	}
-	return l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message})
+	return nil
 }
 
-func skippedRepos(obs plan.Observation) map[string]bool {
-	skipped := make(map[string]bool, len(obs.SettingsErrors))
+// recordRepoProblems puts every repo the loop cannot drive this tick on the masthead's last
+// error: unreadable settings, a failed observe, or a refusal that waits for Track.
+func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
+	repos, err := l.store.Repos(ctx)
+	if err != nil {
+		return err
+	}
+	var parts []string
+	for repo, reason := range obs.SettingsErrors {
+		parts = append(parts, fmt.Sprintf("settings for %s: %s", repo, reason))
+	}
+	for repo, reason := range obs.RepoErrors {
+		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
+	}
+	for _, repo := range repos {
+		if repo.State == store.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
+			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	slices.Sort(parts)
+	return l.recordTickError(ctx, strings.Join(parts, "; "))
+}
+
+// skippedRepos is every repo the act steps must leave alone this tick: those not ready, and those
+// whose observation failed or whose settings would not read.
+func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
+	repos, err := l.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	skipped := map[string]bool{}
+	for _, repo := range repos {
+		if repo.State != store.RepoReady {
+			skipped[repo.Name] = true
+		}
+	}
 	for repo := range obs.SettingsErrors {
 		skipped[repo] = true
 	}
-	return skipped
+	for repo := range obs.RepoErrors {
+		skipped[repo] = true
+	}
+	return skipped, nil
 }
 
 // Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is

@@ -67,12 +67,16 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 	return nil
 }
 
-func (s *Store) SetRepoState(ctx context.Context, name string, state RepoState, refusalKind, refusal string) error {
+// SetRepoState writes r's state, refusal and settings read onto the row named r.Name.
+func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 	err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
-		Name: name, State: string(state), RefusalKind: nullIfEmpty(refusalKind), Refusal: nullIfEmpty(refusal),
+		Name: r.Name, State: string(r.State),
+		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
+		SettingsSource: nullIfEmpty(r.SettingsSource),
+		SettingsReadAt: sql.NullTime{Time: r.SettingsReadAt.UTC(), Valid: !r.SettingsReadAt.IsZero()},
 	})
 	if err != nil {
-		return fmt.Errorf("set repo %s state %s: %w", name, state, err)
+		return fmt.Errorf("set repo %s state %s: %w", r.Name, r.State, err)
 	}
 	return nil
 }

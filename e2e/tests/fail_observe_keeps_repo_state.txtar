@@ -1,5 +1,5 @@
-# Inv. 10 end to end: a non-zero gh read ends the tick before decide. The page keeps the states
-# the last good observation derived and shows the error.
+# Inv. 10 end to end: a non-zero gh read fails that repo's observe, not the tick. The page keeps
+# the states the repo's last good observation derived and shows the error.
 #
 # It deliberately does not assert that the tick age grows. Two `cc request` calls milliseconds
 # apart render the same age, and the script-controlled clock that would fix that was declined;
@@ -17,8 +17,7 @@ stdout '>blocked</span>'
 ! stdout 'the last tick failed'
 
 cc-fake-gh fail
-! exec cc tick --count 1
-stderr 'gh is unavailable'
+exec cc tick --count 1
 
 exec cc request GET /
 stdout 'the last tick failed'
