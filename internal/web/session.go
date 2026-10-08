@@ -1,8 +1,11 @@
 package web
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/auth"
@@ -11,14 +14,22 @@ import (
 const (
 	sessionCookie = "cc_session"
 	sessionTTL    = 30 * 24 * time.Hour
-
-	dummyPasswordHash = "pbkdf2-sha256$600000$b1587cc8331a8b2b3d56d9ae2cb8fad2$" +
-		"2eeb8c3e2f342ef738806c830c0da915ef5e76c60efa82289e50eb5a27c0e56a"
 )
+
+// dummyPasswordHash is verified against when no account matches, so the KDF cost is paid at the
+// current iteration count either way.
+var dummyPasswordHash = sync.OnceValue(func() string {
+	hash, err := auth.HashPassword("dummy")
+	if err != nil {
+		panic(err)
+	}
+	return hash
+})
 
 type loginView struct{ Failed bool }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, _ *http.Request) error {
+	w.Header().Set("Cache-Control", "no-store")
 	return renderHTML(w, "login.tmpl", loginView{})
 }
 
@@ -31,14 +42,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	password := r.PostFormValue("password")
 
 	user, err := s.store.UserForLogin(ctx, email)
+	missing := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !missing {
+		return err
+	}
 	encoded := user.PasswordHash
-	if err != nil {
-		encoded = dummyPasswordHash
+	if missing {
+		encoded = dummyPasswordHash()
 	}
 	ok := s.verifyPassword(password, encoded)
-	if err != nil || !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		return renderHTML(w, "login.tmpl", loginView{Failed: true})
+	if missing || !ok {
+		w.Header().Set("Cache-Control", "no-store")
+		return renderHTMLStatus(w, http.StatusUnauthorized, "login.tmpl", loginView{Failed: true})
 	}
 
 	token, err := auth.NewSessionToken()

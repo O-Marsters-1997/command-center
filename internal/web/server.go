@@ -222,11 +222,16 @@ func writeJSON(w http.ResponseWriter, v any) error {
 }
 
 func renderHTML(w http.ResponseWriter, name string, data any) error {
+	return renderHTMLStatus(w, http.StatusOK, name, data)
+}
+
+func renderHTMLStatus(w http.ResponseWriter, status int, name string, data any) error {
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	_, err := buf.WriteTo(w)
 	return err
 }
