@@ -20,17 +20,11 @@ type Chrome struct {
 	View              string
 	Section           string
 	RepoScope         string
-	RepoLinks         []ScopeLink
+	RepoCrumb         string
+	RepoCrumbPath     string
 	FeatureScope      string
 	FeatureImportPath string
 	FeatureQuery      string
-}
-
-// ScopeLink is one breadcrumb switcher entry: "all" plus one per configured repo.
-type ScopeLink struct {
-	Name    string
-	Path    string
-	Current bool
 }
 
 // Age is a relative time the server renders and the page's clock keeps current. Stamp is the

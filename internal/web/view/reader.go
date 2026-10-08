@@ -192,7 +192,7 @@ func (r *Reader) buildChrome(
 		View:         params.View,
 		Section:      params.View,
 		RepoScope:    params.Repo,
-		RepoLinks:    repoLinksFor(r.repos, params),
+		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
 	}
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
@@ -204,6 +204,9 @@ func (r *Reader) buildChrome(
 	}
 	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
 		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
+	}
+	if params.Repo != "" {
+		c.RepoCrumbPath = repoPath(params.Repo)
 	}
 	if params.Feature != "" {
 		c.FeatureImportPath = params.featureImportPath()
