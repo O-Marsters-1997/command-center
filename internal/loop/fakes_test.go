@@ -45,10 +45,12 @@ func execSQL(t *testing.T, dsn, query string, args ...any) {
 
 func seedUserWithSessions(t *testing.T, dsn string, tokens map[string]time.Time) {
 	t.Helper()
-	execSQL(t, dsn, `INSERT INTO users (id, email, password_hash, created_at) VALUES (1, 'olly@example.com', 'hash', now())`)
+	execSQL(t, dsn,
+		`INSERT INTO users (email, password_hash, created_at) VALUES ('olly@example.com', 'h', now())`)
 	for token, expiresAt := range tokens {
 		execSQL(t, dsn,
-			`INSERT INTO sessions (user_id, token_sha, created_at, expires_at) VALUES (1, $1, now(), $2)`,
+			`INSERT INTO sessions (user_id, token_sha, created_at, expires_at)
+			 SELECT id, $1, now(), $2 FROM users LIMIT 1`,
 			token, expiresAt)
 	}
 }

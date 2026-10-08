@@ -44,7 +44,6 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 	// re-pointed by GitHub itself.
 	for _, childBaseRef := range []string{"parent", "main"} {
 		t.Run("github has it on "+childBaseRef, func(t *testing.T) {
-			// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 			root, repoPath := repoWithOrigin(t)
 			ghLog := installFakeGh(t, false)
 			store := openStore(t)
@@ -99,7 +98,6 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 }
 
 func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	store := openStore(t)
@@ -136,7 +134,6 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 }
 
 func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -176,12 +173,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	}
 }
 
-// TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick covers the hazard the step's own
-// precondition creates: a ticket whose recorded base stays non-main is a candidate on every later
-// tick, so aborting the tick on a `gh pr edit` gh refuses would stall every other ticket's push,
-// verdict and launch for as long as that one pull request stays un-editable.
 func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 	store := openStore(t)
@@ -231,10 +223,6 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	}
 }
 
-// TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget covers issue #85's fourth incident:
-// retargetOne's re-point onto main is itself a base_sha_at_push, so it goes stale the same way a
-// still-stacked row does the next time its base moves -- here, main moving again after the
-// retarget, not just the parent branch retargetOne already accounted for.
 func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	t.Parallel()
 
@@ -320,12 +308,7 @@ func advanceMain(t *testing.T, root, relPath, contents string) {
 	runGit(t, "-C", clone, "push", "-q", "origin", "HEAD:main")
 }
 
-// TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted covers issue #85's fourth root
-// cause: retargetOne used to record main's own current tip as the row's base_sha_at_push without
-// ever merging main, so baseMoved read "not stale" forever and the board showed review_me over a
-// pull request GitHub already called dirty.
 func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -403,12 +386,7 @@ func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
 	return true
 }
 
-// TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack covers issue #89. A squash writes
-// main a commit with no ancestry to the branch it came from, so merging main back into a
-// descendant replays that descendant's own copies of the parent's commits against it and
-// conflicts on every line either side touched. The parent's work has to be dropped, not merged.
 func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -470,11 +448,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	}
 }
 
-// TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack is the cascade the restack
-// itself creates: once the app rewrites one branch of a stack, every branch sitting on it is in
-// the same position as a descendant of a squash, with its recorded base tip no longer reachable.
 func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -512,12 +486,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	}
 }
 
-// TestARewriteTheAppDidNotPerformIsNeverForcePushed covers the licence the restack needs and
-// must not hand out generally (issue #89). An agent's own amend or reset in its worktree leaves
-// the branch exactly as diverged from origin as a restack does, and that is a push failed for a
-// human to look at, not something to overwrite the pull request with.
 func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -551,12 +520,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	}
 }
 
-// TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution covers issue #93. advanceOnto
-// reports the restack on its error path too, because the rebase is what failed, and refreshOne
-// used to drop that: the branch was rewritten, the licence was not recorded, and the push after
-// a hand resolution was rejected non-fast-forward with nothing left to grant it.
 func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)
@@ -622,12 +586,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	}
 }
 
-// TestARetargetWhoseRefreshDeclinesLeavesTheRowStale covers issue #95. retargetOne recorded the
-// row as pushed against main's tip before calling the refresh that would make that true, so a
-// refresh that declined left baseMoved comparing main against itself: the branch never advanced
-// again and the row reported the pull request's own verdict over a base it had never reached.
 func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	store := openStore(t)

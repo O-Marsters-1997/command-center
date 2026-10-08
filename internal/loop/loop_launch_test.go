@@ -27,48 +27,28 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 }
 
 func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
+	f := newLoopFixture(t)
+	f.AuthoriseAll(t)
+	f.Tick(t)
 
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-	authoriseTicket(t, store, ticket.URL, hash, at)
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
-	}
-	spawned := fake.Spawns[0]
+	spawned := f.Fake.Spawns[0]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
-	if spawned.SettingsPath != ws.SettingsPath {
-		t.Errorf("settings path = %q, want %q", spawned.SettingsPath, ws.SettingsPath)
+	if spawned.SettingsPath != f.WS.SettingsPath {
+		t.Errorf("settings path = %q, want %q", spawned.SettingsPath, f.WS.SettingsPath)
 	}
-	if spawned.SystemPromptPath != ws.SystemPromptPath {
-		t.Errorf("system prompt path = %q, want %q", spawned.SystemPromptPath, ws.SystemPromptPath)
+	if spawned.SystemPromptPath != f.WS.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", spawned.SystemPromptPath, f.WS.SystemPromptPath)
 	}
 	if _, err := os.Stat(spawned.PromptPath); err != nil {
 		t.Errorf("prompt file was not written: %v", err)
 	}
 
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	summary, ok := latest[ticket.URL]
+	summary, ok := f.Latest(t)[f.Tickets[0].URL]
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
@@ -83,107 +63,48 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	}
 }
 
-// TestLoopWritesTheComposedPromptAndTicketBody goldens the file written for the agent: the
-// implement instruction the preview showed at authorisation, then the ticket's body.
 func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
+	ticket := sandboxTicket("1")
+	ticket.Body = "fake ticket body"
+	f := newLoopFixture(t, withTickets(ticket))
+	f.AuthoriseAll(t)
+	f.Tick(t)
 
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1", Body: "fake ticket body"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-	authoriseTicket(t, store, ticket.URL, hash, at)
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
-	}
-
-	written, err := os.ReadFile(fake.Spawns[0].PromptPath)
+	written, err := os.ReadFile(f.Fake.Spawns[0].PromptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertGolden(t, goldenPrompt, written)
 }
 
-// TestLoopNeverSpawnsOnAPromptHashMismatch covers issue #55's AC1: a member authorised against a
-// hash the ticket no longer composes to sits queued forever, spawning nothing, however many ticks
-// pass -- the tick refuses on the mismatch rather than composing around it.
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+	f := newLoopFixture(t)
+	authoriseTicket(t, f.Store, f.Tickets[0].URL, plan.Hash("a prompt this ticket never composed to"), testAt)
+	for range 3 {
+		f.Tick(t)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	authoriseTicket(t, store, ticket.URL, plan.Hash("a prompt this ticket never composed to"), at)
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	for i := 0; i < 3; i++ {
-		if err := lp.RunOnce(t.Context()); err != nil {
-			t.Fatalf("RunOnce %d: %v", i, err)
-		}
+	if len(f.Fake.Spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned",
+			len(f.Fake.Spawns))
 	}
-	if len(fake.Spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a hash the ticket no longer composes to must never be spawned", len(fake.Spawns))
-	}
-
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ran := latest[ticket.URL]; ran {
+	if _, ran := f.Latest(t)[f.Tickets[0].URL]; ran {
 		t.Error("no run should ever be recorded for a ticket whose authorised hash no longer matches")
 	}
 }
 
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, true)
+	f := newLoopFixture(t, withFailingTp())
+	f.AuthoriseAll(t)
+	f.Tick(t)
 
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+	if len(f.Fake.Spawns) != 0 {
+		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(f.Fake.Spawns))
 	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-	authoriseTicket(t, store, ticket.URL, hash, at)
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if len(fake.Spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(fake.Spawns))
-	}
-
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	summary := latest[ticket.URL]
+	summary := f.Latest(t)[f.Tickets[0].URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomeCutFailed {
 		t.Errorf("summary = %+v, want cut_failed", summary)
 	}
@@ -193,40 +114,14 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 }
 
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
+	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
+	f.AuthoriseAll(t)
+	f.Tick(t)
 
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
-		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(f.Fake.Spawns))
 	}
-	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	for _, ticket := range tickets {
-		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-		authoriseTicket(t, store, ticket.URL, hash, at)
-	}
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if len(fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(fake.Spawns))
-	}
-
-	latest, err := store.LatestRunsByTicket(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	latest := f.Latest(t)
 	if _, ran := latest["sandbox://CC-1"]; !ran {
 		t.Error("sandbox://CC-1 (first in ticket order) should have launched")
 	}
@@ -236,7 +131,6 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -312,10 +206,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	}
 }
 
-// TestLoopDisposesAKilledRunWithUnsettledPartials: a killed run's log has no result line, so its
-// partial totals must reach Postgres with metrics_settled false.
 func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -374,14 +265,7 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	}
 }
 
-// TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
-// a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
-// path directly rather than through an injected parser.
-// TestLoopDisposesARunAndRecordsItsUtilizationReadings covers "RecordDisposition writes them":
-// a real log on disk, since readings come from agentlog.ParseReadings reading the run's own log
-// path directly rather than through an injected parser.
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -435,7 +319,6 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -489,7 +372,6 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 }
 
 func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -552,92 +434,39 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	}
 }
 
-// TestLoopPausesSpawningAtOrAboveSpendLimit5h covers CC-314's first acceptance criterion: an
-// otherwise-eligible ticket stays queued while the latest five-hour reading is at or above
-// spend_limit_5h.
-func TestLoopPausesSpawningAtOrAboveSpendLimit5h(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	cfg.SpendLimit5h = 80
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+func TestLoopSpendLimit5h(t *testing.T) {
+	tests := []struct {
+		name         string
+		utilizations []float64
+		wantSpawns   int
+	}{
+		{"pauses at the limit", []float64{0.80}, 0},
+		{"launches under the limit", []float64{0.50}, 1},
+		{"resumes once a newer reading drops below the limit", []float64{0.85, 0.50}, 1},
 	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-	authoriseTicket(t, store, ticket.URL, hash, at)
-	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.80, ResetsAt: at.Add(time.Hour), At: at}
-	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
-	}
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: the five-hour reading is at spend_limit_5h", len(fake.Spawns))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newLoopFixture(t, withSpendLimit5h(80))
+			f.AuthoriseAll(t)
+			for i, utilization := range tt.utilizations {
+				at := testAt.Add(time.Duration(i) * time.Second)
+				reading := agentlog.Reading{
+					Window: agentlog.FiveHour, Utilization: utilization,
+					ResetsAt: testAt.Add(time.Duration(i+1) * time.Hour), At: at,
+				}
+				if err := f.Store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+					t.Fatal(err)
+				}
+				f.Tick(t)
+			}
+			if len(f.Fake.Spawns) != tt.wantSpawns {
+				t.Errorf("spawns = %d, want %d", len(f.Fake.Spawns), tt.wantSpawns)
+			}
+		})
 	}
 }
 
-// TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit covers CC-314's second acceptance
-// criterion: the same ticket launches once a later reading reports usage back under the limit.
-func TestLoopResumesSpawningWhenTheReadingDropsBelowTheLimit(t *testing.T) {
-	root, _ := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	cfg.SpendLimit5h = 80
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-	authoriseTicket(t, store, ticket.URL, hash, at)
-	over := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.85, ResetsAt: at.Add(time.Hour), At: at}
-	if err := store.RecordReadings(t.Context(), []agentlog.Reading{over}); err != nil {
-		t.Fatal(err)
-	}
-
-	fake := runner.NewFake()
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), cfg, ws, fake)
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("first RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 0 {
-		t.Fatalf("spawns after tick 1 = %d, want 0", len(fake.Spawns))
-	}
-
-	under := agentlog.Reading{
-		Window: agentlog.FiveHour, Utilization: 0.50,
-		ResetsAt: at.Add(2 * time.Hour), At: at.Add(time.Second),
-	}
-	if err := store.RecordReadings(t.Context(), []agentlog.Reading{under}); err != nil {
-		t.Fatal(err)
-	}
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	if len(fake.Spawns) != 1 {
-		t.Errorf("spawns after tick 2 = %d, want 1: the newer reading dropped below spend_limit_5h", len(fake.Spawns))
-	}
-}
-
-// TestLoopSpendPauseNeverKillsALiveRun covers CC-314's own constraint: a run already spawned
-// keeps going while spend_limit_5h pauses new spawns, since launchEligible only ever refuses to
-// start something new.
 func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv, which panics after t.Parallel().
 	_, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")

@@ -14,10 +14,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// TestCheckingTicksOnlyAdvanceOnSuccessfulObserve is the AC's forced-failure sequence over an
-// injected clock (docs/designs/command-centre-design.md § 9 inv. 10): internal/verdict.Input.Now is
-// derived from this counter, never from l.now(), so a real GitHub outage lasting hours must not
-// walk a row any closer to needs_you than the successful ticks either side of it did.
 func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	t.Parallel()
 

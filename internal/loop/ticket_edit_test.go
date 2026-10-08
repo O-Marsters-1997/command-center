@@ -113,8 +113,6 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 	}
 }
 
-// TestLoopRecordsAClosureRefusalOnAnEditTicketIntent pins issue #255's other route in: POST
-// /ticket must not be able to edit blocked_by into a ticket outside its own feature either.
 func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	t.Parallel()
 

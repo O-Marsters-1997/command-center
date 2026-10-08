@@ -25,7 +25,6 @@ func writeVerifyScript(t *testing.T, script string) string {
 }
 
 func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -82,7 +81,6 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 }
 
 func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -112,7 +110,6 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 }
 
 func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -150,7 +147,6 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 }
 
 func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -207,11 +203,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	}
 }
 
-// TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet reproduces issue #85's first
-// mechanism: two independently-authored insertions at different points in the same file merge
-// with no conflict markers at all, and only a real build or vet catches the redeclaration.
 func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	commitFile(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
 	commitFile(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")

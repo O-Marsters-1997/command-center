@@ -14,10 +14,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting covers re-run's own contract
-// (docs/prds/prd-command-centre.md § Phase 6): relaunch in the same worktree, incrementally -- a
-// second `runs` row against the same ticket, with no `tp new` call at all (the fake runner here
-// never touches tp; nothing about re-run does).
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
@@ -91,9 +87,6 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	}
 }
 
-// TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns covers issue #198's re-run fallback, including
-// the stale local branch a plain `git worktree remove` leaves behind for `tp new -b` to collide
-// with.
 func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	installFakeTp(t, false)

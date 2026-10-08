@@ -126,7 +126,6 @@ func countLines(t *testing.T, path string) int {
 }
 
 func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 
@@ -186,7 +185,6 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 }
 
 func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
@@ -246,7 +244,6 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 }
 
 func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
@@ -290,7 +287,6 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 }
 
 func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, true) // pr create fails
 
@@ -377,13 +373,7 @@ func mustLookPath(t *testing.T, name string) string {
 	return path
 }
 
-// TestPushPushableSkipsATicketWhoseBranchWasRemoved covers the hazard remove-worktree (verbs.go)
-// introduces: a ticket's latest run keeps outcome=push forever, so without a guard, pushPushable
-// would call BranchTip on it every tick for the rest of the app's life -- and once
-// tp remove --force has deleted the branch along with the worktree, that call errors and would
-// abort every subsequent tick, for every ticket, not just this one.
 func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 

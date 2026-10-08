@@ -118,10 +118,7 @@ func countReadyCalls(t *testing.T, logPath string) int {
 	return strings.Count(string(body), "pr ready")
 }
 
-// TestDraftGateStaysDraftWhileGatingBlockerIsOpen covers the AC's first half in isolation: an
-// unmerged gating blocker keeps the consumer drafted even once its own verdict is green.
 func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
-	// Not t.Parallel(): installFakeGhReady uses t.Setenv.
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
@@ -137,10 +134,7 @@ func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
 	}
 }
 
-// TestDraftGateStaysDraftWhileVerdictIsNotGreen covers the AC's second half in isolation: a
-// merged gating blocker is not enough on its own -- the consumer's own CI must be green too.
 func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
-	// Not t.Parallel(): installFakeGhReady uses t.Setenv.
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
@@ -156,11 +150,7 @@ func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
 	}
 }
 
-// TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce is issue #57 AC3: the tick after both halves
-// of the gate are satisfied calls `gh pr ready` exactly once, and never again across nine more
-// ticks once the observed PR itself reports isDraft=false, as a real gh pr list would from there.
 func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
-	// Not t.Parallel(): installFakeGhReady uses t.Setenv.
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
@@ -207,11 +197,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 }
 
-// TestDraftGateClosedBlockerNeverReadies is issue #57 AC4: a gating blocker whose PR closed
-// unmerged must never un-draft the consumer, and must never be confused with `base gone` --
-// that derivation is plan.Unlocked's own, gated on a same-repo blocker, never a gating edge.
 func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
-	// Not t.Parallel(): installFakeGhReady uses t.Setenv.
 	f := newDraftGateFixture(t)
 	logPath, _ := installFakeGhReady(t, false)
 
@@ -236,11 +222,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	}
 }
 
-// TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb is issue #57 AC6: a failed `gh pr
-// ready` leaves the row untouched (still draft) and is retried automatically on the very next
-// tick, unlike a push failure -- nothing about the retry is gated on a stored fact.
 func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
-	// Not t.Parallel(): installFakeGhReady uses t.Setenv.
 	f := newDraftGateFixture(t)
 	logPath, binDir := installFakeGhReady(t, true)
 
@@ -282,9 +264,6 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	}
 }
 
-// TestDraftPRCountsAsOpenForASameRepoDependent is issue #57 AC5: a draft PR is still an OPEN
-// pull request as far as unlock is concerned, so a same-repo dependent still unlocks off its
-// branch -- asserted directly, not merely implied by the absence of a failure elsewhere.
 func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	t.Parallel()
 
@@ -318,10 +297,7 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 }
 
-// TestPushOneOpensADraftPRForATicketWithAGatingEdge is issue #57 AC1's first half: a consumer
-// ticket with a cross-repo blocker opens its PR as a draft.
 func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 
@@ -360,10 +336,7 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	}
 }
 
-// TestPushOneOpensANonDraftPRWithNoGatingEdge is issue #57 AC1's parity clause: a plain
-// single-repo ticket opens a non-draft PR exactly as in Phase 2.
 func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
-	// Not t.Parallel(): installFakeGh and repoWithOrigin both use t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	ghLog := installFakeGh(t, false)
 

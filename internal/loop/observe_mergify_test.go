@@ -8,9 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 )
 
-// TestMergifyHashReadsTheRefNotTheWorkingTree covers phase 4's fix: every other read in the app
-// goes through a remote-tracking ref, and this one used to read the working tree, so a checkout
-// sitting on another branch or holding uncommitted edits hashed the wrong file.
 func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
 

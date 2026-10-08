@@ -99,7 +99,6 @@ func (c conflictFixture) midMerge(t *testing.T) bool {
 }
 
 func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConflicted(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -126,7 +125,6 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 }
 
 func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -161,7 +159,6 @@ func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testin
 }
 
 func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -196,7 +193,6 @@ func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *t
 }
 
 func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -223,7 +219,6 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 }
 
 func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) {
-	// Not t.Parallel(): repoWithOrigin uses t.Setenv.
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
