@@ -1,4 +1,4 @@
-# The same 1+4 stacked fan-out as fan_out_stacked.txtar, but max_agents = 2 can only ever cover
+# The same 1+4 stacked fan-out as fan_out_stacked.txtar, but max_agents = 3, one slot held by the root's review, can only ever cover
 # two of the four dependents at once: the surplus stays queued reading "waiting for a slot",
 # never "waiting on a base" -- it is already unlocked -- and the tick after a slot frees starts
 # another (issue #33). Dependents run under sleeps.sh, not commits.sh: a run that never exits on
@@ -33,14 +33,14 @@ cc-config fan-out-stacked-capped-sleeps
 # running, so only two cut and spawn off origin/cc-1-x.
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=3 'run_launched'
+stdout -count=4 'run_launched'
 grep -count=2 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=2 '>running</span>'
+stdout -count=3 '>running</span>'
 stdout -count=2 'waiting for a slot'
 ! stdout 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1'
 
@@ -50,12 +50,12 @@ stdout -count=2 'waiting for a slot'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=4 'run_launched'
+stdout -count=5 'run_launched'
 grep -count=3 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc tick --count 1
 exec cc request GET /
-stdout -count=2 '>running</span>'
+stdout -count=3 '>running</span>'
 stdout -count=1 'waiting for a slot'
 
 # Kill the last two: the second kill's freed slot starts the last dependent, and nothing is ever
@@ -63,7 +63,7 @@ stdout -count=1 'waiting for a slot'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3'
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=5 'run_launched'
+stdout -count=6 'run_launched'
 grep -count=4 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc tick --count 1

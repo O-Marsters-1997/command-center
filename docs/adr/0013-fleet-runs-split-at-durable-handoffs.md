@@ -40,3 +40,17 @@ a run per phase (five opening contexts per ticket).
 
 A launch pays an explore run first, shared across its tickets. The review size bound must be stated
 concretely in the prompt, or reviewers fix or escalate everything.
+
+## Addendum: how the review run is wired
+
+- The next tick after a push sees an implement or follow-up run whose tip is the recorded pushed tip
+  with an open PR, and spawns one `review` run (`plan.ComposeReview`). A review is never itself
+  reviewed, so each push gets one.
+- A review always disposes as `push`, whether or not it committed: a clean review must not fail the
+  ticket, and its commits go out by the ordinary push step.
+- Findings over the bound (about 50 changed lines, a public interface, another package) go to
+  `<runs>/<id>.findings.md`. Absorb turns a non-empty file into an intent; act, after the push
+  step, spawns a follow-up carrying it. When the run before the review was a follow-up, the
+  findings are posted to the PR as a comment instead, so escalation happens once.
+- `max_turns` caps implement, follow-up and resolve runs; `review_max_turns` caps review and is
+  always lower.

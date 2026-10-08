@@ -27,6 +27,7 @@ const (
 	runKindAgent    = "agent"
 	runKindResolve  = plan.RunKindResolve
 	runKindFollowUp = "follow_up"
+	runKindReview   = "review"
 )
 
 const (
@@ -221,7 +222,9 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		func() error { return l.applyRetryPushIntents(ctx, snap, obs) },
 		func() error { return l.applyRemoveWorktreeIntents(ctx, snap, obs) },
 		func() error { return l.applyCommitResolutionIntents(ctx, snap, obs) },
+		func() error { return l.launchReviews(ctx, snap, obs) },
 		func() error { return l.pushPushable(ctx, snap, obs) },
+		func() error { return l.applyReviewFindingsIntents(ctx, obs) },
 		func() error { return l.applyDraftGate(ctx, snap) },
 		func() error { return l.launchEligible(ctx, snap) },
 	)
@@ -476,7 +479,7 @@ func (l *Loop) disposeRun(
 			return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
 		}
 	}
-	outcome := plan.Disposition(commits)
+	outcome := dispositionFor(run.Kind, commits)
 
 	var exitCode *int
 	if code, ok := l.runner.Reap(run.Pgid); ok {
@@ -493,7 +496,13 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	return l.event(ctx, ticket.URL, eventRunDisposed, outcome.String())
+	if err := l.event(ctx, ticket.URL, eventRunDisposed, outcome.String()); err != nil {
+		return err
+	}
+	if run.Kind != runKindReview {
+		return nil
+	}
+	return l.queueReviewFindings(ctx, run)
 }
 
 func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bool) {
@@ -606,6 +615,7 @@ func agentPrompt(ticket store.Ticket) string {
 type spawnSpec struct {
 	ticket                                 store.Ticket
 	worktree, baseline, hash, kind, prompt string
+	promptFor                              func(runID int64) string
 }
 
 func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
@@ -615,8 +625,12 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		return err
 	}
 
+	prompt := spec.prompt
+	if spec.promptFor != nil {
+		prompt = spec.promptFor(runID)
+	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	if err := os.WriteFile(promptPath, []byte(spec.prompt), 0o600); err != nil {
+	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
 	}
 
@@ -627,21 +641,25 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	}
 	defer func() { _ = logFile.Close() }()
 
+	agentCommand := l.cfg.AgentCommand
+	if spec.kind == runKindReview && len(l.cfg.ReviewAgentCommand) > 0 {
+		agentCommand = l.cfg.ReviewAgentCommand
+	}
 	spawnCfg := runner.SpawnConfig{
-		AgentCommand: l.cfg.AgentCommand,
+		AgentCommand: agentCommand,
 		WorktreePath: spec.worktree,
 		SettingsPath: l.ws.SettingsPath,
-		Prompt:       spec.prompt,
+		Prompt:       prompt,
 		PromptPath:   promptPath,
 		LogFile:      logFile,
 	}
-	if spec.kind == runKindAgent {
+	if spec.kind == runKindAgent || spec.kind == runKindReview {
 		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
 		spawnCfg.AgentsPath = l.ws.AgentsPath
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.clock.Now(), nil)
+		return l.store.RecordDisposition(ctx, runID, dispositionFor(spec.kind, 0), nil, l.clock.Now(), nil)
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {

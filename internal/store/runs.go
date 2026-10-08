@@ -179,6 +179,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 type PendingRun struct {
 	ID            int64
 	TicketID      string
+	Kind          string
 	Pgid          int
 	ProcStartedAt time.Time
 	BaselineSHA   string
@@ -195,7 +196,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	var pending []PendingRun
 	for _, row := range rows {
 		p := PendingRun{
-			ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64),
+			ID: row.ID, TicketID: row.TicketID, Kind: row.Kind, Pgid: int(row.Pgid.Int64),
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
@@ -359,4 +360,16 @@ func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string
 	default:
 		return row.LogPath.String, row.EndedAt.Valid, nil
 	}
+}
+
+// PrecedingRunKind is the kind of the ticket's run just before runID, empty when there is none.
+func (s *Store) PrecedingRunKind(ctx context.Context, ticketID string, runID int64) (string, error) {
+	kind, err := s.q.PrecedingRunKind(ctx, ccdb.PrecedingRunKindParams{TicketID: ticketID, ID: runID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("select run before %d: %w", runID, err)
+	}
+	return kind, nil
 }

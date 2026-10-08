@@ -265,6 +265,46 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 	}
 }
 
+func TestLoadConfigReviewMaxTurns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		body    string
+		want    string
+		wantErr string
+	}{
+		{name: "unset defaults without an implement cap", body: "", want: "20"},
+		{name: "unset halves a low implement cap", body: "max_turns = 10\n", want: "5"},
+		{name: "unset keeps the default under a high implement cap", body: "max_turns = 100\n", want: "20"},
+		{name: "explicit value below the implement cap", body: "max_turns = 60\nreview_max_turns = 15\n", want: "15"},
+		{
+			name: "explicit value not below the implement cap",
+			body: "max_turns = 20\nreview_max_turns = 20\n", wantErr: "must be below",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := config.LoadConfig(writeConfig(t, tt.body+"\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("LoadConfig error = %v, want one containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			n := len(got.ReviewAgentCommand)
+			if n < 2 || got.ReviewAgentCommand[n-2] != "--max-turns" || got.ReviewAgentCommand[n-1] != tt.want {
+				t.Errorf("review command tail = %q, want --max-turns %s", got.ReviewAgentCommand, tt.want)
+			}
+		})
+	}
+}
+
 // TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
 // on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {

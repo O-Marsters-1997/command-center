@@ -113,3 +113,16 @@ func TestHashChangesOnlyWhenTheWorkedExampleContentChanges(t *testing.T) {
 		t.Error("composing the same ticket twice produced different hashes")
 	}
 }
+
+func TestComposeReviewOpensWithTheFixCommandAndStatesTheBound(t *testing.T) {
+	got := plan.ComposeReview("feat/x", "/runs/7.findings.md")
+
+	if !strings.HasPrefix(got, "/code-review --fix origin/feat/x...HEAD") {
+		t.Errorf("prompt = %q, want it to open with the review command against the base", got)
+	}
+	for _, want := range []string{"/runs/7.findings.md", "50 lines", "Do not push", "public interface"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("prompt = %q, want it to contain %q", got, want)
+		}
+	}
+}

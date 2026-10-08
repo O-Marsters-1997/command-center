@@ -241,13 +241,14 @@ func (q *Queries) PendingIntentsByTicket(ctx context.Context) ([]PendingIntentsB
 }
 
 const pendingRunsAwaitingDisposition = `-- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL
 `
 
 type PendingRunsAwaitingDispositionRow struct {
 	ID            int64
 	TicketID      string
+	Kind          string
 	Pgid          sql.NullInt64
 	ProcStartedAt sql.NullTime
 	BaselineSHA   sql.NullString
@@ -266,6 +267,7 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 		if err := rows.Scan(
 			&i.ID,
 			&i.TicketID,
+			&i.Kind,
 			&i.Pgid,
 			&i.ProcStartedAt,
 			&i.BaselineSHA,
@@ -315,6 +317,22 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 		return nil, err
 	}
 	return items, nil
+}
+
+const precedingRunKind = `-- name: PrecedingRunKind :one
+SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1
+`
+
+type PrecedingRunKindParams struct {
+	TicketID string
+	ID       int64
+}
+
+func (q *Queries) PrecedingRunKind(ctx context.Context, arg PrecedingRunKindParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, precedingRunKind, arg.TicketID, arg.ID)
+	var kind string
+	err := row.Scan(&kind)
+	return kind, err
 }
 
 const queueVerbIntent = `-- name: QueueVerbIntent :exec

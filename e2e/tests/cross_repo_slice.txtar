@@ -46,6 +46,8 @@ grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.
 # DraftGate entirely could still pass the rest of this script.
 cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
 exec cc tick --count 1
+exec sleep 2.5
+exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'
 stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'

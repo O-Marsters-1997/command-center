@@ -122,6 +122,11 @@ func (s Snapshot) LaunchAfter(spawned int) []string {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
+// HasSlotAfter reports whether a run may spawn when spawned agents have started since this snapshot.
+func (s Snapshot) HasSlotAfter(spawned int) bool {
+	return !s.spendPaused && s.maxAgents-s.running-spawned > 0
+}
+
 // Skipping is the snapshot without the tickets of the named repos: nothing is acted on for a repo
 // whose settings could not be read this tick.
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {

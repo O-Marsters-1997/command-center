@@ -20,9 +20,10 @@ import (
 )
 
 type fakeForge struct {
-	t       *testing.T
-	remote  string
-	created bool
+	t        *testing.T
+	remote   string
+	created  bool
+	comments []string
 }
 
 func (f *fakeForge) List(_ context.Context, _ string, tracked []string) (gh.Snapshot, error) {
@@ -48,7 +49,11 @@ func (f *fakeForge) Create(context.Context, string, string, string, bool) error 
 	return nil
 }
 
-func (*fakeForge) Ready(context.Context, string, string) error        { return nil }
+func (*fakeForge) Ready(context.Context, string, string) error { return nil }
+func (f *fakeForge) Comment(_ context.Context, _, _, body string) error {
+	f.comments = append(f.comments, body)
+	return nil
+}
 func (*fakeForge) Edit(context.Context, string, string, string) error { return nil }
 func (*fakeForge) CloseIssue(context.Context, string, string) error   { return nil }
 
@@ -116,6 +121,14 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	runner.Alive[1] = false
 	runner.CanReap[1] = true
 	for range 4 {
+		tick()
+	}
+
+	if len(runner.Spawns) != 2 {
+		t.Fatalf("spawns = %d, want the implement run then its review", len(runner.Spawns))
+	}
+	runner.Alive[2] = false
+	for range 2 {
 		tick()
 	}
 
