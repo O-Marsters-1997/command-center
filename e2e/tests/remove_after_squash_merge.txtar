@@ -31,6 +31,6 @@ exec cc tick --count 1
 grep -count=1 'remove --force cc-1-x' $WORK/tp.log
 ! grep 'remove --merged cc-1-x' $WORK/tp.log
 exec cc request GET /events
-stdout '"TicketURL":"https://github.com/sandbox-org/single-task/issues/CC-1","Kind":"worktree_removed","Detail":"forced.*pushed tip"'
+stdout '"TicketURL":"https://github.com/sandbox-org/single-task/issues/CC-1","Kind":"worktree_removed","Detail":"forced.*proven tip"'
 exec cc request GET /
 ! stdout '>#CC-1</button>'
