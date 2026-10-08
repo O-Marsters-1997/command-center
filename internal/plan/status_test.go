@@ -61,6 +61,24 @@ func TestStatus(t *testing.T) {
 	}
 }
 
+func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
+	t.Parallel()
+
+	run := &plan.RunFact{Alive: false, HasOutcome: true, Outcome: plan.OutcomePush}
+	held := plan.Unlock{Reason: "blocked", Blocking: []string{"#259"}}
+
+	state, reason := plan.Status(plan.Facts{Unlock: held, LatestRun: run})
+	if state != plan.PushPending || !strings.Contains(string(reason), "#259") {
+		t.Fatalf("Status = %v, %q; want push pending naming #259", state, reason)
+	}
+
+	free := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
+	state, reason = plan.Status(plan.Facts{Unlock: free, LatestRun: run})
+	if state != plan.PushPending || reason != "agent finished with commits, waiting to push" {
+		t.Fatalf("Status = %v, %q; want today's push pending reason", state, reason)
+	}
+}
+
 func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 	t.Parallel()
 
