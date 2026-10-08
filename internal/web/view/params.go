@@ -22,12 +22,13 @@ type Params struct {
 	Log     string
 	Repo    string
 	Feature string
+	Phase   string
 }
 
 func ParseParams(q url.Values) Params {
 	v := Params{
 		Tickets: q["ticket"], View: q.Get("view"), Log: NormalizeLogFilter(q.Get("log")),
-		Repo: q.Get("repo"), Feature: q.Get("feature"),
+		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: q.Get("phase"),
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
@@ -52,8 +53,8 @@ func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	return ""
 }
 
-// url.Values.Encode sorts by key, so this always renders feature/log/repo/sel/ticket/view in that
-// order.
+// url.Values.Encode sorts by key, so this always renders feature/log/phase/repo/sel/ticket/view
+// in that order.
 func (v Params) query() string {
 	q := url.Values{}
 	if v.Feature != "" {
@@ -61,6 +62,9 @@ func (v Params) query() string {
 	}
 	if v.Log != "" && v.Log != "all" {
 		q.Set("log", v.Log)
+	}
+	if v.Phase != "" {
+		q.Set("phase", v.Phase)
 	}
 	if v.Repo != "" {
 		q.Set("repo", v.Repo)
@@ -80,6 +84,12 @@ func (v Params) query() string {
 func (v Params) withLog(mode string) Params {
 	next := v
 	next.Log = mode
+	return next
+}
+
+func (v Params) withPhase(phase string) Params {
+	next := v
+	next.Phase = phase
 	return next
 }
 

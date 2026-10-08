@@ -228,6 +228,30 @@ func TestBoardGoldensASelectedRowsDetail(t *testing.T) {
 	assertGolden(t, goldenBoardSelected, []byte(renderPath(t, server, target)))
 }
 
+func TestBoardGoldensARunLogAsASession(t *testing.T) {
+	t.Parallel()
+
+	startedAt := testNow
+	now := startedAt.Add(90 * time.Second)
+	server := web.NewServer(
+		detailStore(t, "testdata/fixtures/session.jsonl", startedAt, now), fixedClock(now), nil, "")
+
+	for _, tc := range []struct {
+		golden string
+		query  url.Values
+	}{
+		{"testdata/board_runlog.golden.html", url.Values{}},
+		{"testdata/board_runlog_phase.golden.html", url.Values{"phase": {"1"}}},
+	} {
+		t.Run(tc.golden, func(t *testing.T) {
+			t.Parallel()
+
+			tc.query.Set("sel", "https://github.com/o/r/issues/76")
+			assertGolden(t, tc.golden, []byte(renderPath(t, server, "/board?"+tc.query.Encode())))
+		})
+	}
+}
+
 func TestSelectingAnUnknownTicketRendersNothingSelected(t *testing.T) {
 	t.Parallel()
 
@@ -611,7 +635,7 @@ func TestLogFilterSurvivesABoardSwap(t *testing.T) {
 	}
 }
 
-func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
+func TestJumpToFirstFailureSelectsItsPhase(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -622,8 +646,10 @@ func TestJumpToFirstFailureIsAPlainAnchor(t *testing.T) {
 	rec := get(t, server, selPagePath(ticket))
 	body := rec.Body.String()
 
-	if !strings.Contains(body, `<a href="#first-fail"`) || !strings.Contains(body, `>first failure</a>`) {
-		t.Errorf("no plain anchor jumps to the first failure:\n%s", body)
+	jump := `<a href="/?phase=0&amp;sel=` + url.QueryEscape(ticket) + `#first-fail" class="jump-first-fail ml-auto">` +
+		`1 check failed along the way</a>`
+	if !strings.Contains(body, jump) {
+		t.Errorf("no link jumps to the first failure's phase:\n%s", body)
 	}
 	if !strings.Contains(body, `id="first-fail"`) {
 		t.Errorf("no line carries the id the jump anchor targets:\n%s", body)

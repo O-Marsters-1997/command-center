@@ -107,8 +107,7 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	firstOffset := int64(len(first) + 1)
 	for _, want := range []string{
 		fmt.Sprintf("id: %d\ndata: %s\n\n", firstOffset, renderedToolLine(t, "first")),
-		`data: <div class="line line-tool"><span class="line-label">tool</span> Bash ` +
-			"&lt;script&gt;alert(1)&lt;/script&gt;</div>\n\n",
+		`<code class="call-arg">&lt;script&gt;alert(1)&lt;/script&gt;</code>`,
 		"data: " + renderedToolLine(t, "third") + "\n\n",
 	} {
 		if !strings.Contains(body, want) {
@@ -315,7 +314,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 		`sse-swap="message"`,
 		`sse-close="end"`,
 		`hx-swap="beforeend"`,
-		`<div class="line line-tool"><span class="line-label">tool</span> Bash step 3</div>`,
+		`<span class="call-verb">Ran</span><code class="call-arg">step 3</code>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail fragment is missing %q:\n%s", want, body)

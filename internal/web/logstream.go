@@ -76,17 +76,29 @@ func sendLines(w io.Writer, path string, offset *int64, mode string) int {
 		}
 		*offset += int64(len(line))
 
-		event, ok := agentlog.ParseLine([]byte(strings.TrimRight(line, "\r\n")))
-		if !ok || !view.KindShown(mode, event.Kind) {
-			continue
+		for _, event := range agentlog.ParseLine([]byte(strings.TrimRight(line, "\r\n"))) {
+			if !view.KindShown(mode, event.Kind) {
+				continue
+			}
+			rendered, err := renderLogLine(view.LineOf(event))
+			if err != nil {
+				continue
+			}
+			if err := writeEvent(w, *offset, rendered); err != nil {
+				return sent
+			}
+			sent++
 		}
-		rendered, err := renderLogLine(event, false)
-		if err != nil {
-			continue
-		}
-		if _, err := fmt.Fprintf(w, "id: %d\ndata: %s\n\n", *offset, rendered); err != nil {
-			return sent
-		}
-		sent++
 	}
+}
+
+func writeEvent(w io.Writer, id int64, data string) error {
+	var frame strings.Builder
+	fmt.Fprintf(&frame, "id: %d\n", id)
+	for _, line := range strings.Split(data, "\n") {
+		fmt.Fprintf(&frame, "data: %s\n", line)
+	}
+	frame.WriteString("\n")
+	_, err := io.WriteString(w, frame.String())
+	return err
 }
