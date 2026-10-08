@@ -128,10 +128,10 @@ func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	if len(repos) == 0 {
 		return s
 	}
-	out := Snapshot{
-		byURL: make(map[string]int, len(s.Entries)), running: s.running,
-		maxAgents: s.maxAgents, spendPaused: s.spendPaused,
-	}
+	out := s
+	out.Entries = nil
+	out.launch = nil
+	out.byURL = make(map[string]int, len(s.Entries))
 	for _, e := range s.Entries {
 		if repos[e.Ticket.Repo] {
 			continue

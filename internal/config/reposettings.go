@@ -70,6 +70,9 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 		}
 		return RepoSettings{}, err
 	}
+	if settings.Tracker == "" {
+		settings.Tracker = string(tracker.GitHub)
+	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		key := undecoded[0]
 		return RepoSettings{}, fmt.Errorf("line %d: unknown key %q", lineOfKey(body, key), key.String())

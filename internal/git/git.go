@@ -138,7 +138,7 @@ func HasFile(ctx context.Context, repoPath, ref, path string) (bool, error) {
 
 // ChangedPaths lists the paths branch changed relative to its merge base with base.
 func ChangedPaths(ctx context.Context, repoPath, base, branch string) ([]string, error) {
-	out, err := git(ctx, repoPath, "diff", "--name-only", base+"..."+branch)
+	out, err := git(ctx, repoPath, "diff", "--name-only", "--no-renames", base+"..."+branch)
 	if err != nil {
 		return nil, err
 	}
