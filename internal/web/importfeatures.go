@@ -6,11 +6,12 @@ import (
 	"sort"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
 func importFeatures(
-	ctx context.Context, repos []config.Repo, settings map[string]config.RepoSettings, resolve tracker.Resolver,
+	ctx context.Context, repos []store.Repo, settings map[string]config.RepoSettings, resolve tracker.Resolver,
 ) ([]string, error) {
 	var names []string
 	seen := map[string]bool{}

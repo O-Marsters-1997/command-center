@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -19,10 +20,14 @@ import (
 type ObserveFunc func(ctx context.Context) (plan.Observation, error)
 
 // NewObserver builds the real observe phase: fetch, then the PR snapshot, then the issue titles,
-// then the worktree map, per configured repo. Every branch-keyed map is written under
-// plan.BranchKey(repo.Name, branch), since two configured repos can hold the same branch name.
+// then the worktree map, per ready tracked repo. Every branch-keyed map is written under
+// plan.BranchKey(repo.Name, branch), since two tracked repos can hold the same branch name.
 func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc {
 	return func(ctx context.Context) (plan.Observation, error) {
+		repos, err := readyRepos(ctx, store)
+		if err != nil {
+			return plan.Observation{}, err
+		}
 		tickets, err := store.Tickets(ctx)
 		if err != nil {
 			return plan.Observation{}, err
@@ -39,8 +44,8 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			ConflictsWithPeer: map[string]map[string]bool{},
 			Settings:          map[string]config.RepoSettings{}, SettingsErrors: map[string]string{},
 		}
-		for _, repo := range cfg.Repos {
-			path := repo.Checkout
+		for _, repo := range repos {
+			path := config.CheckoutPath(cfg.DataDir, repo.Name)
 			if err := git.Fetch(ctx, path); err != nil {
 				return plan.Observation{}, err
 			}
@@ -183,6 +188,14 @@ func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, co
 	m[keyB][keyA] = conflicts
 }
 
+func readyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
+	repos, err := st.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(repos, func(r store.Repo) bool { return r.State != store.RepoReady }), nil
+}
+
 func branchesFor(tickets []store.Ticket, repo string) []string {
 	var branches []string
 	for _, t := range tickets {
@@ -211,7 +224,7 @@ func planPR(pr gh.PR) plan.PR {
 func (l *Loop) rereadLocalTips(ctx context.Context, obs plan.Observation) {
 	for key := range obs.Worktrees {
 		repo, branch, _ := strings.Cut(key, "//")
-		if tip, err := git.BranchTip(ctx, l.repo(repo).Checkout, branch); err == nil {
+		if tip, err := git.BranchTip(ctx, l.checkout(repo), branch); err == nil {
 			obs.LocalTips[key] = tip
 		}
 	}

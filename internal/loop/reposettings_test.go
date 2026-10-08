@@ -18,7 +18,9 @@ func TestTheObserverReadsSettingsFromOriginMainEachTickAndNeverFromABranch(t *te
 	root, repoPath := repoWithOrigin(t)
 	pathWithGitAndTpOnly(t)
 	cfg, _ := testConfigAndWorkspace(t, root, 1, []string{"true"})
-	observer := loop.NewObserver(openStore(t), &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
+	store := openStore(t)
+	trackRepo(t, store, "repo", root+"/remote.git")
+	observer := loop.NewObserver(store, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
 
 	denyOf := func() []string {
 		t.Helper()

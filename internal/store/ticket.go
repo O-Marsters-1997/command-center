@@ -26,7 +26,7 @@ func (t Ticket) Plan() plan.Ticket {
 	return plan.Ticket{URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
 }
 
-// ImportedTicket is one tracker.Ticket with the configured repo it came from.
+// ImportedTicket is one tracker.Ticket with the tracked repo it came from.
 type ImportedTicket struct {
 	tracker.Ticket
 	Repo   string

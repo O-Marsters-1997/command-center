@@ -33,7 +33,7 @@ func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.
 func (l *Loop) retargetOne(
 	ctx context.Context, snap plan.Snapshot, obs plan.Observation, t plan.Ticket, row plan.PushRow,
 ) error {
-	repoPath := l.repo(t.Repo).Checkout
+	repoPath := l.checkout(t.Repo)
 	if err := l.forge.Edit(ctx, repoPath, t.Branch, plan.DefaultBaseBranch); err != nil {
 		return l.event(ctx, t.URL, eventRetargetFailed, err.Error())
 	}

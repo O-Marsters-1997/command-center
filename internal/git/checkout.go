@@ -76,6 +76,20 @@ func SameRemote(a, b string) bool {
 
 // NormaliseRemote reduces a git URL to its lower-case host/owner/repo form.
 func NormaliseRemote(url string) string {
+	return strings.ToLower(hostPath(url))
+}
+
+// FullName reads a remote's owner/name, keeping the case it is written in.
+func FullName(remote string) (string, error) {
+	host, fullName, _ := strings.Cut(hostPath(remote), "/")
+	owner, name, ok := strings.Cut(fullName, "/")
+	if !ok || host == "" || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", fmt.Errorf("remote %q does not name an owner/name repository", remote)
+	}
+	return fullName, nil
+}
+
+func hostPath(url string) string {
 	url = strings.TrimSpace(url)
 	url = strings.TrimSuffix(strings.TrimSuffix(url, "/"), ".git")
 
@@ -88,5 +102,5 @@ func NormaliseRemote(url string) string {
 	if at := strings.Index(url, "@"); at >= 0 {
 		url = url[at+1:]
 	}
-	return strings.ToLower(strings.TrimSuffix(url, "/"))
+	return strings.TrimSuffix(url, "/")
 }

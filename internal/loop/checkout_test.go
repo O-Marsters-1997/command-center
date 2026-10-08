@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestRepoNameForDir(t *testing.T) {
@@ -56,15 +56,15 @@ func TestRepoNameForDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, repoPath := repoWithOrigin(t)
+			root, repoPath := repoWithOrigin(t)
 			remote := tt.remote
 			if remote == "" {
-				remote = filepath.Join(filepath.Dir(repoPath), "remote.git")
+				remote = filepath.Join(root, "remote.git")
 			}
 			if tt.setOrigin != "" {
 				runGit(t, "-C", repoPath, "remote", "set-url", "origin", tt.setOrigin)
 			}
-			repos := []config.Repo{{Name: "r", Remote: remote}}
+			repos := []store.Repo{{Name: "r", Remote: remote}}
 
 			name, ok := loop.RepoNameForDir(t.Context(), tt.dir(t, repoPath), repos)
 			if ok != tt.wantOK || name != tt.wantName {

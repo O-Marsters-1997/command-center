@@ -240,7 +240,6 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
 	}
-	repos := []config.Repo{{Name: "repo"}}
 
 	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
 		t.Helper()
@@ -267,7 +266,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
-		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), repos, "")), "sandbox://CHILD")
+		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), "")), "sandbox://CHILD")
 	}
 
 	if got := stateOfChild(t, false, "main-tip-later"); got != "base_moved" {

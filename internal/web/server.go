@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -72,7 +71,6 @@ func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) ro
 type Server struct {
 	store      *store.Store
 	clock      loop.Clock
-	repos      []config.Repo
 	view       *view.Reader
 	trackerFor tracker.Resolver
 	rawMux     *http.ServeMux
@@ -106,12 +104,11 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 	return repos, nil
 }
 
-// NewServer assembles the page and its routes over a store, a clock, the configured repos and
-// the data directory.
-func NewServer(store *store.Store, clock loop.Clock, repos []config.Repo, dataDir string) *Server {
+// NewServer assembles the page and its routes over a store, a clock and the data directory.
+func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	s := &Server{
-		store: store, clock: clock, repos: repos,
-		view:       view.NewReader(store, repos, dataDir, renderLogLine),
+		store: store, clock: clock,
+		view:       view.NewReader(store, dataDir, renderLogLine),
 		trackerFor: tracker.New,
 		nudge:      func() {},
 		pushable:   pushableCache{list: gh.PushableRepos},
@@ -468,13 +465,17 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 		return renderHTML(w, "features.tmpl", page)
 	}
 
+	repo, known, err := s.view.KnownRepo(ctx, scope)
+	if err != nil {
+		return err
+	}
 	var offered []string
-	if repo, ok := s.view.KnownRepo(scope); ok {
+	if known {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
 			return err
 		}
-		if offered, err = importFeatures(ctx, []config.Repo{repo}, obs.Settings, s.trackerFor); err != nil {
+		if offered, err = importFeatures(ctx, []store.Repo{repo}, obs.Settings, s.trackerFor); err != nil {
 			return err
 		}
 	}
@@ -497,7 +498,11 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 			search.SearchError = err.Error()
 		}
 	}
-	search.Rows = s.view.SearchRepos(query, pushable)
+	rows, err := s.view.SearchRepos(r.Context(), query, pushable)
+	if err != nil {
+		return err
+	}
+	search.Rows = rows
 	return renderHTML(w, "repoResults", search)
 }
 

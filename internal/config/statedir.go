@@ -13,7 +13,7 @@ type Workspace struct {
 	// DataDir is the root the whole layout hangs off, and the name the page's header shows.
 	DataDir  string
 	StateDir string
-	// ReposDir holds one checkout per configured repo, named after the repo.
+	// ReposDir holds one checkout per tracked repo, at <owner>/<name>.
 	ReposDir string
 	// LockPath is the file the one-instance-per-workspace flock is taken on.
 	LockPath string

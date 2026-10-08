@@ -46,12 +46,16 @@ func open(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	repos, err := trackedRepos(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
-	if name, ok := loop.RepoNameForDir(ctx, dir, cfg.Repos); ok {
+	if name, ok := loop.RepoNameForDir(ctx, dir, repos); ok {
 		target += "?repo=" + url.QueryEscape(name)
 	} else {
-		fmt.Fprintln(os.Stderr, "cc open: no configured repo matches this directory; falling back to the unscoped board")
+		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the unscoped board")
 	}
 
 	if !daemonListening(cfg.Port) {
@@ -65,6 +69,15 @@ func open(ctx context.Context, configPath string) error {
 		opener = "open"
 	}
 	return exec.CommandContext(ctx, opener, target).Run()
+}
+
+func trackedRepos(ctx context.Context, databaseURL string) (_ []store.Repo, err error) {
+	st, err := store.OpenStore(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, st.Close()) }()
+	return st.Repos(ctx)
 }
 
 func useradd(ctx context.Context, configPath string, args []string) error {

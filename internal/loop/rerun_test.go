@@ -2,7 +2,6 @@ package loop_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
+	root, repoPath := repoWithOrigin(t)
 	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
@@ -47,7 +46,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, filepath.Dir(repoPath), 0, nil)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)

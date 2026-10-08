@@ -109,7 +109,7 @@ func installFakeTp(t *testing.T, fail bool) {
 func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	t.Helper()
 	root = t.TempDir()
-	repoPath = filepath.Join(root, "repo")
+	repoPath = config.CheckoutPath(root, "repo")
 	remote := filepath.Join(root, "remote.git")
 
 	t.Setenv("GIT_AUTHOR_NAME", "t")
@@ -140,11 +140,7 @@ func testConfigAndWorkspace(
 	t *testing.T, root string, maxAgents int, agentCommand []string,
 ) (config.Config, config.Workspace) {
 	t.Helper()
-	cfg := config.Config{
-		MaxAgents:    maxAgents,
-		AgentCommand: agentCommand,
-		Repos:        []config.Repo{{Name: "repo", Checkout: filepath.Join(root, "repo")}},
-	}
+	cfg := config.Config{DataDir: root, MaxAgents: maxAgents, AgentCommand: agentCommand}
 	ws := config.Workspace{
 		RunsDir:      t.TempDir(),
 		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
@@ -181,4 +177,12 @@ func pushSettingsFile(t *testing.T, repoPath, body string) {
 	runGit(t, "-C", repoPath, "add", config.SettingsFile)
 	runGit(t, "-C", repoPath, "commit", "-q", "-m", "settings")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
+}
+
+func trackRepo(t *testing.T, store *storepkg.Store, name, remote string) {
+	t.Helper()
+	repo := storepkg.Repo{Name: name, Remote: remote, State: storepkg.RepoReady, TrackedAt: testAt}
+	if err := store.UpsertRepo(t.Context(), repo); err != nil {
+		t.Fatal(err)
+	}
 }

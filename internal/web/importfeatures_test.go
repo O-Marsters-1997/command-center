@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -21,10 +22,10 @@ func (featureSource) Tickets(context.Context, string) ([]tracker.Ticket, error) 
 func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 	t.Parallel()
 
-	repos := []config.Repo{
+	repos := []store.Repo{
 		{Name: "alpha", Remote: "git@github.com:acme/alpha.git"},
 		{Name: "beta", Remote: "git@github.com:acme/beta.git"},
-		{Name: "local", Path: "."},
+		{Name: "local"},
 	}
 	byRemote := map[string]tracker.Source{
 		"github.com/acme/alpha": featureSource{[]tracker.Feature{"project:x"}},
@@ -50,7 +51,7 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 func TestImportFeaturesDispatchesOnEachReposConfiguredTrackerKind(t *testing.T) {
 	t.Parallel()
 
-	repos := []config.Repo{
+	repos := []store.Repo{
 		{Name: "alpha", Remote: "git@github.com:acme/alpha.git"},
 		{Name: "beta", Remote: "git@github.com:acme/beta.git"},
 	}

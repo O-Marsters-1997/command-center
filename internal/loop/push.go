@@ -118,7 +118,7 @@ func (l *Loop) commitResolutionOne(ctx context.Context, e plan.Entry, obs plan.O
 		}
 	}
 
-	tip, err := git.BranchTip(ctx, l.repo(ticket.Repo).Checkout, ticket.Branch)
+	tip, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read tip after commit resolution for %s: %w", ticket.URL, err)
 	}
@@ -145,7 +145,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs p
 		return nil
 	}
 	base := e.Unlock.BaseBranch
-	repoPath := l.repo(t.Repo).Checkout
+	repoPath := l.checkout(t.Repo)
 
 	changed, err := git.ChangedPaths(ctx, repoPath, "origin/"+base, t.Branch)
 	if err != nil {

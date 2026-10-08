@@ -56,7 +56,6 @@ func IsInvalid(err error) bool {
 // intent.
 type Reader struct {
 	store            *store.Store
-	repos            []config.Repo
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -64,9 +63,9 @@ type Reader struct {
 	renderLine       LineRenderer
 }
 
-func NewReader(st *store.Store, repos []config.Repo, dataDir string, renderLine LineRenderer) *Reader {
+func NewReader(st *store.Store, dataDir string, renderLine LineRenderer) *Reader {
 	return &Reader{
-		store: st, repos: repos, dataDir: dataDir, renderLine: renderLine,
+		store: st, dataDir: dataDir, renderLine: renderLine,
 		boardPollSeconds: config.DefaultBoardPollSeconds,
 		spend:            NewSpendCache(),
 	}
@@ -88,10 +87,11 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 // Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
 // a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
-	params.Repo = normalizeRepoScope(params.Repo, r.repos)
-
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
+		return Board{}, err
+	}
+	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
 		return Board{}, err
 	}
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
@@ -157,7 +157,9 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, err
 	}
-	params.Repo = normalizeRepoScope(params.Repo, r.repos)
+	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
+		return Chrome{}, err
+	}
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 
 	obs, observed, err := r.store.LastObservation(ctx)

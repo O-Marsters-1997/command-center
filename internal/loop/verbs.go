@@ -59,7 +59,7 @@ func (l *Loop) resolveOne(ctx context.Context, ticket store.Ticket, obs plan.Obs
 		return l.event(ctx, ticket.URL, eventResolveRefused, refusal)
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, l.repo(ticket.Repo).Checkout, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
 	}
@@ -96,7 +96,7 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 		return l.event(ctx, ticket.URL, eventFollowUpRefused, refusal)
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, l.repo(ticket.Repo).Checkout, ticket.Branch)
+	baselineSHA, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
@@ -134,7 +134,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs pl
 func (l *Loop) reRunOne(
 	ctx context.Context, ticket store.Ticket, baseBranch string, obs plan.Observation, promptHash string,
 ) error {
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 	worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
@@ -179,7 +179,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		return refuse("neither merged nor base gone")
 	}
 
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 	worktreePath, worktreePresent := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 
 	mode := git.RemoveMerged

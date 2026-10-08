@@ -46,31 +46,25 @@ type Loop struct {
 	cfg        config.Config
 	ws         config.Workspace
 	trackerFor tracker.Resolver
-	repos      map[string]config.Repo
 	nudgeCh    chan struct{}
 	spawned    []string
 }
 
 // NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
-// and spawn steps need (repos, agent_command, max_agents, the state dir's runs and settings
+// and spawn steps need (data_dir, agent_command, max_agents, the state dir's runs and settings
 // paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(
 	store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
 ) *Loop {
-	repos := make(map[string]config.Repo, len(cfg.Repos))
-	for _, r := range cfg.Repos {
-		repos[r.Name] = r
-	}
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
 		trackerFor: tracker.New,
-		repos:      repos,
 		nudgeCh:    make(chan struct{}, 1),
 	}
 }
 
-func (l *Loop) repo(name string) config.Repo { return l.repos[name] }
+func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
 
 func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error {
 	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
@@ -292,8 +286,12 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	if err != nil {
 		return err
 	}
+	repos, err := readyRepos(ctx, l.store)
+	if err != nil {
+		return err
+	}
 	var matched []store.ImportedTicket
-	for _, repo := range l.cfg.Repos {
+	for _, repo := range repos {
 		trackerKind := config.DefaultRepoSettings().Tracker
 		if settings, ok := lastObs.Settings[repo.Name]; ok {
 			trackerKind = settings.Tracker
@@ -454,7 +452,7 @@ func (l *Loop) commitsSinceBaseline(
 	if !ok {
 		return 0, nil
 	}
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
@@ -501,7 +499,7 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 
 func (l *Loop) cutAndSpawn(ctx context.Context, ticket store.Ticket, baseBranch, promptHash string) error {
 	branch := ticket.Branch
-	repoPath := l.repo(ticket.Repo).Checkout
+	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
 		_, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now())

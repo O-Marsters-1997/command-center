@@ -69,7 +69,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 		t.Errorf("remote child tip = %s, want unchanged %s: a failed verification must not push", remoteChildTip, childTip0)
 	}
 
-	server := web.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
 		t.Fatalf("child's state = %q, want verification_failed", state)
@@ -265,7 +265,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 			remoteParentTip1, remoteParentTip0)
 	}
 
-	server := web.NewServer(store, clock, cfg.Repos, "")
+	server := web.NewServer(store, clock, "")
 	if state := rowState(t, renderPage(t, server), f.parent.URL); state != "verification_failed" {
 		t.Fatalf("parent's state = %q, want verification_failed", state)
 	}

@@ -49,7 +49,7 @@ stale-close behaviour stays inspection-only.
 - `gh`, authenticated. Every PR read and write shells out to it.
 - `tp`, the treepad CLI. It cuts and removes the per-ticket worktrees.
 
-Every configured repo must be squash-only on GitHub. Startup reads
+Every tracked repo must be squash-only on GitHub. Startup reads
 `gh api repos/{owner}/{repo}` and refuses to run if a repo allows merge commits
 or rebase merges, because the merge-don't-rebase design rests on GitHub
 flattening every merge.
@@ -212,7 +212,7 @@ state/command-centre.lock    flock, one instance per data dir
 state/runs/<id>.jsonl        one per run: agent stdout and stderr, redirected not piped
 state/runs/<id>.prompt       the prompt that run was given
 state/settings/agent.json    the app-owned deny settings passed to every spawn
-repos/<name>/                a repo's checkout, with the worktrees tp cuts beside it
+repos/<owner>/<name>/        a repo's checkout, with the worktrees tp cuts beside it
 ```
 
 The driver is `github.com/jackc/pgx/v5/stdlib`, which is pure Go, so `CGO_ENABLED=0`
@@ -223,8 +223,8 @@ and applied at `OpenStore`. `0001_init.sql` creates `meta`, `tickets`, `launches
 
 ## Configuration
 
-Where the config file sits decides one thing only: what a relative `[[repo]]`
-path is relative to.
+The config describes only the daemon. Repos are tracked in the database's `repos` table,
+each named `owner/name`.
 
 | Key | What |
 |---|---|
@@ -234,12 +234,16 @@ path is relative to.
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{prompt}` and `{prompt_file}` are substituted into every element. A non-empty argv must name `--permission-mode` and carry `{agents}` and `{system_prompt}`; startup refuses one that does not. |
 | `max_turns` | Caps a spawned run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | `name`, then exactly one of `remote` and `path`. Per-repo settings live in the repo's own `.command-centre.toml` (below); a block that still carries one is refused at load. |
+| `[[repo]]` | Legacy: `name` and `remote`, read once by the first-boot import. A block that still carries a per-repo setting is refused at load. |
 
-A repo is located by `remote`, a git URL cloned to `<data_dir>/repos/<name>`, or by `path`,
-a checkout that already exists, absolute or relative to the config file's own
-directory. Setting both is refused at load. Startup clones when the directory is
-absent, and refuses to start when it holds something whose `origin` names a
+On the first boot against an empty `repos` table, each `[[repo]]` block is imported as a ready
+repo named by its remote's `owner/name`, every ticket's `repo` is rewritten to match, and an
+existing `repos/<name>` checkout moves to `repos/<owner>/<name>` with a symlink left at the old
+path so existing worktrees still resolve. Once `repos` holds a row, a config that still has
+`[[repo]]` blocks is refused: delete them.
+
+A tracked repo's checkout is `<data_dir>/repos/<owner>/<name>`. Startup clones when the
+directory is absent, and refuses to start when it holds something whose `origin` names a
 different repository. The ssh and https forms of one repository count as one.
 
 The app never resets, pulls or checks out a checkout. It fetches and reads

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -83,7 +82,7 @@ func boardFor(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
 
 	at := testNow
-	return renderBoard(t, web.NewServer(store, fixedClock(at), []config.Repo{{Name: "repo"}}, ""))
+	return renderBoard(t, web.NewServer(track(t, store, named("repo")...), fixedClock(at), ""))
 }
 
 func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
