@@ -459,3 +459,22 @@ func TestPlanRulesIndexesEachRepoByName(t *testing.T) {
 		t.Error("a repo that never opted in must still be present, so scope checks see it")
 	}
 }
+
+func TestLoadConfigIgnoresTheRemovedGeneratedKeys(t *testing.T) {
+	t.Parallel()
+
+	body := `
+[[repo]]
+name          = "cc-sandbox"
+path          = "cc-sandbox"
+generated     = ["dist/**"]
+build_command = ["just", "assets"]
+`
+	got, err := config.LoadConfig(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(got.Repos) != 1 || got.Repos[0].Name != "cc-sandbox" {
+		t.Errorf("repos = %+v", got.Repos)
+	}
+}

@@ -162,9 +162,6 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 	if err := l.applyAbortIntents(ctx, snap, obs); err != nil {
 		return err
 	}
-	if err := l.resolveGeneratedConflicts(ctx, obs); err != nil {
-		return err
-	}
 	if err := l.applyResolveIntents(ctx, obs); err != nil {
 		return err
 	}

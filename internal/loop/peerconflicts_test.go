@@ -28,9 +28,9 @@ func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 		},
 	}
 	calls := 0
-	merges := func(context.Context, string, string, string) (bool, []string, error) {
+	merges := func(context.Context, string, string, string) (bool, error) {
 		calls++
-		return false, nil, nil
+		return false, nil
 	}
 
 	into := map[string]map[string]bool{}
@@ -66,9 +66,9 @@ func TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip(t *testing.T) {
 		},
 	}
 	var recomputed []string
-	merges := func(_ context.Context, _ string, tipA, tipB string) (bool, []string, error) {
+	merges := func(_ context.Context, _ string, tipA, tipB string) (bool, error) {
 		recomputed = append(recomputed, tipA+"/"+tipB)
-		return false, nil, nil // reports a conflict for every pair it is asked about
+		return false, nil // reports a conflict for every pair it is asked about
 	}
 
 	into := map[string]map[string]bool{}
@@ -95,9 +95,9 @@ func TestRecordPeerConflictsWithNoPriorObservation(t *testing.T) {
 	branches := []string{"a", "b"}
 	tips := map[string]string{branchKey("r", "a"): "sha-a", branchKey("r", "b"): "sha-b"}
 	calls := 0
-	merges := func(context.Context, string, string, string) (bool, []string, error) {
+	merges := func(context.Context, string, string, string) (bool, error) {
 		calls++
-		return true, nil, nil
+		return true, nil
 	}
 
 	into := map[string]map[string]bool{}

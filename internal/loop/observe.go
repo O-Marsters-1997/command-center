@@ -35,7 +35,7 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 		obs := plan.Observation{
 			PRs: map[string]plan.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 			BranchTips: map[string]string{}, LocalTips: map[string]string{}, MidMerge: map[string]bool{},
-			Titles: map[string]string{}, ConflictsWithBase: map[string]bool{}, ConflictedPaths: map[string][]string{},
+			Titles: map[string]string{}, ConflictsWithBase: map[string]bool{},
 			ConflictsWithPeer: map[string]map[string]bool{},
 		}
 		for _, repo := range cfg.Repos {
@@ -71,15 +71,12 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 				if mainErr != nil {
 					continue
 				}
-				clean, paths, err := git.MergesCleanly(ctx, path, mainTip, tip)
+				clean, err := git.MergesCleanly(ctx, path, mainTip, tip)
 				if err != nil {
 					return plan.Observation{}, fmt.Errorf("check whether %s merges into %s: %w",
 						branch, defaultBaseBranch, err)
 				}
 				obs.ConflictsWithBase[branchKey(repo.Name, branch)] = !clean
-				if !clean {
-					obs.ConflictedPaths[branchKey(repo.Name, branch)] = paths
-				}
 			}
 
 			if err := recordPeerConflicts(
@@ -128,7 +125,7 @@ func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, []string, error)
+type peerReader func(ctx context.Context, repoPath, tipA, tipB string) (bool, error)
 
 func recordPeerConflicts(
 	ctx context.Context, repoPath, repo string, branches []string, tips map[string]string,
@@ -148,7 +145,7 @@ func recordPeerConflicts(
 				recordConflictsWithPeer(into, repo, branchA, branchB, conflicts)
 				continue
 			}
-			clean, _, err := merges(ctx, repoPath, tipA, tipB)
+			clean, err := merges(ctx, repoPath, tipA, tipB)
 			if err != nil {
 				return fmt.Errorf("check whether %s merges with %s: %w", branchA, branchB, err)
 			}

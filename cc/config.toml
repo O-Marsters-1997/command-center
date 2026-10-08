@@ -35,11 +35,6 @@ remote   = "git@github.com:O-Marsters-1997/command-center.git"
 stacking = true
 deny     = [".github/**", ".golangci.yml", "go.mod", "go.sum"]
 
-# A conflict confined to these paths is resolved in the app: merge, run build_command, commit.
-# Naming no build_command opts the repo out, and every such conflict waits for the resolve verb.
-generated     = ["internal/web/assets/dist/**", "internal/web/testdata/*.golden.html"]
-build_command = ["just", "assets"]
-
   [[repo.checks.all_of]]
   success = "test"
   [[repo.checks.all_of]]

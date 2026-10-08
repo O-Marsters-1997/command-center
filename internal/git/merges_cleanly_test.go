@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"testing"
 )
 
@@ -27,35 +26,13 @@ func TestMergesCleanly(t *testing.T) {
 		{branch: "child", want: false},
 		{branch: "elsewhere", want: true},
 	} {
-		got, _, err := MergesCleanly(t.Context(), dir, "main", tt.branch)
+		got, err := MergesCleanly(t.Context(), dir, "main", tt.branch)
 		if err != nil {
 			t.Fatalf("MergesCleanly(main, %s): %v", tt.branch, err)
 		}
 		if got != tt.want {
 			t.Errorf("MergesCleanly(main, %s) = %v, want %v", tt.branch, got, tt.want)
 		}
-	}
-}
-
-func TestMergesCleanlyNamesEveryConflictedPath(t *testing.T) {
-	t.Parallel()
-
-	dir := initRepoForGitTest(t)
-	commitLine(t, dir, "one\ntwo\nthree\n", "base")
-	runGitInTest(t, dir, "checkout", "-q", "-b", "child")
-	commitLine(t, dir, "one\nTWO-from-child\nthree\n", "child edit")
-	runGitInTest(t, dir, "checkout", "-q", "main")
-	commitLine(t, dir, "one\nTWO-from-main\nthree\n", "main edit")
-
-	clean, paths, err := MergesCleanly(t.Context(), dir, "main", "child")
-	if err != nil {
-		t.Fatalf("MergesCleanly(main, child): %v", err)
-	}
-	if clean {
-		t.Fatal("MergesCleanly(main, child) = clean, want conflicted")
-	}
-	if want := []string{"f.txt"}; !slices.Equal(paths, want) {
-		t.Errorf("MergesCleanly(main, child) paths = %v, want %v", paths, want)
 	}
 }
 

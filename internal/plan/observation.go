@@ -43,6 +43,5 @@ type Observation struct {
 	Titles            map[string]string          `json:"titles"`
 	MidMerge          map[string]bool            `json:"mid_merge"`
 	ConflictsWithBase map[string]bool            `json:"conflicts_with_base"`
-	ConflictedPaths   map[string][]string        `json:"conflicted_paths"`
 	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 }
