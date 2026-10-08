@@ -17,11 +17,56 @@ linters:
     - exhaustive # exhaustive enum switches
     - lll # line length
     - errorlint # %w vs %v, and == comparisons on error values
+    - thelper # test helpers call t.Helper()
+    - tparallel # t.Parallel() used consistently between a test and its subtests
+    - usetesting # t.Context(), t.TempDir(), t.Setenv() over manual equivalents
+    - forbidigo # bans reflect.DeepEqual and time.Sleep in tests
+    - depguard # plan stays pure, only store reaches ccdb, no testify
   settings:
     lll:
       line-length: 120
     exhaustive:
       default-signifies-exhaustive: true
+    usetesting:
+      context-background: true
+      context-todo: true
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^reflect\.DeepEqual$
+          msg: compare fields with == and slices.Equal instead
+        - pattern: ^time\.Sleep$
+          msg: poll a condition with a deadline, or wait on a channel
+    depguard:
+      rules:
+        plan-pure:
+          files: ["**/internal/plan/**"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/plan
+            - github.com/O-Marsters-1997/command-center/internal/spend
+            - github.com/O-Marsters-1997/command-center/internal/verdict
+          deny:
+            - pkg: database/sql
+              desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0015)
+            - pkg: os/exec
+              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0015)
+        ccdb-in-store:
+          files: ["$all", "!**/internal/store/**"]
+          deny:
+            - pkg: github.com/O-Marsters-1997/command-center/internal/store/ccdb
+              desc: only internal/store uses the generated queries; call a Store method (ADR 0005)
+        no-testify:
+          files: ["**/*_test.go"]
+          deny:
+            - pkg: github.com/stretchr/testify
+              desc: use cmp.Diff and errors.Is/As instead
+  exclusions:
+    rules:
+      - path-except: _test\.go
+        linters:
+          - forbidigo
 
 formatters:
   enable:

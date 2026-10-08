@@ -43,6 +43,7 @@ func TestRemovalStateFor(t *testing.T) {
 		{
 			name: "removable by merged while the remote ref still resolves",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				commitEmpty(t, dir, "not yet pushed")
 				return dir, ""
@@ -52,6 +53,7 @@ func TestRemovalStateFor(t *testing.T) {
 		{
 			name: "not removable with no remote-tracking ref at all",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				return initRepoForGitTest(t), ""
 			},
 			want: NotRemovable,
@@ -59,6 +61,7 @@ func TestRemovalStateFor(t *testing.T) {
 		{
 			name: "removable by force when the ref is gone but the tip was recorded as pushed",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
 				if err != nil {
@@ -72,6 +75,7 @@ func TestRemovalStateFor(t *testing.T) {
 		{
 			name: "not removable when the ref is gone and the tip moved past the recorded push",
 			setup: func(t *testing.T) (string, string) {
+				t.Helper()
 				dir := initRepoWithOriginForGitTest(t)
 				tip, err := RevParse(t.Context(), dir, "refs/heads/main")
 				if err != nil {
@@ -113,6 +117,7 @@ func TestDirty(t *testing.T) {
 		{
 			name: "an uncommitted change",
 			mutate: func(t *testing.T, dir string) {
+				t.Helper()
 				if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("x\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}

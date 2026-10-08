@@ -40,6 +40,7 @@ func TestTpInvocations(t *testing.T) {
 		{
 			name: "New passes the base",
 			call: func(t *testing.T, repoPath string) error {
+				t.Helper()
 				return (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
 			},
 			wantArgv: "new cc-1-first --base origin/main",
@@ -47,6 +48,7 @@ func TestTpInvocations(t *testing.T) {
 		{
 			name: "Remove merged",
 			call: func(t *testing.T, repoPath string) error {
+				t.Helper()
 				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
 			},
 			wantArgv: "remove --merged cc-1-first",
@@ -54,6 +56,7 @@ func TestTpInvocations(t *testing.T) {
 		{
 			name: "Remove forced",
 			call: func(t *testing.T, repoPath string) error {
+				t.Helper()
 				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
 			},
 			wantArgv: "remove --force cc-1-first",
@@ -98,12 +101,15 @@ func TestTpFailureNamesTheBranch(t *testing.T) {
 		call func(t *testing.T, repoPath string) error
 	}{
 		{"New", func(t *testing.T, repoPath string) error {
+			t.Helper()
 			return (git.CLI{}).New(t.Context(), repoPath, "cc-1-first", "origin/main")
 		}},
 		{"Remove", func(t *testing.T, repoPath string) error {
+			t.Helper()
 			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
 		}},
 		{"Remove forced", func(t *testing.T, repoPath string) error {
+			t.Helper()
 			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
 		}},
 	}

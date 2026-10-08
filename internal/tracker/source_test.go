@@ -3,7 +3,6 @@ package tracker
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -37,7 +36,7 @@ func TestGithubSourceFeatures(t *testing.T) {
 	t.Parallel()
 
 	src := &githubSource{owner: "O-Marsters-1997", repo: "command-center", run: fakeRun(t)}
-	got, err := src.Features(context.Background())
+	got, err := src.Features(t.Context())
 	if err != nil {
 		t.Fatalf("Features: %v", err)
 	}
@@ -52,7 +51,7 @@ func TestGithubSourceTickets(t *testing.T) {
 	t.Parallel()
 
 	src := &githubSource{owner: "O-Marsters-1997", repo: "command-center", run: fakeRun(t)}
-	got, err := src.Tickets(context.Background(), "project:repo-and-ticket-model")
+	got, err := src.Tickets(t.Context(), "project:repo-and-ticket-model")
 	if err != nil {
 		t.Fatalf("Tickets: %v", err)
 	}
@@ -95,8 +94,10 @@ func TestGithubSourceTickets(t *testing.T) {
 		t.Fatalf("Tickets() returned %d tickets (%v), want %d", len(got), got, len(want))
 	}
 	for i := range want {
-		if !reflect.DeepEqual(got[i], want[i]) {
-			t.Errorf("ticket[%d] = %+v, want %+v", i, got[i], want[i])
+		g, w := got[i], want[i]
+		if g.URL != w.URL || g.Number != w.Number || g.Title != w.Title || g.Body != w.Body ||
+			g.Status != w.Status || !slices.Equal(g.BlockedBy, w.BlockedBy) || (g.BlockedBy == nil) != (w.BlockedBy == nil) {
+			t.Errorf("ticket[%d] = %+v, want %+v", i, g, w)
 		}
 	}
 }

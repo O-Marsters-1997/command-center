@@ -86,14 +86,9 @@ func readChildPid(t *testing.T, path string) int {
 // child is reparented on the leader's death and reaped by init, not by us, so a brief zombie
 // window right after Cancel returns is expected rather than a failure.
 func eventuallyNotRunning(pid int) bool {
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
+	return pollUntil(2*time.Second, func() bool {
 		out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
 		stat := strings.TrimSpace(string(out))
-		if err != nil || stat == "" || strings.HasPrefix(stat, "Z") {
-			return true
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	return false
+		return err != nil || stat == "" || strings.HasPrefix(stat, "Z")
+	})
 }

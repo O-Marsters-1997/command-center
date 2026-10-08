@@ -35,6 +35,7 @@ func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req, err := http.NewRequest(tt.method, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
 			if err != nil {
 				t.Fatal(err)
@@ -126,6 +127,7 @@ func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?"+tt.query, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -222,6 +224,7 @@ func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			body := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
 			if tt.prompt != "" {
 				body.Set("prompt", tt.prompt)

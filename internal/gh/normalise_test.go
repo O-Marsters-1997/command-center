@@ -30,6 +30,7 @@ func TestDecode(t *testing.T) {
 			name:    "no prs",
 			fixture: "no_prs.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if len(prs) != 0 {
 					t.Fatalf("prs = %d, want 0", len(prs))
 				}
@@ -39,6 +40,7 @@ func TestDecode(t *testing.T) {
 			name:    "one name five times reduces to the latest completed run",
 			fixture: "mixed_rollup.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if len(prs) != 1 {
 					t.Fatalf("prs = %d, want 1", len(prs))
 				}
@@ -62,6 +64,7 @@ func TestDecode(t *testing.T) {
 			name:    "a status context keeps its context as its name",
 			fixture: "mixed_rollup.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				got, ok := prs[0].Checks["ci/legacy"]
 				if !ok {
 					t.Fatalf("no ci/legacy check in %v", prs[0].Checks)
@@ -75,6 +78,7 @@ func TestDecode(t *testing.T) {
 			name:    "a nameless entry is dropped, not panicked on",
 			fixture: "mixed_rollup.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if _, ok := prs[0].Checks[""]; ok {
 					t.Error("a nameless rollup entry was kept under the empty name")
 				}
@@ -87,6 +91,7 @@ func TestDecode(t *testing.T) {
 			name:    "an empty rollup is empty, not green",
 			fixture: "empty_rollup.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if len(prs[0].Checks) != 0 {
 					t.Errorf("checks = %v, want none", prs[0].Checks)
 				}
@@ -99,6 +104,7 @@ func TestDecode(t *testing.T) {
 			name:    "merged state survives the fallback read",
 			fixture: "merged.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if prs[0].State != Merged {
 					t.Errorf("state = %v, want Merged", prs[0].State)
 				}
@@ -111,6 +117,7 @@ func TestDecode(t *testing.T) {
 			name:    "an open pr carries a zero mergedAt",
 			fixture: "mixed_rollup.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				if !prs[0].MergedAt.IsZero() {
 					t.Errorf("mergedAt = %s, want zero for an unmerged PR", prs[0].MergedAt)
 				}
@@ -120,6 +127,7 @@ func TestDecode(t *testing.T) {
 			name:    "labels decode by name",
 			fixture: "stacked_ready_to_merge.json",
 			want: func(t *testing.T, prs []PR) {
+				t.Helper()
 				want := []string{"keep-open", "ready-to-merge"}
 				if !slices.Equal(prs[0].Labels, want) {
 					t.Errorf("labels = %v, want %v", prs[0].Labels, want)

@@ -22,6 +22,7 @@ func TestRepoNameForDir(t *testing.T) {
 		{
 			name: "subdirectory",
 			dir: func(t *testing.T, repo string) string {
+				t.Helper()
 				sub := filepath.Join(repo, "sub")
 				if err := os.Mkdir(sub, 0o700); err != nil {
 					t.Fatal(err)
@@ -33,6 +34,7 @@ func TestRepoNameForDir(t *testing.T) {
 		{
 			name: "worktree",
 			dir: func(t *testing.T, repo string) string {
+				t.Helper()
 				worktree := filepath.Join(filepath.Dir(repo), "worktree")
 				runGit(t, "-C", repo, "worktree", "add", worktree)
 				return worktree
@@ -51,7 +53,10 @@ func TestRepoNameForDir(t *testing.T) {
 		},
 		{
 			name: "no origin",
-			dir:  func(t *testing.T, _ string) string { return t.TempDir() },
+			dir: func(t *testing.T, _ string) string {
+				t.Helper()
+				return t.TempDir()
+			},
 		},
 	}
 	for _, tt := range tests {
