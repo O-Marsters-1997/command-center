@@ -87,7 +87,6 @@ func carryForward(dst *plan.Observation, prev plan.Observation, repo string) {
 	copyKeyed(dst.MergifyHash, prev.MergifyHash, named)
 	copyKeyed(dst.Settings, prev.Settings, named)
 	copyKeyed(dst.SettingsErrors, prev.SettingsErrors, named)
-	copyKeyed(dst.SettingsSources, prev.SettingsSources, named)
 }
 
 func copyKeyed[V any](dst, src map[string]V, keep func(string) bool) {
