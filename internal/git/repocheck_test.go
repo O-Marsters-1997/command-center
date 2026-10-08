@@ -33,7 +33,8 @@ func TestAssertRepoSettings(t *testing.T) {
 		{name: "rebase merges refuse", fixture: "allows_rebase_merge.json",
 			wantKind: plan.RefusalMergeSettings, wantReason: "allow_rebase_merge"},
 		{name: "a master default refuses with the rename hint", fixture: "master_default.json",
-			wantKind: plan.RefusalDefaultBranch, wantReason: "default branch is `master`, not `main`; rename it on GitHub, then Track again."},
+			wantKind:   plan.RefusalDefaultBranch,
+			wantReason: "default branch is `master`, not `main`; rename it on GitHub, then Track again."},
 	}
 
 	for _, tt := range tests {

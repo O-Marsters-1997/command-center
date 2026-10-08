@@ -211,8 +211,9 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 	}
 
 	pushSettingsFile(t, repoPath, "stacking = true\n")
-	if got := tick(); got.State != storepkg.RepoReady || got.Refusal != "" || got.SettingsSource != string(config.SourceFile) {
-		t.Errorf("repo after the file was fixed = %+v, want ready again read from origin/main", got)
+	healed := tick()
+	if healed.State != storepkg.RepoReady || healed.Refusal != "" || healed.SettingsSource != string(config.SourceFile) {
+		t.Errorf("repo after the file was fixed = %+v, want ready again read from origin/main", healed)
 	}
 }
 
@@ -229,7 +230,8 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := repoByName(t, st, "repo"); got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalMergeSettings {
+	got := repoByName(t, st, "repo")
+	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalMergeSettings {
 		t.Errorf("repo = %+v, want it still refused(merge_settings)", got)
 	}
 }
