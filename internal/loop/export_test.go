@@ -13,3 +13,8 @@ func MergifyHash(ctx context.Context, repoPath string) (string, error) {
 
 // MainTipKey names the default branch's own tip in Observation.BranchTips.
 func MainTipKey(repo string) string { return plan.BranchKey(repo, plan.DefaultBaseBranch) }
+
+// RecordMergeState is the observe phase's read of a mid-merge worktree's unmerged and staged paths.
+func RecordMergeState(ctx context.Context, obs *plan.Observation, key, worktreePath string) error {
+	return recordMergeState(ctx, obs, key, worktreePath)
+}

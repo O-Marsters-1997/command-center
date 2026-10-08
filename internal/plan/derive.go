@@ -361,7 +361,15 @@ func (r Rules) runFor(
 			}
 		}
 		if summary.Outcome == OutcomeFailed && summary.Kind == RunKindResolve && in.Obs.MidMerge[key] {
-			fact.Resolved = true
+			switch unmerged := in.Obs.UnmergedPaths[key]; {
+			case len(unmerged) > 0:
+				fact.ResolveIncompleteReason = Reason(fmt.Sprintf(
+					"resolve run stopped mid-merge with files still unmerged: %s", strings.Join(unmerged, ", ")))
+			case !in.Obs.HasStaged[key]:
+				fact.ResolveIncompleteReason = "resolve run stopped mid-merge with nothing staged"
+			default:
+				fact.Resolved = true
+			}
 		}
 	}
 

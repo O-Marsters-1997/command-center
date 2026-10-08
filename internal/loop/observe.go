@@ -62,6 +62,8 @@ func mergeObservation(dst *plan.Observation, src plan.Observation) {
 	maps.Copy(dst.BranchTips, src.BranchTips)
 	maps.Copy(dst.LocalTips, src.LocalTips)
 	maps.Copy(dst.MidMerge, src.MidMerge)
+	maps.Copy(dst.UnmergedPaths, src.UnmergedPaths)
+	maps.Copy(dst.HasStaged, src.HasStaged)
 	maps.Copy(dst.Titles, src.Titles)
 	maps.Copy(dst.ConflictsWithBase, src.ConflictsWithBase)
 	maps.Copy(dst.ConflictsWithPeer, src.ConflictsWithPeer)
@@ -80,6 +82,8 @@ func carryForward(dst *plan.Observation, prev plan.Observation, repo string) {
 	copyKeyed(dst.BranchTips, prev.BranchTips, keep)
 	copyKeyed(dst.LocalTips, prev.LocalTips, keep)
 	copyKeyed(dst.MidMerge, prev.MidMerge, keep)
+	copyKeyed(dst.UnmergedPaths, prev.UnmergedPaths, keep)
+	copyKeyed(dst.HasStaged, prev.HasStaged, keep)
 	copyKeyed(dst.ConflictsWithBase, prev.ConflictsWithBase, keep)
 	copyKeyed(dst.ConflictsWithPeer, prev.ConflictsWithPeer, keep)
 	copyKeyed(dst.Titles, prev.Titles, func(string) bool { return true })
@@ -101,6 +105,7 @@ func newObservation() plan.Observation {
 	return plan.Observation{
 		PRs: map[string]plan.PR{}, Worktrees: map[string]string{}, MergifyHash: map[string]string{},
 		BranchTips: map[string]string{}, LocalTips: map[string]string{}, MidMerge: map[string]bool{},
+		UnmergedPaths: map[string][]string{}, HasStaged: map[string]bool{},
 		Titles: map[string]string{}, ConflictsWithBase: map[string]bool{},
 		ConflictsWithPeer: map[string]map[string]bool{},
 		Settings:          map[string]config.RepoSettings{}, SettingsErrors: map[string]string{},
@@ -180,6 +185,11 @@ func observeRepo(
 			return plan.Observation{}, fmt.Errorf("check mid-merge for %s: %w", branch, err)
 		}
 		obs.MidMerge[plan.BranchKey(name, branch)] = mid
+		if mid {
+			if err := recordMergeState(ctx, &obs, plan.BranchKey(name, branch), wtPath); err != nil {
+				return plan.Observation{}, fmt.Errorf("read merge state for %s: %w", branch, err)
+			}
+		}
 	}
 
 	if settings.MergifySHA != "" {
@@ -190,6 +200,20 @@ func observeRepo(
 		obs.MergifyHash[name] = hash
 	}
 	return obs, nil
+}
+
+func recordMergeState(ctx context.Context, obs *plan.Observation, key, worktreePath string) error {
+	unmerged, err := git.UnmergedPaths(ctx, worktreePath)
+	if err != nil {
+		return err
+	}
+	staged, err := git.StagedPaths(ctx, worktreePath)
+	if err != nil {
+		return err
+	}
+	obs.UnmergedPaths[key] = unmerged
+	obs.HasStaged[key] = len(staged) > 0
+	return nil
 }
 
 func mergifyHash(ctx context.Context, repoPath string) (string, error) {

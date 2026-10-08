@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
@@ -49,5 +50,31 @@ func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	}
 	if elsewhere != clean {
 		t.Errorf("hash changed on another branch: %q then %q", clean, elsewhere)
+	}
+}
+
+func TestRecordMergeStateReadsUnmergedAndStagedPaths(t *testing.T) {
+	_, repoPath := repoWithOrigin(t)
+	worktreePath := cutWorktree(t, repoPath, "cc-1")
+	conflictedWorktree(t, repoPath, worktreePath, "shared.txt")
+	const key = "repo//cc-1"
+
+	obs := plan.Observation{UnmergedPaths: map[string][]string{}, HasStaged: map[string]bool{}}
+	if err := loop.RecordMergeState(t.Context(), &obs, key, worktreePath); err != nil {
+		t.Fatal(err)
+	}
+	if got := obs.UnmergedPaths[key]; len(got) != 1 || got[0] != "shared.txt" {
+		t.Errorf("unmerged = %v, want [shared.txt]", got)
+	}
+
+	resolveAndStage(t, worktreePath, "shared.txt", "resolved\n")
+	if err := loop.RecordMergeState(t.Context(), &obs, key, worktreePath); err != nil {
+		t.Fatal(err)
+	}
+	if got := obs.UnmergedPaths[key]; len(got) != 0 {
+		t.Errorf("unmerged = %v, want none once staged", got)
+	}
+	if !obs.HasStaged[key] {
+		t.Error("HasStaged = false, want true once the resolution is staged")
 	}
 }

@@ -91,7 +91,8 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 
 	obs := plan.Observation{
 		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
-		MidMerge: map[string]bool{plan.BranchKey("repo", "cc-1"): true},
+		MidMerge:  map[string]bool{plan.BranchKey("repo", "cc-1"): true},
+		HasStaged: map[string]bool{plan.BranchKey("repo", "cc-1"): true},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
