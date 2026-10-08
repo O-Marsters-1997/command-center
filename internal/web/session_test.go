@@ -132,7 +132,9 @@ func TestWrongPasswordAndUnknownEmailAreIdenticalAndBothRunTheKDF(t *testing.T) 
 	}
 }
 
-func gatedGet(t *testing.T, server *web.Server, path string, cookie *http.Cookie, headers map[string]string) *httptest.ResponseRecorder {
+func gatedGet(
+	t *testing.T, server *web.Server, path string, cookie *http.Cookie, headers map[string]string,
+) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	for k, v := range headers {
@@ -160,6 +162,9 @@ func TestSessionGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := map[string]string{"Accept": "text/html"}
+	htmx := map[string]string{"HX-Request": "true"}
+	sse := map[string]string{"Accept": "text/event-stream"}
+	session := func(value string) *http.Cookie { return &http.Cookie{Name: "cc_session", Value: value} }
 
 	tests := []struct {
 		name     string
@@ -171,11 +176,11 @@ func TestSessionGate(t *testing.T) {
 		hxRedir  string
 	}{
 		{"no cookie redirects a page", "/", nil, html, http.StatusSeeOther, "/login", ""},
-		{"valid cookie renders the board", "/", &http.Cookie{Name: "cc_session", Value: live}, html, http.StatusOK, "", ""},
-		{"htmx poll gets an HX-Redirect", "/board", nil, map[string]string{"HX-Request": "true"}, http.StatusOK, "", "/login"},
-		{"event stream gets 401", "/events", nil, map[string]string{"Accept": "text/event-stream"}, http.StatusUnauthorized, "", ""},
-		{"unknown cookie is refused", "/", &http.Cookie{Name: "cc_session", Value: "nope"}, html, http.StatusSeeOther, "/login", ""},
-		{"expired session is refused", "/", &http.Cookie{Name: "cc_session", Value: stale}, html, http.StatusSeeOther, "/login", ""},
+		{"valid cookie renders the board", "/", session(live), html, http.StatusOK, "", ""},
+		{"htmx poll gets an HX-Redirect", "/board", nil, htmx, http.StatusOK, "", "/login"},
+		{"event stream gets 401", "/events", nil, sse, http.StatusUnauthorized, "", ""},
+		{"unknown cookie is refused", "/", session("nope"), html, http.StatusSeeOther, "/login", ""},
+		{"expired session is refused", "/", session(stale), html, http.StatusSeeOther, "/login", ""},
 		{"login page is public", "/login", nil, html, http.StatusOK, "", ""},
 		{"stylesheet is public", "/assets/app.css", nil, nil, http.StatusOK, "", ""},
 	}
