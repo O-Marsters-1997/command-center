@@ -70,3 +70,51 @@ func (s *Store) SetPassword(ctx context.Context, email, passwordHash string) (er
 	}
 	return nil
 }
+
+// IssueSession replaces every session the user holds with one row for tokenSHA, so a token
+// captured before a login is dead after it.
+func (s *Store) IssueSession(ctx context.Context, userID int64, tokenSHA string, at, expiresAt time.Time) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+
+	qtx := s.q.WithTx(tx)
+	if err = qtx.DeleteSessionsForUser(ctx, userID); err != nil {
+		return fmt.Errorf("delete sessions for user %d: %w", userID, err)
+	}
+	err = qtx.IssueSession(ctx, ccdb.IssueSessionParams{
+		UserID:    userID,
+		TokenSHA:  tokenSHA,
+		CreatedAt: at.UTC(),
+		ExpiresAt: expiresAt.UTC(),
+	})
+	if err != nil {
+		return fmt.Errorf("issue session for user %d: %w", userID, err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
+// SessionOwner returns the user id holding the unexpired session whose token hash is tokenSHA.
+func (s *Store) SessionOwner(ctx context.Context, tokenSHA string, now time.Time) (int64, error) {
+	id, err := s.q.SessionOwner(ctx, ccdb.SessionOwnerParams{TokenSHA: tokenSHA, ExpiresAt: now.UTC()})
+	if err != nil {
+		return 0, fmt.Errorf("select session owner: %w", err)
+	}
+	return id, nil
+}
+
+func (s *Store) DeleteSession(ctx context.Context, tokenSHA string) error {
+	if err := s.q.DeleteSession(ctx, tokenSHA); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}

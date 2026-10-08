@@ -1,0 +1,20 @@
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+<main id="main" class="p-4 max-w-sm mx-auto mt-16">
+<h1 class="mb-3">LOG IN</h1>
+{{if .Failed}}
+<p class="banner ribbon mb-2" data-tone="stop" role="alert">email or password is wrong.</p>
+{{end}}
+<form method="post" action="/login" class="flex flex-col gap-2">
+  <label for="email">email</label>
+  <input id="email" type="email" name="email" required autocomplete="username" autofocus
+    class="block w-full border border-border rounded px-3 py-2">
+  <label for="password">password</label>
+  <input id="password" type="password" name="password" required autocomplete="current-password"
+    class="block w-full border border-border rounded px-3 py-2">
+  <button type="submit" class="border border-border rounded px-3 py-2">log in</button>
+</form>
+</main>
+</body>
+</html>

@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/auth"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -72,14 +73,15 @@ func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) ro
 // Server is the status page plus the launch, authorisation and features routes. It only queues
 // intents; it never writes the database directly.
 type Server struct {
-	store      *store.Store
-	clock      loop.Clock
-	view       *view.Reader
-	trackerFor tracker.Resolver
-	rawMux     *http.ServeMux
-	mux        http.Handler
-	nudge      func()
-	pushable   pushableCache
+	store          *store.Store
+	clock          loop.Clock
+	view           *view.Reader
+	trackerFor     tracker.Resolver
+	rawMux         *http.ServeMux
+	mux            http.Handler
+	nudge          func()
+	pushable       pushableCache
+	verifyPassword func(password, encoded string) bool
 }
 
 const pushableTTL = time.Minute
@@ -111,10 +113,11 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	s := &Server{
 		store: store, clock: clock,
-		view:       view.NewReader(store, dataDir, renderLogLine),
-		trackerFor: tracker.New,
-		nudge:      func() {},
-		pushable:   pushableCache{list: gh.PushableRepos},
+		view:           view.NewReader(store, dataDir, renderLogLine),
+		trackerFor:     tracker.New,
+		nudge:          func() {},
+		pushable:       pushableCache{list: gh.PushableRepos},
+		verifyPassword: auth.VerifyPassword,
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
@@ -137,6 +140,8 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("POST /launch", handler(s.handleLaunch))
 	mux.Handle("POST /verb", handler(s.handleVerb))
 	mux.Handle("POST /ticket", handler(s.handleTicket))
+	mux.Handle("GET /login", handler(s.handleLoginPage))
+	mux.Handle("POST /login", handler(s.handleLogin))
 	s.rawMux = mux
 	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
@@ -217,11 +222,16 @@ func writeJSON(w http.ResponseWriter, v any) error {
 }
 
 func renderHTML(w http.ResponseWriter, name string, data any) error {
+	return renderHTMLStatus(w, http.StatusOK, name, data)
+}
+
+func renderHTMLStatus(w http.ResponseWriter, status int, name string, data any) error {
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	_, err := buf.WriteTo(w)
 	return err
 }
