@@ -138,11 +138,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		if err := s.store.DeleteSession(r.Context(), auth.HashToken(c.Value)); err != nil {
-			return err
-		}
-	}
+	w.Header().Set("Cache-Control", "no-store")
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Path:     "/",
@@ -151,6 +147,11 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if err := s.store.DeleteSession(r.Context(), auth.HashToken(c.Value)); err != nil {
+			return err
+		}
+	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 	return nil
 }

@@ -74,7 +74,7 @@ func TestLoginSetsSessionCookieStoredOnlyAsHash(t *testing.T) {
 	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode || c.Path != "/" {
 		t.Errorf("cookie attributes wrong: %+v", c)
 	}
-	if _, err := st.SessionOwner(t.Context(), auth.HashToken(c.Value), testNow); err != nil {
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(token), testNow); err != nil {
 		t.Errorf("no session for the hash of the cookie: %v", err)
 	}
 	if _, err := st.SessionOwner(t.Context(), c.Value, testNow); !errors.Is(err, sql.ErrNoRows) {
@@ -307,7 +307,7 @@ func TestLogoutDeletesSessionClearsCookieAndRedirects(t *testing.T) {
 	}
 }
 
-func TestGetLogoutIsNotRouted(t *testing.T) {
+func TestGetLogoutIsNotRoutedAndKeepsSession(t *testing.T) {
 	t.Parallel()
 
 	st := openStore(t)
@@ -319,5 +319,8 @@ func TestGetLogoutIsNotRouted(t *testing.T) {
 	rec := gatedGet(t, newServer(st, testNow), "/logout", &http.Cookie{Name: "cc_session", Value: token}, nil)
 	if rec.Code != http.StatusMethodNotAllowed && rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /logout status = %d", rec.Code)
+	}
+	if _, err := st.SessionOwner(t.Context(), auth.HashToken(token), testNow); err != nil {
+		t.Errorf("GET /logout ended the session: %v", err)
 	}
 }
