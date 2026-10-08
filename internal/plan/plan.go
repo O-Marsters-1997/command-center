@@ -250,7 +250,7 @@ func Status(f Facts) (State, Reason) {
 	if f.LatestRun != nil && f.LatestRun.PRMerged {
 		return PRMerged, "pull request merged"
 	}
-	if state, reason, ok := statusFromRun(f.LatestRun); ok {
+	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock); ok {
 		return state, reason
 	}
 	switch {
@@ -269,7 +269,7 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-func statusFromRun(run *RunFact) (State, Reason, bool) {
+func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 	if run == nil {
 		return 0, "", false
 	}
@@ -281,7 +281,7 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	}
 	switch run.Outcome {
 	case OutcomePush:
-		state, reason := statusFromPush(*run)
+		state, reason := statusFromPush(*run, unlock)
 		return state, reason, true
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
@@ -297,7 +297,7 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	}
 }
 
-func statusFromPush(run RunFact) (State, Reason) {
+func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 	switch {
 	case run.PRClosedUnmerged:
 		return PRClosedUnmerged, "pull request closed without merging"
@@ -322,6 +322,10 @@ func statusFromPush(run RunFact) (State, Reason) {
 			return Checking, Reason(run.Verdict.Reason)
 		}
 		return Checking, "pull request open, no verdict yet"
+	case !unlock.Unlocked && len(unlock.Blocking) > 0:
+		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", strings.Join(unlock.Blocking, ", ")))
+	case !unlock.Unlocked:
+		return PushPending, Reason("push held: " + string(unlock.Reason))
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}
