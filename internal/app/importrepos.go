@@ -59,7 +59,7 @@ func moveCheckout(dataDir, shortName, fullName string) error {
 		if isLink {
 			return nil
 		}
-		return fmt.Errorf("move %s to %s: %s already exists", from, to, to)
+		return fmt.Errorf("move %s to %s: destination already exists", from, to)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
