@@ -36,3 +36,6 @@ UPDATE launches SET state = 'cancelled' WHERE id IN (
     JOIN launches l ON l.id = lm.launch_id
     WHERE l.state = 'active' AND lm.ticket_id = $1
 );
+
+-- name: LaunchMemberTickets :many
+SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id;

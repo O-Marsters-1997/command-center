@@ -170,3 +170,12 @@ func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (members
 	}
 	return int(count), nil
 }
+
+// LaunchMemberTickets returns a launch's member ticket URLs, whatever the launch's state.
+func (s *Store) LaunchMemberTickets(ctx context.Context, launchID int64) ([]string, error) {
+	urls, err := s.q.LaunchMemberTickets(ctx, launchID)
+	if err != nil {
+		return nil, fmt.Errorf("select members of launch %d: %w", launchID, err)
+	}
+	return urls, nil
+}

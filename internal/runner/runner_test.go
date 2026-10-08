@@ -186,6 +186,13 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			check:     wantArgv(func(runner.SpawnConfig) string { return prompt }),
 		},
 		{
+			name:      "substitutes the model into argv",
+			script:    dumpArg,
+			command:   []string{"{model}"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) { cfg.Model = "claude-haiku-5-5" },
+			check:     wantArgv(func(runner.SpawnConfig) string { return "claude-haiku-5-5" }),
+		},
+		{
 			name:    "substitutes the system prompt path into argv",
 			script:  dumpArg,
 			command: []string{"{system_prompt}"},

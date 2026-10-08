@@ -6,7 +6,7 @@
 # underneath them across a swap is agent_command.
 
 max_agents = 3
-agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
+agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}"]
 
 [[repo]]
 name     = "repo"

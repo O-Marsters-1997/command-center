@@ -12,6 +12,8 @@ exec cc import project:cross-repo
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
 exec sleep 0.5

@@ -6,6 +6,9 @@
     <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
       <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
     </span>
+    {{- if .Exploring}}
+    <span class="pill" data-tone="live"><span class="pill-pulse"></span>{{.Exploring}} exploring</span>
+    {{- end}}
     {{if .ObserveStale}}
     <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: {{template "age" .Observe}}</span>
     {{else}}

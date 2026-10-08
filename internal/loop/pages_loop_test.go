@@ -94,9 +94,10 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
-	f.Tick(t)
-	if len(f.Fake.Spawns) != 1 {
-		t.Fatalf("spawns after tick 1 = %d, want 1: max_agents caps the rest as queued", len(f.Fake.Spawns))
+	f.TickPastExplore(t)
+	if len(f.ImplementSpawns()) != 1 {
+		t.Fatalf("implement spawns after launch = %d, want 1: max_agents caps the rest as queued",
+			len(f.ImplementSpawns()))
 	}
 
 	var runningTicket string
@@ -122,9 +123,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 	f.Tick(t)
 
-	if len(f.Fake.Spawns) != 1 {
-		t.Errorf("spawns after tick 2 = %d, want still 1: launchEligible must start nothing from a cancelled launch",
-			len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 1 {
+		t.Errorf("implement spawns after tick 2 = %d, want still 1: a cancelled launch starts nothing",
+			len(f.ImplementSpawns()))
 	}
 	if len(f.Fake.Canceled) != 0 {
 		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", f.Fake.Canceled)
@@ -168,11 +169,11 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
 	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
 	authoriseTicket(t, f.Store, hidden.URL, plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL})), testAt)
-	f.Tick(t)
+	f.TickPastExplore(t)
 
-	if len(f.Fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 1 {
+		t.Fatalf("implement spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
+			len(f.ImplementSpawns()))
 	}
 	if _, ok := f.Latest(t)[hidden.URL]; !ok {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")

@@ -140,7 +140,7 @@ func (l *Loop) reRunOne(
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash)
+		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash, "")
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
@@ -149,7 +149,7 @@ func (l *Loop) reRunOne(
 	}
 	return l.spawnRun(ctx, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: runKindAgent, prompt: agentPrompt(ticket),
+		kind: runKindAgent, prompt: agentPrompt(ticket, ""),
 	})
 }
 

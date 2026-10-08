@@ -460,3 +460,44 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 		t.Fatalf("after = %+v, want %+v", after, want)
 	}
 }
+
+func TestAnExploreRunLeavesEveryTicketFactUntouched(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+	before, err := store.PlanInput(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "h", "g", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	runID, err := store.InsertExploreRunSkeleton(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, runID, 99, time.Now(), "/log"); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := store.PlanInput(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Runs) != len(before.Runs) || len(after.Runs) != 0 {
+		t.Errorf("runs = %+v, want none: an explore run belongs to no ticket", after.Runs)
+	}
+	pending, err := store.PendingRunsAwaitingDisposition(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Kind != "explore" || pending[0].LaunchID != 1 || pending[0].TicketID != "" {
+		t.Errorf("pending = %+v, want the one explore run for launch 1", pending)
+	}
+}

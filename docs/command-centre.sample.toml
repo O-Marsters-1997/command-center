@@ -38,7 +38,7 @@ agent_command = [
   "--agents", "{agents}",
   "--append-system-prompt-file", "{system_prompt}",
   "--permission-mode", "auto",
-  "--model", "claude-sonnet-5-5",
+  "--model", "{model}",
 ]
 
 # Caps a spawned run at this many agent turns, appended to agent_command as

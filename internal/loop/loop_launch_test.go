@@ -29,12 +29,12 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	f := newLoopFixture(t)
 	f.AuthoriseAll(t)
-	f.Tick(t)
+	f.TickPastExplore(t)
 
-	if len(f.Fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
 	}
-	spawned := f.Fake.Spawns[0]
+	spawned := f.ImplementSpawns()[0]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
@@ -52,8 +52,8 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
-	if summary.Pgid == nil || *summary.Pgid != 1 {
-		t.Errorf("pgid = %v, want 1", summary.Pgid)
+	if summary.Pgid == nil || *summary.Pgid != 2 {
+		t.Errorf("pgid = %v, want 2 (after the explore run's 1)", summary.Pgid)
 	}
 	if summary.BaselineSHA == "" {
 		t.Error("baseline_sha is empty")
@@ -68,12 +68,12 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	ticket.Body = "fake ticket body"
 	f := newLoopFixture(t, withTickets(ticket))
 	f.AuthoriseAll(t)
-	f.Tick(t)
+	f.TickPastExplore(t)
 
-	if len(f.Fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1", len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
 	}
-	written, err := os.ReadFile(f.Fake.Spawns[0].PromptPath)
+	written, err := os.ReadFile(f.ImplementSpawns()[0].PromptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,10 +99,10 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	f := newLoopFixture(t, withFailingTp())
 	f.AuthoriseAll(t)
-	f.Tick(t)
+	f.TickPastExplore(t)
 
-	if len(f.Fake.Spawns) != 0 {
-		t.Errorf("spawns = %d, want 0: a cut failure must never reach Spawn", len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 0 {
+		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.ImplementSpawns()))
 	}
 	summary := f.Latest(t)[f.Tickets[0].URL]
 	if !summary.HasOutcome || summary.Outcome != plan.OutcomeCutFailed {
@@ -116,10 +116,10 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
 	f.AuthoriseAll(t)
-	f.Tick(t)
+	f.TickPastExplore(t)
 
-	if len(f.Fake.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want exactly 1 (max_agents = 1)", len(f.Fake.Spawns))
+	if len(f.ImplementSpawns()) != 1 {
+		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.ImplementSpawns()))
 	}
 	latest := f.Latest(t)
 	if _, ran := latest["sandbox://CC-1"]; !ran {

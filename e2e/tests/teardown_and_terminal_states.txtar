@@ -16,6 +16,8 @@ exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/iss
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
 exec cc request GET /
 stdout '>failed</span>[\s\S]*?>#CC-7</button>'
 
@@ -29,6 +31,8 @@ exec cc import project:teardown-more
 exec cc tick --count 1
 exec cc request POST '/verb?verb=re-run&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-1&ticket=https://github.com/sandbox-org/teardown/issues/CC-3&ticket=https://github.com/sandbox-org/teardown/issues/CC-4'
+exec cc tick --count 1
+exec sleep 0.5
 exec cc tick --count 1
 grep -count=1 'new cc-7-x' $WORK/tp.log
 exec sleep 0.5

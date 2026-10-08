@@ -16,11 +16,12 @@ type TicketSpend struct {
 	AgentUSD    float64
 	ResolveUSD  float64
 	FollowUpUSD float64
+	ExploreUSD  float64
 }
 
 // TotalUSD is every run's weight regardless of kind.
 func (t TicketSpend) TotalUSD() float64 {
-	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
+	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD + t.ExploreUSD
 }
 
 // MergedTicketSpend returns one point per ticket whose pr_merged event falls in
@@ -40,6 +41,7 @@ func (s *Store) MergedTicketSpend(
 		points[i] = TicketSpend{
 			Ticket: row.TicketID, Title: row.Title, MergedAt: row.MergedAt,
 			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd,
+			ExploreUSD: row.ExploreUsd,
 		}
 	}
 	return points, nil
@@ -47,13 +49,13 @@ func (s *Store) MergedTicketSpend(
 
 // BoardTicketSpend is one ticket's own weight right now, merged or not.
 type BoardTicketSpend struct {
-	AgentUSD, ResolveUSD, FollowUpUSD float64
-	Merged                            bool
+	AgentUSD, ResolveUSD, FollowUpUSD, ExploreUSD float64
+	Merged                                        bool
 }
 
 // TotalUSD is every run's weight regardless of kind.
 func (t BoardTicketSpend) TotalUSD() float64 {
-	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD
+	return t.AgentUSD + t.ResolveUSD + t.FollowUpUSD + t.ExploreUSD
 }
 
 // BoardTicketSpend returns every ticket in scope's weight, keyed by ticket URL: runs
@@ -67,7 +69,8 @@ func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map
 	byURL := make(map[string]BoardTicketSpend, len(rows))
 	for _, row := range rows {
 		byURL[row.TicketID] = BoardTicketSpend{
-			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd, Merged: row.Merged,
+			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd,
+			ExploreUSD: row.ExploreUsd, Merged: row.Merged,
 		}
 	}
 	return byURL, nil
