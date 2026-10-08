@@ -8,16 +8,29 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 )
+
+func writeAgentFiles(t *testing.T) config.Workspace {
+	t.Helper()
+
+	dir := t.TempDir()
+	ws := config.Workspace{
+		SettingsPath:     filepath.Join(dir, "agent.json"),
+		SystemPromptPath: filepath.Join(dir, "system-prompt.md"),
+		AgentsPath:       filepath.Join(dir, "agents.json"),
+	}
+	if err := loop.WriteAgentFiles(ws); err != nil {
+		t.Fatalf("WriteAgentFiles: %v", err)
+	}
+	return ws
+}
 
 func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "agent.json")
-	if err := loop.WriteAgentSettings(path); err != nil {
-		t.Fatalf("WriteAgentSettings: %v", err)
-	}
+	path := writeAgentFiles(t).SettingsPath
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -48,10 +61,7 @@ func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
 func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "system-prompt.md")
-	if err := loop.WriteAgentSystemPrompt(path); err != nil {
-		t.Fatalf("WriteAgentSystemPrompt: %v", err)
-	}
+	path := writeAgentFiles(t).SystemPromptPath
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -89,10 +99,7 @@ func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *tes
 func TestWriteAgentDigestDefinitionDefinesDigestOnHaikuWithReadOnlyTools(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "agents.json")
-	if err := loop.WriteAgentDigestDefinition(path); err != nil {
-		t.Fatalf("WriteAgentDigestDefinition: %v", err)
-	}
+	path := writeAgentFiles(t).AgentsPath
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -125,21 +132,18 @@ func TestWriteAgentDigestDefinitionDefinesDigestOnHaikuWithReadOnlyTools(t *test
 	}
 }
 
-func TestWriteAgentSettingsIsIdempotent(t *testing.T) {
+func TestWriteAgentFilesIsIdempotent(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(t.TempDir(), "agent.json")
-	if err := loop.WriteAgentSettings(path); err != nil {
-		t.Fatalf("first WriteAgentSettings: %v", err)
-	}
-	first, err := os.ReadFile(path)
+	ws := writeAgentFiles(t)
+	first, err := os.ReadFile(ws.SettingsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := loop.WriteAgentSettings(path); err != nil {
-		t.Fatalf("second WriteAgentSettings: %v", err)
+	if err := loop.WriteAgentFiles(ws); err != nil {
+		t.Fatalf("second WriteAgentFiles: %v", err)
 	}
-	second, err := os.ReadFile(path)
+	second, err := os.ReadFile(ws.SettingsPath)
 	if err != nil {
 		t.Fatal(err)
 	}

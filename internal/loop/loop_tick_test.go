@@ -35,7 +35,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
@@ -78,7 +78,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()

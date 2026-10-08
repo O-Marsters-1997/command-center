@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -13,34 +12,27 @@ import (
 )
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	now := l.clock.Now()
-
-	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbRefresh)
+	requested := map[string]bool{}
+	err := l.eachIntent(ctx, plan.VerbRefresh, func(intent store.VerbIntent) error {
+		requested[intent.TicketID] = true
+		e, ok := snap.Entry(intent.TicketID)
+		if !ok {
+			return nil
+		}
+		var row plan.PushRow
+		if e.LastPush != nil {
+			row = *e.LastPush
+		}
+		return l.refreshOne(ctx, snap, obs, e.Ticket, row, true)
+	})
 	if err != nil {
 		return err
 	}
-	requested := make(map[string]bool, len(intents))
-	for _, intent := range intents {
-		requested[intent.TicketID] = true
-		if e, ok := snap.Entry(intent.TicketID); ok {
-			var row plan.PushRow
-			if e.LastPush != nil {
-				row = *e.LastPush
-			}
-			if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, now, true); err != nil {
-				return err
-			}
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-
-	return l.autoRefresh(ctx, snap, obs, requested, now)
+	return l.autoRefresh(ctx, snap, obs, requested)
 }
 
 func (l *Loop) autoRefresh(
-	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[string]bool, now time.Time,
+	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[string]bool,
 ) error {
 	outcomes, err := l.store.LatestRefreshOutcomes(ctx)
 	if err != nil {
@@ -55,7 +47,7 @@ func (l *Loop) autoRefresh(
 		if e.Run == nil || !e.Run.HasOutcome || e.Run.Outcome != plan.OutcomePush {
 			continue
 		}
-		if obs.PRs[branchKey(t.Repo, t.Branch)].State != plan.Open {
+		if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
 		pushRow := e.LastPush
@@ -65,7 +57,7 @@ func (l *Loop) autoRefresh(
 		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, *pushRow, obs) {
 			continue
 		}
-		if err := l.refreshOne(ctx, snap, obs, t, *pushRow, now, false); err != nil {
+		if err := l.refreshOne(ctx, snap, obs, t, *pushRow, false); err != nil {
 			return err
 		}
 	}
@@ -92,41 +84,36 @@ func supersededConflict(o store.RefreshOutcome, t plan.Ticket, row plan.PushRow,
 	if !ok {
 		return false
 	}
-	return obs.BranchTips[branchKey(t.Repo, t.Branch)] != branchTip ||
-		obs.BranchTips[branchKey(t.Repo, row.BaseBranch)] != baseTip
+	return obs.BranchTips[plan.BranchKey(t.Repo, t.Branch)] != branchTip ||
+		obs.BranchTips[plan.BranchKey(t.Repo, row.BaseBranch)] != baseTip
 }
 
 func baseMoved(row plan.PushRow, obs plan.Observation, repo string) bool {
-	return row.BaseBranch != "" && obs.BranchTips[branchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
+	return row.BaseBranch != "" && obs.BranchTips[plan.BranchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
 }
 
 func (l *Loop) refreshOne(
 	ctx context.Context, snap plan.Snapshot, obs plan.Observation, ticket plan.Ticket, row plan.PushRow,
-	now time.Time, requested bool,
+	requested bool,
 ) error {
 	branch := ticket.Branch
 	refuse := func(detail string) error {
 		if !requested {
 			return nil
 		}
-		return l.store.AppendEvent(ctx,
-			store.Event{At: now, TicketURL: ticket.URL, Kind: store.EventRefreshRefused, Detail: detail})
+		return l.event(ctx, ticket.URL, store.EventRefreshRefused, detail)
 	}
 
-	worktreePath, ok := obs.Worktrees[branchKey(ticket.Repo, branch)]
-	switch {
-	case !ok:
-		return refuse(fmt.Sprintf("no worktree for %s", branch))
-	case obs.Runs[ticket.URL].Alive:
-		return refuse(fmt.Sprintf("a run is alive in %s", worktreePath))
-	case obs.MidMerge[branchKey(ticket.Repo, branch)]:
+	worktreePath, refusal := idleWorktreeFor(ticket, obs)
+	if refusal != "" {
+		return refuse(refusal)
+	}
+	if obs.MidMerge[plan.BranchKey(ticket.Repo, branch)] {
 		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
-		return l.store.AppendEvent(ctx, store.Event{
-			At: now, TicketURL: ticket.URL, Kind: store.EventRefreshRefused, Detail: err.Error(),
-		})
+		return l.event(ctx, ticket.URL, store.EventRefreshRefused, err.Error())
 	}
 
 	entry, _ := snap.Entry(ticket.URL)
@@ -137,38 +124,28 @@ func (l *Loop) refreshOne(
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
 	if err != nil {
 		if restacked {
-			if err := l.store.AppendEvent(ctx, store.Event{
-				At: now, TicketURL: ticket.URL, Kind: store.EventRestacked,
-				Detail: detail + ", conflicted",
-			}); err != nil {
+			if err := l.event(ctx, ticket.URL, store.EventRestacked, detail+", conflicted"); err != nil {
 				return err
 			}
 		}
-		baseTip := obs.BranchTips[branchKey(ticket.Repo, unlock.BaseBranch)]
-		return l.store.AppendEvent(ctx, store.Event{
-			At: now, TicketURL: ticket.URL, Kind: store.EventRefreshConflicted,
-			Detail: conflictDetail(obs.BranchTips[branchKey(ticket.Repo, branch)], baseTip, err),
-		})
+		baseTip := obs.BranchTips[plan.BranchKey(ticket.Repo, unlock.BaseBranch)]
+		return l.event(ctx, ticket.URL, store.EventRefreshConflicted,
+			conflictDetail(obs.BranchTips[plan.BranchKey(ticket.Repo, branch)], baseTip, err))
 	}
 
 	kind := store.EventRefreshed
 	if restacked {
 		kind = store.EventRestacked
 	}
-	if err := l.store.AppendEvent(ctx, store.Event{
-		At: now, TicketURL: ticket.URL, Kind: kind,
-		Detail: fmt.Sprintf("merged origin/%s then %s", branch, detail),
-	}); err != nil {
+	if err := l.event(ctx, ticket.URL, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
 		return err
 	}
-	return l.verifyOne(ctx, ticket, worktreePath, verifyCommandByRepo(l.cfg.Repos)[ticket.Repo], now)
+	return l.verifyOne(ctx, ticket, worktreePath, l.repo(ticket.Repo).VerifyCommand)
 }
 
 const maxVerifyDetail = 4000
 
-func (l *Loop) verifyOne(
-	ctx context.Context, ticket plan.Ticket, worktreePath string, argv []string, now time.Time,
-) error {
+func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath string, argv []string) error {
 	if len(argv) == 0 {
 		return nil
 	}
@@ -182,10 +159,8 @@ func (l *Loop) verifyOne(
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}
-	return l.store.AppendEvent(ctx, store.Event{
-		At: now, TicketURL: ticket.URL, Kind: store.EventVerificationFailed,
-		Detail: fmt.Sprintf("%s: %s: %s", strings.Join(argv, " "), err, detail),
-	})
+	return l.event(ctx, ticket.URL, store.EventVerificationFailed,
+		fmt.Sprintf("%s: %s: %s", strings.Join(argv, " "), err, detail))
 }
 
 func advanceOnto(
@@ -211,7 +186,7 @@ func restackBoundary(repo string, row plan.PushRow, obs plan.Observation) string
 	if row.BaseBranch == "" {
 		return ""
 	}
-	if pr := obs.PRs[branchKey(repo, row.BaseBranch)]; pr.State == plan.Merged && pr.HeadOid != "" {
+	if pr := obs.PRs[plan.BranchKey(repo, row.BaseBranch)]; pr.State == plan.Merged && pr.HeadOid != "" {
 		return pr.HeadOid
 	}
 	return row.BaseSHAAtPush

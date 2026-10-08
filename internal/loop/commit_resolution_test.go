@@ -60,7 +60,7 @@ func TestCommitResolutionCommitsTheStagedMergeAndPushesInTheSameTick(t *testing.
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -116,7 +116,7 @@ func TestCommitResolutionRefusesAnUnmergedPath(t *testing.T) {
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -155,7 +155,7 @@ func TestCommitResolutionRefusesWhenNothingIsStaged(t *testing.T) {
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -190,7 +190,7 @@ func TestCommitResolutionRefusesALiveRun(t *testing.T) {
 
 	store, ticket, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
 		PRs:       map[string]plan.PR{},
 		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 	}
@@ -223,7 +223,7 @@ func TestCommitResolutionTouchingADeniedPathIsRefusedByThePushPolicy(t *testing.
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -266,7 +266,7 @@ func TestCommitResolutionSkipsTheCommitWhenAHumanAlreadyCommittedByHand(t *testi
 
 	store, _, at := commitResolutionFixture(t, root, repoPath)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 

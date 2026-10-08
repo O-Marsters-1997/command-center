@@ -17,7 +17,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 	}
 
 	for _, t := range tickets {
-		pr := obs.PRs[branchKey(t.Repo, t.Branch)]
+		pr := obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
 		if pr.State != plan.Merged {
 			continue
 		}

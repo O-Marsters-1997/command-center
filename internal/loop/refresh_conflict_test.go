@@ -57,7 +57,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		for ticketURL, alive := range aliveRuns {
 			obs.Runs[ticketURL] = plan.RunObservation{Alive: alive}
 		}
-		obs.PRs[loop.BranchKey("repo", "child")] = plan.PR{
+		obs.PRs[plan.BranchKey("repo", "child")] = plan.PR{
 			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
@@ -65,7 +65,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[loop.BranchKey("repo", "child")] = mid
+		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
 		return obs, nil
 	}
 

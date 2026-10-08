@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
+	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -19,8 +19,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
-
-const killVerb = plan.VerbKill
 
 const (
 	runKindAgent    = "agent"
@@ -44,6 +42,7 @@ type Loop struct {
 	cfg        config.Config
 	ws         config.Workspace
 	trackerFor tracker.Resolver
+	repos      map[string]config.Repo
 	nudgeCh    chan struct{}
 	spawned    []string
 }
@@ -54,12 +53,60 @@ type Loop struct {
 func NewLoop(
 	store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
 ) *Loop {
+	repos := make(map[string]config.Repo, len(cfg.Repos))
+	for _, r := range cfg.Repos {
+		repos[r.Name] = r
+	}
 	return &Loop{
 		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
 		trackerFor: tracker.New,
+		repos:      repos,
 		nudgeCh:    make(chan struct{}, 1),
 	}
+}
+
+func (l *Loop) repo(name string) config.Repo { return l.repos[name] }
+
+func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error {
+	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
+}
+
+func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIntent) error) error {
+	intents, err := l.store.PendingVerbIntents(ctx, verb)
+	if err != nil {
+		return err
+	}
+	for _, intent := range intents {
+		if err := fn(intent); err != nil {
+			return err
+		}
+		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, error) {
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return store.Ticket{}, false, err
+	}
+	i := slices.IndexFunc(tickets, func(t store.Ticket) bool { return t.URL == url })
+	if i < 0 {
+		return store.Ticket{}, false, nil
+	}
+	return tickets[i], true, nil
+}
+
+func runSteps(steps ...func() error) error {
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Nudge wakes Run for one tick right now rather than at the end of store.TickPeriod. A nudge that
@@ -124,73 +171,42 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 }
 
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
-	if err := l.tickCheckingWaits(ctx); err != nil {
-		return err
-	}
-	if err := l.store.SaveObservation(ctx, obs); err != nil {
-		return err
-	}
-	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
-		return err
-	}
-	if err := l.applyCancelIntents(ctx); err != nil {
-		return err
-	}
-	l.spawned = nil
-	if err := l.applyKillIntents(ctx); err != nil {
-		return err
-	}
-	if err := l.reconcileRuns(ctx, obs); err != nil {
-		return err
-	}
-	if err := l.store.SaveObservation(ctx, obs); err != nil {
-		return err
-	}
-	if err := l.recordVerdictTransitions(ctx, obs); err != nil {
-		return err
-	}
-	return l.recordMergedEvents(ctx, obs)
+	return runSteps(
+		func() error { return l.tickCheckingWaits(ctx) },
+		func() error { return l.store.SaveObservation(ctx, obs) },
+		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
+		func() error { return l.applyCancelIntents(ctx) },
+		func() error { l.spawned = nil; return nil },
+		func() error { return l.applyKillIntents(ctx) },
+		func() error { return l.reconcileRuns(ctx, obs) },
+		func() error { return l.store.SaveObservation(ctx, obs) },
+		func() error { return l.recordVerdictTransitions(ctx, obs) },
+		func() error { return l.recordMergedEvents(ctx, obs) },
+	)
 }
 
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	if err := l.applyReRunIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyFollowUpIntents(ctx, obs); err != nil {
-		return err
-	}
-	if err := l.applyAbortIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyResolveIntents(ctx, obs); err != nil {
-		return err
-	}
-	for _, url := range l.spawned {
-		obs.Runs[url] = plan.RunObservation{Alive: true}
-	}
-	if err := l.retargetMerged(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyRefreshIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	rereadLocalTips(ctx, obs, repoPathsByName(l.cfg.Repos))
-	if err := l.applyRetryPushIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyRemoveWorktreeIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyCommitResolutionIntents(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.pushPushable(ctx, snap, obs); err != nil {
-		return err
-	}
-	if err := l.applyDraftGate(ctx, snap); err != nil {
-		return err
-	}
-	return l.launchEligible(ctx, snap)
+	return runSteps(
+		func() error { return l.applyReRunIntents(ctx, snap, obs) },
+		func() error { return l.applyFollowUpIntents(ctx, obs) },
+		func() error { return l.applyAbortIntents(ctx, snap, obs) },
+		func() error { return l.applyResolveIntents(ctx, obs) },
+		func() error {
+			for _, url := range l.spawned {
+				obs.Runs[url] = plan.RunObservation{Alive: true}
+			}
+			return nil
+		},
+		func() error { return l.retargetMerged(ctx, snap, obs) },
+		func() error { return l.applyRefreshIntents(ctx, snap, obs) },
+		func() error { l.rereadLocalTips(ctx, obs); return nil },
+		func() error { return l.applyRetryPushIntents(ctx, snap, obs) },
+		func() error { return l.applyRemoveWorktreeIntents(ctx, snap, obs) },
+		func() error { return l.applyCommitResolutionIntents(ctx, snap, obs) },
+		func() error { return l.pushPushable(ctx, snap, obs) },
+		func() error { return l.applyDraftGate(ctx, snap) },
+		func() error { return l.launchEligible(ctx, snap) },
+	)
 }
 
 func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {
@@ -226,24 +242,9 @@ func (l *Loop) sweepExpiredSessions(ctx context.Context) {
 }
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	intents, err := l.store.PendingVerbIntents(ctx, importVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	now := l.clock.Now()
-	for _, intent := range intents {
-		if err := l.importFeature(ctx, intent.TicketID); err != nil {
-			return err
-		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
+	return l.eachIntent(ctx, store.ImportVerb, func(intent store.VerbIntent) error {
+		return l.importFeature(ctx, intent.TicketID)
+	})
 }
 
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
@@ -303,31 +304,18 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 }
 
 func (l *Loop) applyKillIntents(ctx context.Context) error {
-	intents, err := l.store.PendingVerbIntents(ctx, killVerb)
-	if err != nil {
-		return err
-	}
-	if len(intents) == 0 {
-		return nil
-	}
-
-	latest, err := l.store.LatestRunsByTicket(ctx)
-	if err != nil {
-		return err
-	}
-
-	now := l.clock.Now()
-	for _, intent := range intents {
+	return l.eachIntent(ctx, plan.VerbKill, func(intent store.VerbIntent) error {
+		latest, err := l.store.LatestRunsByTicket(ctx)
+		if err != nil {
+			return err
+		}
 		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
 				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
 			}
 		}
-		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
@@ -355,7 +343,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 		if alive {
 			continue
 		}
-		if err := l.disposeRun(ctx, run, byTicket[run.TicketID], obs, now); err != nil {
+		if err := l.disposeRun(ctx, run, byTicket[run.TicketID], obs); err != nil {
 			return err
 		}
 	}
@@ -363,7 +351,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 }
 
 func (l *Loop) disposeRun(
-	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation, now time.Time,
+	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) error {
 	commits := 0
 	if run.BaselineSHA != "" {
@@ -379,58 +367,46 @@ func (l *Loop) disposeRun(
 	if code, ok := l.runner.Reap(run.Pgid); ok {
 		exitCode = &code
 	}
-	metrics := l.parseRunMetrics(run.LogPath)
-	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, now, metrics); err != nil {
+	var metrics *agentlog.RunMetrics
+	if m, ok := parseLog(run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
+		metrics = &m
+	}
+	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), metrics); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
-	readings := l.parseReadings(run.LogPath)
+	readings, _ := parseLog(run.LogPath, "run readings", agentlog.ParseReadings)
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	return l.store.AppendEvent(ctx, store.Event{
-		At: now, TicketURL: ticket.URL, Kind: eventRunDisposed, Detail: outcome.String(),
-	})
+	return l.event(ctx, ticket.URL, eventRunDisposed, outcome.String())
 }
 
-func (l *Loop) parseRunMetrics(logPath string) *agentlog.RunMetrics {
+func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bool) {
+	var zero T
 	if logPath == "" {
-		return nil
+		return zero, false
 	}
-	metrics, err := agentlog.ParseMetrics(logPath)
+	v, err := parse(logPath)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			log.Printf("parse run metrics %s: %v", logPath, err)
+			log.Printf("parse %s %s: %v", what, logPath, err)
 		}
-		return nil
+		return zero, false
 	}
-	return &metrics
-}
-
-func (l *Loop) parseReadings(logPath string) []agentlog.Reading {
-	if logPath == "" {
-		return nil
-	}
-	readings, err := agentlog.ParseReadings(logPath)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			log.Printf("parse run readings %s: %v", logPath, err)
-		}
-		return nil
-	}
-	return readings
+	return v, true
 }
 
 func (l *Loop) commitsSinceBaseline(
 	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
-	if worktreePath := obs.Worktrees[branchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
+	if worktreePath := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
 		return git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
 	}
-	tip, ok := obs.BranchTips[branchKey(ticket.Repo, ticket.Branch)]
+	tip, ok := obs.BranchTips[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return 0, nil
 	}
-	repoPath := repoPathsByName(l.cfg.Repos)[ticket.Repo]
+	repoPath := l.repo(ticket.Repo).Checkout
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
@@ -445,17 +421,10 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	repoPaths := repoPathsByName(l.cfg.Repos)
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
 		ticket := byTicket[ticketURL]
-		spec := launchSpec{
-			ticket:     ticket,
-			baseBranch: entry.Unlock.BaseBranch,
-			promptHash: entry.PromptHash,
-			repoPath:   repoPaths[ticket.Repo],
-		}
-		if err := l.cutAndSpawn(ctx, spec); err != nil {
+		if err := l.cutAndSpawn(ctx, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
 			return err
 		}
 	}
@@ -482,28 +451,21 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 	return byURL
 }
 
-type launchSpec struct {
-	ticket     store.Ticket
-	baseBranch string
-	promptHash string
-	repoPath   string
-}
+func (l *Loop) cutAndSpawn(ctx context.Context, ticket store.Ticket, baseBranch, promptHash string) error {
+	branch := ticket.Branch
+	repoPath := l.repo(ticket.Repo).Checkout
 
-func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
-	branch := spec.ticket.Branch
-	baseRef := "origin/" + spec.baseBranch
-
-	if err := l.worktrees.New(ctx, spec.repoPath, branch, baseRef); err != nil {
-		_, insertErr := l.store.InsertCutFailedRun(ctx, spec.ticket.URL, spec.promptHash, l.clock.Now())
+	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
+		_, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now())
 		return insertErr
 	}
 
-	baselineSHA, err := git.BranchTip(ctx, spec.repoPath, branch)
+	baselineSHA, err := git.BranchTip(ctx, repoPath, branch)
 	if err != nil {
-		return fmt.Errorf("read baseline for %s: %w", spec.ticket.URL, err)
+		return fmt.Errorf("read baseline for %s: %w", ticket.URL, err)
 	}
 
-	worktrees, err := git.WorktreePaths(ctx, spec.repoPath)
+	worktrees, err := git.WorktreePaths(ctx, repoPath)
 	if err != nil {
 		return fmt.Errorf("list worktrees after cutting %s: %w", branch, err)
 	}
@@ -512,33 +474,34 @@ func (l *Loop) cutAndSpawn(ctx context.Context, spec launchSpec) error {
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spec.ticket, worktreePath, baselineSHA, spec.promptHash, runKindAgent, "")
+	return l.spawnRun(ctx, spawnSpec{
+		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
+		kind: runKindAgent, prompt: agentPrompt(ticket),
+	})
 }
 
-func (l *Loop) spawnRun(
-	ctx context.Context, ticket store.Ticket, worktreePath, baselineSHA, promptHash, kind string,
-	followUpText string,
-) error {
-	var prompt string
-	switch kind {
-	case runKindResolve:
-		prompt = plan.ComposeResolve(ticket.Plan())
-	case runKindFollowUp:
-		prompt = plan.ComposeFollowUp(followUpText)
-	default:
-		prompt = plan.Compose(ticket.Plan())
-		if ticket.Body != "" {
-			prompt += "\n\n## Ticket\n\n" + ticket.Body
-		}
+func agentPrompt(ticket store.Ticket) string {
+	prompt := plan.Compose(ticket.Plan())
+	if ticket.Body != "" {
+		prompt += "\n\n## Ticket\n\n" + ticket.Body
 	}
+	return prompt
+}
 
-	runID, err := l.store.InsertRunSkeleton(ctx, ticket.URL, kind, baselineSHA, promptHash)
+type spawnSpec struct {
+	ticket                                 store.Ticket
+	worktree, baseline, hash, kind, prompt string
+}
+
+func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
+	ticket := spec.ticket
+	runID, err := l.store.InsertRunSkeleton(ctx, ticket.URL, spec.kind, spec.baseline, spec.hash)
 	if err != nil {
 		return err
 	}
 
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
-	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
+	if err := os.WriteFile(promptPath, []byte(spec.prompt), 0o600); err != nil {
 		return fmt.Errorf("write prompt for run %d: %w", runID, err)
 	}
 
@@ -549,35 +512,26 @@ func (l *Loop) spawnRun(
 	}
 	defer func() { _ = logFile.Close() }()
 
-	var systemPromptPath, agentsPath string
-	if kind == runKindAgent {
-		systemPromptPath = l.ws.SystemPromptPath
-		agentsPath = l.ws.AgentsPath
-	}
-
 	spawnCfg := runner.SpawnConfig{
-		AgentCommand:     l.cfg.AgentCommand,
-		WorktreePath:     worktreePath,
-		SettingsPath:     l.ws.SettingsPath,
-		SystemPromptPath: systemPromptPath,
-		AgentsPath:       agentsPath,
-		Prompt:           prompt,
-		PromptPath:       promptPath,
-		LogFile:          logFile,
+		AgentCommand: l.cfg.AgentCommand,
+		WorktreePath: spec.worktree,
+		SettingsPath: l.ws.SettingsPath,
+		Prompt:       spec.prompt,
+		PromptPath:   promptPath,
+		LogFile:      logFile,
+	}
+	if spec.kind == runKindAgent {
+		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
+		spawnCfg.AgentsPath = l.ws.AgentsPath
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
 		return l.store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, l.clock.Now(), nil)
 	}
 
-	pgid := result.Pid
-	startedAt := l.clock.Now()
-	if err := l.store.RecordSpawn(ctx, runID, pgid, startedAt, logPath); err != nil {
+	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
 		return err
 	}
 	l.spawned = append(l.spawned, ticket.URL)
-	return l.store.AppendEvent(ctx, store.Event{
-		At: startedAt, TicketURL: ticket.URL, Kind: eventRunLaunched,
-		Detail: fmt.Sprintf("spawned pid %d in %s", pgid, worktreePath),
-	})
+	return l.event(ctx, ticket.URL, eventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
 }

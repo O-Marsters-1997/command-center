@@ -34,7 +34,7 @@ func TestResolveSpawnsAgainstTheConflictSkillAndConsumesTheIntentOnce(t *testing
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -91,7 +91,7 @@ func TestResolveNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
 		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
@@ -131,8 +131,8 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
-		MidMerge: map[string]bool{loop.BranchKey("repo", "cc-1"): true},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		MidMerge: map[string]bool{plan.BranchKey("repo", "cc-1"): true},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -177,7 +177,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 		t.Errorf("row does not offer commit-resolution, want the verb that commits and pushes it:\n%s", row)
 	}
 
-	obs.MidMerge[loop.BranchKey("repo", "cc-1")] = false
+	obs.MidMerge[plan.BranchKey("repo", "cc-1")] = false
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("third RunOnce: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestReRunAfterAResolveRunReachesTheAgent(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 

@@ -33,7 +33,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -114,7 +114,7 @@ func TestFollowUpNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
 		Runs:      map[string]plan.RunObservation{ticket.URL: {Alive: true}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }

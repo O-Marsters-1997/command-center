@@ -59,7 +59,7 @@ func ProspectiveBase(t Ticket, byURL map[string]Ticket, stacking bool) string {
 	if len(sameRepo) == 1 && stacking {
 		return sameRepo[0].Branch
 	}
-	return defaultBranch
+	return DefaultBaseBranch
 }
 
 type PreviewRow struct {
@@ -98,7 +98,7 @@ func (s Snapshot) Preview(selection []string) ([]PreviewRow, error) {
 }
 
 func (s Snapshot) baseRun(base string) *RunFact {
-	if base == defaultBranch {
+	if base == DefaultBaseBranch {
 		return nil
 	}
 	for _, e := range s.Entries {

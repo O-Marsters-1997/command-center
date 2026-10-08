@@ -142,7 +142,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -202,7 +202,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -262,8 +262,8 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:       map[string]plan.PR{loop.BranchKey("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
+		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -306,7 +306,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 

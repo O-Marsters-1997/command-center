@@ -97,10 +97,10 @@ func draftConsumerPR(
 ) plan.Observation {
 	return plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("repo", "cc-1"): {
+			plan.BranchKey("repo", "cc-1"): {
 				Number: 1, State: plan.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks,
 			},
-			loop.BranchKey("services", "pla-40"): {State: blockerState},
+			plan.BranchKey("services", "pla-40"): {State: blockerState},
 		},
 		BranchTips: map[string]string{loop.MainTipKey("repo"): "main-tip"},
 	}
@@ -194,7 +194,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// GitHub now reports the PR as ready, as a real observe would from here on.
-	obs.PRs[loop.BranchKey("repo", "cc-1")] = plan.PR{
+	obs.PRs[plan.BranchKey("repo", "cc-1")] = plan.PR{
 		Number: 1, State: plan.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS"),
 	}
 	for i := range 9 {
@@ -299,8 +299,8 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "parent"): "/repos/parent"},
-		PRs:       map[string]plan.PR{loop.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
+		Worktrees: map[string]string{plan.BranchKey("repo", "parent"): "/repos/parent"},
+		PRs:       map[string]plan.PR{plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
@@ -341,7 +341,7 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	dispositionAsPushed(t, store, consumer.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -379,7 +379,7 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{loop.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 

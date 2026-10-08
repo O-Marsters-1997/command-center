@@ -84,9 +84,9 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{
-			loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
+			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
 		},
-		Worktrees: map[string]string{loop.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
+		Worktrees: map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
 	lp := loop.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
@@ -102,7 +102,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	if !got.ObservedAt.Equal(at) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
-	if got.PRs[loop.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
+	if got.PRs[plan.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
 		t.Errorf("prs = %+v", got.PRs)
 	}
 }
@@ -150,7 +150,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{loop.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
+		PRs: map[string]plan.PR{plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
 	ok := loop.NewLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },

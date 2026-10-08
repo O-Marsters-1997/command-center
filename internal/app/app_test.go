@@ -125,12 +125,12 @@ func seedTickets(t *testing.T, dsn string) {
 
 // stubSquashOnly stands in for the real gh-backed check, which these tests must not shell out
 // to: none of their fixture repos are real git checkouts with a GitHub remote.
-var stubSquashOnly = app.WithRepoCheck(func(context.Context, config.Workspace, []config.Repo) error { return nil })
+var stubSquashOnly = app.WithRepoCheck(func(context.Context, []config.Repo) error { return nil })
 
 func TestNewRefusesARepoThatAllowsMergeCommits(t *testing.T) {
 	configPath := appConfig(t)
 
-	notSquashOnly := app.WithRepoCheck(func(_ context.Context, _ config.Workspace, repos []config.Repo) error {
+	notSquashOnly := app.WithRepoCheck(func(_ context.Context, repos []config.Repo) error {
 		return fmt.Errorf("repo %s allows merge commits (allow_merge_commit=true): "+
 			"command-centre requires squash-only merges, refusing to start", repos[0].Name)
 	})

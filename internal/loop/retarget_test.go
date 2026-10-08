@@ -31,11 +31,11 @@ func mergeParentIntoMain(t *testing.T, repoPath string) {
 
 func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
 	obs := baseObservation(f, "")
-	obs.PRs[loop.BranchKey("repo", "parent")] = plan.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged}
-	obs.PRs[loop.BranchKey("repo", "child")] = plan.PR{
+	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged}
+	obs.PRs[plan.BranchKey("repo", "child")] = plan.PR{
 		Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: plan.Open,
 	}
-	delete(obs.BranchTips, loop.BranchKey("repo", "parent"))
+	delete(obs.BranchTips, plan.BranchKey("repo", "parent"))
 	return obs
 }
 
@@ -246,8 +246,8 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	prs := map[string]plan.PR{
-		loop.BranchKey("repo", "parent"): {Number: 1, State: plan.Merged, BaseRef: "main"},
-		loop.BranchKey("repo", "child"): {
+		plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Merged, BaseRef: "main"},
+		plan.BranchKey("repo", "child"): {
 			Number: 2, State: plan.Open, HeadOid: childTip, BaseRef: "main",
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
@@ -271,7 +271,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			}
 		}
 		obs := plan.Observation{
-			Worktrees:  map[string]string{loop.BranchKey("repo", "child"): "/repos/child"},
+			Worktrees:  map[string]string{plan.BranchKey("repo", "child"): "/repos/child"},
 			BranchTips: map[string]string{loop.MainTipKey("repo"): observedMainTip},
 			PRs:        prs,
 		}
@@ -420,7 +420,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[loop.BranchKey("repo", "parent")] = plan.PR{
+	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
 	}
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
@@ -576,7 +576,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[loop.BranchKey("repo", "parent")] = plan.PR{
+	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
 	}
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
@@ -653,11 +653,11 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	}
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[loop.BranchKey("repo", "parent")] = plan.PR{
+	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
 	}
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
-	obs.MidMerge[loop.BranchKey("repo", "child")] = true
+	obs.MidMerge[plan.BranchKey("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
@@ -676,7 +676,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
 	// it was: still built on the parent's own commit, still needing main.
 	runGit(t, "-C", f.childWorktree, "rebase", "--abort")
-	obs.MidMerge[loop.BranchKey("repo", "child")] = false
+	obs.MidMerge[plan.BranchKey("repo", "child")] = false
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)

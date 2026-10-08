@@ -9,7 +9,7 @@ const ReadyToMergeLabel = "ready-to-merge"
 // StackedReadyToMergeWarning reports whether a PR based on anything other than main carries
 // ready-to-merge, which would squash-merge into its parent branch with checks unseen.
 func StackedReadyToMergeWarning(baseRef string, labels []string) bool {
-	if baseRef == "" || baseRef == defaultBranch {
+	if baseRef == "" || baseRef == DefaultBaseBranch {
 		return false
 	}
 	return slices.Contains(labels, ReadyToMergeLabel)
