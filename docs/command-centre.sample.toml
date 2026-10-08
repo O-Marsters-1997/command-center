@@ -46,6 +46,10 @@ agent_command = [
 # an entire launch window.
 # max_turns = 60
 
+# Caps a review run. Defaults to 20 (or half of max_turns when that is lower); must be below
+# max_turns, so a review that outgrows it writes findings instead of turning into an implement.
+# review_max_turns = 20
+
 # A repo is located by exactly one of remote and path. path points at a checkout that already
 # exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this
 # same file run on a machine with no tree on it:

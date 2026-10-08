@@ -15,7 +15,7 @@ INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: LatestRunsByTicket :many
@@ -47,6 +47,9 @@ WHERE l.state = 'active';
 
 -- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
+
+-- name: PrecedingRunKind :one
+SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1;
 
 -- name: LatestRunLog :one
 SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1;

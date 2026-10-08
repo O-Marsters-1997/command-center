@@ -122,6 +122,7 @@ type Forge interface {
 	Create(ctx context.Context, repoPath, base, body string, draft bool) error
 	Ready(ctx context.Context, repoPath, branch string) error
 	Edit(ctx context.Context, repoPath, branch, base string) error
+	Comment(ctx context.Context, repoPath, branch, body string) error
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 }
 
@@ -146,6 +147,12 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 // Ready marks branch's pull request as ready for review, undoing draft state.
 func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 	_, err := run(ctx, repoPath, "pr", "ready", branch)
+	return err
+}
+
+// Comment adds body as a comment on branch's pull request.
+func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
+	_, err := run(ctx, repoPath, "pr", "comment", branch, "--body", body)
 	return err
 }
 
