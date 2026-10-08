@@ -78,7 +78,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		f:         f,
 		aliveRuns: aliveRuns,
 		loop:      loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
-		server:    web.NewServer(store, clock, ""),
+		server:    openServer(store, clock, ""),
 		store:     store,
 	}
 }

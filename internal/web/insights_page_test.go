@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 const goldenInsights = "testdata/insights.golden.html"
@@ -24,7 +22,7 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	repos := named("cc-sandbox")
-	server := web.NewServer(track(t, store, repos...), fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), "")
+	server := openServer(track(t, store, repos...), fixedClock(time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)), "")
 
 	got := renderPath(t, server, "/insights?repo=cc-sandbox&feature=feat-a")
 	if !strings.Contains(got, `href="/insights?feature=feat-a"`) {

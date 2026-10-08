@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -56,7 +55,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://ROOT", 4); got != "L1" {
@@ -110,7 +109,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := web.NewServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	if got := rowCellAt(t, page, "sandbox://PARENT", 1); strings.Contains(got, "flag-warning") {
@@ -150,7 +149,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(track(t, store, named("repo")...), fixedClock(at), "")
+	server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
 	page := renderPage(t, server)
 
 	got := rowCellAt(t, page, ticket.URL, 1)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 type renderedRow struct {
@@ -82,7 +81,7 @@ func boardFor(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
 
 	at := testNow
-	return renderBoard(t, web.NewServer(track(t, store, named("repo")...), fixedClock(at), ""))
+	return renderBoard(t, openServer(track(t, store, named("repo")...), fixedClock(at), ""))
 }
 
 func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {

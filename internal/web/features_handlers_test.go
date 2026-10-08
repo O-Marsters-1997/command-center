@@ -14,7 +14,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 type fakeTrackerSource struct{ features []tracker.Feature }
@@ -53,7 +52,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := web.NewServer(store, loop.RealClock{}, "")
+	server := openServer(store, loop.RealClock{}, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
 	if rec.Code != http.StatusOK {
@@ -70,7 +69,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := noRedirect(srv).Get(srv.URL + "/features/" + url.PathEscape("project:x"))
@@ -91,7 +90,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := web.NewServer(store, loop.RealClock{}, "")
+	server := openServer(store, loop.RealClock{}, "")
 	var nudged atomic.Bool
 	server.SetNudge(func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
@@ -128,7 +127,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
@@ -149,7 +148,7 @@ func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
@@ -165,7 +164,7 @@ func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(web.NewServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)
