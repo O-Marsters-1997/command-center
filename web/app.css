@@ -1157,12 +1157,19 @@
 }
 
 @media (max-width: 759px) {
-  .stack-list a,
-  .stack-form input,
-  .stack-form button {
+  .stack-list a {
     display: inline-flex;
     align-items: center;
     min-height: var(--hit-min);
+  }
+
+  .stack-form input,
+  .stack-form button {
+    min-height: var(--hit-min);
+  }
+
+  .stack-form input {
+    width: 100%;
   }
 }
 

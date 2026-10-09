@@ -49,7 +49,7 @@ func TestSessionStackPanelListsBlockersAndUnlocks(t *testing.T) {
 	}
 }
 
-func TestSessionStackFormReturnsToTheSessionAndReflectsTheEdit(t *testing.T) {
+func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.T) {
 	t.Parallel()
 	st := stackStore(t)
 	server := newServer(st, testNow)

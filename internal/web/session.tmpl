@@ -103,4 +103,4 @@
   </form>
   {{- end}}
 </div>{{end}}
-{{define "stackLink"}}<a href="{{.Path}}"{{if .Glyph}} data-glyph="{{.Glyph}}"{{end}}><span class="glyph glyph-{{.Glyph}}" aria-hidden="true"></span>{{.Ref}}</a>{{with .State}} <span class="text-muted">{{.}}</span>{{end}}{{end}}
+{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .State}} <span class="text-muted">{{.}}</span>{{end}}{{end}}

@@ -18,12 +18,13 @@ type Stack struct {
 
 func buildStack(board Board, row Row) Stack {
 	rows := rowsIn(board.Groups)
+	byURL := make(map[string]Row, len(rows))
+	for _, r := range rows {
+		byURL[r.URL] = r
+	}
 	link := func(url string) StackLink {
-		l := StackLink{Ref: ticketRef(url), Path: SessionPath(url)}
-		if i := slices.IndexFunc(rows, func(r Row) bool { return r.URL == url }); i >= 0 {
-			l.Glyph, l.State = rows[i].Glyph, rows[i].State
-		}
-		return l
+		known := byURL[url]
+		return StackLink{Ref: ticketRef(url), Path: SessionPath(url), Glyph: known.Glyph, State: known.State}
 	}
 	var s Stack
 	for _, url := range row.BlockedBy {
