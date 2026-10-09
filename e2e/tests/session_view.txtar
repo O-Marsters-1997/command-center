@@ -22,7 +22,7 @@ stdout 'class="session-tabs"'
 stdout 'id="session-actions"'
 
 exec cc request GET '/s/sandbox-org/single-task/CC-1?log=raw'
-stdout 'class="raw-log"'
+stdout 'No log was kept for this run'
 
 ! exec cc request GET /s/sandbox-org/single-task/CC-99
 stderr '404'
