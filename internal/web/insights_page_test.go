@@ -1,10 +1,11 @@
 package web_test
 
 import (
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
 const goldenInsights = "testdata/insights.golden.html"

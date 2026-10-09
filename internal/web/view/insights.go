@@ -142,14 +142,15 @@ func buildSpendSplit(points []insightsPointJSON) SpendSplit {
 		followUp += p.FollowUpPctWeek
 		total += p.PctWeek
 	}
+	explore := max(0, total-agent-resolve-followUp)
 	return SpendSplit{
 		Rows: []SplitRow{
 			{Kind: "agent", Pct: agent},
 			{Kind: "resolve", Pct: resolve},
 			{Kind: "follow-up", Pct: followUp},
-			{Kind: "explore", Pct: max(0, total-agent-resolve-followUp)},
+			{Kind: "explore", Pct: explore},
 		},
-		Total: total,
+		Total: agent + resolve + followUp + explore,
 	}
 }
 
