@@ -50,6 +50,29 @@
     {{- end}}
   </div>
   {{- end}}
+  <aside class="stack-panel" aria-label="feature stack">
+    <h2 class="stack-title">Blocked by</h2>
+    {{- if .Stack.Blockers}}
+    <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- else}}<p class="text-muted">Nothing blocks this ticket.</p>{{end}}
+    <h2 class="stack-title">Merging this unlocks</h2>
+    {{- if .Stack.Unlocks}}
+    <ul class="stack-list">{{range .Stack.Unlocks}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- else}}<p class="text-muted">Nothing waits on this ticket.</p>{{end}}
+    <form method="post" action="/ticket" class="stack-form">
+      <input type="hidden" name="ticket" value="{{.Row.URL}}">
+      <input type="hidden" name="branch" value="{{.Row.Branch}}">
+      <input type="hidden" name="return" value="{{.TranscriptPath}}">
+      <fieldset class="stack-fields">
+        <legend class="stack-title">Edit blockers</legend>
+        {{- range .Row.BlockedBy}}
+        <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+        {{- end}}
+        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+      </fieldset>
+      <button type="submit" class="button">save</button>
+    </form>
+  </aside>
   {{template "sessionActions" .}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
@@ -80,3 +103,4 @@
   </form>
   {{- end}}
 </div>{{end}}
+{{define "stackLink"}}<a href="{{.Path}}"{{if .Glyph}} data-glyph="{{.Glyph}}"{{end}}><span class="glyph glyph-{{.Glyph}}" aria-hidden="true"></span>{{.Ref}}</a>{{with .State}} <span class="text-muted">{{.}}</span>{{end}}{{end}}
