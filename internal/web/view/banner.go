@@ -16,11 +16,11 @@ const (
 	BannerRefused   = "refused"
 )
 
-// CheckStep is one line of a repo's four-step check list. Tone is one of the five tone words and
+// CheckStep is one line of a repo's four-step check list. Glyph is one of the eight glyph words and
 // Mark is the glyph shown beside Label.
 type CheckStep struct {
 	Label string
-	Tone  string
+	Glyph string
 	Mark  string
 }
 
@@ -28,7 +28,7 @@ type CheckStep struct {
 type Banner struct {
 	Repo      string
 	State     string
-	Tone      string
+	Glyph     string
 	Text      string
 	BoardPath string
 	Steps     []CheckStep
@@ -69,7 +69,7 @@ func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 		b.Repo = repo.Name
 		b.State = bannerState(repo)
 	}
-	b.Tone, b.Text = bannerWords(b.State, repo)
+	b.Glyph, b.Text = bannerWords(b.State, repo)
 	b.Steps = checkSteps(b.State, repo.RefusalKind)
 	if b.State == BannerReady {
 		b.BoardPath = Params{Repo: repo.Name}.pagePath()
@@ -88,19 +88,19 @@ func bannerState(repo store.Repo) string {
 	return BannerCloning
 }
 
-func bannerWords(state string, repo store.Repo) (tone, text string) {
+func bannerWords(state string, repo store.Repo) (glyph, text string) {
 	switch state {
 	case BannerCloning:
-		return "live", "Checking the repo on GitHub, then cloning it."
+		return plan.GlyphRunning, "Checking the repo on GitHub, then cloning it."
 	case BannerReady:
 		if repo.SettingsSource == string(config.SourceFile) {
-			return "done", "Settings from .command-centre.toml on main."
+			return plan.GlyphDone, "Settings from .command-centre.toml on main."
 		}
-		return "done", "No .command-centre.toml on main: defaults are in use."
+		return plan.GlyphDone, "No .command-centre.toml on main: defaults are in use."
 	case BannerRefused:
-		return "stop", repo.Refusal
+		return plan.GlyphFailed, repo.Refusal
 	}
-	return "idle", "Not tracked."
+	return plan.GlyphReady, "Not tracked."
 }
 
 // checkSteps lists the checks in display order. Validation runs squash-only, default branch,
@@ -123,16 +123,16 @@ func checkSteps(state, refusalKind string) []CheckStep {
 	}
 	steps := make([]CheckStep, 0, len(labels))
 	for _, l := range labels {
-		step := CheckStep{Label: l.label, Tone: "idle", Mark: "-"}
+		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady, Mark: "-"}
 		switch {
 		case state == BannerReady:
-			step.Tone, step.Mark = "done", "ok"
+			step.Glyph, step.Mark = plan.GlyphDone, "ok"
 		case state == BannerCloning:
-			step.Tone, step.Mark = "live", "..."
+			step.Glyph, step.Mark = plan.GlyphRunning, "..."
 		case state == BannerRefused && rank(l.kind) < rank(refusalKind):
-			step.Tone, step.Mark = "done", "ok"
+			step.Glyph, step.Mark = plan.GlyphDone, "ok"
 		case state == BannerRefused && l.kind == refusalKind:
-			step.Tone, step.Mark = "stop", "x"
+			step.Glyph, step.Mark = plan.GlyphFailed, "x"
 		}
 		steps = append(steps, step)
 	}

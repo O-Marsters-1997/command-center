@@ -658,7 +658,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
 		t.Errorf("Content-Type = %q, want text/css", got)
 	}
-	for _, want := range []string{"--color-s-live", ".pill", "data-theme=dark"} {
+	for _, want := range []string{"--color-s-live", ".glyph", "data-theme=dark"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}

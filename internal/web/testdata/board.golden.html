@@ -11,7 +11,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"
         hx-get="/board?ticket=sandbox%3A%2F%2FCC-1" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-idle pill-ring">ready</span> · launch queued
+      <span class="glyph glyph-ready">ready</span> · launch queued
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
@@ -37,7 +37,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"
         hx-get="/board?ticket=sandbox%3A%2F%2FCC-2" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-wait pill-ring">blocked</span>
+      <span class="glyph glyph-blocked">blocked</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
@@ -62,11 +62,9 @@
 </table>
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill">
-      <span class="pill-ring"></span>0 live
-    </span>
+    <span class="glyph glyph-ready">0 live</span>
     
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
+    <span class="glyph glyph-pending">last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -81,7 +79,7 @@
     
   </div>
   
-  <p class="banner ribbon" data-tone="stop" role="status">
+  <p class="banner ribbon" data-glyph="failed" role="status">
     the last tick failed <time datetime="2026-08-20T12:00:15Z">30s ago</time> and nothing below has been re-derived since. observe: gh pr list: exit status 1
   </p>
   
@@ -94,16 +92,16 @@
     <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/2 yours</p>
     <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       
-      <span class="segbar-segment" data-tone="wait" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="blocked" style="flex-grow: 1"></span>
       
-      <span class="segbar-segment" data-tone="idle" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span>
       
     </div>
     <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="wait"></span>blocked · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-blocked"></span>blocked · 1</li>
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="idle"></span>ready · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 1</li>
       
     </ul>
     
@@ -116,7 +114,7 @@
     <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
       
       <li class="flex items-center gap-[0.4em]">
-        <span class="meter"><span class="meter-fill" data-tone="idle" style="width: 100%"></span></span>
+        <span class="meter"><span class="meter-fill" data-glyph="ready" style="width: 100%"></span></span>
         depth 0 · 2
       </li>
       

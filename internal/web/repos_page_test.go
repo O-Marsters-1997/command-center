@@ -215,7 +215,7 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	server := reposServer(t, &calls)
 
 	body := renderPath(t, server, "/features?repo=acme/stranger")
-	for _, want := range []string{"<h1>acme/stranger</h1>", `data-tone="idle"`, "Not tracked."} {
+	for _, want := range []string{"<h1>acme/stranger</h1>", `data-glyph="ready"`, "Not tracked."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("unknown repo page missing %q:\n%s", want, body)
 		}

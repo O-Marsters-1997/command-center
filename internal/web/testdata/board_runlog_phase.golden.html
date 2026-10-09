@@ -9,7 +9,7 @@
   <tr class="group selected" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc pill-pulse">running</span>
+      <span class="glyph glyph-running glyph-pulse">running</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
@@ -51,7 +51,7 @@
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
       <span class="run-log-path font-medium">testdata/fixtures/session.jsonl</span>
-      <span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
+      <span class="glyph glyph-running glyph-pulse">streaming</span>
       <span class="run-log-outcome text-muted">success</span>
       <nav class="log-filters flex gap-2"><a href="/?phase=1&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1 active font-semibold" aria-current="true">all</a><a href="/?log=skills&amp;phase=1&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">skills</a><a href="/?log=tools&amp;phase=1&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">tools</a><a href="/?log=fails&amp;phase=1&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">fails</a></nav>
       <a href="/?phase=1&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76#first-fail" class="jump-first-fail ml-auto">1 check failed along the way</a>
@@ -62,7 +62,7 @@
         <summary><span class="worked-spark" aria-hidden="true">✻</span> Worked for 3m 25s <span class="worked-stats">· 6 turns · $0.42</span></summary>
       </details>
       <nav class="phase-strip flex" aria-label="Phases"><a href="/?phase=0&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="phase-seg" style="flex: 31"><span class="phase-bar"></span><span class="phase-name"><b>start</b><span>31s</span></span></a><a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="phase-seg" style="flex: 169" title="red, then green" aria-current="true"><span class="phase-bar"></span><span class="phase-name"><b>tdd</b><span class="phase-dot" aria-label="a check failed"></span><span>2m 49s</span></span></a></nav>
-      <div class="readout flex flex-wrap items-baseline"><span class="metric"><span class="metric-label">Time</span> <span class="metric-value">2m 49s <small>85% of run</small></span></span><span class="metric"><span class="metric-label">Turns</span> <span class="metric-value">4</span></span><span class="metric"><span class="metric-label">Cost</span> <span class="metric-value">$0.23 <small>56%</small></span></span><span class="metric"><span class="metric-label">Tool calls</span> <span class="metric-value">3 <small>1 editing, 2 running</small></span></span><span class="metric" data-tone="stop"><span class="metric-label">Failed</span> <span class="metric-value">1</span></span><p class="readout-insight"><b>tdd.</b> 42s per turn, slower turns than the run&#39;s average; one check failed before it settled. <a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="readout-clear">Whole run</a></p>
+      <div class="readout flex flex-wrap items-baseline"><span class="metric"><span class="metric-label">Time</span> <span class="metric-value">2m 49s <small>85% of run</small></span></span><span class="metric"><span class="metric-label">Turns</span> <span class="metric-value">4</span></span><span class="metric"><span class="metric-label">Cost</span> <span class="metric-value">$0.23 <small>56%</small></span></span><span class="metric"><span class="metric-label">Tool calls</span> <span class="metric-value">3 <small>1 editing, 2 running</small></span></span><span class="metric" data-glyph="failed"><span class="metric-label">Failed</span> <span class="metric-value">1</span></span><p class="readout-insight"><b>tdd.</b> 42s per turn, slower turns than the run&#39;s average; one check failed before it settled. <a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="readout-clear">Whole run</a></p>
       </div>
       <div class="run-work">
         <section class="phase">
@@ -71,7 +71,7 @@
             <span class="phase-rule"></span>
             <span class="phase-at">&#43;00:31</span>
           </header>
-          <details class="fold" open><summary>Ran 1 command <span class="fold-fail">· 1 failed</span></summary><div class="fold-body"><div class="line line-fail call" data-tone="stop" id="first-fail"><div class="call-head"><span class="call-verb">Ran</span><code class="call-arg">go test ./internal/agentlog</code><span class="call-res">failed</span></div><pre class="call-out">--- FAIL: TestParseKinds (0.00s)
+          <details class="fold" open><summary>Ran 1 command <span class="fold-fail">· 1 failed</span></summary><div class="fold-body"><div class="line line-fail call" data-glyph="failed" id="first-fail"><div class="call-head"><span class="call-verb">Ran</span><code class="call-arg">go test ./internal/agentlog</code><span class="call-res">failed</span></div><pre class="call-out">--- FAIL: TestParseKinds (0.00s)
     parse_test.go:112: kinds = [skill tool], want [skill say tool]</pre></div></div></details>
           <div class="line line-say prose"><p>Expected red. <code class="code-chip">Parse</code> stops after the first content block; it needs to walk all of them.</p></div>
           <details class="fold"><summary>Edited 1 file, ran 1 command</summary><div class="fold-body"><div class="line line-file call"><div class="call-head"><span class="call-verb">Edit</span><code class="call-arg">internal/agentlog/parse.go</code><span class="call-res"><span class="diff-plus">+4</span> <span class="diff-minus">−2</span></span></div><div class="call-diff"><div class="diff-row diff-del">func (l logLine) event() {</div><div class="diff-row diff-del">	return first(l)</div><div class="diff-row diff-add">func (l logLine) events() {</div><div class="diff-row diff-add">	for _, b := range l.blocks {</div><div class="diff-row diff-add">		emit(b)</div><div class="diff-row diff-add">	}</div><div class="diff-row diff-ctx">}</div></div></div><div class="line line-tool call"><div class="call-head"><span class="call-verb">Ran</span><code class="call-arg">go test ./internal/agentlog</code><span class="call-res">ok</span></div><pre class="call-out">ok  	internal/agentlog	0.214s</pre></div></div></details>
@@ -100,11 +100,9 @@
 </table>
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill" data-tone="live">
-      <span class="pill-pulse"></span>1 live
-    </span>
+    <span class="glyph glyph-running glyph-pulse">1 live</span>
     
-    <span class="pill"><span class="pill-disc"></span>observed <time datetime="2026-08-20T12:01:30Z">0s ago</time></span>
+    <span class="glyph glyph-done">observed <time datetime="2026-08-20T12:01:30Z">0s ago</time></span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -128,12 +126,12 @@
     <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">0/1 yours</p>
     <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       
-      <span class="segbar-segment" data-tone="live" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="running" style="flex-grow: 1"></span>
       
     </div>
     <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="live"></span>running · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-running"></span>running · 1</li>
       
     </ul>
     
@@ -146,7 +144,7 @@
     <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
       
       <li class="flex items-center gap-[0.4em]">
-        <span class="meter"><span class="meter-fill" data-tone="idle" style="width: 100%"></span></span>
+        <span class="meter"><span class="meter-fill" data-glyph="ready" style="width: 100%"></span></span>
         depth 0 · 1
       </li>
       

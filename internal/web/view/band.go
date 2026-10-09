@@ -24,7 +24,7 @@ type fleetCard struct {
 
 type stateSegment struct {
 	State string
-	Tone  string
+	Glyph string
 	Count int
 }
 
@@ -68,18 +68,18 @@ func deriveBand(rows []Row) Band {
 
 func deriveFleetCard(rows []Row) fleetCard {
 	counts := make(map[string]int, len(rows))
-	tones := make(map[string]string, len(rows))
+	glyphs := make(map[string]string, len(rows))
 	yours := 0
 	for _, r := range rows {
 		counts[r.State]++
-		tones[r.State] = r.Tone
+		glyphs[r.State] = r.Glyph
 		if !r.Unattended {
 			yours++
 		}
 	}
 	segments := make([]stateSegment, 0, len(counts))
 	for state, count := range counts {
-		segments = append(segments, stateSegment{State: state, Tone: tones[state], Count: count})
+		segments = append(segments, stateSegment{State: state, Glyph: glyphs[state], Count: count})
 	}
 	slices.SortFunc(segments, func(a, b stateSegment) int {
 		if a.Count != b.Count {

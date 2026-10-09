@@ -6,10 +6,10 @@ func TestDeriveFleetCardSegmentsSumToTheRowCount(t *testing.T) {
 	t.Parallel()
 
 	rows := []Row{
-		{State: "blocked", Tone: "wait", Unattended: false},
-		{State: "ready", Tone: "idle", Unattended: false},
-		{State: "queued", Tone: "wait", Unattended: true},
-		{State: "queued", Tone: "wait", Unattended: true},
+		{State: "blocked", Glyph: "pending", Unattended: false},
+		{State: "ready", Glyph: "ready", Unattended: false},
+		{State: "queued", Glyph: "pending", Unattended: true},
+		{State: "queued", Glyph: "pending", Unattended: true},
 	}
 	got := deriveFleetCard(rows)
 

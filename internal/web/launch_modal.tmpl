@@ -2,7 +2,7 @@
 {{if .Pending -}}
 <p>importing {{.Feature}}&hellip;</p>
 {{- else if .Refused -}}
-<p class="banner ribbon" data-tone="stop" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
+<p class="banner ribbon" data-glyph="failed" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
 {{- else if .Empty -}}
 <p class="text-muted">{{.Feature}} has no tickets to launch.</p>
 {{- else -}}
@@ -11,7 +11,7 @@
      404s -- renders: a custom element the browser never upgrades still shows its light-DOM
      children. -->
 <cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}}>
-  <p class="banner ribbon" data-tone="wait" role="status">
+  <p class="banner ribbon" data-glyph="pending" role="status">
     the launch modal needs the built assets: run `just assets`.
   </p>
 </cc-launch-modal>

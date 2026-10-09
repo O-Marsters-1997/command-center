@@ -21,6 +21,8 @@
   --color-s-wait: oklch(72% 0.146 80);
   --color-s-stop: oklch(58% 0.196 25);
   --color-s-idle: oklch(65% 0.012 250);
+  --color-s-attention: oklch(56% 0.19 275);
+  --color-s-check: oklch(62% 0.12 200);
 
   --color-k-agent: oklch(60% 0.158 250);
   --color-k-resolve: oklch(62% 0.148 150);
@@ -49,6 +51,8 @@
   --color-s-wait: oklch(80% 0.138 80);
   --color-s-stop: oklch(68% 0.178 25);
   --color-s-idle: oklch(55% 0.012 250);
+  --color-s-attention: oklch(70% 0.15 275);
+  --color-s-check: oklch(72% 0.11 200);
 
   --color-k-agent: oklch(70% 0.148 250);
   --color-k-resolve: oklch(72% 0.148 150);
@@ -122,8 +126,8 @@
     margin: 0;
     padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--color-border);
-    background: color-mix(in oklab, var(--tone) 12%, transparent);
-    color: var(--tone);
+    background: color-mix(in oklab, var(--glyph) 12%, transparent);
+    color: var(--glyph);
   }
 
   tr.group-head td:nth-child(3),
@@ -147,118 +151,112 @@
     padding-left: 6rem;
   }
 
-  .pill,
+  .glyph,
   .ribbon,
   .meter,
   .banner,
   .segbar-segment {
-    --tone: var(--color-s-idle);
+    --glyph: var(--color-s-idle);
   }
 
-  [data-tone="done"],
-  .pill-done {
-    --tone: var(--color-s-done);
+  [data-glyph="failed"],
+  .glyph-failed {
+    --glyph: var(--color-s-stop);
+    --fill: 100%;
   }
 
-  [data-tone="live"],
-  .pill-live {
-    --tone: var(--color-s-live);
+  [data-glyph="attention"],
+  .glyph-attention {
+    --glyph: var(--color-s-attention);
+    --fill: 100%;
   }
 
-  [data-tone="wait"],
-  .pill-wait {
-    --tone: var(--color-s-wait);
+  [data-glyph="running"],
+  .glyph-running {
+    --glyph: var(--color-s-live);
+    --fill: 50%;
   }
 
-  [data-tone="stop"],
-  .pill-stop {
-    --tone: var(--color-s-stop);
+  [data-glyph="pending"],
+  .glyph-pending {
+    --glyph: var(--color-s-wait);
+    --fill: 25%;
   }
 
-  [data-tone="idle"],
-  .pill-idle {
-    --tone: var(--color-s-idle);
+  [data-glyph="checking"],
+  .glyph-checking {
+    --glyph: var(--color-s-check);
+    --fill: 75%;
+  }
+
+  [data-glyph="ready"],
+  .glyph-ready {
+    --glyph: var(--color-s-idle);
+    --fill: 0%;
+  }
+
+  [data-glyph="blocked"],
+  .glyph-blocked {
+    --glyph: var(--color-s-idle);
+    --fill: 0%;
+  }
+
+  [data-glyph="done"],
+  .glyph-done {
+    --glyph: var(--color-s-done);
+    --fill: 100%;
   }
 
   [data-kind="agent"] {
-    --tone: var(--color-k-agent);
+    --glyph: var(--color-k-agent);
   }
 
   [data-kind="resolve"] {
-    --tone: var(--color-k-resolve);
+    --glyph: var(--color-k-resolve);
   }
 
   [data-kind="follow_up"] {
-    --tone: var(--color-k-follow-up);
+    --glyph: var(--color-k-follow-up);
   }
 
-  .pill {
+  .glyph {
     display: inline-flex;
     align-items: center;
     gap: 0.35em;
     padding: 0.05rem 0.45rem;
-    border: 1px solid color-mix(in oklab, var(--tone) 45%, transparent);
+    border: 1px solid color-mix(in oklab, var(--glyph) 45%, transparent);
     border-radius: 999px;
-    background: color-mix(in oklab, var(--tone) 12%, transparent);
-    color: var(--tone);
+    background: color-mix(in oklab, var(--glyph) 12%, transparent);
+    color: var(--glyph);
     white-space: nowrap;
   }
 
-  .pill-disc,
-  .pill-ring,
-  .pill-pulse {
-    display: inline-block;
-    flex: none;
-    width: 0.5em;
-    height: 0.5em;
-    border-radius: 999px;
-  }
-
-  .pill-disc {
-    background: var(--tone);
-  }
-
-  .pill-ring {
-    border: 1px solid var(--tone);
-  }
-
-  .pill-pulse {
-    background: var(--tone);
-    animation: pill-pulse 1.6s ease-in-out infinite;
-  }
-
-  .pill.pill-disc,
-  .pill.pill-ring,
-  .pill.pill-pulse {
-    width: auto;
-    height: auto;
-    background: color-mix(in oklab, var(--tone) 12%, transparent);
-  }
-
-  .pill.pill-disc::before,
-  .pill.pill-ring::before {
+  .glyph::before {
     content: "";
     display: inline-block;
     flex: none;
-    width: 0.5em;
-    height: 0.5em;
+    width: 0.6em;
+    height: 0.6em;
+    border: 1px solid var(--glyph);
     border-radius: 999px;
-    margin-right: 0.35em;
+    background: conic-gradient(var(--glyph) var(--fill, 0%), transparent 0);
   }
 
-  .pill.pill-disc::before {
-    background: var(--tone);
+  .glyph-blocked::before {
+    border-style: dashed;
   }
 
-  .pill.pill-ring::before {
-    border: 1px solid var(--tone);
+  .glyph:empty {
+    padding: 0;
+    border: 0;
+    background: none;
   }
 
-  .pill.pill-pulse::before {
-    animation: pill-pulse 1.6s ease-in-out infinite;
+  .glyph-pulse::before {
+    animation: glyph-pulse 1.6s ease-in-out infinite;
   }
 
-  @keyframes pill-pulse {
+  @keyframes glyph-pulse {
     50% {
       opacity: 0.25;
       transform: scale(0.7);
@@ -266,8 +264,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pill-pulse,
-    .pill.pill-pulse::before {
+    .glyph-pulse::before {
       animation: none;
     }
   }
@@ -289,7 +286,7 @@
   }
 
   .ribbon {
-    box-shadow: inset 3px 0 0 var(--tone);
+    box-shadow: inset 3px 0 0 var(--glyph);
   }
 
   .meter {
@@ -304,12 +301,12 @@
   .meter-fill {
     display: block;
     height: 100%;
-    background: var(--tone);
+    background: var(--glyph);
   }
 
   .segbar-segment {
     display: block;
-    background: var(--tone);
+    background: var(--glyph);
   }
 
   .chart-grid {
@@ -393,7 +390,7 @@
   .line-fail,
   .line-pass,
   .line-say {
-    --tone: var(--color-s-idle);
+    --glyph: var(--color-s-idle);
   }
 
   .run-thread {
@@ -552,8 +549,8 @@
     color: var(--color-muted);
   }
 
-  .metric[data-tone] .metric-value {
-    color: var(--tone);
+  .metric[data-glyph] .metric-value {
+    color: var(--glyph);
   }
 
   .readout-insight {
@@ -673,10 +670,10 @@
     white-space: nowrap;
   }
 
-  .call[data-tone] .call-verb,
-  .call[data-tone] .call-res,
-  .call[data-tone] .call-out {
-    color: var(--tone);
+  .call[data-glyph] .call-verb,
+  .call[data-glyph] .call-res,
+  .call[data-glyph] .call-out {
+    color: var(--glyph);
   }
 
   .call-out {

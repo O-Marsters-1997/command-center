@@ -56,11 +56,9 @@
 </header>
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill">
-      <span class="pill-ring"></span>0 live
-    </span>
+    <span class="glyph glyph-ready">0 live</span>
     
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
+    <span class="glyph glyph-pending">last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -75,7 +73,7 @@
     
   </div>
   
-  <p class="banner ribbon" data-tone="stop" role="status">
+  <p class="banner ribbon" data-glyph="failed" role="status">
     the last tick failed <time datetime="2026-08-20T12:00:15Z">30s ago</time> and nothing below has been re-derived since. observe: gh pr list: exit status 1
   </p>
   

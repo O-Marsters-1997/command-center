@@ -27,7 +27,7 @@
       {{- end -}}
     </td>
     <td>
-      <span class="pill pill-{{.Tone}}{{if .Unattended}} pill-disc{{else}} pill-ring{{end}}{{if .Alive}} pill-pulse{{end}}">{{.State}}</span>
+      <span class="glyph glyph-{{.Glyph}}{{if .Alive}} glyph-pulse{{end}}">{{.State}}</span>
       {{- if .Draft}} <mark class="flag" title="draft: {{.DraftReason}}">draft</mark>{{end}}
       {{- if .BaseVerdict}} <mark class="flag" title="base verdict: {{.BaseVerdict}}">base {{.BaseVerdict}}</mark>{{end}}
       {{- if .Warning}} <mark class="flag flag-warning" title="{{.Warning}}">⚠ warning</mark>{{end}}
