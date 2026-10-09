@@ -28,12 +28,13 @@
 <script>
   function markCurrent() {
     document.querySelectorAll(".sidebar-item").forEach(function (a) {
-      if (a.pathname === location.pathname) a.setAttribute("aria-current", "page");
+      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
+      if (here) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
   }
   document.addEventListener("htmx:pushedIntoHistory", markCurrent);
-  window.addEventListener("popstate", markCurrent);
+  document.addEventListener("htmx:historyRestore", markCurrent);
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
