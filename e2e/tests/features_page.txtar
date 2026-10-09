@@ -1,23 +1,25 @@
-# GET /features lists the known repos; GET /features?repo= lists that repo's tracker's features,
+# GET /repos lists the known repos; GET /repos/{owner}/{name} lists that repo's tracker's features,
 # imported or not; opening one 303s to the board scoped to it. GET /import and POST /import no longer exist.
 
 cc-init-repo
 cc-config two-tasks
 cc-fake-gh no-prs
 
-exec cc request GET /features
-stdout 'href="/features\?repo=sandbox-org/two-tasks"'
+exec cc request GET /repos
+stdout 'href="/repos/sandbox-org/two-tasks"'
 
 exec cc tick --count 1
 
-exec cc request GET '/features?repo=sandbox-org/two-tasks'
+exec cc request GET /repos/sandbox-org/two-tasks
 stdout 'project:two-tasks</a>\s*</td>\s*<td>no</td>'
 
 exec cc import project:two-tasks
 exec cc tick --count 1
 
-exec cc request GET '/features?repo=sandbox-org/two-tasks'
+exec cc request GET /repos/sandbox-org/two-tasks
 stdout 'project:two-tasks</a>\s*</td>\s*<td>yes</td>'
+stdout 'id="board"'
+stdout 'data-section='
 
 exec cc request GET '/features/project:two-tasks'
 stdout 'href="/\?feature=project%3Atwo-tasks"'

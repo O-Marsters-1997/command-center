@@ -126,9 +126,11 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
-	mux.Handle("GET /features", handler(s.handleFeatures))
-	mux.Handle("GET /features/search", handler(s.handleRepoSearch))
-	mux.Handle("GET /features/banner", handler(s.handleBanner))
+	mux.Handle("GET /repos", handler(s.handleRepos))
+	mux.Handle("GET /repos/{owner}/{name}", handler(s.handleRepo))
+	mux.Handle("GET /repos/search", handler(s.handleRepoSearch))
+	mux.Handle("GET /repos/banner", handler(s.handleBanner))
+	mux.HandleFunc("GET /features", s.handleFeaturesRedirect)
 	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
@@ -149,7 +151,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 // AllowAnonymous turns the session gate off, for the demo build whose board is a local simulation.
 func (s *Server) AllowAnonymous() { s.open = true }
 
-// SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
+// SetTrackerSource replaces the tracker constructor so a test can drive GET /repos/{owner}/{name} without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
 
 // SetPushableSource replaces the gh listing behind repo search so a test can drive it without gh.
@@ -525,17 +527,28 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	scope := r.URL.Query().Get("repo")
-	if scope == "" {
-		page, err := s.view.Repos(ctx, s.clock.Now())
-		if err != nil {
-			return err
-		}
-		return renderHTML(w, "features.tmpl", page)
+func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
+	target := "/repos"
+	if repo := r.URL.Query().Get("repo"); repo != "" && repoName.MatchString(repo) && !hasDotSegment(repo) {
+		target = view.RepoPath(repo)
 	}
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
 
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
+	page, err := s.view.Repos(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "repos.tmpl", page)
+}
+
+func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scope := r.PathValue("owner") + "/" + r.PathValue("name")
+	if !repoName.MatchString(scope) || hasDotSegment(scope) {
+		return errorf(http.StatusNotFound, "repo %q is not owner/name", scope)
+	}
 	repo, known, err := s.view.KnownRepo(ctx, scope)
 	if err != nil {
 		return err

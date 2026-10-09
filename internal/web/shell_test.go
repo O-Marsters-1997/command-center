@@ -87,7 +87,7 @@ func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	for _, path := range []string{"/", "/insights", "/features"} {
+	for _, path := range []string{"/", "/insights", "/repos"} {
 		body := renderPath(t, server, path)
 		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
 		for _, want := range anchors {
