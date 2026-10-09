@@ -23,14 +23,10 @@
 {{end}}
 {{- end}}
 
-{{template "docHead" .}}
-<body>
-{{template "skipLink" .}}
-{{template "topbar" .}}
-{{template "masthead" .}}
-<div class="shell">
-{{template "sidebar" .}}
-<main id="main" class="p-4">
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "shellContent" .}}
 <h1 class="mb-3">REPOS</h1>
 {{template "importRefusal" .LastImportError}}
 <input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
@@ -40,7 +36,4 @@
 <div id="repo-results">
 {{template "repoResults" .Results}}
 </div>
-</main>
-</div>
-</body>
-</html>
+{{template "shellEnd" .}}

@@ -365,7 +365,7 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 			t.Errorf("page is missing %q:\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, "hx-select") {
+	if strings.Contains(body, `hx-select="#board"`) {
 		t.Errorf("the poll re-renders the whole document to select the board back out of it:\n%s", body)
 	}
 }
@@ -560,7 +560,7 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		tag, attrs := m[1], m[2]
-		if tag == "table" || tag == "div" || tag == "tr" || tag == "section" {
+		if tag == "table" || tag == "div" || tag == "tr" || tag == "section" || tag == "a" {
 			continue
 		}
 		if (tag == "input" || tag == "button") && strings.Contains(attrs, `hx-target="#board"`) {

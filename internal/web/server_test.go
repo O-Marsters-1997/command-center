@@ -165,12 +165,16 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	}
 	rest := full
 	for _, part := range splitBoardSwap(t, swap) {
-		if !strings.Contains(rest, part.html) {
+		nested := part.html
+		if part.name == "band" {
+			nested = strings.Replace(nested, ` hx-swap-oob="true"`, "", 1)
+		}
+		if !strings.Contains(rest, nested) {
 			t.Errorf("GET / does not nest the GET /board %s bytes verbatim\n--- %s ---\n%s\n--- page ---\n%s",
 				part.name, part.name, part.html, full)
 			continue
 		}
-		rest = strings.Replace(rest, part.html, "", 1)
+		rest = strings.Replace(rest, nested, "", 1)
 	}
 	assertGolden(t, goldenBoard, []byte(swap))
 	assertGolden(t, goldenShell, []byte(rest))
@@ -658,7 +662,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
 		t.Errorf("Content-Type = %q, want text/css", got)
 	}
-	for _, want := range []string{"--color-s-live", ".glyph", "data-theme=dark"} {
+	for _, want := range []string{"--color-s-live", ".glyph", "inter-variable.woff2"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}

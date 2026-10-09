@@ -6,14 +6,6 @@
 <title>Command Centre</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script>
-  var stored = localStorage.getItem("theme");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
-  function toggleTheme() {
-    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-  }
   
   
   function ago(ms) {
@@ -32,6 +24,16 @@
     });
   }, 1000);
 </script>
+<script>
+  function markCurrent() {
+    document.querySelectorAll(".sidebar-item").forEach(function (a) {
+      if (a.pathname === location.pathname) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
+  window.addEventListener("popstate", markCurrent);
+</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script>
@@ -42,7 +44,7 @@
 </script>
 </head>
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
 <main id="main" class="p-4 max-w-sm mx-auto mt-16">
 <h1 class="mb-3">LOG IN</h1>
 

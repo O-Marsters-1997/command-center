@@ -206,7 +206,12 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
-	return s.renderBoard(w, r, "page.tmpl")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(r.URL.Query()))
+	if err != nil {
+		return err
+	}
+	board.Home = r.URL.RawQuery == ""
+	return renderHTML(w, "page.tmpl", board)
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
