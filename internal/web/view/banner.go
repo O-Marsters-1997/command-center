@@ -24,7 +24,7 @@ type CheckStep struct {
 	Mark  string
 }
 
-// Banner is the tracking state of one repo as the fragment GET /features/banner renders it.
+// Banner is the tracking state of one repo as the fragment GET /repos/banner renders it.
 type Banner struct {
 	Repo      string
 	State     string

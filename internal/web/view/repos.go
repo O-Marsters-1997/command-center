@@ -48,7 +48,7 @@ type RepoSearch struct {
 	SearchError string
 }
 
-// RepoPage is the /repos/{owner}/{name} page. Tickets is that repo's board. Known is false for a repo the app does not track.
+// RepoPage is the /repos/{owner}/{name} page. Known is false for a repo the app does not track.
 type RepoPage struct {
 	Chrome
 	Title           string
