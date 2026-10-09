@@ -1,0 +1,70 @@
+{{define "railItem"}}
+<a class="rail-link" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Selected}} aria-current="page"{{end}}>
+  <span class="glyph" data-glyph="{{.Glyph}}"><span class="sr-only">{{.Glyph}}</span></span>
+  <span class="rail-ref">{{.Ref}}</span>
+  <span class="rail-title">{{.Title}}</span>
+  {{- if .Started}}<span class="rail-timer" data-started="{{.Started}}"></span>{{end}}
+</a>
+{{end}}
+
+{{define "railVerb"}}
+<form method="post" action="/verb" hx-post="/verb" hx-target="#rail-body" hx-swap="outerHTML">
+  <input type="hidden" name="ticket" value="{{.URL}}">
+  <input type="hidden" name="from" value="rail">
+  <button class="rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
+</form>
+{{end}}
+
+{{define "rail"}}
+<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-swap="outerHTML">
+  <section class="rail-group" data-group="needs-you" aria-label="Needs you">
+    <h2 class="rail-heading">Needs you</h2>
+    {{- range .NeedsYou}}
+    <div class="rail-card" data-glyph="{{.Glyph}}">
+      {{template "railItem" .}}
+      {{with .Reason}}<p class="rail-reason">{{.}}</p>{{end}}
+      {{if .Verb}}{{template "railVerb" .}}{{end}}
+    </div>
+    {{- else}}
+    <p class="rail-empty">Nothing needs you.</p>
+    {{- end}}
+  </section>
+  <section class="rail-group" data-group="in-flight" aria-label="In flight">
+    <h2 class="rail-heading">In flight</h2>
+    {{- range .Features}}
+    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}>
+      <summary>{{.Name}} <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
+      {{- range .Live}}{{template "railItem" .}}{{end}}
+      {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
+    </details>
+    {{- else}}
+    <p class="rail-empty">Nothing in flight.</p>
+    {{- end}}
+  </section>
+  {{- with .Settled}}{{if .Items}}
+  <section class="rail-group" data-group="settled" aria-label="Settled">
+    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}>
+      <summary>Settled <span class="rail-count">{{len .Items}}</span></summary>
+      {{- range .Items}}
+      <div class="rail-settled">
+        {{template "railItem" .}}
+        {{if .Verb}}{{template "railVerb" .}}{{end}}
+      </div>
+      {{- end}}
+    </details>
+  </section>
+  {{end}}{{end}}
+  <footer class="rail-footer">
+    {{- range .Gauges}}
+    <span class="rail-gauge"><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span> {{.Label}} · {{.Pct}}%</span>
+    {{- end}}
+    {{- with .Health}}
+    {{- if .Error}}
+    <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Age}}: {{.Error.Message}}</p>
+    {{- else}}
+    <p class="rail-health">{{.Live}} live · observed {{template "age" .Observe}}</p>
+    {{- end}}
+    {{- end}}
+  </footer>
+</div>
+{{end}}

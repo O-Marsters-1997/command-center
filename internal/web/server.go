@@ -117,6 +117,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /{$}", handler(s.handleIndex))
 	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
 	mux.Handle("GET /board", handler(s.handleBoard))
+	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", handler(s.handleSession))
 	mux.Handle("GET /insights", handler(s.handleInsightsPage))
@@ -226,6 +227,22 @@ func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
 	return s.renderBoard(w, r, "boardSwap")
+}
+
+const railOpenCookie = "rail-open"
+
+func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
+	params := view.RailParams{Sel: view.RailSelection(r.Header.Get("HX-Current-URL"))}
+	if c, err := r.Cookie(railOpenCookie); err == nil {
+		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
+			params.Open = strings.Split(value, view.RailOpenSeparator)
+		}
+	}
+	rail, err := s.view.Rail(r.Context(), s.clock.Now(), params)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "rail", rail)
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
@@ -428,6 +445,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err != nil {
 		return err
+	}
+	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
+		return s.handleRail(w, r)
 	}
 	return s.redirectOrSwap(w, r)
 }

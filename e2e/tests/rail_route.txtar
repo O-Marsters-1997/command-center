@@ -1,0 +1,33 @@
+# GET /rail serves the session rail fragment: a merged ticket whose worktree still exists is
+# listed under Settled with its remove-worktree verb, and drops out once the worktree is gone.
+
+cc-init-repo
+cc-config single-task-commits
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec git -C $WORK/repo push -q origin --delete cc-1-x
+cc-fake-gh single-task-merged
+exec cc tick --count 1
+
+exec cc request GET /rail
+stdout '^<div id="rail-body"'
+stdout 'data-group="needs-you"'
+stdout 'data-group="in-flight"'
+stdout 'data-group="settled"'
+stdout 'value="remove-worktree"'
+! stdout '<!doctype html>'
+
+exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+
+exec cc request GET /rail
+! stdout 'data-group="settled"'
