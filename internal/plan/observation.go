@@ -42,6 +42,8 @@ type Observation struct {
 	LocalTips         map[string]string          `json:"local_tips"`
 	Titles            map[string]string          `json:"titles"`
 	MidMerge          map[string]bool            `json:"mid_merge"`
+	UnmergedPaths     map[string][]string        `json:"unmerged_paths"`
+	HasStaged         map[string]bool            `json:"has_staged"`
 	ConflictsWithBase map[string]bool            `json:"conflicts_with_base"`
 	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
 	// Settings is each repo's .command-centre.toml as origin/main held it this tick, keyed by repo

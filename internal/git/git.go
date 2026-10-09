@@ -238,6 +238,8 @@ func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	return lines(out), nil
 }
 
+// StagedPaths lists the paths whose index entry differs from HEAD, so a resolution identical to
+// HEAD's side is not listed.
 func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
 	out, err := git(ctx, worktreePath, "diff", "--cached", "--name-only")
 	if err != nil {

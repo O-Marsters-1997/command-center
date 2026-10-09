@@ -229,6 +229,7 @@ type RunFact struct {
 	VerificationFailed       bool
 	VerificationFailedReason Reason
 	Resolved                 bool
+	ResolveIncompleteReason  Reason
 }
 
 // Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
@@ -290,6 +291,9 @@ func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 			return ConflictResolved, Reason(fmt.Sprintf(
 				"resolved with nothing committed; read it in the worktree before deciding what happens next, log at %s",
 				run.LogPath)), true
+		}
+		if run.ResolveIncompleteReason != "" {
+			return Failed, Reason(fmt.Sprintf("%s; log at %s", run.ResolveIncompleteReason, run.LogPath)), true
 		}
 		fallthrough
 	default:
