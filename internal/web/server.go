@@ -449,6 +449,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
 		return s.handleRail(w, r)
 	}
+	if r.FormValue("from") == "session" {
+		return s.afterSessionVerb(w, r, ticketURL, verb)
+	}
 	return s.redirectOrSwap(w, r)
 }
 

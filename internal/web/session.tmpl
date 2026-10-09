@@ -50,6 +50,33 @@
     {{- end}}
   </div>
   {{- end}}
-  <div id="session-actions"></div>
+  {{template "sessionActions" .}}
 </article>
-{{template "shellEnd" .}}
+{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
+  {{- with .Toast}}<p class="toast" role="status">{{.}}</p>{{end}}
+  <div class="verbs">
+    {{- $s := .}}
+    {{- range .ActionVerbs}}
+    <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+      <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
+      <input type="hidden" name="from" value="session">
+      <button class="verb" type="submit" name="verb" value="{{.}}"{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
+      {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+    </form>
+    {{- end}}
+    {{- with .PRURL}}<a class="verb" href="{{.}}" target="_blank" rel="noopener">Open PR</a>{{end}}
+    {{- if .Row.LogPath}}<a class="verb" href="{{.RawPath}}">Open log</a>{{end}}
+  </div>
+  {{- if .Running}}
+  <p class="composer-running" data-glyph="running">Agent is running{{with .Row.Log.Worked.Stats}} · {{.}}{{end}}{{with .Row.Elapsed}} · {{.}}{{end}}</p>
+  {{- else if .Row.FollowUpAvailable}}
+  <form class="composer" method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML">
+    <input type="hidden" name="ticket" value="{{.Row.URL}}">
+    <input type="hidden" name="from" value="session">
+    <input type="hidden" name="verb" value="follow-up">
+    <textarea name="prompt" rows="2" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
+    <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>Send</button>
+    {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+  </form>
+  {{- end}}
+</div>{{end}}

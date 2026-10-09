@@ -20,6 +20,7 @@ stdout '#CC-1'
 stdout 'class="prompt-bubble"'
 stdout 'class="session-tabs"'
 stdout 'id="session-actions"'
+stdout 'hx-get="/s/sandbox-org/single-task/CC-1\?part=actions"'
 
 exec cc request GET '/s/sandbox-org/single-task/CC-1?log=raw'
 stdout 'No log was kept for this run'
