@@ -38,6 +38,8 @@ type Row struct {
 	MergeOrder      int      `json:"merge_order"`
 	Warning         string   `json:"warning"`
 	Blocking        []string `json:"blocking"`
+	After           []string `json:"after"`
+	Unlocks         []string `json:"unlocks"`
 	Worktree        string   `json:"worktree"`
 	PRNumber        int      `json:"pr_number"`
 	PRState         string   `json:"pr_state"`
@@ -208,6 +210,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		rows[i].MergeOrder = rows[i].StackDepth + 1
 		rows[i].ElapsedPercent = PercentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
+	nameDependencies(rows, in.Tickets)
 	return rows
 }
 

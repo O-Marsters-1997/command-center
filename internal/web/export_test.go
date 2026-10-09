@@ -25,6 +25,7 @@ func renderStates(name string, states []plan.State) (string, error) {
 		Chrome:           view.Chrome{Observe: view.Age{Age: "0s ago"}},
 		BoardPollSeconds: config.DefaultBoardPollSeconds,
 	}
+	var rows []view.Row
 	for _, state := range states {
 		r := view.Row{
 			URL:        "sandbox://" + state.String(),
@@ -33,8 +34,9 @@ func renderStates(name string, states []plan.State) (string, error) {
 			Unattended: state.Unattended(),
 			Verbs:      plan.Verbs(state),
 		}
-		board.Groups = append(board.Groups, view.Group{Children: []view.Row{r}})
+		rows = append(rows, r)
 	}
+	board.Sections = view.Sectioned(rows)
 
 	var out strings.Builder
 	if err := templates.ExecuteTemplate(&out, name, board); err != nil {

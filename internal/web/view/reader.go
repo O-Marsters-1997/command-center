@@ -21,6 +21,7 @@ const observeStaleAfter = 20 * time.Second
 type Board struct {
 	Chrome
 	Groups           []Group
+	Sections         []Section
 	Band             Band
 	BoardPath        string
 	BoardPollSeconds int
@@ -133,6 +134,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	return Board{
 		Chrome:           chrome,
 		Groups:           groups,
+		Sections:         Sectioned(rowsIn(groups)),
 		Band:             deriveBand(rowsIn(groups)),
 		BoardPath:        params.boardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
