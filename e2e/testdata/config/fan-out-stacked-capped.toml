@@ -1,11 +1,11 @@
 # cc-config prepends `port = 0`, so this file must not set it.
 # {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
 #
-# The same 1+4 fan-out as fan-out-stacked.toml, but max_agents can only ever cover two of the
-# four dependents at once -- issue #33's "waiting for a slot, not a base" proof.
+# The same 1+4 fan-out as fan-out-stacked.toml, but max_agents (3, one slot held by the root's review run) can only
+# ever cover two of the four dependents at once -- issue #33's "waiting for a slot, not a base" proof.
 
-max_agents = 2
-agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
+max_agents = 3
+agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}"]
 
 [[repo]]
 name     = "repo"

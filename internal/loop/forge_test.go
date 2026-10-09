@@ -19,9 +19,10 @@ import (
 )
 
 type fakeForge struct {
-	t       *testing.T
-	remote  string
-	created bool
+	t        *testing.T
+	remote   string
+	created  bool
+	comments []string
 }
 
 func (f *fakeForge) List(_ context.Context, _ string, tracked []string) (gh.Snapshot, error) {
@@ -47,7 +48,11 @@ func (f *fakeForge) Create(context.Context, string, string, string, bool) error 
 	return nil
 }
 
-func (*fakeForge) Ready(context.Context, string, string) error        { return nil }
+func (*fakeForge) Ready(context.Context, string, string) error { return nil }
+func (f *fakeForge) Comment(_ context.Context, _, _, body string) error {
+	f.comments = append(f.comments, body)
+	return nil
+}
 func (*fakeForge) Edit(context.Context, string, string, string) error { return nil }
 func (*fakeForge) CloseIssue(context.Context, string, string) error   { return nil }
 
@@ -107,14 +112,24 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	}
 
 	tick()
-	if len(runner.Spawns) != 1 {
-		t.Fatalf("spawns = %d, want 1: the imported ticket should have launched", len(runner.Spawns))
-	}
-	commitFile(t, runner.Spawns[0].WorktreePath, "x.go", "package x\n")
-
 	runner.Alive[1] = false
-	runner.CanReap[1] = true
+	tick()
+	if len(runner.Spawns) != 2 {
+		t.Fatalf("spawns = %d, want the explore run then the imported ticket's implement run", len(runner.Spawns))
+	}
+	commitFile(t, runner.Spawns[1].WorktreePath, "x.go", "package x\n")
+
+	runner.Alive[2] = false
+	runner.CanReap[2] = true
 	for range 4 {
+		tick()
+	}
+
+	if len(runner.Spawns) != 3 {
+		t.Fatalf("spawns = %d, want the explore, implement and review runs", len(runner.Spawns))
+	}
+	runner.Alive[3] = false
+	for range 2 {
 		tick()
 	}
 

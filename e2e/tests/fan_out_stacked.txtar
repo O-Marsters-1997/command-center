@@ -10,6 +10,8 @@ cc-fake-gh no-prs
 exec cc import project:fan-out
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
+exec cc tick --count 1
+exec sleep 0.5
 
 # Tick: the root has no blockers, so it alone is unlocked and authorised -- cuts and spawns.
 # Every dependent is locked, naming the root as what it is waiting on.
@@ -34,7 +36,7 @@ cc-fake-gh root-open-fanout
 # each off origin/cc-1-x (stacking on, single open blocker): max_agents (5) covers the whole surplus.
 exec cc tick --count 1
 exec cc request GET /events
-stdout -count=5 'run_launched'
+stdout -count=6 'run_launched'
 grep -count=1 'new cc-2-x --base origin/cc-1-x' $WORK/tp.log
 grep -count=1 'new cc-3-x --base origin/cc-1-x' $WORK/tp.log
 grep -count=1 'new cc-4-x --base origin/cc-1-x' $WORK/tp.log
@@ -55,8 +57,9 @@ exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-5-x
 grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge after #42' $WORK/gh.log
 
-# Five spawns, ever -- the fake agent log is independent of both tp.log's cuts and events' count.
-grep -count=5 'commits.sh' $WORK/agent.log
+# Six spawns, ever -- five implement runs and the root's review -- the fake agent log is independent
+# of both tp.log's cuts and events' count.
+grep -count=6 'commits.sh' $WORK/agent.log
 
 exec cc request GET /
 ! stdout '<td>blocked</td>'

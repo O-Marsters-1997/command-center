@@ -45,3 +45,13 @@ func (m RemoveMode) flag() string {
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
 	return command.Run(ctx, repoPath, "tp", "remove", mode.flag(), branch)
 }
+
+// AddDetached checks baseRef out at dir with no branch, so a read-only run leaves no ref behind.
+func AddDetached(ctx context.Context, repoPath, dir, baseRef string) error {
+	return command.Run(ctx, repoPath, "git", "worktree", "add", "--detach", dir, baseRef)
+}
+
+// RemoveDetached deletes a worktree AddDetached made, whatever state the run left it in.
+func RemoveDetached(ctx context.Context, repoPath, dir string) error {
+	return command.Run(ctx, repoPath, "git", "worktree", "remove", "--force", dir)
+}

@@ -113,3 +113,40 @@ func TestHashChangesOnlyWhenTheWorkedExampleContentChanges(t *testing.T) {
 		t.Error("composing the same ticket twice produced different hashes")
 	}
 }
+
+func TestComposeReviewOpensWithTheFixCommandAndStatesTheBound(t *testing.T) {
+	got := plan.ComposeReview("feat/x", "/runs/7.findings.md")
+
+	if !strings.HasPrefix(got, "/code-review --fix origin/feat/x...HEAD") {
+		t.Errorf("prompt = %q, want it to open with the review command against the base", got)
+	}
+	for _, want := range []string{"/runs/7.findings.md", "50 lines", "Do not push", "public interface"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("prompt = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+func TestComposeNamesTheBriefWhenOneExists(t *testing.T) {
+	t.Parallel()
+
+	got := plan.Compose(plan.Ticket{URL: "sandbox://CC-1", BriefPath: "/runs/launch-1/brief.md"})
+	if !strings.HasPrefix(got, "/implement sandbox://CC-1") || !strings.Contains(got, "## Brief") ||
+		!strings.Contains(got, "/runs/launch-1/brief.md") {
+		t.Errorf("Compose = %q, want the implement line first then a Brief section naming the path", got)
+	}
+	if plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-1"})) == plan.Hash(got) {
+		t.Error("a brief must change the composed prompt")
+	}
+}
+
+func TestComposeExploreNamesEveryTicketAndTheBriefPath(t *testing.T) {
+	t.Parallel()
+
+	got := plan.ComposeExplore([]plan.Ticket{{URL: "sandbox://CC-1"}, {URL: "sandbox://CC-2"}}, "/runs/launch-1/brief.md")
+	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "/runs/launch-1/brief.md", "Test commands"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("ComposeExplore = %q, want it to mention %q", got, want)
+		}
+	}
+}

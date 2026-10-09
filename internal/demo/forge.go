@@ -237,6 +237,8 @@ func (f *Forge) Ready(_ context.Context, repoPath, branch string) error {
 	return f.update(repoPath, branch, func(pr *pullRequest) { pr.draft = false })
 }
 
+func (f *Forge) Comment(_ context.Context, _, _, _ string) error { return nil }
+
 func (f *Forge) Edit(_ context.Context, repoPath, branch, base string) error {
 	return f.update(repoPath, branch, func(pr *pullRequest) { pr.baseRef = base })
 }

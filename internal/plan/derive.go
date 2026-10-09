@@ -122,6 +122,11 @@ func (s Snapshot) LaunchAfter(spawned int) []string {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
+// HasSlotAfter reports whether a run may spawn when spawned agents have started since this snapshot.
+func (s Snapshot) HasSlotAfter(spawned int) bool {
+	return !s.spendPaused && s.maxAgents-s.running-spawned > 0
+}
+
 // Skipping is the snapshot without the tickets of the named repos: nothing is acted on for a repo
 // whose settings could not be read this tick.
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
@@ -356,7 +361,15 @@ func (r Rules) runFor(
 			}
 		}
 		if summary.Outcome == OutcomeFailed && summary.Kind == RunKindResolve && in.Obs.MidMerge[key] {
-			fact.Resolved = true
+			switch unmerged := in.Obs.UnmergedPaths[key]; {
+			case len(unmerged) > 0:
+				fact.ResolveIncompleteReason = Reason(fmt.Sprintf(
+					"resolve run stopped mid-merge with files still unmerged: %s", strings.Join(unmerged, ", ")))
+			case !in.Obs.HasStaged[key]:
+				fact.ResolveIncompleteReason = "resolve run stopped mid-merge with nothing staged"
+			default:
+				fact.Resolved = true
+			}
 		}
 	}
 

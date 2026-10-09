@@ -41,6 +41,9 @@ type Ticket struct {
 	Branch              string
 	BlockedBy           []string
 	WorkedExampleBranch string
+	// BriefPath names the launch's explore brief. It is set at spawn, never at authorisation, so
+	// it stays out of the prompt hash.
+	BriefPath string
 }
 
 type Reason string
@@ -229,6 +232,7 @@ type RunFact struct {
 	VerificationFailed       bool
 	VerificationFailedReason Reason
 	Resolved                 bool
+	ResolveIncompleteReason  Reason
 }
 
 // Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
@@ -250,7 +254,7 @@ func Status(f Facts) (State, Reason) {
 	if f.LatestRun != nil && f.LatestRun.PRMerged {
 		return PRMerged, "pull request merged"
 	}
-	if state, reason, ok := statusFromRun(f.LatestRun); ok {
+	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock); ok {
 		return state, reason
 	}
 	switch {
@@ -269,7 +273,7 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-func statusFromRun(run *RunFact) (State, Reason, bool) {
+func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 	if run == nil {
 		return 0, "", false
 	}
@@ -281,7 +285,7 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 	}
 	switch run.Outcome {
 	case OutcomePush:
-		state, reason := statusFromPush(*run)
+		state, reason := statusFromPush(*run, unlock)
 		return state, reason, true
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
@@ -291,13 +295,16 @@ func statusFromRun(run *RunFact) (State, Reason, bool) {
 				"resolved with nothing committed; read it in the worktree before deciding what happens next, log at %s",
 				run.LogPath)), true
 		}
+		if run.ResolveIncompleteReason != "" {
+			return Failed, Reason(fmt.Sprintf("%s; log at %s", run.ResolveIncompleteReason, run.LogPath)), true
+		}
 		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
 	}
 }
 
-func statusFromPush(run RunFact) (State, Reason) {
+func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 	switch {
 	case run.PRClosedUnmerged:
 		return PRClosedUnmerged, "pull request closed without merging"
@@ -322,6 +329,10 @@ func statusFromPush(run RunFact) (State, Reason) {
 			return Checking, Reason(run.Verdict.Reason)
 		}
 		return Checking, "pull request open, no verdict yet"
+	case !unlock.Unlocked && len(unlock.Blocking) > 0:
+		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", strings.Join(unlock.Blocking, ", ")))
+	case !unlock.Unlocked:
+		return PushPending, Reason("push held: " + string(unlock.Reason))
 	default:
 		return PushPending, "agent finished with commits, waiting to push"
 	}

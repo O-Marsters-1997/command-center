@@ -140,7 +140,7 @@ func (l *Loop) reRunOne(
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash)
+		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash, "")
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
@@ -149,7 +149,7 @@ func (l *Loop) reRunOne(
 	}
 	return l.spawnRun(ctx, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: runKindAgent, prompt: agentPrompt(ticket),
+		kind: runKindAgent, prompt: agentPrompt(ticket, ""),
 	})
 }
 
@@ -173,7 +173,8 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		return l.event(ctx, ticket.URL, store.EventRemoveWorktreeRefused, detail)
 	}
 
-	merged := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)].State == plan.Merged
+	pr := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	merged := pr.State == plan.Merged
 	baseGone := e.Run != nil && e.Unlock.BlockerClosed
 	if !merged && !baseGone {
 		return refuse("neither merged nor base gone")
@@ -192,7 +193,11 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 			return refuse("worktree is dirty")
 		}
 
-		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, lastPushed)
+		provenTips := []string{lastPushed}
+		if merged && pr.HeadOid != "" {
+			provenTips = append(provenTips, pr.HeadOid)
+		}
+		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, provenTips...)
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}
@@ -217,7 +222,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	}
 	var detail string
 	if mode == git.RemoveForced {
-		detail = "forced: origin ref pruned, branch at last pushed tip"
+		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
 	if err := l.event(ctx, ticket.URL, eventWorktreeRemoved, detail); err != nil {
 		return err

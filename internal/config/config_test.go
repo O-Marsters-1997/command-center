@@ -73,7 +73,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
-		"--model", "claude-sonnet-5-5",
+		"--model", "{model}",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
@@ -111,6 +111,7 @@ func withRequiredParts(head ...string) []string {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
+		"--model", "{model}",
 	)
 }
 
@@ -164,6 +165,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
+		"--model", "{model}",
 	}
 	without := func(drop ...string) []string {
 		var argv []string
@@ -183,6 +185,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		{"no permission mode", without("--permission-mode"), "--permission-mode"},
 		{"no agents placeholder", without("{agents}"), "{agents}"},
 		{"no system prompt placeholder", without("{system_prompt}"), "{system_prompt}"},
+		{"no model placeholder", without("{model}"), "{model}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
@@ -227,7 +230,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5-5",
+				"--model", "{model}",
 			},
 		},
 		{
@@ -240,7 +243,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5-5",
+				"--model", "{model}",
 				"--max-turns", "40",
 			},
 		},
@@ -260,6 +263,46 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 			}
 			if !slices.Equal(got.AgentCommand, tt.want) {
 				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfigReviewMaxTurns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		body    string
+		want    string
+		wantErr string
+	}{
+		{name: "unset defaults without an implement cap", body: "", want: "20"},
+		{name: "unset halves a low implement cap", body: "max_turns = 10\n", want: "5"},
+		{name: "unset keeps the default under a high implement cap", body: "max_turns = 100\n", want: "20"},
+		{name: "explicit value below the implement cap", body: "max_turns = 60\nreview_max_turns = 15\n", want: "15"},
+		{
+			name: "explicit value not below the implement cap",
+			body: "max_turns = 20\nreview_max_turns = 20\n", wantErr: "must be below",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := config.LoadConfig(writeConfig(t, tt.body+"\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("LoadConfig error = %v, want one containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			n := len(got.ReviewAgentCommand)
+			if n < 2 || got.ReviewAgentCommand[n-2] != "--max-turns" || got.ReviewAgentCommand[n-1] != tt.want {
+				t.Errorf("review command tail = %q, want --max-turns %s", got.ReviewAgentCommand, tt.want)
 			}
 		})
 	}

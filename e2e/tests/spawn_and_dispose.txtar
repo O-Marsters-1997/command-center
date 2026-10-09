@@ -19,6 +19,8 @@ exec cc import project:spawn
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
 exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
 
 # The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
 # liveness check reads it -- this is real OS process liveness, not a controllable fake.
@@ -37,6 +39,8 @@ cc-config spawn-empty
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-2'
 exec cc tick --count 1
 exec sleep 0.5
+exec cc tick --count 1
+exec sleep 0.5
 
 # Tick: no commits after CC-2's own baseline is failed, decided by the commit count and never by
 # a missing event (inv. 7) -- and a failed run is not a push candidate, so cc-2 never reached
@@ -50,6 +54,8 @@ stdout 'no commits after this run'
 # Swap to the agent that never exits on its own, and launch CC-3 under it.
 cc-config spawn-sleeps
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
+exec cc tick --count 1
+exec sleep 0.5
 exec cc tick --count 1
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot

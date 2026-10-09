@@ -16,7 +16,7 @@ import (
 // land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
 	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
-		TicketID:    ticketID,
+		TicketID:    notNull(ticketID),
 		Kind:        kind,
 		BaselineSHA: notNull(baselineSHA),
 		PromptHash:  notNull(promptHash),
@@ -164,7 +164,7 @@ func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunReques
 // InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
-		TicketID:   ticketID,
+		TicketID:   notNull(ticketID),
 		PromptHash: notNull(promptHash),
 		Outcome:    notNull(plan.OutcomeCutFailed.String()),
 		EndedAt:    notNullTime(at.UTC()),
@@ -176,9 +176,12 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 }
 
 // PendingRun is one run this tick must check for liveness and, if it has died, dispose of.
+// An explore run has a LaunchID and no TicketID.
 type PendingRun struct {
 	ID            int64
 	TicketID      string
+	LaunchID      int64
+	Kind          string
 	Pgid          int
 	ProcStartedAt time.Time
 	BaselineSHA   string
@@ -195,7 +198,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	var pending []PendingRun
 	for _, row := range rows {
 		p := PendingRun{
-			ID: row.ID, TicketID: row.TicketID, Pgid: int(row.Pgid.Int64),
+			ID: row.ID, TicketID: row.TicketID.String, LaunchID: row.LaunchID.Int64, Kind: row.Kind, Pgid: int(row.Pgid.Int64),
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
@@ -340,7 +343,7 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 
 // RunIDsForTicket returns every run id recorded for a ticket, oldest first.
 func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
-	ids, err := s.q.RunIDsForTicket(ctx, ticketID)
+	ids, err := s.q.RunIDsForTicket(ctx, notNull(ticketID))
 	if err != nil {
 		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
 	}
@@ -350,7 +353,7 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 // LatestRunLog returns the newest run's log path for a ticket and whether it has ended.
 // A ticket with no run reads as ended with no path.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
-	row, err := s.q.LatestRunLog(ctx, ticketURL)
+	row, err := s.q.LatestRunLog(ctx, notNull(ticketURL))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", true, nil
@@ -359,4 +362,72 @@ func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string
 	default:
 		return row.LogPath.String, row.EndedAt.Valid, nil
 	}
+}
+
+// PrecedingRunKind is the kind of the ticket's run just before runID, empty when there is none.
+func (s *Store) PrecedingRunKind(ctx context.Context, ticketID string, runID int64) (string, error) {
+	kind, err := s.q.PrecedingRunKind(ctx, ccdb.PrecedingRunKindParams{TicketID: notNull(ticketID), ID: runID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("select run before %d: %w", runID, err)
+	}
+	return kind, nil
+}
+
+// InsertExploreRunSkeleton reserves a runs row for a launch's explore run.
+func (s *Store) InsertExploreRunSkeleton(ctx context.Context, launchID int64) (int64, error) {
+	id, err := s.q.InsertExploreRunSkeleton(ctx, sql.NullInt64{Int64: launchID, Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("insert explore run for launch %d: %w", launchID, err)
+	}
+	return id, nil
+}
+
+// InsertCutFailedExploreRun records an explore run that never got a worktree, so its launch
+// proceeds without a brief.
+func (s *Store) InsertCutFailedExploreRun(ctx context.Context, launchID int64, at time.Time) error {
+	_, err := s.q.InsertCutFailedExploreRun(ctx, ccdb.InsertCutFailedExploreRunParams{
+		LaunchID: sql.NullInt64{Int64: launchID, Valid: true},
+		Outcome:  notNull(plan.OutcomeCutFailed.String()),
+		EndedAt:  notNullTime(at.UTC()),
+	})
+	if err != nil {
+		return fmt.Errorf("insert cut-failed explore run for launch %d: %w", launchID, err)
+	}
+	return nil
+}
+
+// ExploreRun is a launch's explore run: Disposed once it has an outcome, Spawned once it has a pgid.
+type ExploreRun struct {
+	ID       int64
+	Spawned  bool
+	Disposed bool
+}
+
+// ExploreRuns returns each launch's latest explore run, keyed by launch id.
+func (s *Store) ExploreRuns(ctx context.Context) (map[int64]ExploreRun, error) {
+	rows, err := s.q.ExploreRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select explore runs: %w", err)
+	}
+	byLaunch := make(map[int64]ExploreRun, len(rows))
+	for _, row := range rows {
+		byLaunch[row.LaunchID.Int64] = ExploreRun{ID: row.ID, Spawned: row.Pgid.Valid, Disposed: row.Outcome.Valid}
+	}
+	return byLaunch, nil
+}
+
+// ActiveLaunchTickets returns the member ticket URLs of every active launch, keyed by launch id.
+func (s *Store) ActiveLaunchTickets(ctx context.Context) (map[int64][]string, error) {
+	rows, err := s.q.ActiveLaunchTickets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select active launch tickets: %w", err)
+	}
+	byLaunch := map[int64][]string{}
+	for _, row := range rows {
+		byLaunch[row.LaunchID] = append(byLaunch[row.LaunchID], row.TicketID)
+	}
+	return byLaunch, nil
 }

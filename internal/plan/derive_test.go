@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -288,5 +289,49 @@ func TestSnapshotOffersTheVerbsOfTheRowState(t *testing.T) {
 	}
 	if snap.Offers("sandbox://CC-404", plan.VerbLaunch) {
 		t.Error("an unknown ticket must offer nothing")
+	}
+}
+
+func TestDeriveResolveRunChecksTheWorktree(t *testing.T) {
+	t.Parallel()
+
+	tk := ticket("1", "cc-1-first")
+	tests := []struct {
+		name      string
+		unmerged  []string
+		staged    bool
+		wantState plan.State
+		reasonHas string
+	}{
+		{name: "every conflict staged", staged: true, wantState: plan.ConflictResolved},
+		{
+			name: "unmerged paths remain", unmerged: []string{"a.go", "b.go"}, staged: true,
+			wantState: plan.Failed, reasonHas: "a.go, b.go",
+		},
+		{name: "nothing staged", wantState: plan.Failed, reasonHas: "nothing staged"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			in := plan.Input{
+				Tickets: []plan.Ticket{tk},
+				Obs: plan.Observation{
+					MidMerge:      map[string]bool{key(tk.Branch): true},
+					UnmergedPaths: map[string][]string{key(tk.Branch): tt.unmerged},
+					HasStaged:     map[string]bool{key(tk.Branch): tt.staged},
+				},
+				Runs: map[string]plan.RunSummary{tk.URL: {
+					HasOutcome: true, Outcome: plan.OutcomeFailed, Kind: plan.RunKindResolve, LogPath: "run.log",
+				}},
+			}
+			e := entry(t, derive(plan.Rules{}, in), tk.URL)
+			if e.State != tt.wantState {
+				t.Fatalf("state = %v, want %v (reason %q)", e.State, tt.wantState, e.Reason)
+			}
+			if !strings.Contains(string(e.Reason), tt.reasonHas) {
+				t.Errorf("reason = %q, want it to contain %q", e.Reason, tt.reasonHas)
+			}
+		})
 	}
 }

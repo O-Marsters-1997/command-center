@@ -66,7 +66,7 @@ type Repo struct {
 
 type Run struct {
 	ID             int64
-	TicketID       string
+	TicketID       sql.NullString
 	Kind           string
 	Pgid           sql.NullInt64
 	ProcStartedAt  sql.NullTime
@@ -83,6 +83,7 @@ type Run struct {
 	CostUsd        sql.NullFloat64
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
+	LaunchID       sql.NullInt64
 }
 
 type RunRequest struct {

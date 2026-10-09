@@ -17,6 +17,10 @@ exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/services/issues/PLA-40'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 
+# Each launch explores first; the explore runs exit at once.
+exec cc tick --count 1
+exec sleep 0.5
+
 # Both cut and spawn on this tick.
 exec cc tick --count 1
 
@@ -45,6 +49,8 @@ grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.
 # compat check involved at all. Without this step, deleting the gating-blocker check from
 # DraftGate entirely could still pass the rest of this script.
 cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
+exec cc tick --count 1
+exec sleep 2.5
 exec cc tick --count 1
 exec cc request GET /
 stdout '>review_me</span>'

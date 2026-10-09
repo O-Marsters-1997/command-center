@@ -126,6 +126,7 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	}
 	for i, p := range merged {
 		agentPct, resolvePct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
+		totalPct += spend.PctWeek(p.ExploreUSD, factor)
 		resp.Points[i] = insightsPointJSON{
 			Ticket: p.Ticket, Title: p.Title, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,

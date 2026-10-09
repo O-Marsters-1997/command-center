@@ -10,12 +10,14 @@ and `Fetch` prunes, so the ref is usually gone and tp refuses even though the co
 squashed into `main`. The refusal was also an event nothing read back.
 
 cc records every push's tip in `pushes`, so it can ask "does this branch sit where cc last pushed it".
+A branch that took hand-pushed commits (lint fixes, merges from main) differs from that record, but a
+merged PR's head is already observed, so a branch exactly there is equally proven.
 
 ## Decision
 
 - **cc picks the removal path before tp runs.** `RemovalStateFor`: ref present means
-  `RemovableByMerged` (tp checks). Ref gone and branch at cc's last pushed tip means
-  `RemovableByForce`, which calls `tp remove --force`. Ref gone and branch moved on means
+  `RemovableByMerged` (tp checks). Ref gone and branch at cc's last pushed tip, or at the merged
+  PR's head (#342), means `RemovableByForce`, which calls `tp remove --force`. Ref gone and branch moved on means
   `NotRemovable`, which refuses naming unpushed commits.
 - **cc checks dirtiness itself**, first, via `git status --porcelain`, because `--force` bypasses tp's
   check.
@@ -28,5 +30,5 @@ cc records every push's tip in `pushes`, so it can ask "does this branch sit whe
 ## Consequences
 
 No confirmation gates the forced path: merged, pruned, at the last pushed tip and clean is what a
-confirm button would ask a human to assert and they could not verify. Dirty or diverged worktrees
+confirm button would ask a human to assert and they could not verify. Dirty worktrees and branches ahead of every proven tip
 still refuse. tp is unchanged; only who reaches for `--force` changed.

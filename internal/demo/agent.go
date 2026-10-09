@@ -60,6 +60,9 @@ func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnRe
 	if err != nil {
 		return runner.SpawnResult{}, err
 	}
+	if branch == "" {
+		return a.spawnExplore(), nil
+	}
 	ownerIdx := slices.IndexFunc(a.issues, func(i issue) bool { return i.branch == branch })
 	if ownerIdx < 0 {
 		return runner.SpawnResult{}, fmt.Errorf("no scenario ticket owns branch %s", branch)
@@ -86,6 +89,14 @@ func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnRe
 		return runner.SpawnResult{}, err
 	}
 	return runner.SpawnResult{Pid: a.nextPid}, nil
+}
+
+func (a *Agent) spawnExplore() runner.SpawnResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.nextPid++
+	a.runs[a.nextPid] = &agentRun{finished: true}
+	return runner.SpawnResult{Pid: a.nextPid}
 }
 
 // Step plays every live run up to the current sim time: one more assistant turn each, and the

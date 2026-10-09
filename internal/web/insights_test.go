@@ -318,3 +318,48 @@ func TestHandleInsightsFallsBackToThirtyDaysOnBadSince(t *testing.T) {
 		}
 	}
 }
+
+func TestMergedTicketSpendSplitsALaunchsExploreRunAcrossItsMembers(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	urls := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"}
+	hash := plan.Hash(plan.Compose(plan.Ticket{}))
+	for _, url := range urls {
+		insightsTicket(t, store, url, "cc-sandbox", "feat-a")
+		if err := store.QueueLaunchIntent(ctx, url, hash, "one-launch", civilDay(t, 2026, 6, 10)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ApplyLaunchIntents(ctx, civilDay(t, 2026, 6, 10)); err != nil {
+		t.Fatal(err)
+	}
+	exploreID, err := store.InsertExploreRunSkeleton(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cost := 0.30
+	ended := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
+	metrics := &agentlog.RunMetrics{CostUSD: &cost, Settled: true}
+	if err := store.RecordDisposition(ctx, exploreID, plan.OutcomePush, nil, ended, metrics); err != nil {
+		t.Fatal(err)
+	}
+	for _, url := range urls {
+		disposeInsightsRun(t, store, url, "agent", ended, 1.00)
+		mergeInsightsTicket(t, store, url, time.Date(2026, 6, 10, 18, 0, 0, 0, time.UTC))
+	}
+
+	points, err := store.MergedTicketSpend(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
+	if err != nil {
+		t.Fatalf("MergedTicketSpend: %v", err)
+	}
+	if len(points) != 3 {
+		t.Fatalf("points = %d, want 3", len(points))
+	}
+	for _, p := range points {
+		if diff := p.ExploreUSD - 0.10; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("%s explore share = %v, want 0.10 (a third of 0.30)", p.Ticket, p.ExploreUSD)
+		}
+	}
+}

@@ -33,7 +33,7 @@ and the process exits with your work uncommitted.
 Delegate read-heavy, low-output work — searching, grepping, or reading several files to answer
 one question — to the digest subagent, in the foreground. It runs on a smaller model with a
 narrower tool set and returns roughly 1k tokens, so that reading never lands in your own context.
-Do the writing, editing and committing yourself; code review also stays in this run for now.
+Do the writing, editing and committing yourself. Code review is a separate run in a fresh context.
 
 Write a comment only if it passes this test: name the specific thing a reader would get wrong
 without it, and that thing must live outside this repo's control. If you cannot name it, or the

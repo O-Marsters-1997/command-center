@@ -13,6 +13,8 @@ exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
 
 # The human merges (squash) and GitHub deletes the branch.
 exec git -C $WORK/repo push -q origin --delete cc-1-x

@@ -1,4 +1,5 @@
 #!/bin/sh
+for arg in "$@"; do if [ "$arg" = claude-haiku-5-5 ]; then exit 0; fi; done
 # Fake agent: like commits.sh, but sleeps briefly before committing, so a script can catch it
 # still running across an instance boundary (crash-recovery style) before it finishes.
 # $1 worktree, $2 settings, $3 prompt.

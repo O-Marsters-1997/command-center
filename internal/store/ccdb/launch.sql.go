@@ -93,6 +93,33 @@ func (q *Queries) InsertLaunchMember(ctx context.Context, arg InsertLaunchMember
 	return err
 }
 
+const launchMemberTickets = `-- name: LaunchMemberTickets :many
+SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id
+`
+
+func (q *Queries) LaunchMemberTickets(ctx context.Context, launchID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, launchMemberTickets, launchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ticket_id string
+		if err := rows.Scan(&ticket_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ticket_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const launchMemberships = `-- name: LaunchMemberships :many
 SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
        COUNT(*) OVER (PARTITION BY lm.launch_id) AS members

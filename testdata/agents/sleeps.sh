@@ -1,4 +1,5 @@
 #!/bin/sh
+for arg in "$@"; do if [ "$arg" = claude-haiku-5-5 ]; then exit 0; fi; done
 # Fake agent: backgrounds a sleep and waits for a signal. $1 worktree, $2 settings, $3 prompt.
 # The child inherits this script's process group, so killing -pgid must reap both.
 # Logs its own invocation to $CC_AGENT_LOG when set -- see commits.sh's comment.

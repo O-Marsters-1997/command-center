@@ -13,6 +13,8 @@ cc-fake-gh same-branch-two-repos
 exec cc import project:same-branch
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1&ticket=https://github.com/sandbox-org/peer/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
 
 # Both cut and spawn this tick, onto the identical branch name in their own separate checkouts.
 exec cc tick --count 1

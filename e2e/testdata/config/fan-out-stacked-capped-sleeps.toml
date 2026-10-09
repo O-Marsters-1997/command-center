@@ -5,8 +5,8 @@
 # commits.sh, so a dependent's launch is observable as running before it is killed -- proving
 # max_agents defers the surplus rather than inferring it from how fast an agent happens to exit.
 
-max_agents = 2
-agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
+max_agents = 3
+agent_command = ["{{agents}}/sleeps.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}"]
 
 [[repo]]
 name     = "repo"
