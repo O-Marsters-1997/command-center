@@ -70,6 +70,7 @@ func applyTicketSpend(rows []Row, byURL map[string]store.BoardTicketSpend, facto
 		}
 		rows[i].AgentPctWeek, rows[i].ResolvePctWeek, rows[i].FollowUpPctWeek, rows[i].SpendPctWeek =
 			spend.KindPctWeek(ts.AgentUSD, ts.ResolveUSD, ts.FollowUpUSD, factor)
+		rows[i].SpendPctWeek += spend.PctWeek(ts.ExploreUSD, factor)
 		rows[i].TicketOpen = !ts.Merged
 	}
 }

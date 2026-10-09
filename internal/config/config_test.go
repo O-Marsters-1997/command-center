@@ -73,7 +73,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
-		"--model", "claude-sonnet-5-5",
+		"--model", "{model}",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
@@ -111,6 +111,7 @@ func withRequiredParts(head ...string) []string {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
+		"--model", "{model}",
 	)
 }
 
@@ -164,6 +165,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
+		"--model", "{model}",
 	}
 	without := func(drop ...string) []string {
 		var argv []string
@@ -183,6 +185,7 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		{"no permission mode", without("--permission-mode"), "--permission-mode"},
 		{"no agents placeholder", without("{agents}"), "{agents}"},
 		{"no system prompt placeholder", without("{system_prompt}"), "{system_prompt}"},
+		{"no model placeholder", without("{model}"), "{model}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
@@ -227,7 +230,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5-5",
+				"--model", "{model}",
 			},
 		},
 		{
@@ -240,7 +243,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
-				"--model", "claude-sonnet-5-5",
+				"--model", "{model}",
 				"--max-turns", "40",
 			},
 		},

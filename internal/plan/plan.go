@@ -41,6 +41,9 @@ type Ticket struct {
 	Branch              string
 	BlockedBy           []string
 	WorkedExampleBranch string
+	// BriefPath names the launch's explore brief. It is set at spawn, never at authorisation, so
+	// it stays out of the prompt hash.
+	BriefPath string
 }
 
 type Reason string

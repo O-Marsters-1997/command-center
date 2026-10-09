@@ -183,6 +183,15 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
+	exploring, err := r.store.ExploreRuns(ctx)
+	if err != nil {
+		return Chrome{}, err
+	}
+	for _, run := range exploring {
+		if run.Spawned && !run.Disposed {
+			chrome.Exploring++
+		}
+	}
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
 		return Chrome{}, err
 	}

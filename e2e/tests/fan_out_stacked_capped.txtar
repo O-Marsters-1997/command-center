@@ -12,6 +12,8 @@ cc-fake-gh no-prs
 exec cc import project:fan-out
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
+exec cc tick --count 1
+exec sleep 0.5
 
 # Tick: only the root is unlocked yet, so the cap never even comes into play here.
 exec cc tick --count 1

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 )
 
 // Compose renders the prompt a launch authorises. The implement instruction always leads,
@@ -15,7 +16,32 @@ func Compose(t Ticket) string {
 			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",
 			t.WorkedExampleBranch, DefaultBaseBranch)
 	}
+	if t.BriefPath != "" {
+		prompt += fmt.Sprintf(
+			"\n\n## Brief\n\nRead %s before exploring the code: it maps the files, conventions, seams "+
+				"and test commands for this launch.",
+			t.BriefPath)
+	}
 	return prompt
+}
+
+// BriefTokens is the length the explore brief is held to.
+const BriefTokens = 3000
+
+// ComposeExplore is the prompt for a launch's explore run: write the brief for tickets to briefPath.
+func ComposeExplore(tickets []Ticket, briefPath string) string {
+	var urls strings.Builder
+	for _, t := range tickets {
+		fmt.Fprintf(&urls, "- %s\n", t.URL)
+	}
+	return fmt.Sprintf(
+		"Explore this repository for a launch of the tickets below, then write one brief to %[1]s. "+
+			"Do not change any other file and do not commit.\n\n"+
+			"Read each ticket first (gh issue view for a GitHub URL).\n\n%[2]s\n"+
+			"Keep the brief to about %[3]d tokens, with these sections: File map, Conventions, Seams, "+
+			"Test commands, then one section per ticket naming the files it touches and the tests "+
+			"that cover them. Say only what an implementer would otherwise spend turns finding out.",
+		briefPath, urls.String(), BriefTokens)
 }
 
 const resolveSkillPath = "cc/skills/resolve-merge-conflict/SKILL.md"

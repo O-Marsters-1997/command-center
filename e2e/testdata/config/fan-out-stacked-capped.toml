@@ -5,7 +5,7 @@
 # ever cover two of the four dependents at once -- issue #33's "waiting for a slot, not a base" proof.
 
 max_agents = 3
-agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
+agent_command = ["{{agents}}/commits.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}"]
 
 [[repo]]
 name     = "repo"

@@ -2,7 +2,7 @@
 # {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
 
 max_agents = 1
-agent_command = ["{{agents}}/commits_ci.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto"]
+agent_command = ["{{agents}}/commits_ci.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}"]
 
 [[repo]]
 name     = "repo"

@@ -108,3 +108,32 @@ func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
 	}
 	return latest
 }
+
+const exploreModel = "claude-haiku-5-5"
+
+func (f *loopFixture) TickPastExplore(t *testing.T) {
+	t.Helper()
+	f.Tick(t)
+	for pid := range f.Fake.Alive {
+		f.Fake.Alive[pid] = false
+	}
+	f.Tick(t)
+}
+
+func (f *loopFixture) ExploreSpawns() []runner.SpawnConfig {
+	return spawnsWithModel(f.Fake.Spawns, true)
+}
+
+func (f *loopFixture) ImplementSpawns() []runner.SpawnConfig {
+	return spawnsWithModel(f.Fake.Spawns, false)
+}
+
+func spawnsWithModel(spawns []runner.SpawnConfig, explore bool) []runner.SpawnConfig {
+	var out []runner.SpawnConfig
+	for _, s := range spawns {
+		if (s.Model == exploreModel) == explore {
+			out = append(out, s)
+		}
+	}
+	return out
+}

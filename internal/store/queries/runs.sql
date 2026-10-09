@@ -1,6 +1,21 @@
 -- name: InsertRunSkeleton :one
 INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id;
 
+-- name: InsertExploreRunSkeleton :one
+INSERT INTO runs (launch_id, kind) VALUES ($1, 'explore') RETURNING id;
+
+-- name: InsertCutFailedExploreRun :one
+INSERT INTO runs (launch_id, kind, outcome, ended_at) VALUES ($1, 'explore', $2, $3) RETURNING id;
+
+-- name: ExploreRuns :many
+SELECT id, launch_id, pgid, outcome FROM runs WHERE launch_id IS NOT NULL ORDER BY id;
+
+-- name: ActiveLaunchTickets :many
+SELECT lm.launch_id, lm.ticket_id FROM launch_members lm
+JOIN launches l ON l.id = lm.launch_id
+WHERE l.state = 'active'
+ORDER BY lm.launch_id, lm.ticket_id;
+
 -- name: RecordSpawn :exec
 UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
 
@@ -15,14 +30,14 @@ INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
-SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
+SELECT id, ticket_id, launch_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: LatestRunsByTicket :many
-SELECT r.id, r.ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
+SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
        r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
 FROM runs r
-JOIN (SELECT ticket_id, MAX(id) AS id FROM runs GROUP BY ticket_id) latest
+JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id;
 
 -- name: QueueVerbIntent :exec

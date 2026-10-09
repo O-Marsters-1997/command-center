@@ -1,4 +1,5 @@
 #!/bin/sh
+for arg in "$@"; do if [ "$arg" = claude-haiku-5-5 ]; then exit 0; fi; done
 # Fake agent: commits one file and exits 0. $1 worktree, $2 settings, $3 prompt.
 # Logs its own invocation to $CC_AGENT_LOG when set, so an e2e script can assert on the number
 # of times an agent actually ran, distinct from tp.log's cuts or events' run_launched rows.

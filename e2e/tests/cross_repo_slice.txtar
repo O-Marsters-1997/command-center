@@ -17,6 +17,10 @@ exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/services/issues/PLA-40'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/CC-1'
 
+# Each launch explores first; the explore runs exit at once.
+exec cc tick --count 1
+exec sleep 0.5
+
 # Both cut and spawn on this tick.
 exec cc tick --count 1
 
