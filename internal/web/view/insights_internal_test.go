@@ -75,3 +75,32 @@ func TestParseSinceOrDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestSpendSplitRowsSumToTheChartTotal(t *testing.T) {
+	points := []insightsPointJSON{
+		{PctWeek: 1.5, AgentPctWeek: 1, ResolvePctWeek: 0.25, FollowUpPctWeek: 0.125},
+		{PctWeek: 2, AgentPctWeek: 1.5, ResolvePctWeek: 0.25, FollowUpPctWeek: 0.25},
+	}
+	split := buildSpendSplit(points)
+	var sum float64
+	for _, row := range split.Rows {
+		sum += row.Pct
+	}
+	if sum != split.Total || split.Total != 3.5 {
+		t.Errorf("rows sum to %v, total %v, want both 3.5", sum, split.Total)
+	}
+}
+
+func TestBuildLimitsLeavesAWindowWithoutAReadingBlank(t *testing.T) {
+	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	limits := buildLimits([]Gauge{
+		{Label: "five-hour", ResetsAt: now.Add(26*time.Hour + 10*time.Minute)},
+		{Label: "weekly"},
+	}, now)
+	if limits[0].ResetsIn != "in 1d 2h" {
+		t.Errorf("ResetsIn = %q, want in 1d 2h", limits[0].ResetsIn)
+	}
+	if limits[1].ResetsIn != "" {
+		t.Errorf("ResetsIn = %q, want empty", limits[1].ResetsIn)
+	}
+}

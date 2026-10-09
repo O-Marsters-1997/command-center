@@ -1,6 +1,8 @@
 package view
 
 import (
+	"time"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -56,6 +58,7 @@ type Gauge struct {
 	Pct         int
 	Calibrating bool
 	CCPct       int
+	ResetsAt    time.Time
 }
 
 type windowSplit struct {
@@ -73,7 +76,7 @@ func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Win
 func deriveGauge(
 	label string, window agentlog.Window, gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit,
 ) Gauge {
-	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization)}
+	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization), ResetsAt: gauges[window].ResetsAt}
 	w := split[window]
 	view.CCPct, view.Calibrating = spend.Share(view.Pct, w.Fit, w.CCUSD)
 	return view
