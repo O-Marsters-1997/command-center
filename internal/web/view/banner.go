@@ -123,7 +123,7 @@ func checkSteps(state, refusalKind string) []CheckStep {
 	}
 	steps := make([]CheckStep, 0, len(labels))
 	for _, l := range labels {
-		step := CheckStep{Label: l.label, Glyph: "ready", Mark: "-"}
+		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady, Mark: "-"}
 		switch {
 		case state == BannerReady:
 			step.Glyph, step.Mark = plan.GlyphDone, "ok"

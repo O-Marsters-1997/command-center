@@ -40,7 +40,7 @@ func Glyph(s State) string {
 	case PRMerged:
 		return GlyphDone
 	}
-	return GlyphReady
+	return GlyphFailed
 }
 
 // RailGroup places a glyph word in a rail group. folded marks the in-flight glyphs the rail
