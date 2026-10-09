@@ -117,6 +117,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /{$}", handler(s.handleIndex))
 	mux.Handle("GET /tickets", handler(s.handleTickets))
 	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
+	mux.Handle("GET /f/{feature}/graph", handler(s.handleFeatureGraph))
 	mux.Handle("GET /board", handler(s.handleBoard))
 	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
@@ -226,6 +227,14 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature.tmpl")
+}
+
+func (s *Server) handleFeatureGraph(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature_graph.tmpl")
+}
+
+func (s *Server) renderFeature(w http.ResponseWriter, r *http.Request, tmpl string) error {
 	feature := r.PathValue("feature")
 	q := r.URL.Query()
 	q.Set("feature", feature)
@@ -237,7 +246,7 @@ func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
 	if board.FeatureScope != feature {
 		return errorf(http.StatusNotFound, "no feature %q", feature)
 	}
-	return renderHTML(w, "feature.tmpl", board)
+	return renderHTML(w, tmpl, board)
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {

@@ -1,39 +1,66 @@
 import { describe, expect, test } from "bun:test";
-import { bounds, edgePath, edgesFor, layoutGroups, stackByColumn } from "./layout";
+import { bounds, edgePath, edgesFor, layoutWaves, stackByColumn, traceChain, waveDepths, waveLabel } from "./layout";
 
 interface Row {
   url: string;
 }
 
-describe("layoutGroups", () => {
-  test("places a root at col 0 and its children at col 1, stacked below it", () => {
-    const placed = layoutGroups<Row>([{ root: { url: "root" }, children: [{ url: "a" }, { url: "b" }] }]);
-    expect(placed.map((p) => [p.row.url, p.col, p.x, p.y])).toEqual([
-      ["root", 0, 24, 24],
-      ["a", 1, 284, 88],
-      ["b", 1, 284, 152],
+describe("layoutWaves", () => {
+  const rows = [
+    { url: "9", blocking: ["7"] },
+    { url: "2", blocking: null },
+    { url: "7", blocking: ["2"] },
+    { url: "3", blocking: ["2", "7"] },
+  ];
+
+  test("places a ticket one wave after its deepest blocker", () => {
+    const placed = layoutWaves(rows);
+    const col = Object.fromEntries(placed.map((p) => [p.url, p.col]));
+    expect(col).toEqual({ "2": 0, "7": 1, "9": 2, "3": 2 });
+  });
+
+  test("stacks each wave in input order at that wave's x", () => {
+    expect(layoutWaves(rows).map((p) => [p.url, p.x, p.y])).toEqual([
+      ["9", 24 + 2 * 260, 24],
+      ["2", 24, 24],
+      ["7", 24 + 260, 24],
+      ["3", 24 + 2 * 260, 88],
     ]);
   });
 
-  test("starts the next group below every row the previous group used, not just its root", () => {
-    const placed = layoutGroups<Row>([
-      { root: { url: "root1" }, children: [{ url: "a" }, { url: "b" }] },
-      { root: { url: "root2" }, children: [] },
+  test("ignores a blocker outside the set and survives a cycle", () => {
+    const depth = waveDepths([
+      { url: "a", blocking: ["gone"] },
+      { url: "b", blocking: ["c"] },
+      { url: "c", blocking: ["b"] },
     ]);
-    expect(placed.map((p) => [p.row.url, p.y])).toEqual([
-      ["root1", 24],
-      ["a", 88],
-      ["b", 152],
-      ["root2", 216],
-    ]);
+    expect(depth.get("a")).toBe(0);
+    expect([...depth.values()].every((d) => Number.isFinite(d))).toBe(true);
   });
 
-  test("stacks a rootless group's children in col 0", () => {
-    const placed = layoutGroups<Row>([{ root: null, children: [{ url: "a" }, { url: "b" }] }]);
-    expect(placed.map((p) => [p.row.url, p.col, p.x, p.y])).toEqual([
-      ["a", 0, 24, 24],
-      ["b", 0, 24, 88],
-    ]);
+  test("labels waves from one", () => {
+    expect(waveLabel(0)).toBe("Wave 1");
+  });
+});
+
+describe("traceChain", () => {
+  const n = (url: string) => ({ url });
+  const nodes = ["2", "7", "9", "4"].map(n);
+  const edges = edgesFor(
+    nodes.map((x) => ({ ...x, blocking: x.url === "7" ? ["2"] : x.url === "9" ? ["7"] : null })),
+    (x) => x.blocking,
+  );
+
+  test("lights the full upstream chain of a node", () => {
+    expect([...traceChain("9", edges)].sort()).toEqual(["2", "7", "9"]);
+  });
+
+  test("lights the full downstream chain of a node", () => {
+    expect([...traceChain("2", edges)].sort()).toEqual(["2", "7", "9"]);
+  });
+
+  test("leaves an unconnected node alone", () => {
+    expect([...traceChain("4", edges)]).toEqual(["4"]);
   });
 });
 

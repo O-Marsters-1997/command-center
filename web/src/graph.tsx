@@ -1,11 +1,10 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { bounds as layoutBounds, edgePath, edgesFor, layoutGroups } from "./layout";
+import { COL_W, MARGIN, bounds as layoutBounds, edgePath, edgesFor, layoutWaves, traceChain, waveLabel } from "./layout";
 import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 3;
+const PHONE = "(max-width: 759px)";
 
 declare global {
   interface Window {
@@ -41,19 +40,20 @@ customElement("cc-graph", {}, () => {
   noShadowDOM();
   // solid-element inserts into the element rather than clearing it first, so the light-DOM
   // fallback content (the Go-only-build message) survives an upgrade unless it goes here.
-  getCurrentElement().textContent = "";
+  const element = getCurrentElement();
+  const src = element.dataset.src ?? `/graph.json${window.location.search}`;
+  element.textContent = "";
 
   const [groups, setGroups] = createSignal<Group[]>([]);
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
-  const [pan, setPan] = createSignal({ x: 0, y: 0 });
-  const [scale, setScale] = createSignal(1);
+  const [hovered, setHovered] = createSignal<string | null>(null);
+  const [pinned, setPinned] = createSignal<string | null>(null);
 
-  let viewport: HTMLDivElement | undefined;
   const nodeRefs = new Map<string, HTMLButtonElement>();
 
   async function load() {
     try {
-      const res = await fetch(`/graph.json${window.location.search}`);
+      const res = await fetch(src);
       if (!res.ok) return;
       setGroups(await res.json());
     } catch {}
@@ -66,18 +66,18 @@ customElement("cc-graph", {}, () => {
   });
   onCleanup(() => clearInterval(timer));
 
-  const nodes = createMemo(() => layoutGroups(groups()).map((p) => toNode(p.row, p.col, p.x, p.y)));
+  const nodes = createMemo(() => {
+    const rows = groups().flatMap((g) => (g.root ? [g.root, ...g.children] : g.children));
+    return layoutWaves(rows).map((p) => toNode(p, p.col, p.x, p.y));
+  });
   const edges = createMemo(() => edgesFor(nodes(), (n) => n.blocking));
   const bounds = createMemo(() => layoutBounds(nodes()));
 
-  const litURLs = createMemo(() => {
-    const sel = selected();
-    const lit = new Set(sel);
-    for (const edge of edges()) {
-      if (sel.has(edge.from.url)) lit.add(edge.to.url);
-      if (sel.has(edge.to.url)) lit.add(edge.from.url);
-    }
-    return lit;
+  const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
+
+  const traced = createMemo(() => {
+    const from = hovered() ?? pinned();
+    return from ? traceChain(from, edges()) : new Set<string>();
   });
 
   function toggle(url: string) {
@@ -97,39 +97,9 @@ customElement("cc-graph", {}, () => {
     });
   }
 
-  function resetView() {
-    setPan({ x: 0, y: 0 });
-    setScale(1);
-  }
-
-  let dragging: { x: number; y: number; pan: { x: number; y: number } } | null = null;
-  function onPointerDown(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest("[data-node]")) return;
-    dragging = { x: e.clientX, y: e.clientY, pan: pan() };
-    viewport?.setPointerCapture(e.pointerId);
-    viewport?.classList.replace("cursor-grab", "cursor-grabbing");
-  }
-  function onPointerMove(e: PointerEvent) {
-    if (!dragging) return;
-    setPan({ x: dragging.pan.x + (e.clientX - dragging.x), y: dragging.pan.y + (e.clientY - dragging.y) });
-  }
-  function endDrag() {
-    dragging = null;
-    viewport?.classList.replace("cursor-grabbing", "cursor-grab");
-  }
-  function onWheel(e: WheelEvent) {
-    e.preventDefault();
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const cursorX = e.clientX - rect.left;
-    const cursorY = e.clientY - rect.top;
-    const p = pan();
-    const s = scale();
-    const contentX = (cursorX - p.x) / s;
-    const contentY = (cursorY - p.y) / s;
-    const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, s * (1 - e.deltaY * 0.001)));
-    setScale(nextScale);
-    setPan({ x: cursorX - contentX * nextScale, y: cursorY - contentY * nextScale });
+  function onNodeClick(url: string) {
+    if (window.matchMedia(PHONE).matches) setPinned((prev) => (prev === url ? null : url));
+    else toggle(url);
   }
 
   function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
@@ -152,34 +122,26 @@ customElement("cc-graph", {}, () => {
     <div>
       <div class="mb-[0.4rem] flex items-center gap-[0.6rem] text-[0.85em] text-muted">
         <span>{selected().size} selected</span>
-        <button type="button" class="ml-auto" onClick={resetView}>
-          reset view
-        </button>
         <button type="button" class="ml-auto" disabled={selected().size === 0} onClick={submit}>
           launch selected
         </button>
       </div>
-      <div
-        class="relative h-[70vh] cursor-grab touch-none select-none overflow-hidden rounded border border-border"
-        ref={viewport}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onWheel={onWheel}
-      >
-        <div
-          class="absolute left-0 top-0 origin-top-left"
-          style={{
-            transform: `translate(${pan().x}px, ${pan().y}px) scale(${scale()})`,
-            width: `${bounds().width}px`,
-            height: `${bounds().height}px`,
-          }}
-        >
+      <div class="relative h-[70vh] overflow-auto rounded border border-border" data-graph-panel>
+        <div class="relative" style={{ width: `${bounds().width}px`, height: `${bounds().height}px` }}>
+          <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
+            {(col) => (
+              <span
+                class="absolute top-1 text-[0.75em] uppercase tracking-wide text-muted"
+                style={{ left: `${MARGIN + col * COL_W}px` }}
+              >
+                {waveLabel(col)}
+              </span>
+            )}
+          </For>
           <svg width={bounds().width} height={bounds().height} aria-hidden="true" role="presentation">
             <For each={edges()}>
               {(edge) => {
-                const lit = () => selected().has(edge.from.url) || selected().has(edge.to.url);
+                const lit = () => traced().has(edge.from.url) && traced().has(edge.to.url);
                 return (
                   <path
                     class="fill-none"
@@ -196,7 +158,7 @@ customElement("cc-graph", {}, () => {
           <For each={nodes()}>
             {(node) => {
               const isSelected = () => selected().has(node.url);
-              const isLit = () => isSelected() || litURLs().has(node.url);
+              const isLit = () => isSelected() || traced().has(node.url);
               return (
                 <button
                   type="button"
@@ -210,7 +172,11 @@ customElement("cc-graph", {}, () => {
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
                   ref={(el) => nodeRefs.set(node.url, el)}
                   aria-pressed={isSelected()}
-                  onClick={() => toggle(node.url)}
+                  onClick={() => onNodeClick(node.url)}
+                  onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
+                  onPointerLeave={() => setHovered(null)}
+                  onFocus={(e) => e.currentTarget.matches(":focus-visible") && setHovered(node.url)}
+                  onBlur={() => setHovered(null)}
                   onKeyDown={(e) => onNodeKeyDown(e, node)}
                 >
                   <span
