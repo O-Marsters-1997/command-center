@@ -17,15 +17,16 @@
   </header>
   <section class="prompt-bubble" aria-label="prompt">
     {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
-    {{- else}}<p class="prompt-gone text-muted">The prompt was not kept.</p>{{end}}
+    {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
   </section>
   <nav class="session-tabs" aria-label="log view">
-    <a href="{{.TranscriptPath}}"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
-    <a href="{{.RawPath}}"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+    <a href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
   </nav>
   {{- if .Raw}}
-  <pre class="raw-log">{{.RawText}}</pre>
+  {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
   {{- else}}
+  {{- if not .Row.Log.PhaseCount}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
   <div class="run-thread">
     <div class="run-work">
       {{- range .Row.Log.Phases}}

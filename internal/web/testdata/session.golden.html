@@ -109,8 +109,8 @@
 </pre>
   </section>
   <nav class="session-tabs" aria-label="log view">
-    <a href="/s/acme/web/1" aria-current="page">Transcript</a>
-    <a href="/s/acme/web/1?log=raw">Raw log</a>
+    <a href="/s/acme/web/1" hx-get="/s/acme/web/1" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Transcript</a>
+    <a href="/s/acme/web/1?log=raw" hx-get="/s/acme/web/1?log=raw" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Raw log</a>
   </nav>
   <div class="run-thread">
     <div class="run-work">
