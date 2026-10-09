@@ -36,6 +36,28 @@
   document.addEventListener("htmx:pushedIntoHistory", markCurrent);
   document.addEventListener("htmx:historyRestore", markCurrent);
 </script>
+<script>
+  document.addEventListener("toggle", function (e) {
+    var key = e.target.dataset && e.target.dataset.railKey;
+    if (!key) return;
+    var open = document.cookie.split("; ").reduce(function (found, c) {
+      return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
+    }, []).filter(function (k) { return k && k !== key; });
+    if (e.target.open) open.push(key);
+    document.cookie = "rail-open=" + encodeURIComponent(open.join("|")) + "; path=/; max-age=31536000; samesite=lax";
+  }, true);
+  function tickStarted() {
+    var now = Date.now();
+    document.querySelectorAll("[data-started]").forEach(function (el) {
+      var s = Math.max(0, Math.round((now - Date.parse(el.dataset.started)) / 1000));
+      if (isNaN(s)) return;
+      var m = Math.floor(s / 60);
+      el.textContent = m < 60 ? m + "m" + (s % 60) + "s" : Math.floor(m / 60) + "h" + (m % 60) + "m";
+    });
+  }
+  setInterval(tickStarted, 1000);
+  document.addEventListener("htmx:afterSwap", tickStarted);
+</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script>
@@ -125,7 +147,7 @@
     <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-get="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
     <a class="sidebar-item" href="/features" hx-get="/features" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
   </nav>
-  <div class="rail-slot" id="rail"></div>
+  <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <form method="post" action="/logout">
     <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
   </form>
