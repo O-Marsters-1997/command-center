@@ -118,6 +118,8 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /tickets", handler(s.handleTickets))
 	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
 	mux.Handle("GET /f/{feature}/graph", handler(s.handleFeatureGraph))
+	mux.Handle("GET /f/{feature}/launch", handler(s.handleFeatureLaunch))
+	mux.Handle("GET /launch", handler(s.handleLaunchPicker))
 	mux.Handle("GET /board", handler(s.handleBoard))
 	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
@@ -235,18 +237,47 @@ func (s *Server) handleFeatureGraph(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) renderFeature(w http.ResponseWriter, r *http.Request, tmpl string) error {
+	board, err := s.featureBoard(r)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, tmpl, board)
+}
+
+func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
 	feature := r.PathValue("feature")
 	q := r.URL.Query()
 	q.Set("feature", feature)
 	q.Del("view")
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
 	if err != nil {
-		return err
+		return view.Board{}, err
 	}
 	if board.FeatureScope != feature {
-		return errorf(http.StatusNotFound, "no feature %q", feature)
+		return view.Board{}, errorf(http.StatusNotFound, "no feature %q", feature)
 	}
-	return renderHTML(w, tmpl, board)
+	return board, nil
+}
+
+func (s *Server) handleFeatureLaunch(w http.ResponseWriter, r *http.Request) error {
+	board, err := s.featureBoard(r)
+	if err != nil {
+		return err
+	}
+	modal, err := s.view.FeatureModal(r.Context(), s.clock.Now(), board.FeatureScope)
+	if err != nil {
+		return err
+	}
+	board.Launch = &modal
+	return renderHTML(w, "feature.tmpl", board)
+}
+
+func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) error {
+	page, err := s.view.LaunchPicker(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "launch_picker.tmpl", page)
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
@@ -314,7 +345,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
 }
 
 func renderLaunchModal(w http.ResponseWriter, modal view.LaunchModal) error {
-	return renderHTML(w, "launch_modal.tmpl", modal)
+	return renderHTML(w, "launchDialog", modal)
 }
 
 func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error {

@@ -1,0 +1,23 @@
+# GET /f/{feature}/launch renders the feature page with the launch dialog open over it, and
+# GET /launch lists the features with launchable work, each linking to its own dialog. Neither
+# route writes: only POST /launch queues a launch.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+
+exec cc request GET /f/project:two-tasks/launch
+stdout 'data-section="ready"'
+stdout '<dialog id="launch-modal-body"'
+stdout '<cc-launch-modal feature="project:two-tasks">'
+
+exec cc request GET /f/project:two-tasks
+! stdout '<dialog'
+
+exec cc request GET /launch
+stdout 'href="/f/project:two-tasks/launch"'
+
+! exec cc request GET /f/bogus/launch

@@ -1,0 +1,20 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+<li>launch</li>
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<h1 class="mb-3">LAUNCH</h1>
+{{if .Features -}}
+<p class="text-muted mb-3">Choose a feature to review what would start.</p>
+<ul class="flex max-w-3xl flex-col gap-2" aria-label="features with launchable work">
+  {{range .Features -}}
+  <li><a class="button flex items-center justify-between gap-3 min-h-11" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+    <span>{{.Name}}</span>
+    <span class="text-muted">{{.Now}} ready now{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
+  </a></li>
+  {{- end}}
+</ul>
+{{- else -}}
+<p class="text-muted">No feature has work to launch.</p>
+{{- end}}
+{{template "shellEnd" .}}

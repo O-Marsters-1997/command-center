@@ -1,4 +1,5 @@
-<dialog id="launch-modal-body" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}} class="p-4">
+{{define "launchDialog" -}}
+<dialog id="launch-modal-body" class="launch-dialog" aria-label="Launch {{.Feature}}" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}}>
 {{if .Pending -}}
 <p>importing {{.Feature}}&hellip;</p>
 {{- else if .Refused -}}
@@ -17,5 +18,8 @@
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
+{{- if or .Pending .Refused .Empty}}
 <a href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">[ cancel ]</a>
+{{- end}}
 </dialog>
+{{- end}}
