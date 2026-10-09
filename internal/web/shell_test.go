@@ -38,17 +38,6 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 	return store
 }
 
-func boardFragment(t *testing.T, page string) string {
-	t.Helper()
-
-	start := strings.Index(page, `<table id="board"`)
-	end := strings.Index(page, "</table>")
-	if start < 0 || end < start {
-		t.Fatalf("no board in page:\n%s", page)
-	}
-	return page[start:end]
-}
-
 func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
@@ -100,7 +89,8 @@ func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
 
 	for _, path := range []string{"/", "/insights", "/features"} {
 		body := renderPath(t, server, path)
-		for _, want := range []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`} {
+		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
+		for _, want := range anchors {
 			if !strings.Contains(body, want) {
 				t.Errorf("GET %s is missing %q:\n%s", path, want, body)
 			}
