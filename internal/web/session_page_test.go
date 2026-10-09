@@ -17,8 +17,8 @@ func sessionStore(t *testing.T, kind, prompt string, keepPrompt, alive bool) (*s
 	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
-	err := st.UpsertTickets(ctx, []storepkg.Ticket{{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}})
-	if err != nil {
+	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}
+	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
 	runID, err := st.InsertRunSkeleton(ctx, sessionTicket, kind, "base", "hash")
@@ -27,7 +27,8 @@ func sessionStore(t *testing.T, kind, prompt string, keepPrompt, alive bool) (*s
 	}
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "1.jsonl")
-	line := `{"type":"assistant","timestamp":"2026-08-20T12:00:01Z","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}]}}` + "\n"
+	line := `{"type":"assistant","timestamp":"2026-08-20T12:00:01Z",` +
+		`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}]}}` + "\n"
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,8 @@ func TestSessionRawTabServesTheJSONL(t *testing.T) {
 	t.Parallel()
 	st, line := sessionStore(t, "agent", "p", true, false)
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?log=raw")
-	if !strings.Contains(body, `<pre class="raw-log">`) || !strings.Contains(body, strings.TrimSpace(strings.ReplaceAll(line, `"`, "&#34;"))) {
+	escaped := strings.TrimSpace(strings.ReplaceAll(line, `"`, "&#34;"))
+	if !strings.Contains(body, `<pre class="raw-log">`) || !strings.Contains(body, escaped) {
 		t.Errorf("raw tab lacks the JSONL:\n%s", body)
 	}
 }
