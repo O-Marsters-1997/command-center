@@ -124,6 +124,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /{$}", handler(s.handleIndex))
 	mux.Handle("GET /board", handler(s.handleBoard))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
+	mux.Handle("GET /s/{owner}/{name}/{n}", handler(s.handleSession))
 	mux.Handle("GET /insights", handler(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", handler(s.handleInsights))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
