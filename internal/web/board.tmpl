@@ -4,19 +4,17 @@
     <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
-  {{range $group := .Groups}}
-  {{if $group.Root}}
-  {{template "row" (head $group.Root $.RepoScope $.FeatureScope)}}
-  {{range $group.Children}}{{template "row" (child . 1 $.RepoScope $.FeatureScope)}}{{end}}
-  {{else}}
-  {{range $group.Children}}{{template "row" (child . 0 $.RepoScope $.FeatureScope)}}{{end}}
-  {{end}}
+  {{range $section := .Sections}}
+  <tbody data-section="{{$section.Key}}" aria-labelledby="section-{{$section.Key}}">
+    <tr class="section-head"><th id="section-{{$section.Key}}" colspan="10">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span></th></tr>
+    {{range $section.Rows}}{{template "row" (slot . $.RepoScope $.FeatureScope)}}{{end}}
+  </tbody>
   {{end}}
 </table>
 {{- end}}
 
 {{define "row"}}
-  <tr class="group{{if .Head}} group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted{{end}}{{if .Selected}} selected{{end}}" data-depth="{{.Depth}}">
+  <tr class="group{{if .Selected}} selected{{end}}">
     <td>
       {{- $row := .}}
       {{- range .Verbs}}
@@ -43,6 +41,8 @@
       <div class="text-muted text-[0.85em]">required check failed: {{range $i, $c := .RedChecks}}{{if $i}}, {{end}}{{if $c.DetailsURL}}<a href="{{$c.DetailsURL}}" target="_blank" rel="noopener">{{$c.Name}}</a>{{else}}{{$c.Name}}{{end}}{{end}}</div>
       {{- else if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
       <div>{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
+      {{- if .After}}<div class="text-muted text-[0.85em]">after {{range $i, $r := .After}}{{if $i}}, {{end}}{{$r}}{{end}}</div>{{end}}
+      {{- if .Unlocks}}<div class="text-muted text-[0.85em]">unlocks {{range $i, $r := .Unlocks}}{{if $i}}, {{end}}{{$r}}{{end}}</div>{{end}}
     </td>
     <td>{{.Stack}}</td>
     <td>
@@ -95,3 +95,12 @@
   <tr id="{{.DetailID}}" hx-preserve="true">{{template "detail" .}}</tr>
   {{end}}
 {{end}}
+
+{{define "boardForm" -}}
+<!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
+     checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
+     instead would nest the per-row verb forms inside it, which HTML forbids. -->
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+{{template "board" .}}
+<button type="submit" form="launch">launch selected</button>
+{{- end}}

@@ -16,7 +16,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 		URL: "sandbox://CHILD", Repo: "services", State: "ready", Glyph: "ready", Blocking: []string{root.URL},
 	}
 	view := view.Board{
-		Groups: []view.Group{{Root: &root, Children: []view.Row{child}}}, BoardPath: "/board?repo=repo",
+		Sections: view.Sectioned([]view.Row{root, child}), BoardPath: "/board?repo=repo",
 		Chrome: view.Chrome{RepoScope: "repo"},
 	}
 
@@ -43,7 +43,7 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnFeature(t *testing.T) {
 		URL: "sandbox://CHILD", Feature: "sqlc-migration", State: "ready", Glyph: "ready", Blocking: []string{root.URL},
 	}
 	view := view.Board{
-		Groups:    []view.Group{{Root: &root, Children: []view.Row{child}}},
+		Sections:  view.Sectioned([]view.Row{root, child}),
 		BoardPath: "/board?feature=board-scope",
 		Chrome:    view.Chrome{FeatureScope: "board-scope"},
 	}
@@ -71,7 +71,7 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 		AgentPctWeek: 1.5, ResolvePctWeek: 0.5, FollowUpPctWeek: 0.25,
 		SpendPctWeek: 2.25, TicketOpen: true,
 	}
-	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
+	board := view.Board{Sections: view.Sectioned([]view.Row{r})}
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -99,7 +99,7 @@ func TestBoardTemplateOmitsOpenForAMergedTicket(t *testing.T) {
 		URL: "sandbox://CC-1", State: "merged", Glyph: "done",
 		AgentPctWeek: 1, SpendPctWeek: 1, TicketOpen: false,
 	}
-	board := view.Board{Groups: []view.Group{{Children: []view.Row{r}}}}
+	board := view.Board{Sections: view.Sectioned([]view.Row{r})}
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, "board", board); err != nil {
 		t.Fatalf("Execute: %v", err)

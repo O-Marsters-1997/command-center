@@ -987,6 +987,7 @@
   }
 }
 
+<<<<<<< HEAD
 .session {
   display: flex;
   flex-direction: column;
@@ -1053,8 +1054,7 @@
 .session-tabs a[aria-current="page"] {
   color: var(--color-fg);
   box-shadow: inset 0 -2px var(--color-accent);
-}
-
+=======
 @layer components {
   .section-head th {
     padding: var(--space-3) 6px var(--space-1);
@@ -1115,4 +1115,5 @@
       min-height: var(--hit-min);
     }
   }
+>>>>>>> db146c1 (Feature board by attention at /f/{feature})
 }

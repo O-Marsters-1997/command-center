@@ -1,0 +1,13 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+<a class="button" href="/f/{{.FeatureScope | pathEscape}}/launch" hx-get="/f/{{.FeatureScope | pathEscape}}/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Launch</a>
+{{template "shellContent" .}}
+<nav class="pill-tabs" aria-label="feature views">
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}" aria-current="page">Board</a>
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph">Graph</a>
+</nav>
+{{template "bandStatic" .}}
+{{template "boardForm" .}}
+<div id="launch-modal"></div>
+{{template "shellEnd" .}}

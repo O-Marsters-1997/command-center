@@ -119,7 +119,16 @@ func (v Params) withFeature(feature string) Params {
 
 func (v Params) boardPath() string { return withQuery("/board", v.query()) }
 func (v Params) verbPath() string  { return withQuery("/verb", v.query()) }
-func (v Params) pagePath() string  { return withQuery("/", v.query()) }
+
+// pagePath is the URL a board swap pushes: a feature-scoped board lives at /f/{feature}.
+func (v Params) pagePath() string {
+	if v.Feature == "" || v.Repo != "" || (v.View != "" && v.View != "board") {
+		return withQuery("/", v.query())
+	}
+	rest := v
+	rest.Feature = ""
+	return withQuery("/f/"+url.PathEscape(v.Feature), rest.query())
+}
 
 func (v Params) featureImportPath() string {
 	return withQuery("/features/"+url.PathEscape(v.Feature)+"/import", v.query())
