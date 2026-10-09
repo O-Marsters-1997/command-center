@@ -12,7 +12,9 @@ func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	t.Parallel()
 
 	root := view.Row{URL: "sandbox://ROOT", Repo: "repo", State: "ready", Glyph: "ready"}
-	child := view.Row{URL: "sandbox://CHILD", Repo: "services", State: "ready", Glyph: "ready", Blocking: []string{root.URL}}
+	child := view.Row{
+		URL: "sandbox://CHILD", Repo: "services", State: "ready", Glyph: "ready", Blocking: []string{root.URL},
+	}
 	view := view.Board{
 		Groups: []view.Group{{Root: &root, Children: []view.Row{child}}}, BoardPath: "/board?repo=repo",
 		Chrome: view.Chrome{RepoScope: "repo"},
