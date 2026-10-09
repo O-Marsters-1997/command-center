@@ -1,0 +1,13 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<nav class="pill-tabs" aria-label="ticket filters">
+  {{- range .Tabs}}
+  <a class="pill-tab" href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}} <span class="section-count">{{.Count}}</span></a>
+  {{- end}}
+</nav>
+{{template "bandStatic" .}}
+{{template "boardForm" .}}
+<div id="launch-modal"></div>
+{{template "shellEnd" .}}

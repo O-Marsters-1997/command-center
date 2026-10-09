@@ -115,6 +115,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
+	mux.Handle("GET /tickets", handler(s.handleTickets))
 	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
 	mux.Handle("GET /board", handler(s.handleBoard))
 	mux.Handle("GET /rail", handler(s.handleRail))
@@ -208,6 +209,18 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	}
 	board.Home = r.URL.RawQuery == ""
 	return renderHTML(w, "page.tmpl", board)
+}
+
+func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
+	q := r.URL.Query()
+	q.Set("all", "1")
+	q.Del("view")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
+	if err != nil {
+		return err
+	}
+	board.Section = "tickets"
+	return renderHTML(w, "tickets.tmpl", board)
 }
 
 func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
