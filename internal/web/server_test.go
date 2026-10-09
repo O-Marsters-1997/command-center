@@ -397,8 +397,8 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name:   "GET is rejected before origin is even checked",
-			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
+			name:   "PUT is rejected before origin is even checked",
+			method: http.MethodPut, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:   "a foreign Origin is rejected",
