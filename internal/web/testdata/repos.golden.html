@@ -10,14 +10,6 @@
 <title>Command Centre</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script>
-  var stored = localStorage.getItem("theme");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
-  function toggleTheme() {
-    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-  }
   
   
   function ago(ms) {
@@ -36,6 +28,17 @@
     });
   }, 1000);
 </script>
+<script>
+  function markCurrent() {
+    document.querySelectorAll(".sidebar-item").forEach(function (a) {
+      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
+      if (here) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
+  document.addEventListener("htmx:historyRestore", markCurrent);
+</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script>
@@ -46,18 +49,21 @@
 </script>
 </head>
 <body>
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
-<header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
-  
-  <span class="text-muted">/</span>
-  <a href="/features">repos</a>
-  
-  
-  <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
+<div class="app">
+<aside class="sidebar" id="sidebar" aria-label="sections">
+  <div class="sidebar-head">Command Centre</div>
+  <nav class="sidebar-nav">
+    <a class="sidebar-item" href="/?view=board" hx-get="/?view=board" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
+    <a class="sidebar-item" href="/insights" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
+    <a class="sidebar-item" href="/features" hx-get="/features" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
+  </nav>
+  <div class="rail-slot" id="rail"></div>
   <form method="post" action="/logout">
-    <button type="submit">log out</button>
+    <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
   </form>
-</header>
+</aside>
+<div class="pane">
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
     <span class="glyph glyph-ready">0 live</span>
@@ -79,14 +85,20 @@
   
   
 </div>
-<div class="shell">
-<nav class="sidebar" id="sidebar-nav" aria-label="sections">
-  <a class="sidebar-item" href="/features" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span class="sidebar-label">repos</span></a>
-  <a class="sidebar-item" href="/?view=board"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span class="sidebar-label">board</span></a>
-  <a class="sidebar-item" href="/?view=graph"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg><span class="sidebar-label">graph</span></a>
-  <a class="sidebar-item" href="/insights"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span class="sidebar-label">insights</span></a>
-</nav>
-<main id="main" class="p-4">
+<main id="main">
+<header class="topbar">
+  <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
+  <ol class="crumbs">
+<li>Command Centre</li>
+<li><a href="/features">repos</a></li>
+
+
+</ol>
+  <div class="topbar-action">
+
+</div>
+</header>
+<div class="content">
 <h1 class="mb-3">REPOS</h1>
 
 <input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
@@ -111,7 +123,9 @@
   
 </table>
 </div>
+</div>
 </main>
+</div>
 </div>
 </body>
 </html>

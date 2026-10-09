@@ -1,11 +1,9 @@
-{{template "docHead" .}}
-<body>
-{{template "skipLink" .}}
-{{template "topbar" .}}
-{{template "masthead" .}}
-<div class="shell">
-{{template "sidebar" .}}
-<main id="main" class="p-4">
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+<li>insights</li>
+{{template "shellAction" .}}
+{{template "scopeActions" .}}
+{{template "shellContent" .}}
 <h1 class="mb-3">INSIGHTS</h1>
 <h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
 {{with .Chart}}{{if .Dots}}
@@ -26,7 +24,4 @@
   {{if .HasWaste}}<span class="chart-legend"><span class="chart-legend-swatch chart-series-3"></span> waste: {{.WasteLabel}}</span>{{end}}
 </div>
 {{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}{{end}}
-</main>
-</div>
-</body>
-</html>
+{{template "shellEnd" .}}

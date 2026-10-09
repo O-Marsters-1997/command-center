@@ -1,11 +1,8 @@
-{{template "docHead" .}}
-<body>
-{{template "skipLink" .}}
-{{template "topbar" .}}
-{{template "masthead" .}}
-<div class="shell">
-{{template "sidebar" .}}
-<main id="main" class="p-4">
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+{{template "scopeActions" .}}
+{{template "shellContent" .}}
 <input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
   class="block border border-border rounded px-2 py-1 mb-1"
   hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
@@ -42,7 +39,4 @@
 </table>
 {{end}}
 <div id="launch-modal"></div>
-</main>
-</div>
-</body>
-</html>
+{{template "shellEnd" .}}

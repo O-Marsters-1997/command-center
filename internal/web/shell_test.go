@@ -38,17 +38,6 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 	return store
 }
 
-func boardFragment(t *testing.T, page string) string {
-	t.Helper()
-
-	start := strings.Index(page, `<table id="board"`)
-	end := strings.Index(page, "</table>")
-	if start < 0 || end < start {
-		t.Fatalf("no board in page:\n%s", page)
-	}
-	return page[start:end]
-}
-
 func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
@@ -75,33 +64,61 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	}
 }
 
-func TestThemeSitsOnTheRootElement(t *testing.T) {
+func TestShellIsLightOnlyAndMakesNoThirdPartyRequest(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 	body := renderPage(t, server)
 
-	if strings.Contains(boardFragment(t, body), "data-theme") {
-		t.Error("data-theme is inside the board, which htmx swaps")
-	}
-	headEnd := strings.Index(body, "</head>")
-	if headEnd < 0 {
-		t.Fatalf("page has no head:\n%s", body)
-	}
-	head := body[:headEnd]
-	for _, want := range []string{
-		"document.documentElement.dataset.theme",
-		`localStorage.getItem("theme")`,
-		`localStorage.setItem("theme"`,
-		"prefers-color-scheme: dark",
-	} {
-		if !strings.Contains(head, want) {
-			t.Errorf("the head script is missing %q:\n%s", want, head)
+	for _, gone := range []string{"data-theme", "toggleTheme", "localStorage", "prefers-color-scheme"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the page still carries %q:\n%s", gone, body)
 		}
 	}
-	if !strings.Contains(body, `onclick="toggleTheme()"`) {
-		t.Errorf("the header has no theme toggle:\n%s", body)
+	if strings.Contains(body, "https://") || strings.Contains(body, "//fonts.") {
+		t.Errorf("the page requests a third-party origin:\n%s", body)
+	}
+}
+
+func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+
+	for _, path := range []string{"/", "/insights", "/features"} {
+		body := renderPath(t, server, path)
+		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
+		for _, want := range anchors {
+			if !strings.Contains(body, want) {
+				t.Errorf("GET %s is missing %q:\n%s", path, want, body)
+			}
+		}
+	}
+
+	body := renderPath(t, server, "/insights")
+	for _, want := range []string{`hx-get="/insights"`, `hx-select="#main"`, `hx-target="#main"`, `hx-push-url="true"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("sidebar link is missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+
+	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home>`) {
+		t.Errorf("the bare root is not marked as home:\n%s", body)
+	}
+	if body := renderPath(t, server, "/?view=board"); strings.Contains(body, "data-home") {
+		t.Errorf("a destination is marked as home:\n%s", body)
+	}
+	if body := renderPath(t, server, "/insights"); !strings.Contains(body, `class="back"`) {
+		t.Errorf("an opened page has no back link:\n%s", body)
 	}
 }
 
