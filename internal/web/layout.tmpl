@@ -143,7 +143,7 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <div class="sidebar-head">{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-get="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if or (eq .Section "board") (eq .Section "graph")}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-get="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if or (eq .Section "board") (eq .Section "graph") (eq .Section "tickets")}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
     <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-get="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
     <a class="sidebar-item" href="/features" hx-get="/features" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
   </nav>
