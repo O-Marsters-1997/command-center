@@ -14,8 +14,8 @@
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
       <span class="run-log-path font-medium">{{.Log.Path}}</span>
-      {{if .Log.Streaming}}<span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
-      {{- else}}<span class="pill"><span class="pill-ring"></span>ended</span>{{end}}
+      {{if .Log.Streaming}}<span class="glyph glyph-running glyph-pulse">streaming</span>
+      {{- else}}<span class="glyph glyph-ready">ended</span>{{end}}
       {{- with .Log.Outcome}}
       <span class="run-log-outcome text-muted">{{.}}</span>
       {{- end}}
@@ -40,7 +40,7 @@
       {{- end}}
       {{- with .Log.Readout.Metrics}}
       <div class="readout flex flex-wrap items-baseline">
-        {{- range .}}<span class="metric"{{if .Failed}} data-tone="stop"{{end}}><span class="metric-label">{{.Label}}</span> <span class="metric-value">{{.Value}}{{with .Note}} <small>{{.}}</small>{{end}}</span></span>{{end}}
+        {{- range .}}<span class="metric"{{if .Failed}} data-glyph="failed"{{end}}><span class="metric-label">{{.Label}}</span> <span class="metric-value">{{.Value}}{{with .Note}} <small>{{.}}</small>{{end}}</span></span>{{end}}
         {{- with $.Log.Readout.Insight}}<p class="readout-insight"><b>{{$.Log.Readout.Lead}}</b> {{.}}{{with $.Log.Readout.ClearPath}} <a href="{{.}}" class="readout-clear">Whole run</a>{{end}}</p>{{end}}
       </div>
       {{- end}}

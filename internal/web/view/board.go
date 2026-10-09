@@ -25,7 +25,7 @@ type Row struct {
 	Title           string   `json:"title"`
 	State           string   `json:"state"`
 	Reason          string   `json:"reason"`
-	Tone            string   `json:"tone"`
+	Glyph           string   `json:"glyph"`
 	Unattended      bool     `json:"unattended"`
 	Alive           bool     `json:"alive"`
 	Verbs           []string `json:"verbs"`
@@ -169,7 +169,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
-			Tone:           plan.Tone(e.State),
+			Glyph:          plan.Glyph(e.State),
 			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[t.URL].Alive,
 			Verbs:          plan.Verbs(e.State),

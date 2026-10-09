@@ -9,7 +9,7 @@
   <tr class="group selected" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc pill-pulse">running</span>
+      <span class="glyph glyph-running glyph-pulse">running</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board" hx-push-url="/" hx-target="#board" hx-swap="outerHTML">#76</button>
@@ -51,7 +51,7 @@
   <div class="run-log">
     <div class="run-log-header flex flex-wrap items-center gap-2">
       <span class="run-log-path font-medium">testdata/fixtures/run.jsonl</span>
-      <span class="pill" data-tone="live"><span class="pill-pulse"></span>streaming</span>
+      <span class="glyph glyph-running glyph-pulse">streaming</span>
       <nav class="log-filters flex gap-2"><a href="/?sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1 active font-semibold" aria-current="true">all</a><a href="/?log=skills&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">skills</a><a href="/?log=tools&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">tools</a><a href="/?log=fails&amp;sel=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F76" class="px-1">fails</a></nav>
     </div>
     <p class="run-log-meta text-muted">3 lines · 0 phases</p>
@@ -79,11 +79,9 @@
 </table>
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill" data-tone="live">
-      <span class="pill-pulse"></span>1 live
-    </span>
+    <span class="glyph glyph-running glyph-pulse">1 live</span>
     
-    <span class="pill"><span class="pill-disc"></span>observed <time datetime="2026-08-20T12:01:30Z">0s ago</time></span>
+    <span class="glyph glyph-done">observed <time datetime="2026-08-20T12:01:30Z">0s ago</time></span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -107,12 +105,12 @@
     <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">0/1 yours</p>
     <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       
-      <span class="segbar-segment" data-tone="live" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="running" style="flex-grow: 1"></span>
       
     </div>
     <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="live"></span>running · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-running"></span>running · 1</li>
       
     </ul>
     
@@ -125,7 +123,7 @@
     <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
       
       <li class="flex items-center gap-[0.4em]">
-        <span class="meter"><span class="meter-fill" data-tone="idle" style="width: 100%"></span></span>
+        <span class="meter"><span class="meter-fill" data-glyph="ready" style="width: 100%"></span></span>
         depth 0 · 1
       </li>
       

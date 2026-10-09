@@ -3,16 +3,14 @@
 {{define "masthead" -}}
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill"{{if .LiveAgents}} data-tone="live"{{end}}>
-      <span class="{{if .LiveAgents}}pill-pulse{{else}}pill-ring{{end}}"></span>{{.LiveAgents}} live
-    </span>
+    <span class="glyph {{if .LiveAgents}}glyph-running glyph-pulse{{else}}glyph-ready{{end}}">{{.LiveAgents}} live</span>
     {{- if .Exploring}}
-    <span class="pill" data-tone="live"><span class="pill-pulse"></span>{{.Exploring}} exploring</span>
+    <span class="glyph glyph-running glyph-pulse">{{.Exploring}} exploring</span>
     {{- end}}
     {{if .ObserveStale}}
-    <span class="pill" data-tone="wait"><span class="pill-ring"></span>last good observe: {{template "age" .Observe}}</span>
+    <span class="glyph glyph-pending">last good observe: {{template "age" .Observe}}</span>
     {{else}}
-    <span class="pill"><span class="pill-disc"></span>observed {{template "age" .Observe}}</span>
+    <span class="glyph glyph-done">observed {{template "age" .Observe}}</span>
     {{end}}
     {{range .Gauges}}
     <span class="flex items-center gap-[0.4em]">
@@ -22,17 +20,17 @@
     {{end}}
   </div>
   {{with .LastError}}
-  <p class="banner ribbon" data-tone="stop" role="status">
+  <p class="banner ribbon" data-glyph="failed" role="status">
     the last tick failed {{template "age" .Age}} and nothing below has been re-derived since. {{.Message}}
   </p>
   {{end}}
   {{- range .RefusedRepos}}
-  <p class="banner ribbon" data-tone="stop" role="status">
+  <p class="banner ribbon" data-glyph="failed" role="status">
     <a href="{{.Path}}">{{.Name}}</a> is refused{{with .Reason}}: {{.}}{{end}}
   </p>
   {{- end}}
   {{with .SpendPaused}}
-  <p class="banner ribbon" data-tone="wait" role="status">
+  <p class="banner ribbon" data-glyph="pending" role="status">
     spawning paused: five-hour usage is {{.Pct}}%, at or above the spend_limit_5h of {{.Limit}}%.
   </p>
   {{end}}

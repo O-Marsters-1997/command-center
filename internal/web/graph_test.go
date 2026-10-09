@@ -16,7 +16,7 @@ const goldenGraph = "testdata/graph.golden.json"
 type jsonRow struct {
 	URL      string   `json:"url"`
 	State    string   `json:"state"`
-	Tone     string   `json:"tone"`
+	Glyph    string   `json:"glyph"`
 	Blocking []string `json:"blocking"`
 }
 
@@ -28,11 +28,11 @@ type jsonGroup struct {
 func boardPillText(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	cell := rowCellAt(t, page, ticketURL, 1)
-	pill := pillTextRE.FindStringSubmatch(cell)
-	if pill == nil {
-		t.Fatalf("no state pill found for %s in cell:\n%s", ticketURL, cell)
+	glyph := glyphTextRE.FindStringSubmatch(cell)
+	if glyph == nil {
+		t.Fatalf("no state glyph found for %s in cell:\n%s", ticketURL, cell)
 	}
-	return pill[1]
+	return glyph[1]
 }
 
 func fetchGraph(t *testing.T, server *web.Server) *httptest.ResponseRecorder {

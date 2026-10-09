@@ -138,7 +138,7 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 			if !strings.Contains(body, tt.wantChip) {
 				t.Errorf("chip does not read %q:\n%s", tt.wantChip, body)
 			}
-			if got := strings.Contains(body, `data-tone="wait"`); got != tt.stale {
+			if got := strings.Contains(body, `glyph glyph-pending`); got != tt.stale {
 				t.Errorf("chip amber = %v, want %v:\n%s", got, tt.stale, body)
 			}
 		})

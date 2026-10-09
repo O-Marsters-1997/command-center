@@ -11,7 +11,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://blocked"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-wait pill-ring">blocked</span>
+      <span class="glyph glyph-blocked">blocked</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#blocked</button>
@@ -40,7 +40,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://ready"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-idle pill-ring">ready</span>
+      <span class="glyph glyph-ready">ready</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ready</button>
@@ -67,7 +67,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-disc">queued</span>
+      <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#queued</button>
@@ -98,7 +98,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc">running</span>
+      <span class="glyph glyph-running">running</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#running</button>
@@ -129,7 +129,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">failed</span>
+      <span class="glyph glyph-failed">failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#failed</button>
@@ -160,7 +160,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">cut_failed</span>
+      <span class="glyph glyph-failed">cut_failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cut_failed</button>
@@ -191,7 +191,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc">push_pending</span>
+      <span class="glyph glyph-pending">push_pending</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_pending</button>
@@ -218,7 +218,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc">checking</span>
+      <span class="glyph glyph-checking">checking</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#checking</button>
@@ -249,7 +249,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">needs_you</span>
+      <span class="glyph glyph-attention">needs_you</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#needs_you</button>
@@ -284,7 +284,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">push_failed</span>
+      <span class="glyph glyph-failed">push_failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#push_failed</button>
@@ -319,7 +319,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-ring">review_me</span>
+      <span class="glyph glyph-attention">review_me</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#review_me</button>
@@ -346,7 +346,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-done pill-ring">merged</span>
+      <span class="glyph glyph-done">merged</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#merged</button>
@@ -377,7 +377,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">pr_closed_unmerged</span>
+      <span class="glyph glyph-failed">pr_closed_unmerged</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#pr_closed_unmerged</button>
@@ -412,7 +412,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">base_gone</span>
+      <span class="glyph glyph-failed">base_gone</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_gone</button>
@@ -449,7 +449,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://cancelled"
         hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-idle pill-ring">cancelled</span>
+      <span class="glyph glyph-ready">cancelled</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#cancelled</button>
@@ -476,7 +476,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-live pill-disc">base_moved</span>
+      <span class="glyph glyph-pending">base_moved</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#base_moved</button>
@@ -511,7 +511,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">ci_failed</span>
+      <span class="glyph glyph-failed">ci_failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#ci_failed</button>
@@ -542,7 +542,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">refresh_conflicted</span>
+      <span class="glyph glyph-failed">refresh_conflicted</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#refresh_conflicted</button>
@@ -573,7 +573,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">conflicts_with_main</span>
+      <span class="glyph glyph-failed">conflicts_with_main</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#conflicts_with_main</button>
@@ -608,7 +608,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">verification_failed</span>
+      <span class="glyph glyph-failed">verification_failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#verification_failed</button>
@@ -643,7 +643,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-ring">waiting_on_producer_deploy</span>
+      <span class="glyph glyph-blocked">waiting_on_producer_deploy</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#waiting_on_producer_deploy</button>
@@ -674,7 +674,7 @@
   <tr class="group" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-ring">conflict_resolved</span>
+      <span class="glyph glyph-attention">conflict_resolved</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="" hx-push-url="" hx-target="#board" hx-swap="outerHTML">#conflict_resolved</button>

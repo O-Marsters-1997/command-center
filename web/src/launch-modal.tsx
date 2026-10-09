@@ -19,7 +19,7 @@ function ticketRef(url: string): string {
 function Banner(props: { children: JSX.Element }) {
   return (
     // biome-ignore lint/a11y/useSemanticElements: <output> would break that byte-for-byte match.
-    <p class="banner ribbon mb-2" data-tone="stop" role="status">
+    <p class="banner ribbon mb-2" data-glyph="failed" role="status">
       {props.children}
     </p>
   );

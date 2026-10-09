@@ -9,7 +9,7 @@
   <tr class="group group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted" data-depth="0">
     <td></td>
     <td>
-      <span class="pill pill-stop pill-ring">failed</span>
+      <span class="glyph glyph-failed">failed</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">#ROOT</button>
@@ -37,7 +37,7 @@
   <tr class="group" data-depth="1">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-disc">queued</span>
+      <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
@@ -64,7 +64,7 @@
   <tr class="group" data-depth="1">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-disc">queued</span>
+      <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-3" hx-push-url="/?sel=sandbox%3A%2F%2FCC-3" hx-target="#board" hx-swap="outerHTML">#CC-3</button>
@@ -91,7 +91,7 @@
   <tr class="group" data-depth="1">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-disc">queued</span>
+      <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-4" hx-push-url="/?sel=sandbox%3A%2F%2FCC-4" hx-target="#board" hx-swap="outerHTML">#CC-4</button>
@@ -118,7 +118,7 @@
   <tr class="group" data-depth="1">
     <td></td>
     <td>
-      <span class="pill pill-wait pill-disc">queued</span>
+      <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-5" hx-push-url="/?sel=sandbox%3A%2F%2FCC-5" hx-target="#board" hx-swap="outerHTML">#CC-5</button>
@@ -151,7 +151,7 @@
       <input type="checkbox" form="launch" name="ticket" value="sandbox://LONE"
         hx-get="/board?ticket=sandbox%3A%2F%2FLONE" hx-push-url="/?ticket=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
-      <span class="pill pill-idle pill-ring">ready</span>
+      <span class="glyph glyph-ready">ready</span>
     </td>
     <td>
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FLONE" hx-push-url="/?sel=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">#LONE</button>
@@ -176,11 +176,9 @@
 </table>
 <div id="masthead" hx-swap-oob="true">
   <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="pill">
-      <span class="pill-ring"></span>0 live
-    </span>
+    <span class="glyph glyph-ready">0 live</span>
     
-    <span class="pill"><span class="pill-disc"></span>observed <time datetime="2026-08-20T12:00:00Z">0s ago</time></span>
+    <span class="glyph glyph-done">observed <time datetime="2026-08-20T12:00:00Z">0s ago</time></span>
     
     
     <span class="flex items-center gap-[0.4em]">
@@ -204,20 +202,20 @@
     <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/6 yours</p>
     <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
       
-      <span class="segbar-segment" data-tone="wait" style="flex-grow: 4"></span>
+      <span class="segbar-segment" data-glyph="pending" style="flex-grow: 4"></span>
       
-      <span class="segbar-segment" data-tone="stop" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="failed" style="flex-grow: 1"></span>
       
-      <span class="segbar-segment" data-tone="idle" style="flex-grow: 1"></span>
+      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span>
       
     </div>
     <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="wait"></span>queued · 4</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-pending"></span>queued · 4</li>
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="stop"></span>failed · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-failed"></span>failed · 1</li>
       
-      <li class="flex items-center gap-[0.3em]"><span class="pill-disc" data-tone="idle"></span>ready · 1</li>
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 1</li>
       
     </ul>
     

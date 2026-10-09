@@ -214,7 +214,7 @@ customElement("cc-graph", {}, () => {
                   onKeyDown={(e) => onNodeKeyDown(e, node)}
                 >
                   <span
-                    class={`pill pill-${node.tone}${node.unattended ? " pill-disc" : " pill-ring"}${node.alive ? " pill-pulse" : ""}`}
+                    class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}
                   >
                     {node.state}
                   </span>

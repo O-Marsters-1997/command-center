@@ -70,19 +70,3 @@ func (s State) Unattended() bool {
 		return false
 	}
 }
-
-// Tone is the state's health band: done, live, wait, stop or idle, never a utility class.
-func Tone(s State) string {
-	switch s {
-	case PRMerged:
-		return "done"
-	case Running, PushPending, Checking, BaseMoved:
-		return "live"
-	case Blocked, Queued, ReviewMe, WaitingOnProducerDeploy, ConflictResolved:
-		return "wait"
-	case Ready, Cancelled:
-		return "idle"
-	default:
-		return "stop"
-	}
-}
