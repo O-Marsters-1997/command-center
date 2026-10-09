@@ -1,0 +1,28 @@
+# GET /s/{owner}/{name}/{n} is a ticket's session view inside the shell: header, the prompt the run
+# was given, and the transcript. ?log=raw swaps the transcript for the run's JSONL.
+
+cc-init-repo
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec cc request GET /s/sandbox-org/single-task/CC-1
+stdout '<main id="main"'
+stdout 'class="session"'
+stdout 'class="back"'
+stdout '#CC-1'
+stdout 'class="prompt-bubble"'
+stdout 'class="session-tabs"'
+stdout 'id="session-actions"'
+
+exec cc request GET '/s/sandbox-org/single-task/CC-1?log=raw'
+stdout 'class="raw-log"'
+
+! exec cc request GET /s/sandbox-org/single-task/CC-99
+stderr '404'

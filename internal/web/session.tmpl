@@ -1,0 +1,54 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+<li>{{.Ref}}</li>
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<article class="session" data-session="{{.Row.URL}}">
+  <header class="session-head">
+    <span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}" data-glyph="{{.Row.Glyph}}">{{.Row.State}}</span>
+    <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
+    <p class="session-meta text-muted">{{.Row.Repo}}{{with .Row.Feature}} · {{.}}{{end}}</p>
+    {{- if .Row.Log.PhaseCount}}
+    <details class="worked">
+      <summary><span class="worked-spark" aria-hidden="true">✻</span> {{.Row.Log.Worked.Label}}{{with .Row.Log.Worked.Stats}} <span class="worked-stats">{{.}}</span>{{end}}</summary>
+      <p class="text-muted">lines {{.Row.Log.Lines}} · phases {{.Row.Log.PhaseCount}}</p>
+    </details>
+    {{- end}}
+  </header>
+  <section class="prompt-bubble" aria-label="prompt">
+    {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
+    {{- else}}<p class="prompt-gone text-muted">The prompt was not kept.</p>{{end}}
+  </section>
+  <nav class="session-tabs" aria-label="log view">
+    <a href="{{.TranscriptPath}}"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a href="{{.RawPath}}"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+  </nav>
+  {{- if .Raw}}
+  <pre class="raw-log">{{.RawText}}</pre>
+  {{- else}}
+  <div class="run-thread">
+    <div class="run-work">
+      {{- range .Row.Log.Phases}}
+      <section class="phase">
+        <header class="phase-head flex items-baseline gap-2">
+          <span class="phase-skill">{{if .Skill}}{{.Skill}}{{else}}start{{end}}</span>{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
+          <span class="phase-rule"></span>
+          <span class="phase-at">{{.At}}</span>
+        </header>
+        {{- range .Items}}
+        {{if eq .Kind "say"}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+        {{- end}}
+      </section>
+      {{- end}}
+      {{- with .Row.Log.StreamPath}}
+      <div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+      {{- end}}
+    </div>
+    {{- with .Row.Log.Final}}
+    <div class="run-final">{{raw .}}</div>
+    {{- end}}
+  </div>
+  {{- end}}
+  <div id="session-actions"></div>
+</article>
+{{template "shellEnd" .}}
