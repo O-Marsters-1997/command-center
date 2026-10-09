@@ -46,6 +46,7 @@ customElement("cc-graph", {}, () => {
 
   const [groups, setGroups] = createSignal<Group[]>([]);
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
+  const [focused, setFocused] = createSignal<string | null>(null);
   const [hovered, setHovered] = createSignal<string | null>(null);
   const [pinned, setPinned] = createSignal<string | null>(null);
 
@@ -76,7 +77,7 @@ customElement("cc-graph", {}, () => {
   const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
 
   const traced = createMemo(() => {
-    const from = hovered() ?? pinned();
+    const from = hovered() ?? focused() ?? pinned();
     return from ? traceChain(from, edges()) : new Set<string>();
   });
 
@@ -98,8 +99,9 @@ customElement("cc-graph", {}, () => {
   }
 
   function onNodeClick(url: string) {
+    toggle(url);
     if (window.matchMedia(PHONE).matches) setPinned((prev) => (prev === url ? null : url));
-    else toggle(url);
+    else setPinned(null);
   }
 
   function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
@@ -175,8 +177,8 @@ customElement("cc-graph", {}, () => {
                   onClick={() => onNodeClick(node.url)}
                   onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
                   onPointerLeave={() => setHovered(null)}
-                  onFocus={(e) => e.currentTarget.matches(":focus-visible") && setHovered(node.url)}
-                  onBlur={() => setHovered(null)}
+                  onFocus={(e) => e.currentTarget.matches(":focus-visible") && setFocused(node.url)}
+                  onBlur={() => setFocused(null)}
                   onKeyDown={(e) => onNodeKeyDown(e, node)}
                 >
                   <span

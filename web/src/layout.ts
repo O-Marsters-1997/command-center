@@ -88,24 +88,24 @@ export function bounds(nodes: { col: number; y: number }[]): { width: number; he
 }
 
 export function traceChain<T extends { url: string }>(url: string, edges: Edge<T>[]): Set<string> {
-  const walk = (next: (e: Edge<T>) => [string, string]): string[] => {
-    const seen: string[] = [];
+  const upstream = new Map<string, string[]>();
+  const downstream = new Map<string, string[]>();
+  for (const e of edges) {
+    upstream.set(e.to.url, [...(upstream.get(e.to.url) ?? []), e.from.url]);
+    downstream.set(e.from.url, [...(downstream.get(e.from.url) ?? []), e.to.url]);
+  }
+  const traced = new Set([url]);
+  for (const adjacent of [upstream, downstream]) {
     const queue = [url];
+    const seen = new Set([url]);
     while (queue.length > 0) {
-      const at = queue.pop() as string;
-      for (const e of edges) {
-        const [near, far] = next(e);
-        if (near === at && !seen.includes(far) && far !== url) {
-          seen.push(far);
-          queue.push(far);
-        }
+      for (const next of adjacent.get(queue.pop() as string) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        traced.add(next);
+        queue.push(next);
       }
     }
-    return seen;
-  };
-  return new Set([
-    url,
-    ...walk((e) => [e.to.url, e.from.url]),
-    ...walk((e) => [e.from.url, e.to.url]),
-  ]);
+  }
+  return traced;
 }
