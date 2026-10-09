@@ -177,3 +177,19 @@ func TestSessionVerbWithoutHTMXRedirectsBack(t *testing.T) {
 		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Header().Get("Location"))
 	}
 }
+
+func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
+	t.Parallel()
+	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	srv := newServer(st, testNow)
+	rec := sessionVerb(t, srv, url.Values{
+		"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"},
+	}, true)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Queued follow-up") {
+		t.Fatalf("status %d:\n%s", rec.Code, rec.Body.String())
+	}
+	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("blank follow-up status = %d, want 400", rec.Code)
+	}
+}

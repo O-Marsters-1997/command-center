@@ -147,7 +147,7 @@
       <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Facme%2Fweb%2Fissues%2F1/log?from=144" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     </div>
   </div>
-  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s" hx-swap="outerHTML">
+  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
   <div class="verbs"><a class="verb" href="/s/acme/web/1?log=raw">Open log</a>
   </div>
 </div>

@@ -28,6 +28,9 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL, verb string) error {
 	self := view.SessionPath(ticketURL)
+	if self == "" {
+		return errorf(http.StatusBadRequest, "%q has no session page", ticketURL)
+	}
 	if r.Header.Get("HX-Request") == "" {
 		http.Redirect(w, r, self, http.StatusSeeOther)
 		return nil

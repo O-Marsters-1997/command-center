@@ -52,7 +52,7 @@
   {{- end}}
   {{template "sessionActions" .}}
 </article>
-{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-swap="outerHTML">
+{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
   {{- with .Toast}}<p class="toast" role="status">{{.}}</p>{{end}}
   <div class="verbs">
     {{- $s := .}}
