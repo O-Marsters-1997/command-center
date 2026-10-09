@@ -15,6 +15,7 @@
   <p class="banner ribbon" data-glyph="pending" role="status">
     the launch modal needs the built assets: run `just assets`.
   </p>
+  <a class="button" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}

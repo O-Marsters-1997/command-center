@@ -60,7 +60,7 @@ export function sectionsFor(candidates: Candidate[]): Sections {
   return {
     now: candidates.filter((c) => c.label === NOW),
     onUnlock: candidates.filter((c) => c.label === ON_UNLOCK),
-    refused: candidates.filter((c) => c.label === REFUSED),
+    refused: candidates.filter((c) => c.label !== NOW && c.label !== ON_UNLOCK),
   };
 }
 

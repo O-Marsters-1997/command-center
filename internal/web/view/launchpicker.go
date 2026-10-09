@@ -46,7 +46,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 	for feature, urls := range byFeature {
 		candidates, err := previewCandidates(urls, in)
 		if err != nil {
-			return LaunchPicker{}, err
+			continue
 		}
 		row := LaunchFeature{Name: feature, Path: "/f/" + url.PathEscape(feature) + "/launch"}
 		for _, c := range candidates {
