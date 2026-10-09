@@ -4,9 +4,10 @@
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
   
-  
-  
-  <tr class="group group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted" data-depth="0">
+  <tbody data-section="needs-you" aria-labelledby="section-needs-you">
+    <tr class="section-head"><th id="section-needs-you" colspan="10">Needs you <span class="section-count">1</span></th></tr>
+    
+  <tr class="group">
     <td></td>
     <td>
       <span class="glyph glyph-failed">failed</span>
@@ -15,7 +16,7 @@
       <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">#ROOT</button>
     </td>
     <td><div class="text-muted text-[0.85em]">no commits after this run&#39;s baseline; log at /state/runs/1.jsonl</div>
-      <div>untitled</div>
+      <div>untitled</div><div class="text-muted text-[0.85em]">unlocks #CC-2, #CC-3, #CC-4, #CC-5</div>
     </td>
     <td>L1</td>
     <td>no checks
@@ -33,8 +34,12 @@
   </tr>
   
 
+  </tbody>
   
-  <tr class="group" data-depth="1">
+  <tbody data-section="in-progress" aria-labelledby="section-in-progress">
+    <tr class="section-head"><th id="section-in-progress" colspan="10">In progress <span class="section-count">4</span></th></tr>
+    
+  <tr class="group">
     <td></td>
     <td>
       <span class="glyph glyph-pending">queued</span>
@@ -61,7 +66,7 @@
   </tr>
   
 
-  <tr class="group" data-depth="1">
+  <tr class="group">
     <td></td>
     <td>
       <span class="glyph glyph-pending">queued</span>
@@ -88,7 +93,7 @@
   </tr>
   
 
-  <tr class="group" data-depth="1">
+  <tr class="group">
     <td></td>
     <td>
       <span class="glyph glyph-pending">queued</span>
@@ -115,7 +120,7 @@
   </tr>
   
 
-  <tr class="group" data-depth="1">
+  <tr class="group">
     <td></td>
     <td>
       <span class="glyph glyph-pending">queued</span>
@@ -142,11 +147,12 @@
   </tr>
   
 
+  </tbody>
   
-  
-  
-  
-  <tr class="group" data-depth="0">
+  <tbody data-section="ready" aria-labelledby="section-ready">
+    <tr class="section-head"><th id="section-ready" colspan="10">Ready <span class="section-count">1</span></th></tr>
+    
+  <tr class="group">
     <td>
       <input type="checkbox" form="launch" name="ticket" value="sandbox://LONE"
         hx-get="/board?ticket=sandbox%3A%2F%2FLONE" hx-push-url="/?ticket=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
@@ -171,7 +177,7 @@
   </tr>
   
 
-  
+  </tbody>
   
 </table>
 <div id="masthead" hx-swap-oob="true">

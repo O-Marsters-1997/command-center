@@ -35,12 +35,7 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"head": func(r *view.Row, scope, featureScope string) rowSlot {
-			return newRowSlot(*r, true, 0, scope, featureScope)
-		},
-		"child": func(r view.Row, depth int, scope, featureScope string) rowSlot {
-			return newRowSlot(r, false, depth, scope, featureScope)
-		},
+		"slot":         newRowSlot,
 		"confirmation": confirmation,
 		"percent":      view.PercentOf,
 		"raw":          func(s string) template.HTML { return template.HTML(s) },
@@ -53,8 +48,6 @@ var templates = template.Must(template.New("").
 // pageView's copies of these fields.
 type rowSlot struct {
 	view.Row
-	Head         bool
-	Depth        int
 	LaunchVerb   string
 	CancelVerb   string
 	FollowUpVerb string
@@ -62,9 +55,9 @@ type rowSlot struct {
 	FeatureScope string
 }
 
-func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) rowSlot {
+func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
 	return rowSlot{
-		Row: r, Head: head, Depth: depth,
+		Row:        r,
 		LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, FollowUpVerb: plan.VerbFollowUp,
 		Scope: scope, FeatureScope: featureScope,
 	}
@@ -122,7 +115,9 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
+	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
 	mux.Handle("GET /board", handler(s.handleBoard))
+	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
 	mux.Handle("GET /s/{owner}/{name}/{n}", handler(s.handleSession))
 	mux.Handle("GET /insights", handler(s.handleInsightsPage))
@@ -215,8 +210,39 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	return renderHTML(w, "page.tmpl", board)
 }
 
+func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
+	feature := r.PathValue("feature")
+	q := r.URL.Query()
+	q.Set("feature", feature)
+	q.Del("view")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
+	if err != nil {
+		return err
+	}
+	if board.FeatureScope != feature {
+		return errorf(http.StatusNotFound, "no feature %q", feature)
+	}
+	return renderHTML(w, "feature.tmpl", board)
+}
+
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
 	return s.renderBoard(w, r, "boardSwap")
+}
+
+const railOpenCookie = "rail-open"
+
+func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
+	params := view.RailParams{Sel: view.RailSelection(r.Header.Get("HX-Current-URL"))}
+	if c, err := r.Cookie(railOpenCookie); err == nil {
+		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
+			params.Open = strings.Split(value, view.RailOpenSeparator)
+		}
+	}
+	rail, err := s.view.Rail(r.Context(), s.clock.Now(), params)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "rail", rail)
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
@@ -419,6 +445,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err != nil {
 		return err
+	}
+	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
+		return s.handleRail(w, r)
 	}
 	return s.redirectOrSwap(w, r)
 }

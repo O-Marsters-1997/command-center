@@ -35,7 +35,7 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	ref := ticketRef(ticketURL)
 	for _, block := range strings.Split(page, "<tr") {
-		if !strings.Contains(block, ref) {
+		if !strings.Contains(block, ">"+ref+"</button>") {
 			continue
 		}
 		end := strings.Index(block, "</tr>")
