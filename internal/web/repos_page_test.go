@@ -29,7 +29,7 @@ var pushable = []gh.RepoSummary{
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 	t.Helper()
-	server := web.NewServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "")
+	server := openServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		calls.Add(1)
 		return pushable, nil
@@ -133,7 +133,7 @@ func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 
 	var calls atomic.Int32
 	clock := &steppingClock{at: testNow}
-	server := web.NewServer(openStore(t), clock, "")
+	server := openServer(openStore(t), clock, "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		calls.Add(1)
 		return pushable, nil
@@ -155,7 +155,7 @@ func (*steppingClock) After(d time.Duration) <-chan time.Time { return time.Afte
 func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "")
+	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "")
 	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		return nil, errors.New("gh: not logged in")
 	})
@@ -181,7 +181,7 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := web.NewServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "")
+	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "")
 	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{
 		"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}},
 		"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
@@ -257,7 +257,7 @@ func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	if err := st.UpsertRepo(t.Context(), refused); err != nil {
 		t.Fatal(err)
 	}
-	server := web.NewServer(st, fixedClock(testNow), "")
+	server := openServer(st, fixedClock(testNow), "")
 
 	for name, path := range map[string]string{
 		"masthead_refused_board":  "/",

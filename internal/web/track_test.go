@@ -42,7 +42,7 @@ func recordingGitAndGh(t *testing.T) string {
 func TestTrackQueuesOneIntentAndRunsNoGitOrGh(t *testing.T) {
 	log := recordingGitAndGh(t)
 	st := openStore(t)
-	server := web.NewServer(st, fixedClock(testNow), "")
+	server := openServer(st, fixedClock(testNow), "")
 
 	first := postTrack(t, server, "acme/new", true)
 	second := postTrack(t, server, "acme/new", true)
@@ -66,7 +66,7 @@ func TestTrackQueuesOneIntentAndRunsNoGitOrGh(t *testing.T) {
 }
 
 func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
-	server := web.NewServer(openStore(t), fixedClock(testNow), "")
+	server := openServer(openStore(t), fixedClock(testNow), "")
 
 	rec := postTrack(t, server, "acme/new", false)
 
@@ -76,7 +76,7 @@ func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
 }
 
 func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
-	server := web.NewServer(openStore(t), fixedClock(testNow), "")
+	server := openServer(openStore(t), fixedClock(testNow), "")
 
 	for _, repo := range []string{"", "acme", "acme/a/b", "acme/ x", "../..", "./."} {
 		if rec := postTrack(t, server, repo, true); rec.Code != http.StatusBadRequest {
@@ -87,7 +87,7 @@ func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 
 func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	st := openStore(t)
-	server := web.NewServer(st, fixedClock(testNow), "")
+	server := openServer(st, fixedClock(testNow), "")
 	postTrack(t, server, "acme/new", true)
 
 	stale := get(t, server, "/features/banner?repo=acme/new&seen=cloning")
@@ -143,7 +143,7 @@ func TestBannerGoldens(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	server := web.NewServer(st, fixedClock(testNow), "")
+	server := openServer(st, fixedClock(testNow), "")
 	if err := st.QueueVerbIntent(t.Context(), "acme/queued", storepkg.TrackVerb, testNow); err != nil {
 		t.Fatal(err)
 	}

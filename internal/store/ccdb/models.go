@@ -120,10 +120,12 @@ type Ticket struct {
 }
 
 type User struct {
-	ID           int64
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
+	ID            int64
+	Email         string
+	PasswordHash  string
+	CreatedAt     time.Time
+	FailedCount   int32
+	NextAttemptAt sql.NullTime
 }
 
 type UtilizationInterval struct {

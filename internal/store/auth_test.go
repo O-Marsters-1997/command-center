@@ -303,3 +303,35 @@ func sessionTokens(t *testing.T, dsn string) []string {
 	}
 	return tokens
 }
+
+func TestSetPasswordClearsLoginBackoff(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	now := time.Now()
+	if err := store.CreateUser(ctx, "olly@example.com", "hash", now); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	row, err := store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	if admitted, err := store.ClaimLoginAttempt(ctx, row.ID, now); err != nil || !admitted {
+		t.Fatalf("first claim = %v, %v, want admitted", admitted, err)
+	}
+	if admitted, err := store.ClaimLoginAttempt(ctx, row.ID, now); err != nil || admitted {
+		t.Fatalf("claim inside the window = %v, %v, want refused", admitted, err)
+	}
+	if err := store.SetPassword(ctx, "olly@example.com", "hash2"); err != nil {
+		t.Fatalf("SetPassword: %v", err)
+	}
+
+	row, err = store.UserForLogin(ctx, "olly@example.com")
+	if err != nil {
+		t.Fatalf("UserForLogin: %v", err)
+	}
+	if row.FailedCount != 0 || row.NextAttemptAt.Valid {
+		t.Errorf("backoff survived SetPassword: %+v", row)
+	}
+}

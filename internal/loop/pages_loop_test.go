@@ -12,11 +12,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
+
+func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Server {
+	server := web.NewServer(st, clock, dataDir)
+	server.AllowAnonymous()
+	return server
+}
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()

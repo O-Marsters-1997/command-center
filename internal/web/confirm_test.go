@@ -34,7 +34,7 @@ func TestBoardAsksBeforeOnlyDestructiveVerbs(t *testing.T) {
 func TestConfirmPageIsGone(t *testing.T) {
 	t.Parallel()
 
-	server := web.NewServer(seededStore(t, time.Now()), realClock{}, "")
+	server := openServer(seededStore(t, time.Now()), realClock{}, "")
 	rec := get(t, server, "/confirm?verb=kill&ticket=sandbox://CC-1")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)

@@ -7,8 +7,30 @@ package ccdb
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
+
+const claimLoginAttempt = `-- name: ClaimLoginAttempt :execrows
+UPDATE users
+SET failed_count = failed_count + 1,
+    next_attempt_at = $2::timestamptz
+        + LEAST(power(2, LEAST(failed_count + 1, 6)), 60) * interval '1 second'
+WHERE id = $1 AND (next_attempt_at IS NULL OR next_attempt_at <= $2::timestamptz)
+`
+
+type ClaimLoginAttemptParams struct {
+	ID  int64
+	Now time.Time
+}
+
+func (q *Queries) ClaimLoginAttempt(ctx context.Context, arg ClaimLoginAttemptParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, claimLoginAttempt, arg.ID, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (email, password_hash, created_at)
@@ -38,6 +60,15 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt time.Time
 	return result.RowsAffected()
 }
 
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE token_sha = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, tokenSha string) error {
+	_, err := q.db.ExecContext(ctx, deleteSession, tokenSha)
+	return err
+}
+
 const deleteSessionsForUser = `-- name: DeleteSessionsForUser :exec
 DELETE FROM sessions WHERE user_id = $1
 `
@@ -45,6 +76,53 @@ DELETE FROM sessions WHERE user_id = $1
 func (q *Queries) DeleteSessionsForUser(ctx context.Context, userID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteSessionsForUser, userID)
 	return err
+}
+
+const issueSession = `-- name: IssueSession :exec
+INSERT INTO sessions (user_id, token_sha, created_at, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type IssueSessionParams struct {
+	UserID    int64
+	TokenSHA  string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+func (q *Queries) IssueSession(ctx context.Context, arg IssueSessionParams) error {
+	_, err := q.db.ExecContext(ctx, issueSession,
+		arg.UserID,
+		arg.TokenSHA,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const resetLoginFailures = `-- name: ResetLoginFailures :exec
+UPDATE users SET failed_count = 0, next_attempt_at = NULL WHERE id = $1
+`
+
+func (q *Queries) ResetLoginFailures(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, resetLoginFailures, id)
+	return err
+}
+
+const sessionOwner = `-- name: SessionOwner :one
+SELECT user_id FROM sessions WHERE token_sha = $1 AND expires_at > $2
+`
+
+type SessionOwnerParams struct {
+	TokenSHA  string
+	ExpiresAt time.Time
+}
+
+func (q *Queries) SessionOwner(ctx context.Context, arg SessionOwnerParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sessionOwner, arg.TokenSHA, arg.ExpiresAt)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
 }
 
 const updatePasswordByEmail = `-- name: UpdatePasswordByEmail :one
@@ -64,18 +142,26 @@ func (q *Queries) UpdatePasswordByEmail(ctx context.Context, arg UpdatePasswordB
 }
 
 const userForLogin = `-- name: UserForLogin :one
-SELECT id, email, password_hash FROM users WHERE email = $1
+SELECT id, email, password_hash, failed_count, next_attempt_at FROM users WHERE email = $1
 `
 
 type UserForLoginRow struct {
-	ID           int64
-	Email        string
-	PasswordHash string
+	ID            int64
+	Email         string
+	PasswordHash  string
+	FailedCount   int32
+	NextAttemptAt sql.NullTime
 }
 
 func (q *Queries) UserForLogin(ctx context.Context, email string) (UserForLoginRow, error) {
 	row := q.db.QueryRowContext(ctx, userForLogin, email)
 	var i UserForLoginRow
-	err := row.Scan(&i.ID, &i.Email, &i.PasswordHash)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.FailedCount,
+		&i.NextAttemptAt,
+	)
 	return i, err
 }

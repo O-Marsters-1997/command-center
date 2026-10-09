@@ -7,7 +7,6 @@ import (
 	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -124,7 +123,7 @@ func TestAResolveRunWithNoCommitsParksAsConflictResolved(t *testing.T) {
 		t.Fatalf("summary = %+v, want failed (zero commits after baseline)", summary)
 	}
 
-	server := web.NewServer(store, fixedClock(at), "")
+	server := openServer(store, fixedClock(at), "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state != "conflict_resolved" {
 		t.Fatalf("child's state = %q, want conflict_resolved", state)
@@ -261,7 +260,7 @@ func TestReRunOnAConflictResolvedRowWithAGoneWorktreeCutsFreshAndUnsticksIt(t *t
 		t.Fatalf("second RunOnce: %v", err)
 	}
 
-	server := web.NewServer(store, fixedClock(at.Add(time.Second)), "")
+	server := openServer(store, fixedClock(at.Add(time.Second)), "")
 	page := renderPage(t, server)
 	if state := rowState(t, page, ticket.URL); state == "conflict_resolved" {
 		t.Fatalf("state = %q, want the row to have left conflict_resolved once the fresh run disposed", state)

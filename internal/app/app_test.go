@@ -44,8 +44,23 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.OpenStore(cfg.DatabaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	token, err := st.SeedSession(ctx, "me@example.com", at, at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "cc_session", Value: token})
 	rec := httptest.NewRecorder()
-	inst.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	inst.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}

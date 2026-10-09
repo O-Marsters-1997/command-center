@@ -16,7 +16,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 type fakeForge struct {
@@ -109,7 +108,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	}
 	state := func() string {
 		t.Helper()
-		return rowState(t, renderPage(t, web.NewServer(store, fixedClock(at), "")), issue.URL)
+		return rowState(t, renderPage(t, openServer(store, fixedClock(at), "")), issue.URL)
 	}
 
 	tick()
