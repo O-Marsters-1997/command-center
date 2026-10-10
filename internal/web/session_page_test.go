@@ -20,7 +20,9 @@ func sessionStore(t *testing.T, kind, prompt string, keepPrompt, alive bool) (*s
 	return sessionStoreEnding(t, kind, prompt, keepPrompt, alive, plan.OutcomePush)
 }
 
-func sessionStoreEnding(t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome) (*storepkg.Store, string) {
+func sessionStoreEnding(
+	t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+) (*storepkg.Store, string) {
 	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
@@ -128,7 +130,9 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	t.Parallel()
 	running, _ := sessionStore(t, "agent", "p", true, true)
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
-	for _, want := range []string{`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`} {
+	for _, want := range []string{
+		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("running session lacks %q:\n%s", want, body)
 		}
@@ -172,7 +176,8 @@ func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 func TestSessionVerbWithoutHTMXRedirectsBack(t *testing.T) {
 	t.Parallel()
 	st, _ := sessionStore(t, "agent", "p", true, true)
-	rec := sessionVerb(t, newServer(st, testNow), url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}, false)
+	form := url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}
+	rec := sessionVerb(t, newServer(st, testNow), form, false)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/s/acme/web/1" {
 		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Header().Get("Location"))
 	}
