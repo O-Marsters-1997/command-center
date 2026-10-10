@@ -147,6 +147,20 @@
       <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Facme%2Fweb%2Fissues%2F1/log?from=144" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     </div>
   </div>
+  <aside class="stack-panel" aria-label="feature stack">
+    <h2 class="stack-title">Blocked by</h2><p class="text-muted">Nothing blocks this ticket.</p>
+    <h2 class="stack-title">Merging this unlocks</h2><p class="text-muted">Nothing waits on this ticket.</p>
+    <form method="post" action="/ticket" class="stack-form">
+      <input type="hidden" name="ticket" value="https://github.com/acme/web/issues/1">
+      <input type="hidden" name="branch" value="cc-1">
+      <input type="hidden" name="return" value="/s/acme/web/1">
+      <fieldset class="stack-fields">
+        <legend class="stack-title">Edit blockers</legend>
+        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+      </fieldset>
+      <button type="submit" class="button">save</button>
+    </form>
+  </aside>
   <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
   <div class="verbs"><a class="verb" href="/s/acme/web/1?log=raw">Open log</a>
   </div>
@@ -158,3 +172,4 @@
 </div>
 </body>
 </html>
+

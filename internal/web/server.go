@@ -563,8 +563,17 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.clock.Now()); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, afterTicketEdit(r.FormValue("return")), http.StatusSeeOther)
 	return nil
+}
+
+func afterTicketEdit(back string) string {
+	u, err := url.Parse(back)
+	if err != nil || u.Scheme != "" || u.Host != "" ||
+		!strings.HasPrefix(u.Path, "/s/") || strings.Contains(u.Path, "..") {
+		return "/"
+	}
+	return u.EscapedPath()
 }
 
 func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
