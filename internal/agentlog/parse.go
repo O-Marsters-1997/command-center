@@ -5,6 +5,7 @@ package agentlog
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -353,7 +354,11 @@ func (l logLine) events() []Event {
 				events = append(events, Event{Kind: Say, Detail: say})
 			}
 		case l.Type == "user" && block.Type == "tool_result":
-			events = append(events, block.resultEvent())
+			event := block.resultEvent()
+			if l.toolResults() == 1 {
+				event.Diff = changeCounts(l.ToolUseResult)
+			}
+			events = append(events, event)
 		}
 	}
 	return events
@@ -376,10 +381,61 @@ func (b contentBlock) toolEvent() Event {
 		kind = File
 	}
 	event := Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input), CallID: b.ID}
-	if b.Name == "Edit" {
+	switch b.Name {
+	case "Edit":
 		event.Diff = lineDiff(text(input["old_string"]), text(input["new_string"]))
+	case "Write":
+		event.Diff = Diff{Added: countLines(text(input["content"]))}
 	}
 	return event
+}
+
+func (l logLine) toolResults() int {
+	n := 0
+	for _, b := range l.Message.Content {
+		if b.Type == "tool_result" {
+			n++
+		}
+	}
+	return n
+}
+
+func changeCounts(raw json.RawMessage) Diff {
+	if !bytes.Contains(raw, []byte(`"structuredPatch"`)) {
+		return Diff{}
+	}
+	var result struct {
+		Type            string `json:"type"`
+		Content         string `json:"content"`
+		StructuredPatch []struct {
+			Lines []string `json:"lines"`
+		} `json:"structuredPatch"`
+	}
+	if json.Unmarshal(raw, &result) != nil {
+		return Diff{}
+	}
+	if result.Type == "create" {
+		return Diff{Added: countLines(result.Content)}
+	}
+	var counts Diff
+	for _, hunk := range result.StructuredPatch {
+		for _, line := range hunk.Lines {
+			switch {
+			case strings.HasPrefix(line, "+"):
+				counts.Added++
+			case strings.HasPrefix(line, "-"):
+				counts.Removed++
+			}
+		}
+	}
+	return counts
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(strings.TrimSuffix(s, "\n"), "\n") + 1
 }
 
 func (b contentBlock) resultEvent() Event {

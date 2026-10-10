@@ -122,6 +122,11 @@ func (p callPair) line() LogLine {
 		line.Open = line.Fold && line.Failed
 		return line
 	}
+	if p.called && p.answered {
+		if counted := p.result.Diff; counted.Added+counted.Removed > 0 {
+			line.Added, line.Removed = counted.Added, counted.Removed
+		}
+	}
 	if p.answered {
 		line.Result = p.resultWord()
 		if line.Failed || categoryOf(p.call.Tool) == running {
