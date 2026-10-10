@@ -1,0 +1,17 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+{{template "shellAction" .}}
+<a class="button" href="/f/{{.FeatureScope | pathEscape}}/launch" hx-get="/f/{{.FeatureScope | pathEscape}}/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Launch</a>
+{{template "shellContent" .}}
+<nav class="pill-tabs" aria-label="feature views">
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}">Board</a>
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph" aria-current="page">Graph</a>
+</nav>
+<cc-graph data-src="/graph.json?feature={{.FeatureScope}}">
+  <p class="banner ribbon" data-glyph="pending" role="status">
+    the dependency graph needs the built assets: run `just assets`, or switch to the board.
+  </p>
+</cc-graph>
+<script type="module" src="/assets/dist/graph.js"></script>
+<div id="launch-modal"></div>
+{{template "shellEnd" .}}

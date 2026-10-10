@@ -6,7 +6,7 @@
   {{range .Rows}}
   <tr>
     <td><a href="{{.Path}}">{{.FullName}}</a></td>
-    <td>{{if .Tracked}}<span class="glyph glyph-done">ready</span>{{else}}<span class="text-muted">not tracked</span>{{with .RefusedBranch}} <span class="glyph glyph-failed text-xs">will be refused: default branch is <code>{{.}}</code></span>{{end}}{{end}}</td>
+    <td>{{if .Tracked}}<ul class="flex flex-wrap gap-3">{{range .Steps}}<li><span class="glyph glyph-{{.Glyph}}">{{.Mark}}</span> {{.Label}}</li>{{end}}</ul>{{else}}<span class="text-muted">not tracked</span>{{with .RefusedBranch}} <span class="glyph glyph-failed text-xs">will be refused: default branch is <code>{{.}}</code></span>{{end}}{{end}}</td>
     <td>{{if not .Tracked}}<a href="{{.Path}}">track &rarr;</a>{{end}}</td>
   </tr>
   {{else}}
@@ -32,7 +32,7 @@
 {{template "importRefusal" .LastImportError}}
 <input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
   class="block w-full max-w-3xl border border-border rounded px-3 py-2 text-lg mb-1"
-  hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
+  hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 <p class="text-muted mb-3">Search runs as this box's gh identity.</p>
 <div id="repo-results">
 {{template "repoResults" .Results}}

@@ -74,7 +74,7 @@
   <nav class="sidebar-nav">
     <a class="sidebar-item" href="/?view=board" hx-get="/?view=board" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
     <a class="sidebar-item" href="/insights" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
-    <a class="sidebar-item" href="/features" hx-get="/features" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
+    <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
   </nav>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <form method="post" action="/logout">
@@ -108,8 +108,8 @@
   <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
   <ol class="crumbs">
 <li>Command Centre</li>
-<li><a href="/features">repos</a></li>
-<li><a href="/features?repo=acme/alpha">acme/alpha</a></li>
+<li><a href="/repos">repos</a></li>
+<li><a href="/repos/acme/alpha">acme/alpha</a></li>
 
 </ol>
   <div class="topbar-action">
@@ -117,10 +117,6 @@
 </div>
 </header>
 <div class="content">
-<input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
-  class="block border border-border rounded px-2 py-1 mb-1"
-  hx-get="/features/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
-<div id="repo-results" class="mb-3"></div>
 <h1>acme/alpha</h1>
 <p class="text-muted mb-2">git@github.com:acme/alpha.git</p>
 <section id="repo-banner" class="banner ribbon mb-3" data-glyph="done" data-state="ready" role="status">
@@ -140,7 +136,7 @@
   
   <tr>
     <td>
-      <a href="/features/project:x">project:x</a>
+      <a href="/f/project:x">project:x</a>
       
     </td>
     <td>no</td>
@@ -154,6 +150,17 @@
   </tr>
   
 </table>
+<h2 class="mt-4 mb-2">Tickets</h2>
+
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+<table id="board" hx-get="/board?repo=acme%2Falpha" hx-trigger="every 5s" hx-swap="outerHTML">
+  <tr>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
+  </tr>
+  
+</table>
+<button type="submit" form="launch">launch selected</button>
 
 <div id="launch-modal"></div>
 </div>

@@ -1,14 +1,16 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import type { JSX } from "solid-js";
 import { bounds, edgePath, edgesFor, stackByColumn } from "./layout";
 import {
   type Candidate,
   REFUSED,
+  cancelHref,
   columnsFor,
   dependentsOf,
   initialTicked,
   missingBlockersOf,
+  sectionsFor,
 } from "./launch";
 
 function ticketRef(url: string): string {
@@ -38,6 +40,11 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
   const [loaded, setLoaded] = createSignal(false);
 
   onMount(async () => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") window.location.assign(cancelHref(props.feature));
+    };
+    document.addEventListener("keydown", onKey);
+    onCleanup(() => document.removeEventListener("keydown", onKey));
     try {
       const query = props.tickets || `feature=${encodeURIComponent(props.feature)}`;
       const res = await fetch(`/launch/candidates?${query}`);
@@ -91,6 +98,46 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
   const dagEdges = createMemo(() => edgesFor(dagNodes(), (n) => n.blocked_by));
   const dagBounds = createMemo(() => bounds(dagNodes()));
 
+  const sections = createMemo(() => sectionsFor(candidates()));
+
+  function Section(sec: { title: string; rows: Candidate[] }) {
+    return (
+      <Show when={sec.rows.length > 0}>
+        <section class="launch-section" aria-label={sec.title}>
+          <h3 class="launch-section-title">
+            {sec.title} <span class="text-muted">{sec.rows.length}</span>
+          </h3>
+          <ul class="launch-rows">
+            <For each={sec.rows}>
+              {(c) => (
+                <li class="launch-row">
+                  <label class="launch-row-main">
+                    <input
+                      type="checkbox"
+                      checked={ticked().has(c.url)}
+                      disabled={c.label === REFUSED}
+                      onChange={() => toggle(c)}
+                    />
+                    <Show when={ticked().has(c.url) && c.label !== REFUSED}>
+                      <input type="hidden" name="ticket" value={c.url} />
+                      <input type="hidden" name="hash" value={`${c.url} ${c.prompt_hash}`} />
+                    </Show>
+                    <span class="launch-row-ref">{c.ref}</span>
+                    <span>{c.title}</span>
+                  </label>
+                  <span class="launch-row-meta text-muted">
+                    {c.base} &middot; {c.base_verdict}
+                    {c.reason && <> &middot; {c.reason}</>}
+                  </span>
+                </li>
+              )}
+            </For>
+          </ul>
+        </section>
+      </Show>
+    );
+  }
+
   return (
     <div>
       <Show when={loaded()} fallback={<p class="text-muted">loading&hellip;</p>}>
@@ -119,46 +166,17 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
           </div>
 
           <form method="post" action="/launch">
-            <table class="mb-3 w-full max-w-4xl">
-              <tbody>
-                <tr>
-                  <th />
-                  <th>label</th>
-                  <th>ticket</th>
-                  <th>base</th>
-                  <th>base verdict</th>
-                  <th>why</th>
-                </tr>
-                <For each={candidates()}>
-                  {(c) => (
-                    <tr>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={ticked().has(c.url)}
-                          disabled={c.label === REFUSED}
-                          onChange={() => toggle(c)}
-                        />
-                        <Show when={ticked().has(c.url) && c.label !== REFUSED}>
-                          <input type="hidden" name="ticket" value={c.url} />
-                          <input type="hidden" name="hash" value={`${c.url} ${c.prompt_hash}`} />
-                        </Show>
-                      </td>
-                      <td>{c.label}</td>
-                      <td>
-                        {c.ref} {c.title}
-                      </td>
-                      <td>{c.base}</td>
-                      <td>{c.base_verdict}</td>
-                      <td class="text-muted">{c.reason}</td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-            <button type="submit" disabled={tickedCandidates().length === 0}>
-              [ confirm ]
-            </button>
+            <Section title="Ready now" rows={sections().now} />
+            <Section title="On unlock" rows={sections().onUnlock} />
+            <Section title="Refused" rows={sections().refused} />
+            <div class="launch-actions">
+              <a class="button" href={cancelHref(props.feature)}>
+                Cancel
+              </a>
+              <button type="submit" class="button launch-confirm" disabled={tickedCandidates().length === 0}>
+                Confirm launch
+              </button>
+            </div>
           </form>
         </Show>
       </Show>

@@ -54,7 +54,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 
 	server := openServer(store, loop.RealClock{}, "")
 	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/features", nil))
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/repos", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
