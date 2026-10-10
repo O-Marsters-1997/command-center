@@ -11,7 +11,6 @@ import (
 type Chrome struct {
 	Workspace     string
 	LiveAgents    int
-	Exploring     int
 	Observe       Age
 	ObserveStale  bool
 	LastError     *TickError

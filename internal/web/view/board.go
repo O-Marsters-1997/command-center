@@ -63,7 +63,6 @@ type Row struct {
 	SpendPctWeek    float64  `json:"spend_pct_week"`
 	TicketOpen      bool     `json:"ticket_open"`
 
-	Selected    bool      `json:"selected"`
 	Checked     bool      `json:"checked"`
 	SessionPath string    `json:"session_path"`
 	TogglePath  string    `json:"toggle_path"`
@@ -119,13 +118,12 @@ type Group struct {
 func applyViewState(rows []Row, params Params, render LineRenderer) {
 	for i := range rows {
 		r := &rows[i]
-		r.Selected = params.Sel == r.URL
 		r.Checked = slices.Contains(params.Tickets, r.URL)
 		r.SessionPath = cmp.Or(SessionPath(r.URL), ticketsPath)
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
-		if r.Selected {
+		if params.Sel == r.URL {
 			r.Log = buildLogDetail(render, r.LogPath, r.Alive, r.URL, params)
 		}
 	}
