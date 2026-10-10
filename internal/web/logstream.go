@@ -81,7 +81,9 @@ func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mod
 			if !view.EventShown(mode, event) {
 				continue
 			}
-			rendered, err := renderLogLine(view.LineOf(event))
+			logLine := view.LineOf(event)
+			logLine.Replace = event.Kind == agentlog.Cmd && event.Done && event.CallID != "" && mode != "fails"
+			rendered, err := renderLogLine(logLine)
 			if err != nil {
 				continue
 			}

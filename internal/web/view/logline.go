@@ -24,6 +24,8 @@ type LogLine struct {
 	Added   int
 	Removed int
 	Anchor  bool
+	CallID  string
+	Replace bool
 }
 
 type ProseBlock struct {
@@ -85,7 +87,7 @@ func (p callPair) cmdWord() string {
 		return "running"
 	case p.result.Interrupted:
 		return "interrupted" + elapsedSuffix(p.result.Elapsed)
-	case p.result.ExitCode > 0:
+	case p.result.ExitCode != 0:
 		return fmt.Sprintf("exit %d%s", p.result.ExitCode, elapsedSuffix(p.result.Elapsed))
 	default:
 		return "✓" + elapsedSuffix(p.result.Elapsed)
@@ -113,6 +115,7 @@ func (p callPair) line() LogLine {
 		}
 	}
 	if p.called && p.call.Kind == agentlog.Cmd {
+		line.CallID = p.call.CallID
 		line.Result = p.cmdWord()
 		line.Output = p.result.Output
 		line.Fold = line.Output != ""

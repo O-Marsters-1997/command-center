@@ -88,7 +88,12 @@ func TestParseCommandResults(t *testing.T) {
 		{
 			name: "interrupted is not a pass",
 			log:  result(stamp, ok, `{"stdout":"","stderr":"","interrupted":true}`),
-			want: agentlog.Event{Done: true, Interrupted: true, Elapsed: 3500 * time.Millisecond},
+			want: agentlog.Event{Done: true, Interrupted: true, Output: "from content", OutputLines: 1, Elapsed: 3500 * time.Millisecond},
+		},
+		{
+			name: "output that merely starts like an exit code is not a failure",
+			log:  result(stamp, ok, `{"stdout":"Exit code 3 reached"}`),
+			want: agentlog.Event{Done: true, Output: "Exit code 3 reached", OutputLines: 1, Elapsed: 3500 * time.Millisecond},
 		},
 		{
 			name: "a bare string result carries the exit code",

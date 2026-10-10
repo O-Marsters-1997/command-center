@@ -423,14 +423,15 @@ func (l logLine) cmdDone(call cmdCall, callID string) Event {
 			done.Interrupted = bash.Interrupted
 		}
 	}
-	if output == "" && !done.Interrupted {
+	if output == "" {
 		output = block.resultText()
 	}
-	if match := exitCodePrefix.FindStringSubmatch(output); match != nil {
-		done.ExitCode, _ = strconv.Atoi(match[1])
-		output = output[len(match[0]):]
-	} else if block.IsError {
+	if block.IsError {
 		done.ExitCode = 1
+		if match := exitCodePrefix.FindStringSubmatch(output); match != nil {
+			done.ExitCode, _ = strconv.Atoi(match[1])
+			output = output[len(match[0]):]
+		}
 	}
 	if !l.Timestamp.IsZero() && !call.at.IsZero() {
 		done.Elapsed = max(0, l.Timestamp.Sub(call.at))
