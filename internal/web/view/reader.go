@@ -26,6 +26,8 @@ type Board struct {
 	Band             Band
 	BoardPath        string
 	BoardPollSeconds int
+	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
+	Launch *LaunchModal
 }
 
 func (b Board) Row(ticketURL string) (Row, bool) {

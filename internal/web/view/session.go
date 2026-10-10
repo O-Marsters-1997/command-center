@@ -20,6 +20,7 @@ var ErrSessionNotFound = errors.New("no such session")
 type Session struct {
 	Chrome
 	Row            Row
+	Stack          Stack
 	Ref            string
 	Prompt         Prompt
 	Raw            bool
@@ -94,6 +95,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		PRURL:          prURL,
 		Chrome:         chrome,
 		Row:            row,
+		Stack:          buildStack(board, row),
 		Ref:            ticketRef(ticketURL),
 		Prompt:         readPrompt(row.LogPath),
 		Raw:            raw,

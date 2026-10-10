@@ -1,0 +1,17 @@
+# GET /f/{feature}/graph renders the feature page with the Graph tab current and the graph island
+# pointed at that feature's graph.json; an unknown feature is a 404.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+exec cc request GET /f/project:two-tasks/graph
+
+stdout 'href="/f/project:two-tasks">Board<'
+stdout 'href="/f/project:two-tasks/graph" aria-current="page">Graph<'
+stdout '<cc-graph data-src="/graph.json\?feature=project%3[Aa]two-tasks"'
+stdout '/assets/dist/graph.js'
+
+! exec cc request GET /f/bogus/graph
