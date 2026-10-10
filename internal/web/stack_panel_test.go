@@ -79,7 +79,9 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 func TestTicketEditIgnoresAnOffSiteReturn(t *testing.T) {
 	t.Parallel()
 	server := newServer(stackStore(t), testNow)
-	form := url.Values{"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"}}
+	form := url.Values{
+		"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"},
+	}
 	req := httptest.NewRequest(http.MethodPost, "/ticket", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
