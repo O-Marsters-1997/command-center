@@ -72,7 +72,7 @@ func (s *Server) sendRecords(
 	for _, record := range records {
 		*afterID = record.ID
 		event := view.RecordOf(record)
-		if !view.EventShown(mode, event) {
+		if !view.RecordShown(record) || !view.EventShown(mode, event) {
 			continue
 		}
 		rendered, err := renderLogLine(view.LineOf(event))

@@ -73,6 +73,7 @@ func buildLogDetail(
 	render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
 ) LogDetail {
 	detail := LogDetail{Path: path, Streaming: streaming}
+	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })
 
 	whole, resumeAt := wholeLines(path)
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
@@ -99,6 +100,10 @@ func buildLogDetail(
 		}
 	}
 	return detail
+}
+
+func RecordShown(e store.Event) bool {
+	return e.Kind == "pr_merged"
 }
 
 func RecordOf(e store.Event) agentlog.Event {

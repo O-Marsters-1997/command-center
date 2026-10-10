@@ -64,7 +64,8 @@ func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) 
 
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	records := []store.Event{
-		{ID: 4, At: start.Add(-time.Minute), Kind: "launched", Detail: "before the log"},
+		{ID: 4, At: start.Add(-time.Minute), Kind: "pr_merged", Detail: "PR #11 merged"},
+		{ID: 5, At: start.Add(time.Minute), Kind: "launched", Detail: "internal audit row"},
 		{ID: 7, At: start.Add(time.Hour), Kind: "pr_merged", Detail: "PR #12 merged"},
 	}
 	path := writeRunLog(t, testRunLog)
@@ -72,7 +73,7 @@ func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) 
 	detail := buildLogDetail(testLine, path, false, "sandbox://x", records, Params{Log: "all"})
 
 	first, last := detail.Phases[0], detail.Phases[len(detail.Phases)-1]
-	if got := first.Items[0]; got.Kind != "record" || got.Line != "line-record launched before the log" {
+	if got := first.Items[0]; got.Kind != "record" || got.Line != "line-record merged PR #11 merged" {
 		t.Errorf("first item = %+v, want the early record ahead of the agent's lines", got)
 	}
 	if got := last.Items[len(last.Items)-1]; got.Kind != "record" || got.Line != "line-record merged PR #12 merged" {
