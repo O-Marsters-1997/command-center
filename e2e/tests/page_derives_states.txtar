@@ -7,10 +7,10 @@ cc-fake-gh no-prs
 
 exec cc import project:two-tasks
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 
-stdout '>#CC-1</button>'
+stdout '>#CC-1</a>'
 stdout '>ready</span>'
-stdout '>#CC-2</button>'
+stdout '>#CC-2</a>'
 stdout '>blocked</span>'
 stdout 'blocked by https://github.com/sandbox-org/two-tasks/issues/CC-1'

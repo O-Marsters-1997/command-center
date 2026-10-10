@@ -14,7 +14,7 @@ exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
 
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>push_failed</span>'
 
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x

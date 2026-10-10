@@ -17,7 +17,7 @@ exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
 
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>needs_you</span>'
 stdout 'protected path'
 

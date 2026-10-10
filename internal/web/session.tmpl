@@ -1,0 +1,109 @@
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+<li>{{.Ref}}</li>
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<article class="session" data-session="{{.Row.URL}}">
+  <header class="session-head">
+    <span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}" data-glyph="{{.Row.Glyph}}">{{.Row.State}}</span>
+    <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
+    <p class="session-meta text-muted">{{.Row.Repo}}{{with .Row.Feature}} · {{.}}{{end}}</p>
+    {{- with .Row.Worktree}}
+    <p class="session-worktree text-muted"><code>{{.}}</code></p>
+    {{- end}}
+    {{- if .Row.Log.PhaseCount}}
+    <details class="worked">
+      <summary><span class="worked-spark" aria-hidden="true">✻</span> {{.Row.Log.Worked.Label}}{{with .Row.Log.Worked.Stats}} <span class="worked-stats">{{.}}</span>{{end}}</summary>
+      <p class="text-muted">lines {{.Row.Log.Lines}} · phases {{.Row.Log.PhaseCount}}</p>
+    </details>
+    {{- end}}
+  </header>
+  <section class="prompt-bubble" aria-label="prompt">
+    {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
+    {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
+  </section>
+  <nav class="session-tabs" aria-label="log view">
+    <a href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+  </nav>
+  {{- if .Raw}}
+  {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
+  {{- else}}
+  {{- if not .Row.Log.PhaseCount}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
+  <div class="run-thread">
+    <div class="run-work">
+      {{- range .Row.Log.Phases}}
+      <section class="phase">
+        <header class="phase-head flex items-baseline gap-2">
+          <span class="phase-skill">{{if .Skill}}{{.Skill}}{{else}}start{{end}}</span>{{with .Note}}<span class="phase-note">{{.}}</span>{{end}}
+          <span class="phase-rule"></span>
+          <span class="phase-at">{{.At}}</span>
+        </header>
+        {{- range .Items}}
+        {{if eq .Kind "say"}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+        {{- end}}
+      </section>
+      {{- end}}
+      {{- with .Row.Log.StreamPath}}
+      <div class="run-log-live" hx-ext="sse" sse-connect="{{.}}" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+      {{- end}}
+    </div>
+    {{- with .Row.Log.Final}}
+    <div class="run-final">{{raw .}}</div>
+    {{- end}}
+  </div>
+  {{- end}}
+  <aside class="stack-panel" aria-label="feature stack">
+    <h2 class="stack-title">Blocked by</h2>
+    {{- if .Stack.Blockers}}
+    <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- else}}<p class="text-muted">Nothing blocks this ticket.</p>{{end}}
+    <h2 class="stack-title">Merging this unlocks</h2>
+    {{- if .Stack.Unlocks}}
+    <ul class="stack-list">{{range .Stack.Unlocks}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
+    {{- else}}<p class="text-muted">Nothing waits on this ticket.</p>{{end}}
+    <form method="post" action="/ticket" class="stack-form">
+      <input type="hidden" name="ticket" value="{{.Row.URL}}">
+      <input type="hidden" name="branch" value="{{.Row.Branch}}">
+      <input type="hidden" name="return" value="{{.TranscriptPath}}">
+      <fieldset class="stack-fields">
+        <legend class="stack-title">Edit blockers</legend>
+        {{- range .Row.BlockedBy}}
+        <input type="text" name="blocked_by" value="{{.}}" aria-label="blocked by">
+        {{- end}}
+        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+      </fieldset>
+      <button type="submit" class="button">save</button>
+    </form>
+  </aside>
+  {{template "sessionActions" .}}
+</article>
+{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
+  {{- with .Toast}}<p class="toast" role="status">{{.}}</p>{{end}}
+  <div class="verbs">
+    {{- $s := .}}
+    {{- range .ActionVerbs}}
+    <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+      <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
+      <input type="hidden" name="from" value="session">
+      <button class="verb" type="submit" name="verb" value="{{.}}"{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
+      {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+    </form>
+    {{- end}}
+    {{- with .PRURL}}<a class="verb" href="{{.}}" target="_blank" rel="noopener">Open PR</a>{{end}}
+    {{- if .Row.LogPath}}<a class="verb" href="{{.RawPath}}">Open log</a>{{end}}
+  </div>
+  {{- if .Running}}
+  <p class="composer-running" data-glyph="running">Agent is running{{with .Row.Log.Worked.Stats}} · {{.}}{{end}}{{with .Row.Elapsed}} · {{.}}{{end}}</p>
+  {{- else if .Row.FollowUpAvailable}}
+  <form class="composer" method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML">
+    <input type="hidden" name="ticket" value="{{.Row.URL}}">
+    <input type="hidden" name="from" value="session">
+    <input type="hidden" name="verb" value="follow-up">
+    <textarea name="prompt" rows="2" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
+    <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>Send</button>
+    {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+  </form>
+  {{- end}}
+</div>{{end}}
+{{define "stackLink"}}{{if .Glyph}}<span class="glyph glyph-{{.Glyph}}" data-glyph="{{.Glyph}}" aria-hidden="true"></span>{{end}}{{if .Path}}<a href="{{.Path}}">{{.Ref}}</a>{{else}}{{.Ref}}{{end}}{{with .State}} <span class="text-muted">{{.}}</span>{{end}}{{end}}

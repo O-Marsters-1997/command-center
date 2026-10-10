@@ -12,7 +12,7 @@ import (
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
-	return renderPath(t, server, "/")
+	return renderPath(t, server, "/tickets")
 }
 
 func renderBoard(t *testing.T, server *web.Server) string {
@@ -35,7 +35,7 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	ref := ticketRef(ticketURL)
 	for _, block := range strings.Split(page, "<tr") {
-		if !strings.Contains(block, ref) {
+		if !strings.Contains(block, ">"+ref+"</a>") {
 			continue
 		}
 		end := strings.Index(block, "</tr>")
@@ -49,18 +49,18 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 }
 
 var (
-	pillTextRE   = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
+	glyphTextRE  = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
 	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)
 )
 
 func rowState(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	cell := rowCellAt(t, page, ticketURL, 1)
-	pill := pillTextRE.FindStringSubmatch(cell)
-	if pill == nil {
-		t.Fatalf("no state pill found for %s in cell:\n%s", ticketURL, cell)
+	glyph := glyphTextRE.FindStringSubmatch(cell)
+	if glyph == nil {
+		t.Fatalf("no state glyph found for %s in cell:\n%s", ticketURL, cell)
 	}
-	state := pill[1]
+	state := glyph[1]
 	for _, m := range queuedVerbRE.FindAllStringSubmatch(cell, -1) {
 		state += " · " + m[1] + " queued"
 	}

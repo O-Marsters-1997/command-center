@@ -30,7 +30,7 @@ const maxAgents = 4
 
 var simStart = time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 
-var pillRE = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
+var glyphRE = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
 
 type issue struct {
 	Ticket
@@ -327,8 +327,8 @@ func (s *Sim) states() (map[string]string, error) {
 			if !strings.Contains(row, ref) {
 				continue
 			}
-			if pill := pillRE.FindStringSubmatch(row); pill != nil {
-				states[i.ID] = pill[1]
+			if glyph := glyphRE.FindStringSubmatch(row); glyph != nil {
+				states[i.ID] = glyph[1]
 			}
 		}
 	}

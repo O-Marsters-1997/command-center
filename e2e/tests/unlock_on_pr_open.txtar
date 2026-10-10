@@ -9,11 +9,11 @@ exec cc import project:two-tasks
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'
 
 cc-fake-gh pr-open-cc1
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout 'waiting for a slot'
 ! stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'

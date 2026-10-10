@@ -4,7 +4,7 @@ export interface Row {
   url: string;
   title: string;
   state: string;
-  tone: string;
+  glyph: string;
   unattended: boolean;
   alive: boolean;
   blocking: string[] | null;

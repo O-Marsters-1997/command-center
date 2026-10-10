@@ -1,18 +1,14 @@
 package web_test
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
-func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
+func TestRailRendersTheLatestStoredReading(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -31,17 +27,17 @@ func TestMastheadRendersTheLatestStoredReading(t *testing.T) {
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
-	board := renderBoard(t, server)
+	board := renderPath(t, server, "/rail")
 
 	if !strings.Contains(board, "five-hour · 42%") {
-		t.Errorf("board masthead does not show the newer five-hour reading (42%%):\n%s", board)
+		t.Errorf("page does not show the newer five-hour reading (42%%):\n%s", board)
 	}
 	if !strings.Contains(board, "weekly · 0%") {
-		t.Errorf("board masthead does not show weekly at 0%% (no reading stored yet):\n%s", board)
+		t.Errorf("page does not show weekly at 0%% (no reading stored yet):\n%s", board)
 	}
 }
 
-func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
+func TestRailGaugesSurviveARepeatedPollWithoutFlicker(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -55,59 +51,15 @@ func TestMastheadGaugesSurviveARepeatedBoardPollWithoutFlicker(t *testing.T) {
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
-	first := gaugeMarkup(t, renderBoard(t, server))
-	second := gaugeMarkup(t, renderBoard(t, server))
+	first := gaugeMarkup(t, renderPath(t, server, "/rail"))
+	second := gaugeMarkup(t, renderPath(t, server, "/rail"))
 	if first != second {
 		t.Errorf("gauge markup changed between two polls of the same reading:\n--- first ---\n%s\n--- second ---\n%s",
 			first, second)
 	}
 }
 
-func TestMastheadGaugeSplitsIntoCCAndOtherOnceCalibrated(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	observedAt := testNow
-	store := seededStore(t, observedAt)
-
-	server := newServer(store, observedAt)
-	if got := renderBoard(t, server); !strings.Contains(got, "five-hour · 0% · calibrating") {
-		t.Errorf("board masthead does not read calibrating below the sample threshold:\n%s", got)
-	}
-
-	projectsDir := t.TempDir()
-	project := filepath.Join(projectsDir, "proj")
-	if err := os.Mkdir(project, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	var lines string
-	start := observedAt.Add(-6 * time.Hour)
-	for i := range spend.MinSamples {
-		at := start.Add(time.Duration(i)*time.Hour + 30*time.Minute)
-		lines += oneMillionInputTokensLine(at.Format(time.RFC3339), fmt.Sprintf("r%d", i)) + "\n"
-	}
-	if err := os.WriteFile(filepath.Join(project, "session.jsonl"), []byte(lines), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	for i := range spend.MinSamples + 1 {
-		at := start.Add(time.Duration(i) * time.Hour)
-		reading := agentlog.Reading{
-			Window: agentlog.FiveHour, Utilization: float64(i) * 0.02,
-			ResetsAt: at.Add(5 * time.Hour), At: at,
-		}
-		if err := store.RecordReadingsAndIntervals(ctx, []agentlog.Reading{reading}, projectsDir); err != nil {
-			t.Fatalf("RecordReadingsAndIntervals (reading %d): %v", i, err)
-		}
-	}
-
-	board := renderBoard(t, server)
-	if !strings.Contains(board, "five-hour · 10% · 0% cc") {
-		t.Errorf("board masthead does not show five-hour's cc share once calibrated:\n%s", board)
-	}
-}
-
-func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
+func TestNoticeNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -122,14 +74,14 @@ func TestMastheadNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 
 	server := newServer(store, observedAt.Add(45*time.Second))
 	server.SetSpendLimit5h(80)
-	board := renderBoard(t, server)
+	board := renderPath(t, server, "/tickets")
 
 	if !strings.Contains(board, "spend_limit_5h") {
-		t.Errorf("board masthead does not name spend_limit_5h as the reason spawning is paused:\n%s", board)
+		t.Errorf("page does not name spend_limit_5h as the reason spawning is paused:\n%s", board)
 	}
 }
 
-func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
+func TestNoticeStaysSilentBelowSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -144,10 +96,10 @@ func TestMastheadStaysSilentBelowSpendLimit5h(t *testing.T) {
 
 	server := newServer(store, observedAt.Add(45*time.Second))
 	server.SetSpendLimit5h(80)
-	board := renderBoard(t, server)
+	board := renderPath(t, server, "/tickets")
 
 	if strings.Contains(board, "spend_limit_5h") {
-		t.Errorf("board masthead names spend_limit_5h though the reading is below it:\n%s", board)
+		t.Errorf("page names spend_limit_5h though the reading is below it:\n%s", board)
 	}
 }
 
@@ -155,11 +107,11 @@ func gaugeMarkup(t *testing.T, board string) string {
 	t.Helper()
 	start := strings.Index(board, `<span class="meter">`)
 	if start < 0 {
-		t.Fatalf("no gauge markup found in board render:\n%s", board)
+		t.Fatalf("no gauge markup found in rail render:\n%s", board)
 	}
-	end := strings.Index(board[start:], "</div>")
+	end := strings.Index(board[start:], "</footer>")
 	if end < 0 {
-		t.Fatalf("gauge markup never closes in board render:\n%s", board)
+		t.Fatalf("gauge markup never closes in rail render:\n%s", board)
 	}
 	return board[start : start+end]
 }

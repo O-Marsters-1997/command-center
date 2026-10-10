@@ -1,8 +1,9 @@
-<dialog id="launch-modal-body" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}} class="p-4">
+{{define "launchDialog" -}}
+<dialog id="launch-modal-body" class="launch-dialog" aria-label="Launch {{.Feature}}" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}}>
 {{if .Pending -}}
 <p>importing {{.Feature}}&hellip;</p>
 {{- else if .Refused -}}
-<p class="banner ribbon" data-tone="stop" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
+<p class="banner ribbon" data-glyph="failed" role="status">import of {{.Feature}} refused: {{.Refused}}</p>
 {{- else if .Empty -}}
 <p class="text-muted">{{.Feature}} has no tickets to launch.</p>
 {{- else -}}
@@ -11,11 +12,15 @@
      404s -- renders: a custom element the browser never upgrades still shows its light-DOM
      children. -->
 <cc-launch-modal{{if .Feature}} feature="{{.Feature}}"{{else}} tickets="{{.TicketQuery}}"{{end}}>
-  <p class="banner ribbon" data-tone="wait" role="status">
+  <p class="banner ribbon" data-glyph="pending" role="status">
     the launch modal needs the built assets: run `just assets`.
   </p>
+  <a class="button" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
-<a href="{{if .Feature}}/features{{else}}/{{end}}">[ cancel ]</a>
+{{- if or .Pending .Refused .Empty}}
+<a href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">[ cancel ]</a>
+{{- end}}
 </dialog>
+{{- end}}

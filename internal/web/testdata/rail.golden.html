@@ -1,0 +1,46 @@
+
+<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-swap="outerHTML">
+  <section class="rail-group" data-group="needs-you" aria-label="Needs you">
+    <h2 class="rail-heading">Needs you</h2>
+    <p class="rail-empty">Nothing needs you.</p>
+  </section>
+  <section class="rail-group" data-group="in-flight" aria-label="In flight">
+    <h2 class="rail-heading">In flight</h2>
+    <details class="rail-feature" data-rail-key="feature:project:billing">
+      <summary>project:billing <span class="rail-count">1 live · 1 waiting</span></summary>
+<a class="rail-link" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+  <span class="glyph" data-glyph="running"><span class="sr-only">running</span></span>
+  <span class="rail-ref">#CC-3</span>
+  <span class="rail-title"></span><span class="rail-timer" data-started="2026-08-20T12:00:00Z"></span>
+</a>
+<p class="rail-waiting">1 ready</p>
+    </details>
+  </section>
+  <section class="rail-group" data-group="settled" aria-label="Settled">
+    <details class="rail-feature" data-rail-key="settled">
+      <summary>Settled <span class="rail-count">1</span></summary>
+      <div class="rail-settled">
+        
+<a class="rail-link" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+  <span class="glyph" data-glyph="done"><span class="sr-only">done</span></span>
+  <span class="rail-ref">#CC-1</span>
+  <span class="rail-title"></span>
+</a>
+
+        
+<form method="post" action="/verb" hx-post="/verb" hx-target="#rail-body" hx-swap="outerHTML">
+  <input type="hidden" name="ticket" value="sandbox://CC-1">
+  <input type="hidden" name="from" value="rail">
+  <button class="rail-verb" type="submit" name="verb" value="remove-worktree">remove-worktree</button>
+</form>
+
+      </div>
+    </details>
+  </section>
+  
+  <footer class="rail-footer">
+    <span class="rail-gauge"><span class="meter"><span class="meter-fill" style="width: 0%"></span></span> five-hour · 0%</span>
+    <span class="rail-gauge"><span class="meter"><span class="meter-fill" style="width: 0%"></span></span> weekly · 0%</span>
+    <p class="rail-health">1 live · observed <time datetime="2026-08-20T12:00:00Z">0s ago</time></p>
+  </footer>
+</div>

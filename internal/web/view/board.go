@@ -25,7 +25,7 @@ type Row struct {
 	Title           string   `json:"title"`
 	State           string   `json:"state"`
 	Reason          string   `json:"reason"`
-	Tone            string   `json:"tone"`
+	Glyph           string   `json:"glyph"`
 	Unattended      bool     `json:"unattended"`
 	Alive           bool     `json:"alive"`
 	Verbs           []string `json:"verbs"`
@@ -38,6 +38,8 @@ type Row struct {
 	MergeOrder      int      `json:"merge_order"`
 	Warning         string   `json:"warning"`
 	Blocking        []string `json:"blocking"`
+	After           []string `json:"after"`
+	Unlocks         []string `json:"unlocks"`
 	Worktree        string   `json:"worktree"`
 	PRNumber        int      `json:"pr_number"`
 	PRState         string   `json:"pr_state"`
@@ -61,18 +63,12 @@ type Row struct {
 	SpendPctWeek    float64  `json:"spend_pct_week"`
 	TicketOpen      bool     `json:"ticket_open"`
 
-	// Selected is the ?sel= row, the only one with a detail <tr>, so an unattached hx-preserve id
-	// never lingers past the row that grew it.
-	Selected     bool         `json:"selected"`
-	Checked      bool         `json:"checked"`
-	SelectPath   string       `json:"select_path"`
-	SelectPush   string       `json:"select_push"`
-	TogglePath   string       `json:"toggle_path"`
-	TogglePush   string       `json:"toggle_push"`
-	VerbPath     string       `json:"verb_path"`
-	Log          LogDetail    `json:"log"`
-	RunID        int64        `json:"-"`
-	ContextCurve ContextCurve `json:"-"`
+	Checked     bool      `json:"checked"`
+	SessionPath string    `json:"session_path"`
+	TogglePath  string    `json:"toggle_path"`
+	TogglePush  string    `json:"toggle_push"`
+	VerbPath    string    `json:"verb_path"`
+	Log         LogDetail `json:"log"`
 }
 
 type Check struct {
@@ -122,14 +118,12 @@ type Group struct {
 func applyViewState(rows []Row, params Params, render LineRenderer) {
 	for i := range rows {
 		r := &rows[i]
-		r.Selected = params.Sel == r.URL
 		r.Checked = slices.Contains(params.Tickets, r.URL)
-		toggledSel := params.toggleSel(r.URL)
-		r.SelectPath, r.SelectPush = toggledSel.boardPath(), toggledSel.pagePath()
+		r.SessionPath = cmp.Or(SessionPath(r.URL), ticketsPath)
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
-		if r.Selected {
+		if params.Sel == r.URL {
 			r.Log = buildLogDetail(render, r.LogPath, r.Alive, r.URL, params)
 		}
 	}
@@ -169,7 +163,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
-			Tone:           plan.Tone(e.State),
+			Glyph:          plan.Glyph(e.State),
 			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[t.URL].Alive,
 			Verbs:          plan.Verbs(e.State),
@@ -192,7 +186,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Blocking:       e.Unlock.Blocking,
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
-			RunID:          latestRun.ID,
 		})
 	}
 
@@ -208,6 +201,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		rows[i].MergeOrder = rows[i].StackDepth + 1
 		rows[i].ElapsedPercent = PercentOf(rows[i].ElapsedSeconds, longestElapsed)
 	}
+	nameDependencies(rows, in.Tickets)
 	return rows
 }
 

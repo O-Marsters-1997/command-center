@@ -41,7 +41,7 @@ grep -count=2 '\-\-base origin/cc-1-x' $WORK/tp.log
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it running (spawn_and_dispose.txtar's own invariant) -- one more tick to observe it.
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=3 '>running</span>'
 stdout -count=2 'waiting for a slot'
 ! stdout 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1'
@@ -56,7 +56,7 @@ stdout -count=5 'run_launched'
 grep -count=3 '\-\-base origin/cc-1-x' $WORK/tp.log
 
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=3 '>running</span>'
 stdout -count=1 'waiting for a slot'
 
@@ -72,6 +72,6 @@ exec cc tick --count 1
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4'
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout 'waiting for a slot'
 ! stdout '>blocked</span>'

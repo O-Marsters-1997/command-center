@@ -18,7 +18,7 @@ exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
 
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>cut_failed</span>'
 stdout 'tp new failed to cut a worktree'
 grep -count=1 'new cc-1-x' $WORK/tp.log
@@ -27,7 +27,7 @@ grep -count=1 'new cc-1-x' $WORK/tp.log
 # more ticks, still one attempt.
 exec cc tick --count 3
 grep -count=1 'new cc-1-x' $WORK/tp.log
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>cut_failed</span>'
 
 # No worktree was left behind, and no run ever claimed a pgid: the agent was never spawned, so

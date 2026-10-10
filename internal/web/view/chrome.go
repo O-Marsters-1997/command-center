@@ -1,32 +1,29 @@
 package view
 
 import (
+	"time"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// Chrome is the shell every page wears: workspace, the live and observe pills, the last tick's
-// error, the current board/graph view, and the repo/feature scope links. layout.tmpl's topbar and
-// masthead render it once per page load; every page's view model embeds it.
 type Chrome struct {
-	Workspace         string
-	LiveAgents        int
-	Exploring         int
-	Observe           Age
-	ObserveStale      bool
-	LastError         *TickError
-	Gauges            []Gauge
-	SpendPaused       *SpendPaused
-	RefusedRepos      []RefusedRepo
-	View              string
-	Section           string
-	RepoScope         string
-	RepoCrumb         string
-	RepoCrumbPath     string
-	FeatureScope      string
-	FeatureImportPath string
-	FeatureQuery      string
+	Workspace     string
+	LiveAgents    int
+	Observe       Age
+	ObserveStale  bool
+	LastError     *TickError
+	Gauges        []Gauge
+	SpendPaused   *SpendPaused
+	RefusedRepos  []RefusedRepo
+	Section       string
+	Home          bool
+	RepoScope     string
+	RepoCrumb     string
+	RepoCrumbPath string
+	FeatureScope  string
+	FeatureQuery  string
 }
 
 // Age is a relative time the server renders and the page's clock keeps current. Stamp is the
@@ -48,13 +45,12 @@ type TickError struct {
 	Message string
 }
 
-// Gauge is one window's masthead gauge. Calibrating is true below spend.MinSamples trailing
-// intervals, when CCPct has no meaning.
 type Gauge struct {
 	Label       string
 	Pct         int
 	Calibrating bool
 	CCPct       int
+	ResetsAt    time.Time
 }
 
 type windowSplit struct {
@@ -72,7 +68,7 @@ func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Win
 func deriveGauge(
 	label string, window agentlog.Window, gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit,
 ) Gauge {
-	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization)}
+	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization), ResetsAt: gauges[window].ResetsAt}
 	w := split[window]
 	view.CCPct, view.Calibrating = spend.Share(view.Pct, w.Fit, w.CCUSD)
 	return view

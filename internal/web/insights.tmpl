@@ -1,12 +1,18 @@
-{{template "docHead" .}}
-<body>
-{{template "skipLink" .}}
-{{template "topbar" .}}
-{{template "masthead" .}}
-<div class="shell">
-{{template "sidebar" .}}
-<main id="main" class="p-4">
+{{template "shellStart" .}}
+{{template "scopeCrumbs" .}}
+<li>insights</li>
+{{template "shellAction" .}}
+{{template "shellContent" .}}
 <h1 class="mb-3">INSIGHTS</h1>
+<h2 class="mb-2 text-[0.9em] text-muted">limits</h2>
+<ul class="mb-4 flex flex-col gap-2" aria-label="limits">
+  {{range .Limits}}<li class="flex flex-wrap items-center gap-3">
+    <span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
+    <span>{{.Label}} · {{.Pct}}%</span>
+    <span class="text-muted">{{if .ResetsIn}}resets <time datetime="{{.ResetsAt}}">{{.ResetsIn}}</time>{{else}}no reset time yet{{end}}</span>
+  </li>
+  {{end -}}
+</ul>
 <h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
 {{with .Chart}}{{if .Dots}}
 <svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img">
@@ -26,7 +32,13 @@
   {{if .HasWaste}}<span class="chart-legend"><span class="chart-legend-swatch chart-series-3"></span> waste: {{.WasteLabel}}</span>{{end}}
 </div>
 {{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}{{end}}
-</main>
-</div>
-</body>
-</html>
+<h2 class="mt-4 mb-2 text-[0.9em] text-muted">spend split</h2>
+<table aria-label="spend split">
+  <thead><tr><th scope="col">kind</th><th scope="col" class="text-right">% of week</th></tr></thead>
+  <tbody>
+    {{range .Split.Rows}}<tr><th scope="row">{{.Kind}}</th><td class="text-right">{{printf "%.2f" .Pct}}%</td></tr>
+    {{end -}}
+  </tbody>
+  <tfoot><tr><th scope="row">total</th><td class="text-right">{{printf "%.2f" .Split.Total}}%</td></tr></tfoot>
+</table>
+{{template "shellEnd" .}}

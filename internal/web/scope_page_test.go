@@ -2,6 +2,7 @@ package web_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 
 	server := threeRepoServer(t)
 
-	underRepo := renderPath(t, server, "/?repo=repo")
+	underRepo := renderPath(t, server, "/board?repo=repo")
 	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
 		if !strings.Contains(underRepo, want) {
 			t.Errorf("?repo=repo dropped %s from its own group:\n%s", want, underRepo)
@@ -53,7 +54,7 @@ func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 		t.Errorf("?repo=repo rendered the unrelated LONE ticket:\n%s", underRepo)
 	}
 
-	underOther := renderPath(t, server, "/?repo=other")
+	underOther := renderPath(t, server, "/board?repo=other")
 	if !strings.Contains(underOther, ticketRef("sandbox://LONE")) {
 		t.Errorf("?repo=other dropped its own LONE ticket:\n%s", underOther)
 	}
@@ -78,7 +79,7 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
 	server := openServer(tracked, fixedClock(testNow), "")
 
-	page := renderPath(t, server, "/?repo=O-Marsters-1997/command-center")
+	page := renderPath(t, server, "/board?repo=O-Marsters-1997/command-center")
 	if !strings.Contains(page, ticketRef("sandbox://MINE")) || strings.Contains(page, ticketRef("sandbox://THEIRS")) {
 		t.Errorf("?repo=O-Marsters-1997/command-center did not scope the board to that repo:\n%s", page)
 	}
@@ -87,45 +88,11 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	t.Parallel()
 
-	page := renderPath(t, threeRepoServer(t), "/?repo=bogus")
+	page := renderPath(t, threeRepoServer(t), "/board?repo=bogus")
 	for _, want := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
 		if !strings.Contains(page, ticketRef(want)) {
 			t.Errorf("?repo=bogus dropped %s, want the unscoped board:\n%s", want, page)
 		}
-	}
-}
-
-func TestRepoScopeNarrowsTheBandButNotLiveAgents(t *testing.T) {
-	t.Parallel()
-
-	page := renderPath(t, threeRepoServer(t), "/?repo=other")
-	if !strings.Contains(page, "1/1 yours") {
-		t.Errorf("fleet headline under ?repo=other = want 1/1 yours (LONE only):\n%s", page)
-	}
-	if !strings.Contains(page, "0 live") {
-		t.Errorf("masthead live-agent count changed under scope, want it to stay the process-wide 0 live:\n%s", page)
-	}
-}
-
-func TestBreadcrumbIsPlainLinksWithTheRepoSegmentOnlyWhenScoped(t *testing.T) {
-	t.Parallel()
-
-	server := threeRepoServer(t)
-
-	unscoped := renderPath(t, server, "/")
-	if !strings.Contains(unscoped, `<a href="/features">repos</a>`) {
-		t.Errorf("breadcrumb missing the repos link:\n%s", unscoped)
-	}
-	if strings.Contains(unscoped, "repo-switcher") || strings.Contains(unscoped, "popover") {
-		t.Errorf("breadcrumb still carries the repo switcher popover:\n%s", unscoped)
-	}
-	if strings.Contains(unscoped, `href="/features?repo=`) {
-		t.Errorf("unscoped breadcrumb has a repo segment:\n%s", unscoped)
-	}
-
-	scoped := renderPath(t, server, "/?repo=services")
-	if !strings.Contains(scoped, `<a href="/features?repo=services">services</a>`) {
-		t.Errorf("?repo=services breadcrumb missing its repo segment:\n%s", scoped)
 	}
 }
 
@@ -160,35 +127,32 @@ func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 
 	server := threeFeatureServer(t)
 
-	underFeature := renderPath(t, server, "/?feature=board-scope")
+	underFeature := renderPath(t, server, "/f/board-scope")
 	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
 		if !strings.Contains(underFeature, want) {
-			t.Errorf("?feature=board-scope dropped %s from its own group:\n%s", want, underFeature)
+			t.Errorf("/f/board-scope dropped %s from its own group:\n%s", want, underFeature)
 		}
 	}
 	if strings.Contains(underFeature, ticketRef("sandbox://LONE")) {
-		t.Errorf("?feature=board-scope rendered the unrelated LONE ticket:\n%s", underFeature)
+		t.Errorf("/f/board-scope rendered the unrelated LONE ticket:\n%s", underFeature)
 	}
 
-	underOther := renderPath(t, server, "/?feature=sqlc-migration")
+	underOther := renderPath(t, server, "/f/sqlc-migration")
 	if !strings.Contains(underOther, ticketRef("sandbox://LONE")) {
-		t.Errorf("?feature=sqlc-migration dropped its own LONE ticket:\n%s", underOther)
+		t.Errorf("/f/sqlc-migration dropped its own LONE ticket:\n%s", underOther)
 	}
 	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
 		if strings.Contains(underOther, want) {
-			t.Errorf("?feature=sqlc-migration rendered %s, from a group with no member in it:\n%s", want, underOther)
+			t.Errorf("/f/sqlc-migration rendered %s, from a group with no member in it:\n%s", want, underOther)
 		}
 	}
 }
 
-func TestFeatureScopeUnknownFallsBackToUnscoped(t *testing.T) {
+func TestFeatureScopeUnknownIs404(t *testing.T) {
 	t.Parallel()
 
-	page := renderPath(t, threeFeatureServer(t), "/?feature=bogus")
-	for _, want := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
-		if !strings.Contains(page, ticketRef(want)) {
-			t.Errorf("?feature=bogus dropped %s, want the unscoped board:\n%s", want, page)
-		}
+	if rec := get(t, threeFeatureServer(t), "/f/bogus"); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /f/bogus = %d, want 404", rec.Code)
 	}
 }
 
@@ -212,13 +176,13 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	repos := named("repo", "other")
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 
-	page := renderPath(t, server, "/?feature=board-scope&repo=repo")
+	page := renderPath(t, server, "/board?feature=board-scope&repo=repo")
 	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {
-		t.Errorf("?feature=board-scope&repo=repo dropped the ticket matching both:\n%s", page)
+		t.Errorf("/board?feature=board-scope&repo=repo dropped the ticket matching both:\n%s", page)
 	}
 	for _, want := range []string{ticketRef("sandbox://WRONG-REPO"), ticketRef("sandbox://WRONG-FEATURE")} {
 		if strings.Contains(page, want) {
-			t.Errorf("?feature=board-scope&repo=repo rendered %s, matching only one axis:\n%s", want, page)
+			t.Errorf("/board?feature=board-scope&repo=repo rendered %s, matching only one axis:\n%s", want, page)
 		}
 	}
 }
@@ -228,7 +192,7 @@ func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 
 	server := threeRepoServer(t)
 
-	page := renderPath(t, server, "/?repo=repo&feature=")
+	page := renderPath(t, server, "/board?repo=repo&feature=")
 	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
 		if !strings.Contains(page, want) {
 			t.Errorf("?repo=repo&feature= dropped %s though the repo scope should still apply:\n%s", want, page)
@@ -239,40 +203,12 @@ func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 	}
 }
 
-func TestMastheadOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
+func TestSidebarOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
 	t.Parallel()
 
-	page := renderPage(t, seededServer(t))
+	page := renderPath(t, seededServer(t), "/tickets")
 	if strings.Contains(page, "feature=") {
-		t.Errorf("masthead rendered a feature link though no ticket carries one:\n%s", page)
-	}
-}
-
-func TestMastheadShowsReimportOnlyWhenFeatureScoped(t *testing.T) {
-	t.Parallel()
-
-	server := threeFeatureServer(t)
-
-	unscoped := renderPath(t, server, "/")
-	if strings.Contains(unscoped, "/import") {
-		t.Errorf("unscoped board offers a reimport action with no feature to name:\n%s", unscoped)
-	}
-
-	scoped := renderPath(t, server, "/?feature=board-scope")
-	if !strings.Contains(scoped, `hx-post="/features/board-scope/import?feature=board-scope"`) {
-		t.Errorf("?feature=board-scope masthead missing the reimport action:\n%s", scoped)
-	}
-	if !strings.Contains(scoped, `<input type="hidden" name="feature" value="board-scope">`) {
-		t.Errorf("?feature=board-scope masthead missing the launch action:\n%s", scoped)
-	}
-	if !strings.Contains(scoped, `href="/?view=board"`) || !strings.Contains(scoped, ">all features</a>") {
-		t.Errorf("?feature=board-scope masthead missing the all-features link:\n%s", scoped)
-	}
-	if !strings.Contains(scoped, `href="/?view=board&feature=board-scope"`) {
-		t.Errorf("?feature=board-scope sidebar board link should carry the feature scope:\n%s", scoped)
-	}
-	if !strings.Contains(scoped, `href="/?view=graph&feature=board-scope"`) {
-		t.Errorf("?feature=board-scope sidebar graph link should carry the feature scope:\n%s", scoped)
+		t.Errorf("sidebar rendered a feature link though no ticket carries one:\n%s", page)
 	}
 }
 
@@ -332,7 +268,7 @@ func fetchGraphPath(t *testing.T, server *web.Server, path string) *httptest.Res
 func TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths(t *testing.T) {
 	t.Parallel()
 
-	page := renderPath(t, threeRepoServer(t), "/?repo=repo")
+	page := renderPath(t, threeRepoServer(t), "/board?repo=repo")
 	if !strings.Contains(page, `hx-get="/board?repo=repo"`) {
 		t.Errorf("the board's own poll dropped the repo scope:\n%s", page)
 	}

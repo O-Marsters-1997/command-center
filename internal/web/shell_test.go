@@ -38,23 +38,12 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 	return store
 }
 
-func boardFragment(t *testing.T, page string) string {
-	t.Helper()
-
-	start := strings.Index(page, `<table id="board"`)
-	end := strings.Index(page, "</table>")
-	if start < 0 || end < start {
-		t.Fatalf("no board in page:\n%s", page)
-	}
-	return page[start:end]
-}
-
 func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
 	server := openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
-	body := renderPage(t, server)
+	body := renderPath(t, server, "/tickets")
 
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {
 		t.Errorf("page does not open a document:\n%s", body[:min(len(body), 200)])
@@ -75,33 +64,61 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	}
 }
 
-func TestThemeSitsOnTheRootElement(t *testing.T) {
+func TestShellIsLightOnlyAndMakesNoThirdPartyRequest(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
-	body := renderPage(t, server)
+	body := renderPath(t, server, "/tickets")
 
-	if strings.Contains(boardFragment(t, body), "data-theme") {
-		t.Error("data-theme is inside the board, which htmx swaps")
-	}
-	headEnd := strings.Index(body, "</head>")
-	if headEnd < 0 {
-		t.Fatalf("page has no head:\n%s", body)
-	}
-	head := body[:headEnd]
-	for _, want := range []string{
-		"document.documentElement.dataset.theme",
-		`localStorage.getItem("theme")`,
-		`localStorage.setItem("theme"`,
-		"prefers-color-scheme: dark",
-	} {
-		if !strings.Contains(head, want) {
-			t.Errorf("the head script is missing %q:\n%s", want, head)
+	for _, gone := range []string{"data-theme", "toggleTheme", "localStorage", "prefers-color-scheme"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the page still carries %q:\n%s", gone, body)
 		}
 	}
-	if !strings.Contains(body, `onclick="toggleTheme()"`) {
-		t.Errorf("the header has no theme toggle:\n%s", body)
+	if strings.Contains(body, "https://") || strings.Contains(body, "//fonts.") {
+		t.Errorf("the page requests a third-party origin:\n%s", body)
+	}
+}
+
+func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+
+	for _, path := range []string{"/tickets", "/insights", "/repos"} {
+		body := renderPath(t, server, path)
+		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
+		for _, want := range anchors {
+			if !strings.Contains(body, want) {
+				t.Errorf("GET %s is missing %q:\n%s", path, want, body)
+			}
+		}
+	}
+
+	body := renderPath(t, server, "/insights")
+	for _, want := range []string{`hx-get="/insights"`, `hx-select="#main"`, `hx-target="#main"`, `hx-push-url="true"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("sidebar link is missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+
+	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home>`) {
+		t.Errorf("the bare root is not marked as home:\n%s", body)
+	}
+	if body := renderPath(t, server, "/tickets"); strings.Contains(body, "data-home") {
+		t.Errorf("a destination is marked as home:\n%s", body)
+	}
+	if body := renderPath(t, server, "/insights"); !strings.Contains(body, `class="back"`) {
+		t.Errorf("an opened page has no back link:\n%s", body)
 	}
 }
 
@@ -114,13 +131,12 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 		age      time.Duration
 		never    bool
 		wantChip string
-		stale    bool
 	}{
 		{name: "fresh", age: 2 * time.Second, wantChip: "observed 2s ago"},
 		{name: "under twenty", age: 19 * time.Second, wantChip: "observed 19s ago"},
-		{name: "at twenty", age: 20 * time.Second, wantChip: "last good observe: 20s ago", stale: true},
-		{name: "well past", age: 5 * time.Minute, wantChip: "last good observe: 5m0s ago", stale: true},
-		{name: "no observation", never: true, wantChip: "last good observe: never", stale: true},
+		{name: "at twenty", age: 20 * time.Second, wantChip: "last good observe: 20s ago"},
+		{name: "well past", age: 5 * time.Minute, wantChip: "last good observe: 5m0s ago"},
+		{name: "no observation", never: true, wantChip: "last good observe: never"},
 	}
 
 	for _, tt := range tests {
@@ -133,43 +149,36 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 			}
 			now := observedAt.Add(tt.age)
 			server := newServer(shellStore(t, at, ""), now)
-			body := flattenTimes(renderPage(t, server))
+			body := flattenTimes(renderPath(t, server, "/rail"))
 
 			if !strings.Contains(body, tt.wantChip) {
 				t.Errorf("chip does not read %q:\n%s", tt.wantChip, body)
-			}
-			if got := strings.Contains(body, `data-tone="wait"`); got != tt.stale {
-				t.Errorf("chip amber = %v, want %v:\n%s", got, tt.stale, body)
 			}
 		})
 	}
 }
 
-func TestStaleBannerOnlyOpensOnAFailedTick(t *testing.T) {
+func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
 	now := observedAt.Add(45 * time.Second)
 
 	quiet := newServer(shellStore(t, &observedAt, ""), now)
-	if body := renderPage(t, quiet); strings.Contains(body, "banner") {
+	if body := renderPath(t, quiet, "/rail"); strings.Contains(body, "banner") {
 		t.Errorf("a banner opened with no failed tick:\n%s", body)
 	}
 
 	failed := newServer(shellStore(t, &observedAt, "gh is unavailable"), now)
-	body := flattenTimes(renderPage(t, failed))
-	for _, want := range []string{
-		"the last tick failed 44s ago",
-		"nothing below has been re-derived since",
-		"gh is unavailable",
-	} {
+	body := flattenTimes(renderPath(t, failed, "/rail"))
+	for _, want := range []string{"tick failed 44s ago", "gh is unavailable"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("banner is missing %q:\n%s", want, body)
 		}
 	}
 }
 
-func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
+func TestRailBannerClosesOnceATickSucceeds(t *testing.T) {
 	t.Parallel()
 
 	observedAt := testNow
@@ -180,7 +189,7 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := flattenTimes(renderPage(t, newServer(store, now)))
+	body := flattenTimes(renderPath(t, newServer(store, now), "/rail"))
 	if strings.Contains(body, "banner") {
 		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
 	}
@@ -189,26 +198,23 @@ func TestStaleBannerClosesOnceATickSucceeds(t *testing.T) {
 	}
 }
 
-func TestHeaderCountsLiveAgents(t *testing.T) {
+func TestRailCountsLiveAgents(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
 	live := newServer(detailStore(t, writeLog(t, 1), now, now), now)
-	if body := renderPage(t, live); !strings.Contains(body, "1 live") {
-		t.Errorf("header does not count the one live agent:\n%s", body)
+	if body := renderPath(t, live, "/rail"); !strings.Contains(body, "1 live") {
+		t.Errorf("rail does not count the one live agent:\n%s", body)
 	}
 
 	idle := newServer(shellStore(t, &now, ""), now)
-	body := renderPage(t, idle)
+	body := renderPath(t, idle, "/rail")
 	if !strings.Contains(body, "0 live") {
-		t.Errorf("header does not count zero live agents:\n%s", body)
-	}
-	if strings.Contains(body, `id="liveness"`) {
-		t.Errorf("the liveness div is still on the page:\n%s", body)
+		t.Errorf("rail does not count zero live agents:\n%s", body)
 	}
 }
 
-func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
+func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -237,21 +243,9 @@ func TestHeaderCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPage(t, newServer(store, now))
+	body := renderPath(t, newServer(store, now), "/rail")
 	if !strings.Contains(body, "1 live") {
-		t.Errorf("header does not count the live agent behind a base_gone row:\n%s", body)
-	}
-}
-
-func TestHeaderRefreshesWithTheBoard(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-
-	rec := get(t, server, "/")
-	if got := rec.Body.String(); !strings.Contains(got, `id="masthead" hx-swap-oob="true"`) {
-		t.Errorf("the masthead is not an out-of-band swap target:\n%s", got)
+		t.Errorf("rail does not count the live agent behind a base_gone row:\n%s", body)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,7 +42,7 @@ func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
 
-	for _, path := range []string{"/features", "/features/search", "/features/search?q="} {
+	for _, path := range []string{"/repos", "/repos/search", "/repos/search?q="} {
 		body := renderPath(t, server, path)
 		for _, want := range []string{"acme/alpha", "acme/beta"} {
 			if !strings.Contains(body, want) {
@@ -65,8 +64,8 @@ func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T)
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
 
-	body := renderPath(t, server, "/features/search?q=API")
-	for _, want := range []string{"acme/api", "acme/payments-api", "not tracked", `href="/features?repo=acme/api"`} {
+	body := renderPath(t, server, "/repos/search?q=API")
+	for _, want := range []string{"acme/api", "acme/payments-api", "not tracked", `href="/repos/acme/api"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("search for API missing %q:\n%s", want, body)
 		}
@@ -75,7 +74,7 @@ func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T)
 		t.Errorf("search listed a repo gh never returned as pushable:\n%s", body)
 	}
 
-	tracked := renderPath(t, server, "/features/search?q=alpha")
+	tracked := renderPath(t, server, "/repos/search?q=alpha")
 	if !strings.Contains(tracked, "acme/alpha") || strings.Contains(tracked, "not tracked") {
 		t.Errorf("a pushable repo that is already tracked must show once, tracked:\n%s", tracked)
 	}
@@ -90,12 +89,12 @@ func TestRepoSearchMarksARepoWhoseDefaultBranchIsNotMain(t *testing.T) {
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
 
-	body := renderPath(t, server, "/features/search?q=api")
+	body := renderPath(t, server, "/repos/search?q=api")
 	paymentsRow, apiRow := searchRow(t, body, "acme/payments-api"), searchRow(t, body, "acme/api")
 	if !strings.Contains(paymentsRow, "will be refused: default branch is <code>master</code>") {
 		t.Errorf("master-default repo is not marked:\n%s", paymentsRow)
 	}
-	if !strings.Contains(paymentsRow, `<a href="/features?repo=acme/payments-api">track &rarr;</a>`) {
+	if !strings.Contains(paymentsRow, `<a href="/repos/acme/payments-api">track &rarr;</a>`) {
 		t.Errorf("marked row lost its track link:\n%s", paymentsRow)
 	}
 	if strings.Contains(apiRow, "will be refused") {
@@ -121,7 +120,7 @@ func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
 	server := reposServer(t, &calls)
 
 	for _, q := range []string{"a", "ap", "api"} {
-		renderPath(t, server, "/features/search?q="+q)
+		renderPath(t, server, "/repos/search?q="+q)
 	}
 	if got := calls.Load(); got != 1 {
 		t.Errorf("three keystrokes made %d gh calls, want 1", got)
@@ -139,9 +138,9 @@ func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 		return pushable, nil
 	})
 
-	renderPath(t, server, "/features/search?q=api")
+	renderPath(t, server, "/repos/search?q=api")
 	clock.at = clock.at.Add(61 * time.Second)
-	renderPath(t, server, "/features/search?q=api")
+	renderPath(t, server, "/repos/search?q=api")
 	if got := calls.Load(); got != 2 {
 		t.Errorf("gh calls across the 60s window = %d, want 2", got)
 	}
@@ -160,7 +159,7 @@ func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 		return nil, errors.New("gh: not logged in")
 	})
 
-	body := renderPath(t, server, "/features/search?q=alpha")
+	body := renderPath(t, server, "/repos/search?q=alpha")
 	for _, want := range []string{"acme/alpha", "gh search failed", "not logged in"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("failed search missing %q:\n%s", want, body)
@@ -187,15 +186,21 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
 	}))
 
-	body := renderPath(t, server, "/features?repo="+url.QueryEscape("acme/alpha"))
+	body := renderPath(t, server, "/repos/acme/alpha")
 	for _, want := range []string{
-		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git", `href="/?repo=acme%2Falpha"`,
+		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git",
 		"project:x", "project:y", "also in acme/beta",
-		`<a href="/features?repo=acme/alpha">acme/alpha</a>`,
+		`<a href="/repos/acme/alpha">acme/alpha</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scoped page missing %q:\n%s", want, body)
 		}
+	}
+	if !strings.Contains(body, `<table id="board"`) || !strings.Contains(body, `hx-get="/board?repo=acme%2Falpha"`) {
+		t.Errorf("scoped page missing its repo's board:\n%s", body)
+	}
+	if strings.Contains(body, "issues/2") {
+		t.Errorf("scoped page's board listed a ticket from beta:\n%s", body)
 	}
 	if strings.Contains(body, "project:z") {
 		t.Errorf("scoped page listed a feature from beta's tracker:\n%s", body)
@@ -214,8 +219,8 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
 
-	body := renderPath(t, server, "/features?repo=acme/stranger")
-	for _, want := range []string{"<h1>acme/stranger</h1>", `data-tone="idle"`, "Not tracked."} {
+	body := renderPath(t, server, "/repos/acme/stranger")
+	for _, want := range []string{"<h1>acme/stranger</h1>", `data-glyph="ready"`, "Not tracked."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("unknown repo page missing %q:\n%s", want, body)
 		}
@@ -233,10 +238,10 @@ func TestReposPagesMatchGoldens(t *testing.T) {
 	}))
 
 	for name, path := range map[string]string{
-		"repos":              "/features",
-		"repos_search_empty": "/features/search",
-		"repos_search_api":   "/features/search?q=api",
-		"repo_scoped":        "/features?repo=acme/alpha",
+		"repos":              "/repos",
+		"repos_search_empty": "/repos/search",
+		"repos_search_api":   "/repos/search?q=api",
+		"repo_scoped":        "/repos/acme/alpha",
 	} {
 		rec := get(t, server, path)
 		if rec.Code != http.StatusOK {
@@ -246,7 +251,7 @@ func TestReposPagesMatchGoldens(t *testing.T) {
 	}
 }
 
-func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
+func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	t.Parallel()
 
 	st := track(t, openStore(t), alphaRepo)
@@ -260,17 +265,47 @@ func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 
 	for name, path := range map[string]string{
-		"masthead_refused_board":  "/",
-		"masthead_refused_scoped": "/?repo=acme/alpha",
-		"masthead_refused_repos":  "/features",
+		"notice_refused_tickets": "/tickets",
+		"notice_refused_repo":    "/repos/acme/beta",
+		"notice_refused_repos":   "/repos",
 	} {
 		rec := get(t, server, path)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET %s: status = %d", path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), `<a href="/features?repo=acme/beta">acme/beta</a> is refused`) {
+		if !strings.Contains(rec.Body.String(), `<a href="/repos/acme/beta">acme/beta</a> is refused`) {
 			t.Errorf("GET %s missing refused-repo link:\n%s", path, rec.Body)
 		}
 		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
+	}
+}
+
+func TestFeaturesPathsRedirectToTheReposPages(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	server := reposServer(t, &calls)
+
+	for path, want := range map[string]string{
+		"/features":                "/repos",
+		"/features?repo=acme/beta": "/repos/acme/beta",
+		"/features?repo=../x":      "/repos",
+	} {
+		rec := get(t, server, path)
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
+			t.Errorf("GET %s = %d to %q, want 301 to %q", path, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+}
+
+func TestRepoPageRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	server := reposServer(t, &calls)
+
+	path := "/repos/acme/a%20b"
+	if rec := get(t, server, path); rec.Code != http.StatusNotFound {
+		t.Errorf("GET %s = %d, want 404", path, rec.Code)
 	}
 }

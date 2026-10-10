@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Centre</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script>
+  
+  
+  function ago(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
+    var h = Math.floor(m / 60);
+    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
+  }
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll("time[datetime]").forEach(function (el) {
+      var at = Date.parse(el.dateTime);
+      if (!isNaN(at)) el.textContent = ago(now - at);
+    });
+  }, 1000);
+</script>
+<script>
+  function markCurrent() {
+    document.querySelectorAll(".sidebar-item").forEach(function (a) {
+      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
+      if (here) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
+  document.addEventListener("htmx:historyRestore", markCurrent);
+</script>
+<script>
+  document.addEventListener("toggle", function (e) {
+    var key = e.target.dataset && e.target.dataset.railKey;
+    if (!key) return;
+    var open = document.cookie.split("; ").reduce(function (found, c) {
+      return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
+    }, []).filter(function (k) { return k && k !== key; });
+    if (e.target.open) open.push(key);
+    document.cookie = "rail-open=" + encodeURIComponent(open.join("|")) + "; path=/; max-age=31536000; samesite=lax";
+  }, true);
+  function tickStarted() {
+    var now = Date.now();
+    document.querySelectorAll("[data-started]").forEach(function (el) {
+      var s = Math.max(0, Math.round((now - Date.parse(el.dataset.started)) / 1000));
+      if (isNaN(s)) return;
+      var m = Math.floor(s / 60);
+      el.textContent = m < 60 ? m + "m" + (s % 60) + "s" : Math.floor(m / 60) + "h" + (m % 60) + "m";
+    });
+  }
+  setInterval(tickStarted, 1000);
+  document.addEventListener("htmx:afterSwap", tickStarted);
+</script>
+<script src="/assets/htmx.min.js"></script>
+<script src="/assets/sse.min.js"></script>
+<script>
+  document.addEventListener("htmx:sseMessage", function (e) {
+    var pre = e.target;
+    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
+  });
+</script>
+</head>
+<body>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
+<div class="app">
+<aside class="sidebar" id="sidebar" aria-label="sections">
+  <div class="sidebar-head">Command Centre</div>
+  <nav class="sidebar-nav">
+    <a class="sidebar-item" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
+    <a class="sidebar-item" href="/insights" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
+    <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
+  </nav>
+  <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
+  <form method="post" action="/logout">
+    <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
+  </form>
+</aside>
+<div class="pane">
+<div id="notices">
+</div>
+<main id="main">
+<header class="topbar">
+  <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
+  <ol class="crumbs">
+<li>Command Centre</li>
+<li><a href="/repos">repos</a></li>
+
+
+<li>#1</li>
+</ol>
+  <div class="topbar-action">
+</div>
+</header>
+<div class="content">
+<article class="session" data-session="https://github.com/acme/web/issues/1">
+  <header class="session-head">
+    <span class="glyph glyph-pending" data-glyph="pending">push_pending</span>
+    <h1 class="session-ref">#1</h1>
+    <p class="session-meta text-muted">acme/web · checkout</p>
+    <details class="worked">
+      <summary><span class="worked-spark" aria-hidden="true">✻</span> Worked for 0s</summary>
+      <p class="text-muted">lines 1 · phases 1</p>
+    </details>
+  </header>
+  <section class="prompt-bubble" aria-label="prompt"><pre class="prompt-text">Implement #1
+</pre>
+  </section>
+  <nav class="session-tabs" aria-label="log view">
+    <a href="/s/acme/web/1" hx-get="/s/acme/web/1" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Transcript</a>
+    <a href="/s/acme/web/1?log=raw" hx-get="/s/acme/web/1?log=raw" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Raw log</a>
+  </nav>
+  <div class="run-thread">
+    <div class="run-work">
+      <section class="phase">
+        <header class="phase-head flex items-baseline gap-2">
+          <span class="phase-skill">start</span>
+          <span class="phase-rule"></span>
+          <span class="phase-at">&#43;00:00</span>
+        </header>
+        <details class="fold"><summary>Ran 1 command</summary><div class="fold-body"><div class="line line-tool call"><div class="call-head"><span class="call-verb">Ran</span><code class="call-arg">go test</code><span class="call-res"></span></div></div></div></details>
+      </section>
+      <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Facme%2Fweb%2Fissues%2F1/log?from=144" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+    </div>
+  </div>
+  <aside class="stack-panel" aria-label="feature stack">
+    <h2 class="stack-title">Blocked by</h2><p class="text-muted">Nothing blocks this ticket.</p>
+    <h2 class="stack-title">Merging this unlocks</h2><p class="text-muted">Nothing waits on this ticket.</p>
+    <form method="post" action="/ticket" class="stack-form">
+      <input type="hidden" name="ticket" value="https://github.com/acme/web/issues/1">
+      <input type="hidden" name="branch" value="cc-1">
+      <input type="hidden" name="return" value="/s/acme/web/1">
+      <fieldset class="stack-fields">
+        <legend class="stack-title">Edit blockers</legend>
+        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
+      </fieldset>
+      <button type="submit" class="button">save</button>
+    </form>
+  </aside>
+  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
+  <div class="verbs"><a class="verb" href="/s/acme/web/1?log=raw">Open log</a>
+  </div>
+</div>
+</article>
+</div>
+</main>
+</div>
+</div>
+</body>
+</html>
+

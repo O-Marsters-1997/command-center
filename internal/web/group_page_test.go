@@ -16,7 +16,7 @@ type renderedRow struct {
 }
 
 var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*` +
-	`<button[^>]*>([^<]*)</button>`)
+	`<a[^>]*>([^<]*)</a>`)
 
 func renderedRows(page string) []renderedRow {
 	matches := rowTagRE.FindAllStringSubmatch(page, -1)
@@ -84,7 +84,7 @@ func boardFor(t *testing.T, store *storepkg.Store) string {
 	return renderBoard(t, openServer(track(t, store, named("repo")...), fixedClock(at), ""))
 }
 
-func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
+func TestBoardListsAFanOutBySection(t *testing.T) {
 	t.Parallel()
 
 	children := []string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"}
@@ -96,9 +96,6 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 	}
 	if rows[0].Ticket != ticketRef("sandbox://ROOT") {
 		t.Errorf("first row = %q, want the blocker's group line", rows[0].Ticket)
-	}
-	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
-		t.Errorf("group line attrs = %q, want the blocker's own depth of 0", rows[0].Attrs)
 	}
 	if got := rowState(t, page, "sandbox://ROOT"); got != "failed" {
 		t.Errorf("group line state = %q, want the blocker's own failed", got)
@@ -112,11 +109,6 @@ func TestBoardRendersAFanOutAsOneGroup(t *testing.T) {
 		}
 		if !strings.Contains(page, `name="ticket" value="`+c+`"`) {
 			t.Errorf("%s lost its verb buttons:\n%s", c, page)
-		}
-	}
-	for _, r := range rows[1:] {
-		if !strings.Contains(r.Attrs, `data-depth="1"`) {
-			t.Errorf("child %s attrs = %q, want data-depth=1", r.Ticket, r.Attrs)
 		}
 	}
 }
@@ -161,16 +153,21 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	}
 
 	page := boardFor(t, store)
-	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-3"), ticketRef("sandbox://CC-2")}
+	want := []string{ticketRef("sandbox://CC-1"), ticketRef("sandbox://CC-2"), ticketRef("sandbox://CC-3")}
 	if got := ticketRefs(renderedRows(page)); !slices.Equal(got, want) {
-		t.Errorf("row order = %v, want CC-3 under CC-1 only, %v", got, want)
+		t.Errorf("row order = %v, want the two ready blockers then the blocked row, %v", got, want)
 	}
-	if got := rowCellAt(t, page, "sandbox://CC-3", 3); !strings.Contains(got, "sandbox://CC-2") {
-		t.Errorf("CC-3 reason = %q, want it to still name both blockers", got)
+	if got := rowCellAt(t, page, "sandbox://CC-3", 3); !strings.Contains(got, "after #CC-1, #CC-2") {
+		t.Errorf("CC-3 ticket cell = %q, want it to name both blockers", got)
+	}
+	for _, blocker := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+		if got := rowCellAt(t, page, blocker, 3); !strings.Contains(got, "unlocks #CC-3") {
+			t.Errorf("%s ticket cell = %q, want it to name what it unlocks", blocker, got)
+		}
 	}
 }
 
-func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
+func TestBoardListsAChainOfBlockersOnceEach(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -194,13 +191,8 @@ func TestBoardFlattensAChainOfBlockersIntoOneGroup(t *testing.T) {
 	if got := ticketRefs(rows); !slices.Equal(got, want) {
 		t.Fatalf("row order = %v, want %v (each ticket rendered exactly once)", got, want)
 	}
-	if !strings.Contains(rows[0].Attrs, `data-depth="0"`) {
-		t.Errorf("root attrs = %q, want data-depth=0", rows[0].Attrs)
-	}
-	for _, r := range rows[1:] {
-		if !strings.Contains(r.Attrs, `data-depth="1"`) {
-			t.Errorf("%s attrs = %q, want data-depth=1", r.Ticket, r.Attrs)
-		}
+	if got := rowCellAt(t, page, "sandbox://CC-3", 3); !strings.Contains(got, "after #CC-2") {
+		t.Errorf("CC-3 ticket cell = %q, want it to name its direct blocker", got)
 	}
 }
 
@@ -225,11 +217,6 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	rows := renderedRows(page)
 	if got, want := len(rows), len(tickets); got != want {
 		t.Errorf("rendered %d rows for %d tickets, want no extra group line:\n%s", got, want, page)
-	}
-	for _, r := range rows {
-		if !strings.Contains(r.Attrs, `data-depth="0"`) {
-			t.Errorf("%s attrs = %q, want data-depth=0", r.Ticket, r.Attrs)
-		}
 	}
 }
 

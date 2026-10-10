@@ -157,40 +157,19 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	t.Parallel()
 
 	server := seededServer(t)
-	full := renderPage(t, server)
-	swap := renderBoard(t, server)
+	full := renderPath(t, server, "/tickets")
+	swap := renderPath(t, server, "/board?all=1")
 
 	if !strings.HasPrefix(swap, `<table id="board"`) {
 		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", swap)
 	}
-	rest := full
-	for _, part := range splitBoardSwap(t, swap) {
-		if !strings.Contains(rest, part.html) {
-			t.Errorf("GET / does not nest the GET /board %s bytes verbatim\n--- %s ---\n%s\n--- page ---\n%s",
-				part.name, part.name, part.html, full)
-			continue
-		}
-		rest = strings.Replace(rest, part.html, "", 1)
+	nested := strings.TrimSpace(swap)
+	if !strings.Contains(full, nested) {
+		t.Fatalf("GET /tickets does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s",
+			swap, full)
 	}
 	assertGolden(t, goldenBoard, []byte(swap))
-	assertGolden(t, goldenShell, []byte(rest))
-}
-
-type swapPart struct{ name, html string }
-
-func splitBoardSwap(t *testing.T, swap string) []swapPart {
-	t.Helper()
-
-	masthead := strings.Index(swap, `<div id="masthead"`)
-	band := strings.Index(swap, `<section id="band"`)
-	if masthead < 0 || band < masthead {
-		t.Fatalf("GET /board is not the table, then the masthead, then the band:\n%s", swap)
-	}
-	return []swapPart{
-		{"board", strings.TrimSpace(swap[:masthead])},
-		{"masthead", strings.TrimSpace(swap[masthead:band])},
-		{"band", strings.TrimSpace(swap[band:])},
-	}
+	assertGolden(t, goldenShell, []byte(strings.Replace(full, nested, "", 1)))
 }
 
 func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
@@ -393,8 +372,8 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name:   "GET is rejected before origin is even checked",
-			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
+			name:   "PUT is rejected before origin is even checked",
+			method: http.MethodPut, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:   "a foreign Origin is rejected",
@@ -578,7 +557,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	store := runningRowStore(t, ticket, startedAt, now)
 
 	server := newServer(store, now)
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -640,7 +619,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	observedAt := testNow
 	server := newServer(seededStore(t, observedAt), observedAt)
 
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 
 	body := rec.Body.String()
 	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
@@ -658,7 +637,7 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
 		t.Errorf("Content-Type = %q, want text/css", got)
 	}
-	for _, want := range []string{"--color-s-live", ".pill", "data-theme=dark"} {
+	for _, want := range []string{"--color-s-live", ".glyph", "inter-variable.woff2"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}

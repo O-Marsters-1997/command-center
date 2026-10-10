@@ -4,19 +4,17 @@
     <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
   </tr>
-  {{range $group := .Groups}}
-  {{if $group.Root}}
-  {{template "row" (head $group.Root $.RepoScope $.FeatureScope)}}
-  {{range $group.Children}}{{template "row" (child . 1 $.RepoScope $.FeatureScope)}}{{end}}
-  {{else}}
-  {{range $group.Children}}{{template "row" (child . 0 $.RepoScope $.FeatureScope)}}{{end}}
-  {{end}}
+  {{range $section := .Sections}}
+  <tbody data-section="{{$section.Key}}" aria-labelledby="section-{{$section.Key}}">
+    <tr class="section-head"><th id="section-{{$section.Key}}" colspan="10">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span></th></tr>
+    {{range $section.Rows}}{{template "row" (slot . $.RepoScope $.FeatureScope)}}{{end}}
+  </tbody>
   {{end}}
 </table>
 {{- end}}
 
 {{define "row"}}
-  <tr class="group{{if .Head}} group-head bg-[color-mix(in_oklab,var(--color-border)_40%,var(--color-bg))] text-muted{{end}}{{if .Selected}} selected{{end}}" data-depth="{{.Depth}}">
+  <tr class="group">
     <td>
       {{- $row := .}}
       {{- range .Verbs}}
@@ -27,14 +25,14 @@
       {{- end -}}
     </td>
     <td>
-      <span class="pill pill-{{.Tone}}{{if .Unattended}} pill-disc{{else}} pill-ring{{end}}{{if .Alive}} pill-pulse{{end}}">{{.State}}</span>
+      <span class="glyph glyph-{{.Glyph}}{{if .Alive}} glyph-pulse{{end}}">{{.State}}</span>
       {{- if .Draft}} <mark class="flag" title="draft: {{.DraftReason}}">draft</mark>{{end}}
       {{- if .BaseVerdict}} <mark class="flag" title="base verdict: {{.BaseVerdict}}">base {{.BaseVerdict}}</mark>{{end}}
       {{- if .Warning}} <mark class="flag flag-warning" title="{{.Warning}}">⚠ warning</mark>{{end}}
       {{- range .PendingVerbs}} · {{.}} queued{{end}}
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
+      <a href="{{.SessionPath}}" hx-get="{{.SessionPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.Ticket}}</a>
       {{- if and .Scope (ne .Repo .Scope)}} <span class="text-muted text-[0.85em]">{{.Repo}}</span>{{end}}
       {{- if and .FeatureScope (ne .Feature .FeatureScope)}} <span class="text-muted text-[0.85em]">{{.Feature}}</span>{{end}}
     </td>
@@ -43,6 +41,8 @@
       <div class="text-muted text-[0.85em]">required check failed: {{range $i, $c := .RedChecks}}{{if $i}}, {{end}}{{if $c.DetailsURL}}<a href="{{$c.DetailsURL}}" target="_blank" rel="noopener">{{$c.Name}}</a>{{else}}{{$c.Name}}{{end}}{{end}}</div>
       {{- else if .Reason}}<div class="text-muted text-[0.85em]">{{.Reason}}</div>{{end}}
       <div>{{if .Title}}{{.Title}}{{else}}untitled{{end}}</div>
+      {{- if .After}}<div class="text-muted text-[0.85em]">after {{range $i, $r := .After}}{{if $i}}, {{end}}{{$r}}{{end}}</div>{{end}}
+      {{- if .Unlocks}}<div class="text-muted text-[0.85em]">unlocks {{range $i, $r := .Unlocks}}{{if $i}}, {{end}}{{$r}}{{end}}</div>{{end}}
     </td>
     <td>{{.Stack}}</td>
     <td>
@@ -70,7 +70,7 @@
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
       {{- else}}no spend{{end}}
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
@@ -86,12 +86,13 @@
       {{- end -}}
     </td>
   </tr>
-  {{if .Selected}}
-  <!-- hx-preserve keeps an expanded detail mounted through the board's own swap, which would
-       otherwise destroy and remount it every five seconds. Only the selected row ever renders
-       this <tr>: htmx matches hx-preserve by id off the incoming markup, so an unselected row
-       must render none at all rather than an empty one for a later selection to fill
-       (docs/prds/prd-fleet-view.md § The hx-preserve id is conditional on selection). -->
-  <tr id="{{.DetailID}}" hx-preserve="true">{{template "detail" .}}</tr>
-  {{end}}
 {{end}}
+
+{{define "boardForm" -}}
+<!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
+     checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
+     instead would nest the per-row verb forms inside it, which HTML forbids. -->
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+{{template "board" .}}
+<button type="submit" form="launch">launch selected</button>
+{{- end}}

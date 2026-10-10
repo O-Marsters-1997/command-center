@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/auth"
@@ -53,9 +54,10 @@ func open(ctx context.Context, configPath string) error {
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
 	if name, ok := loop.RepoNameForDir(ctx, dir, repos); ok {
-		target += "?repo=" + url.QueryEscape(name)
+		owner, repo, _ := strings.Cut(name, "/")
+		target += "repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo)
 	} else {
-		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the unscoped board")
+		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
 	if !daemonListening(cfg.Port) {

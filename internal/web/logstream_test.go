@@ -292,7 +292,7 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	}
 }
 
-func TestDetailConnectsThePreToTheStream(t *testing.T) {
+func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -304,7 +304,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := get(t, server, selPagePath(ticket))
+	rec := get(t, server, sessionPagePath(ticket))
 	body := rec.Body.String()
 
 	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())
@@ -317,7 +317,7 @@ func TestDetailConnectsThePreToTheStream(t *testing.T) {
 		`<span class="call-verb">Ran</span><code class="call-arg">step 3</code>`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("detail fragment is missing %q:\n%s", want, body)
+			t.Errorf("session page is missing %q:\n%s", want, body)
 		}
 	}
 }
@@ -333,7 +333,7 @@ func TestPageCapsThePreAtAThousandLines(t *testing.T) {
 		t.Fatalf("GET /assets/sse.min.js = %d, want 200", asset.Code)
 	}
 
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<script src="/assets/sse.min.js"></script>`,

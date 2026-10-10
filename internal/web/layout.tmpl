@@ -1,3 +1,20 @@
+{{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
+
+{{define "notices" -}}
+<div id="notices">
+  {{- range .RefusedRepos}}
+  <p class="banner ribbon" data-glyph="failed" role="status">
+    <a href="{{.Path}}">{{.Name}}</a> is refused{{with .Reason}}: {{.}}{{end}}
+  </p>
+  {{- end}}
+  {{- with .SpendPaused}}
+  <p class="banner ribbon" data-glyph="pending" role="status">
+    spawning paused: five-hour usage is {{.Pct}}%, at or above the spend_limit_5h of {{.Limit}}%.
+  </p>
+  {{- end}}
+</div>
+{{- end}}
+
 {{define "docHead" -}}
 <!doctype html>
 <html lang="en">
@@ -7,14 +24,6 @@
 <title>Command Centre</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script>
-  var stored = localStorage.getItem("theme");
-  var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = stored || (dark ? "dark" : "light");
-  function toggleTheme() {
-    var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-  }
   // Every <time datetime> is rendered once with the instant it counts from, so the server's own
   // wording goes stale the moment it is sent and a swap is not what keeps it current.
   function ago(ms) {
@@ -33,6 +42,39 @@
     });
   }, 1000);
 </script>
+<script>
+  function markCurrent() {
+    document.querySelectorAll(".sidebar-item").forEach(function (a) {
+      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
+      if (here) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
+  document.addEventListener("htmx:historyRestore", markCurrent);
+</script>
+<script>
+  document.addEventListener("toggle", function (e) {
+    var key = e.target.dataset && e.target.dataset.railKey;
+    if (!key) return;
+    var open = document.cookie.split("; ").reduce(function (found, c) {
+      return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
+    }, []).filter(function (k) { return k && k !== key; });
+    if (e.target.open) open.push(key);
+    document.cookie = "rail-open=" + encodeURIComponent(open.join("|")) + "; path=/; max-age=31536000; samesite=lax";
+  }, true);
+  function tickStarted() {
+    var now = Date.now();
+    document.querySelectorAll("[data-started]").forEach(function (el) {
+      var s = Math.max(0, Math.round((now - Date.parse(el.dataset.started)) / 1000));
+      if (isNaN(s)) return;
+      var m = Math.floor(s / 60);
+      el.textContent = m < 60 ? m + "m" + (s % 60) + "s" : Math.floor(m / 60) + "h" + (m % 60) + "m";
+    });
+  }
+  setInterval(tickStarted, 1000);
+  document.addEventListener("htmx:afterSwap", tickStarted);
+</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script>
@@ -45,45 +87,52 @@
 {{- end}}
 
 {{define "skipLink" -}}
-<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-bg focus:left-2 focus:top-2" href="#main">skip to content</a>
+<a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
 {{- end}}
 
-{{define "topbar" -}}
-<header class="flex flex-wrap items-center gap-[0.4rem] py-2 px-4 border-b border-border">
-  {{with .Workspace}}<span>{{.}}</span>{{end}}
-  <span class="text-muted">/</span>
-  <a href="/features">repos</a>
-  {{with .RepoCrumb}}
-  <span class="text-muted">/</span>
-  <a href="{{$.RepoCrumbPath}}">{{.}}</a>
-  {{end}}
-  {{if .FeatureScope}}
-  <span class="text-muted">/</span>
-  <span>{{.FeatureScope}}</span>
-  {{if .FeatureImportPath}}
-  <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
-    <input type="hidden" name="feature" value="{{.FeatureScope}}">
-    <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">launch</button>
-  </form>
-  <form hx-post="{{.FeatureImportPath}}" hx-target="#board" hx-swap="outerHTML">
-    <button type="submit" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">reimport</button>
-  </form>
-  <a href="/?view={{.View}}" class="py-[0.1rem] px-2 border border-border rounded-full text-muted">all features</a>
-  {{end}}
-  {{end}}
-  <button type="button" class="ml-auto" onclick="toggleTheme()">theme</button>
-  <form method="post" action="/logout">
-    <button type="submit">log out</button>
-  </form>
+{{define "shellStart" -}}
+{{template "docHead" .}}
+<body>
+{{template "skipLink" .}}
+<div class="app">
+{{template "sidebar" .}}
+<div class="pane">
+{{template "notices" .}}
+<main id="main"{{if .Home}} data-home{{end}}>
+<header class="topbar">
+  <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
+  <ol class="crumbs">
+{{- end}}
+
+{{define "shellAction" -}}
+  </ol>
+  <div class="topbar-action">
+{{- end}}
+
+{{define "shellContent" -}}
+  </div>
 </header>
+<div class="content">
+{{- end}}
+
+{{define "shellEnd" -}}
+</div>
+</main>
+</div>
+</div>
+</body>
+</html>
+{{- end}}
+
+{{define "scopeCrumbs" -}}
+<li>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</li>
+<li><a href="/repos">repos</a></li>
+{{with .RepoCrumb}}<li><a href="{{$.RepoCrumbPath}}">{{.}}</a></li>{{end}}
+{{with .FeatureScope}}<li>{{.}}</li>{{end}}
 {{- end}}
 
 {{define "icon-board" -}}
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg>
-{{- end}}
-
-{{define "icon-graph" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><line x1="5.7" y1="5" x2="10.5" y2="7"/><line x1="5.7" y1="11" x2="10.5" y2="9"/></svg>
 {{- end}}
 
 {{define "icon-features" -}}
@@ -95,10 +144,16 @@
 {{- end}}
 
 {{define "sidebar" -}}
-<nav class="sidebar" id="sidebar-nav" aria-label="sections">
-  <a class="sidebar-item" href="/features"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span class="sidebar-label">repos</span></a>
-  <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "board"}} aria-current="page"{{end}}>{{template "icon-board"}}<span class="sidebar-label">board</span></a>
-  <a class="sidebar-item" href="/?view=graph{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}"{{if eq .Section "graph"}} aria-current="page"{{end}}>{{template "icon-graph"}}<span class="sidebar-label">graph</span></a>
-  <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span class="sidebar-label">insights</span></a>
-</nav>
+<aside class="sidebar" id="sidebar" aria-label="sections">
+  <div class="sidebar-head">{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</div>
+  <nav class="sidebar-nav">
+    <a class="sidebar-item" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-get="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
+    <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
+  </nav>
+  <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
+  <form method="post" action="/logout">
+    <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
+  </form>
+</aside>
 {{- end}}

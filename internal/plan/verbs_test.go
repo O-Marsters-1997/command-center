@@ -14,82 +14,65 @@ func TestStateDecisions(t *testing.T) {
 		state      plan.State
 		want       []string
 		unattended bool
-		tone       string
 	}{
-		{state: plan.Blocked, want: []string{plan.VerbLaunch}, tone: "wait"},
-		{state: plan.Ready, want: []string{plan.VerbLaunch}, tone: "idle"},
-		{state: plan.Queued, want: []string{plan.VerbCancel}, unattended: true, tone: "wait"},
-		{state: plan.Running, want: []string{plan.VerbKill}, unattended: true, tone: "live"},
-		{state: plan.Failed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
-		{state: plan.CutFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
-		{state: plan.PushPending, want: nil, unattended: true, tone: "live"},
+		{state: plan.Blocked, want: []string{plan.VerbLaunch}},
+		{state: plan.Ready, want: []string{plan.VerbLaunch}},
+		{state: plan.Queued, want: []string{plan.VerbCancel}, unattended: true},
+		{state: plan.Running, want: []string{plan.VerbKill}, unattended: true},
+		{state: plan.Failed, want: []string{plan.VerbReRun, plan.VerbFollowUp}},
+		{state: plan.CutFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}},
+		{state: plan.PushPending, want: nil, unattended: true},
 		{
 			state:      plan.Checking,
 			want:       []string{plan.VerbReRun, plan.VerbFollowUp},
-			unattended: true, tone: "live",
+			unattended: true,
 		},
 		{
 			state: plan.NeedsYou,
 			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbKill},
-			tone:  "stop",
 		},
 		{
 			state: plan.PushFailed,
 			want:  []string{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp},
-			tone:  "stop",
 		},
-		{state: plan.ReviewMe, want: nil, tone: "wait"},
-		{state: plan.PRMerged, want: []string{plan.VerbRemoveWorktree}, tone: "done"},
+		{state: plan.ReviewMe, want: nil},
+		{state: plan.PRMerged, want: []string{plan.VerbRemoveWorktree}},
 		{
 			state: plan.PRClosedUnmerged,
 			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree},
-			tone:  "stop",
 		},
 		{
 			state: plan.BaseGone,
 			want:  []string{plan.VerbReRun, plan.VerbFollowUp, plan.VerbRemoveWorktree},
-			tone:  "stop",
 		},
-		{state: plan.Cancelled, want: []string{plan.VerbLaunch}, tone: "idle"},
+		{state: plan.Cancelled, want: []string{plan.VerbLaunch}},
 		{
 			state:      plan.BaseMoved,
 			want:       []string{plan.VerbRefresh, plan.VerbReRun, plan.VerbFollowUp},
-			unattended: true, tone: "live",
+			unattended: true,
 		},
-		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}, tone: "stop"},
-		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}, tone: "stop"},
+		{state: plan.CIFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}},
+		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}},
 		{
 			state: plan.ConflictsWithMain,
 			want:  []string{plan.VerbResolve, plan.VerbRefresh},
-			tone:  "stop",
 		},
 		{
 			state: plan.VerificationFailed,
 			want:  []string{plan.VerbRetryPush, plan.VerbReRun, plan.VerbFollowUp},
-			tone:  "stop",
 		},
 		{
 			state: plan.WaitingOnProducerDeploy,
 			want:  []string{plan.VerbReRun, plan.VerbFollowUp},
-			tone:  "wait",
 		},
 		{
 			state: plan.ConflictResolved,
 			want:  []string{plan.VerbCommitResolution},
-			tone:  "wait",
 		},
 	}
 
 	if len(tests) != plan.StateCount {
 		t.Fatalf("table covers %d states, the enum has %d", len(tests), plan.StateCount)
-	}
-
-	tones := map[string]bool{}
-	for _, tt := range tests {
-		tones[tt.tone] = true
-	}
-	if len(tones) != 5 {
-		t.Errorf("table spends %d tones, the stylesheet knows 5: %v", len(tones), tones)
 	}
 
 	for _, tt := range tests {
@@ -111,9 +94,6 @@ func TestStateDecisions(t *testing.T) {
 			}
 			if got := tt.state.Unattended(); got != tt.unattended {
 				t.Errorf("%s.Unattended() = %t, want %t", tt.state, got, tt.unattended)
-			}
-			if got := plan.Tone(tt.state); got != tt.tone {
-				t.Errorf("Tone(%s) = %q, want %q", tt.state, got, tt.tone)
 			}
 		})
 	}

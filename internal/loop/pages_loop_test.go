@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -27,7 +26,7 @@ func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Serve
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
-	return renderPath(t, server, "/")
+	return renderPath(t, server, "/tickets")
 }
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
@@ -63,18 +62,18 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 }
 
 var (
-	pillTextRE   = regexp.MustCompile(`<span class="pill[^"]*">([^<]*)</span>`)
+	glyphTextRE  = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
 	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)
 )
 
 func rowState(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	cell := rowCellAt(t, page, ticketURL, 1)
-	pill := pillTextRE.FindStringSubmatch(cell)
-	if pill == nil {
-		t.Fatalf("no state pill found for %s in cell:\n%s", ticketURL, cell)
+	glyph := glyphTextRE.FindStringSubmatch(cell)
+	if glyph == nil {
+		t.Fatalf("no state glyph found for %s in cell:\n%s", ticketURL, cell)
 	}
-	state := pill[1]
+	state := glyph[1]
 	for _, m := range queuedVerbRE.FindAllStringSubmatch(cell, -1) {
 		state += " · " + m[1] + " queued"
 	}
@@ -207,8 +206,4 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	if string(got) != string(want) {
 		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
 	}
-}
-
-func selPagePath(ticketURL string) string {
-	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
 }

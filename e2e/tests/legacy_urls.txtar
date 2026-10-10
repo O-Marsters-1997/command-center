@@ -1,0 +1,42 @@
+# Every URL of the old board answers 301 to its path route. The body http.Redirect writes carries
+# the target in its href, which is what a script can read; "Moved Permanently" is the 301.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+
+exec cc request GET '/?sel=https%3A%2F%2Fgithub.com%2Fsandbox-org%2Ftwo-tasks%2Fissues%2FCC-1'
+stdout 'href="/s/sandbox-org/two-tasks/CC-1"'
+stdout 'Moved Permanently'
+
+exec cc request GET '/?feature=project%3Atwo-tasks'
+stdout 'href="/f/project:two-tasks"'
+stdout 'Moved Permanently'
+
+exec cc request GET '/?feature=project%3Atwo-tasks&view=graph'
+stdout 'href="/f/project:two-tasks/graph"'
+stdout 'Moved Permanently'
+
+exec cc request GET '/?repo=sandbox-org/two-tasks'
+stdout 'href="/repos/sandbox-org/two-tasks"'
+stdout 'Moved Permanently'
+
+exec cc request GET /features
+stdout 'href="/repos"'
+stdout 'Moved Permanently'
+
+exec cc request GET '/features?repo=sandbox-org/two-tasks'
+stdout 'href="/repos/sandbox-org/two-tasks"'
+stdout 'Moved Permanently'
+
+exec cc request GET /features/project:two-tasks
+stdout 'href="/f/project:two-tasks"'
+stdout 'Moved Permanently'
+
+# A bare / is not a redirect: it is the home page, which on a desktop hops to where to start.
+exec cc request GET /
+stdout '<main id="main" data-home>'
+! stdout 'Moved Permanently'

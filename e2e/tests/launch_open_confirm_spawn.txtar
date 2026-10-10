@@ -8,7 +8,7 @@ cc-fake-gh no-prs
 
 exec cc tick --count 1
 
-exec cc request GET '/features?repo=sandbox-org/two-tasks'
+exec cc request GET /repos/sandbox-org/two-tasks
 stdout 'project:two-tasks</a>\s*</td>\s*<td>no</td>'
 
 exec cc request -form 'feature=project:two-tasks' POST /launch/open
@@ -22,10 +22,10 @@ stdout '"label":"on unlock"'
 
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 
-stdout '>#CC-1</button>'
-stdout '>#CC-2</button>'
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
 stdout '>queued</span>'
 stdout 'waiting for a slot'
 stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1&#39;s PR'

@@ -3,7 +3,6 @@ package view
 import (
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -22,32 +21,32 @@ func NormalizeLogFilter(mode string) string {
 type Params struct {
 	Sel     string
 	Tickets []string
-	View    string
 	Log     string
 	Repo    string
 	Feature string
-	Phase   string
+	Filter  string
+	All     bool
 }
 
 func ParseParams(q url.Values) Params {
 	v := Params{
-		Tickets: q["ticket"], View: q.Get("view"), Log: NormalizeLogFilter(q.Get("log")),
-		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: normalizePhase(q.Get("phase")),
+		Tickets: q["ticket"], Log: NormalizeLogFilter(q.Get("log")),
+		Repo: q.Get("repo"), Feature: q.Get("feature"),
+		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
 	}
-	if v.View == "" {
-		v.View = "board"
-	}
 	return v
 }
 
-func normalizePhase(phase string) string {
-	if i, err := strconv.Atoi(phase); err != nil || i < 0 {
-		return ""
+func normalizeFilter(filter string) string {
+	for _, s := range sectionOrder {
+		if s.Key == filter {
+			return filter
+		}
 	}
-	return phase
+	return ""
 }
 
 func normalizeRepoScope(repo string, tracked []store.Repo) string {
@@ -65,18 +64,19 @@ func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	return ""
 }
 
-// url.Values.Encode sorts by key, so this always renders feature/log/phase/repo/sel/ticket/view
-// in that order.
 func (v Params) query() string {
 	q := url.Values{}
+	if v.All {
+		q.Set("all", "1")
+	}
+	if v.Filter != "" {
+		q.Set("filter", v.Filter)
+	}
 	if v.Feature != "" {
 		q.Set("feature", v.Feature)
 	}
 	if v.Log != "" && v.Log != "all" {
 		q.Set("log", v.Log)
-	}
-	if v.Phase != "" {
-		q.Set("phase", v.Phase)
 	}
 	if v.Repo != "" {
 		q.Set("repo", v.Repo)
@@ -87,42 +87,27 @@ func (v Params) query() string {
 	for _, ticket := range v.Tickets {
 		q.Add("ticket", ticket)
 	}
-	if v.View != "" && v.View != "board" {
-		q.Set("view", v.View)
-	}
 	return q.Encode()
-}
-
-func (v Params) withLog(mode string) Params {
-	next := v
-	next.Log = mode
-	return next
-}
-
-func (v Params) withPhase(phase string) Params {
-	next := v
-	next.Phase = phase
-	return next
-}
-
-func (v Params) withRepo(repo string) Params {
-	next := v
-	next.Repo = repo
-	return next
-}
-
-func (v Params) withFeature(feature string) Params {
-	next := v
-	next.Feature = feature
-	return next
 }
 
 func (v Params) boardPath() string { return withQuery("/board", v.query()) }
 func (v Params) verbPath() string  { return withQuery("/verb", v.query()) }
-func (v Params) pagePath() string  { return withQuery("/", v.query()) }
 
-func (v Params) featureImportPath() string {
-	return withQuery("/features/"+url.PathEscape(v.Feature)+"/import", v.query())
+func (v Params) pagePath() string {
+	rest := v
+	switch {
+	case v.All:
+		rest.All = false
+		return withQuery(ticketsPath, rest.query())
+	case v.Repo != "":
+		rest.Repo = ""
+		return withQuery(RepoPath(v.Repo), rest.query())
+	case v.Feature != "":
+		rest.Feature = ""
+		return withQuery("/f/"+url.PathEscape(v.Feature), rest.query())
+	default:
+		return withQuery(ticketsPath, v.query())
+	}
 }
 
 func withQuery(path, query string) string {
@@ -130,17 +115,6 @@ func withQuery(path, query string) string {
 		return path
 	}
 	return path + "?" + query
-}
-
-func (v Params) toggleSel(ticketURL string) Params {
-	next := v
-	next.Phase = ""
-	if v.Sel == ticketURL {
-		next.Sel = ""
-	} else {
-		next.Sel = ticketURL
-	}
-	return next
 }
 
 func (v Params) toggleTicket(ticketURL string) Params {

@@ -13,7 +13,7 @@ import (
 )
 
 func RenderStatesPage(states []plan.State) (string, error) {
-	return renderStates("page.tmpl", states)
+	return renderStates("tickets.tmpl", states)
 }
 
 func RenderStatesBoard(states []plan.State) (string, error) {
@@ -25,16 +25,18 @@ func renderStates(name string, states []plan.State) (string, error) {
 		Chrome:           view.Chrome{Observe: view.Age{Age: "0s ago"}},
 		BoardPollSeconds: config.DefaultBoardPollSeconds,
 	}
+	var rows []view.Row
 	for _, state := range states {
 		r := view.Row{
 			URL:        "sandbox://" + state.String(),
 			State:      state.String(),
-			Tone:       plan.Tone(state),
+			Glyph:      plan.Glyph(state),
 			Unattended: state.Unattended(),
 			Verbs:      plan.Verbs(state),
 		}
-		board.Groups = append(board.Groups, view.Group{Children: []view.Row{r}})
+		rows = append(rows, r)
 	}
+	board.Sections = view.Sectioned(rows)
 
 	var out strings.Builder
 	if err := templates.ExecuteTemplate(&out, name, board); err != nil {

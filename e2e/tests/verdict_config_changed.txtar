@@ -27,13 +27,13 @@ cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
 exec sleep 0.5
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>review_me</span>'
 
 # An uncommitted edit is not a config change: the hash comes from the ref, so the row holds green.
 cp mergify-v2.yml repo/.mergify.yml
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>review_me</span>'
 ! stdout 'check config changed'
 
@@ -43,7 +43,7 @@ cc-config verdict-single-task-stale-sha
 exec cc tick --count 1
 cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout '>review_me</span>'
 stdout '>checking</span>'
 stdout 'check config changed'
@@ -53,7 +53,7 @@ cc-config verdict-single-task
 exec cc tick --count 1
 cc-fake-gh-head verdict-review-me cc-1-x
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>review_me</span>'
 
 -- mergify-v1.yml --

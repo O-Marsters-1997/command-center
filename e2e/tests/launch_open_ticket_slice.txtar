@@ -15,5 +15,5 @@ stdout '<cc-launch-modal tickets='
 
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>queued</span>'

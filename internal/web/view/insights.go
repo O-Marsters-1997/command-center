@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -82,7 +83,75 @@ func systemTimezoneName() string {
 
 type InsightsPage struct {
 	Chrome
-	Chart InsightsChart
+	Chart  InsightsChart
+	Limits []Limit
+	Split  SpendSplit
+}
+
+// Limit is one rate-limit window on the insights page. ResetsIn is empty when no reading has
+// reported a reset time.
+type Limit struct {
+	Label    string
+	Pct      int
+	ResetsIn string
+	ResetsAt string
+}
+
+// SpendSplit is the chart's spend by kind, as a share of the weekly limit. Its rows sum to Total,
+// the sum of the chart's dots.
+type SpendSplit struct {
+	Rows  []SplitRow
+	Total float64
+}
+
+type SplitRow struct {
+	Kind string
+	Pct  float64
+}
+
+func buildLimits(gauges []Gauge, now time.Time) []Limit {
+	limits := make([]Limit, len(gauges))
+	for i, g := range gauges {
+		limits[i] = Limit{Label: g.Label, Pct: g.Pct}
+		if g.ResetsAt.IsZero() {
+			continue
+		}
+		limits[i].ResetsAt = g.ResetsAt.UTC().Format(time.RFC3339)
+		limits[i].ResetsIn = untilReset(now, g.ResetsAt)
+	}
+	return limits
+}
+
+func untilReset(now, at time.Time) string {
+	d := at.Sub(now)
+	if d <= 0 {
+		return "resetting now"
+	}
+	d = d.Round(time.Minute)
+	if d >= 24*time.Hour {
+		return fmt.Sprintf("in %dd %dh", int(d.Hours())/24, int(d.Hours())%24)
+	}
+	return fmt.Sprintf("in %dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+func buildSpendSplit(points []insightsPointJSON) SpendSplit {
+	var agent, resolve, followUp, total float64
+	for _, p := range points {
+		agent += p.AgentPctWeek
+		resolve += p.ResolvePctWeek
+		followUp += p.FollowUpPctWeek
+		total += p.PctWeek
+	}
+	explore := max(0, total-agent-resolve-followUp)
+	return SpendSplit{
+		Rows: []SplitRow{
+			{Kind: "agent", Pct: agent},
+			{Kind: "resolve", Pct: resolve},
+			{Kind: "follow-up", Pct: followUp},
+			{Kind: "explore", Pct: explore},
+		},
+		Total: agent + resolve + followUp + explore,
+	}
 }
 
 func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) (InsightsPage, error) {
@@ -95,7 +164,10 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	if err != nil {
 		return InsightsPage{}, err
 	}
-	return InsightsPage{Chrome: chrome, Chart: buildInsightsChart(resp)}, nil
+	return InsightsPage{
+		Chrome: chrome, Chart: buildInsightsChart(resp),
+		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
+	}, nil
 }
 
 // Insights reads the merged-ticket spend between ?since= (default thirty days back) and today in

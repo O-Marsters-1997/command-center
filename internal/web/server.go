@@ -35,12 +35,7 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"head": func(r *view.Row, scope, featureScope string) rowSlot {
-			return newRowSlot(*r, true, 0, scope, featureScope)
-		},
-		"child": func(r view.Row, depth int, scope, featureScope string) rowSlot {
-			return newRowSlot(r, false, depth, scope, featureScope)
-		},
+		"slot":         newRowSlot,
 		"confirmation": confirmation,
 		"percent":      view.PercentOf,
 		"raw":          func(s string) template.HTML { return template.HTML(s) },
@@ -53,8 +48,6 @@ var templates = template.Must(template.New("").
 // pageView's copies of these fields.
 type rowSlot struct {
 	view.Row
-	Head         bool
-	Depth        int
 	LaunchVerb   string
 	CancelVerb   string
 	FollowUpVerb string
@@ -62,9 +55,9 @@ type rowSlot struct {
 	FeatureScope string
 }
 
-func newRowSlot(r view.Row, head bool, depth int, scope, featureScope string) rowSlot {
+func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
 	return rowSlot{
-		Row: r, Head: head, Depth: depth,
+		Row:        r,
 		LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, FollowUpVerb: plan.VerbFollowUp,
 		Scope: scope, FeatureScope: featureScope,
 	}
@@ -122,16 +115,25 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
+	mux.Handle("GET /tickets", handler(s.handleTickets))
+	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
+	mux.Handle("GET /f/{feature}/graph", handler(s.handleFeatureGraph))
+	mux.Handle("GET /f/{feature}/launch", handler(s.handleFeatureLaunch))
+	mux.Handle("GET /launch", handler(s.handleLaunchPicker))
 	mux.Handle("GET /board", handler(s.handleBoard))
+	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
+	mux.Handle("GET /s/{owner}/{name}/{n}", handler(s.handleSession))
 	mux.Handle("GET /insights", handler(s.handleInsightsPage))
 	mux.Handle("GET /insights.json", handler(s.handleInsights))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
-	mux.Handle("GET /features", handler(s.handleFeatures))
-	mux.Handle("GET /features/search", handler(s.handleRepoSearch))
-	mux.Handle("GET /features/banner", handler(s.handleBanner))
+	mux.Handle("GET /repos", handler(s.handleRepos))
+	mux.Handle("GET /repos/{owner}/{name}", handler(s.handleRepo))
+	mux.Handle("GET /repos/search", handler(s.handleRepoSearch))
+	mux.Handle("GET /repos/banner", handler(s.handleBanner))
+	mux.HandleFunc("GET /features", s.handleFeaturesRedirect)
 	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
@@ -152,7 +154,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 // AllowAnonymous turns the session gate off, for the demo build whose board is a local simulation.
 func (s *Server) AllowAnonymous() { s.open = true }
 
-// SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
+// SetTrackerSource replaces the tracker constructor so a test can drive GET /repos/{owner}/{name} without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
 
 // SetPushableSource replaces the gh listing behind repo search so a test can drive it without gh.
@@ -206,11 +208,117 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
-	return s.renderBoard(w, r, "page.tmpl")
+	if target := legacyIndexTarget(r.URL.Query()); target != "" {
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return nil
+	}
+	home, err := s.view.Home(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "home.tmpl", home)
+}
+
+func legacyIndexTarget(q url.Values) string {
+	if sel := view.SessionPath(q.Get("sel")); sel != "" {
+		return sel
+	}
+	if feature := q.Get("feature"); feature != "" {
+		target := "/f/" + url.PathEscape(feature)
+		if q.Get("view") == "graph" {
+			target += "/graph"
+		}
+		return target
+	}
+	if repo := q.Get("repo"); validRepo(repo) {
+		return view.RepoPath(repo)
+	}
+	return ""
+}
+
+func validRepo(repo string) bool { return repoName.MatchString(repo) && !hasDotSegment(repo) }
+
+func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
+	q := r.URL.Query()
+	q.Set("all", "1")
+	q.Del("view")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "tickets.tmpl", board)
+}
+
+func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature.tmpl")
+}
+
+func (s *Server) handleFeatureGraph(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature_graph.tmpl")
+}
+
+func (s *Server) renderFeature(w http.ResponseWriter, r *http.Request, tmpl string) error {
+	board, err := s.featureBoard(r)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, tmpl, board)
+}
+
+func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
+	feature := r.PathValue("feature")
+	q := r.URL.Query()
+	q.Set("feature", feature)
+	q.Del("view")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
+	if err != nil {
+		return view.Board{}, err
+	}
+	if board.FeatureScope != feature {
+		return view.Board{}, errorf(http.StatusNotFound, "no feature %q", feature)
+	}
+	return board, nil
+}
+
+func (s *Server) handleFeatureLaunch(w http.ResponseWriter, r *http.Request) error {
+	board, err := s.featureBoard(r)
+	if err != nil {
+		return err
+	}
+	modal, err := s.view.FeatureModal(r.Context(), s.clock.Now(), board.FeatureScope)
+	if err != nil {
+		return err
+	}
+	board.Launch = &modal
+	return renderHTML(w, "feature.tmpl", board)
+}
+
+func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) error {
+	page, err := s.view.LaunchPicker(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "launch_picker.tmpl", page)
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
-	return s.renderBoard(w, r, "boardSwap")
+	return s.renderBoard(w, r, "board")
+}
+
+const railOpenCookie = "rail-open"
+
+func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
+	params := view.RailParams{Sel: view.RailSelection(r.Header.Get("HX-Current-URL"))}
+	if c, err := r.Cookie(railOpenCookie); err == nil {
+		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
+			params.Open = strings.Split(value, view.RailOpenSeparator)
+		}
+	}
+	rail, err := s.view.Rail(r.Context(), s.clock.Now(), params)
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "rail", rail)
 }
 
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
@@ -258,7 +366,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
 }
 
 func renderLaunchModal(w http.ResponseWriter, modal view.LaunchModal) error {
-	return renderHTML(w, "launch_modal.tmpl", modal)
+	return renderHTML(w, "launchDialog", modal)
 }
 
 func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error {
@@ -414,6 +522,12 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
+		return s.handleRail(w, r)
+	}
+	if r.FormValue("from") == "session" {
+		return s.afterSessionVerb(w, r, ticketURL, verb)
+	}
 	return s.redirectOrSwap(w, r)
 }
 
@@ -422,7 +536,7 @@ func (s *Server) redirectOrSwap(w http.ResponseWriter, r *http.Request) error {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return nil
 	}
-	return s.renderBoard(w, r, "boardSwap")
+	return s.renderBoard(w, r, "board")
 }
 
 func nonBlank(values []string) []string {
@@ -470,21 +584,41 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.clock.Now()); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, afterTicketEdit(r.FormValue("return")), http.StatusSeeOther)
 	return nil
 }
 
-func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	scope := r.URL.Query().Get("repo")
-	if scope == "" {
-		page, err := s.view.Repos(ctx, s.clock.Now())
-		if err != nil {
-			return err
-		}
-		return renderHTML(w, "features.tmpl", page)
+func afterTicketEdit(back string) string {
+	u, err := url.Parse(back)
+	if err != nil || u.Scheme != "" || u.Host != "" ||
+		!strings.HasPrefix(u.Path, "/s/") || strings.Contains(u.Path, "..") {
+		return "/"
 	}
+	return u.EscapedPath()
+}
 
+func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
+	target := "/repos"
+	if repo := r.URL.Query().Get("repo"); validRepo(repo) {
+		target = view.RepoPath(repo)
+	}
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
+
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
+	page, err := s.view.Repos(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "repos.tmpl", page)
+}
+
+func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scope := r.PathValue("owner") + "/" + r.PathValue("name")
+	if !repoName.MatchString(scope) || hasDotSegment(scope) {
+		return errorf(http.StatusNotFound, "repo %q is not owner/name", scope)
+	}
 	repo, known, err := s.view.KnownRepo(ctx, scope)
 	if err != nil {
 		return err
@@ -499,7 +633,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered)
+	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered, r.URL.Query()["ticket"])
 	if err != nil {
 		return err
 	}
@@ -576,8 +710,7 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 }
 
 func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
-	feature := r.PathValue("feature")
-	http.Redirect(w, r, "/?feature="+url.QueryEscape(feature), http.StatusSeeOther)
+	http.Redirect(w, r, "/f/"+url.PathEscape(r.PathValue("feature")), http.StatusMovedPermanently)
 }
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {

@@ -1,0 +1,18 @@
+# GET /tickets renders every ticket in attention sections; ?filter= keeps one section and marks its tab.
+
+cc-init-repo
+cc-config two-tasks
+cc-fake-gh no-prs
+
+exec cc import project:two-tasks
+exec cc tick --count 1
+exec cc request GET /tickets
+
+stdout 'data-section="ready"'
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
+stdout 'href="/tickets" aria-current="page">All'
+
+exec cc request GET /tickets?filter=blocked
+! stdout 'data-section="ready"'
+stdout 'href="/tickets\?filter=blocked" aria-current="page">Blocked'
