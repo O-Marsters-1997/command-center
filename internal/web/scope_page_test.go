@@ -113,18 +113,18 @@ func TestBreadcrumbIsPlainLinksWithTheRepoSegmentOnlyWhenScoped(t *testing.T) {
 	server := threeRepoServer(t)
 
 	unscoped := renderPath(t, server, "/")
-	if !strings.Contains(unscoped, `<a href="/features">repos</a>`) {
+	if !strings.Contains(unscoped, `<a href="/repos">repos</a>`) {
 		t.Errorf("breadcrumb missing the repos link:\n%s", unscoped)
 	}
 	if strings.Contains(unscoped, "repo-switcher") || strings.Contains(unscoped, "popover") {
 		t.Errorf("breadcrumb still carries the repo switcher popover:\n%s", unscoped)
 	}
-	if strings.Contains(unscoped, `href="/features?repo=`) {
+	if strings.Contains(unscoped, `href="/repos/`) {
 		t.Errorf("unscoped breadcrumb has a repo segment:\n%s", unscoped)
 	}
 
 	scoped := renderPath(t, server, "/?repo=services")
-	if !strings.Contains(scoped, `<a href="/features?repo=services">services</a>`) {
+	if !strings.Contains(scoped, `<a href="/repos/services">services</a>`) {
 		t.Errorf("?repo=services breadcrumb missing its repo segment:\n%s", scoped)
 	}
 }

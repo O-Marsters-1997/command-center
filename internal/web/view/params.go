@@ -27,12 +27,15 @@ type Params struct {
 	Repo    string
 	Feature string
 	Phase   string
+	Filter  string
+	All     bool
 }
 
 func ParseParams(q url.Values) Params {
 	v := Params{
 		Tickets: q["ticket"], View: q.Get("view"), Log: NormalizeLogFilter(q.Get("log")),
 		Repo: q.Get("repo"), Feature: q.Get("feature"), Phase: normalizePhase(q.Get("phase")),
+		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
 	if sel := q["sel"]; len(sel) > 0 {
 		v.Sel = sel[0]
@@ -41,6 +44,15 @@ func ParseParams(q url.Values) Params {
 		v.View = "board"
 	}
 	return v
+}
+
+func normalizeFilter(filter string) string {
+	for _, s := range sectionOrder {
+		if s.Key == filter {
+			return filter
+		}
+	}
+	return ""
 }
 
 func normalizePhase(phase string) string {
@@ -65,10 +77,16 @@ func normalizeFeatureScope(feature string, fleetFeatures []string) string {
 	return ""
 }
 
-// url.Values.Encode sorts by key, so this always renders feature/log/phase/repo/sel/ticket/view
-// in that order.
+// url.Values.Encode sorts by key, so this always renders
+// all/feature/filter/log/phase/repo/sel/ticket/view in that order.
 func (v Params) query() string {
 	q := url.Values{}
+	if v.All {
+		q.Set("all", "1")
+	}
+	if v.Filter != "" {
+		q.Set("filter", v.Filter)
+	}
 	if v.Feature != "" {
 		q.Set("feature", v.Feature)
 	}
@@ -121,6 +139,11 @@ func (v Params) boardPath() string { return withQuery("/board", v.query()) }
 func (v Params) verbPath() string  { return withQuery("/verb", v.query()) }
 
 func (v Params) pagePath() string {
+	if v.All {
+		rest := v
+		rest.All = false
+		return withQuery("/tickets", rest.query())
+	}
 	if v.Feature == "" || v.Repo != "" || (v.View != "" && v.View != "board") {
 		return withQuery("/", v.query())
 	}

@@ -49,6 +49,46 @@ func Sectioned(rows []Row) []Section {
 	return out
 }
 
+// FilterTab is one pill of the all-tickets page: a section key (or "all"), its link and whether it
+// is the filter in force.
+type FilterTab struct {
+	Key     string
+	Title   string
+	Path    string
+	Count   int
+	Current bool
+}
+
+func filterSections(sections []Section, filter string) []Section {
+	if filter == "" {
+		return sections
+	}
+	var out []Section
+	for _, s := range sections {
+		if s.Key == filter {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func filterTabs(sections []Section, filter string) []FilterTab {
+	total := 0
+	counts := make(map[string]int, len(sections))
+	for _, s := range sections {
+		counts[s.Key] = len(s.Rows)
+		total += len(s.Rows)
+	}
+	tabs := []FilterTab{{Key: "all", Title: "All", Path: "/tickets", Count: total, Current: filter == ""}}
+	for _, s := range sectionOrder {
+		tabs = append(tabs, FilterTab{
+			Key: s.Key, Title: s.Title, Count: counts[s.Key], Current: filter == s.Key,
+			Path: Params{Filter: s.Key, All: true}.pagePath(),
+		})
+	}
+	return tabs
+}
+
 // nameDependencies fills each row's After (its unmet blockers, for a blocked row) and Unlocks
 // (every ticket waiting on it) as ticket refs.
 func nameDependencies(rows []Row, tickets []plan.Ticket) {

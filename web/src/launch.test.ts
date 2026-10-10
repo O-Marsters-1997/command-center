@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { columnsFor, dependentsOf, initialTicked, missingBlockersOf, REFUSED } from "./launch";
+import { cancelHref, columnsFor, dependentsOf, initialTicked, missingBlockersOf, REFUSED, sectionsFor } from "./launch";
 import type { Candidate } from "./launch";
 
 function candidate(over: Partial<Candidate> & { url: string }): Candidate {
@@ -118,5 +118,30 @@ describe("columnsFor", () => {
     ];
     const cols = columnsFor(candidates);
     expect(cols.get("c")).toBe(2);
+  });
+});
+
+describe("sectionsFor", () => {
+  test("splits by preview label, keeping order within a section", () => {
+    const candidates = [
+      candidate({ url: "a" }),
+      candidate({ url: "b", label: "on unlock", blocked_by: ["a"] }),
+      candidate({ url: "c", label: REFUSED }),
+      candidate({ url: "d" }),
+    ];
+    const sections = sectionsFor(candidates);
+    expect(sections.now.map((c) => c.url)).toEqual(["a", "d"]);
+    expect(sections.onUnlock.map((c) => c.url)).toEqual(["b"]);
+    expect(sections.refused.map((c) => c.url)).toEqual(["c"]);
+  });
+});
+
+describe("cancelHref", () => {
+  test("returns to the feature page, escaping its name", () => {
+    expect(cancelHref("project:x/y")).toBe("/f/project%3Ax%2Fy");
+  });
+
+  test("returns home for a ticket slice", () => {
+    expect(cancelHref("")).toBe("/");
   });
 });

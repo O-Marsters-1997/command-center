@@ -9,5 +9,5 @@
 </nav>
 {{template "bandStatic" .}}
 {{template "boardForm" .}}
-<div id="launch-modal"></div>
+<div id="launch-modal">{{with .Launch}}{{template "launchDialog" .}}{{end}}</div>
 {{template "shellEnd" .}}

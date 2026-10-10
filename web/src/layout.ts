@@ -8,38 +8,39 @@ export const NODE_W = 200;
 export const NODE_H = 40;
 export const MARGIN = 24;
 
-export interface LayoutGroup<Row> {
-  root: Row | null;
-  children: Row[];
+export interface Wave {
+  url: string;
+  blocking: string[] | null;
 }
 
-export interface Placed<Row> {
-  row: Row;
-  col: number;
-  x: number;
-  y: number;
-}
-
-export function layoutGroups<Row>(groups: LayoutGroup<Row>[]): Placed<Row>[] {
-  const placed: Placed<Row>[] = [];
-  let y = MARGIN;
-  for (const g of groups) {
-    if (g.root) {
-      placed.push({ row: g.root, col: 0, x: MARGIN, y });
-      let cy = y;
-      for (const child of g.children) {
-        cy += ROW_H;
-        placed.push({ row: child, col: 1, x: MARGIN + COL_W, y: cy });
-      }
-      y = cy + ROW_H;
-    } else {
-      for (const child of g.children) {
-        placed.push({ row: child, col: 0, x: MARGIN, y });
-        y += ROW_H;
-      }
+export function waveDepths(rows: Wave[]): Map<string, number> {
+  const byURL = new Map(rows.map((r) => [r.url, r]));
+  const depth = new Map<string, number>();
+  const visiting = new Set<string>();
+  const depthOf = (url: string): number => {
+    const known = depth.get(url);
+    if (known !== undefined) return known;
+    if (visiting.has(url)) return 0;
+    visiting.add(url);
+    let d = 0;
+    for (const blocker of byURL.get(url)?.blocking ?? []) {
+      if (byURL.has(blocker)) d = Math.max(d, depthOf(blocker) + 1);
     }
-  }
-  return placed;
+    visiting.delete(url);
+    depth.set(url, d);
+    return d;
+  };
+  for (const row of rows) depthOf(row.url);
+  return depth;
+}
+
+export function layoutWaves<Row extends Wave>(rows: Row[]): (Row & { col: number; x: number; y: number })[] {
+  const depth = waveDepths(rows);
+  return stackByColumn(rows.map((row) => ({ ...row, col: depth.get(row.url) ?? 0 })));
+}
+
+export function waveLabel(col: number): string {
+  return `Wave ${col + 1}`;
 }
 
 export function stackByColumn<T extends { col: number }>(nodes: T[]): (T & { x: number; y: number })[] {
@@ -84,4 +85,27 @@ export function bounds(nodes: { col: number; y: number }[]): { width: number; he
   const maxCol = nodes.reduce((m, n) => Math.max(m, n.col), 0);
   const maxY = nodes.reduce((m, n) => Math.max(m, n.y), 0);
   return { width: MARGIN * 2 + maxCol * COL_W + NODE_W, height: maxY + NODE_H + MARGIN };
+}
+
+export function traceChain<T extends { url: string }>(url: string, edges: Edge<T>[]): Set<string> {
+  const upstream = new Map<string, string[]>();
+  const downstream = new Map<string, string[]>();
+  for (const e of edges) {
+    upstream.set(e.to.url, [...(upstream.get(e.to.url) ?? []), e.from.url]);
+    downstream.set(e.from.url, [...(downstream.get(e.from.url) ?? []), e.to.url]);
+  }
+  const traced = new Set([url]);
+  for (const adjacent of [upstream, downstream]) {
+    const queue = [url];
+    const seen = new Set([url]);
+    while (queue.length > 0) {
+      for (const next of adjacent.get(queue.pop() as string) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        traced.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return traced;
 }

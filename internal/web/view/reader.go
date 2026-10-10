@@ -22,9 +22,12 @@ type Board struct {
 	Chrome
 	Groups           []Group
 	Sections         []Section
+	Tabs             []FilterTab
 	Band             Band
 	BoardPath        string
 	BoardPollSeconds int
+	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
+	Launch *LaunchModal
 }
 
 func (b Board) Row(ticketURL string) (Row, bool) {
@@ -131,10 +134,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
 		return Board{}, err
 	}
+	sections := Sectioned(rowsIn(groups))
 	return Board{
 		Chrome:           chrome,
 		Groups:           groups,
-		Sections:         Sectioned(rowsIn(groups)),
+		Sections:         filterSections(sections, params.Filter),
+		Tabs:             filterTabs(sections, params.Filter),
 		Band:             deriveBand(rowsIn(groups)),
 		BoardPath:        params.boardPath(),
 		BoardPollSeconds: r.boardPollSeconds,

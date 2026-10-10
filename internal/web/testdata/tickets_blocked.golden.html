@@ -111,65 +111,105 @@
 <li><a href="/repos">repos</a></li>
 
 
-<li>#1</li>
 </ol>
   <div class="topbar-action">
 </div>
 </header>
 <div class="content">
-<article class="session" data-session="https://github.com/acme/web/issues/1">
-  <header class="session-head">
-    <span class="glyph glyph-pending" data-glyph="pending">push_pending</span>
-    <h1 class="session-ref">#1</h1>
-    <p class="session-meta text-muted">acme/web · checkout</p>
-    <details class="worked">
-      <summary><span class="worked-spark" aria-hidden="true">✻</span> Worked for 0s</summary>
-      <p class="text-muted">lines 1 · phases 1</p>
-    </details>
-  </header>
-  <section class="prompt-bubble" aria-label="prompt"><pre class="prompt-text">Implement #1
-</pre>
-  </section>
-  <nav class="session-tabs" aria-label="log view">
-    <a href="/s/acme/web/1" hx-get="/s/acme/web/1" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Transcript</a>
-    <a href="/s/acme/web/1?log=raw" hx-get="/s/acme/web/1?log=raw" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Raw log</a>
-  </nav>
-  <div class="run-thread">
-    <div class="run-work">
-      <section class="phase">
-        <header class="phase-head flex items-baseline gap-2">
-          <span class="phase-skill">start</span>
-          <span class="phase-rule"></span>
-          <span class="phase-at">&#43;00:00</span>
-        </header>
-        <details class="fold"><summary>Ran 1 command</summary><div class="fold-body"><div class="line line-tool call"><div class="call-head"><span class="call-verb">Ran</span><code class="call-arg">go test</code><span class="call-res"></span></div></div></div></details>
-      </section>
-      <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Facme%2Fweb%2Fissues%2F1/log?from=144" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
+<nav class="pill-tabs" aria-label="ticket filters">
+  <a class="pill-tab" href="/tickets">All <span class="section-count">3</span></a>
+  <a class="pill-tab" href="/tickets?filter=needs-you">Needs you <span class="section-count">0</span></a>
+  <a class="pill-tab" href="/tickets?filter=in-progress">In progress <span class="section-count">0</span></a>
+  <a class="pill-tab" href="/tickets?filter=ready">Ready <span class="section-count">2</span></a>
+  <a class="pill-tab" href="/tickets?filter=blocked" aria-current="page">Blocked <span class="section-count">1</span></a>
+  <a class="pill-tab" href="/tickets?filter=done">Done <span class="section-count">0</span></a>
+</nav>
+<section id="band" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
+<article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
+    
+    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">3/3 yours</p>
+    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
+      
+      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 2"></span>
+      
+      <span class="segbar-segment" data-glyph="blocked" style="flex-grow: 1"></span>
+      
     </div>
-  </div>
-  <aside class="stack-panel" aria-label="feature stack">
-    <h2 class="stack-title">Blocked by</h2><p class="text-muted">Nothing blocks this ticket.</p>
-    <h2 class="stack-title">Merging this unlocks</h2><p class="text-muted">Nothing waits on this ticket.</p>
-    <form method="post" action="/ticket" class="stack-form">
-      <input type="hidden" name="ticket" value="https://github.com/acme/web/issues/1">
-      <input type="hidden" name="branch" value="cc-1">
-      <input type="hidden" name="return" value="/s/acme/web/1">
-      <fieldset class="stack-fields">
-        <legend class="stack-title">Edit blockers</legend>
-        <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
-      </fieldset>
-      <button type="submit" class="button">save</button>
-    </form>
-  </aside>
-  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  <div class="verbs"><a class="verb" href="/s/acme/web/1?log=raw">Open log</a>
-  </div>
-</div>
-</article>
+    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
+      
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 2</li>
+      
+      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-blocked"></span>blocked · 1</li>
+      
+    </ul>
+    
+  </article>
+
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
+    
+    <p class="m-0 text-muted">no worktree has been cut</p>
+    
+  </article>
+
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
+    
+    <p class="m-0 text-muted">no branch has reported a check yet</p>
+    
+  </article>
+
+  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
+    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
+    
+    <p class="m-0 text-muted">no runs have completed this session yet</p>
+    
+  </article></section>
+
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+<table id="board" hx-get="/board?all=1&amp;filter=blocked" hx-trigger="every 5s" hx-swap="outerHTML">
+  <tr>
+    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
+    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
+  </tr>
+  
+  <tbody data-section="blocked" aria-labelledby="section-blocked">
+    <tr class="section-head"><th id="section-blocked" colspan="10">Blocked <span class="section-count">1</span></th></tr>
+    
+  <tr class="group">
+    <td>
+      <input type="checkbox" form="launch" name="ticket" value="sandbox://CHILD"
+        hx-get="/board?all=1&amp;filter=blocked&amp;ticket=sandbox%3A%2F%2FCHILD" hx-push-url="/tickets?filter=blocked&amp;ticket=sandbox%3A%2F%2FCHILD" hx-target="#board" hx-swap="outerHTML"></td>
+    <td>
+      <span class="glyph glyph-blocked">blocked</span>
+    </td>
+    <td>
+      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?all=1&amp;filter=blocked&amp;sel=sandbox%3A%2F%2FCHILD" hx-push-url="/tickets?filter=blocked&amp;sel=sandbox%3A%2F%2FCHILD" hx-target="#board" hx-swap="outerHTML">#CHILD</button>
+    </td>
+    <td><div class="text-muted text-[0.85em]">blocked by sandbox://ROOT: root has no open or merged pull request</div>
+      <div>untitled</div><div class="text-muted text-[0.85em]">after #ROOT</div>
+    </td>
+    <td>L1</td>
+    <td>no checks
+    </td>
+    <td>no pr</td>
+    <td>not started
+    </td>
+    <td>no spend
+    </td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+  </tr>
+  
+
+  </tbody>
+  
+</table>
+<button type="submit" form="launch">launch selected</button>
+<div id="launch-modal"></div>
 </div>
 </main>
 </div>
 </div>
 </body>
 </html>
-
