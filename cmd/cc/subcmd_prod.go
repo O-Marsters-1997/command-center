@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -53,9 +52,9 @@ func open(ctx context.Context, configPath string) error {
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
 	if name, ok := loop.RepoNameForDir(ctx, dir, repos); ok {
-		target += "?repo=" + url.QueryEscape(name)
+		target += "repos/" + name
 	} else {
-		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the unscoped board")
+		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
 	if !daemonListening(cfg.Port) {

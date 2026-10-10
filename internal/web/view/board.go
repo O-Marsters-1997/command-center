@@ -63,18 +63,13 @@ type Row struct {
 	SpendPctWeek    float64  `json:"spend_pct_week"`
 	TicketOpen      bool     `json:"ticket_open"`
 
-	// Selected is the ?sel= row, the only one with a detail <tr>, so an unattached hx-preserve id
-	// never lingers past the row that grew it.
-	Selected     bool         `json:"selected"`
-	Checked      bool         `json:"checked"`
-	SelectPath   string       `json:"select_path"`
-	SelectPush   string       `json:"select_push"`
-	TogglePath   string       `json:"toggle_path"`
-	TogglePush   string       `json:"toggle_push"`
-	VerbPath     string       `json:"verb_path"`
-	Log          LogDetail    `json:"log"`
-	RunID        int64        `json:"-"`
-	ContextCurve ContextCurve `json:"-"`
+	Selected    bool      `json:"selected"`
+	Checked     bool      `json:"checked"`
+	SessionPath string    `json:"session_path"`
+	TogglePath  string    `json:"toggle_path"`
+	TogglePush  string    `json:"toggle_push"`
+	VerbPath    string    `json:"verb_path"`
+	Log         LogDetail `json:"log"`
 }
 
 type Check struct {
@@ -126,8 +121,7 @@ func applyViewState(rows []Row, params Params, render LineRenderer) {
 		r := &rows[i]
 		r.Selected = params.Sel == r.URL
 		r.Checked = slices.Contains(params.Tickets, r.URL)
-		toggledSel := params.toggleSel(r.URL)
-		r.SelectPath, r.SelectPush = toggledSel.boardPath(), toggledSel.pagePath()
+		r.SessionPath = cmp.Or(SessionPath(r.URL), ticketsPath)
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
@@ -194,7 +188,6 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Blocking:       e.Unlock.Blocking,
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
-			RunID:          latestRun.ID,
 		})
 	}
 

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -100,23 +99,5 @@ func TestBoardFragmentNeverContainsACustomElementTag(t *testing.T) {
 	board := renderBoard(t, seededServer(t))
 	if hyphenatedTagRE.MatchString(board) {
 		t.Errorf("GET /board contains a hyphenated tag name:\n%s", board)
-	}
-}
-
-func TestPageRendersCcGraphOutsideTheBoardOnlyForTheGraphView(t *testing.T) {
-	t.Parallel()
-
-	server := seededServer(t)
-	boardView := renderPath(t, server, "/")
-	if strings.Contains(boardView, "<cc-graph") {
-		t.Errorf("GET / with the default board view rendered <cc-graph>:\n%s", boardView)
-	}
-
-	graphView := renderPath(t, server, "/?view=graph")
-	if !strings.Contains(graphView, "<cc-graph") {
-		t.Fatalf("GET /?view=graph did not render <cc-graph>:\n%s", graphView)
-	}
-	if strings.Contains(graphView, `id="board"`) {
-		t.Errorf("GET /?view=graph still rendered the board table:\n%s", graphView)
 	}
 }

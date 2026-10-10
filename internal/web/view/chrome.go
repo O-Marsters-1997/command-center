@@ -8,28 +8,23 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// Chrome is the shell every page wears: workspace, the live and observe pills, the last tick's
-// error, the current board/graph view, and the repo/feature scope links. layout.tmpl's topbar and
-// masthead render it once per page load; every page's view model embeds it.
 type Chrome struct {
-	Workspace         string
-	LiveAgents        int
-	Exploring         int
-	Observe           Age
-	ObserveStale      bool
-	LastError         *TickError
-	Gauges            []Gauge
-	SpendPaused       *SpendPaused
-	RefusedRepos      []RefusedRepo
-	View              string
-	Section           string
-	Home              bool
-	RepoScope         string
-	RepoCrumb         string
-	RepoCrumbPath     string
-	FeatureScope      string
-	FeatureImportPath string
-	FeatureQuery      string
+	Workspace     string
+	LiveAgents    int
+	Exploring     int
+	Observe       Age
+	ObserveStale  bool
+	LastError     *TickError
+	Gauges        []Gauge
+	SpendPaused   *SpendPaused
+	RefusedRepos  []RefusedRepo
+	Section       string
+	Home          bool
+	RepoScope     string
+	RepoCrumb     string
+	RepoCrumbPath string
+	FeatureScope  string
+	FeatureQuery  string
 }
 
 // Age is a relative time the server renders and the page's clock keeps current. Stamp is the
@@ -51,8 +46,6 @@ type TickError struct {
 	Message string
 }
 
-// Gauge is one window's masthead gauge. Calibrating is true below spend.MinSamples trailing
-// intervals, when CCPct has no meaning.
 type Gauge struct {
 	Label       string
 	Pct         int

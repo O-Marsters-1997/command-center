@@ -24,7 +24,7 @@ grep 'pr create --base main --fill --label keep-open --draft' $WORK/gh.log
 # The gating blocker's own PR is still open, and the consumer's own CI is red: stays drafted.
 cc-fake-gh-head draft-gate-open cc-1-x
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 ! stdout 'pr ready'
 

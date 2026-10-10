@@ -77,11 +77,11 @@ func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303", resp.StatusCode)
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want 301", resp.StatusCode)
 	}
-	if got := resp.Header.Get("Location"); got != "/?feature=project%3Ax" {
-		t.Fatalf("Location = %q, want /?feature=project%%3Ax", got)
+	if got := resp.Header.Get("Location"); got != "/f/project:x" {
+		t.Fatalf("Location = %q, want /f/project:x", got)
 	}
 }
 

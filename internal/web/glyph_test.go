@@ -20,7 +20,7 @@ func TestRunningRowGlyphPulses(t *testing.T) {
 	store := runningRowStore(t, ticket, startedAt, now)
 
 	server := newServer(store, now)
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -37,7 +37,7 @@ func TestEndedRunsGlyphDoesNotPulse(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 	body := rec.Body.String()
 
 	if strings.Contains(body, "glyph-pulse") {

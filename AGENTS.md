@@ -44,8 +44,8 @@ The stack is unusual and the wrong assumption is expensive.
   `hx-select="#main"` and `hx-push-url`, swapping `#main` and never the rail. The rail polls
   `GET /rail` inside a scroll container that does not swap
   ([ADR 19](docs/adr/0019-pages-are-routes-beside-a-polling-rail.md)). Do not remove or rename an
-  `hx-` attribute, `#main`, or the rail's scroll container. `id="board"` and the `hx-preserve`
-  detail row are gone; the board sections by attention
+  `hx-` attribute, `#main`, or the rail's scroll container. `id="board"` stays as the swap target of the
+  board's poll and verb forms; the `hx-preserve` detail row is gone, and the board sections by attention
   ([ADR 20](docs/adr/0020-the-board-sections-by-attention.md)).
 - **Two Solid islands**, `web/src/graph.tsx` and `web/src/launch-modal.tsx`, opt out of shadow DOM
   ([ADR 1](docs/adr/0001-one-global-stylesheet.md)), so their classes are page-global. They share
@@ -65,7 +65,6 @@ For styling, load `tailwind-design-system`. **Do not load `tailwind-shadcn`**: i
   mapping ([ADR 18](docs/adr/0018-glyph-replaces-tone.md)).
 - Go never returns a utility string. `plan.Glyph` returns one of eight words and the template
   composes the class.
-- `data-depth` indent rules stay CSS attribute selectors.
 - Colour is an oklch token in `@theme` with no dark counterpart, never a literal in a template.
 
 ## Tests

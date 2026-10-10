@@ -20,7 +20,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
 	server := openServer(seededStore(t, time.Now()), realClock{}, "")
-	rec := get(t, server, "/")
+	rec := get(t, server, "/tickets")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
@@ -61,7 +61,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	}
 	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 
-	target := "/?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
+	target := "/tickets?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
 	rec := get(t, server, target)
 	body := rec.Body.String()
 

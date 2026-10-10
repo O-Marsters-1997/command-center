@@ -1,3 +1,20 @@
+{{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
+
+{{define "notices" -}}
+<div id="notices">
+  {{- range .RefusedRepos}}
+  <p class="banner ribbon" data-glyph="failed" role="status">
+    <a href="{{.Path}}">{{.Name}}</a> is refused{{with .Reason}}: {{.}}{{end}}
+  </p>
+  {{- end}}
+  {{- with .SpendPaused}}
+  <p class="banner ribbon" data-glyph="pending" role="status">
+    spawning paused: five-hour usage is {{.Pct}}%, at or above the spend_limit_5h of {{.Limit}}%.
+  </p>
+  {{- end}}
+</div>
+{{- end}}
+
 {{define "docHead" -}}
 <!doctype html>
 <html lang="en">
@@ -80,7 +97,7 @@
 <div class="app">
 {{template "sidebar" .}}
 <div class="pane">
-{{template "masthead" .}}
+{{template "notices" .}}
 <main id="main"{{if .Home}} data-home{{end}}>
 <header class="topbar">
   <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
@@ -114,19 +131,6 @@
 {{with .FeatureScope}}<li>{{.}}</li>{{end}}
 {{- end}}
 
-{{define "scopeActions" -}}
-{{if .FeatureScope}}{{if .FeatureImportPath}}
-<form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
-  <input type="hidden" name="feature" value="{{.FeatureScope}}">
-  <button type="submit">launch</button>
-</form>
-<form hx-post="{{.FeatureImportPath}}" hx-target="#board" hx-swap="outerHTML">
-  <button type="submit">reimport</button>
-</form>
-<a href="/?view={{.View}}">all features</a>
-{{end}}{{end}}
-{{- end}}
-
 {{define "icon-board" -}}
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg>
 {{- end}}
@@ -143,7 +147,7 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <div class="sidebar-head">{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-get="/?view=board{{if .FeatureScope}}&feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if or (eq .Section "board") (eq .Section "graph") (eq .Section "tickets")}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
     <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-get="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
     <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
   </nav>

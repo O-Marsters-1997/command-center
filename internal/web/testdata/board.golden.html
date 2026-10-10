@@ -1,4 +1,4 @@
-<table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
+<table id="board" hx-get="/board?all=1" hx-trigger="every 5s" hx-swap="outerHTML">
   <tr>
     <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
     <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
@@ -10,12 +10,12 @@
   <tr class="group">
     <td>
       <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"
-        hx-get="/board?ticket=sandbox%3A%2F%2FCC-1" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
+        hx-get="/board?all=1&amp;ticket=sandbox%3A%2F%2FCC-1" hx-push-url="/tickets?ticket=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="glyph glyph-ready">ready</span> · launch queued
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-1" hx-push-url="/?sel=sandbox%3A%2F%2FCC-1" hx-target="#board" hx-swap="outerHTML">#CC-1</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-1</a>
     </td>
     <td><div class="text-muted text-[0.85em]">no blockers</div>
       <div>untitled</div><div class="text-muted text-[0.85em]">unlocks #CC-2</div>
@@ -28,9 +28,8 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100"></td>
   </tr>
-  
 
   </tbody>
   
@@ -40,12 +39,12 @@
   <tr class="group">
     <td>
       <input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"
-        hx-get="/board?ticket=sandbox%3A%2F%2FCC-2" hx-push-url="/?ticket=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
+        hx-get="/board?all=1&amp;ticket=sandbox%3A%2F%2FCC-2" hx-push-url="/tickets?ticket=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="glyph glyph-blocked">blocked</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-2</a>
     </td>
     <td><div class="text-muted text-[0.85em]">blocked by sandbox://CC-1: cc-1-first has no open or merged pull request</div>
       <div>untitled</div><div class="text-muted text-[0.85em]">after #CC-1</div>
@@ -58,85 +57,9 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100"></td>
   </tr>
-  
 
   </tbody>
   
 </table>
-<div id="masthead" hx-swap-oob="true">
-  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="glyph glyph-ready">0 live</span>
-    
-    <span class="glyph glyph-pending">last good observe: <time datetime="2026-08-20T12:00:00Z">45s ago</time></span>
-    
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      five-hour · 0% · calibrating
-    </span>
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      weekly · 0% · calibrating
-    </span>
-    
-  </div>
-  
-  <p class="banner ribbon" data-glyph="failed" role="status">
-    the last tick failed <time datetime="2026-08-20T12:00:15Z">30s ago</time> and nothing below has been re-derived since. observe: gh pr list: exit status 1
-  </p>
-  
-  
-</div>
-<section id="band" hx-swap-oob="true" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
-<article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
-    
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/2 yours</p>
-    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
-      
-      <span class="segbar-segment" data-glyph="blocked" style="flex-grow: 1"></span>
-      
-      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span>
-      
-    </div>
-    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-blocked"></span>blocked · 1</li>
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 1</li>
-      
-    </ul>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
-    
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">0 deep</p>
-    <ul class="m-0 flex flex-col list-none gap-[0.2rem] p-0">
-      
-      <li class="flex items-center gap-[0.4em]">
-        <span class="meter"><span class="meter-fill" data-glyph="ready" style="width: 100%"></span></span>
-        depth 0 · 2
-      </li>
-      
-    </ul>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
-    
-    <p class="m-0 text-muted">no branch has reported a check yet</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
-    
-    <p class="m-0 text-muted">no runs have completed this session yet</p>
-    
-  </article></section>

@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,14 +47,6 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 	if err := st.RecordDisposition(t.Context(), runID, plan.OutcomePush, &exitCode, at, nil); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func oneMillionInputTokensLine(timestamp, requestID string) string {
-	return fmt.Sprintf(
-		`{"type":"assistant","timestamp":%q,"request_id":%q,`+
-			`"message":{"model":"claude-sonnet-5","usage":{"input_tokens":1000000}}}`,
-		timestamp, requestID,
-	)
 }
 
 type realClock struct{}

@@ -72,9 +72,9 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <div class="sidebar-head">Command Centre</div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/?view=board" hx-get="/?view=board" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
+    <a class="sidebar-item" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
     <a class="sidebar-item" href="/insights" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
-    <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
+    <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
   </nav>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <form method="post" action="/logout">
@@ -82,84 +82,40 @@
   </form>
 </aside>
 <div class="pane">
-<div id="masthead" hx-swap-oob="true">
-  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="glyph glyph-ready">0 live</span>
-    
-    <span class="glyph glyph-pending">last good observe: never</span>
-    
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      five-hour · 0% · calibrating
-    </span>
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      weekly · 0% · calibrating
-    </span>
-    
-  </div>
-  
+<div id="notices">
   <p class="banner ribbon" data-glyph="failed" role="status">
     <a href="/repos/acme/beta">acme/beta</a> is refused: default branch is master
   </p>
-  
 </div>
-<main id="main" data-home>
+<main id="main">
 <header class="topbar">
   <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
   <ol class="crumbs">
 <li>Command Centre</li>
 <li><a href="/repos">repos</a></li>
-
+<li><a href="/repos/acme/beta">acme/beta</a></li>
 
 </ol>
   <div class="topbar-action">
-<a href="/?view=graph">graph</a>
-
 </div>
 </header>
 <div class="content">
-<section id="band" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
-<article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
-    
-    <p class="m-0 text-muted">no tickets tracked yet</p>
-    
-  </article>
+<h1>acme/beta</h1>
+<p class="text-muted mb-2">https://github.com/acme/beta.git</p>
+<section id="repo-banner" class="banner ribbon mb-3" data-glyph="failed" data-state="refused" role="status">
+  <p>default branch is master</p>
+  <ul class="flex flex-wrap gap-3 mt-1">
+    <li><span class="glyph glyph-failed">x</span> clone</li>
+    <li><span class="glyph glyph-done">ok</span> squash-only merges</li>
+    <li><span class="glyph glyph-done">ok</span> default branch is main</li>
+    <li><span class="glyph glyph-ready">-</span> settings file</li>
+    </ul>
+  <form class="mt-1" hx-post="/repos/track" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
+    <input type="hidden" name="repo" value="acme/beta">
+    <button type="submit">[ Track again ]</button>
+  </form>
+  </section>
 
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
-    
-    <p class="m-0 text-muted">no worktree has been cut</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
-    
-    <p class="m-0 text-muted">no branch has reported a check yet</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
-    
-    <p class="m-0 text-muted">no runs have completed this session yet</p>
-    
-  </article></section>
-
-
-<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
-<table id="board" hx-get="/board" hx-trigger="every 5s" hx-swap="outerHTML">
-  <tr>
-    <th></th><th>state</th><th>ref</th><th>ticket</th><th>stack</th>
-    <th>checks</th><th>pr</th><th>elapsed</th><th>spend</th><th>verbs</th>
-  </tr>
-  
-</table>
-<button type="submit" form="launch">launch selected</button>
 
 <div id="launch-modal"></div>
 </div>

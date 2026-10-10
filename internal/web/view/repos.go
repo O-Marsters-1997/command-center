@@ -53,7 +53,6 @@ type RepoPage struct {
 	Chrome
 	Title           string
 	Remote          string
-	BoardPath       string
 	Known           bool
 	Ready           bool
 	Banner          Banner
@@ -161,7 +160,9 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 
 // RepoPage shapes the scoped page. offered is the repo's own tracker's features; a feature
 // imported with tickets in other repos names them.
-func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offered []string) (RepoPage, error) {
+func (r *Reader) RepoPage(
+	ctx context.Context, now time.Time, scope string, offered, selected []string,
+) (RepoPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
 		return RepoPage{}, err
@@ -202,7 +203,6 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 	page.Title = repo.Name
 	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
 	page.Remote = repo.Remote
-	page.BoardPath = Params{Repo: repo.Name}.pagePath()
 	page.Known = true
 	page.Ready = repo.State == store.RepoReady
 	for _, f := range offered {
@@ -212,7 +212,7 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 	if err != nil {
 		return RepoPage{}, err
 	}
-	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}}))
+	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}, "ticket": selected}))
 	if err != nil {
 		return RepoPage{}, err
 	}

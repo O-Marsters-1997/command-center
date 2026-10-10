@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -50,32 +49,19 @@ type callGroup struct {
 	Lines    []string `json:"lines"`
 }
 
-type logFilterLink struct {
-	Label  string `json:"label"`
-	Path   string `json:"path"`
-	Active bool   `json:"active"`
-}
-
-// LogDetail is the selected row's run log, parsed and filtered, ready for detail.tmpl.
 type LogDetail struct {
-	Path       string          `json:"path"`
-	Streaming  bool            `json:"streaming"`
-	Lines      int             `json:"lines"`
-	PhaseCount int             `json:"phase_count"`
-	Phases     []phaseView     `json:"phases"`
-	Outcome    string          `json:"outcome"`
-	Filters    []logFilterLink `json:"filters"`
-	StreamPath string          `json:"stream_path"`
-	Worked     workedLine      `json:"worked"`
-	Strip      []phaseSegment  `json:"strip"`
-	Readout    readout         `json:"readout"`
-	Final      string          `json:"final"`
-	Changed    changedFiles    `json:"changed"`
-	Jump       jumpLink        `json:"jump"`
+	Path       string      `json:"path"`
+	Streaming  bool        `json:"streaming"`
+	Lines      int         `json:"lines"`
+	PhaseCount int         `json:"phase_count"`
+	Phases     []phaseView `json:"phases"`
+	StreamPath string      `json:"stream_path"`
+	Worked     workedLine  `json:"worked"`
+	Final      string      `json:"final"`
 }
 
 func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL string, params Params) LogDetail {
-	detail := LogDetail{Path: path, Streaming: streaming, Filters: filterLinks(params)}
+	detail := LogDetail{Path: path, Streaming: streaming}
 
 	whole, resumeAt := wholeLines(path)
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, params.Log)
@@ -86,23 +72,12 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 	run, _ := agentlog.Parse(bytes.NewReader(whole))
 	final := takeFinalAnswer(&run)
 	stats := measure(run)
-	selected := selectedPhase(params.Phase, len(run.Phases))
 	mode := NormalizeLogFilter(params.Log)
 
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
-	if run.Result != nil {
-		detail.Outcome = run.Result.Outcome
-	}
-	detail.Worked = stats.worked(streaming || selected >= 0 || mode != "all")
-	detail.Strip = stats.strip(run.Phases, params, selected)
-	detail.Readout = stats.readout(params, selected)
-	detail.Phases = renderPhases(render, run.Phases, mode, selected)
-	if selected >= 0 && selected < len(run.Phases)-1 {
-		detail.StreamPath = ""
-	}
-	detail.Changed = changedFilesOf(run.Phases)
-	detail.Jump = jumpOf(run.Phases, params)
+	detail.Worked = stats.worked()
+	detail.Phases = renderPhases(render, run.Phases, mode)
 	if final != "" {
 		if line, err := render(sayLine(final)); err == nil {
 			detail.Final = line
@@ -138,29 +113,18 @@ func takeFinalAnswer(run *agentlog.Run) string {
 	return final
 }
 
-func selectedPhase(param string, phases int) int {
-	i, err := strconv.Atoi(param)
-	if err != nil || i < 0 || i >= phases {
-		return -1
-	}
-	return i
-}
-
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string, selected int) []phaseView {
+func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) []phaseView {
 	firstFail := firstFailureIndex(phases)
 	openGroups := mode == "tools" || mode == "fails"
 	idx := 0
 	var views []phaseView
-	for i, phase := range phases {
+	for _, phase := range phases {
 		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
 			b.add(event, idx == firstFail)
 			idx++
 		}
 		b.flush()
-		if selected >= 0 && i != selected {
-			continue
-		}
 		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
 	return views
@@ -249,14 +213,6 @@ func firstFailureIndex(phases []agentlog.Phase) int {
 		}
 	}
 	return -1
-}
-
-func filterLinks(params Params) []logFilterLink {
-	links := make([]logFilterLink, len(logFilters))
-	for i, mode := range logFilters {
-		links[i] = logFilterLink{Label: mode, Path: params.withLog(mode).pagePath(), Active: params.Log == mode}
-	}
-	return links
 }
 
 func formatOffset(d time.Duration) string {

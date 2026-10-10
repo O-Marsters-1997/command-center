@@ -100,6 +100,15 @@ func TestSessionRawTabServesTheJSONL(t *testing.T) {
 	}
 }
 
+func TestSessionPageShowsTheWorktreeToShellInto(t *testing.T) {
+	t.Parallel()
+	now := testNow
+	body := renderPath(t, newServer(detailStore(t, writeLog(t, 1), now, now), now), "/s/o/r/76")
+	if !strings.Contains(body, "<code>/repos/repo-cc-76</code>") {
+		t.Errorf("session page does not show the ticket's worktree:\n%s", body)
+	}
+}
+
 func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	t.Parallel()
 	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/9")

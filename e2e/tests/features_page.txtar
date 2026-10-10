@@ -1,5 +1,5 @@
 # GET /repos lists the known repos; GET /repos/{owner}/{name} lists that repo's tracker's features,
-# imported or not; opening one 303s to the board scoped to it. GET /import and POST /import no longer exist.
+# imported or not; the old per-feature path 301s to /f/{feature}. GET /import and POST /import no longer exist.
 
 cc-init-repo
 cc-config two-tasks
@@ -21,12 +21,9 @@ stdout 'project:two-tasks</a>\s*</td>\s*<td>yes</td>'
 stdout 'id="board"'
 stdout 'data-section='
 
-exec cc request GET '/features/project:two-tasks'
-stdout 'href="/\?feature=project%3Atwo-tasks"'
-
-exec cc request GET '/?feature=project%3Atwo-tasks'
-stdout '>#CC-1</button>'
-stdout '>#CC-2</button>'
+exec cc request GET /f/project:two-tasks
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
 
 ! exec cc request GET /import
 stderr '404'

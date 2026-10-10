@@ -18,7 +18,7 @@ exec sleep 0.5
 exec cc tick --count 1
 exec cc request GET /events
 stdout -count=1 'run_launched'
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=4 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1&#39;s PR'
 
 exec sleep 0.5
@@ -50,7 +50,7 @@ exec sleep 1.5
 # tick's own observation, no further human step.
 exec cc tick --count 1
 exec cc request GET /events
-exec cc request GET /
+exec cc request GET /tickets
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2-x
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-3-x
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
@@ -61,5 +61,5 @@ grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge aft
 # of both tp.log's cuts and events' count.
 grep -count=6 'commits.sh' $WORK/agent.log
 
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout '<td>blocked</td>'

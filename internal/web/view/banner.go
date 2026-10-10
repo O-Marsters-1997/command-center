@@ -26,12 +26,11 @@ type CheckStep struct {
 
 // Banner is the tracking state of one repo as the fragment GET /repos/banner renders it.
 type Banner struct {
-	Repo      string
-	State     string
-	Glyph     string
-	Text      string
-	BoardPath string
-	Steps     []CheckStep
+	Repo  string
+	State string
+	Glyph string
+	Text  string
+	Steps []CheckStep
 }
 
 // Polling reports whether the banner should poll for a state change.
@@ -71,9 +70,6 @@ func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 	}
 	b.Glyph, b.Text = bannerWords(b.State, repo)
 	b.Steps = checkSteps(b.State, repo.RefusalKind)
-	if b.State == BannerReady {
-		b.BoardPath = Params{Repo: repo.Name}.pagePath()
-	}
 	return b, nil
 }
 

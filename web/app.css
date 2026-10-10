@@ -493,115 +493,6 @@
     display: none;
   }
 
-  .phase-strip {
-    gap: 3px;
-    margin: 0 0 0.35rem;
-  }
-
-  .phase-seg {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    min-width: 4.75rem;
-    padding: 0.3rem 0 0.35rem;
-    color: var(--color-muted);
-    text-decoration: none;
-  }
-
-  .phase-bar {
-    height: 5px;
-    border-radius: 3px;
-    background: color-mix(in oklch, var(--color-s-live) 22%, var(--color-track));
-    transition: background 180ms;
-  }
-
-  .phase-strip:has([aria-current]) .phase-bar {
-    background: var(--color-track);
-  }
-
-  .phase-seg:hover .phase-bar {
-    background: color-mix(in oklch, var(--color-s-live) 35%, var(--color-track));
-  }
-
-  .phase-strip .phase-seg[aria-current] .phase-bar {
-    background: var(--color-s-live);
-  }
-
-  .phase-name {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding-right: 0.4rem;
-    font-size: 12.5px;
-    line-height: 1.2;
-    white-space: nowrap;
-  }
-
-  .phase-name b {
-    font-weight: 500;
-    color: var(--color-soft);
-  }
-
-  .phase-seg:hover .phase-name b,
-  .phase-seg[aria-current] .phase-name b {
-    color: var(--color-fg);
-  }
-
-  .phase-seg[aria-current] .phase-name b {
-    font-weight: 600;
-  }
-
-  .phase-dot {
-    flex: none;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--color-s-stop);
-  }
-
-  .readout {
-    gap: 0.25rem 1.4rem;
-    margin-bottom: 1.4rem;
-    padding: 0.7rem 0 0.9rem;
-    border-bottom: 1px solid var(--color-border);
-    font-size: 13.5px;
-  }
-
-  .metric {
-    white-space: nowrap;
-  }
-
-  .metric-label {
-    color: var(--color-muted);
-  }
-
-  .metric-value {
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .metric-value small {
-    font-size: 12.5px;
-    font-weight: 400;
-    color: var(--color-muted);
-  }
-
-  .metric[data-glyph] .metric-value {
-    color: var(--glyph);
-  }
-
-  .readout-insight {
-    flex-basis: 100%;
-    margin: 0.3rem 0 0;
-    font-size: 14px;
-    color: var(--color-soft);
-  }
-
-  .readout-clear {
-    margin-left: 1rem;
-    color: var(--color-muted);
-  }
-
   .phase {
     margin: 0 0 1.75rem;
   }
@@ -763,32 +654,7 @@
     margin-top: 0.5rem;
   }
 
-  .changed-files {
-    margin: 0.4rem 0 1rem;
-    padding: 0.6rem 0.85rem;
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    background: var(--color-surface);
-  }
-
-  .changed-files-label {
-    font-weight: 500;
-  }
-
-  .jump-first-fail {
-    color: var(--color-s-stop);
-  }
-
   @media (max-width: 640px) {
-    .phase-strip {
-      overflow-x: auto;
-      padding-bottom: 0.2rem;
-    }
-
-    .phase-strip .phase-seg {
-      flex: none !important;
-    }
-
     .call-head {
       flex-wrap: wrap;
     }
@@ -800,8 +666,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .worked > summary::before,
-    .fold > summary::before,
-    .phase-bar {
+    .fold > summary::before {
       transition: none;
     }
   }

@@ -62,7 +62,7 @@
     {{- if .Error}}
     <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Age}}: {{.Error.Message}}</p>
     {{- else}}
-    <p class="rail-health">{{.Live}} live · observed {{template "age" .Observe}}</p>
+    <p class="rail-health">{{.Live}} live · {{if .Stale}}last good observe:{{else}}observed{{end}} {{template "age" .Observe}}</p>
     {{- end}}
     {{- end}}
   </footer>

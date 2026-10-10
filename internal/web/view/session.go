@@ -73,7 +73,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		return Session{}, ErrSessionNotFound
 	}
 
-	board, err := r.Board(ctx, now, Params{Sel: ticketURL, View: "board", Log: "all"})
+	board, err := r.Board(ctx, now, Params{Sel: ticketURL, Log: "all"})
 	if err != nil {
 		return Session{}, err
 	}
@@ -84,7 +84,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 
 	self := SessionPath(ticketURL)
 	chrome := board.Chrome
-	chrome.Section = "board"
+	chrome.Section = "tickets"
 	chrome.Home = false
 	prURL := ""
 	if row.PRNumber > 0 {

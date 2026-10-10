@@ -61,9 +61,6 @@ func TestBuildLogDetailFoldsTheClosingResultIntoTheWorkedLine(t *testing.T) {
 	t.Parallel()
 
 	ended := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", Params{Log: "all"})
-	if ended.Outcome != "success" {
-		t.Errorf("Outcome = %q, want success", ended.Outcome)
-	}
 	want := workedLine{Label: "Worked for 17m 11s", Stats: "· 129 turns · $8.29"}
 	if ended.Worked != want {
 		t.Errorf("Worked = %+v, want %+v (closed: the run has ended and nothing is filtered)", ended.Worked, want)
@@ -71,11 +68,8 @@ func TestBuildLogDetailFoldsTheClosingResultIntoTheWorkedLine(t *testing.T) {
 
 	firstLine := strings.SplitAfter(testRunLog, "\n")[0]
 	alive := buildLogDetail(testLine, writeRunLog(t, firstLine), true, "sandbox://x", Params{Log: "all"})
-	if alive.Outcome != "" {
-		t.Errorf("Outcome = %q, want empty for a run with no result line yet", alive.Outcome)
-	}
-	if !alive.Worked.Open {
-		t.Error("Worked is closed on a live run, which would hide the tail")
+	if alive.Worked.Stats != "" {
+		t.Errorf("Worked.Stats = %q, want none for a run with no result line yet", alive.Worked.Stats)
 	}
 }
 
@@ -139,16 +133,6 @@ func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
 	}
 }
 
-func TestBuildLogDetailJumpsToTheFirstFailingPhase(t *testing.T) {
-	t.Parallel()
-
-	detail := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", Params{Sel: "sandbox://x"})
-	want := jumpLink{Label: "1 check failed along the way", Path: "/?phase=0&sel=sandbox%3A%2F%2Fx#first-fail"}
-	if detail.Jump != want {
-		t.Errorf("Jump = %+v, want %+v", detail.Jump, want)
-	}
-}
-
 var sessionLog = mustReadTestdata("session.jsonl")
 
 func TestBuildLogDetailFoldsEachRunOfCallsIntoOneSummarisedGroup(t *testing.T) {
@@ -193,102 +177,6 @@ func TestBuildLogDetailLiftsTheFinalAnswerOutOfTheFold(t *testing.T) {
 	}
 }
 
-func TestBuildLogDetailShowsOnlyTheSelectedPhase(t *testing.T) {
-	t.Parallel()
-
-	path := writeRunLog(t, sessionLog)
-	detail := buildLogDetail(testLine, path, false, "x", Params{Sel: "x", Phase: "1"})
-
-	if len(detail.Phases) != 1 || detail.Phases[0].Skill != "tdd" {
-		t.Fatalf("Phases = %+v, want only tdd", detail.Phases)
-	}
-	if !detail.Worked.Open {
-		t.Error("Worked is closed with a phase selected, hiding the phase asked for")
-	}
-	if !detail.Strip[1].Active || detail.Strip[1].Path != "/?sel=x" {
-		t.Errorf("selected segment = %+v, want active and toggling the phase off", detail.Strip[1])
-	}
-	if detail.Strip[0].Path != "/?phase=0&sel=x" {
-		t.Errorf("segment 0 Path = %q, want it to select phase 0", detail.Strip[0].Path)
-	}
-	if detail.Readout.ClearPath != "/?sel=x" {
-		t.Errorf("ClearPath = %q, want the whole run", detail.Readout.ClearPath)
-	}
-
-	if detail.StreamPath == "" {
-		t.Error("StreamPath is empty on the last phase, where the live tail lands")
-	}
-	if first := buildLogDetail(testLine, path, true, "x", Params{Phase: "0"}); first.StreamPath != "" {
-		t.Errorf("StreamPath = %q on an earlier phase, whose view the tail would append to", first.StreamPath)
-	}
-
-	for _, param := range []string{"", "9", "-1", "tdd"} {
-		if got := buildLogDetail(testLine, path, false, "x", Params{Phase: param}); len(got.Phases) != 2 {
-			t.Errorf("phase=%q renders %d phases, want the whole run", param, len(got.Phases))
-		}
-	}
-}
-
-func TestBuildLogDetailWeighsTheStripByEachPhasesDuration(t *testing.T) {
-	t.Parallel()
-
-	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", Params{})
-
-	want := []phaseSegment{
-		{Label: "start", Duration: "10s", Weight: 10, Path: "/?phase=0"},
-		{Label: "tdd", Duration: "30s", Weight: 30, Failed: true, Path: "/?phase=1"},
-	}
-	if !slices.Equal(detail.Strip, want) {
-		t.Errorf("Strip = %+v, want %+v", detail.Strip, want)
-	}
-}
-
-func TestBuildLogDetailReadsOutTheWholeRun(t *testing.T) {
-	t.Parallel()
-
-	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", Params{})
-
-	want := []metric{
-		{Label: "Time", Value: "40s"},
-		{Label: "Turns", Value: "4"},
-		{Label: "Cost", Value: "$2.00"},
-		{Label: "Tool calls", Value: "4"},
-		{Label: "Failed", Value: "1", Note: "recovered", Failed: true},
-	}
-	if !slices.Equal(detail.Readout.Metrics, want) {
-		t.Errorf("Metrics = %+v, want %+v", detail.Readout.Metrics, want)
-	}
-	if detail.Readout.Lead != "tdd" {
-		t.Errorf("Lead = %q, want the longest phase", detail.Readout.Lead)
-	}
-	wantInsight := "took 75% of the run and $1.60 of the cost. Select a phase to see where the time went."
-	if detail.Readout.Insight != wantInsight {
-		t.Errorf("Insight = %q, want %q (the reported cost, apportioned by priced tokens)",
-			detail.Readout.Insight, wantInsight)
-	}
-}
-
-func TestBuildLogDetailReadsOutTheSelectedPhase(t *testing.T) {
-	t.Parallel()
-
-	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", Params{Phase: "1"})
-
-	want := []metric{
-		{Label: "Time", Value: "30s", Note: "75% of run"},
-		{Label: "Turns", Value: "3"},
-		{Label: "Cost", Value: "$1.60", Note: "80%"},
-		{Label: "Tool calls", Value: "1", Note: "1 running"},
-		{Label: "Failed", Value: "1", Failed: true},
-	}
-	if !slices.Equal(detail.Readout.Metrics, want) {
-		t.Errorf("Metrics = %+v, want %+v", detail.Readout.Metrics, want)
-	}
-	wantInsight := "10s per turn, turns at the run's usual pace; one check failed before it settled."
-	if detail.Readout.Lead != "tdd." || detail.Readout.Insight != wantInsight {
-		t.Errorf("Readout = %q %q, want %q %q", detail.Readout.Lead, detail.Readout.Insight, "tdd.", wantInsight)
-	}
-}
-
 func TestBuildLogDetailCarriesStreaming(t *testing.T) {
 	t.Parallel()
 
@@ -298,29 +186,6 @@ func TestBuildLogDetailCarriesStreaming(t *testing.T) {
 	}
 	if got := buildLogDetail(testLine, path, false, "x", Params{Log: "all"}).Streaming; got {
 		t.Error("Streaming = true, want false for an ended run")
-	}
-}
-
-func TestFilterLinksMarkTheActiveModeAndCarryTheSelection(t *testing.T) {
-	t.Parallel()
-
-	links := filterLinks(Params{Sel: "sandbox://x", Log: "tools"})
-	if len(links) != len(logFilters) {
-		t.Fatalf("links = %d, want %d", len(links), len(logFilters))
-	}
-	for _, l := range links {
-		if l.Active != (l.Label == "tools") {
-			t.Errorf("%s.Active = %v", l.Label, l.Active)
-		}
-		if !strings.Contains(l.Path, "sel=sandbox") {
-			t.Errorf("%s.Path = %q, want the selection carried forward", l.Label, l.Path)
-		}
-		if l.Label == "all" && strings.Contains(l.Path, "log=all") {
-			t.Errorf("all.Path = %q, should not name the default filter", l.Path)
-		}
-		if strings.HasPrefix(l.Path, "/board") {
-			t.Errorf("%s.Path = %q, points at the fragment-only /board route", l.Label, l.Path)
-		}
 	}
 }
 

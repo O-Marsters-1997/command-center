@@ -57,24 +57,31 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "cc_session", Value: token})
-	rec := httptest.NewRecorder()
-	inst.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+	fetch := func(path string) string {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(&http.Cookie{Name: "cc_session", Value: token})
+		rec := httptest.NewRecorder()
+		inst.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status = %d, want 200", path, rec.Code)
+		}
+		return rec.Body.String()
 	}
 
-	body := rec.Body.String()
+	body := fetch("/tickets")
 	// The two tickets seeded straight into the store before New both derive from the stub's
 	// snapshot: CC-1 has no blockers, CC-2's blocker now has an open PR.
-	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "ready", "0s ago"} {
+	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "ready"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, "blocked") {
+	if strings.Contains(body, ">blocked</span>") {
 		t.Errorf("a row still renders blocked though its blocker has an open PR:\n%s", body)
+	}
+	if rail := fetch("/rail"); !strings.Contains(rail, "0s ago") {
+		t.Errorf("rail does not carry the tick's age:\n%s", rail)
 	}
 }
 

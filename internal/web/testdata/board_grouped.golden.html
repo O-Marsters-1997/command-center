@@ -13,7 +13,7 @@
       <span class="glyph glyph-failed">failed</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FROOT" hx-push-url="/?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">#ROOT</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#ROOT</a>
     </td>
     <td><div class="text-muted text-[0.85em]">no commits after this run&#39;s baseline; log at /state/runs/1.jsonl</div>
       <div>untitled</div><div class="text-muted text-[0.85em]">unlocks #CC-2, #CC-3, #CC-4, #CC-5</div>
@@ -26,13 +26,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://ROOT">
         <button type="submit" name="verb" value="re-run">re-run</button>
       </form></td>
   </tr>
-  
 
   </tbody>
   
@@ -45,7 +44,7 @@
       <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-2" hx-push-url="/?sel=sandbox%3A%2F%2FCC-2" hx-target="#board" hx-swap="outerHTML">#CC-2</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-2</a>
     </td>
     <td><div class="text-muted text-[0.85em]">waiting on sandbox://ROOT&#39;s PR</div>
       <div>untitled</div>
@@ -58,13 +57,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://CC-2">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
-  
 
   <tr class="group">
     <td></td>
@@ -72,7 +70,7 @@
       <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-3" hx-push-url="/?sel=sandbox%3A%2F%2FCC-3" hx-target="#board" hx-swap="outerHTML">#CC-3</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-3</a>
     </td>
     <td><div class="text-muted text-[0.85em]">waiting on sandbox://ROOT&#39;s PR</div>
       <div>untitled</div>
@@ -85,13 +83,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://CC-3">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
-  
 
   <tr class="group">
     <td></td>
@@ -99,7 +96,7 @@
       <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-4" hx-push-url="/?sel=sandbox%3A%2F%2FCC-4" hx-target="#board" hx-swap="outerHTML">#CC-4</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-4</a>
     </td>
     <td><div class="text-muted text-[0.85em]">waiting on sandbox://ROOT&#39;s PR</div>
       <div>untitled</div>
@@ -112,13 +109,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://CC-4">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
-  
 
   <tr class="group">
     <td></td>
@@ -126,7 +122,7 @@
       <span class="glyph glyph-pending">queued</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FCC-5" hx-push-url="/?sel=sandbox%3A%2F%2FCC-5" hx-target="#board" hx-swap="outerHTML">#CC-5</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CC-5</a>
     </td>
     <td><div class="text-muted text-[0.85em]">waiting on sandbox://ROOT&#39;s PR</div>
       <div>untitled</div>
@@ -139,13 +135,12 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       <form method="post" action="/verb" hx-post="/verb" hx-target="#board" hx-swap="outerHTML">
         <input type="hidden" name="ticket" value="sandbox://CC-5">
         <button type="submit" name="verb" value="cancel">cancel launch (4 tickets)</button>
       </form></td>
   </tr>
-  
 
   </tbody>
   
@@ -155,12 +150,12 @@
   <tr class="group">
     <td>
       <input type="checkbox" form="launch" name="ticket" value="sandbox://LONE"
-        hx-get="/board?ticket=sandbox%3A%2F%2FLONE" hx-push-url="/?ticket=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
+        hx-get="/board?ticket=sandbox%3A%2F%2FLONE" hx-push-url="/tickets?ticket=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML"></td>
     <td>
       <span class="glyph glyph-ready">ready</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?sel=sandbox%3A%2F%2FLONE" hx-push-url="/?sel=sandbox%3A%2F%2FLONE" hx-target="#board" hx-swap="outerHTML">#LONE</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#LONE</a>
     </td>
     <td><div class="text-muted text-[0.85em]">no blockers</div>
       <div>untitled</div>
@@ -173,77 +168,9 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100"></td>
   </tr>
-  
 
   </tbody>
   
 </table>
-<div id="masthead" hx-swap-oob="true">
-  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="glyph glyph-ready">0 live</span>
-    
-    <span class="glyph glyph-done">observed <time datetime="2026-08-20T12:00:00Z">0s ago</time></span>
-    
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      five-hour · 0% · calibrating
-    </span>
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      weekly · 0% · calibrating
-    </span>
-    
-  </div>
-  
-  
-</div>
-<section id="band" hx-swap-oob="true" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
-<article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
-    
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/6 yours</p>
-    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
-      
-      <span class="segbar-segment" data-glyph="pending" style="flex-grow: 4"></span>
-      
-      <span class="segbar-segment" data-glyph="failed" style="flex-grow: 1"></span>
-      
-      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span>
-      
-    </div>
-    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-pending"></span>queued · 4</li>
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-failed"></span>failed · 1</li>
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 1</li>
-      
-    </ul>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
-    
-    <p class="m-0 text-muted">no worktree has been cut</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
-    
-    <p class="m-0 text-muted">no branch has reported a check yet</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
-    
-    <p class="m-0 text-muted">no runs have completed this session yet</p>
-    
-  </article></section>

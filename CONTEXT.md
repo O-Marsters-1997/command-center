@@ -20,17 +20,16 @@ _Avoid_: Ticket (a ref names the work, it is not the work), number, key, ID
 
 **Feature**:
 The tracker's own grouping of tickets. It is the unit the board scopes to, the unit a launch is
-offered against, and the only thing with a route of its own. A ticket belongs to at most one
-feature; a ticket the tracker puts in two is a tracker problem the app refuses rather than
+offered against, and the only grouping with routes of its own, `/f/{feature}` and its graph. A
+ticket belongs to at most one feature; a ticket the tracker puts in two is a tracker problem the app refuses rather than
 resolves. A feature is closed under `blocked_by`: every blocker of every ticket it holds is
 itself in the feature, unless that blocker has already merged. An import that would break
 closure is refused whole, the same way a two-feature ticket is.
-_Avoid_: Group (that is how the board lays out a blocker and its waiters), epic, project,
-milestone, slice
+_Avoid_: Group, epic, project, milestone, slice
 
 **Slice**:
 The set of tickets a single authorisation covers.
-_Avoid_: Batch, group (group means something else here), selection, feature
+_Avoid_: Batch, group, selection, feature
 
 **Exhausted**:
 A property of a slice: every ticket it covers has produced a pull request, so the loop has nothing
@@ -41,10 +40,6 @@ _Avoid_: Done, complete, finished (each reads as merged), drained
 **Run**:
 One agent process spawned against one ticket.
 _Avoid_: Job, execution, attempt
-
-**Group**:
-A blocker ticket and the tickets waiting on it, as the board lays them out.
-_Avoid_: Cluster, stack (stack means the git relationship, not the layout)
 
 **Peer**:
 Another ticket with an open branch based on `main`, which this one is tested against for conflict.
@@ -104,15 +99,16 @@ _Avoid_: Apply, execute
 ### The surface
 
 **Board**:
-The grouped table of tickets. Also `#board`, the element htmx swaps.
+The table of tickets sectioned by attention: Needs you, In progress, Ready, Blocked, Done. It
+renders on `/tickets`, `/f/{feature}` and a repo page, and is also `#board`, the element htmx swaps.
 _Avoid_: Table, list, grid, dashboard
 
 **Scope**:
-The narrowing applied to the board, by feature or by repo. It decides which tickets render and
-what the band counts, never what the loop reconciles: every ticket is still observed, derived and
-acted on whatever the scope. A group is admitted whole when any of its tickets is in scope, so a
-blocker outside the scope stays visible.
-_Avoid_: Filter (that is the run log's four log modes), view, selection, narrowing
+The narrowing applied to the board, by feature or by repo, reached through `/f/{feature}` and
+`/repos/{owner}/{name}`. It decides which tickets render, never what the loop reconciles: every
+ticket is still observed, derived and acted on whatever the scope. A blocker chain is admitted
+whole when any of its tickets is in scope, so a blocker outside the scope stays visible.
+_Avoid_: Filter (that is the attention tabs on `/tickets`), view, selection, narrowing
 
 **Repo**:
 One tracked repository, named `owner/name` from its remote and cloned by the app. A ticket belongs to exactly
@@ -129,33 +125,21 @@ repo. Its opposite is untrack.
 _Avoid_: Add, register, connect, configure
 
 **Detail**:
-The panel that expands under a selected row, carrying the run log and the flag prose.
+The page for one ticket's latest run at `/s/{owner}/{name}/{n}`: its header, the prompt the run was
+given, the transcript, the stack panel and the verbs. It replaces the panel that used to expand
+under a board row.
 _Avoid_: Drawer, expansion, panel
 
 **Launch modal**:
-The dialog that opens from a feature row or a board selection, listing the tickets one launch
+The dialog that opens at `/f/{feature}/launch` or `/launch`, from a feature or a board selection, listing the tickets one launch
 would cover and drawing the DAG it would produce. Its toggles change nothing: only confirming
 writes. Unticking a ticket others depend on is refused, naming them, so the set it confirms is
 always closed under blockers.
 _Avoid_: Dialog, popup, drawer, preview (that is the label a ticket carries inside it)
 
-**Band**:
-The row of analytics cards above the board, counted off the current tick over the tickets the
-board's scope admits. Narrowing the scope narrows the band with it.
-_Avoid_: Stats, summary, header cards
-
-**Pill**:
-The inline badge carrying a ticket's state, its unattended glyph and, while a run is alive, a pulse.
-_Avoid_: Badge, chip, tag, label
-
-**Tone**:
-The health band a state collapses to: done, live, wait, stop or idle. Many states share one tone.
-The surface colours by tone, never by state.
-_Avoid_: Colour, variant, severity, status
-
 **Grammar**:
 A reusable markup-and-style pattern with exactly one definition, rendered identically by Go and by
-Solid. The pill, the board table, the segbar and the run-log line are each a grammar.
+Solid. The glyph, the board table, the segbar and the run-log line are each a grammar.
 _Avoid_: Component (that is any Solid function), widget, partial (that is how a grammar is stored)
 
 **Island**:
@@ -177,22 +161,28 @@ _Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight), usage, pri
 One `rate_limit_event`'s account-wide utilization of a window, stored with its time.
 _Avoid_: Quota, limit (the limit is what utilization is a fraction of)
 
+**Glyph**:
+The status mark drawn beside a ticket, one of eight words derived from its state by `plan.Glyph`:
+blocked, ready, running, pending, checking, attention, done, failed. The surface colours by glyph,
+never by state, and the rail's group is a function of it (ADR 18).
+_Avoid_: Pill, tone, badge, icon, status
+
 **Sidebar**:
-The nav naming the app's four destinations, board, graph, features and insights. Renders once per
-page load, outside every `hx-swap` target, so tabbing it never loses focus to a poll.
-_Avoid_: Nav (ambiguous with the board/graph pair it replaced), menu, drawer
+The left column of every page: the app's destinations, All tickets, Insights and Repos, over the
+rail. Renders once per page load, outside every `hx-swap` target, so navigating never loses the
+rail's scroll or focus.
+_Avoid_: Nav, menu, drawer
 
 **Rail**:
-The sidebar's collapsed state: icons only, no labels. A CSS state kept in `localStorage` and
-applied before first paint, the same way the theme is; forced below 900px regardless of what
-`localStorage` says.
-_Avoid_: Collapsed nav, mini sidebar, icon bar
+The sidebar's session list: Needs you, In flight by feature, and Settled. It polls `GET /rail`
+inside a scroll container that never swaps, keeps its expanded features in a cookie and takes the
+selected session from the current URL (ADR 19). Below 760px it is the home screen.
+_Avoid_: Collapsed nav, mini sidebar, icon bar, session list
 
 **Breadcrumb**:
-The static row reading workspace, then the repo switcher, then the scoped feature, each segment
+The static row reading workspace, then repos, then the scoped repo and feature, each of those two
 present only when that axis applies. Sits beside the sidebar outside every `hx-swap` target.
-_Avoid_: Masthead (that is the swapping half: the live pill, the observe pill and the last-error
-banner), header, nav
+_Avoid_: Header, nav
 
 ## Relationships
 
@@ -201,25 +191,24 @@ banner), header, nav
 - A **slice** is **exhausted** once every **ticket** it covers has a pull request
 - A **ticket** has exactly one **state** per **tick**, and a **state** offers zero or more **verbs**
 - A **verb** becomes an **intent**, which a later **tick** consumes
-- A **state** has exactly one **tone**; a **tone** covers one or more **states**
+- A **state** has exactly one **glyph**; a **glyph** covers one or more **states**
 - A **grammar** has one definition and many use sites, in templates and **islands** alike
-- A **group** has one blocker **ticket** and zero or more waiting **tickets**
 - A **ticket** has zero or more **peers**; peership crosses **slice** and **feature** alike
 - A **ticket** has exactly one **ref**
 - A **ticket** belongs to exactly one **repo**; a **feature** spans one or more **repos**
 - A **feature** contains every unmerged blocker of every **ticket** it contains
-- A **scope** admits a **group** whole when any of its **tickets** matches
+- A **scope** admits a blocker chain whole when any of its **tickets** matches
 - A **launch modal** confirms exactly one **slice**, drawn from one **feature** or one board selection
 - A **ticket** has zero or more **runs**; only the latest one renders
 - A **run** produces a log of **run phases**, and one **spend** figure
-- The **board** contains **groups**; a **detail** belongs to exactly one **ticket**
+- The **board** contains **tickets** sectioned by attention; a **detail** belongs to exactly one **ticket**
 - An **island** is never a descendant of the **board**
 
 ## Example dialogue
 
 > **Dev:** "Four rows went red at once. Is that four problems?"
 >
-> **Operator:** "Look at the **group**. One **ticket** is `failed` and three are `queued` behind it.
+> **Operator:** "Look at the **board**. One **ticket** is `failed` and three are `queued` behind it.
 > That's one problem — the **reason** on each queued row names the blocker."
 >
 > **Dev:** "So do I press a **verb** on all four?"
@@ -251,8 +240,9 @@ banner), header, nav
   are **spend**, which reads as tokens while a run is alive and as dollars once it ends.
 - **"group"** named three things at once: the board's layout of a blocker and the tickets waiting
   on it, the tracker's own grouping that the import page lists, and an internal key tying one
-  authorisation's intents together. Resolved: **group** is the board layout, always. The tracker's
-  grouping is a **feature**. The third is not a domain term and has no entry here.
+  authorisation's intents together. Resolved: the board no longer lays out groups (ADR 20), so
+  **group** has no entry here. The tracker's grouping is a **feature**. The third is not a domain
+  term.
 - **"status"** was used for both a ticket's derived label and the Linear project status in the
   prototype. Resolved: **state** is the derived label; the prototype's project status has no
   referent in this app, which has no project concept.
