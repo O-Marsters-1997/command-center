@@ -430,6 +430,7 @@ func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) 
 
 // Event is one append-only audit row.
 type Event struct {
+	ID        int64
 	At        time.Time
 	TicketURL string
 	Kind      string
@@ -471,6 +472,24 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 		e := Event{At: row.At, Kind: row.Kind}
 		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
 		events = append(events, e)
+	}
+	return events, nil
+}
+
+func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID int64) ([]Event, error) {
+	rows, err := s.q.TicketEventsAfter(ctx, ccdb.TicketEventsAfterParams{
+		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
+		ID:       afterID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("select events for %s: %w", ticketURL, err)
+	}
+
+	var events []Event
+	for _, row := range rows {
+		events = append(events, Event{
+			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail.String,
+		})
 	}
 	return events, nil
 }

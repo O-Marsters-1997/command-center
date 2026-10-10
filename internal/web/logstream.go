@@ -2,6 +2,7 @@ package web
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil {
 		offset = resumed
 	}
+	afterRecord, _ := strconv.ParseInt(r.URL.Query().Get("records"), 10, 64)
 	mode := view.NormalizeLogFilter(r.URL.Query().Get("log"))
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
@@ -39,6 +41,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	var tail agentlog.Tail
 	for {
 		sent := sendLines(w, &tail, path, &offset, mode)
+		sent += s.sendRecords(ctx, w, ticketURL, &afterRecord, offset, mode)
 		_ = flusher.Flush()
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
@@ -56,6 +59,32 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 	}
+}
+
+func (s *Server) sendRecords(
+	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode string,
+) int {
+	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
+	if err != nil {
+		return 0
+	}
+	sent := 0
+	for _, record := range records {
+		*afterID = record.ID
+		event := view.RecordOf(record)
+		if !view.RecordShown(record) || !view.EventShown(mode, event) {
+			continue
+		}
+		rendered, err := renderLogLine(view.LineOf(event))
+		if err != nil {
+			continue
+		}
+		if err := writeEvent(w, offset, rendered); err != nil {
+			return sent
+		}
+		sent++
+	}
+	return sent
 }
 
 func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) int {

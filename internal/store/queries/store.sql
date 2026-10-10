@@ -48,6 +48,11 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, $2, $3, $4);
 -- name: Events :many
 SELECT at, ticket_id, kind, detail FROM events ORDER BY id;
 
+-- name: TicketEventsAfter :many
+SELECT id, at, ticket_id, kind, detail FROM events
+WHERE ticket_id = $1 AND id > $2
+ORDER BY id;
+
 -- name: HasEvent :one
 SELECT EXISTS (
     SELECT 1 FROM events WHERE ticket_id = $1 AND kind = $2
