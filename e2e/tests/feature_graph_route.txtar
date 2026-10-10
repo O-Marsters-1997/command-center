@@ -11,7 +11,7 @@ exec cc request GET /f/project:two-tasks/graph
 
 stdout 'href="/f/project:two-tasks">Board<'
 stdout 'href="/f/project:two-tasks/graph" aria-current="page">Graph<'
-stdout '<cc-graph data-src="/graph.json\?feature=project%3Atwo-tasks"'
+stdout '<cc-graph data-src="/graph.json\?feature=project%3[Aa]two-tasks"'
 stdout '/assets/dist/graph.js'
 
 ! exec cc request GET /f/bogus/graph
