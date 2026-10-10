@@ -78,7 +78,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mod
 		*offset += int64(len(line))
 
 		for _, event := range tail.Read([]byte(strings.TrimRight(line, "\r\n"))) {
-			if !view.KindShown(mode, event.Kind) {
+			if !view.EventShown(mode, event) {
 				continue
 			}
 			rendered, err := renderLogLine(view.LineOf(event))
