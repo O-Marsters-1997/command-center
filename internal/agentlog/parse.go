@@ -320,6 +320,7 @@ func (t *Tail) feed(l logLine) []Event {
 				events[i] = l.cmdDone(call, e.CallID)
 				delete(t.cmdCalls, e.CallID)
 			}
+		default:
 		}
 	}
 	return t.keep(events)

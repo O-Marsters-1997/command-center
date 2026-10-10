@@ -88,7 +88,9 @@ func TestParseCommandResults(t *testing.T) {
 		{
 			name: "interrupted is not a pass",
 			log:  result(stamp, ok, `{"stdout":"","stderr":"","interrupted":true}`),
-			want: agentlog.Event{Done: true, Interrupted: true, Output: "from content", OutputLines: 1, Elapsed: 3500 * time.Millisecond},
+			want: agentlog.Event{
+				Done: true, Interrupted: true, Output: "from content", OutputLines: 1, Elapsed: 3500 * time.Millisecond,
+			},
 		},
 		{
 			name: "output that merely starts like an exit code is not a failure",
@@ -108,7 +110,9 @@ func TestParseCommandResults(t *testing.T) {
 		{
 			name: "no tool_use_result on a failure reads the exit code from the content",
 			log:  result(stamp, bad, ""),
-			want: agentlog.Event{Done: true, ExitCode: 2, Output: "from content", OutputLines: 1, Elapsed: 3500 * time.Millisecond},
+			want: agentlog.Event{
+				Done: true, ExitCode: 2, Output: "from content", OutputLines: 1, Elapsed: 3500 * time.Millisecond,
+			},
 		},
 		{
 			name: "a result with no timestamp has no duration",
