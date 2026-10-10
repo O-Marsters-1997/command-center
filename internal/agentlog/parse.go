@@ -30,6 +30,7 @@ const (
 	Pass
 	Say
 	Cmd
+	Record
 )
 
 func (k Kind) String() string {
@@ -48,6 +49,8 @@ func (k Kind) String() string {
 		return "say"
 	case Cmd:
 		return "cmd"
+	case Record:
+		return "record"
 	default:
 		return "unknown"
 	}
@@ -95,6 +98,7 @@ type Run struct {
 	Phases []Phase
 	Result *Result
 	Lines  int
+	Start  time.Time
 	End    time.Duration
 }
 
@@ -148,6 +152,7 @@ func Parse(r io.Reader) (Run, error) {
 		ledger.note(parsed, len(run.Phases)-1)
 	})
 	ledger.settle(run.Phases)
+	run.Start = base
 	return run, err
 }
 

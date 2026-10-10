@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 var testRunLog = mustReadTestdata("run.jsonl")
@@ -36,7 +37,7 @@ func TestBuildLogDetailCutsPhasesAtEachSkill(t *testing.T) {
 	t.Parallel()
 
 	path := writeRunLog(t, testRunLog)
-	detail := buildLogDetail(testLine, path, false, "sandbox://x", Params{Log: "all"})
+	detail := buildLogDetail(testLine, path, false, "sandbox://x", nil, Params{Log: "all"})
 
 	if detail.Lines != 6 {
 		t.Fatalf("Lines = %d, want 6", detail.Lines)
@@ -58,17 +59,71 @@ func TestBuildLogDetailCutsPhasesAtEachSkill(t *testing.T) {
 	}
 }
 
+func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) {
+	t.Parallel()
+
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	records := []store.Event{
+		{ID: 4, At: start.Add(-time.Minute), Kind: "launched", Detail: "before the log"},
+		{ID: 7, At: start.Add(time.Hour), Kind: "pr_merged", Detail: "PR #12 merged"},
+	}
+	path := writeRunLog(t, testRunLog)
+
+	detail := buildLogDetail(testLine, path, false, "sandbox://x", records, Params{Log: "all"})
+
+	first, last := detail.Phases[0], detail.Phases[len(detail.Phases)-1]
+	if got := first.Items[0]; got.Kind != "record" || got.Line != "line-record launched before the log" {
+		t.Errorf("first item = %+v, want the early record ahead of the agent's lines", got)
+	}
+	if got := last.Items[len(last.Items)-1]; got.Kind != "record" || got.Line != "line-record merged PR #12 merged" {
+		t.Errorf("last item = %+v, want the merge line after the agent's lines", got)
+	}
+	if !strings.HasSuffix(detail.StreamPath, "&records=7") {
+		t.Errorf("StreamPath = %q, want it to resume after record 7", detail.StreamPath)
+	}
+
+	for _, mode := range []string{"skills", "tools", "fails"} {
+		hidden := buildLogDetail(testLine, path, false, "sandbox://x", records, Params{Log: mode})
+		for _, phase := range hidden.Phases {
+			for _, item := range phase.Items {
+				if item.Kind == "record" {
+					t.Errorf("mode %q rendered a store line; they show under all only", mode)
+				}
+			}
+		}
+	}
+}
+
+func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
+	t.Parallel()
+
+	records := []store.Event{{ID: 3, At: time.Now(), Kind: "pr_merged", Detail: "PR #12 merged"}}
+	gone := filepath.Join(t.TempDir(), "pruned.jsonl")
+
+	detail := buildLogDetail(testLine, gone, false, "sandbox://x", records, Params{Log: "all"})
+
+	if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
+		t.Fatalf("Phases = %+v, want one phase holding the one store line", detail.Phases)
+	}
+	if got, want := detail.Phases[0].Items[0].Line, "line-record merged PR #12 merged"; got != want {
+		t.Errorf("line = %q, want %q", got, want)
+	}
+	if detail.PhaseCount != 0 {
+		t.Errorf("PhaseCount = %d, want 0: no agent phase ran in what is left", detail.PhaseCount)
+	}
+}
+
 func TestBuildLogDetailFoldsTheClosingResultIntoTheWorkedLine(t *testing.T) {
 	t.Parallel()
 
-	ended := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", Params{Log: "all"})
+	ended := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
 	want := workedLine{Label: "Worked for 17m 11s", Stats: "· 129 turns · $8.29"}
 	if ended.Worked != want {
 		t.Errorf("Worked = %+v, want %+v (closed: the run has ended and nothing is filtered)", ended.Worked, want)
 	}
 
 	firstLine := strings.SplitAfter(testRunLog, "\n")[0]
-	alive := buildLogDetail(testLine, writeRunLog(t, firstLine), true, "sandbox://x", Params{Log: "all"})
+	alive := buildLogDetail(testLine, writeRunLog(t, firstLine), true, "sandbox://x", nil, Params{Log: "all"})
 	if alive.Worked.Stats != "" {
 		t.Errorf("Worked.Stats = %q, want none for a run with no result line yet", alive.Worked.Stats)
 	}
@@ -90,7 +145,7 @@ func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
 		t.Run(tc.mode, func(t *testing.T) {
 			t.Parallel()
 
-			detail := buildLogDetail(testLine, path, false, "sandbox://x", Params{Log: tc.mode})
+			detail := buildLogDetail(testLine, path, false, "sandbox://x", nil, Params{Log: tc.mode})
 			if len(detail.Phases) != 2 {
 				t.Fatalf("phases = %d, want 2", len(detail.Phases))
 			}
@@ -104,7 +159,7 @@ func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
 func TestBuildLogDetailAnchorsOnlyTheRunsFirstFailure(t *testing.T) {
 	t.Parallel()
 
-	detail := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", Params{Log: "all"})
+	detail := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
 
 	if got := anchorCount(detail); got != 1 {
 		t.Fatalf("%d lines carry the jump anchor, want exactly 1", got)
@@ -126,7 +181,7 @@ func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 
-			detail := buildLogDetail(testLine, path, false, "sandbox://x", Params{Log: mode})
+			detail := buildLogDetail(testLine, path, false, "sandbox://x", nil, Params{Log: mode})
 			if anchorCount(detail) != 1 {
 				t.Errorf("mode %q renders no #first-fail target, but the jump link still points at it", mode)
 			}
@@ -139,7 +194,7 @@ var sessionLog = mustReadTestdata("session.jsonl")
 func TestBuildLogDetailFoldsEachRunOfCallsIntoOneSummarisedGroup(t *testing.T) {
 	t.Parallel()
 
-	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", Params{Log: "all"})
+	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", nil, Params{Log: "all"})
 
 	items := detail.Phases[0].Items
 	if len(items) != 2 || items[0].Kind != "say" || items[1].Kind != "calls" {
@@ -161,7 +216,7 @@ func TestBuildLogDetailFoldsEachRunOfCallsIntoOneSummarisedGroup(t *testing.T) {
 func TestBuildLogDetailLiftsTheFinalAnswerOutOfTheFold(t *testing.T) {
 	t.Parallel()
 
-	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", Params{Log: "all"})
+	detail := buildLogDetail(testLine, writeRunLog(t, sessionLog), false, "x", nil, Params{Log: "all"})
 	if detail.Final != "line-say " {
 		t.Errorf("Final = %q, want the run's closing prose", detail.Final)
 	}
@@ -172,7 +227,7 @@ func TestBuildLogDetailLiftsTheFinalAnswerOutOfTheFold(t *testing.T) {
 	}
 
 	live := sessionLog[:strings.LastIndex(strings.TrimSuffix(sessionLog, "\n"), "\n")+1]
-	alive := buildLogDetail(testLine, writeRunLog(t, live), true, "x", Params{Log: "all"})
+	alive := buildLogDetail(testLine, writeRunLog(t, live), true, "x", nil, Params{Log: "all"})
 	if alive.Final != "" {
 		t.Errorf("Final = %q on a live run, whose last words are not its answer yet", alive.Final)
 	}
@@ -182,10 +237,10 @@ func TestBuildLogDetailCarriesStreaming(t *testing.T) {
 	t.Parallel()
 
 	path := writeRunLog(t, testRunLog)
-	if got := buildLogDetail(testLine, path, true, "x", Params{Log: "all"}).Streaming; !got {
+	if got := buildLogDetail(testLine, path, true, "x", nil, Params{Log: "all"}).Streaming; !got {
 		t.Error("Streaming = false, want true for a live run")
 	}
-	if got := buildLogDetail(testLine, path, false, "x", Params{Log: "all"}).Streaming; got {
+	if got := buildLogDetail(testLine, path, false, "x", nil, Params{Log: "all"}).Streaming; got {
 		t.Error("Streaming = true, want false for an ended run")
 	}
 }
@@ -339,7 +394,7 @@ func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
 		{"from the inputs when there is no result", withoutResults, []string{"+1 -1", "+3 -0", "+5 -0"}},
 	} {
 		render := func(l LogLine) (string, error) { return fmt.Sprintf("+%d -%d", l.Added, l.Removed), nil }
-		detail := buildLogDetail(render, writeRunLog(t, tc.log), false, "sandbox://x", Params{Log: "all"})
+		detail := buildLogDetail(render, writeRunLog(t, tc.log), false, "sandbox://x", nil, Params{Log: "all"})
 
 		var got []string
 		for _, item := range detail.Phases[0].Items {

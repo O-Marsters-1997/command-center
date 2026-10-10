@@ -29,7 +29,7 @@
   {{- if .Raw}}
   {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
   {{- else}}
-  {{- if not .Row.Log.PhaseCount}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
+  {{- if not .Row.Log.Phases}}<p class="text-muted">Nothing to show yet: no run has written a log.</p>{{end}}
   <div class="run-thread">
     <div class="run-work">
       {{- range .Row.Log.Phases}}
@@ -40,7 +40,7 @@
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if eq .Kind "say"}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+        {{if or (eq .Kind "say") (eq .Kind "record")}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
         {{- end}}
       </section>
       {{- end}}

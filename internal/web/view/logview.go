@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // LineRenderer turns one log line into its markup.
@@ -67,16 +69,21 @@ type LogDetail struct {
 	Final      string      `json:"final"`
 }
 
-func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL string, params Params) LogDetail {
+func buildLogDetail(
+	render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
+) LogDetail {
 	detail := LogDetail{Path: path, Streaming: streaming}
 
 	whole, resumeAt := wholeLines(path)
-	detail.StreamPath = logStreamPath(ticketURL, resumeAt, params.Log)
-	if whole == nil {
+	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
+	if whole == nil && len(records) == 0 {
 		return detail
 	}
 
-	run, _ := agentlog.Parse(bytes.NewReader(whole))
+	var run agentlog.Run
+	if whole != nil {
+		run, _ = agentlog.Parse(bytes.NewReader(whole))
+	}
 	final := takeFinalAnswer(&run)
 	stats := measure(run)
 	mode := NormalizeLogFilter(params.Log)
@@ -84,6 +91,7 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
 	detail.Worked = stats.worked()
+	mergeRecords(&run, records)
 	detail.Phases = renderPhases(render, run.Phases, mode)
 	if final != "" {
 		if line, err := render(sayLine(final)); err == nil {
@@ -91,6 +99,42 @@ func buildLogDetail(render LineRenderer, path string, streaming bool, ticketURL 
 		}
 	}
 	return detail
+}
+
+func RecordOf(e store.Event) agentlog.Event {
+	return agentlog.Event{Kind: agentlog.Record, Tool: e.Kind, Detail: e.Detail}
+}
+
+func lastRecordID(records []store.Event) int64 {
+	var last int64
+	for _, r := range records {
+		last = max(last, r.ID)
+	}
+	return last
+}
+
+func mergeRecords(run *agentlog.Run, records []store.Event) {
+	for _, r := range records {
+		if len(run.Phases) == 0 {
+			run.Phases = append(run.Phases, agentlog.Phase{})
+		}
+		record := RecordOf(r)
+		if !run.Start.IsZero() {
+			record.At = r.At.Sub(run.Start)
+		}
+		phaseIdx := 0
+		for i, p := range run.Phases {
+			if p.At <= record.At {
+				phaseIdx = i
+			}
+		}
+		phase := &run.Phases[phaseIdx]
+		at := slices.IndexFunc(phase.Events, func(e agentlog.Event) bool { return e.At > record.At })
+		if at < 0 {
+			at = len(phase.Events)
+		}
+		phase.Events = slices.Insert(phase.Events, at, record)
+	}
 }
 
 // wholeLines reads path's complete lines only: an agent flushes mid-line, so a trailing partial
@@ -154,6 +198,14 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
 		}
 		if line, err := b.render(sayLine(event.Detail)); err == nil {
 			b.items = append(b.items, logItem{Kind: "say", Line: line})
+		}
+	case agentlog.Record:
+		b.flush()
+		if !KindShown(b.mode, event.Kind) {
+			return
+		}
+		if line, err := b.render(LineOf(event)); err == nil {
+			b.items = append(b.items, logItem{Kind: "record", Line: line})
 		}
 	case agentlog.Pass, agentlog.Fail:
 		b.answer(event, anchor)
@@ -231,8 +283,8 @@ func formatOffset(d time.Duration) string {
 	return fmt.Sprintf("+%02d:%02d", m, s)
 }
 
-func logStreamPath(ticketURL string, from int64, mode string) string {
-	path := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticketURL), from)
+func logStreamPath(ticketURL string, from, afterRecord int64, mode string) string {
+	path := fmt.Sprintf("/ticket/%s/log?from=%d&records=%d", url.PathEscape(ticketURL), from, afterRecord)
 	if mode != "" && mode != "all" {
 		path += "&log=" + url.QueryEscape(mode)
 	}

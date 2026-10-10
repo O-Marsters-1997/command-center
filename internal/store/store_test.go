@@ -238,6 +238,50 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	}
 }
 
+func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	for _, e := range []storepkg.Event{
+		{At: at, TicketURL: "sandbox://CC-1", Kind: "first"},
+		{At: at, TicketURL: "sandbox://CC-2", Kind: "other"},
+		{At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: "second", Detail: "late write, old time"},
+		{At: at, Kind: "fleet_event"},
+	} {
+		if err := store.AppendEvent(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0)
+	if err != nil {
+		t.Fatalf("TicketEventsAfter: %v", err)
+	}
+	if len(all) != 2 || all[0].Kind != "first" || all[1].Kind != "second" {
+		t.Fatalf("TicketEventsAfter(CC-1, 0) = %+v, want first then second", all)
+	}
+	if all[1].Detail != "late write, old time" || !all[1].At.Equal(at.Add(-time.Hour)) {
+		t.Errorf("second = %+v, want its detail and time round-tripped", all[1])
+	}
+
+	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID)
+	if err != nil {
+		t.Fatalf("TicketEventsAfter: %v", err)
+	}
+	if len(newer) != 1 || newer[0].Kind != "second" {
+		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
+	}
+}
+
 func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 	t.Parallel()
 

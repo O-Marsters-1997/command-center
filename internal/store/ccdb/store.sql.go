@@ -184,6 +184,46 @@ func (q *Queries) TicketBranch(ctx context.Context, url string) (TicketBranchRow
 	return i, err
 }
 
+const ticketEventsAfter = `-- name: TicketEventsAfter :many
+SELECT id, at, ticket_id, kind, detail FROM events
+WHERE ticket_id = $1 AND id > $2
+ORDER BY id
+`
+
+type TicketEventsAfterParams struct {
+	TicketID sql.NullString
+	ID       int64
+}
+
+func (q *Queries) TicketEventsAfter(ctx context.Context, arg TicketEventsAfterParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, ticketEventsAfter, arg.TicketID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.TicketID,
+			&i.Kind,
+			&i.Detail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ticketFeature = `-- name: TicketFeature :one
 SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
 `

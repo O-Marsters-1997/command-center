@@ -50,12 +50,23 @@ func LineOf(e agentlog.Event) LogLine {
 		return sayLine(e.Detail)
 	case agentlog.Skill:
 		return LogLine{Kind: e.Kind.String(), Verb: e.Tool, Arg: e.Detail}
+	case agentlog.Record:
+		return recordLine(e.Tool, e.Detail)
 	case agentlog.Pass, agentlog.Fail:
 		return callPair{result: e, answered: true}.line()
 	case agentlog.Cmd:
 		return cmdPair(e, false).line()
 	default:
 		return callPair{call: e, called: true}.line()
+	}
+}
+
+func recordLine(kind, detail string) LogLine {
+	switch kind {
+	case "pr_merged":
+		return LogLine{Kind: agentlog.Record.String(), Verb: "merged", Arg: detail}
+	default:
+		return LogLine{Kind: agentlog.Record.String(), Verb: kind, Arg: detail}
 	}
 }
 

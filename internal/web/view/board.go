@@ -115,7 +115,7 @@ type Group struct {
 	Children []Row `json:"children"`
 }
 
-func applyViewState(rows []Row, params Params, render LineRenderer) {
+func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) {
 	for i := range rows {
 		r := &rows[i]
 		r.Checked = slices.Contains(params.Tickets, r.URL)
@@ -124,7 +124,7 @@ func applyViewState(rows []Row, params Params, render LineRenderer) {
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
 		if params.Sel == r.URL {
-			r.Log = buildLogDetail(render, r.LogPath, r.Alive, r.URL, params)
+			r.Log = buildLogDetail(render, r.LogPath, r.Alive, r.URL, records, params)
 		}
 	}
 }

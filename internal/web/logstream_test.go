@@ -307,7 +307,7 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	rec := get(t, server, sessionPagePath(ticket))
 	body := rec.Body.String()
 
-	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())
+	stream := fmt.Sprintf("/ticket/%s/log?from=%d&amp;records=0", url.PathEscape(ticket), info.Size())
 	for _, want := range []string{
 		`hx-ext="sse"`,
 		`sse-connect="` + stream + `"`,
