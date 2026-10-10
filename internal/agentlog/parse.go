@@ -5,6 +5,7 @@ package agentlog
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -354,7 +355,7 @@ func (l logLine) events() []Event {
 			}
 		case l.Type == "user" && block.Type == "tool_result":
 			event := block.resultEvent()
-			if len(l.Message.Content) == 1 {
+			if l.toolResults() == 1 {
 				event.Diff = changeCounts(l.ToolUseResult)
 			}
 			events = append(events, event)
@@ -389,7 +390,20 @@ func (b contentBlock) toolEvent() Event {
 	return event
 }
 
+func (l logLine) toolResults() int {
+	n := 0
+	for _, b := range l.Message.Content {
+		if b.Type == "tool_result" {
+			n++
+		}
+	}
+	return n
+}
+
 func changeCounts(raw json.RawMessage) Diff {
+	if !bytes.Contains(raw, []byte(`"structuredPatch"`)) {
+		return Diff{}
+	}
 	var result struct {
 		Type            string `json:"type"`
 		Content         string `json:"content"`
