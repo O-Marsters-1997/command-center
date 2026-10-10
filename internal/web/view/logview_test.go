@@ -1,6 +1,7 @@
 package view
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -318,6 +319,47 @@ func joinSpans(spans []ProseSpan) string {
 		b.WriteString(s.Text)
 	}
 	return b.String()
+}
+
+func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile(filepath.Join("..", "..", "agentlog", "testdata", "edits.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(body)
+	withoutResults := stripToolUseResults(log)
+	for _, tc := range []struct {
+		name string
+		log  string
+		want []string
+	}{
+		{"from the structured result", log, []string{"+3 -2", "+3 -0", "+3 -1"}},
+		{"from the inputs when there is no result", withoutResults, []string{"+1 -1", "+3 -0", "+5 -0"}},
+	} {
+		render := func(l LogLine) (string, error) { return fmt.Sprintf("+%d -%d", l.Added, l.Removed), nil }
+		detail := buildLogDetail(render, writeRunLog(t, tc.log), false, "sandbox://x", Params{Log: "all"})
+
+		var got []string
+		for _, item := range detail.Phases[0].Items {
+			got = append(got, item.Group.Lines...)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: counts = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func stripToolUseResults(log string) string {
+	var kept []string
+	for _, line := range strings.SplitAfter(log, "\n") {
+		if before, _, found := strings.Cut(line, `,"tool_use_result"`); found {
+			line = before + "}\n"
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "")
 }
 
 func groupLineCounts(detail LogDetail) [2]int {

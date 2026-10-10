@@ -1,6 +1,7 @@
 package agentlog_test
 
 import (
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -175,7 +176,7 @@ func TestParseLineKeeps(t *testing.T) {
 			name: "a write is a file event",
 			line: `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":` +
 				`[{"type":"tool_use","name":"Write","input":{"file_path":"a.go","content":"x"}}]}}`,
-			want: agentlog.Event{Kind: agentlog.File, Tool: "Write", Detail: "a.go"},
+			want: agentlog.Event{Kind: agentlog.File, Tool: "Write", Detail: "a.go", Diff: agentlog.Diff{Added: 1}},
 		},
 		{
 			name: "a grep renders its pattern",
@@ -390,6 +391,43 @@ func TestParseDiffMarksTheRowsItCuts(t *testing.T) {
 	}
 	if got[0].Diff.Added != 100 {
 		t.Errorf("Added = %d; want every added line counted", got[0].Diff.Added)
+	}
+}
+
+func TestParseCountsEditsAndWritesFromTheStructuredResult(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile(filepath.Join("testdata", "edits.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := parseString(t, string(body))
+
+	got := map[string][2]int{}
+	for _, e := range run.Phases[0].Events {
+		if e.Kind == agentlog.Pass {
+			got[e.CallID] = [2]int{e.Diff.Added, e.Diff.Removed}
+		}
+	}
+	want := map[string][2]int{
+		"toolu_edit":   {3, 2},
+		"toolu_create": {3, 0},
+		"toolu_update": {3, 1},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("result counts = %v, want %v", got, want)
+	}
+}
+
+func TestParseLineCountsAWriteFromItsContent(t *testing.T) {
+	t.Parallel()
+
+	line := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":` +
+		`{"file_path":"a.go","content":"a\nb\nc\n"}}]}}`
+
+	got := agentlog.ParseLine([]byte(line))
+	if len(got) != 1 || got[0].Diff.Added != 3 || got[0].Diff.Removed != 0 {
+		t.Errorf("ParseLine = %+v, want one event counting +3 -0", got)
 	}
 }
 
