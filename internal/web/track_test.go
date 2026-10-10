@@ -70,7 +70,7 @@ func TestTrackWithoutHTMXRedirectsToTheRepoPage(t *testing.T) {
 
 	rec := postTrack(t, server, "acme/new", false)
 
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/features?repo=acme/new" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/repos/acme/new" {
 		t.Errorf("status = %d, Location = %q", rec.Code, rec.Header().Get("Location"))
 	}
 }
@@ -90,7 +90,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 	postTrack(t, server, "acme/new", true)
 
-	stale := get(t, server, "/features/banner?repo=acme/new&seen=cloning")
+	stale := get(t, server, "/repos/banner?repo=acme/new&seen=cloning")
 	if stale.Header().Get("HX-Refresh") != "" || !strings.Contains(stale.Body.String(), `hx-trigger="every 2s"`) {
 		t.Errorf("a cloning banner seen as cloning must poll without a refresh:\n%s", stale.Body)
 	}
@@ -103,7 +103,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	}
 	consumeTrack(t, st)
 
-	changed := get(t, server, "/features/banner?repo=acme/new&seen=cloning")
+	changed := get(t, server, "/repos/banner?repo=acme/new&seen=cloning")
 	if changed.Header().Get("HX-Refresh") != "true" {
 		t.Errorf("a banner whose state moved from cloning must send HX-Refresh: true")
 	}
@@ -159,7 +159,7 @@ func TestBannerGoldens(t *testing.T) {
 		"banner_refused_clone":  "acme/noclone",
 		"banner_refused_toml":   "acme/badtoml",
 	} {
-		rec := get(t, server, "/features/banner?repo="+repo)
+		rec := get(t, server, "/repos/banner?repo="+repo)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET banner %s: %d: %s", repo, rec.Code, rec.Body)
 		}

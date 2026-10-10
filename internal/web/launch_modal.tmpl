@@ -17,5 +17,5 @@
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
-<a href="{{if .Feature}}/features{{else}}/{{end}}">[ cancel ]</a>
+<a href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">[ cancel ]</a>
 </dialog>

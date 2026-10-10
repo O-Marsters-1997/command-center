@@ -115,7 +115,9 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
+	mux.Handle("GET /tickets", handler(s.handleTickets))
 	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
+	mux.Handle("GET /f/{feature}/graph", handler(s.handleFeatureGraph))
 	mux.Handle("GET /board", handler(s.handleBoard))
 	mux.Handle("GET /rail", handler(s.handleRail))
 	mux.Handle("GET /graph.json", handler(s.handleGraph))
@@ -125,9 +127,11 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
 	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
-	mux.Handle("GET /features", handler(s.handleFeatures))
-	mux.Handle("GET /features/search", handler(s.handleRepoSearch))
-	mux.Handle("GET /features/banner", handler(s.handleBanner))
+	mux.Handle("GET /repos", handler(s.handleRepos))
+	mux.Handle("GET /repos/{owner}/{name}", handler(s.handleRepo))
+	mux.Handle("GET /repos/search", handler(s.handleRepoSearch))
+	mux.Handle("GET /repos/banner", handler(s.handleBanner))
+	mux.HandleFunc("GET /features", s.handleFeaturesRedirect)
 	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
@@ -148,7 +152,7 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 // AllowAnonymous turns the session gate off, for the demo build whose board is a local simulation.
 func (s *Server) AllowAnonymous() { s.open = true }
 
-// SetTrackerSource replaces the tracker constructor so a test can drive GET /features without gh.
+// SetTrackerSource replaces the tracker constructor so a test can drive GET /repos/{owner}/{name} without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
 
 // SetPushableSource replaces the gh listing behind repo search so a test can drive it without gh.
@@ -210,7 +214,27 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	return renderHTML(w, "page.tmpl", board)
 }
 
+func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
+	q := r.URL.Query()
+	q.Set("all", "1")
+	q.Del("view")
+	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
+	if err != nil {
+		return err
+	}
+	board.Section = "tickets"
+	return renderHTML(w, "tickets.tmpl", board)
+}
+
 func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature.tmpl")
+}
+
+func (s *Server) handleFeatureGraph(w http.ResponseWriter, r *http.Request) error {
+	return s.renderFeature(w, r, "feature_graph.tmpl")
+}
+
+func (s *Server) renderFeature(w http.ResponseWriter, r *http.Request, tmpl string) error {
 	feature := r.PathValue("feature")
 	q := r.URL.Query()
 	q.Set("feature", feature)
@@ -222,7 +246,7 @@ func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) error {
 	if board.FeatureScope != feature {
 		return errorf(http.StatusNotFound, "no feature %q", feature)
 	}
-	return renderHTML(w, "feature.tmpl", board)
+	return renderHTML(w, tmpl, board)
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
@@ -449,6 +473,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
 		return s.handleRail(w, r)
 	}
+	if r.FormValue("from") == "session" {
+		return s.afterSessionVerb(w, r, ticketURL, verb)
+	}
 	return s.redirectOrSwap(w, r)
 }
 
@@ -509,17 +536,28 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	scope := r.URL.Query().Get("repo")
-	if scope == "" {
-		page, err := s.view.Repos(ctx, s.clock.Now())
-		if err != nil {
-			return err
-		}
-		return renderHTML(w, "features.tmpl", page)
+func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
+	target := "/repos"
+	if repo := r.URL.Query().Get("repo"); repo != "" && repoName.MatchString(repo) && !hasDotSegment(repo) {
+		target = view.RepoPath(repo)
 	}
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
+}
 
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
+	page, err := s.view.Repos(r.Context(), s.clock.Now())
+	if err != nil {
+		return err
+	}
+	return renderHTML(w, "repos.tmpl", page)
+}
+
+func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	scope := r.PathValue("owner") + "/" + r.PathValue("name")
+	if !repoName.MatchString(scope) || hasDotSegment(scope) {
+		return errorf(http.StatusNotFound, "repo %q is not owner/name", scope)
+	}
 	repo, known, err := s.view.KnownRepo(ctx, scope)
 	if err != nil {
 		return err

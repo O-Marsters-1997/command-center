@@ -31,23 +31,24 @@ type RepoRow struct {
 	Tracked       bool
 	Path          string
 	RefusedBranch string
+	Steps         []CheckStep
 }
 
-// ReposPage is the unscoped /features page: every repo the app knows.
+// ReposPage is the /repos page: every repo the app knows.
 type ReposPage struct {
 	Chrome
 	Results         RepoSearch
 	LastImportError *ImportError
 }
 
-// RepoSearch is the fragment GET /features/search swaps in. SearchError is set when gh failed, in
+// RepoSearch is the fragment GET /repos/search swaps in. SearchError is set when gh failed, in
 // which case Rows still hold the known repos that match.
 type RepoSearch struct {
 	Rows        []RepoRow
 	SearchError string
 }
 
-// RepoPage is the scoped /features?repo= page. Known is false for a repo the app does not track.
+// RepoPage is the /repos/{owner}/{name} page. Known is false for a repo the app does not track.
 type RepoPage struct {
 	Chrome
 	Title           string
@@ -58,16 +59,19 @@ type RepoPage struct {
 	Banner          Banner
 	Features        []FeatureRow
 	LastImportError *ImportError
+	Tickets         Board
 }
 
-// RepoPath is the scoped repos page for fullName.
+// RepoPath is the page of fullName, an owner/name pair.
 func RepoPath(fullName string) string {
-	q := url.Values{"repo": {fullName}}.Encode()
-	return "/features?" + strings.ReplaceAll(q, "%2F", "/")
+	return "/repos/" + fullName
 }
 
 func trackedRow(r store.Repo) RepoRow {
-	return RepoRow{FullName: r.Name, Tracked: true, Path: RepoPath(r.Name)}
+	return RepoRow{
+		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name),
+		Steps: checkSteps(bannerState(r), r.RefusalKind),
+	}
 }
 
 func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
@@ -205,6 +209,10 @@ func (r *Reader) RepoPage(ctx context.Context, now time.Time, scope string, offe
 		page.Features = append(page.Features, FeatureRow{Feature: f, Imported: imported[f], OtherRepos: others[f]})
 	}
 	page.LastImportError, err = r.importError(ctx, now)
+	if err != nil {
+		return RepoPage{}, err
+	}
+	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}}))
 	if err != nil {
 		return RepoPage{}, err
 	}

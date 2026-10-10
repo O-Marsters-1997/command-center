@@ -5,8 +5,12 @@ import (
 	"errors"
 	"os"
 	"path"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 // ErrSessionNotFound is returned when no tracked ticket matches the session route.
@@ -22,7 +26,17 @@ type Session struct {
 	RawText        string
 	TranscriptPath string
 	RawPath        string
+	ActionsPath    string
+	PRURL          string
+	Toast          string
 }
+
+// Running reports whether an agent is live on the ticket, so the composer shows its status line
+// and Kill instead of a follow-up box.
+func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
+
+// PendingVerb reports whether a verb is queued and not yet consumed by the loop.
+func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
 
 // Prompt is the run's own prompt file. Kept is false when the file is gone.
 type Prompt struct {
@@ -71,7 +85,13 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	chrome := board.Chrome
 	chrome.Section = "board"
 	chrome.Home = false
+	prURL := ""
+	if row.PRNumber > 0 {
+		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
+	}
 	return Session{
+		ActionsPath:    self + "?part=actions",
+		PRURL:          prURL,
 		Chrome:         chrome,
 		Row:            row,
 		Ref:            ticketRef(ticketURL),
@@ -103,4 +123,12 @@ func rawLog(raw bool, logPath string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// ActionVerbs is the state's verbs minus launch, which has its own modal, and follow-up, which
+// is the composer.
+func (s Session) ActionVerbs() []string {
+	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v string) bool {
+		return v == plan.VerbLaunch || v == plan.VerbFollowUp
+	})
 }
