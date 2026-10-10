@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +28,7 @@ const (
 	Fail
 	Pass
 	Say
+	Cmd
 )
 
 func (k Kind) String() string {
@@ -42,6 +45,8 @@ func (k Kind) String() string {
 		return "pass"
 	case Say:
 		return "say"
+	case Cmd:
+		return "cmd"
 	default:
 		return "unknown"
 	}
@@ -58,6 +63,10 @@ type Event struct {
 	Output      string
 	OutputLines int
 	Diff        Diff
+	Done        bool
+	ExitCode    int
+	Interrupted bool
+	Elapsed     time.Duration
 }
 
 // Phase is the work between one Skill tool use and the next. A run's first phase has no skill:
@@ -109,13 +118,22 @@ func Parse(r io.Reader) (Run, error) {
 			run.Result = &result
 			return
 		}
-		for _, event := range tail.keep(parsed.events()) {
+		for _, event := range tail.feed(parsed) {
 			if !parsed.Timestamp.IsZero() {
 				if base.IsZero() {
 					base = parsed.Timestamp
 				}
 				event.At = parsed.Timestamp.Sub(base)
 				run.End = max(run.End, event.At)
+			}
+			if event.Kind == Cmd && event.Done {
+				phase, ok := callPhase[event.CallID]
+				if !ok {
+					phase = len(run.Phases) - 1
+				}
+				if phase >= 0 && run.Phases[phase].answerCmd(event) {
+					continue
+				}
 			}
 			if phase, ok := callPhase[event.CallID]; ok && (event.Kind == Pass || event.Kind == Fail) {
 				run.Phases[phase].Events = append(run.Phases[phase].Events, event)
@@ -142,6 +160,17 @@ func ParseLine(line []byte) []Event {
 	return parsed.events()
 }
 
+func (p *Phase) answerCmd(done Event) bool {
+	for i, e := range p.Events {
+		if e.Kind == Cmd && !e.Done && e.CallID == done.CallID {
+			done.At = e.At
+			p.Events[i] = done
+			return true
+		}
+	}
+	return false
+}
+
 func (run *Run) append(event Event) {
 	if event.Kind == Skill {
 		run.Phases = append(run.Phases, Phase{Skill: event.Tool, Note: event.Detail, At: event.At})
@@ -166,12 +195,13 @@ type logLine struct {
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`
 	} `json:"message"`
-	Subtype       string         `json:"subtype"`
-	DurationMS    int64          `json:"duration_ms"`
-	NumTurns      int            `json:"num_turns"`
-	CostUSD       *float64       `json:"total_cost_usd"`
-	Usage         usage          `json:"usage"`
-	RateLimitInfo *rateLimitInfo `json:"rate_limit_info"`
+	ToolUseResult json.RawMessage `json:"tool_use_result"`
+	Subtype       string          `json:"subtype"`
+	DurationMS    int64           `json:"duration_ms"`
+	NumTurns      int             `json:"num_turns"`
+	CostUSD       *float64        `json:"total_cost_usd"`
+	Usage         usage           `json:"usage"`
+	RateLimitInfo *rateLimitInfo  `json:"rate_limit_info"`
 }
 
 type rateLimitInfo struct {
@@ -260,10 +290,40 @@ func (l logLine) result() Result {
 // launch, as Parse does.
 type Tail struct {
 	skillCalls map[string]bool
+	cmdCalls   map[string]cmdCall
+}
+
+type cmdCall struct {
+	command string
+	at      time.Time
 }
 
 func (t *Tail) Read(line []byte) []Event {
-	return t.keep(ParseLine(line))
+	parsed, err := decode(line)
+	if err != nil {
+		return nil
+	}
+	return t.feed(parsed)
+}
+
+func (t *Tail) feed(l logLine) []Event {
+	events := l.events()
+	for i, e := range events {
+		switch e.Kind {
+		case Cmd:
+			if t.cmdCalls == nil {
+				t.cmdCalls = make(map[string]cmdCall)
+			}
+			t.cmdCalls[e.CallID] = cmdCall{command: e.Detail, at: l.Timestamp}
+		case Pass, Fail:
+			if call, ok := t.cmdCalls[e.CallID]; ok {
+				events[i] = l.cmdDone(call, e.CallID)
+				delete(t.cmdCalls, e.CallID)
+			}
+		default:
+		}
+	}
+	return t.keep(events)
 }
 
 func (t *Tail) keep(events []Event) []Event {
@@ -309,7 +369,10 @@ func (b contentBlock) toolEvent() Event {
 		return Event{Kind: Skill, Tool: text(input["skill"]), Detail: text(input["args"]), CallID: b.ID}
 	}
 	kind := Tool
-	if slices.Contains(fileTools, b.Name) {
+	switch {
+	case b.Name == "Bash":
+		kind = Cmd
+	case slices.Contains(fileTools, b.Name):
 		kind = File
 	}
 	event := Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input), CallID: b.ID}
@@ -327,6 +390,59 @@ func (b contentBlock) resultEvent() Event {
 	whole := strings.TrimRight(b.resultText(), "\n")
 	output, lines := boundOutput(whole)
 	return Event{Kind: kind, Detail: firstLine(whole), CallID: b.ToolUseID, Output: output, OutputLines: lines}
+}
+
+var exitCodePrefix = regexp.MustCompile(`^(?:Error: )?Exit code (\d+)\n?`)
+
+func (l logLine) cmdDone(call cmdCall, callID string) Event {
+	var block contentBlock
+	results := 0
+	for _, b := range l.Message.Content {
+		if b.Type != "tool_result" {
+			continue
+		}
+		results++
+		if b.ToolUseID == callID {
+			block = b
+		}
+	}
+
+	done := Event{Kind: Cmd, Tool: "Bash", Detail: call.command, CallID: callID, Done: true}
+	var output string
+	if results == 1 {
+		var failure string
+		var bash struct {
+			Stdout      string `json:"stdout"`
+			Stderr      string `json:"stderr"`
+			Interrupted bool   `json:"interrupted"`
+		}
+		switch {
+		case json.Unmarshal(l.ToolUseResult, &failure) == nil:
+			output = failure
+		case json.Unmarshal(l.ToolUseResult, &bash) == nil:
+			output = joinNonEmpty(bash.Stdout, bash.Stderr)
+			done.Interrupted = bash.Interrupted
+		}
+	}
+	if output == "" {
+		output = block.resultText()
+	}
+	if block.IsError {
+		done.ExitCode = 1
+		if match := exitCodePrefix.FindStringSubmatch(output); match != nil {
+			done.ExitCode, _ = strconv.Atoi(match[1])
+			output = output[len(match[0]):]
+		}
+	}
+	if !l.Timestamp.IsZero() && !call.at.IsZero() {
+		done.Elapsed = max(0, l.Timestamp.Sub(call.at))
+	}
+	done.Output, done.OutputLines = boundOutput(strings.TrimRight(output, "\n"))
+	return done
+}
+
+func joinNonEmpty(parts ...string) string {
+	return strings.Join(slices.DeleteFunc(slices.Clone(parts), func(p string) bool { return p == "" }), "\n")
 }
 
 // The CLI writes a tool result's content either as a bare string or as Messages API blocks.

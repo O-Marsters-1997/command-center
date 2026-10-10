@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
@@ -17,10 +18,14 @@ type LogLine struct {
 	Result  string
 	Failed  bool
 	Output  string
+	Fold    bool
+	Open    bool
 	Diff    []DiffRow
 	Added   int
 	Removed int
 	Anchor  bool
+	CallID  string
+	Replace bool
 }
 
 type ProseBlock struct {
@@ -47,6 +52,8 @@ func LineOf(e agentlog.Event) LogLine {
 		return LogLine{Kind: e.Kind.String(), Verb: e.Tool, Arg: e.Detail}
 	case agentlog.Pass, agentlog.Fail:
 		return callPair{result: e, answered: true}.line()
+	case agentlog.Cmd:
+		return cmdPair(e, false).line()
 	default:
 		return callPair{call: e, called: true}.line()
 	}
@@ -58,10 +65,43 @@ type callPair struct {
 	anchor           bool
 }
 
-func (p callPair) failed() bool { return p.answered && p.result.Kind == agentlog.Fail }
+func cmdPair(e agentlog.Event, anchor bool) callPair {
+	return callPair{call: e, result: e, called: true, answered: e.Done, anchor: anchor}
+}
+
+func cmdFailed(e agentlog.Event) bool {
+	return e.Kind == agentlog.Cmd && e.Done && (e.ExitCode != 0 || e.Interrupted)
+}
+
+func failedEvent(e agentlog.Event) bool { return e.Kind == agentlog.Fail || cmdFailed(e) }
+
+func (p callPair) failed() bool { return p.answered && failedEvent(p.result) }
 
 func (p callPair) shown(mode string) bool {
-	return (p.called && KindShown(mode, p.call.Kind)) || (p.answered && KindShown(mode, p.result.Kind))
+	return (p.called && EventShown(mode, p.call)) || (p.answered && EventShown(mode, p.result))
+}
+
+func (p callPair) cmdWord() string {
+	switch {
+	case !p.answered:
+		return "running"
+	case p.result.Interrupted:
+		return "interrupted" + elapsedSuffix(p.result.Elapsed)
+	case p.result.ExitCode != 0:
+		return fmt.Sprintf("exit %d%s", p.result.ExitCode, elapsedSuffix(p.result.Elapsed))
+	default:
+		return "✓" + elapsedSuffix(p.result.Elapsed)
+	}
+}
+
+func elapsedSuffix(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	if d < time.Second {
+		return " " + d.Round(time.Millisecond).String()
+	}
+	return " " + d.Round(100*time.Millisecond).String()
 }
 
 func (p callPair) line() LogLine {
@@ -73,6 +113,14 @@ func (p callPair) line() LogLine {
 		for _, row := range p.call.Diff.Lines {
 			line.Diff = append(line.Diff, DiffRow{Op: row.Op.String(), Text: row.Text})
 		}
+	}
+	if p.called && p.call.Kind == agentlog.Cmd {
+		line.CallID = p.call.CallID
+		line.Result = p.cmdWord()
+		line.Output = p.result.Output
+		line.Fold = line.Output != ""
+		line.Open = line.Fold && line.Failed
+		return line
 	}
 	if p.answered {
 		line.Result = p.resultWord()

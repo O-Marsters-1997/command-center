@@ -28,9 +28,7 @@ func TestParse(t *testing.T) {
 				Phases: []agentlog.Phase{
 					{
 						Events: []agentlog.Event{
-							{Kind: agentlog.Tool, Tool: "Bash", Detail: "go test ./..."},
-							{At: 1500 * time.Millisecond, Kind: agentlog.Fail,
-								Detail: "FAIL\tinternal/agentlog"},
+							{Kind: agentlog.Cmd, Tool: "Bash", Detail: "go test ./..."},
 						},
 					},
 					{
@@ -56,8 +54,7 @@ func TestParse(t *testing.T) {
 				Lines: 2,
 				Phases: []agentlog.Phase{{
 					Events: []agentlog.Event{
-						{Kind: agentlog.Tool, Tool: "Bash", Detail: "just test"},
-						{At: time.Second, Kind: agentlog.Pass, Detail: "ok"},
+						{Kind: agentlog.Cmd, Tool: "Bash", Detail: "just test"},
 					},
 				}},
 			},
@@ -76,22 +73,19 @@ func TestParse(t *testing.T) {
 						Events: []agentlog.Event{
 							{Kind: agentlog.Say, Detail: "I'll start by exploring the existing code structure — " +
 								"the `internal/cc` package, the `plan` package, and the untracked test file already present."},
-							{At: 1099 * time.Millisecond, Kind: agentlog.Tool, Tool: "Bash",
+							{At: 1099 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
 								Detail: "find internal/cc internal/plan -type f | sort"},
 							{At: 1843 * time.Millisecond, Kind: agentlog.File, Tool: "Read",
 								Detail: "/Users/dev/Documents/personal/ai-development/" +
 									"command-center-cc-74-grouped-board/internal/cc/group_page_test.go"},
 							{At: 1852 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test"},
-							{At: 2427 * time.Millisecond, Kind: agentlog.Pass,
-								Detail: "internal/cc/app_test.go"},
 						},
 					},
 					{
 						Skill: "go-idiomatic", At: 238544 * time.Millisecond,
 						Events: []agentlog.Event{
-							{At: 764324 * time.Millisecond, Kind: agentlog.Tool, Tool: "Bash",
+							{At: 764324 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
 								Detail: "type go; type rtk 2>/dev/null; alias go 2>/dev/null"},
-							{At: 766801 * time.Millisecond, Kind: agentlog.Fail, Detail: "Exit code 1"},
 						},
 					},
 					{
@@ -175,7 +169,7 @@ func TestParseLineKeeps(t *testing.T) {
 			line: `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":` +
 				`[{"type":"thinking","thinking":"hmm"},` +
 				`{"type":"tool_use","name":"Bash","input":{"command":"just test"}}]}}`,
-			want: agentlog.Event{Kind: agentlog.Tool, Tool: "Bash", Detail: "just test"},
+			want: agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: "just test"},
 		},
 		{
 			name: "a write is a file event",
@@ -205,7 +199,7 @@ func TestParseLineKeeps(t *testing.T) {
 			name: "a call carries its tool_use id",
 			line: `{"type":"assistant","message":{"content":` +
 				`[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}`,
-			want: agentlog.Event{Kind: agentlog.Tool, Tool: "Bash", Detail: "ls", CallID: "toolu_1"},
+			want: agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: "ls", CallID: "toolu_1"},
 		},
 		{
 			name: "a result keeps every text block and the id of the call it answers",
@@ -421,8 +415,8 @@ func TestParseFilesAResultUnderItsCallsPhase(t *testing.T) {
 	if len(run.Phases) != 2 {
 		t.Fatalf("%d phases; want 2", len(run.Phases))
 	}
-	if got := run.Phases[0].Events; len(got) != 2 || got[1].Kind != agentlog.Pass || got[1].CallID != "b" {
-		t.Errorf("phase 0 events = %+v; want the Bash call and its result", got)
+	if got := run.Phases[0].Events; len(got) != 1 || got[0].Kind != agentlog.Cmd || !got[0].Done || got[0].CallID != "b" {
+		t.Errorf("phase 0 events = %+v; want the Bash call answered in place", got)
 	}
 	if got := run.Phases[1].Events; len(got) != 0 {
 		t.Errorf("phase 1 events = %+v; want none (the skill's launch result is dropped)", got)

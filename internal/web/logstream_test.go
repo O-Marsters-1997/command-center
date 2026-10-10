@@ -69,7 +69,7 @@ func jsonToolLine(text string) string {
 func renderedToolLine(t *testing.T, text string) string {
 	t.Helper()
 
-	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Tool, Tool: "Bash", Detail: text}, false)
+	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: text}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

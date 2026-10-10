@@ -21,12 +21,19 @@ func KindShown(mode string, k agentlog.Kind) bool {
 	case "skills":
 		return k == agentlog.Skill
 	case "tools":
-		return k == agentlog.Tool || k == agentlog.File
+		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd
 	case "fails":
 		return k == agentlog.Fail
 	default:
 		return true
 	}
+}
+
+func EventShown(mode string, e agentlog.Event) bool {
+	if e.Kind == agentlog.Cmd && mode == "fails" {
+		return cmdFailed(e)
+	}
+	return KindShown(mode, e.Kind)
 }
 
 type phaseView struct {
@@ -150,6 +157,8 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
 		}
 	case agentlog.Pass, agentlog.Fail:
 		b.answer(event, anchor)
+	case agentlog.Cmd:
+		b.pending = append(b.pending, cmdPair(event, anchor))
 	default:
 		b.pending = append(b.pending, callPair{call: event, called: true})
 	}
@@ -206,7 +215,7 @@ func firstFailureIndex(phases []agentlog.Phase) int {
 	idx := 0
 	for _, phase := range phases {
 		for _, e := range phase.Events {
-			if e.Kind == agentlog.Fail {
+			if failedEvent(e) {
 				return idx
 			}
 			idx++
