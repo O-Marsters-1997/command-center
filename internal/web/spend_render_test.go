@@ -53,7 +53,7 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 	}
 	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
 	aliveServer := newServer(aliveStore, now)
-	rec := get(t, aliveServer, "/")
+	rec := get(t, aliveServer, "/tickets")
 	if !strings.Contains(rec.Body.String(), "15 tok") {
 		t.Errorf("alive run's page does not contain \"15 tok\":\n%s", rec.Body)
 	}
@@ -66,30 +66,8 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
 	endedServer := newServer(endedStore, now)
 	rec = httptest.NewRecorder()
-	endedServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	endedServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tickets", nil))
 	if !strings.Contains(rec.Body.String(), "$1.23") {
 		t.Errorf("ended run's page does not contain \"$1.23\":\n%s", rec.Body)
-	}
-}
-
-func TestBandSpendCardFillsFromTheSameSettledRows(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	ticket := storepkg.Ticket{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3"}
-	logPath := filepath.Join(t.TempDir(), "3.jsonl")
-	if err := os.WriteFile(logPath, []byte(spendAliveLine+spendResultLine), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	store := spendRowStore(t, ticket, logPath, false, now)
-	server := newServer(store, now)
-
-	rec := get(t, server, "/")
-
-	body := rec.Body.String()
-	for _, want := range []string{"$1.23", "1 runs", "0 failed", "avg $1.23"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
 	}
 }

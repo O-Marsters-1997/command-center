@@ -14,7 +14,7 @@
 {{- end}}
 
 {{define "row"}}
-  <tr class="group{{if .Selected}} selected{{end}}">
+  <tr class="group">
     <td>
       {{- $row := .}}
       {{- range .Verbs}}
@@ -32,7 +32,7 @@
       {{- range .PendingVerbs}} · {{.}} queued{{end}}
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="{{.SelectPath}}" hx-push-url="{{.SelectPush}}" hx-target="#board" hx-swap="outerHTML">{{.Ticket}}</button>
+      <a href="{{.SessionPath}}" hx-get="{{.SessionPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.Ticket}}</a>
       {{- if and .Scope (ne .Repo .Scope)}} <span class="text-muted text-[0.85em]">{{.Repo}}</span>{{end}}
       {{- if and .FeatureScope (ne .Feature .FeatureScope)}} <span class="text-muted text-[0.85em]">{{.Feature}}</span>{{end}}
     </td>
@@ -70,7 +70,7 @@
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
       {{- else}}no spend{{end}}
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100">
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100">
       {{- $row := .}}
       {{- range .Verbs}}
       {{- if eq . $row.LaunchVerb}}
@@ -86,14 +86,6 @@
       {{- end -}}
     </td>
   </tr>
-  {{if .Selected}}
-  <!-- hx-preserve keeps an expanded detail mounted through the board's own swap, which would
-       otherwise destroy and remount it every five seconds. Only the selected row ever renders
-       this <tr>: htmx matches hx-preserve by id off the incoming markup, so an unselected row
-       must render none at all rather than an empty one for a later selection to fill
-       (docs/prds/prd-fleet-view.md § The hx-preserve id is conditional on selection). -->
-  <tr id="{{.DetailID}}" hx-preserve="true">{{template "detail" .}}</tr>
-  {{end}}
 {{end}}
 
 {{define "boardForm" -}}

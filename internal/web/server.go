@@ -208,13 +208,35 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
-	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(r.URL.Query()))
+	if target := legacyIndexTarget(r.URL.Query()); target != "" {
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return nil
+	}
+	home, err := s.view.Home(r.Context(), s.clock.Now())
 	if err != nil {
 		return err
 	}
-	board.Home = r.URL.RawQuery == ""
-	return renderHTML(w, "page.tmpl", board)
+	return renderHTML(w, "home.tmpl", home)
 }
+
+func legacyIndexTarget(q url.Values) string {
+	if sel := view.SessionPath(q.Get("sel")); sel != "" {
+		return sel
+	}
+	if feature := q.Get("feature"); feature != "" {
+		target := "/f/" + url.PathEscape(feature)
+		if q.Get("view") == "graph" {
+			target += "/graph"
+		}
+		return target
+	}
+	if repo := q.Get("repo"); validRepo(repo) {
+		return view.RepoPath(repo)
+	}
+	return ""
+}
+
+func validRepo(repo string) bool { return repoName.MatchString(repo) && !hasDotSegment(repo) }
 
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
@@ -224,7 +246,6 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	board.Section = "tickets"
 	return renderHTML(w, "tickets.tmpl", board)
 }
 
@@ -281,7 +302,7 @@ func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
-	return s.renderBoard(w, r, "boardSwap")
+	return s.renderBoard(w, r, "board")
 }
 
 const railOpenCookie = "rail-open"
@@ -515,7 +536,7 @@ func (s *Server) redirectOrSwap(w http.ResponseWriter, r *http.Request) error {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return nil
 	}
-	return s.renderBoard(w, r, "boardSwap")
+	return s.renderBoard(w, r, "board")
 }
 
 func nonBlank(values []string) []string {
@@ -578,7 +599,7 @@ func afterTicketEdit(back string) string {
 
 func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
 	target := "/repos"
-	if repo := r.URL.Query().Get("repo"); repo != "" && repoName.MatchString(repo) && !hasDotSegment(repo) {
+	if repo := r.URL.Query().Get("repo"); validRepo(repo) {
 		target = view.RepoPath(repo)
 	}
 	http.Redirect(w, r, target, http.StatusMovedPermanently)
@@ -612,7 +633,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered)
+	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered, r.URL.Query()["ticket"])
 	if err != nil {
 		return err
 	}
@@ -689,8 +710,7 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 }
 
 func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
-	feature := r.PathValue("feature")
-	http.Redirect(w, r, "/?feature="+url.QueryEscape(feature), http.StatusSeeOther)
+	http.Redirect(w, r, "/f/"+url.PathEscape(r.PathValue("feature")), http.StatusMovedPermanently)
 }
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {

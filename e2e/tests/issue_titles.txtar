@@ -8,11 +8,11 @@ cc-fake-gh issue-titles
 
 exec cc import project:two-tasks
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 
-stdout '>#CC-1</button>'
+stdout '>#CC-1</a>'
 stdout '<div>Ship the first slice</div>'
-stdout '>#CC-2</button>'
+stdout '>#CC-2</a>'
 ! stdout 'An issue nobody is working on'
 ! stdout '>sandbox://CC-1<'
 
@@ -21,6 +21,7 @@ stdout '>#CC-2</button>'
 cc-fake-gh issue-titles-fail
 exec cc tick --count 1
 
-exec cc request GET /
-stdout 'the last tick failed'
+exec cc request GET /tickets
 stdout '<div>Ship the first slice</div>'
+exec cc request GET /rail
+stdout 'tick failed'

@@ -16,14 +16,11 @@ import (
 
 const observeStaleAfter = 20 * time.Second
 
-// Board is the board page's view model: the grouped rows, the band over them and the chrome
-// every page wears.
 type Board struct {
 	Chrome
 	Groups           []Group
 	Sections         []Section
 	Tabs             []FilterTab
-	Band             Band
 	BoardPath        string
 	BoardPollSeconds int
 	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
@@ -126,9 +123,6 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	applySpend(rows, r.spend)
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	applyViewState(rows, params, r.renderLine)
-	if err := r.applyContextCurve(ctx, rows); err != nil {
-		return Board{}, err
-	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
@@ -140,29 +134,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
 		Tabs:             filterTabs(sections, params.Filter),
-		Band:             deriveBand(rowsIn(groups)),
 		BoardPath:        params.boardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
 	}, nil
 }
 
-func (r *Reader) applyContextCurve(ctx context.Context, rows []Row) error {
-	for i := range rows {
-		if !rows[i].Selected || rows[i].RunID == 0 {
-			continue
-		}
-		requests, err := r.store.RunRequestsForRun(ctx, rows[i].RunID)
-		if err != nil {
-			return err
-		}
-		rows[i].ContextCurve = buildContextCurve(requests)
-	}
-	return nil
-}
-
-// Chrome builds a page's chrome without Board's derivation, groups or verdicts: the one cheap
-// read /features and /insights make for the workspace, live and observe pills, and
-// scope links that every page's topbar and masthead show.
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
@@ -190,15 +166,6 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
-	exploring, err := r.store.ExploreRuns(ctx)
-	if err != nil {
-		return Chrome{}, err
-	}
-	for _, run := range exploring {
-		if run.Spawned && !run.Disposed {
-			chrome.Exploring++
-		}
-	}
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
 		return Chrome{}, err
 	}
@@ -229,8 +196,7 @@ func (r *Reader) buildChrome(
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
-		View:         params.View,
-		Section:      params.View,
+		Section:      "tickets",
 		RepoScope:    params.Repo,
 		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
@@ -249,7 +215,6 @@ func (r *Reader) buildChrome(
 		c.RepoCrumbPath = RepoPath(params.Repo)
 	}
 	if params.Feature != "" {
-		c.FeatureImportPath = params.featureImportPath()
 		c.FeatureQuery = url.QueryEscape(params.Feature)
 	}
 	return c

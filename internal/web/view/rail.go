@@ -84,7 +84,10 @@ func RailSelection(currentURL string) string {
 	if err != nil {
 		return ""
 	}
-	return u.Query().Get("sel")
+	if !strings.HasPrefix(u.Path, "/s/") {
+		return ""
+	}
+	return u.Path
 }
 
 func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Rail, error) {
@@ -124,9 +127,9 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 	item := func(r Row) RailItem {
 		it := RailItem{
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Glyph: r.Glyph, Reason: r.Reason,
-			Path:     Params{Sel: r.URL}.pagePath(),
-			Selected: params.Sel == r.URL,
+			Path: cmp.Or(SessionPath(r.URL), ticketsPath),
 		}
+		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		for _, verb := range r.Verbs {
 			if verb != plan.VerbFollowUp && verb != plan.VerbLaunch {
 				it.Verb = verb

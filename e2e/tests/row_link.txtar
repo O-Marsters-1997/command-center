@@ -1,0 +1,23 @@
+# A board row links to its own session page, and htmx is served out of the binary so the page needs
+# no network. The per-row detail routes are gone outright, under either name.
+
+cc-init-repo
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+
+exec cc request GET /tickets
+stdout '<script src="/assets/htmx.min.js"></script>'
+stdout 'href="/s/sandbox-org/single-task/CC-1"'
+! stdout 'http-equiv="refresh"'
+! stdout 'hx-preserve'
+
+exec cc request GET /assets/htmx.min.js
+stdout 'htmx'
+
+! exec cc request GET /ticket/sandbox:%2F%2FCC-1/detail
+stderr '404'
+! exec cc request GET /task/sandbox:%2F%2FCC-1/detail
+stderr '404'

@@ -188,7 +188,7 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 
 	body := renderPath(t, server, "/repos/acme/alpha")
 	for _, want := range []string{
-		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git", `href="/?repo=acme%2Falpha"`,
+		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git",
 		"project:x", "project:y", "also in acme/beta",
 		`<a href="/repos/acme/alpha">acme/alpha</a>`,
 	} {
@@ -251,7 +251,7 @@ func TestReposPagesMatchGoldens(t *testing.T) {
 	}
 }
 
-func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
+func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	t.Parallel()
 
 	st := track(t, openStore(t), alphaRepo)
@@ -265,9 +265,9 @@ func TestMastheadRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 
 	for name, path := range map[string]string{
-		"masthead_refused_board":  "/",
-		"masthead_refused_scoped": "/?repo=acme/alpha",
-		"masthead_refused_repos":  "/repos",
+		"notice_refused_tickets": "/tickets",
+		"notice_refused_repo":    "/repos/acme/beta",
+		"notice_refused_repos":   "/repos",
 	} {
 		rec := get(t, server, path)
 		if rec.Code != http.StatusOK {

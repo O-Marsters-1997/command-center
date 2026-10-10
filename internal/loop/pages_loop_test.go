@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -27,7 +26,7 @@ func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Serve
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
-	return renderPath(t, server, "/")
+	return renderPath(t, server, "/tickets")
 }
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
@@ -207,8 +206,4 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	if string(got) != string(want) {
 		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
 	}
-}
-
-func selPagePath(ticketURL string) string {
-	return "/?" + url.Values{"sel": {ticketURL}}.Encode()
 }

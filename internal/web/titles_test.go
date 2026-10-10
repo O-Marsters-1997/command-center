@@ -32,12 +32,12 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 	page := renderBoard(t, newServer(st, testNow))
 
 	for _, tc := range []struct{ name, got, want string }{
-		{"titled ticket cell", rowCellText(t, page, tickets[0].URL, `button type="button"[^>]*`, "button"), "#100"},
+		{"titled ticket cell", rowCellText(t, page, tickets[0].URL, `a href="[^"]*"[^>]*`, "a"), "#100"},
 		{
 			"titled task cell", rowCellText(t, page, tickets[0].URL, "div", "div"),
 			"Put each ticket&#39;s issue title on its row",
 		},
-		{"untitled ticket cell", rowCellText(t, page, tickets[1].URL, `button type="button"[^>]*`, "button"), "#101"},
+		{"untitled ticket cell", rowCellText(t, page, tickets[1].URL, `a href="[^"]*"[^>]*`, "a"), "#101"},
 		{"untitled task cell", rowCellText(t, page, tickets[1].URL, "div", "div"), "untitled"},
 	} {
 		if tc.got != tc.want {

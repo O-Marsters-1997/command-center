@@ -9,8 +9,8 @@ exec cc tick --count 1
 exec cc request GET /tickets
 
 stdout 'data-section="ready"'
-stdout '>#CC-1</button>'
-stdout '>#CC-2</button>'
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
 stdout 'href="/tickets" aria-current="page">All'
 
 exec cc request GET /tickets?filter=blocked

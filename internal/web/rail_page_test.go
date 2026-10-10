@@ -71,16 +71,17 @@ func TestRailDropsASettledTicketOnceItsWorktreeIsGone(t *testing.T) {
 func TestRailKeepsTheExpandedSetAndSelectionFromTheRequest(t *testing.T) {
 	t.Parallel()
 
-	server := newServer(railStore(t, true), testNow)
+	st, _ := sessionStore(t, "agent", "", false, true)
+	server := newServer(st, testNow)
 	req := httptest.NewRequest(http.MethodGet, "/rail", nil)
-	req.Header.Set("HX-Current-URL", "http://cc/?sel=sandbox%3A%2F%2FCC-1")
-	req.AddCookie(&http.Cookie{Name: "rail-open", Value: "settled"})
+	req.Header.Set("HX-Current-URL", "http://cc/s/acme/web/1")
+	req.AddCookie(&http.Cookie{Name: "rail-open", Value: "feature:checkout"})
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `data-rail-key="settled" open`) {
-		t.Errorf("settled was open in the cookie but rendered closed:\n%s", body)
+	if !strings.Contains(body, `data-rail-key="feature:checkout" open`) {
+		t.Errorf("checkout was open in the cookie but rendered closed:\n%s", body)
 	}
 	if !strings.Contains(body, `aria-current="page"`) {
 		t.Errorf("the ticket in HX-Current-URL is not marked current:\n%s", body)

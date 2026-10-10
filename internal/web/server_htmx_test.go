@@ -4,7 +4,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -60,44 +59,17 @@ func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 	assertSeeOtherHome(t, resp)
 }
 
-func TestVerbSwapKeepsTheSelectedRowExpanded(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(seededRunning(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	q := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}, "sel": {"sandbox://CC-1"}}
-	resp := postVerb(t, srv, "/verb?"+q.Encode(), map[string]string{"HX-Request": "true"})
-	defer func() { _ = resp.Body.Close() }()
-
-	if body := readBody(t, resp); !strings.Contains(body, `hx-preserve="true"`) {
-		t.Errorf("the swapped board dropped the expanded detail row:\n%s", body)
-	}
-}
-
-func TestBoardSwapCarriesTheBandAndMasthead(t *testing.T) {
+func TestBoardSwapIsTheTableAlone(t *testing.T) {
 	t.Parallel()
 
 	server := openServer(seededStore(t, time.Now()), realClock{}, "")
 	body := renderPath(t, server, "/board")
 
-	for _, want := range []string{`id="masthead" hx-swap-oob="true"`, `id="band" hx-swap-oob="true"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("board swap does not contain %q:\n%s", want, body)
-		}
+	if !strings.HasPrefix(strings.TrimSpace(body), `<table id="board"`) {
+		t.Errorf("board swap is not the table:\n%s", body)
 	}
-}
-
-func TestPageRendersTheMastheadAndBandExactlyOnce(t *testing.T) {
-	t.Parallel()
-
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
-	body := renderPath(t, server, "/")
-
-	for _, id := range []string{`id="masthead"`, `id="band"`} {
-		if got := strings.Count(body, id); got != 1 {
-			t.Errorf("page contains %s %d times, want 1", id, got)
-		}
+	if strings.Contains(body, "hx-swap-oob") {
+		t.Errorf("board swap still carries an out-of-band region:\n%s", body)
 	}
 }
 
@@ -107,11 +79,10 @@ func TestAgesCarryTheAbsoluteInstantForTheClock(t *testing.T) {
 	observedAt := testNow
 	store := seededStore(t, observedAt)
 	server := newServer(store, observedAt.Add(90*time.Second))
-	body := renderPath(t, server, "/")
+	body := renderPath(t, server, "/rail")
 
 	for _, want := range []string{
-		`<time datetime="2026-08-20T12:00:00Z">1m30s ago</time>`,
-		`<time datetime="2026-08-20T12:00:15Z">`,
+		`<time datetime="2026-08-20T12:00:15Z">1m15s ago</time>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)

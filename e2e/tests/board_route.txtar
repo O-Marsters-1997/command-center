@@ -1,6 +1,5 @@
-# GET /board serves the table htmx swaps into the target, then the masthead and the band as
-# out-of-band swaps, so the numbers above the board never outlive the rows beneath it. The shell
-# itself -- the document, the launch form -- must still not come back down with it.
+# GET /board serves the table htmx swaps into its target and nothing else. The shell itself -- the
+# document, the launch form -- must not come back down with it.
 
 cc-init-repo
 cc-config two-tasks
@@ -8,14 +7,13 @@ cc-fake-gh no-prs
 
 exec cc import project:two-tasks
 exec cc tick --count 1
-exec cc request GET /board
+exec cc request GET /board?all=1
 
 stdout '^<table id="board"'
-stdout '>#CC-1</button>'
-stdout '>#CC-2</button>'
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
 
-stdout 'id="masthead" hx-swap-oob="true"'
-stdout 'id="band" hx-swap-oob="true"'
+! stdout 'hx-swap-oob'
 
 ! stdout '<form id="launch"'
 ! stdout 'launch selected'

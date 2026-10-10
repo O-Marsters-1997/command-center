@@ -1,0 +1,9 @@
+{{template "shellStart" .}}
+<li>home</li>
+{{template "shellAction" .}}
+{{template "shellContent" .}}
+<p class="text-muted">Pick a session from the rail, or see <a href="{{.Target}}">where to start</a>.</p>
+<script>
+  if (matchMedia("(min-width: 760px)").matches) location.replace({{.Target}});
+</script>
+{{template "shellEnd" .}}

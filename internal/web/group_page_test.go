@@ -16,7 +16,7 @@ type renderedRow struct {
 }
 
 var rowTagRE = regexp.MustCompile(`(?s)<tr([^>]*)>(?:\s*<td[^>]*>.*?</td>){2}\s*<td[^>]*>\s*` +
-	`<button[^>]*>([^<]*)</button>`)
+	`<a[^>]*>([^<]*)</a>`)
 
 func renderedRows(page string) []renderedRow {
 	matches := rowTagRE.FindAllStringSubmatch(page, -1)

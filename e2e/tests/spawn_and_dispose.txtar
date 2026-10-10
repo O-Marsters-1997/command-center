@@ -30,7 +30,7 @@ exec sleep 0.5
 # page still renders that tick's pre-push snapshot, so it reads push_pending, not checking.
 exec cc tick --count 1
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>push_pending</span>'
 stdout 'agent finished with commits, waiting to push'
 
@@ -46,7 +46,7 @@ exec sleep 0.5
 # a missing event (inv. 7) -- and a failed run is not a push candidate, so cc-2 never reached
 # the remote.
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>failed</span>'
 stdout 'no commits after this run'
 ! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-2-x
@@ -60,16 +60,16 @@ exec cc tick --count 1
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it: running is derived by the tick after it.
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout '>running</span>'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>running</span>'
 stdout 'agent running'
 
 # Further ticks leave a live run alone: no second spawn, no premature disposition.
 exec cc tick --count 2
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=1 '>running</span>'
 grep -count=1 'sleeps.sh' $WORK/agent.log
 
@@ -77,7 +77,7 @@ grep -count=1 'sleeps.sh' $WORK/agent.log
 # group empty and disposes the run: nothing left running, and no commits means failed.
 exec cc request POST '/verb?verb=kill&ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout '>running</span>'
 stdout -count=2 '>failed</span>'
 

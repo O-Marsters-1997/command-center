@@ -10,8 +10,8 @@ exec cc tick --count 1
 exec cc request GET /f/project:two-tasks
 
 stdout 'data-section="ready"'
-stdout '>#CC-1</button>'
-stdout '>#CC-2</button>'
+stdout '>#CC-1</a>'
+stdout '>#CC-2</a>'
 stdout 'href="/f/project:two-tasks" aria-current="page">Board<'
 stdout 'href="/f/project:two-tasks/graph">Graph<'
 stdout 'href="/f/project:two-tasks/launch"'

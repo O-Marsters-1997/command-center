@@ -72,7 +72,7 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <div class="sidebar-head">Command Centre</div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/?view=board&feature=board-scope" hx-get="/?view=board&feature=board-scope" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
+    <a class="sidebar-item" href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
     <a class="sidebar-item" href="/insights?feature=board-scope" hx-get="/insights?feature=board-scope" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
     <a class="sidebar-item" href="/repos" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
   </nav>
@@ -82,26 +82,7 @@
   </form>
 </aside>
 <div class="pane">
-<div id="masthead" hx-swap-oob="true">
-  <div class="flex flex-wrap items-center gap-[0.6rem] py-2 px-4">
-    <span class="glyph glyph-ready">0 live</span>
-    
-    <span class="glyph glyph-done">observed <time datetime="2026-08-20T12:00:00Z">0s ago</time></span>
-    
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      five-hour · 0% · calibrating
-    </span>
-    
-    <span class="flex items-center gap-[0.4em]">
-      <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-      weekly · 0% · calibrating
-    </span>
-    
-  </div>
-  
-  
+<div id="notices">
 </div>
 <main id="main">
 <header class="topbar">
@@ -121,48 +102,6 @@
   <a class="pill-tab" href="/f/board-scope" aria-current="page">Board</a>
   <a class="pill-tab" href="/f/board-scope/graph">Graph</a>
 </nav>
-<section id="band" class="mb-4 flex flex-wrap gap-3" aria-label="fleet analytics">
-<article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">state of the fleet</h2>
-    
-    <p class="m-0 mb-[0.35rem] text-[1.1rem] font-bold">2/2 yours</p>
-    <div class="flex h-[0.6rem] overflow-hidden rounded-full bg-track">
-      
-      <span class="segbar-segment" data-glyph="blocked" style="flex-grow: 1"></span>
-      
-      <span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span>
-      
-    </div>
-    <ul class="m-0 mt-[0.35rem] flex flex-wrap list-none gap-x-[0.6rem] gap-y-[0.15rem] p-0">
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-blocked"></span>blocked · 1</li>
-      
-      <li class="flex items-center gap-[0.3em]"><span class="glyph glyph-ready"></span>ready · 1</li>
-      
-    </ul>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">stack depth</h2>
-    
-    <p class="m-0 text-muted">no worktree has been cut</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">gating checks</h2>
-    
-    <p class="m-0 text-muted">no branch has reported a check yet</p>
-    
-  </article>
-
-  <article class="flex-[1_1_14rem] rounded border border-border px-3 py-[0.6rem]">
-    <h2 class="m-0 mb-[0.35rem] text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-muted">spend</h2>
-    
-    <p class="m-0 text-muted">no runs have completed this session yet</p>
-    
-  </article></section>
 
 <form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 <table id="board" hx-get="/board?feature=board-scope" hx-trigger="every 5s" hx-swap="outerHTML">
@@ -182,7 +121,7 @@
       <span class="glyph glyph-ready">ready</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?feature=board-scope&amp;sel=sandbox%3A%2F%2FROOT" hx-push-url="/f/board-scope?sel=sandbox%3A%2F%2FROOT" hx-target="#board" hx-swap="outerHTML">#ROOT</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#ROOT</a>
     </td>
     <td><div class="text-muted text-[0.85em]">no blockers</div>
       <div>untitled</div><div class="text-muted text-[0.85em]">unlocks #CHILD</div>
@@ -195,9 +134,8 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100"></td>
   </tr>
-  
 
   </tbody>
   
@@ -212,7 +150,7 @@
       <span class="glyph glyph-blocked">blocked</span>
     </td>
     <td>
-      <button type="button" class="border-none bg-transparent p-0 text-inherit underline underline-offset-2" hx-get="/board?feature=board-scope&amp;sel=sandbox%3A%2F%2FCHILD" hx-push-url="/f/board-scope?sel=sandbox%3A%2F%2FCHILD" hx-target="#board" hx-swap="outerHTML">#CHILD</button>
+      <a href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">#CHILD</a>
     </td>
     <td><div class="text-muted text-[0.85em]">blocked by sandbox://ROOT: root has no open or merged pull request</div>
       <div>untitled</div><div class="text-muted text-[0.85em]">after #ROOT</div>
@@ -225,9 +163,8 @@
     </td>
     <td>no spend
     </td>
-    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 group-[.selected]:opacity-100"></td>
+    <td class="opacity-35 transition-[opacity] duration-[120ms] ease-[ease-in-out] motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100"></td>
   </tr>
-  
 
   </tbody>
   

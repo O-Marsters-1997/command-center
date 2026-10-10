@@ -28,7 +28,7 @@ exec cc tick --count 1
 # either agent has had time to commit (commits_slow.sh sleeps a full second first, for exactly
 # this reason). Neither run relaunches.
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout -count=2 '>running</span>'
 exec cc request GET /events
 stdout -count=2 'run_launched'
@@ -52,7 +52,7 @@ cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
 exec cc tick --count 1
 exec sleep 2.5
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>review_me</span>'
 stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
@@ -62,7 +62,7 @@ stdout 'waiting on https://github.com/sandbox-org/services/issues/PLA-40'
 # same as any row with no configured compat check.
 cc-fake-gh-head cross-repo-open cc-1-x
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>waiting_on_producer_deploy</span>'
 stdout '>checking</span>'
 ! stdout '>merged</span>'
@@ -73,7 +73,7 @@ stdout '>checking</span>'
 # exists to prove.
 cc-fake-gh-head cross-repo-merged cc-1-x
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>merged</span>'
 stdout '>waiting_on_producer_deploy</span>'
 ! grep 'pr ready cc-1-x' $WORK/gh.log
@@ -83,7 +83,7 @@ stdout '>waiting_on_producer_deploy</span>'
 cc-fake-gh-head cross-repo-compat-green cc-1-x
 exec cc tick --count 1
 grep -count=1 'pr ready cc-1-x' $WORK/gh.log
-exec cc request GET /
+exec cc request GET /tickets
 stdout '>review_me</span>'
 
 # GitHub now reports the pull request as ready, as a real observe would from here on. Further

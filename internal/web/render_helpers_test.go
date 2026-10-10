@@ -12,7 +12,7 @@ import (
 
 func renderPage(t *testing.T, server *web.Server) string {
 	t.Helper()
-	return renderPath(t, server, "/")
+	return renderPath(t, server, "/tickets")
 }
 
 func renderBoard(t *testing.T, server *web.Server) string {
@@ -35,7 +35,7 @@ func rowHTML(t *testing.T, page, ticketURL string) string {
 	t.Helper()
 	ref := ticketRef(ticketURL)
 	for _, block := range strings.Split(page, "<tr") {
-		if !strings.Contains(block, ">"+ref+"</button>") {
+		if !strings.Contains(block, ">"+ref+"</a>") {
 			continue
 		}
 		end := strings.Index(block, "</tr>")

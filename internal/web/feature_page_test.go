@@ -58,13 +58,3 @@ func TestFeaturePageUnknownFeatureIs404(t *testing.T) {
 		t.Errorf("GET /f/bogus: status = %d, want 404", rec.Code)
 	}
 }
-
-func TestFeatureBoardPushesItsOwnURLOnSelect(t *testing.T) {
-	t.Parallel()
-
-	page := renderPath(t, threeFeatureServer(t), "/f/board-scope")
-
-	if !strings.Contains(page, `hx-push-url="/f/board-scope?sel=`) {
-		t.Errorf("row select does not push /f/board-scope:\n%s", page)
-	}
-}

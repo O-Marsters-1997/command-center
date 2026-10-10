@@ -13,7 +13,7 @@ import (
 )
 
 func RenderStatesPage(states []plan.State) (string, error) {
-	return renderStates("page.tmpl", states)
+	return renderStates("tickets.tmpl", states)
 }
 
 func RenderStatesBoard(states []plan.State) (string, error) {

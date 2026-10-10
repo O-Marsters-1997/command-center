@@ -13,7 +13,7 @@ exec cc tick --count 1
 stderr '403'
 
 exec cc tick --count 1
-exec cc request GET /
+exec cc request GET /tickets
 ! stdout 'queued'
 stdout '>ready</span>'
 stdout '>blocked</span>'

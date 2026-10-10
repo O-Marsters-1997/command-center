@@ -160,14 +160,6 @@ func mixOf(pairs []callPair) toolMix {
 	return mix
 }
 
-func (m toolMix) calls() int {
-	total := 0
-	for _, n := range m {
-		total += n
-	}
-	return total
-}
-
 func (m toolMix) summary() string {
 	var parts []string
 	if n := m[reading]; n > 0 {
@@ -194,23 +186,6 @@ func (m toolMix) summary() string {
 	}
 	summary := strings.Join(parts, ", ")
 	return strings.ToUpper(summary[:1]) + summary[1:]
-}
-
-func (m toolMix) kinds() string {
-	var parts []string
-	if n := m[reading] + m[searching]; n > 0 {
-		parts = append(parts, fmt.Sprintf("%d reading", n))
-	}
-	if n := m[editing]; n > 0 {
-		parts = append(parts, fmt.Sprintf("%d editing", n))
-	}
-	if n := m[running]; n > 0 {
-		parts = append(parts, fmt.Sprintf("%d running", n))
-	}
-	if n := m[other]; n > 0 {
-		parts = append(parts, fmt.Sprintf("%d other", n))
-	}
-	return strings.Join(parts, ", ")
 }
 
 func plural(n int, one, many string) string {
