@@ -13,6 +13,8 @@ export interface Candidate {
   blocked_by: string[] | null;
 }
 
+export const NOW = "now";
+export const ON_UNLOCK = "on unlock";
 export const REFUSED = "refused";
 
 export function initialTicked(candidates: Candidate[]): Set<string> {
@@ -46,4 +48,22 @@ export function columnsFor(candidates: Candidate[]): Map<string, number> {
 
   for (const c of candidates) depth(c.url);
   return col;
+}
+
+export interface Sections {
+  now: Candidate[];
+  onUnlock: Candidate[];
+  refused: Candidate[];
+}
+
+export function sectionsFor(candidates: Candidate[]): Sections {
+  return {
+    now: candidates.filter((c) => c.label === NOW),
+    onUnlock: candidates.filter((c) => c.label === ON_UNLOCK),
+    refused: candidates.filter((c) => c.label !== NOW && c.label !== ON_UNLOCK),
+  };
+}
+
+export function cancelHref(feature: string): string {
+  return feature ? `/f/${encodeURIComponent(feature)}` : "/";
 }
