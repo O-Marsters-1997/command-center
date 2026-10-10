@@ -7,7 +7,7 @@
   <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}">Board</a>
   <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph" aria-current="page">Graph</a>
 </nav>
-<cc-graph data-src="/graph.json?feature={{.FeatureQuery}}">
+<cc-graph data-src="/graph.json?feature={{.FeatureScope}}">
   <p class="banner ribbon" data-glyph="pending" role="status">
     the dependency graph needs the built assets: run `just assets`, or switch to the board.
   </p>
