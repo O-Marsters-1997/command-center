@@ -212,7 +212,7 @@ func filterRail(rail Rail, query string) Rail {
 		})
 	}
 
-	rail.Query = strings.Join(terms, " ")
+	rail.Query = strings.TrimSpace(query)
 	rail.NeedsYou = keep(rail.NeedsYou)
 
 	var features []RailFeature
