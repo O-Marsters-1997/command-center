@@ -109,6 +109,24 @@ export function activate(target: KeyTarget): void {
   else target.click();
 }
 
+export interface RailLink {
+  getAttribute(name: string): string | null;
+  closest(selector: string): { open: boolean } | null;
+  click(): void;
+}
+
+export function walkRail(links: readonly RailLink[], step: 1 | -1): RailLink | null {
+  const current = links.findIndex((l) => l.getAttribute("aria-current") === "page");
+  const index = current === -1 ? (step === 1 ? 0 : links.length - 1) : current + step;
+  const target = links[index] ?? null;
+  if (target) {
+    const fold = target.closest("details");
+    if (fold) fold.open = true;
+    target.click();
+  }
+  return target;
+}
+
 function isHTMLElement(node: Node): node is HTMLElement {
   return node instanceof HTMLElement;
 }
@@ -128,6 +146,12 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
     (e) => {
       const binding = state.lookup(e, doc.activeElement);
       if (binding === null) return;
+      if (binding === "j" || binding === "k") {
+        const links = [...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement);
+        if (links.length > 0) e.preventDefault();
+        walkRail(links, binding === "j" ? 1 : -1);
+        return;
+      }
       const target = resolveTarget(binding, [...doc.querySelectorAll("[data-key]")].filter(isHTMLElement));
       if (!target) return;
       e.preventDefault();
