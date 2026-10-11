@@ -28,6 +28,36 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (i
 	return id, err
 }
 
+const deleteProject = `-- name: DeleteProject :execrows
+DELETE FROM projects WHERE lower(name) = lower($1)
+`
+
+func (q *Queries) DeleteProject(ctx context.Context, lower string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteProject, lower)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const editProject = `-- name: EditProject :execrows
+UPDATE projects SET name = $1, hue = $2 WHERE lower(name) = lower($3)
+`
+
+type EditProjectParams struct {
+	NewName string
+	Hue     int16
+	OldName string
+}
+
+func (q *Queries) EditProject(ctx context.Context, arg EditProjectParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, editProject, arg.NewName, arg.Hue, arg.OldName)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const projectID = `-- name: ProjectID :one
 SELECT id FROM projects WHERE lower(name) = lower($1)
 `

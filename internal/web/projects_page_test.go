@@ -119,9 +119,100 @@ func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
 		}
 	}
 
-	body := renderPath(t, server, "/repos")
+	page := renderPath(t, server, "/repos")
+	_, body, _ := strings.Cut(page, "<summary>New project</summary>")
+	body, _, _ = strings.Cut(body, "</details>")
 
 	if !strings.Contains(body, `value="3" checked`) || strings.Contains(body, `value="1" checked`) {
 		t.Errorf("GET /repos should preselect hue 3:\n%s", body)
+	}
+}
+
+func postPath(t *testing.T, server *web.Server, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
+	t.Parallel()
+	server := projectsServer(t)
+	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}})
+
+	rec := postPath(t, server, "/projects/acme", url.Values{"name": {"acme-co"}, "hue": {"2"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /projects/acme = %d, want 303: %s", rec.Code, rec.Body)
+	}
+	body := renderPath(t, server, "/repos")
+	if !strings.Contains(body, `data-hue="2" aria-hidden="true">A</span>`) || !strings.Contains(body, "acme-co") ||
+		!strings.Contains(body, "1 repo<") {
+		t.Errorf("GET /repos after rename:\n%s", body)
+	}
+}
+
+func TestEditProjectRefusals(t *testing.T) {
+	t.Parallel()
+	server := projectsServer(t)
+	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
+	postProjectForm(t, server, url.Values{"name": {"beta"}, "hue": {"1"}})
+
+	for name, c := range map[string]struct {
+		path string
+		form url.Values
+		want int
+	}{
+		"onto existing": {"/projects/acme", url.Values{"name": {"beta"}, "hue": {"1"}}, http.StatusConflict},
+		"unknown":       {"/projects/ghost", url.Values{"name": {"x"}, "hue": {"1"}}, http.StatusNotFound},
+		"bad hue":       {"/projects/acme", url.Values{"name": {"acme"}, "hue": {"9"}}, http.StatusBadRequest},
+		"delete ghost":  {"/projects/ghost/delete", nil, http.StatusNotFound},
+		"move unknown project": {
+			"/repos/acme/alpha/project", url.Values{"project": {"ghost"}}, http.StatusNotFound,
+		},
+		"move unknown repo": {"/repos/acme/ghost/project", url.Values{"project": {"acme"}}, http.StatusNotFound},
+	} {
+		if rec := postPath(t, server, c.path, c.form); rec.Code != c.want {
+			t.Errorf("%s: POST %s = %d, want %d: %s", name, c.path, rec.Code, c.want, rec.Body)
+		}
+	}
+}
+
+func TestDeleteProjectLeavesReposLoose(t *testing.T) {
+	t.Parallel()
+	server := projectsServer(t)
+	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}})
+
+	if rec := postPath(t, server, "/projects/acme/delete", nil); rec.Code != http.StatusSeeOther {
+		t.Fatalf("delete = %d, want 303: %s", rec.Code, rec.Body)
+	}
+
+	body := renderPath(t, server, "/repos")
+	if strings.Contains(body, `data-scope="project"`) || !strings.Contains(body, `href="/repos/acme/alpha"`) {
+		t.Errorf("GET /repos after delete:\n%s", body)
+	}
+}
+
+func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
+	t.Parallel()
+	server := projectsServer(t)
+	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
+
+	if rec := postPath(t, server, "/repos/acme/solo/project", url.Values{"project": {"acme"}}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("move = %d: %s", rec.Code, rec.Body)
+	}
+	if body := renderPath(t, server, "/repos"); !strings.Contains(body, `data-scope="project"`) ||
+		!strings.Contains(body, `<option value="acme" selected>`) {
+		t.Errorf("GET /repos after move:\n%s", body)
+	}
+
+	if rec := postPath(t, server, "/repos/acme/solo/project", url.Values{"project": {""}}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("loosen = %d: %s", rec.Code, rec.Body)
+	}
+	if body := renderPath(t, server, "/repos"); strings.Contains(body, `<option value="acme" selected>`) {
+		t.Errorf("GET /repos after loosen still selects acme:\n%s", body)
 	}
 }
