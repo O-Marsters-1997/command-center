@@ -162,7 +162,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 		}
 		groups = append(groups, group)
 	}
-	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: []int{1, 2, 3}, Repos: names}
+	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: hues(), Repos: names}
 	return groups, form, nil
 }
 

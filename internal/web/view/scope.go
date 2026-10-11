@@ -52,6 +52,14 @@ func initial(name string) string {
 	return strings.ToUpper(string(r))
 }
 
+func hues() []int {
+	var all []int
+	for hue := store.MinHue; hue <= store.MaxHue; hue++ {
+		all = append(all, hue)
+	}
+	return all
+}
+
 func leastUsedHue(projects []store.Project) int {
 	var uses [store.MaxHue + 1]int
 	for _, p := range projects {

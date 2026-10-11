@@ -50,6 +50,10 @@ func (s *Server) respondRepoGroups(w http.ResponseWriter, r *http.Request) error
 		http.Redirect(w, r, "/repos", http.StatusSeeOther)
 		return nil
 	}
+	return s.renderRepoGroups(w, r)
+}
+
+func (s *Server) renderRepoGroups(w http.ResponseWriter, r *http.Request) error {
 	groups, err := s.view.RepoGroups(r.Context())
 	if err != nil {
 		return err

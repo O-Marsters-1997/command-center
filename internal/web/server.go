@@ -687,11 +687,7 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error {
 	query := r.URL.Query().Get("q")
 	if strings.TrimSpace(query) == "" {
-		groups, err := s.view.RepoGroups(r.Context())
-		if err != nil {
-			return err
-		}
-		return renderHTML(w, "repoGroups", groups)
+		return s.renderRepoGroups(w, r)
 	}
 	var (
 		pushable []gh.RepoSummary
