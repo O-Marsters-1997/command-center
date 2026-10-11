@@ -65,3 +65,38 @@ func TestBuildRailGroupsByAttention(t *testing.T) {
 		t.Errorf("Settled = %v, want %v", got, []string{"#5"})
 	}
 }
+
+func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
+	t.Parallel()
+
+	row := railRow("3", "billing", plan.GlyphAttention)
+	row.State = plan.AwaitingInput.String()
+	row.Reason = "Which database?"
+	row.Verbs = []string{plan.VerbFollowUp, plan.VerbReRun}
+
+	rail := buildRail([]Row{row}, time.Now(), RailParams{})
+
+	if len(rail.NeedsYou) != 1 {
+		t.Fatalf("NeedsYou = %d cards, want 1", len(rail.NeedsYou))
+	}
+	got := rail.NeedsYou[0]
+	if !got.Reply || got.Verb != "" || got.Reason != "Which database?" {
+		t.Errorf("card = {Reply: %v, Verb: %q, Reason: %q}, want a Reply card with no verb carrying the question",
+			got.Reply, got.Verb, got.Reason)
+	}
+}
+
+func TestBuildRailKeepsTheVerbWhenAnAwaitingInputRunCannotBeRepliedTo(t *testing.T) {
+	t.Parallel()
+
+	row := railRow("4", "billing", plan.GlyphAttention)
+	row.State = plan.AwaitingInput.String()
+	row.Reason = "Which database?"
+	row.Verbs = []string{plan.VerbReRun}
+
+	got := buildRail([]Row{row}, time.Now(), RailParams{}).NeedsYou[0]
+
+	if got.Reply || got.Verb != plan.VerbReRun {
+		t.Errorf("card = {Reply: %v, Verb: %q}, want no Reply and %q", got.Reply, got.Verb, plan.VerbReRun)
+	}
+}

@@ -1,5 +1,14 @@
 -- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id;
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
+VALUES (
+  sqlc.arg(ticket_id), sqlc.arg(kind), sqlc.arg(baseline_sha), sqlc.arg(prompt_hash),
+  CASE WHEN sqlc.arg(new_session)::boolean THEN gen_random_uuid() ELSE sqlc.narg(session_id)::text::uuid END,
+  sqlc.narg(message)
+) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
+
+-- name: LatestSessionID :one
+SELECT COALESCE(session_id::text, '')::text AS session_id FROM runs
+WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') ORDER BY id DESC LIMIT 1;
 
 -- name: InsertExploreRunSkeleton :one
 INSERT INTO runs (launch_id, kind) VALUES ($1, 'explore') RETURNING id;
@@ -25,6 +34,9 @@ UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
   model = $9, metrics_settled = $10
 WHERE id = $11;
 
+-- name: RecordQuestion :exec
+UPDATE runs SET question = $1 WHERE id = $2;
+
 -- name: InsertCutFailedRun :one
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
@@ -35,7 +47,7 @@ WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: LatestRunsByTicket :many
 SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
+       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind, r.question
 FROM runs r
 JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id;
@@ -62,6 +74,19 @@ WHERE l.state = 'active';
 
 -- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
+
+-- name: LatestSessionRuns :many
+SELECT runs.id,
+  COALESCE(runs.log_path, '')::text AS log_path,
+  COALESCE(runs.message, '')::text AS message,
+  COALESCE(runs.question, '')::text AS question
+FROM runs
+WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.kind IN ('agent', 'follow_up') AND runs.session_id = (
+  SELECT latest.session_id FROM runs latest
+  WHERE latest.ticket_id = sqlc.arg(ticket_id) AND latest.kind IN ('agent', 'follow_up')
+  ORDER BY latest.id DESC LIMIT 1
+)
+ORDER BY runs.id;
 
 -- name: PrecedingRunKind :one
 SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1;

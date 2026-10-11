@@ -84,6 +84,9 @@ type Run struct {
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 	LaunchID       sql.NullInt64
+	SessionID      sql.NullString
+	Message        sql.NullString
+	Question       sql.NullString
 }
 
 type RunRequest struct {

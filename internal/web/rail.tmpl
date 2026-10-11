@@ -15,6 +15,10 @@
 </form>
 {{end}}
 
+{{define "railReply"}}
+<a class="rail-verb" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Reply</a>
+{{end}}
+
 {{define "rail"}}
 <div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-include="#rail-search" hx-swap="outerHTML">
   {{- if .NoMatch}}
@@ -25,8 +29,8 @@
     {{- range .NeedsYou}}
     <div class="rail-card" data-glyph="{{.Glyph}}">
       {{template "railItem" .}}
-      {{with .Reason}}<p class="rail-reason">{{.}}</p>{{end}}
-      {{if .Verb}}{{template "railVerb" .}}{{end}}
+      {{if .Reason}}<p class="rail-reason{{if .Reply}} rail-question{{end}}">{{.Reason}}</p>{{end}}
+      {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
     {{- else}}
     <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing needs you.{{end}}</p>

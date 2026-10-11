@@ -32,6 +32,8 @@ type SpawnConfig struct {
 	Model            string
 	Prompt           string
 	PromptPath       string
+	SessionID        string
+	Resume           bool
 	// LogFile is both stdout and stderr and is never a pipe, which would need a draining goroutine.
 	LogFile *os.File
 }
@@ -55,6 +57,17 @@ func substitute(arg string, cfg SpawnConfig) string {
 	return arg
 }
 
+func sessionArgs(cfg SpawnConfig) []string {
+	switch {
+	case cfg.SessionID == "":
+		return nil
+	case cfg.Resume:
+		return []string{"--resume", cfg.SessionID}
+	default:
+		return []string{"--session-id", cfg.SessionID}
+	}
+}
+
 func buildArgv(cfg SpawnConfig) []string {
 	omitWhenEmpty := map[string]string{
 		"{system_prompt}": cfg.SystemPromptPath,
@@ -62,6 +75,10 @@ func buildArgv(cfg SpawnConfig) []string {
 	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {
+		if a == "{session}" {
+			argv = append(argv, sessionArgs(cfg)...)
+			continue
+		}
 		if path, ok := omitWhenEmpty[a]; ok && path == "" {
 			if len(argv) > 0 {
 				argv = argv[:len(argv)-1]

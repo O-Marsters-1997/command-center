@@ -225,6 +225,35 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			check:   wantArgv(func(runner.SpawnConfig) string { return "before after" }),
 		},
 		{
+			name:    "expands the session element to --session-id for a new session",
+			script:  dumpArgs,
+			command: []string{"before", "{session}", "after"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) {
+				cfg.SessionID = "4e1c0a52-0000-4000-8000-000000000001"
+			},
+			check: wantArgv(func(runner.SpawnConfig) string {
+				return "before --session-id 4e1c0a52-0000-4000-8000-000000000001 after"
+			}),
+		},
+		{
+			name:    "expands the session element to --resume for a resumed session",
+			script:  dumpArgs,
+			command: []string{"before", "{session}", "after"},
+			configure: func(_ *testing.T, cfg *runner.SpawnConfig) {
+				cfg.SessionID = "4e1c0a52-0000-4000-8000-000000000001"
+				cfg.Resume = true
+			},
+			check: wantArgv(func(runner.SpawnConfig) string {
+				return "before --resume 4e1c0a52-0000-4000-8000-000000000001 after"
+			}),
+		},
+		{
+			name:    "drops the session element when there is no session",
+			script:  dumpArgs,
+			command: []string{"before", "{session}", "after"},
+			check:   wantArgv(func(runner.SpawnConfig) string { return "before after" }),
+		},
+		{
 			name:        "runs in the worktree even when argv never mentions it",
 			script:      "#!/bin/sh\npwd > $DUMP\n",
 			dumpOutside: true,

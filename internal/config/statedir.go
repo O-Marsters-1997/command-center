@@ -22,8 +22,7 @@ type Workspace struct {
 	RunsDir string
 	// SettingsPath is the app-owned deny settings file passed to every spawn.
 	SettingsPath string
-	// SystemPromptPath is the app-owned system prompt appended to every spawn, warning it that
-	// its session is single-shot.
+	// SystemPromptPath is the app-owned system prompt appended to every spawn.
 	SystemPromptPath string
 	// AgentsPath is the app-owned digest subagent definition passed to every implement spawn.
 	AgentsPath string

@@ -15,14 +15,41 @@ import (
 // InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
 // land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
-	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+	id, _, err := s.InsertSessionRunSkeleton(ctx, ticketID, kind, baselineSHA, promptHash, RunSession{})
+	return id, err
+}
+
+type RunSession struct {
+	StartNew bool
+	JoinID   string
+	Message  string
+}
+
+func (s *Store) InsertSessionRunSkeleton(
+	ctx context.Context, ticketID, kind, baselineSHA, promptHash string, session RunSession,
+) (runID int64, sessionID string, err error) {
+	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    notNull(ticketID),
 		Kind:        kind,
 		BaselineSHA: notNull(baselineSHA),
 		PromptHash:  notNull(promptHash),
+		NewSession:  session.StartNew,
+		SessionID:   nullIfEmpty(session.JoinID),
+		Message:     nullIfEmpty(session.Message),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+	}
+	return row.ID, row.SessionID, nil
+}
+
+func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, error) {
+	id, err := s.q.LatestSessionID(ctx, notNull(ticketID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("select latest session of %s: %w", ticketID, err)
 	}
 	return id, nil
 }
@@ -85,6 +112,14 @@ func (s *Store) RecordDisposition(
 		}
 	}
 	return tx.Commit()
+}
+
+func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
+	err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
+	if err != nil {
+		return fmt.Errorf("record question for run %d: %w", runID, err)
+	}
+	return nil
 }
 
 func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, requests []agentlog.Request) error {
@@ -237,6 +272,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 		}
 		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
+		summary.Question = row.Question.String
 		summaries[row.TicketID] = summary
 	}
 	return summaries, nil
@@ -248,6 +284,10 @@ func outcomeFromString(s string) plan.Outcome {
 		return plan.OutcomePush
 	case plan.OutcomeCutFailed.String():
 		return plan.OutcomeCutFailed
+	case plan.OutcomeAsked.String():
+		return plan.OutcomeAsked
+	case plan.OutcomeContinued.String():
+		return plan.OutcomeContinued
 	default:
 		return plan.OutcomeFailed
 	}
@@ -348,6 +388,25 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 		return nil, fmt.Errorf("select run ids for %s: %w", ticketID, err)
 	}
 	return ids, nil
+}
+
+type SessionRun struct {
+	ID       int64
+	LogPath  string
+	Message  string
+	Question string
+}
+
+func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]SessionRun, error) {
+	rows, err := s.q.LatestSessionRuns(ctx, notNull(ticketID))
+	if err != nil {
+		return nil, fmt.Errorf("select session runs for %s: %w", ticketID, err)
+	}
+	runs := make([]SessionRun, len(rows))
+	for i, row := range rows {
+		runs[i] = SessionRun{ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question}
+	}
+	return runs, nil
 }
 
 // LatestRunLog returns the newest run's log path for a ticket and whether it has ended.

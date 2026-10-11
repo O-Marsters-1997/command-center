@@ -76,13 +76,17 @@ func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error 
 	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
 }
 
+var errIntentPending = errors.New("intent stays pending")
+
 func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIntent) error) error {
 	intents, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return err
 	}
 	for _, intent := range intents {
-		if err := fn(intent); err != nil {
+		if err := fn(intent); errors.Is(err, errIntentPending) {
+			continue
+		} else if err != nil {
 			return err
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
@@ -210,6 +214,7 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 		func() error { return l.applyCancelIntents(ctx) },
 		func() error { l.spawned = nil; return nil },
 		func() error { return l.applyKillIntents(ctx) },
+		func() error { return l.interruptForFollowUps(ctx) },
 		func() error { return l.reconcileRuns(ctx, obs) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.recordVerdictTransitions(ctx, obs) },
@@ -444,6 +449,30 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	})
 }
 
+func (l *Loop) interruptForFollowUps(ctx context.Context) error {
+	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
+	if err != nil || len(intents) == 0 {
+		return err
+	}
+	latest, err := l.store.LatestRunsByTicket(ctx)
+	if err != nil {
+		return err
+	}
+	cancelled := map[string]bool{}
+	for _, intent := range intents {
+		run, ok := latest[intent.TicketID]
+		steerable := run.Kind == runKindAgent || run.Kind == runKindFollowUp
+		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid == nil || run.HasOutcome {
+			continue
+		}
+		cancelled[intent.TicketID] = true
+		if err := l.runner.Cancel(*run.Pgid); err != nil {
+			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
+		}
+	}
+	return nil
+}
+
 func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
@@ -481,15 +510,10 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 func (l *Loop) disposeRun(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) error {
-	commits := 0
-	if run.BaselineSHA != "" {
-		var err error
-		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
-		if err != nil {
-			return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
-		}
+	outcome, err := l.outcomeFor(ctx, run, ticket, obs)
+	if err != nil {
+		return err
 	}
-	outcome := dispositionFor(run.Kind, commits)
 
 	var exitCode *int
 	if code, ok := l.runner.Reap(run.Pgid); ok {
@@ -517,6 +541,70 @@ func (l *Loop) disposeRun(
 		return nil
 	}
 	return l.queueReviewFindings(ctx, run)
+}
+
+func (l *Loop) outcomeFor(
+	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
+) (plan.Outcome, error) {
+	if run.Kind == runKindAgent || run.Kind == runKindFollowUp {
+		queued, err := l.followUpQueued(ctx, run.TicketID)
+		if err != nil {
+			return 0, err
+		}
+		if queued {
+			return plan.OutcomeContinued, nil
+		}
+	}
+	question, err := l.readQuestion(run)
+	if err != nil {
+		return 0, err
+	}
+	if question != "" {
+		return plan.OutcomeAsked, l.store.RecordQuestion(ctx, run.ID, question)
+	}
+	commits := 0
+	if run.BaselineSHA != "" {
+		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
+		if err != nil {
+			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
+		}
+	}
+	return dispositionFor(run.Kind, commits), nil
+}
+
+func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, error) {
+	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(intents, func(i store.VerbIntent) bool { return i.TicketID == ticketURL }), nil
+}
+
+const maxQuestionBytes = 4096
+
+func (l *Loop) questionPath(runID int64) string {
+	return filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.question", runID))
+}
+
+func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
+	if run.Kind != runKindAgent && run.Kind != runKindFollowUp {
+		return "", nil
+	}
+	data, err := os.ReadFile(l.questionPath(run.ID))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read question for run %d: %w", run.ID, err)
+	}
+	if len(data) > maxQuestionBytes {
+		data = data[:maxQuestionBytes]
+	}
+	question := strings.TrimSpace(strings.ToValidUTF8(string(data), ""))
+	if question == "" {
+		return "(the agent asked without writing a question)", nil
+	}
+	return question, nil
 }
 
 func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bool) {
@@ -646,25 +734,43 @@ type spawnSpec struct {
 	launchID                               int64
 	worktree, baseline, hash, kind, prompt string
 	promptFor                              func(runID int64) string
+	resumeSessionID, message               string
 }
 
-func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (int64, error) {
-	if spec.kind == runKindExplore {
-		return l.store.InsertExploreRunSkeleton(ctx, spec.launchID)
+func (spec spawnSpec) session() store.RunSession {
+	switch {
+	case spec.resumeSessionID != "":
+		return store.RunSession{JoinID: spec.resumeSessionID, Message: spec.message}
+	case spec.kind == runKindAgent || spec.kind == runKindFollowUp:
+		return store.RunSession{StartNew: true, Message: spec.message}
+	default:
+		return store.RunSession{}
 	}
-	return l.store.InsertRunSkeleton(ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash)
+}
+
+func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64, sessionID string, err error) {
+	if spec.kind == runKindExplore {
+		runID, err = l.store.InsertExploreRunSkeleton(ctx, spec.launchID)
+		return runID, "", err
+	}
+	return l.store.InsertSessionRunSkeleton(
+		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 }
 
 func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	ticket := spec.ticket
-	runID, err := l.insertSkeleton(ctx, spec)
+	runID, sessionID, err := l.insertSkeleton(ctx, spec)
 	if err != nil {
 		return err
 	}
 
+	promptFor := spec.promptFor
+	if promptFor == nil && (spec.kind == runKindAgent || spec.kind == runKindFollowUp) {
+		promptFor = func(runID int64) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
+	}
 	prompt := spec.prompt
-	if spec.promptFor != nil {
-		prompt = spec.promptFor(runID)
+	if promptFor != nil {
+		prompt = promptFor(runID)
 	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
@@ -689,6 +795,8 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		Model:        modelFor(spec.kind),
 		Prompt:       prompt,
 		PromptPath:   promptPath,
+		SessionID:    sessionID,
+		Resume:       spec.resumeSessionID != "",
 		LogFile:      logFile,
 	}
 	if spec.kind == runKindAgent || spec.kind == runKindReview {

@@ -23,7 +23,8 @@ const agentSettings = `{
 // agentSystemPrompt is appended to every spawned agent's own system prompt via
 // --append-system-prompt-file: a Task-spawned subagent's completion notification is delivered
 // into a later turn, and claude -p has none to deliver it into.
-const agentSystemPrompt = `This session is single-shot: it runs non-interactively (claude -p) and will not resume.
+const agentSystemPrompt = `This session runs non-interactively (claude -p). Each run ends with your turn, and the
+owner may continue the session later with a message.
 
 Foreground subagents (Task, where you wait on the result within this turn) are allowed.
 Do not spawn a background subagent and end your turn waiting for its result: its completion

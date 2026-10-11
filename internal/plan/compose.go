@@ -59,6 +59,27 @@ func ComposeFollowUp(text string) string {
 	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
 }
 
+func ComposeAsking(questionPath string) string {
+	return fmt.Sprintf(
+		"\n\n## Asking the owner\n\n"+
+			"If you need a decision only the owner can make, write one question to %s and end your turn. "+
+			"The owner's answer resumes this session. Do not ask what you can decide yourself.",
+		questionPath)
+}
+
+func ComposeMessage(text string, after Outcome) string {
+	switch after {
+	case OutcomeAsked:
+		return fmt.Sprintf("The owner's answer to your question:\n\n%s", text)
+	case OutcomeContinued:
+		return fmt.Sprintf(
+			"The owner interrupted you with a message. Your last tool call may have been cut off, "+
+				"so check its effect before going on:\n\n%s", text)
+	default:
+		return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
+	}
+}
+
 const ReviewFixLines = 50
 
 // ComposeReview is the prompt for a review run of the branch against base.

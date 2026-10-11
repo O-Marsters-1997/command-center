@@ -38,6 +38,7 @@ type RunSummary struct {
 	BaselineSHA   string
 	PromptHash    string
 	Kind          string
+	Question      string
 }
 
 type PushRow struct {
@@ -101,6 +102,10 @@ type Entry struct {
 	OpensAsDraft   bool
 	PromptHash     string
 	LastPush       *PushRow
+}
+
+func (e Entry) HoldsWorktree() bool {
+	return e.Run != nil && !e.Run.Alive && e.Run.HasOutcome && e.Run.Outcome == OutcomeAsked
 }
 
 type Snapshot struct {
@@ -340,6 +345,7 @@ func (r Rules) runFor(
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
+		fact.Question = summary.Question
 		if summary.Outcome == OutcomePush {
 			pf := in.Pushes[t.URL]
 			fact.PushRefused = pf.Refused

@@ -486,7 +486,6 @@ func TestSpawningVerbsNeverTouchAWorktreeWithALiveRun(t *testing.T) {
 		refusedKind string
 	}{
 		{"resolve", plan.VerbResolve, "", "resolve_refused"},
-		{"follow-up", plan.VerbFollowUp, "do the thing", "follow_up_refused"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

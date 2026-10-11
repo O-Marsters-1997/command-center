@@ -153,6 +153,7 @@ const (
 	VerificationFailed
 	WaitingOnProducerDeploy
 	ConflictResolved
+	AwaitingInput
 	stateCount
 )
 
@@ -202,6 +203,8 @@ func (s State) String() string {
 		return "waiting_on_producer_deploy"
 	case ConflictResolved:
 		return "conflict_resolved"
+	case AwaitingInput:
+		return "awaiting_input"
 	case Blocked:
 		return "blocked"
 	default:
@@ -233,6 +236,7 @@ type RunFact struct {
 	VerificationFailedReason Reason
 	Resolved                 bool
 	ResolveIncompleteReason  Reason
+	Question                 string
 }
 
 // Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
@@ -287,6 +291,10 @@ func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 	case OutcomePush:
 		state, reason := statusFromPush(*run, unlock)
 		return state, reason, true
+	case OutcomeAsked:
+		return AwaitingInput, firstLine(run.Question), true
+	case OutcomeContinued:
+		return Queued, "resuming with your message", true
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:
@@ -302,6 +310,11 @@ func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
 	}
+}
+
+func firstLine(s string) Reason {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return Reason(strings.TrimSpace(line))
 }
 
 func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
