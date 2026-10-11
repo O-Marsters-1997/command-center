@@ -81,7 +81,7 @@ SELECT runs.id,
   COALESCE(runs.message, '')::text AS message,
   COALESCE(runs.question, '')::text AS question
 FROM runs
-WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.session_id = (
+WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.kind IN ('agent', 'follow_up') AND runs.session_id = (
   SELECT latest.session_id FROM runs latest
   WHERE latest.ticket_id = sqlc.arg(ticket_id) AND latest.kind IN ('agent', 'follow_up')
   ORDER BY latest.id DESC LIMIT 1

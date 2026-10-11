@@ -34,6 +34,10 @@ type Session struct {
 	Toast          string
 }
 
+func (s Session) Empty() bool {
+	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
+}
+
 // Running reports whether an agent is live on the ticket, so the composer shows its status line
 // and Kill instead of a follow-up box.
 func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
@@ -101,12 +105,16 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	if err != nil {
 		return Session{}, err
 	}
+	turns := []Turn{{Log: row.Log}}
+	if !raw {
+		turns = r.turns(row, runs)
+	}
 	promptLog := row.LogPath
 	if len(runs) > 0 {
 		promptLog = runs[0].LogPath
 	}
 	return Session{
-		Turns:          r.turns(row, runs),
+		Turns:          turns,
 		ActionsPath:    self + "?part=actions",
 		PRURL:          prURL,
 		Chrome:         chrome,
@@ -128,7 +136,7 @@ func (r *Reader) turns(row Row, runs []store.SessionRun) []Turn {
 	turns := make([]Turn, len(runs))
 	for i, run := range runs {
 		turns[i].Log = row.Log
-		if run.LogPath != row.LogPath {
+		if i != len(runs)-1 || run.LogPath != row.LogPath {
 			turns[i].Log = buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
 			turns[i].Log.StreamPath = ""
 		}
