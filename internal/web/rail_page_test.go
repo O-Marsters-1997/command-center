@@ -101,3 +101,34 @@ func TestRailShowsALoopErrorInTheFooter(t *testing.T) {
 		t.Errorf("the last loop error is missing from the rail footer:\n%s", body)
 	}
 }
+
+func TestRailQueryNarrowsAndForcesOpenWithoutTouchingTheCookie(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(railStore(t, true), testNow)
+	body := renderPath(t, server, "/rail?q=billing")
+
+	for _, want := range []string{`data-rail-forced`, `data-group="settled"`, `data-group="needs-you"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("GET /rail?q=billing is missing %q:\n%s", want, body)
+		}
+	}
+	if !strings.Contains(body, "No match.") {
+		t.Errorf("a section with no match does not say so:\n%s", body)
+	}
+	if strings.Contains(renderPath(t, server, "/rail"), "data-rail-forced") {
+		t.Error("a rail without a query marks features forced")
+	}
+}
+
+func TestRailQueryWithNoMatchAnywhereSaysSo(t *testing.T) {
+	t.Parallel()
+
+	body := renderPath(t, newServer(railStore(t, true), testNow), "/rail?q=zzzz")
+	if !strings.Contains(body, "Nothing matches “zzzz”.") {
+		t.Errorf("an unmatched query has no summary line:\n%s", body)
+	}
+	if strings.Contains(body, `data-group=`) {
+		t.Errorf("an unmatched query still renders sections:\n%s", body)
+	}
+}

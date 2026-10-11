@@ -170,7 +170,7 @@ embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 | `GET /task/{task}/detail` | One row's detail as an htmx fragment: the log tail, the check list, the base SHA, elapsed and the worktree path. `{task}` is the ticket URL percent-encoded into a single path segment. |
 | `GET /task/{task}/log` | The run's log tail, streamed as JSON over SSE. |
 | `GET /assets/htmx.min.js` | htmx, vendored into the binary. The board needs no network. |
-| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/web/assets/dist/app.css` and committed. The board needs no network. |
+| `GET /assets/app.css` | The Tailwind sheet, built from `web/app.css` into `internal/web/assets/dist/app.css` by `just assets`. The board needs no network. |
 | `POST /launch` | Queues one launch intent per task, all sharing one group token so the tick sees one authorisation. |
 | `POST /verb` | Queues one verb intent against one task. |
 
@@ -307,7 +307,7 @@ just test        # go test ./...
 just test-e2e    # go test -tags=e2e ./e2e/...
 just fmt         # go fmt ./...
 just tidy        # go mod tidy
-just assets      # rebuild the committed app.css (needs bun)
+just assets      # build app.css (ignored) and the committed JS (needs bun)
 just lint        # golangci-lint in docker
 just ci          # conflicts, build, lint, test, e2e
 ```
@@ -316,8 +316,8 @@ Lint is golangci-lint v2: errcheck, govet, ineffassign, staticcheck, unused,
 misspell, exhaustive and lll at 120, plus goimports with a local prefix. It runs
 with `-tags=e2e` so the harness is linted like everything else. CI runs six
 jobs: test with `-race` on ubuntu and macos, e2e on both, lint, build, a
-`go mod tidy` diff check, and an `assets` job that rebuilds `app.css` and
-diffs it.
+`go mod tidy` diff check, and an `assets` job that rebuilds the web assets and
+diffs the committed JS.
 
 `web/app.css` is the Tailwind v4 source. Its `@theme` block holds the colour
 tokens and `@layer components` holds hand-written classes for the state
@@ -325,9 +325,10 @@ grammar, `pill`, `ribbon`, `meter` and the rest. The header, its chips and the
 stale banner use them; the board's own rows do not yet. Go emits no utility
 class anywhere, so nothing depends on Tailwind's scan and no class can be
 purged. `just assets` compiles it into
-`internal/web/assets/dist/app.css`, which is committed the same way
-`htmx.min.js` is, so `go build` and `just ci` need no bun. Change `web/app.css`
-and you must commit the rebuilt output, or the `assets` job fails.
+`internal/web/assets/dist/app.css`, which is gitignored; `just build` and
+`just run` run `just assets` first. The built JS beside it is committed, so
+change `web/src` and you must commit the rebuilt output, or the `assets` job
+fails (ADR 21).
 
 ## Docs
 

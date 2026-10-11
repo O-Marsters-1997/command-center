@@ -24,6 +24,11 @@ type Rail struct {
 	Settled  RailSettled
 	Gauges   []Gauge
 	Health   RailHealth
+	Query    string
+}
+
+func (r Rail) NoMatch() bool {
+	return r.Query != "" && len(r.NeedsYou) == 0 && len(r.Features) == 0 && len(r.Settled.Items) == 0
 }
 
 type RailItem struct {
@@ -31,6 +36,7 @@ type RailItem struct {
 	Ref      string
 	Title    string
 	Repo     string
+	Feature  string
 	Glyph    string
 	Reason   string
 	Verb     string
@@ -75,8 +81,9 @@ type RailHealth struct {
 }
 
 type RailParams struct {
-	Sel  string
-	Open []string
+	Sel   string
+	Open  []string
+	Query string
 }
 
 func RailSelection(currentURL string) string {
@@ -125,9 +132,10 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 
 func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 	item := func(r Row) RailItem {
+		_, featureName := railFeatureKey(r)
 		it := RailItem{
-			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Glyph: r.Glyph, Reason: r.Reason,
-			Path: cmp.Or(SessionPath(r.URL), ticketsPath),
+			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
+			Reason: r.Reason, Path: cmp.Or(SessionPath(r.URL), ticketsPath),
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
 		for _, verb := range r.Verbs {
@@ -190,7 +198,47 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 	slices.SortFunc(rail.Features, func(a, b RailFeature) int {
 		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Key, b.Key))
 	})
+	return filterRail(rail, params.Query)
+}
+
+func filterRail(rail Rail, query string) Rail {
+	terms := strings.Fields(strings.ToLower(query))
+	if len(terms) == 0 {
+		return rail
+	}
+	keep := func(items []RailItem) []RailItem {
+		return slices.DeleteFunc(slices.Clone(items), func(it RailItem) bool {
+			return !matchesAll(terms, it.Ref, strings.TrimPrefix(it.Ref, "#"), it.Title, it.Repo, it.Feature)
+		})
+	}
+
+	rail.Query = strings.TrimSpace(query)
+	rail.NeedsYou = keep(rail.NeedsYou)
+
+	var features []RailFeature
+	for _, f := range rail.Features {
+		if !matchesAll(terms, f.Name) {
+			f.Live = keep(f.Live)
+		}
+		if len(f.Live) == 0 {
+			continue
+		}
+		f.Open = true
+		features = append(features, f)
+	}
+	rail.Features = features
+
+	rail.Settled.Items = keep(rail.Settled.Items)
+	rail.Settled.Open = true
 	return rail
+}
+
+func matchesAll(terms []string, fields ...string) bool {
+	return !slices.ContainsFunc(terms, func(term string) bool {
+		return !slices.ContainsFunc(fields, func(field string) bool {
+			return strings.Contains(strings.ToLower(field), term)
+		})
+	})
 }
 
 func railFeatureKey(r Row) (key, name string) {

@@ -308,7 +308,10 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
 const railOpenCookie = "rail-open"
 
 func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
-	params := view.RailParams{Sel: view.RailSelection(r.Header.Get("HX-Current-URL"))}
+	params := view.RailParams{
+		Sel:   view.RailSelection(r.Header.Get("HX-Current-URL")),
+		Query: strings.TrimSpace(r.FormValue("q")),
+	}
 	if c, err := r.Cookie(railOpenCookie); err == nil {
 		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
 			params.Open = strings.Split(value, view.RailOpenSeparator)

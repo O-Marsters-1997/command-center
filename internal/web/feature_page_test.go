@@ -41,8 +41,8 @@ func TestFeaturePageTabPairMarksTheBoardCurrent(t *testing.T) {
 
 	for _, want := range []string{
 		`<a class="pill-tab" href="/f/board-scope" aria-current="page">Board</a>`,
-		`<a class="pill-tab" href="/f/board-scope/graph">Graph</a>`,
-		`href="/f/board-scope/launch"`,
+		`<a class="pill-tab" href="/f/board-scope/graph" data-key="v">Graph</a>`,
+		`href="/f/board-scope/launch" data-key="c"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("feature page missing %s:\n%s", want, page)

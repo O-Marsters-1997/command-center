@@ -24,9 +24,16 @@ func sessionStoreEnding(
 	t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
+	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
+}
+
+func sessionStoreInFeature(
+	t *testing.T, feature, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+) (*storepkg.Store, string) {
+	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
-	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}
+	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: feature}
 	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +195,72 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	}
 }
 
+func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
+	t.Parallel()
+	running, _ := sessionStore(t, "agent", "p", true, true)
+	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	tests := []struct {
+		name    string
+		store   *storepkg.Store
+		present []string
+		absent  []string
+	}{
+		{
+			"failed", failed,
+			[]string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
+			[]string{`data-key="o"`, `data-key="e"`},
+		},
+		{"running", running, nil, []string{`data-key="r"`, `data-key="o"`, `data-key="e"`, `data-key="enter"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1?part=actions")
+			for _, want := range tt.present {
+				if !strings.Contains(body, want) {
+					t.Errorf("actions lack %q:\n%s", want, body)
+				}
+			}
+			for _, bad := range tt.absent {
+				if strings.Contains(body, bad) {
+					t.Errorf("actions carry %q:\n%s", bad, body)
+				}
+			}
+		})
+	}
+}
+
+func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
+	t.Parallel()
+	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomePush)
+	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
+	obs := plan.Observation{
+		ObservedAt: testNow,
+		Runs:       map[string]plan.RunObservation{sessionTicket: {Alive: false}},
+		PRs:        map[string]plan.PR{plan.BranchKey("acme/web", "cc-1"): pr},
+	}
+	if err := st.SaveObservation(t.Context(), obs); err != nil {
+		t.Fatal(err)
+	}
+
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?part=actions")
+
+	for _, want := range []string{`value="remove-worktree" data-key="e"`, `data-key="o" target="_blank"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("merged session lacks %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestRailVerbButtonsCarryNoKey(t *testing.T) {
+	t.Parallel()
+	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	body := renderPath(t, newServer(failed, testNow), "/rail")
+	if !strings.Contains(body, `name="verb"`) || strings.Contains(body, `data-key="r"`) {
+		t.Errorf("rail verb buttons carry a verb key:\n%s", body)
+	}
+}
+
 func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 	t.Parallel()
 	st, _ := sessionStore(t, "agent", "p", true, true)
@@ -231,5 +304,20 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("blank follow-up status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
+	t.Parallel()
+	withFeature, _ := sessionStore(t, "agent", "p", true, true)
+	noFeature, _ := sessionStoreInFeature(t, "", "agent", "p", true, true, plan.OutcomePush)
+
+	body := renderPath(t, newServer(withFeature, testNow), "/s/acme/web/1")
+	if want := `href="/f/checkout/graph" data-key="f"`; !strings.Contains(body, want) {
+		t.Errorf("session with a feature lacks %q:\n%s", want, body)
+	}
+	body = renderPath(t, newServer(noFeature, testNow), "/s/acme/web/1")
+	if strings.Contains(body, `data-key="f"`) {
+		t.Errorf("session with no feature carries data-key=\"f\":\n%s", body)
 	}
 }

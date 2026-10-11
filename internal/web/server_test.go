@@ -630,6 +630,20 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /page.css = %d, want 404", rec.Code)
+	}
+}
+
+func TestServesTheBuiltStylesheet(t *testing.T) {
+	t.Parallel()
+
+	requireBuiltStylesheet(t)
+	observedAt := testNow
+	server := newServer(seededStore(t, observedAt), observedAt)
+
+	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.css", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/app.css = %d, want 200", rec.Code)
@@ -641,12 +655,6 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}
-	}
-
-	rec = httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET /page.css = %d, want 404", rec.Code)
 	}
 }
 

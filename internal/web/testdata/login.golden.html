@@ -38,7 +38,7 @@
 <script>
   document.addEventListener("toggle", function (e) {
     var key = e.target.dataset && e.target.dataset.railKey;
-    if (!key) return;
+    if (!key || e.target.hasAttribute("data-rail-forced")) return;
     var open = document.cookie.split("; ").reduce(function (found, c) {
       return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
     }, []).filter(function (k) { return k && k !== key; });
@@ -59,6 +59,15 @@
 </script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
+<script type="module" src="/assets/dist/keys.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
+    document.querySelectorAll("#key-sheet kbd").forEach(function (k) {
+      k.textContent = k.textContent.replace("⌘", "Ctrl ");
+    });
+  });
+</script>
 <script>
   document.addEventListener("htmx:sseMessage", function (e) {
     var pre = e.target;

@@ -1,10 +1,10 @@
 default:
     @just --list
 
-build:
+build: assets
     go build -o bin/cc ./cmd/cc
 
-run *args:
+run *args: assets
     go run ./cmd/cc {{args}}
 
 # Start the Postgres the app and the tests connect to.
@@ -59,7 +59,6 @@ fmt:
 tidy:
     go mod tidy
 
-# Rebuild the committed internal/web/assets/dist/app.css. Needs bun.
 assets:
     cd web && bun install && bun run build
 
@@ -93,5 +92,5 @@ ci:
     just test
     just test-e2e
 
-demo *args:
+demo *args: assets
     go run -tags=demo ./cmd/cc demo {{args}}
