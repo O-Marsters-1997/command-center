@@ -75,6 +75,19 @@ WHERE l.state = 'active';
 -- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
 
+-- name: LatestSessionRuns :many
+SELECT runs.id,
+  COALESCE(runs.log_path, '')::text AS log_path,
+  COALESCE(runs.message, '')::text AS message,
+  COALESCE(runs.question, '')::text AS question
+FROM runs
+WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.session_id = (
+  SELECT latest.session_id FROM runs latest
+  WHERE latest.ticket_id = sqlc.arg(ticket_id) AND latest.kind IN ('agent', 'follow_up')
+  ORDER BY latest.id DESC LIMIT 1
+)
+ORDER BY runs.id;
+
 -- name: PrecedingRunKind :one
 SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1;
 

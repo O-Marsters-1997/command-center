@@ -388,6 +388,25 @@ func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, 
 	return ids, nil
 }
 
+type SessionRun struct {
+	ID       int64
+	LogPath  string
+	Message  string
+	Question string
+}
+
+func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]SessionRun, error) {
+	rows, err := s.q.LatestSessionRuns(ctx, notNull(ticketID))
+	if err != nil {
+		return nil, fmt.Errorf("select session runs for %s: %w", ticketID, err)
+	}
+	runs := make([]SessionRun, len(rows))
+	for i, row := range rows {
+		runs[i] = SessionRun{ID: row.ID, LogPath: row.LogPath, Message: row.Message, Question: row.Question}
+	}
+	return runs, nil
+}
+
 // LatestRunLog returns the newest run's log path for a ticket and whether it has ended.
 // A ticket with no run reads as ended with no path.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {

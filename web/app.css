@@ -432,6 +432,18 @@
     --glyph: var(--color-s-idle);
   }
 
+  .line-you {
+    --glyph: var(--color-s-live);
+    margin: 0 0 1.25rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--glyph);
+    white-space: pre-wrap;
+  }
+
+  .line-you .line-label {
+    color: var(--glyph);
+  }
+
   .run-thread {
     max-width: 46rem;
     margin-top: 0.75rem;

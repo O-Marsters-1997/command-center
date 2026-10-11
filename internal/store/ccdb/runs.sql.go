@@ -340,6 +340,55 @@ func (q *Queries) LatestSessionID(ctx context.Context, ticketID sql.NullString) 
 	return session_id, err
 }
 
+const latestSessionRuns = `-- name: LatestSessionRuns :many
+SELECT runs.id,
+  COALESCE(runs.log_path, '')::text AS log_path,
+  COALESCE(runs.message, '')::text AS message,
+  COALESCE(runs.question, '')::text AS question
+FROM runs
+WHERE runs.ticket_id = $1 AND runs.session_id = (
+  SELECT latest.session_id FROM runs latest
+  WHERE latest.ticket_id = $1 AND latest.kind IN ('agent', 'follow_up')
+  ORDER BY latest.id DESC LIMIT 1
+)
+ORDER BY runs.id
+`
+
+type LatestSessionRunsRow struct {
+	ID       int64
+	LogPath  string
+	Message  string
+	Question string
+}
+
+func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString) ([]LatestSessionRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestSessionRuns, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestSessionRunsRow
+	for rows.Next() {
+		var i LatestSessionRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LogPath,
+			&i.Message,
+			&i.Question,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id
 `
