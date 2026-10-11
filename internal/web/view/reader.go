@@ -119,7 +119,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, err
 	}
 
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in))
+	projects, err := r.projectMarks(ctx)
+	if err != nil {
+		return Board{}, err
+	}
+	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
 	applySpend(rows, r.spend)
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
@@ -176,6 +180,20 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	return chrome, nil
+}
+
+func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	marks := make(map[string]ProjectMark, len(repos))
+	for _, repo := range repos {
+		if repo.Project != "" {
+			marks[repo.Name] = ProjectMark{Name: repo.Project, Hue: repo.Hue}
+		}
+	}
+	return marks, nil
 }
 
 func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {

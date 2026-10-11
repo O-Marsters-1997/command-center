@@ -66,6 +66,43 @@ func TestBuildRailGroupsByAttention(t *testing.T) {
 	}
 }
 
+func TestBuildRailNamesTheProjectOnACardAndMarksEachFeatureOnce(t *testing.T) {
+	t.Parallel()
+
+	acme := railRow("1", "Billing", plan.GlyphFailed)
+	acme.Repo, acme.Project, acme.ProjectHue = "acme/web", "acme", 1
+	loose := railRow("2", "Billing", plan.GlyphRunning)
+	loose.Repo = "olly/job-scraper"
+	second := railRow("3", "Billing", plan.GlyphRunning)
+	second.Repo, second.Project, second.ProjectHue = "acme/api", "acme", 1
+	other := railRow("4", "Billing", plan.GlyphRunning)
+	other.Repo, other.Project, other.ProjectHue = "beta/web", "beta", 2
+
+	rail := buildRail([]Row{acme, loose, second, other}, time.Now(), RailParams{})
+
+	card := rail.NeedsYou[0]
+	if card.Context != "acme · Billing #1" || card.Project != (ProjectMark{Name: "acme", Hue: 1}) {
+		t.Errorf("card = {%q %v}, want acme · Billing #1 with the hue 1 mark", card.Context, card.Project)
+	}
+	want := []ProjectMark{{Name: "acme", Hue: 1}, {Name: "beta", Hue: 2}}
+	if got := rail.Features[0].Marks; !slices.Equal(got, want) {
+		t.Errorf("Billing marks = %v, want %v", got, want)
+	}
+}
+
+func TestBuildRailShowsALooseRepoWithoutAMark(t *testing.T) {
+	t.Parallel()
+
+	row := railRow("5", "", plan.GlyphFailed)
+	row.Repo = "olly/job-scraper"
+
+	rail := buildRail([]Row{row}, time.Now(), RailParams{})
+
+	if got := rail.NeedsYou[0]; got.Context != "olly/job-scraper #5" || got.Project.Name != "" {
+		t.Errorf("loose card = {%q %v}, want olly/job-scraper #5 and no mark", got.Context, got.Project)
+	}
+}
+
 func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
 	t.Parallel()
 

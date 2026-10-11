@@ -32,6 +32,7 @@
       {{- range .PendingVerbs}} · {{.}} queued{{end}}
     </td>
     <td>
+      {{template "mark" .Mark}}
       <a href="{{.SessionPath}}" hx-get="{{.SessionPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.Ticket}}</a>
       {{- if and .Scope (ne .Repo .Scope)}} <span class="text-muted text-[0.85em]">{{.Repo}}</span>{{end}}
       {{- if and .FeatureScope (ne .Feature .FeatureScope)}} <span class="text-muted text-[0.85em]">{{.Feature}}</span>{{end}}

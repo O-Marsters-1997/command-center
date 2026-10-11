@@ -37,6 +37,8 @@ type RailItem struct {
 	Title    string
 	Repo     string
 	Feature  string
+	Project  ProjectMark
+	Context  string
 	Glyph    string
 	Reason   string
 	Verb     string
@@ -50,6 +52,7 @@ type RailFeature struct {
 	Key     string
 	Name    string
 	Open    bool
+	Marks   []ProjectMark
 	Live    []RailItem
 	Blocked int
 	Ready   int
@@ -120,7 +123,11 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 		return Rail{}, err
 	}
 	in.Now = now
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in))
+	projects, err := r.projectMarks(ctx)
+	if err != nil {
+		return Rail{}, err
+	}
+	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, Params{})
 
 	rail := buildRail(rows, now, params)
@@ -136,6 +143,7 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 		_, featureName := railFeatureKey(r)
 		it := RailItem{
 			URL: r.URL, Ref: r.Ticket(), Title: r.Title, Repo: r.Repo, Feature: featureName, Glyph: r.Glyph,
+			Project: r.Mark(), Context: railContext(r),
 			Reason: r.Reason, Path: cmp.Or(SessionPath(r.URL), ticketsPath),
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
@@ -181,6 +189,9 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 		_, name := railFeatureKey(members[0])
 		f := RailFeature{Key: key, Name: name, Open: open(key)}
 		for _, r := range members {
+			if mark := r.Mark(); mark.Name != "" && !slices.Contains(f.Marks, mark) {
+				f.Marks = append(f.Marks, mark)
+			}
 			switch r.Glyph {
 			case plan.GlyphReady:
 				f.Ready++
@@ -195,6 +206,7 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 			continue
 		}
 		slices.SortFunc(f.Live, byRepoThenRef)
+		slices.SortFunc(f.Marks, compareMarks)
 		rail.Features = append(rail.Features, f)
 	}
 	slices.SortFunc(rail.Features, func(a, b RailFeature) int {
@@ -241,6 +253,14 @@ func matchesAll(terms []string, fields ...string) bool {
 			return strings.Contains(strings.ToLower(field), term)
 		})
 	})
+}
+
+func railContext(r Row) string {
+	parts := []string{cmp.Or(r.Project, r.Repo)}
+	if r.Feature != "" {
+		parts = append(parts, r.Feature)
+	}
+	return strings.Join(parts, " · ") + " " + r.Ticket()
 }
 
 func railFeatureKey(r Row) (key, name string) {
