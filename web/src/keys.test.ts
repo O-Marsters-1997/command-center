@@ -144,6 +144,14 @@ describe("the g chord", () => {
     }
   });
 
+  test("a digit after the chord window is a bare digit", () => {
+    const clock = fakeClock();
+    const state = createKeyState(true, clock.timers);
+    state.lookup(press("g"), null);
+    clock.advance(1500);
+    expect(state.lookup(press("1"), null)).toBe("1");
+  });
+
   test("the scope chord is ignored while a field has focus", () => {
     const state = createKeyState(true, fakeClock().timers);
     const input = focused(["input"]);
