@@ -132,7 +132,7 @@ func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
 	for _, want := range []string{
 		`href="/" data-key="g h"`,
 		`href="/tickets" data-key="g t"`,
-		`data-key="g i"`,
+		`href="/insights" data-key="g i"`,
 		`href="/repos" data-key="g r"`,
 		`href="/launch" data-key="c"`,
 		`<script src="/assets/keys.js" defer></script>`,

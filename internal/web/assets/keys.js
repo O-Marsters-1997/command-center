@@ -9,25 +9,21 @@
   }
 
   function inField(el) {
-    if (!el) return false;
-    return el.matches("input, textarea, select, [contenteditable]");
+    return !!el && (el.matches("input, textarea, select") || el.isContentEditable);
   }
 
   function isMac() {
     return /Mac|iPhone|iPad/.test(navigator.platform);
   }
 
-  function keyName(e) {
-    var k = e.key;
-    if (k === "Escape") return "escape";
-    if (k === "Enter") return "enter";
-    return k.toLowerCase();
+  function usable(el) {
+    return !el.disabled && el.getClientRects().length > 0;
   }
 
   function press(binding) {
-    var matches = document.querySelectorAll('[data-key="' + binding + '"]');
     var target = null;
-    matches.forEach(function (el) {
+    document.querySelectorAll("[data-key]").forEach(function (el) {
+      if (el.dataset.key !== binding || !usable(el)) return;
       if (!target || (el.closest("#main") && !target.closest("#main"))) target = el;
     });
     if (!target) return false;
@@ -37,15 +33,16 @@
   }
 
   document.addEventListener("keydown", function (e) {
-    if (e.altKey || e.isComposing) return;
-    var mod = isMac() ? e.metaKey : e.ctrlKey;
-    var otherMod = isMac() ? e.ctrlKey : e.metaKey;
-    var name = keyName(e);
-    if (otherMod) return;
+    if (e.altKey || e.isComposing || e.repeat) return;
+    if (e.shiftKey && /^[a-z]$/i.test(e.key)) return;
+    var mac = isMac();
+    var mod = mac ? e.metaKey : e.ctrlKey;
+    if (mac ? e.ctrlKey : e.metaKey) return;
+    var name = e.key.toLowerCase();
     if (mod && name !== "k") return;
 
     var focused = document.activeElement;
-    if (inField(focused) && !(mod && name === "k") && name !== "escape") return;
+    if (inField(focused) && !mod && name !== "escape") return;
     if (name === "enter" && focused && focused.matches("a, button, summary")) return;
 
     var binding = mod ? "mod+" + name : name;
@@ -61,5 +58,9 @@
       return;
     }
     if (press(binding)) e.preventDefault();
+  });
+
+  document.addEventListener("focusin", function (e) {
+    if (inField(e.target)) clearPrefix();
   });
 })();
