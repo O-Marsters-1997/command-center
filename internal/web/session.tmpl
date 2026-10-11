@@ -100,7 +100,7 @@
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
-    <textarea name="prompt" rows="2" data-key="enter" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
+    <textarea name="prompt" rows="2" data-key="enter"{{if .Row.AwaitingInput}} autofocus{{end}} required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
     <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>Send</button>
     {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
   </form>

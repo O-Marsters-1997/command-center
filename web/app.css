@@ -827,6 +827,12 @@
     color: var(--color-muted);
   }
 
+  .rail-question {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .rail-verb {
     margin: var(--space-1) var(--space-2) 0;
   }
