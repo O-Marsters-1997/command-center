@@ -19,7 +19,8 @@ func TestLatestSessionIDIsTheLatestAgentOrFollowUpRunsSession(t *testing.T) {
 		t.Fatalf("LatestSessionID with no runs = %q, %v, want empty", got, err)
 	}
 
-	_, agentSession, err := store.InsertSessionRunSkeleton(ctx, ticket, "agent", "", "hash", storepkg.RunSession{StartNew: true})
+	_, agentSession, err := store.InsertSessionRunSkeleton(
+		ctx, ticket, "agent", "", "hash", storepkg.RunSession{StartNew: true})
 	if err != nil {
 		t.Fatal(err)
 	}

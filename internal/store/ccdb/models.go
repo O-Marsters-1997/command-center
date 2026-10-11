@@ -8,8 +8,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Event struct {
@@ -86,7 +84,7 @@ type Run struct {
 	Model          sql.NullString
 	MetricsSettled sql.NullBool
 	LaunchID       sql.NullInt64
-	SessionID      uuid.NullUUID
+	SessionID      sql.NullString
 	Message        sql.NullString
 }
 
