@@ -103,7 +103,7 @@ func buildLogDetail(
 }
 
 func RecordShown(e store.Event) bool {
-	return e.Kind == "pr_merged"
+	return e.Kind == "pr_merged" || e.Kind == "pr_opened"
 }
 
 func RecordOf(e store.Event) agentlog.Event {
