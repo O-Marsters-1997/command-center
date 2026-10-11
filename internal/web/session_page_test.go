@@ -198,7 +198,11 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 		present []string
 		absent  []string
 	}{
-		{"failed", failed, []string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`}, []string{`data-key="o"`, `data-key="e"`}},
+		{
+			"failed", failed,
+			[]string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
+			[]string{`data-key="o"`, `data-key="e"`},
+		},
 		{"running", running, nil, []string{`data-key="r"`, `data-key="o"`, `data-key="e"`, `data-key="enter"`}},
 	}
 	for _, tt := range tests {
