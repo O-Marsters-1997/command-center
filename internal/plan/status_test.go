@@ -172,6 +172,14 @@ func TestStatusWithLatestRun(t *testing.T) {
 			reasonHas: "Which database?",
 		},
 		{
+			name: "a continued run derives queued while the resume is pending",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeContinued,
+			},
+			wantState: plan.Queued,
+			reasonHas: "resuming with your message",
+		},
+		{
 			name: "a failed cut derives cut failed",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed,

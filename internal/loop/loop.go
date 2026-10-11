@@ -76,13 +76,17 @@ func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error 
 	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
 }
 
+var errIntentPending = errors.New("intent stays pending")
+
 func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIntent) error) error {
 	intents, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return err
 	}
 	for _, intent := range intents {
-		if err := fn(intent); err != nil {
+		if err := fn(intent); errors.Is(err, errIntentPending) {
+			continue
+		} else if err != nil {
 			return err
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
@@ -210,6 +214,7 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 		func() error { return l.applyCancelIntents(ctx) },
 		func() error { l.spawned = nil; return nil },
 		func() error { return l.applyKillIntents(ctx) },
+		func() error { return l.interruptForFollowUps(ctx) },
 		func() error { return l.reconcileRuns(ctx, obs) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.recordVerdictTransitions(ctx, obs) },
@@ -444,6 +449,29 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	})
 }
 
+func (l *Loop) interruptForFollowUps(ctx context.Context) error {
+	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
+	if err != nil || len(intents) == 0 {
+		return err
+	}
+	latest, err := l.store.LatestRunsByTicket(ctx)
+	if err != nil {
+		return err
+	}
+	cancelled := map[string]bool{}
+	for _, intent := range intents {
+		run, ok := latest[intent.TicketID]
+		if cancelled[intent.TicketID] || !ok || run.Pgid == nil || run.HasOutcome {
+			continue
+		}
+		cancelled[intent.TicketID] = true
+		if err := l.runner.Cancel(*run.Pgid); err != nil {
+			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
+		}
+	}
+	return nil
+}
+
 func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
@@ -481,21 +509,8 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 func (l *Loop) disposeRun(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) error {
-	question, err := l.readQuestion(run)
+	outcome, err := l.outcomeFor(ctx, run, ticket, obs)
 	if err != nil {
-		return err
-	}
-	outcome := plan.OutcomeAsked
-	if question == "" {
-		commits := 0
-		if run.BaselineSHA != "" {
-			commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
-			if err != nil {
-				return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
-			}
-		}
-		outcome = dispositionFor(run.Kind, commits)
-	} else if err := l.store.RecordQuestion(ctx, run.ID, question); err != nil {
 		return err
 	}
 
@@ -525,6 +540,43 @@ func (l *Loop) disposeRun(
 		return nil
 	}
 	return l.queueReviewFindings(ctx, run)
+}
+
+func (l *Loop) outcomeFor(
+	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
+) (plan.Outcome, error) {
+	if run.Kind == runKindAgent || run.Kind == runKindFollowUp {
+		queued, err := l.followUpQueued(ctx, run.TicketID)
+		if err != nil {
+			return 0, err
+		}
+		if queued {
+			return plan.OutcomeContinued, nil
+		}
+	}
+	question, err := l.readQuestion(run)
+	if err != nil {
+		return 0, err
+	}
+	if question != "" {
+		return plan.OutcomeAsked, l.store.RecordQuestion(ctx, run.ID, question)
+	}
+	commits := 0
+	if run.BaselineSHA != "" {
+		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
+		if err != nil {
+			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
+		}
+	}
+	return dispositionFor(run.Kind, commits), nil
+}
+
+func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, error) {
+	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(intents, func(i store.VerbIntent) bool { return i.TicketID == ticketURL }), nil
 }
 
 const maxQuestionBytes = 4096

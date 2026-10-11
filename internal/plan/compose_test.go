@@ -78,6 +78,25 @@ func TestComposeFollowUp(t *testing.T) {
 	}
 }
 
+func TestComposeMessageWrapsByTheOutcomeBeingResumed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		after plan.Outcome
+		want  string
+	}{
+		{plan.OutcomeContinued, "last tool call may have been cut off"},
+		{plan.OutcomeAsked, "answer to your question"},
+		{plan.OutcomeFailed, "follow-up instruction"},
+	}
+	for _, tt := range tests {
+		got := plan.ComposeMessage("use sqlite", tt.after)
+		if !strings.Contains(got, tt.want) || !strings.Contains(got, "use sqlite") {
+			t.Errorf("ComposeMessage(after %v) = %q, want %q and the text", tt.after, got, tt.want)
+		}
+	}
+}
+
 func TestHashIsStableAndSensitiveToInput(t *testing.T) {
 	t.Parallel()
 

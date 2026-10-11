@@ -286,6 +286,8 @@ func outcomeFromString(s string) plan.Outcome {
 		return plan.OutcomeCutFailed
 	case plan.OutcomeAsked.String():
 		return plan.OutcomeAsked
+	case plan.OutcomeContinued.String():
+		return plan.OutcomeContinued
 	default:
 		return plan.OutcomeFailed
 	}

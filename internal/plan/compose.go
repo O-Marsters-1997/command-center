@@ -68,10 +68,16 @@ func ComposeAsking(questionPath string) string {
 }
 
 func ComposeMessage(text string, after Outcome) string {
-	if after == OutcomeAsked {
+	switch after {
+	case OutcomeAsked:
 		return fmt.Sprintf("The owner's answer to your question:\n\n%s", text)
+	case OutcomeContinued:
+		return fmt.Sprintf(
+			"The owner interrupted you with a message. Your last tool call may have been cut off, "+
+				"so check its effect before going on:\n\n%s", text)
+	default:
+		return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 	}
-	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }
 
 const ReviewFixLines = 50
