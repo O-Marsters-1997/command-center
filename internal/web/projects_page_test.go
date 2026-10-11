@@ -201,7 +201,8 @@ func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
 	server := projectsServer(t)
 	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
 
-	if rec := postPath(t, server, "/repos/acme/solo/project", url.Values{"project": {"acme"}}); rec.Code != http.StatusSeeOther {
+	move := url.Values{"project": {"acme"}}
+	if rec := postPath(t, server, "/repos/acme/solo/project", move); rec.Code != http.StatusSeeOther {
 		t.Fatalf("move = %d: %s", rec.Code, rec.Body)
 	}
 	if body := renderPath(t, server, "/repos"); !strings.Contains(body, `data-scope="project"`) ||
@@ -209,7 +210,8 @@ func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
 		t.Errorf("GET /repos after move:\n%s", body)
 	}
 
-	if rec := postPath(t, server, "/repos/acme/solo/project", url.Values{"project": {""}}); rec.Code != http.StatusSeeOther {
+	loosen := url.Values{"project": {""}}
+	if rec := postPath(t, server, "/repos/acme/solo/project", loosen); rec.Code != http.StatusSeeOther {
 		t.Fatalf("loosen = %d: %s", rec.Code, rec.Body)
 	}
 	if body := renderPath(t, server, "/repos"); strings.Contains(body, `<option value="acme" selected>`) {

@@ -277,7 +277,9 @@ func TestSetRepoProjectMovesAndLoosens(t *testing.T) {
 		t.Fatalf("move: %v", err)
 	}
 	got, _ := store.Projects(ctx)
-	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1}, storepkg.Project{Name: "beta", Hue: 1, Repos: []string{"acme/web"}})
+	assertProjects(t, got,
+		storepkg.Project{Name: "acme", Hue: 1},
+		storepkg.Project{Name: "beta", Hue: 1, Repos: []string{"acme/web"}})
 
 	if err := store.SetRepoProject(ctx, "acme/web", ""); err != nil {
 		t.Fatalf("loosen: %v", err)
