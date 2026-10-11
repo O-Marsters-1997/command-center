@@ -213,11 +213,14 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Events: %v", err)
 	}
-	if len(events) != 1 {
-		t.Fatalf("events = %d, want exactly one tick-error row: %+v", len(events), events)
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want the first tick's pr_opened and one tick-error row: %+v", len(events), events)
 	}
-	if events[0].Kind != "tick_error" || !events[0].At.Equal(bad) {
-		t.Errorf("event = %+v", events[0])
+	if events[0].Kind != "pr_opened" || !events[0].At.Equal(good) {
+		t.Errorf("first event = %+v, want pr_opened at the good tick", events[0])
+	}
+	if events[1].Kind != "tick_error" || !events[1].At.Equal(bad) {
+		t.Errorf("second event = %+v, want tick_error at the bad tick", events[1])
 	}
 }
 

@@ -15,6 +15,7 @@ type LogLine struct {
 	Blocks  []ProseBlock
 	Verb    string
 	Arg     string
+	Href    string
 	Result  string
 	Failed  bool
 	Output  string
@@ -66,6 +67,12 @@ func LineOf(e agentlog.Event) LogLine {
 
 func recordLine(kind, detail string) LogLine {
 	switch kind {
+	case "pr_opened":
+		number, href, _ := strings.Cut(detail, " https://")
+		if href == "" {
+			return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: detail}
+		}
+		return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: number, Href: "https://" + href}
 	case "pr_merged":
 		return LogLine{Kind: agentlog.Record.String(), Verb: "merged", Arg: detail}
 	default:

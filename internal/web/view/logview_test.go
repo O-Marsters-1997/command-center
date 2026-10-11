@@ -95,6 +95,16 @@ func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) 
 	}
 }
 
+func TestLineOfLinksAPROpenedRecord(t *testing.T) {
+	t.Parallel()
+
+	got := LineOf(RecordOf(store.Event{Kind: "pr_opened", Detail: "PR #12 https://github.com/o/r/pull/12"}))
+
+	if got.Verb != "opened" || got.Arg != "PR #12" || got.Href != "https://github.com/o/r/pull/12" {
+		t.Errorf("LineOf(pr_opened) = %+v, want verb opened, arg PR #12 and the PR's URL as Href", got)
+	}
+}
+
 func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
 	t.Parallel()
 
