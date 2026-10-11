@@ -55,6 +55,9 @@
     {{- with .Log.Final}}
     <div class="run-final">{{raw .}}</div>
     {{- end}}
+    {{- with .Ask}}
+    <div class="line line-ask"><span class="line-label">ask</span><span class="ask-text">{{.}}</span></div>
+    {{- end}}
     {{- end}}
   </div>
   {{- end}}
@@ -109,8 +112,8 @@
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
-    <textarea name="prompt" rows="2" data-key="enter"{{if .Row.AwaitingInput}} autofocus{{end}} required placeholder="{{if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="follow-up prompt"></textarea>
-    <button class="verb" type="submit">Send</button>
+    <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
+    <button class="verb" type="submit">{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
   </form>
   {{- end}}
 </div>{{end}}

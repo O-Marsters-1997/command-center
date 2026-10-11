@@ -42,12 +42,15 @@ func (s Session) Empty() bool {
 
 func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
 
+func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
 func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
 
 type Turn struct {
 	You string
 	Log LogDetail
+	Ask string
 }
 
 // Prompt is the run's own prompt file. Kept is false when the file is gone.
@@ -144,11 +147,12 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 
 func (r *Reader) turns(row Row, runs []store.SessionRun) []Turn {
 	if len(runs) < 2 {
-		return []Turn{{Log: row.Log}}
+		return []Turn{{Log: row.Log, Ask: row.Question}}
 	}
 	turns := make([]Turn, len(runs))
 	for i, run := range runs {
 		turns[i].Log = row.Log
+		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
 			turns[i].Log = buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
 			turns[i].Log.StreamPath = ""
