@@ -23,3 +23,6 @@ docs/prds/
 
 .codegraph/*
 !.codegraph/.gitignore
+
+design
+.od-skills
