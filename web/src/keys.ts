@@ -147,8 +147,9 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
       const binding = state.lookup(e, doc.activeElement);
       if (binding === null) return;
       if (binding === "j" || binding === "k") {
-        e.preventDefault();
-        walkRail([...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement), binding === "j" ? 1 : -1);
+        const links = [...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement);
+        if (links.length > 0) e.preventDefault();
+        walkRail(links, binding === "j" ? 1 : -1);
         return;
       }
       const target = resolveTarget(binding, [...doc.querySelectorAll("[data-key]")].filter(isHTMLElement));
