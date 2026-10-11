@@ -81,7 +81,8 @@ func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
 	}
 	got := rail.NeedsYou[0]
 	if !got.Reply || got.Verb != "" || got.Reason != "Which database?" {
-		t.Errorf("card = {Reply: %v, Verb: %q, Reason: %q}, want a Reply card with no verb carrying the question", got.Reply, got.Verb, got.Reason)
+		t.Errorf("card = {Reply: %v, Verb: %q, Reason: %q}, want a Reply card with no verb carrying the question",
+			got.Reply, got.Verb, got.Reason)
 	}
 }
 
