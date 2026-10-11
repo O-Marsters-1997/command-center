@@ -44,6 +44,13 @@ type Meta struct {
 	Value string
 }
 
+type Project struct {
+	ID        int64
+	Name      string
+	Hue       int16
+	CreatedAt time.Time
+}
+
 type Push struct {
 	ID            int64
 	TicketID      string
@@ -62,6 +69,7 @@ type Repo struct {
 	SettingsSource sql.NullString
 	SettingsReadAt sql.NullTime
 	TrackedAt      time.Time
+	ProjectID      sql.NullInt64
 }
 
 type Run struct {

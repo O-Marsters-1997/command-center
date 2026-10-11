@@ -29,6 +29,8 @@ type Repo struct {
 	SettingsSource string
 	SettingsReadAt time.Time
 	TrackedAt      time.Time
+	Project        string
+	Hue            int
 }
 
 type RepoImport struct {
@@ -47,7 +49,7 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 			Name: row.Name, Remote: row.Remote, State: RepoState(row.State),
 			RefusalKind: row.RefusalKind.String, Refusal: row.Refusal.String,
 			SettingsSource: row.SettingsSource.String, SettingsReadAt: row.SettingsReadAt.Time,
-			TrackedAt: row.TrackedAt,
+			TrackedAt: row.TrackedAt, Project: row.Project.String, Hue: int(row.ProjectHue.Int16),
 		})
 	}
 	return repos, nil
