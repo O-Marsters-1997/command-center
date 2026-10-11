@@ -38,6 +38,7 @@ type RunSummary struct {
 	BaselineSHA   string
 	PromptHash    string
 	Kind          string
+	Question      string
 }
 
 type PushRow struct {
@@ -340,6 +341,7 @@ func (r Rules) runFor(
 	if summary.HasOutcome {
 		fact.HasOutcome = true
 		fact.Outcome = summary.Outcome
+		fact.Question = summary.Question
 		if summary.Outcome == OutcomePush {
 			pf := in.Pushes[t.URL]
 			fact.PushRefused = pf.Refused

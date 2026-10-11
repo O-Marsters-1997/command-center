@@ -59,7 +59,18 @@ func ComposeFollowUp(text string) string {
 	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
 }
 
-func ComposeMessage(text string, _ Outcome) string {
+func ComposeAsking(questionPath string) string {
+	return fmt.Sprintf(
+		"\n\n## Asking the owner\n\n"+
+			"If you need a decision only the owner can make, write one question to %s and end your turn. "+
+			"The owner's answer resumes this session. Do not ask what you can decide yourself.",
+		questionPath)
+}
+
+func ComposeMessage(text string, after Outcome) string {
+	if after == OutcomeAsked {
+		return fmt.Sprintf("The owner's answer to your question:\n\n%s", text)
+	}
 	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }
 

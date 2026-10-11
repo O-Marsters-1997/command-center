@@ -1,0 +1,17 @@
+cc-init-repo
+cc-config asks
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+exec cc request GET /tickets
+stdout -count=1 '>awaiting_input</span>'
+stdout 'Which database\?'
+! exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-1-x
