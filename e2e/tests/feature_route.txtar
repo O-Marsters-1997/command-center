@@ -13,7 +13,7 @@ stdout 'data-section="ready"'
 stdout '>#CC-1</a>'
 stdout '>#CC-2</a>'
 stdout 'href="/f/project:two-tasks" aria-current="page">Board<'
-stdout 'href="/f/project:two-tasks/graph">Graph<'
+stdout 'href="/f/project:two-tasks/graph" data-key="v">Graph<'
 stdout 'href="/f/project:two-tasks/launch"'
 ! stdout 'data-depth'
 

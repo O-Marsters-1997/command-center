@@ -5,7 +5,7 @@
 {{template "shellContent" .}}
 <nav class="pill-tabs" aria-label="feature views">
   <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}" aria-current="page">Board</a>
-  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph">Graph</a>
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph" data-key="v">Graph</a>
 </nav>
 {{template "boardForm" .}}
 <div id="launch-modal">{{with .Launch}}{{template "launchDialog" .}}{{end}}</div>

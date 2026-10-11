@@ -24,9 +24,16 @@ func sessionStoreEnding(
 	t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
+	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
+}
+
+func sessionStoreInFeature(
+	t *testing.T, feature, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+) (*storepkg.Store, string) {
+	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
-	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}
+	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: feature}
 	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
@@ -297,5 +304,20 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("blank follow-up status = %d, want 400", rec.Code)
+	}
+}
+
+func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
+	t.Parallel()
+	withFeature, _ := sessionStore(t, "agent", "p", true, true)
+	noFeature, _ := sessionStoreInFeature(t, "", "agent", "p", true, true, plan.OutcomePush)
+
+	body := renderPath(t, newServer(withFeature, testNow), "/s/acme/web/1")
+	if want := `href="/f/checkout/graph" data-key="f"`; !strings.Contains(body, want) {
+		t.Errorf("session with a feature lacks %q:\n%s", want, body)
+	}
+	body = renderPath(t, newServer(noFeature, testNow), "/s/acme/web/1")
+	if strings.Contains(body, `data-key="f"`) {
+		t.Errorf("session with no feature carries data-key=\"f\":\n%s", body)
 	}
 }
