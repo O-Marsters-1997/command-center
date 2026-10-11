@@ -5,14 +5,12 @@
 ## Context
 
 The keyboard model (`docs/plans/keyboard-and-search.md`) needs one script that presses whatever
-carries a `data-key`. It was first specified as hand-written JavaScript so that keys work with no Node
-step, which put untyped, untestable logic (platform detection, chord timing, field guards) in the one
-file every page loads, outside Biome, `tsc` and `bun test`.
+carries a `data-key`. Hand-written JavaScript would put untyped, untestable logic (platform detection,
+chord timing, field guards) in the one file every page loads, outside Biome, `tsc` and `bun test`.
 
-`app.css` was committed (ADR 1) and the island JS was gitignored. `app.css` is derived from the
-templates plus `web/app.css`, so it changes with every template edit and is the recurring conflict in
-stacked PRs. The JS changes only when `web/src` does, and keys are core navigation: a Go-only checkout
-without them is a regression, not a fallback.
+`app.css` is derived from the templates plus `web/app.css`, so it changes with every template edit and
+is the recurring conflict in stacked PRs. The JS changes only when `web/src` does, and keys are core
+navigation: a Go-only checkout without them is a regression, not a fallback.
 
 ## Decision
 
