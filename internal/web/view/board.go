@@ -25,6 +25,7 @@ type Row struct {
 	Title           string   `json:"title"`
 	State           string   `json:"state"`
 	Reason          string   `json:"reason"`
+	Question        string   `json:"question"`
 	Glyph           string   `json:"glyph"`
 	Unattended      bool     `json:"unattended"`
 	Alive           bool     `json:"alive"`
@@ -149,6 +150,10 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		if e.Run != nil && e.Run.Verdict != nil {
 			redLeaves = e.Run.Verdict.RedLeaves
 		}
+		question := ""
+		if e.State == plan.AwaitingInput {
+			question = latestRun.Question
+		}
 		var pgid, elapsed string
 		var elapsedSeconds int
 		if e.Pgid != nil {
@@ -165,6 +170,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
+			Question:       question,
 			Glyph:          plan.Glyph(e.State),
 			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[t.URL].Alive,

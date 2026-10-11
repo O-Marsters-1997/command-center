@@ -432,6 +432,11 @@
     --glyph: var(--color-s-idle);
   }
 
+  .line-ask {
+    --glyph: var(--color-s-attention);
+    white-space: pre-wrap;
+  }
+
   .line-you {
     --glyph: var(--color-s-live);
     margin: 0 0 1.25rem;
