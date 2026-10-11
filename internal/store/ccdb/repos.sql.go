@@ -26,19 +26,33 @@ func (q *Queries) RenameTicketRepo(ctx context.Context, arg RenameTicketRepoPara
 }
 
 const repos = `-- name: Repos :many
-SELECT name, remote, state, refusal_kind, refusal, settings_source, settings_read_at, tracked_at
-FROM repos ORDER BY name
+SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at,
+    p.name AS project, p.hue AS project_hue
+FROM repos r LEFT JOIN projects p ON p.id = r.project_id ORDER BY r.name
 `
 
-func (q *Queries) Repos(ctx context.Context) ([]Repo, error) {
+type ReposRow struct {
+	Name           string
+	Remote         string
+	State          string
+	RefusalKind    sql.NullString
+	Refusal        sql.NullString
+	SettingsSource sql.NullString
+	SettingsReadAt sql.NullTime
+	TrackedAt      time.Time
+	Project        sql.NullString
+	ProjectHue     sql.NullInt16
+}
+
+func (q *Queries) Repos(ctx context.Context) ([]ReposRow, error) {
 	rows, err := q.db.QueryContext(ctx, repos)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Repo
+	var items []ReposRow
 	for rows.Next() {
-		var i Repo
+		var i ReposRow
 		if err := rows.Scan(
 			&i.Name,
 			&i.Remote,
@@ -48,6 +62,8 @@ func (q *Queries) Repos(ctx context.Context) ([]Repo, error) {
 			&i.SettingsSource,
 			&i.SettingsReadAt,
 			&i.TrackedAt,
+			&i.Project,
+			&i.ProjectHue,
 		); err != nil {
 			return nil, err
 		}

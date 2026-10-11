@@ -37,8 +37,21 @@ type RepoRow struct {
 // ReposPage is the /repos page: every repo the app knows.
 type ReposPage struct {
 	Chrome
-	Results         RepoSearch
+	Groups          []RepoGroup
+	NewProject      NewProjectForm
 	LastImportError *ImportError
+}
+
+type RepoGroup struct {
+	Scope ScopeEntry
+	Count int
+	Rows  []RepoRow
+}
+
+type NewProjectForm struct {
+	DefaultHue int
+	Hues       []int
+	Repos      []string
 }
 
 // RepoSearch is the fragment GET /repos/search swaps in. SearchError is set when gh failed, in
@@ -105,19 +118,52 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 		return ReposPage{}, err
 	}
 	chrome.Section = "repos"
-	repos, err := r.store.Repos(ctx)
+	groups, form, err := r.repoGroups(ctx)
 	if err != nil {
 		return ReposPage{}, err
-	}
-	rows := make([]RepoRow, 0, len(repos))
-	for _, repo := range repos {
-		rows = append(rows, trackedRow(repo))
 	}
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
 		return ReposPage{}, err
 	}
-	return ReposPage{Chrome: chrome, Results: RepoSearch{Rows: rows}, LastImportError: importErr}, nil
+	return ReposPage{Chrome: chrome, Groups: groups, NewProject: form, LastImportError: importErr}, nil
+}
+
+func (r *Reader) RepoGroups(ctx context.Context) ([]RepoGroup, error) {
+	groups, _, err := r.repoGroups(ctx)
+	return groups, err
+}
+
+func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, error) {
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return nil, NewProjectForm{}, err
+	}
+	projects, err := r.store.Projects(ctx)
+	if err != nil {
+		return nil, NewProjectForm{}, err
+	}
+	byName := make(map[string]store.Repo, len(repos))
+	names := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		byName[repo.Name] = repo
+		names = append(names, repo.Name)
+	}
+	var groups []RepoGroup
+	for _, scope := range ScopeList(projects, repos) {
+		members := []string{scope.Value}
+		if scope.Kind == ScopeProject {
+			i := slices.IndexFunc(projects, func(p store.Project) bool { return p.Name == scope.Value })
+			members = projects[i].Repos
+		}
+		group := RepoGroup{Scope: scope, Count: len(members)}
+		for _, name := range members {
+			group.Rows = append(group.Rows, trackedRow(byName[name]))
+		}
+		groups = append(groups, group)
+	}
+	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: []int{1, 2, 3}, Repos: names}
+	return groups, form, nil
 }
 
 // SearchRepos merges the pushable repos whose name contains query with the tracked repos that

@@ -63,8 +63,8 @@ For styling, load `tailwind-design-system`. **Do not load `tailwind-shadcn`**: i
 - Utilities go in the template, for layout and spacing.
 - The state grammar stays named classes, because Go composes them at render time and Tailwind's
   purge cannot see them: the `glyph` family (`glyph glyph-{word}`), `ribbon`, `meter`, `meter-fill`,
-  `segbar-segment`, `banner`, `flag`, `flag-warning`, the `line-*` family, and the `[data-glyph]`
-  mapping ([ADR 18](docs/adr/0018-glyph-replaces-tone.md)).
+  `segbar-segment`, `banner`, `flag`, `flag-warning`, `avatar`, the `line-*` family, and the
+  `[data-glyph]` and `[data-hue]` mappings ([ADR 18](docs/adr/0018-glyph-replaces-tone.md)).
 - Go never returns a utility string. `plan.Glyph` returns one of eight words and the template
   composes the class.
 - Colour is an oklch token in `@theme` with no dark counterpart, never a literal in a template.
