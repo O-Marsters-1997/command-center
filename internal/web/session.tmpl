@@ -86,11 +86,11 @@
     <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
-      <button class="verb" type="submit" name="verb" value="{{.}}"{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
+      <button class="verb" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
       {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
     </form>
     {{- end}}
-    {{- with .PRURL}}<a class="verb" href="{{.}}" target="_blank" rel="noopener">Open PR</a>{{end}}
+    {{- with .PRURL}}<a class="verb" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
     {{- if .Row.LogPath}}<a class="verb" href="{{.RawPath}}">Open log</a>{{end}}
   </div>
   {{- if .Running}}
@@ -100,7 +100,7 @@
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
-    <textarea name="prompt" rows="2" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
+    <textarea name="prompt" rows="2" data-key="enter" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
     <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>Send</button>
     {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
   </form>

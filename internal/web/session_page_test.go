@@ -188,6 +188,46 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	}
 }
 
+func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
+	t.Parallel()
+	running, _ := sessionStore(t, "agent", "p", true, true)
+	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	tests := []struct {
+		name    string
+		store   *storepkg.Store
+		present []string
+		absent  []string
+	}{
+		{"failed", failed, []string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`}, []string{`data-key="o"`, `data-key="e"`}},
+		{"running", running, nil, []string{`data-key="r"`, `data-key="o"`, `data-key="e"`, `data-key="enter"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1?part=actions")
+			for _, want := range tt.present {
+				if !strings.Contains(body, want) {
+					t.Errorf("actions lack %q:\n%s", want, body)
+				}
+			}
+			for _, bad := range tt.absent {
+				if strings.Contains(body, bad) {
+					t.Errorf("actions carry %q:\n%s", bad, body)
+				}
+			}
+		})
+	}
+}
+
+func TestRailVerbButtonsCarryNoKey(t *testing.T) {
+	t.Parallel()
+	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	body := renderPath(t, newServer(failed, testNow), "/rail")
+	if !strings.Contains(body, `name="verb"`) || strings.Contains(body, `data-key="r"`) {
+		t.Errorf("rail verb buttons carry a verb key:\n%s", body)
+	}
+}
+
 func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 	t.Parallel()
 	st, _ := sessionStore(t, "agent", "p", true, true)
