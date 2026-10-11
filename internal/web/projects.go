@@ -39,8 +39,8 @@ func (s *Server) handleEditProject(w http.ResponseWriter, r *http.Request) error
 	}
 	name := r.PathValue("name")
 	newName := strings.TrimSpace(r.PostForm.Get("name"))
-	if newName == "" {
-		newName = name
+	if !store.ProjectNamePattern.MatchString(newName) {
+		return errorf(http.StatusBadRequest, "project name %q is malformed", newName)
 	}
 	hue, err := strconv.Atoi(r.PostForm.Get("hue"))
 	if err != nil {
