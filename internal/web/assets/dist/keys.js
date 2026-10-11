@@ -1,4 +1,4 @@
-const s = /mac|iphone|ipad|ios/i, a = "input, textarea, select", f = "a, button, summary";
+const s = /^(mac|iphone|ipad|ios)/i, a = "input, textarea, select", f = "a, button, summary";
 function m(t) {
   var e;
   return s.test(((e = t.userAgentData) == null ? void 0 : e.platform) ?? t.platform ?? "");

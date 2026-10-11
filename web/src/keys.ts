@@ -32,7 +32,7 @@ interface PlatformSource {
 }
 
 const chordWindowMs = 1500;
-const applePlatform = /mac|iphone|ipad|ios/i;
+const applePlatform = /^(mac|iphone|ipad|ios)/i;
 const fieldSelector = "input, textarea, select";
 const activatableSelector = "a, button, summary";
 
