@@ -15,14 +15,41 @@ import (
 // InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
 // land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
-	id, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
+	id, _, err := s.InsertSessionRunSkeleton(ctx, ticketID, kind, baselineSHA, promptHash, RunSession{})
+	return id, err
+}
+
+type RunSession struct {
+	StartNew bool
+	JoinID   string
+	Message  string
+}
+
+func (s *Store) InsertSessionRunSkeleton(
+	ctx context.Context, ticketID, kind, baselineSHA, promptHash string, session RunSession,
+) (runID int64, sessionID string, err error) {
+	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    notNull(ticketID),
 		Kind:        kind,
 		BaselineSHA: notNull(baselineSHA),
 		PromptHash:  notNull(promptHash),
+		NewSession:  session.StartNew,
+		SessionID:   nullIfEmpty(session.JoinID),
+		Message:     nullIfEmpty(session.Message),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+	}
+	return row.ID, row.SessionID, nil
+}
+
+func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, error) {
+	id, err := s.q.LatestSessionID(ctx, notNull(ticketID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("select latest session of %s: %w", ticketID, err)
 	}
 	return id, nil
 }

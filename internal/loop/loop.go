@@ -646,18 +646,32 @@ type spawnSpec struct {
 	launchID                               int64
 	worktree, baseline, hash, kind, prompt string
 	promptFor                              func(runID int64) string
+	resumeSessionID, message               string
 }
 
-func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (int64, error) {
-	if spec.kind == runKindExplore {
-		return l.store.InsertExploreRunSkeleton(ctx, spec.launchID)
+func (spec spawnSpec) session() store.RunSession {
+	switch {
+	case spec.resumeSessionID != "":
+		return store.RunSession{JoinID: spec.resumeSessionID, Message: spec.message}
+	case spec.kind == runKindAgent || spec.kind == runKindFollowUp:
+		return store.RunSession{StartNew: true}
+	default:
+		return store.RunSession{}
 	}
-	return l.store.InsertRunSkeleton(ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash)
+}
+
+func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64, sessionID string, err error) {
+	if spec.kind == runKindExplore {
+		runID, err = l.store.InsertExploreRunSkeleton(ctx, spec.launchID)
+		return runID, "", err
+	}
+	return l.store.InsertSessionRunSkeleton(
+		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 }
 
 func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	ticket := spec.ticket
-	runID, err := l.insertSkeleton(ctx, spec)
+	runID, sessionID, err := l.insertSkeleton(ctx, spec)
 	if err != nil {
 		return err
 	}
@@ -689,6 +703,8 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		Model:        modelFor(spec.kind),
 		Prompt:       prompt,
 		PromptPath:   promptPath,
+		SessionID:    sessionID,
+		Resume:       spec.resumeSessionID != "",
 		LogFile:      logFile,
 	}
 	if spec.kind == runKindAgent || spec.kind == runKindReview {

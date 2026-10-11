@@ -63,6 +63,7 @@ var defaultAgentCommand = []string{
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--model", "{model}",
+	"{session}",
 }
 
 // LoadConfig decodes the config file and resolves the data directory, database and agent command.

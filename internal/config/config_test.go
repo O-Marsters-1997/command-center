@@ -74,6 +74,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
 		"--model", "{model}",
+		"{session}",
 	}
 	if !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %q, want default %q", got.AgentCommand, want)
