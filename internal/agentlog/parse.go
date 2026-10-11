@@ -502,7 +502,8 @@ func (l logLine) cmdDone(call cmdCall, callID string) Event {
 		done.Elapsed = max(0, l.Timestamp.Sub(call.at))
 	}
 	done.Output, done.OutputLines = boundOutput(strings.TrimRight(output, "\n"))
-	if done.ExitCode == 0 && !done.Interrupted && gitCommit.MatchString(call.command) {
+	if done.ExitCode == 0 && !done.Interrupted && gitCommit.MatchString(call.command) &&
+		!strings.Contains(call.command, "--dry-run") {
 		done.Kind = Commit
 		done.Detail = commitMessage(call.command)
 		done.Output, done.OutputLines = "", 0
@@ -511,7 +512,7 @@ func (l logLine) cmdDone(call cmdCall, callID string) Event {
 }
 
 var (
-	gitCommit     = regexp.MustCompile(`\bgit\s+(?:-\S+\s+)*commit\b`)
+	gitCommit     = regexp.MustCompile(`(?:^|[;&|(]\s*|\s)git\s+(?:(?:-[Cc]\s+\S+|-\S+)\s+)*commit(?:\s|$)`)
 	commitFlagM   = regexp.MustCompile(`(?:^|\s)(?:-[a-zA-Z]*m|--message)(?:\s+|=)(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`)
 	commitHeredoc = regexp.MustCompile(`<<|\s(?:-F|--file)\b`)
 )
