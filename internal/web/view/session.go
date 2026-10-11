@@ -36,6 +36,8 @@ type Session struct {
 // and Kill instead of a follow-up box.
 func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
 
+func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
 func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
 

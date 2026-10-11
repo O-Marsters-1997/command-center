@@ -51,6 +51,9 @@
     {{- with .Row.Log.Final}}
     <div class="run-final">{{raw .}}</div>
     {{- end}}
+    {{- if .AwaitingInput}}
+    <div class="line line-ask"><span class="line-label">ask</span><span class="ask-text">{{.Row.Question}}</span></div>
+    {{- end}}
   </div>
   {{- end}}
   <aside class="stack-panel" aria-label="feature stack">
@@ -100,8 +103,8 @@
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
-    <textarea name="prompt" rows="2" data-key="enter" required placeholder="Send this run a follow-up prompt…" aria-label="follow-up prompt"></textarea>
-    <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>Send</button>
+    <textarea name="prompt" rows="2" data-key="enter" required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
+    <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
     {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
   </form>
   {{- end}}

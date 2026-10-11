@@ -432,6 +432,11 @@
     --glyph: var(--color-s-idle);
   }
 
+  .line-ask {
+    --glyph: var(--color-s-attention);
+    white-space: pre-wrap;
+  }
+
   .run-thread {
     max-width: 46rem;
     margin-top: 0.75rem;
