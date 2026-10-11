@@ -40,6 +40,7 @@ type RailItem struct {
 	Glyph    string
 	Reason   string
 	Verb     string
+	Reply    bool
 	Path     string
 	Selected bool
 	Started  string
@@ -138,8 +139,9 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 			Reason: r.Reason, Path: cmp.Or(SessionPath(r.URL), ticketsPath),
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
+		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Reason != ""
 		for _, verb := range r.Verbs {
-			if verb != plan.VerbFollowUp && verb != plan.VerbLaunch {
+			if !it.Reply && verb != plan.VerbFollowUp && verb != plan.VerbLaunch {
 				it.Verb = verb
 				break
 			}

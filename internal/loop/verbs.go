@@ -14,6 +14,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
+const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
+
 const (
 	eventWorktreeRemoved  = "worktree_removed"
 	eventLaunchCancelled  = "launch_cancelled"
@@ -218,6 +220,10 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	ticket := e.Ticket
 	refuse := func(detail string) error {
 		return l.event(ctx, ticket.URL, store.EventRemoveWorktreeRefused, detail)
+	}
+
+	if e.HoldsWorktree() {
+		return refuse(heldWorktreeRefusal)
 	}
 
 	pr := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)]
