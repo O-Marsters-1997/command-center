@@ -32,14 +32,14 @@ type Session struct {
 	ActionsPath    string
 	PRURL          string
 	Toast          string
+
+	PendingMessages []string
 }
 
 func (s Session) Empty() bool {
 	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
-// Running reports whether an agent is live on the ticket, so the composer shows its status line
-// and Kill instead of a follow-up box.
 func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
 
 func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
@@ -96,6 +96,17 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		return Session{}, ErrSessionNotFound
 	}
 
+	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
+	if err != nil {
+		return Session{}, err
+	}
+	var pendingMessages []string
+	for _, intent := range intents {
+		if intent.TicketID == ticketURL {
+			pendingMessages = append(pendingMessages, intent.Payload)
+		}
+	}
+
 	self := SessionPath(ticketURL)
 	chrome := board.Chrome
 	chrome.Section = "tickets"
@@ -129,6 +140,8 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		RawText:        rawLog(raw, row.LogPath),
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
+
+		PendingMessages: pendingMessages,
 	}, nil
 }
 

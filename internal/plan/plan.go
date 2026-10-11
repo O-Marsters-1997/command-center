@@ -293,6 +293,8 @@ func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 		return state, reason, true
 	case OutcomeAsked:
 		return AwaitingInput, firstLine(run.Question), true
+	case OutcomeContinued:
+		return Queued, "resuming with your message", true
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:

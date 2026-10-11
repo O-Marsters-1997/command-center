@@ -9,6 +9,7 @@ const (
 	OutcomeFailed
 	OutcomeCutFailed
 	OutcomeAsked
+	OutcomeContinued
 )
 
 func (o Outcome) String() string {
@@ -21,6 +22,8 @@ func (o Outcome) String() string {
 		return "cut_failed"
 	case OutcomeAsked:
 		return "asked"
+	case OutcomeContinued:
+		return "continued"
 	default:
 		return "failed"
 	}

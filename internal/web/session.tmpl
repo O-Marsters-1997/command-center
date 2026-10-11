@@ -103,14 +103,17 @@
   </div>
   {{- if .Running}}
   <p class="composer-running" data-glyph="running">Agent is running{{with .Row.Log.Worked.Stats}} · {{.}}{{end}}{{with .Row.Elapsed}} · {{.}}{{end}}</p>
-  {{- else if .Row.FollowUpAvailable}}
+  {{- end}}
+  {{- range .PendingMessages}}
+  <p class="pending-message" data-glyph="pending"><span class="text-muted">you</span> {{.}}</p>
+  {{- end}}
+  {{- if .Row.FollowUpAvailable}}
   <form class="composer" method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML">
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
-    <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
-    <button class="verb" type="submit"{{if .PendingVerb "follow-up"}} disabled{{end}}>{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
-    {{- if .PendingVerb "follow-up"}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+    <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
+    <button class="verb" type="submit">{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
   </form>
   {{- end}}
 </div>{{end}}

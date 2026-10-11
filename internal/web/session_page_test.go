@@ -174,13 +174,11 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
 	for _, want := range []string{
 		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
+		`class="composer"`, `value="follow-up"`, "Send the running agent a message",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("running session lacks %q:\n%s", want, body)
 		}
-	}
-	if strings.Contains(body, `class="composer"`) {
-		t.Errorf("running session offers a follow-up composer:\n%s", body)
 	}
 
 	idle, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
@@ -192,6 +190,23 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	}
 	if strings.Contains(body, "Agent is running") {
 		t.Errorf("finished session claims to be running:\n%s", body)
+	}
+}
+
+func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
+	t.Parallel()
+	running, _ := sessionStore(t, "agent", "p", true, true)
+	if err := running.QueueVerbIntentWithPayload(
+		t.Context(), sessionTicket, plan.VerbFollowUp, "use sqlite instead", testNow,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1?part=actions")
+	for _, want := range []string{`class="pending-message"`, "use sqlite instead", `class="composer"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("running session with a queued message lacks %q:\n%s", want, body)
+		}
 	}
 }
 
@@ -210,7 +225,10 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 			[]string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
 			[]string{`data-key="o"`, `data-key="e"`},
 		},
-		{"running", running, nil, []string{`data-key="r"`, `data-key="o"`, `data-key="e"`, `data-key="enter"`}},
+		{
+			"running", running, []string{`<textarea name="prompt" rows="2" data-key="enter"`},
+			[]string{`data-key="r"`, `data-key="o"`, `data-key="e"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

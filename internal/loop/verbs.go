@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -95,6 +96,9 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) e
 }
 
 func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText string, obs plan.Observation) error {
+	if obs.Runs[ticket.URL].Alive {
+		return errIntentPending
+	}
 	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
 	if refusal != "" {
 		return l.event(ctx, ticket.URL, eventFollowUpRefused, refusal)
@@ -121,7 +125,13 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome)
 		spec.resumeSessionID = sessionID
 	}
-	return l.spawnRun(ctx, spec)
+	if err := l.spawnRun(ctx, spec); err != nil {
+		return err
+	}
+	if slices.Contains(l.spawned, ticket.URL) {
+		obs.Runs[ticket.URL] = plan.RunObservation{Alive: true}
+	}
+	return nil
 }
 
 func (l *Loop) resumableSession(ctx context.Context, ticketURL string) (string, error) {
