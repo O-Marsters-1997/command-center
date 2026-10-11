@@ -17,7 +17,7 @@ export interface KeyTarget extends Focused {
   readonly dataset: { readonly key?: string };
   readonly disabled?: boolean;
   getClientRects(): ArrayLike<unknown>;
-  closest(selector: string): unknown;
+  closest(selector: string): { open?: boolean } | null;
   focus(): void;
   select?(): void;
   click(): void;
@@ -36,6 +36,7 @@ const chordWindowMs = 1500;
 const applePlatform = /^(mac|iphone|ipad|ios)/i;
 const fieldSelector = "input, textarea, select";
 const activatableSelector = "a, button, summary";
+const scopeMenuSelector = "details[data-scope-menu]";
 
 export function isApplePlatform(source: PlatformSource): boolean {
   return applePlatform.test(source.userAgentData?.platform ?? source.platform ?? "");
@@ -93,7 +94,7 @@ export function createKeyState(apple: boolean, timers: Timers) {
 }
 
 function isUsable(el: KeyTarget): boolean {
-  return el.disabled !== true && el.getClientRects().length > 0;
+  return el.disabled !== true && (el.getClientRects().length > 0 || el.closest(scopeMenuSelector) !== null);
 }
 
 export function resolveTarget<T extends KeyTarget>(binding: string, candidates: Iterable<T>): T | null {
@@ -109,7 +110,11 @@ export function activate(target: KeyTarget): void {
   if (target.matches(fieldSelector)) {
     target.focus();
     target.select?.();
-  } else target.click();
+    return;
+  }
+  const menu = target.closest(scopeMenuSelector);
+  if (menu) menu.open = true;
+  target.click();
 }
 
 export interface SearchBox {

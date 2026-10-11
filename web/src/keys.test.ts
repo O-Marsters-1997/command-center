@@ -66,7 +66,7 @@ interface Fake extends KeyTarget {
 
 function fake(
   key: string,
-  opts: { main?: boolean; disabled?: boolean; hidden?: boolean; field?: boolean } = {},
+  opts: { main?: boolean; disabled?: boolean; hidden?: boolean; field?: boolean; menu?: { open: boolean } } = {},
 ): Fake {
   const calls: string[] = [];
   return {
@@ -76,7 +76,10 @@ function fake(
     isContentEditable: false,
     matches: (sel) => opts.field === true && sel.includes("input"),
     getClientRects: () => (opts.hidden ? [] : [{}]),
-    closest: (sel) => (sel === "#main" && opts.main ? {} : null),
+    closest: (sel) => {
+      if (sel === "#main") return opts.main ? {} : null;
+      return sel.includes("data-scope-menu") ? (opts.menu ?? null) : null;
+    },
     focus: () => calls.push("focus"),
     select: () => calls.push("select"),
     click: () => calls.push("click"),
@@ -134,6 +137,35 @@ describe("the g chord", () => {
     state.lookup(press("g"), null);
     clock.advance(1500);
     expect(state.lookup(press("t"), null)).toBe("t");
+  });
+
+  test("g then a digit 0 to 9 looks up the scope chord", () => {
+    const state = createKeyState(true, fakeClock().timers);
+    for (let d = 0; d <= 9; d++) {
+      expect(state.lookup(press("g"), null)).toBeNull();
+      expect(state.lookup(press(String(d)), null)).toBe(`g ${d}`);
+    }
+  });
+
+  test("a digit after the chord window is a bare digit", () => {
+    const clock = fakeClock();
+    const state = createKeyState(true, clock.timers);
+    state.lookup(press("g"), null);
+    clock.advance(1500);
+    expect(state.lookup(press("1"), null)).toBe("1");
+  });
+
+  test("the scope chord is ignored while a field has focus", () => {
+    const state = createKeyState(true, fakeClock().timers);
+    const input = focused(["input"]);
+    expect(state.lookup(press("g"), input)).toBeNull();
+    expect(state.lookup(press("1"), input)).toBeNull();
+    expect(state.lookup(press("1"), null)).toBe("1");
+  });
+
+  test("a modified digit is left to the browser", () => {
+    expect(bindingFor(press("1", { metaKey: true }), true)).toBeNull();
+    expect(bindingFor(press("1", { ctrlKey: true }), false)).toBeNull();
   });
 
   test("clear drops a pending prefix", () => {
@@ -208,6 +240,15 @@ describe("resolveTarget", () => {
   test("the first of equals wins", () => {
     const first = fake("c");
     expect(resolveTarget("c", [first, fake("c")])).toBe(first);
+  });
+
+  test("reaches a scope menu entry while its menu is closed, and opens the menu to click it", () => {
+    const menu = { open: false };
+    const entry = fake("g 1", { hidden: true, menu });
+    expect(resolveTarget("g 1", [entry])).toBe(entry);
+    activate(entry);
+    expect(menu.open).toBe(true);
+    expect(entry.calls).toEqual(["click"]);
   });
 
   test("matches a chord binding exactly", () => {

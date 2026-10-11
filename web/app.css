@@ -44,6 +44,13 @@
   --color-s-failed: oklch(0.6 0.2 27);
   --color-s-check: oklch(0.62 0.12 200);
 
+  --color-hue-1: oklch(0.93 0.045 200);
+  --color-hue-1-ink: oklch(0.42 0.1 200);
+  --color-hue-2: oklch(0.93 0.045 320);
+  --color-hue-2-ink: oklch(0.42 0.1 320);
+  --color-hue-3: oklch(0.93 0.045 145);
+  --color-hue-3-ink: oklch(0.42 0.1 145);
+
   --color-bg: var(--color-surface);
   --color-sunken: var(--color-surface-2);
   --color-soft: var(--color-fg-2);
@@ -180,6 +187,35 @@
 }
 
 @layer components {
+  .avatar {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--color-surface-3);
+    color: var(--color-fg-2);
+    font-size: var(--text-2xs);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+  }
+
+  .avatar[data-hue="1"] {
+    background: var(--color-hue-1);
+    color: var(--color-hue-1-ink);
+  }
+
+  .avatar[data-hue="2"] {
+    background: var(--color-hue-2);
+    color: var(--color-hue-2-ink);
+  }
+
+  .avatar[data-hue="3"] {
+    background: var(--color-hue-3);
+    color: var(--color-hue-3-ink);
+  }
+
   .banner {
     margin: 0;
     padding: 0.5rem 1rem;
@@ -834,6 +870,19 @@
     padding: var(--space-1) 0 var(--space-2);
     border: 1px solid color-mix(in oklab, var(--glyph) 35%, transparent);
     border-radius: var(--radius-sm);
+  }
+
+  .rail-context {
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0 var(--space-2);
+    color: var(--color-muted);
   }
 
   .rail-reason,

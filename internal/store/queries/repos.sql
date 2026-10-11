@@ -1,6 +1,7 @@
 -- name: Repos :many
-SELECT name, remote, state, refusal_kind, refusal, settings_source, settings_read_at, tracked_at
-FROM repos ORDER BY name;
+SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at,
+    p.name AS project, p.hue AS project_hue
+FROM repos r LEFT JOIN projects p ON p.id = r.project_id ORDER BY r.name;
 
 -- name: UpsertRepo :exec
 INSERT INTO repos (name, remote, state, refusal_kind, refusal, tracked_at)

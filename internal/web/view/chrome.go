@@ -1,6 +1,7 @@
 package view
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -9,22 +10,36 @@ import (
 )
 
 type Chrome struct {
-	Workspace     string
-	LiveAgents    int
-	Observe       Age
-	ObserveStale  bool
-	LastError     *TickError
-	Gauges        []Gauge
-	SpendPaused   *SpendPaused
-	RefusedRepos  []RefusedRepo
-	Section       string
-	Home          bool
-	Keymap        []KeyRow
-	RepoScope     string
-	RepoCrumb     string
-	RepoCrumbPath string
-	FeatureScope  string
-	FeatureQuery  string
+	Workspace      string
+	LiveAgents     int
+	Observe        Age
+	ObserveStale   bool
+	LastError      *TickError
+	Gauges         []Gauge
+	SpendPaused    *SpendPaused
+	RefusedRepos   []RefusedRepo
+	Section        string
+	Home           bool
+	Keymap         []KeyRow
+	RepoScope      string
+	RepoCrumb      string
+	RepoCrumbPath  string
+	FeatureScope   string
+	FeatureQuery   string
+	ProjectScope   string
+	ProjectHue     int
+	ProjectQuery   string
+	ProjectInitial string
+	ScopeMenu      []ScopeChoice
+	TicketsPath    string
+	InsightsPath   string
+	ReposPath      string
+	LaunchPath     string
+}
+
+func (c *Chrome) scopeToProject(p store.Project) {
+	c.ProjectScope, c.ProjectHue, c.ProjectQuery = p.Name, p.Hue, url.QueryEscape(p.Name)
+	c.ProjectInitial = initial(p.Name)
 }
 
 // Age is a relative time the server renders and the page's clock keeps current. Stamp is the

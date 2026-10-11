@@ -135,6 +135,10 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /repos/banner", handler(s.handleBanner))
 	mux.HandleFunc("GET /features", s.handleFeaturesRedirect)
 	mux.Handle("POST /repos/track", handler(s.handleTrack))
+	mux.Handle("POST /projects", handler(s.handleCreateProject))
+	mux.Handle("POST /projects/{name}", handler(s.handleEditProject))
+	mux.Handle("POST /projects/{name}/delete", handler(s.handleDeleteProject))
+	mux.Handle("POST /repos/{owner}/{name}/project", handler(s.handleSetRepoProject))
 	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
 	mux.Handle("GET /launch/candidates", handler(s.handleCandidates))
@@ -308,10 +312,12 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) error {
 const railOpenCookie = "rail-open"
 
 func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
+	currentURL := r.Header.Get("HX-Current-URL")
 	params := view.RailParams{
-		Sel:   view.RailSelection(r.Header.Get("HX-Current-URL")),
+		Sel:   view.RailSelection(currentURL),
 		Query: strings.TrimSpace(r.FormValue("q")),
 	}
+	params.Project, params.Repo = view.RailScope(currentURL)
 	if c, err := r.Cookie(railOpenCookie); err == nil {
 		if value, err := url.QueryUnescape(c.Value); err == nil && value != "" {
 			params.Open = strings.Split(value, view.RailOpenSeparator)
@@ -685,6 +691,9 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error {
 	query := r.URL.Query().Get("q")
+	if strings.TrimSpace(query) == "" {
+		return s.renderRepoGroups(w, r)
+	}
 	var (
 		pushable []gh.RepoSummary
 		search   view.RepoSearch
