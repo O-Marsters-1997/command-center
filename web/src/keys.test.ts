@@ -7,7 +7,9 @@ import {
   isApplePlatform,
   type KeyInfo,
   type KeyTarget,
+  type RailLink,
   resolveTarget,
+  walkRail,
 } from "./keys";
 
 function press(key: string, mods: Partial<KeyInfo> = {}): KeyInfo {
@@ -208,6 +210,54 @@ describe("resolveTarget", () => {
   test("matches a chord binding exactly", () => {
     const go = fake("g t");
     expect(resolveTarget("g t", [fake("t"), go])).toBe(go);
+  });
+});
+
+function rail(current: number | null, count: number, folded: number[] = []) {
+  const clicks: number[] = [];
+  const folds = new Map<number, { open: boolean }>();
+  const links: RailLink[] = Array.from({ length: count }, (_, i) => {
+    const fold = { open: !folded.includes(i) };
+    folds.set(i, fold);
+    return {
+      getAttribute: (n) => (n === "aria-current" && i === current ? "page" : null),
+      closest: () => fold,
+      click: () => clicks.push(i),
+    };
+  });
+  return { links, clicks, folds };
+}
+
+describe("walkRail", () => {
+  test("J and K step from the current link", () => {
+    const r = rail(1, 3);
+    walkRail(r.links, 1);
+    walkRail(r.links, -1);
+    expect(r.clicks).toEqual([2, 0]);
+  });
+
+  test("with no current link J goes first and K goes last", () => {
+    const r = rail(null, 3);
+    walkRail(r.links, 1);
+    walkRail(r.links, -1);
+    expect(r.clicks).toEqual([0, 2]);
+  });
+
+  test("does nothing past either end", () => {
+    const last = rail(2, 3);
+    const first = rail(0, 3);
+    expect(walkRail(last.links, 1)).toBeNull();
+    expect(walkRail(first.links, -1)).toBeNull();
+    expect(walkRail([], 1)).toBeNull();
+    expect(last.clicks).toEqual([]);
+    expect(first.clicks).toEqual([]);
+  });
+
+  test("unfolds a closed details before clicking", () => {
+    const r = rail(0, 2, [1]);
+    walkRail(r.links, 1);
+    expect(r.folds.get(1)?.open).toBe(true);
+    expect(r.clicks).toEqual([1]);
   });
 });
 
