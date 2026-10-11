@@ -297,11 +297,20 @@ describe("searchKey", () => {
     expect(searchKey("Enter", b, links)).toBe(true);
     expect(clicks).toEqual(["a"]);
     expect(b.value).toBe("auth");
+    expect(b.blurs).toBe(1);
+  });
+
+  test("Escape on an empty box blurs without a search event", () => {
+    const b = box("");
+    searchKey("Escape", b, []);
+    expect(b.events).toEqual([]);
+    expect(b.blurs).toBe(1);
   });
 
   test("Enter with no match does nothing", () => {
     const b = box("zzz");
     expect(searchKey("Enter", b, [])).toBe(true);
+    expect(b.blurs).toBe(0);
     expect(b.value).toBe("zzz");
     expect(b.events).toEqual([]);
   });

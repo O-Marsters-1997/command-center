@@ -120,12 +120,18 @@ export interface SearchBox {
 
 export function searchKey(key: string, box: SearchBox, links: readonly { click(): void }[]): boolean {
   if (key === "Enter") {
-    links[0]?.click();
+    const first = links[0];
+    if (first) {
+      first.click();
+      box.blur();
+    }
     return true;
   }
   if (key === "Escape") {
-    box.value = "";
-    box.dispatchEvent(new Event("search"));
+    if (box.value !== "") {
+      box.value = "";
+      box.dispatchEvent(new Event("search"));
+    }
     box.blur();
     return true;
   }
@@ -168,7 +174,8 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
     "keydown",
     (e) => {
       const active = doc.activeElement;
-      if (active instanceof HTMLInputElement && active.id === "rail-search" && !e.isComposing) {
+      const plain = !(e.isComposing || e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey);
+      if (active instanceof HTMLInputElement && active.id === "rail-search" && plain) {
         const matches = [...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement);
         if (searchKey(e.key, active, matches)) {
           e.preventDefault();
