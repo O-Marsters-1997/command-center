@@ -9,7 +9,8 @@ ideas/
 web/node_modules/
 .playwright-cli/
 
-internal/web/assets/dist/app.css
+internal/web/assets/dist/*
+!internal/web/assets/dist/.gitkeep
 
 docs/plans/
 docs/prds/
