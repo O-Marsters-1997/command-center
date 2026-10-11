@@ -13,7 +13,7 @@ there is nothing for a tick to reconcile.
 What invariant 9 protects (no racing writers, no half-made write on a page, no tick deriving from a
 table mutating beneath it) concerns state a tick reads or a page renders as ticket truth. `users`,
 `sessions`, `projects` and `repos.project_id` are none of these: no tick step reads them, and
-nothing in them can drift from GitHub or a worktree.
+nothing in them can drift from GitHub or a worktree. A project scope changes which tickets a page shows, never what a ticket is.
 
 ## Decision
 

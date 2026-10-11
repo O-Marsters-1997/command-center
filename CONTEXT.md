@@ -120,7 +120,7 @@ _Avoid_: Codebase, checkout (that is
 where a repo's working copy sits), configured repo (repos are no longer configured)
 
 **Project**:
-A named set of repos with one of three hues. A repo belongs to at most one project. The third scope
+A named set of repos. A repo belongs to at most one project. The third scope
 axis. Made only by grouping repos on the Repos page and never inferred. Not the tracker's `project:`
 label prefix, which marks a feature (ADR 23).
 _Avoid_: Workspace, folder, feature (that is the tracker's grouping of tickets)
