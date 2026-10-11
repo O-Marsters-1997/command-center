@@ -30,7 +30,7 @@ func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
 		`href="/s/acme/alpha/1?project=acme"`,
 		`href="/tickets?project=acme"`, `href="/insights?project=acme"`,
 		`href="/repos?project=acme"`, `href="/launch?project=acme"`,
-		`hx-get="/board?all=1&amp;project=acme"`,		`class="avatar" data-hue="1" aria-hidden="true">A</span> acme`,
+		`hx-get="/board?all=1&amp;project=acme"`, `class="avatar" data-hue="1" aria-hidden="true">A</span> acme`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("GET /tickets?project=ACME missing %q:\n%s", want, body)
