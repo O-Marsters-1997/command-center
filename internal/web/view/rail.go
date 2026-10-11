@@ -139,7 +139,7 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 			Reason: r.Reason, Path: cmp.Or(SessionPath(r.URL), ticketsPath),
 		}
 		it.Selected = params.Sel != "" && params.Sel == SessionPath(r.URL)
-		it.Reply = r.AwaitingInput()
+		it.Reply = r.AwaitingInput() && r.FollowUpAvailable() && r.Reason != ""
 		for _, verb := range r.Verbs {
 			if !it.Reply && verb != plan.VerbFollowUp && verb != plan.VerbLaunch {
 				it.Verb = verb
