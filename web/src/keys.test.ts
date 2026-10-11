@@ -136,6 +136,27 @@ describe("the g chord", () => {
     expect(state.lookup(press("t"), null)).toBe("t");
   });
 
+  test("g then a digit 0 to 9 looks up the scope chord", () => {
+    const state = createKeyState(true, fakeClock().timers);
+    for (let d = 0; d <= 9; d++) {
+      expect(state.lookup(press("g"), null)).toBeNull();
+      expect(state.lookup(press(String(d)), null)).toBe(`g ${d}`);
+    }
+  });
+
+  test("the scope chord is ignored while a field has focus", () => {
+    const state = createKeyState(true, fakeClock().timers);
+    const input = focused(["input"]);
+    expect(state.lookup(press("g"), input)).toBeNull();
+    expect(state.lookup(press("1"), input)).toBeNull();
+    expect(state.lookup(press("1"), null)).toBe("1");
+  });
+
+  test("a modified digit is left to the browser", () => {
+    expect(bindingFor(press("1", { metaKey: true }), true)).toBeNull();
+    expect(bindingFor(press("1", { ctrlKey: true }), false)).toBeNull();
+  });
+
   test("clear drops a pending prefix", () => {
     const state = createKeyState(false, fakeClock().timers);
     state.lookup(press("g"), null);
