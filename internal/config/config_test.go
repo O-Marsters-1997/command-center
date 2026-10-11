@@ -232,6 +232,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
 				"--model", "{model}",
+				"{session}",
 			},
 		},
 		{
@@ -245,6 +246,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
 				"--model", "{model}",
+				"{session}",
 				"--max-turns", "40",
 			},
 		},

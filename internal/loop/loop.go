@@ -654,7 +654,7 @@ func (spec spawnSpec) session() store.RunSession {
 	case spec.resumeSessionID != "":
 		return store.RunSession{JoinID: spec.resumeSessionID, Message: spec.message}
 	case spec.kind == runKindAgent || spec.kind == runKindFollowUp:
-		return store.RunSession{StartNew: true}
+		return store.RunSession{StartNew: true, Message: spec.message}
 	default:
 		return store.RunSession{}
 	}

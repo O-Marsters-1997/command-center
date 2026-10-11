@@ -144,8 +144,8 @@ func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
 	if got.spawn.SessionID == "" || got.spawn.SessionID == got.sessionID {
 		t.Errorf("spawn session = %q, want a new session distinct from %q", got.spawn.SessionID, got.sessionID)
 	}
-	if got.row.Message.Valid {
-		t.Errorf("run message = %q, want none on a fresh follow-up", got.row.Message.String)
+	if got.row.Message.String != "now fix the other test" {
+		t.Errorf("run message = %q, want the owner's raw text kept on a fresh follow-up too", got.row.Message.String)
 	}
 	if !strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
 		t.Errorf("prompt = %q, want the fresh follow-up prompt", got.spawn.Prompt)

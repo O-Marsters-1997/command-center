@@ -104,7 +104,7 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText),
+		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
 	}
 
 	sessionID, err := l.resumableSession(ctx, ticket.URL)
@@ -118,7 +118,6 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 		}
 		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome)
 		spec.resumeSessionID = sessionID
-		spec.message = promptText
 	}
 	return l.spawnRun(ctx, spec)
 }
