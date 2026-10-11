@@ -12,7 +12,12 @@ import (
 func trackRepos(t *testing.T, store *storepkg.Store, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		repo := storepkg.Repo{Name: name, Remote: "git@github.com:" + name + ".git", State: storepkg.RepoReady, TrackedAt: trackedAt}
+		repo := storepkg.Repo{
+			Name:      name,
+			Remote:    "git@github.com:" + name + ".git",
+			State:     storepkg.RepoReady,
+			TrackedAt: trackedAt,
+		}
 		if err := store.UpsertRepo(t.Context(), repo); err != nil {
 			t.Fatal(err)
 		}

@@ -38,7 +38,8 @@ func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {
 		t.Fatalf("POST /projects = %d, want 303: %s", rec.Code, rec.Body)
 	}
 	body := renderPath(t, server, "/repos")
-	for _, want := range []string{`class="avatar" data-hue="1" aria-hidden="true">A</span>`, "2 repos", "acme/alpha", "acme/beta"} {
+	square := `class="avatar" data-hue="1" aria-hidden="true">A</span>`
+	for _, want := range []string{square, "2 repos", "acme/alpha", "acme/beta"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("GET /repos missing %q:\n%s", want, body)
 		}
@@ -99,7 +100,9 @@ func TestLooseRepoRendersUnderItsOwnNameWithNoSquare(t *testing.T) {
 	if !strings.Contains(body, `href="/repos/acme/solo"`) {
 		t.Errorf("GET /repos missing the loose repo:\n%s", body)
 	}
-	if strings.Contains(body, `data-scope="project"`) || strings.Contains(body, `class="avatar" data-hue="1" aria-hidden`) {
+	projectGroup := `data-scope="project"`
+	square := `class="avatar" data-hue="1" aria-hidden`
+	if strings.Contains(body, projectGroup) || strings.Contains(body, square) {
 		t.Errorf("GET /repos gave a loose repo a project square:\n%s", body)
 	}
 }
