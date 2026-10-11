@@ -38,7 +38,7 @@
 <script>
   document.addEventListener("toggle", function (e) {
     var key = e.target.dataset && e.target.dataset.railKey;
-    if (!key) return;
+    if (!key || e.target.hasAttribute("data-rail-forced")) return;
     var open = document.cookie.split("; ").reduce(function (found, c) {
       return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
     }, []).filter(function (k) { return k && k !== key; });

@@ -8,7 +8,7 @@
 {{end}}
 
 {{define "railVerb"}}
-<form method="post" action="/verb" hx-post="/verb" hx-target="#rail-body" hx-swap="outerHTML">
+<form method="post" action="/verb" hx-post="/verb" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="from" value="rail">
   <button class="rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
@@ -16,7 +16,10 @@
 {{end}}
 
 {{define "rail"}}
-<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-swap="outerHTML">
+<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-include="#rail-search" hx-swap="outerHTML">
+  {{- if .NoMatch}}
+  <p class="rail-empty">Nothing matches “{{.Query}}”.</p>
+  {{- else}}
   <section class="rail-group" data-group="needs-you" aria-label="Needs you">
     <h2 class="rail-heading">Needs you</h2>
     {{- range .NeedsYou}}
@@ -26,34 +29,37 @@
       {{if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
     {{- else}}
-    <p class="rail-empty">Nothing needs you.</p>
+    <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing needs you.{{end}}</p>
     {{- end}}
   </section>
   <section class="rail-group" data-group="in-flight" aria-label="In flight">
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
-    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}>
+    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
       <summary>{{.Name}} <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
       {{- range .Live}}{{template "railItem" .}}{{end}}
       {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
     </details>
     {{- else}}
-    <p class="rail-empty">Nothing in flight.</p>
+    <p class="rail-empty">{{if $.Query}}No match.{{else}}Nothing in flight.{{end}}</p>
     {{- end}}
   </section>
-  {{- with .Settled}}{{if .Items}}
+  {{- with .Settled}}{{if or .Items $.Query}}
   <section class="rail-group" data-group="settled" aria-label="Settled">
-    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}>
+    <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
       <summary>Settled <span class="rail-count">{{len .Items}}</span></summary>
       {{- range .Items}}
       <div class="rail-settled">
         {{template "railItem" .}}
         {{if .Verb}}{{template "railVerb" .}}{{end}}
       </div>
+      {{- else}}
+      <p class="rail-empty">No match.</p>
       {{- end}}
     </details>
   </section>
   {{end}}{{end}}
+  {{- end}}
   <footer class="rail-footer">
     {{- range .Gauges}}
     <span class="rail-gauge"><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span> {{.Label}} · {{.Pct}}%</span>

@@ -152,6 +152,9 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 
 	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
 		tag, attrs := m[1], m[2]
+		if tag == "input" && strings.Contains(attrs, `id="rail-search"`) {
+			continue
+		}
 		if tag == "table" || tag == "div" || tag == "tr" || tag == "section" ||
 			(tag == "a" && !strings.Contains(attrs, "hx-post")) {
 			continue
