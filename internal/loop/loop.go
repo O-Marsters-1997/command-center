@@ -203,6 +203,7 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 	return runSteps(
 		func() error { return l.recordRepoStates(ctx, obs) },
 		func() error { return l.tickCheckingWaits(ctx) },
+		func() error { return l.recordOpenedEvents(ctx, prev, obs) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
 		func() error { return l.applyCancelIntents(ctx) },
@@ -211,7 +212,6 @@ func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
 		func() error { return l.reconcileRuns(ctx, obs) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.recordVerdictTransitions(ctx, obs) },
-		func() error { return l.recordOpenedEvents(ctx, prev, obs) },
 		func() error { return l.recordMergedEvents(ctx, obs) },
 	)
 }

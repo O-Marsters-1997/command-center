@@ -17,8 +17,8 @@ func (l *Loop) recordOpenedEvents(ctx context.Context, prev, obs plan.Observatio
 
 	for _, t := range tickets {
 		key := plan.BranchKey(t.Repo, t.Branch)
-		pr, open := obs.PRs[key]
-		if _, seen := prev.PRs[key]; !open || seen {
+		pr, observed := obs.PRs[key]
+		if _, seen := prev.PRs[key]; !observed || seen {
 			continue
 		}
 		exists, err := l.store.HasEvent(ctx, t.URL, eventPROpened)
