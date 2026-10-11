@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -46,6 +47,28 @@ func ScopeList(projects []store.Project, repos []store.Repo) []ScopeEntry {
 	}
 	slices.SortFunc(loose, func(a, b ScopeEntry) int { return strings.Compare(a.Label, b.Label) })
 	return append(entries, loose...)
+}
+
+const maxScopeKeys = 9
+
+type ScopeChoice struct {
+	ScopeEntry
+	Key     string
+	Current bool
+}
+
+func scopeChoices(entries []ScopeEntry, project, repo string) []ScopeChoice {
+	choices := make([]ScopeChoice, 0, len(entries))
+	for i, e := range entries {
+		c := ScopeChoice{ScopeEntry: e}
+		if i < maxScopeKeys {
+			c.Key = "g " + strconv.Itoa(i+1)
+		}
+		c.Current = (e.Kind == ScopeProject && e.Value == project) ||
+			(e.Kind == ScopeRepo && project == "" && e.Value == repo)
+		choices = append(choices, c)
+	}
+	return choices
 }
 
 type ProjectMark struct {

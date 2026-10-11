@@ -32,6 +32,24 @@
       else a.removeAttribute("aria-current");
     });
   }
+  function closeScopeMenu() {
+    function scopeOf(href) {
+      var q = new URL(href, location.origin).searchParams;
+      return q.get("project") ? "project=" + q.get("project") : q.get("repo") ? "repo=" + q.get("repo") : "";
+    }
+    var here = scopeOf(location.href);
+    document.querySelectorAll("details[data-scope-menu]").forEach(function (d) {
+      d.open = false;
+      d.querySelectorAll("a").forEach(function (a) {
+        var current = scopeOf(a.getAttribute("href")) === here;
+        if (current) d.querySelector("summary").innerHTML = a.innerHTML;
+        if (current) a.setAttribute("aria-current", "true");
+        else a.removeAttribute("aria-current");
+      });
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", closeScopeMenu);
+  document.addEventListener("htmx:historyRestore", closeScopeMenu);
   document.addEventListener("htmx:pushedIntoHistory", markCurrent);
   document.addEventListener("htmx:historyRestore", markCurrent);
 </script>
@@ -86,6 +104,15 @@
     <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
     <a class="sidebar-item" href="/launch" data-key="c" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg><span>Launch</span></a>
   </nav>
+  <details class="scope-menu mx-2" data-scope-menu>
+    <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">All projects · 0 running</summary>
+    <nav class="flex flex-col gap-0.5" aria-label="scope">
+      <a class="rail-link" href="/tickets" data-key="g 0" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="true">All projects</a>
+      <a class="rail-link" href="/tickets?repo=acme%2Falpha" data-key="g 1" hx-get="/tickets?repo=acme%2Falpha" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">acme/alpha</a>
+      <a class="rail-link" href="/tickets?repo=acme%2Fbeta" data-key="g 2" hx-get="/tickets?repo=acme%2Fbeta" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">acme/beta</a>
+      
+    </nav>
+  </details>
   <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4.5 7h.01M7.5 7h.01M10.5 7h.01M5 9.5h6" stroke-linecap="round"/></svg><span>Shortcuts</span><kbd>?</kbd></button>
@@ -98,6 +125,8 @@
     <div class="key-row"><dt><kbd>⌘K</kbd></dt><dd>Search sessions, refs, repos and features</dd></div>
     <div class="key-row"><dt><kbd>J / K</kbd></dt><dd>Next / previous session in the rail</dd></div>
     <div class="key-row"><dt><kbd>G H · G T · G I · G R</kbd></dt><dd>Home · All tickets · Insights · Repos</dd></div>
+    <div class="key-row"><dt><kbd>G 1 – G 9</kbd></dt><dd>Scope to project 1–9</dd></div>
+    <div class="key-row"><dt><kbd>G 0</kbd></dt><dd>All projects</dd></div>
     <div class="key-row"><dt><kbd>C</kbd></dt><dd>Launch a feature</dd></div>
     <div class="key-row"><dt><kbd>F · V</kbd></dt><dd>Open the feature graph · switch graph and board</dd></div>
     <div class="key-row"><dt><kbd>E</kbd></dt><dd>Settle a merged session (removes its worktree)</dd></div>

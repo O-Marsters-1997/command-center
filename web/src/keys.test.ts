@@ -66,7 +66,7 @@ interface Fake extends KeyTarget {
 
 function fake(
   key: string,
-  opts: { main?: boolean; disabled?: boolean; hidden?: boolean; field?: boolean } = {},
+  opts: { main?: boolean; disabled?: boolean; hidden?: boolean; field?: boolean; menu?: { open: boolean } } = {},
 ): Fake {
   const calls: string[] = [];
   return {
@@ -76,7 +76,10 @@ function fake(
     isContentEditable: false,
     matches: (sel) => opts.field === true && sel.includes("input"),
     getClientRects: () => (opts.hidden ? [] : [{}]),
-    closest: (sel) => (sel === "#main" && opts.main ? {} : null),
+    closest: (sel) => {
+      if (sel === "#main") return opts.main ? {} : null;
+      return sel.includes("data-scope-menu") ? (opts.menu ?? null) : null;
+    },
     focus: () => calls.push("focus"),
     select: () => calls.push("select"),
     click: () => calls.push("click"),
@@ -237,6 +240,15 @@ describe("resolveTarget", () => {
   test("the first of equals wins", () => {
     const first = fake("c");
     expect(resolveTarget("c", [first, fake("c")])).toBe(first);
+  });
+
+  test("reaches a scope menu entry while its menu is closed, and opens the menu to click it", () => {
+    const menu = { open: false };
+    const entry = fake("g 1", { hidden: true, menu });
+    expect(resolveTarget("g 1", [entry])).toBe(entry);
+    activate(entry);
+    expect(menu.open).toBe(true);
+    expect(entry.calls).toEqual(["click"]);
   });
 
   test("matches a chord binding exactly", () => {
