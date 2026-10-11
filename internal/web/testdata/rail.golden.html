@@ -1,5 +1,5 @@
 
-<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-swap="outerHTML">
+<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-include="#rail-search" hx-swap="outerHTML">
   <section class="rail-group" data-group="needs-you" aria-label="Needs you">
     <h2 class="rail-heading">Needs you</h2>
     <p class="rail-empty">Nothing needs you.</p>
@@ -28,7 +28,7 @@
 </a>
 
         
-<form method="post" action="/verb" hx-post="/verb" hx-target="#rail-body" hx-swap="outerHTML">
+<form method="post" action="/verb" hx-post="/verb" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="sandbox://CC-1">
   <input type="hidden" name="from" value="rail">
   <button class="rail-verb" type="submit" name="verb" value="remove-worktree">remove-worktree</button>
