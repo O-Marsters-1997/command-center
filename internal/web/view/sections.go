@@ -80,7 +80,9 @@ func filterTabs(sections []Section, params Params) []FilterTab {
 		counts[s.Key] = len(s.Rows)
 		total += len(s.Rows)
 	}
-	tabs := []FilterTab{{Key: "all", Title: "All", Path: params.withScope(ticketsPath), Count: total, Current: filter == ""}}
+	tabs := []FilterTab{{
+		Key: "all", Title: "All", Path: params.withScope(ticketsPath), Count: total, Current: filter == "",
+	}}
 	for _, s := range sectionOrder {
 		tabs = append(tabs, FilterTab{
 			Key: s.Key, Title: s.Title, Count: counts[s.Key], Current: filter == s.Key,
