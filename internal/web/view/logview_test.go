@@ -246,6 +246,26 @@ func TestBuildLogDetailCarriesStreaming(t *testing.T) {
 	}
 }
 
+func TestBuildLogDetailRendersASuccessfulCommitAsItsOwnLine(t *testing.T) {
+	t.Parallel()
+
+	const log = `{"type":"assistant","timestamp":"2026-01-01T00:00:00Z","message":{"content":` +
+		`[{"type":"tool_use","id":"c","name":"Bash","input":{"command":"git commit -m \"add it\""}}]}}` + "\n" +
+		`{"type":"user","timestamp":"2026-01-01T00:00:01Z","message":{"content":` +
+		`[{"type":"tool_result","tool_use_id":"c","content":"ok"}]}}` + "\n"
+	path := writeRunLog(t, log)
+
+	detail := buildLogDetail(testLine, path, false, "sandbox://x", nil, Params{Log: "all"})
+
+	if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
+		t.Fatalf("Phases = %+v; want one phase with one item", detail.Phases)
+	}
+	item := detail.Phases[0].Items[0]
+	if item.Kind != "commit" || item.Line != "line-commit commit add it ✓ 1s" {
+		t.Errorf("item = %+v; want a commit line carrying the message", item)
+	}
+}
+
 func TestKindShownByMode(t *testing.T) {
 	t.Parallel()
 
@@ -264,6 +284,10 @@ func TestKindShownByMode(t *testing.T) {
 		{"tools", agentlog.Fail, false},
 		{"fails", agentlog.Fail, true},
 		{"fails", agentlog.Pass, false},
+		{"all", agentlog.Commit, true},
+		{"tools", agentlog.Commit, true},
+		{"skills", agentlog.Commit, false},
+		{"fails", agentlog.Commit, false},
 		{"all", agentlog.Say, true},
 		{"tools", agentlog.Say, false},
 		{"fails", agentlog.Say, false},

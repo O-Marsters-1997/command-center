@@ -111,7 +111,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mod
 				continue
 			}
 			logLine := view.LineOf(event)
-			logLine.Replace = event.Kind == agentlog.Cmd && event.Done && event.CallID != "" && mode != "fails"
+			logLine.Replace = (event.Kind == agentlog.Cmd || event.Kind == agentlog.Commit) && event.Done && event.CallID != "" && mode != "fails"
 			rendered, err := renderLogLine(logLine)
 			if err != nil {
 				continue

@@ -31,6 +31,7 @@ const (
 	Say
 	Cmd
 	Record
+	Commit
 )
 
 func (k Kind) String() string {
@@ -51,6 +52,8 @@ func (k Kind) String() string {
 		return "cmd"
 	case Record:
 		return "record"
+	case Commit:
+		return "commit"
 	default:
 		return "unknown"
 	}
@@ -131,7 +134,7 @@ func Parse(r io.Reader) (Run, error) {
 				event.At = parsed.Timestamp.Sub(base)
 				run.End = max(run.End, event.At)
 			}
-			if event.Kind == Cmd && event.Done {
+			if event.Done && (event.Kind == Cmd || event.Kind == Commit) {
 				phase, ok := callPhase[event.CallID]
 				if !ok {
 					phase = len(run.Phases) - 1
@@ -499,7 +502,29 @@ func (l logLine) cmdDone(call cmdCall, callID string) Event {
 		done.Elapsed = max(0, l.Timestamp.Sub(call.at))
 	}
 	done.Output, done.OutputLines = boundOutput(strings.TrimRight(output, "\n"))
+	if done.ExitCode == 0 && !done.Interrupted && gitCommit.MatchString(call.command) {
+		done.Kind = Commit
+		done.Detail = commitMessage(call.command)
+		done.Output, done.OutputLines = "", 0
+	}
 	return done
+}
+
+var (
+	gitCommit     = regexp.MustCompile(`\bgit\s+(?:-\S+\s+)*commit\b`)
+	commitFlagM   = regexp.MustCompile(`(?:^|\s)(?:-[a-zA-Z]*m|--message)(?:\s+|=)(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`)
+	commitHeredoc = regexp.MustCompile(`<<|\s(?:-F|--file)\b`)
+)
+
+func commitMessage(command string) string {
+	if commitHeredoc.MatchString(command) {
+		return ""
+	}
+	match := commitFlagM.FindStringSubmatch(command)
+	if match == nil {
+		return ""
+	}
+	return firstLine(match[1] + match[2])
 }
 
 func joinNonEmpty(parts ...string) string {
