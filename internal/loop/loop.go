@@ -461,7 +461,8 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	cancelled := map[string]bool{}
 	for _, intent := range intents {
 		run, ok := latest[intent.TicketID]
-		if cancelled[intent.TicketID] || !ok || run.Pgid == nil || run.HasOutcome {
+		steerable := run.Kind == runKindAgent || run.Kind == runKindFollowUp
+		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid == nil || run.HasOutcome {
 			continue
 		}
 		cancelled[intent.TicketID] = true
