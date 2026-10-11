@@ -14,5 +14,6 @@ export default defineConfig({
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
+    rollupOptions: { output: { entryFileNames: "[name].js", chunkFileNames: "[name].js" } },
   },
 });

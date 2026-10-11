@@ -9,14 +9,7 @@ ideas/
 web/node_modules/
 .playwright-cli/
 
-# The vite build's own output. Unlike app.css (ADR 1, committed so its own CI job's git diff
-# guards against drift), this is Node-only and never checked in: a Go-only build must embed no
-# island script and fall back to its custom element's light-DOM content
-# (docs/prds/prd-fleet-view.md § The build, and Go's dependency on it).
-internal/web/assets/dist/graph.js
-internal/web/assets/dist/launch-modal.js
-internal/web/assets/dist/layout-*.js
-internal/web/assets/dist/index-*.js
+internal/web/assets/dist/app.css
 
 docs/plans/
 docs/prds/

@@ -182,7 +182,7 @@ func TestSessionGate(t *testing.T) {
 		{"unknown cookie is refused", "/", session("nope"), html, http.StatusSeeOther, "/login", ""},
 		{"expired session is refused", "/", session(stale), html, http.StatusSeeOther, "/login", ""},
 		{"login page is public", "/login", nil, html, http.StatusOK, "", ""},
-		{"stylesheet is public", "/assets/app.css", nil, nil, http.StatusOK, "", ""},
+		{"assets are public", "/assets/htmx.min.js", nil, nil, http.StatusOK, "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -32,3 +32,9 @@ at render time (`"pill pill-" + tone`). Those must be named classes already in t
 A pill is byte-identical whether Go or Solid drew it. Island styles are page styles and can collide;
 reverting means a sheet per island, which gets harder with each island. Revisit only if untrusted
 markup ever mounts on the page. A new piece of derived state needs a new named class first.
+
+## Amendment, 2026-10-11
+
+The compiled sheet is no longer committed. `just assets` generates `internal/web/assets/dist/app.css`
+and it is gitignored ([ADR 21](0021-built-js-is-committed-the-stylesheet-is-not.md)). The rest of this
+decision stands.
