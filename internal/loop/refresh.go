@@ -104,6 +104,10 @@ func (l *Loop) refreshOne(
 		return l.event(ctx, ticket.URL, store.EventRefreshRefused, detail)
 	}
 
+	entry, _ := snap.Entry(ticket.URL)
+	if entry.HoldsWorktree() {
+		return refuse(heldWorktreeRefusal)
+	}
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
 		return refuse(refusal)
@@ -116,7 +120,6 @@ func (l *Loop) refreshOne(
 		return l.event(ctx, ticket.URL, store.EventRefreshRefused, err.Error())
 	}
 
-	entry, _ := snap.Entry(ticket.URL)
 	unlock := entry.Unlock
 	if !unlock.Unlocked {
 		return refuse(string(unlock.Reason))

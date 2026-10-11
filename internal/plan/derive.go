@@ -104,6 +104,10 @@ type Entry struct {
 	LastPush       *PushRow
 }
 
+func (e Entry) HoldsWorktree() bool {
+	return e.Run != nil && !e.Run.Alive && e.Run.HasOutcome && e.Run.Outcome == OutcomeAsked
+}
+
 type Snapshot struct {
 	Entries     []Entry
 	byURL       map[string]int

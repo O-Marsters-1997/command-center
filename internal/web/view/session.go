@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // ErrSessionNotFound is returned when no tracked ticket matches the session route.
@@ -23,6 +24,7 @@ type Session struct {
 	Stack          Stack
 	Ref            string
 	Prompt         Prompt
+	Turns          []Turn
 	Raw            bool
 	RawText        string
 	TranscriptPath string
@@ -30,6 +32,10 @@ type Session struct {
 	ActionsPath    string
 	PRURL          string
 	Toast          string
+}
+
+func (s Session) Empty() bool {
+	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
 // Running reports whether an agent is live on the ticket, so the composer shows its status line
@@ -40,6 +46,12 @@ func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput
 
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
 func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
+
+type Turn struct {
+	You string
+	Log LogDetail
+	Ask string
+}
 
 // Prompt is the run's own prompt file. Kept is false when the file is gone.
 type Prompt struct {
@@ -92,19 +104,51 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	if row.PRNumber > 0 {
 		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
 	}
+	runs, err := r.store.SessionRunsForTicket(ctx, ticketURL)
+	if err != nil {
+		return Session{}, err
+	}
+	turns := []Turn{{Log: row.Log}}
+	if !raw {
+		turns = r.turns(row, runs)
+	}
+	promptLog := row.LogPath
+	if len(runs) > 0 {
+		promptLog = runs[0].LogPath
+	}
 	return Session{
+		Turns:          turns,
 		ActionsPath:    self + "?part=actions",
 		PRURL:          prURL,
 		Chrome:         chrome,
 		Row:            row,
 		Stack:          buildStack(board, row),
 		Ref:            ticketRef(ticketURL),
-		Prompt:         readPrompt(row.LogPath),
+		Prompt:         readPrompt(promptLog),
 		Raw:            raw,
 		RawText:        rawLog(raw, row.LogPath),
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
 	}, nil
+}
+
+func (r *Reader) turns(row Row, runs []store.SessionRun) []Turn {
+	if len(runs) < 2 {
+		return []Turn{{Log: row.Log, Ask: row.Question}}
+	}
+	turns := make([]Turn, len(runs))
+	for i, run := range runs {
+		turns[i].Log = row.Log
+		turns[i].Ask = run.Question
+		if i != len(runs)-1 || run.LogPath != row.LogPath {
+			turns[i].Log = buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
+			turns[i].Log.StreamPath = ""
+		}
+		if i > 0 {
+			turns[i].You = run.Message
+		}
+	}
+	return turns
 }
 
 func readPrompt(logPath string) Prompt {

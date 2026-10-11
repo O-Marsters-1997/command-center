@@ -85,6 +85,8 @@ func ticketRef(url string) string { return "#" + path.Base(url) }
 
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
+func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
+
 func (r Row) Stack() string {
 	if r.Base == "" || r.Base == defaultBaseBranch {
 		return fmt.Sprintf("L%d", r.MergeOrder)
