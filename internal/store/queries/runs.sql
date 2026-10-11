@@ -34,6 +34,9 @@ UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
   model = $9, metrics_settled = $10
 WHERE id = $11;
 
+-- name: RecordQuestion :exec
+UPDATE runs SET question = $1 WHERE id = $2;
+
 -- name: InsertCutFailedRun :one
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
 VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
@@ -44,7 +47,7 @@ WHERE pgid IS NOT NULL AND outcome IS NULL;
 
 -- name: LatestRunsByTicket :many
 SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
+       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind, r.question
 FROM runs r
 JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id;

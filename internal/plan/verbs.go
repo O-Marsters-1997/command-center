@@ -31,6 +31,8 @@ func Verbs(s State) []string {
 		return []string{VerbCancel}
 	case Running:
 		return []string{VerbKill}
+	case AwaitingInput:
+		return []string{VerbFollowUp, VerbReRun}
 	case Failed, CutFailed:
 		return []string{VerbReRun, VerbFollowUp}
 	case ConflictResolved:

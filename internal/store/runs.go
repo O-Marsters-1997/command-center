@@ -114,6 +114,14 @@ func (s *Store) RecordDisposition(
 	return tx.Commit()
 }
 
+func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
+	err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
+	if err != nil {
+		return fmt.Errorf("record question for run %d: %w", runID, err)
+	}
+	return nil
+}
+
 func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, requests []agentlog.Request) error {
 	for _, r := range requests {
 		if err := q.InsertRunRequest(ctx, ccdb.InsertRunRequestParams{
@@ -264,6 +272,7 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 		}
 		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
+		summary.Question = row.Question.String
 		summaries[row.TicketID] = summary
 	}
 	return summaries, nil
@@ -275,6 +284,8 @@ func outcomeFromString(s string) plan.Outcome {
 		return plan.OutcomePush
 	case plan.OutcomeCutFailed.String():
 		return plan.OutcomeCutFailed
+	case plan.OutcomeAsked.String():
+		return plan.OutcomeAsked
 	default:
 		return plan.OutcomeFailed
 	}

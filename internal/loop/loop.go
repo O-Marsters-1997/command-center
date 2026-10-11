@@ -481,15 +481,23 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 func (l *Loop) disposeRun(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) error {
-	commits := 0
-	if run.BaselineSHA != "" {
-		var err error
-		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
-		if err != nil {
-			return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
-		}
+	question, err := l.readQuestion(run)
+	if err != nil {
+		return err
 	}
-	outcome := dispositionFor(run.Kind, commits)
+	outcome := plan.OutcomeAsked
+	if question == "" {
+		commits := 0
+		if run.BaselineSHA != "" {
+			commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
+			if err != nil {
+				return fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
+			}
+		}
+		outcome = dispositionFor(run.Kind, commits)
+	} else if err := l.store.RecordQuestion(ctx, run.ID, question); err != nil {
+		return err
+	}
 
 	var exitCode *int
 	if code, ok := l.runner.Reap(run.Pgid); ok {
@@ -517,6 +525,33 @@ func (l *Loop) disposeRun(
 		return nil
 	}
 	return l.queueReviewFindings(ctx, run)
+}
+
+const maxQuestionBytes = 4096
+
+func (l *Loop) questionPath(runID int64) string {
+	return filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.question", runID))
+}
+
+func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
+	if run.Kind != runKindAgent && run.Kind != runKindFollowUp {
+		return "", nil
+	}
+	data, err := os.ReadFile(l.questionPath(run.ID))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read question for run %d: %w", run.ID, err)
+	}
+	if len(data) > maxQuestionBytes {
+		data = data[:maxQuestionBytes]
+	}
+	question := strings.TrimSpace(strings.ToValidUTF8(string(data), ""))
+	if question == "" {
+		return "(the agent asked without writing a question)", nil
+	}
+	return question, nil
 }
 
 func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bool) {
@@ -676,9 +711,13 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		return err
 	}
 
+	promptFor := spec.promptFor
+	if promptFor == nil && (spec.kind == runKindAgent || spec.kind == runKindFollowUp) {
+		promptFor = func(runID int64) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
+	}
 	prompt := spec.prompt
-	if spec.promptFor != nil {
-		prompt = spec.promptFor(runID)
+	if promptFor != nil {
+		prompt = promptFor(runID)
 	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {

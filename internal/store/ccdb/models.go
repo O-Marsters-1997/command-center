@@ -86,6 +86,7 @@ type Run struct {
 	LaunchID       sql.NullInt64
 	SessionID      sql.NullString
 	Message        sql.NullString
+	Question       sql.NullString
 }
 
 type RunRequest struct {

@@ -8,6 +8,7 @@ const (
 	OutcomePush Outcome = iota
 	OutcomeFailed
 	OutcomeCutFailed
+	OutcomeAsked
 )
 
 func (o Outcome) String() string {
@@ -18,6 +19,8 @@ func (o Outcome) String() string {
 		return "failed"
 	case OutcomeCutFailed:
 		return "cut_failed"
+	case OutcomeAsked:
+		return "asked"
 	default:
 		return "failed"
 	}

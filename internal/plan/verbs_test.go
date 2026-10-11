@@ -21,6 +21,7 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.Running, want: []string{plan.VerbKill}, unattended: true},
 		{state: plan.Failed, want: []string{plan.VerbReRun, plan.VerbFollowUp}},
 		{state: plan.CutFailed, want: []string{plan.VerbReRun, plan.VerbFollowUp}},
+		{state: plan.AwaitingInput, want: []string{plan.VerbFollowUp, plan.VerbReRun}},
 		{state: plan.PushPending, want: nil, unattended: true},
 		{
 			state:      plan.Checking,

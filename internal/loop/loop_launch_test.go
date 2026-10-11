@@ -73,11 +73,13 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
 	}
-	written, err := os.ReadFile(f.ImplementSpawns()[0].PromptPath)
+	promptPath := f.ImplementSpawns()[0].PromptPath
+	written, err := os.ReadFile(promptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertGolden(t, goldenPrompt, written)
+	runsDir := filepath.Dir(promptPath)
+	assertGolden(t, goldenPrompt, []byte(strings.ReplaceAll(string(written), runsDir, "<runs>")))
 }
 
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {

@@ -271,7 +271,7 @@ func (q *Queries) LatestRunLog(ctx context.Context, ticketID sql.NullString) (La
 
 const latestRunsByTicket = `-- name: LatestRunsByTicket :many
 SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind
+       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind, r.question
 FROM runs r
 JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
   ON latest.ticket_id = r.ticket_id AND latest.id = r.id
@@ -289,6 +289,7 @@ type LatestRunsByTicketRow struct {
 	EndedAt       sql.NullTime
 	PromptHash    sql.NullString
 	Kind          string
+	Question      sql.NullString
 }
 
 func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketRow, error) {
@@ -312,6 +313,7 @@ func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketR
 			&i.EndedAt,
 			&i.PromptHash,
 			&i.Kind,
+			&i.Question,
 		); err != nil {
 			return nil, err
 		}
@@ -538,6 +540,20 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.MetricsSettled,
 		arg.ID,
 	)
+	return err
+}
+
+const recordQuestion = `-- name: RecordQuestion :exec
+UPDATE runs SET question = $1 WHERE id = $2
+`
+
+type RecordQuestionParams struct {
+	Question sql.NullString
+	ID       int64
+}
+
+func (q *Queries) RecordQuestion(ctx context.Context, arg RecordQuestionParams) error {
+	_, err := q.db.ExecContext(ctx, recordQuestion, arg.Question, arg.ID)
 	return err
 }
 

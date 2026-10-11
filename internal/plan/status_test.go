@@ -163,6 +163,15 @@ func TestStatusWithLatestRun(t *testing.T) {
 			wantState: plan.PushPending,
 		},
 		{
+			name: "an asked run derives awaiting input with the question's first line",
+			latestRun: &plan.RunFact{
+				Alive: false, HasOutcome: true, Outcome: plan.OutcomeAsked,
+				Question: "Which database?\nPostgres or SQLite.",
+			},
+			wantState: plan.AwaitingInput,
+			reasonHas: "Which database?",
+		},
+		{
 			name: "a failed cut derives cut failed",
 			latestRun: &plan.RunFact{
 				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed,
