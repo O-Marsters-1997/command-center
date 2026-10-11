@@ -874,6 +874,10 @@
 
   .rail-context {
     display: flex;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     align-items: center;
     gap: var(--space-1);
     margin: 0;

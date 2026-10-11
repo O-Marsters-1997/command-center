@@ -1,4 +1,4 @@
-{{define "mark"}}{{if .Name}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span>{{end}}{{end}}
+{{define "mark"}}{{if .Name}}<span class="avatar" data-hue="{{.Hue}}" title="{{.Name}}" aria-hidden="true">{{.Initial}}</span>{{end}}{{end}}
 
 {{define "railItem"}}
 <a class="rail-link" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Selected}} aria-current="page"{{end}}>
