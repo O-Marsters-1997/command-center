@@ -19,6 +19,7 @@ export interface KeyTarget extends Focused {
   getClientRects(): ArrayLike<unknown>;
   closest(selector: string): unknown;
   focus(): void;
+  select?(): void;
   click(): void;
 }
 
@@ -105,8 +106,30 @@ export function resolveTarget<T extends KeyTarget>(binding: string, candidates: 
 }
 
 export function activate(target: KeyTarget): void {
-  if (target.matches(fieldSelector)) target.focus();
-  else target.click();
+  if (target.matches(fieldSelector)) {
+    target.focus();
+    target.select?.();
+  } else target.click();
+}
+
+export interface SearchBox {
+  value: string;
+  blur(): void;
+  dispatchEvent(event: Event): boolean;
+}
+
+export function searchKey(key: string, box: SearchBox, links: readonly { click(): void }[]): boolean {
+  if (key === "Enter") {
+    links[0]?.click();
+    return true;
+  }
+  if (key === "Escape") {
+    box.value = "";
+    box.dispatchEvent(new Event("search"));
+    box.blur();
+    return true;
+  }
+  return false;
 }
 
 export interface RailLink {
@@ -144,6 +167,14 @@ export function initKeys(doc: Document = document, nav: PlatformSource = navigat
   doc.addEventListener(
     "keydown",
     (e) => {
+      const active = doc.activeElement;
+      if (active instanceof HTMLInputElement && active.id === "rail-search" && !e.isComposing) {
+        const matches = [...doc.querySelectorAll("#rail-body .rail-link")].filter(isHTMLElement);
+        if (searchKey(e.key, active, matches)) {
+          e.preventDefault();
+          return;
+        }
+      }
       const binding = state.lookup(e, doc.activeElement);
       if (binding === null) return;
       if (binding === "j" || binding === "k") {

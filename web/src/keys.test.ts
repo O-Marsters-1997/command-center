@@ -9,6 +9,8 @@ import {
   type KeyTarget,
   type RailLink,
   resolveTarget,
+  type SearchBox,
+  searchKey,
   walkRail,
 } from "./keys";
 
@@ -76,6 +78,7 @@ function fake(
     getClientRects: () => (opts.hidden ? [] : [{}]),
     closest: (sel) => (sel === "#main" && opts.main ? {} : null),
     focus: () => calls.push("focus"),
+    select: () => calls.push("select"),
     click: () => calls.push("click"),
   };
 }
@@ -267,7 +270,51 @@ describe("activate", () => {
     const link = fake("g h");
     activate(field);
     activate(link);
-    expect(field.calls).toEqual(["focus"]);
+    expect(field.calls).toEqual(["focus", "select"]);
     expect(link.calls).toEqual(["click"]);
+  });
+});
+
+describe("searchKey", () => {
+  function box(value: string): SearchBox & { events: string[]; blurs: number } {
+    const b = {
+      value,
+      events: [] as string[],
+      blurs: 0,
+      blur: () => void b.blurs++,
+      dispatchEvent: (e: Event) => {
+        b.events.push(e.type);
+        return true;
+      },
+    };
+    return b;
+  }
+
+  test("Enter clicks the first match and keeps the query", () => {
+    const b = box("auth");
+    const clicks: string[] = [];
+    const links = [{ click: () => clicks.push("a") }, { click: () => clicks.push("b") }];
+    expect(searchKey("Enter", b, links)).toBe(true);
+    expect(clicks).toEqual(["a"]);
+    expect(b.value).toBe("auth");
+  });
+
+  test("Enter with no match does nothing", () => {
+    const b = box("zzz");
+    expect(searchKey("Enter", b, [])).toBe(true);
+    expect(b.value).toBe("zzz");
+    expect(b.events).toEqual([]);
+  });
+
+  test("Escape clears, fires search and blurs", () => {
+    const b = box("auth");
+    expect(searchKey("Escape", b, [])).toBe(true);
+    expect(b.value).toBe("");
+    expect(b.events).toEqual(["search"]);
+    expect(b.blurs).toBe(1);
+  });
+
+  test("other keys are left alone", () => {
+    expect(searchKey("a", box("x"), [])).toBe(false);
   });
 });

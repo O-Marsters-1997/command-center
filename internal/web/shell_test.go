@@ -137,6 +137,7 @@ func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
 		`href="/insights" data-key="g i"`,
 		`href="/repos" data-key="g r"`,
 		`href="/launch" data-key="c"`,
+		`<input id="rail-search" class="rail-search" data-key="mod+k"`,
 		`<script type="module" src="/assets/dist/keys.js"></script>`,
 	} {
 		if !strings.Contains(body, want) {
