@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"html"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.Store {
@@ -139,6 +141,31 @@ func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("home page is missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+
+	for _, path := range []string{"/", "/tickets", "/insights", "/repos"} {
+		body := renderPath(t, server, path)
+		sheet := strings.Index(body, `<dialog id="key-sheet"`)
+		main := strings.Index(body, `id="main"`)
+		if sheet < 0 || main < 0 || sheet > main {
+			t.Errorf("GET %s: sheet at %d, main at %d, want the sheet in the sidebar before main", path, sheet, main)
+		}
+		if !strings.Contains(body, `data-key="?"`) {
+			t.Errorf("GET %s: no Shortcuts button with data-key=\"?\"", path)
+		}
+		for _, row := range view.Keymap {
+			want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
+			if !strings.Contains(body, want) {
+				t.Errorf("GET %s: sheet is missing the row %q", path, want)
+			}
 		}
 	}
 }

@@ -203,7 +203,8 @@ func (r *Reader) buildChrome(
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
 		Section:      "tickets",
-		RepoScope:    params.Repo,
+		Keymap:       Keymap,
+		RepoScope:   params.Repo,
 		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
 	}
