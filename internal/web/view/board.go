@@ -17,9 +17,11 @@ import (
 const defaultBaseBranch = "main"
 
 type Row struct {
-	URL     string `json:"url"`
-	Repo    string `json:"repo"`
-	Feature string `json:"feature"`
+	URL        string `json:"url"`
+	Repo       string `json:"repo"`
+	Feature    string `json:"feature"`
+	Project    string `json:"project"`
+	ProjectHue int    `json:"project_hue"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
 	Title           string   `json:"title"`
@@ -132,7 +134,7 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 	}
 }
 
-func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row {
+func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, projects map[string]ProjectMark) []Row {
 	rows := make([]Row, 0, len(tickets))
 	verdictLabelByBranch := make(map[string]string, len(tickets))
 	baseByBranch := make(map[string]string, len(tickets))
@@ -167,6 +169,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			URL:            t.URL,
 			Repo:           t.Repo,
 			Feature:        t.Feature,
+			Project:        projects[t.Repo].Name,
+			ProjectHue:     projects[t.Repo].Hue,
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),

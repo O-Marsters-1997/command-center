@@ -1,3 +1,5 @@
+{{define "mark"}}{{if .Name}}<span class="avatar" data-hue="{{.Hue}}" title="{{.Name}}" aria-hidden="true">{{.Initial}}</span>{{end}}{{end}}
+
 {{define "railItem"}}
 <a class="rail-link" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"><span class="sr-only">{{.Glyph}}</span></span>
@@ -29,6 +31,7 @@
     {{- range .NeedsYou}}
     <div class="rail-card" data-glyph="{{.Glyph}}">
       {{template "railItem" .}}
+      <p class="rail-context">{{template "mark" .Project}}<span>{{.Context}}</span></p>
       {{if .Reason}}<p class="rail-reason{{if .Reply}} rail-question{{end}}">{{.Reason}}</p>{{end}}
       {{if .Reply}}{{template "railReply" .}}{{else if .Verb}}{{template "railVerb" .}}{{end}}
     </div>
@@ -40,7 +43,7 @@
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>{{.Name}} <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
+      <summary>{{range .Marks}}{{template "mark" .}}{{end}}{{.Name}} <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
       {{- range .Live}}{{template "railItem" .}}{{end}}
       {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
     </details>

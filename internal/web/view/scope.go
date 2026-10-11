@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"net/url"
 	"slices"
 	"strings"
@@ -32,7 +33,7 @@ func ScopeList(projects []store.Project, repos []store.Repo) []ScopeEntry {
 		})
 	}
 	slices.SortFunc(entries, func(a, b ScopeEntry) int {
-		return strings.Compare(strings.ToLower(a.Label), strings.ToLower(b.Label))
+		return compareFold(a.Label, b.Label)
 	})
 	var loose []ScopeEntry
 	for _, r := range repos {
@@ -46,6 +47,21 @@ func ScopeList(projects []store.Project, repos []store.Repo) []ScopeEntry {
 	slices.SortFunc(loose, func(a, b ScopeEntry) int { return strings.Compare(a.Label, b.Label) })
 	return append(entries, loose...)
 }
+
+type ProjectMark struct {
+	Name string
+	Hue  int
+}
+
+func (r Row) Mark() ProjectMark { return ProjectMark{Name: r.Project, Hue: r.ProjectHue} }
+
+func (m ProjectMark) Initial() string { return initial(m.Name) }
+
+func compareMarks(a, b ProjectMark) int {
+	return cmp.Or(compareFold(a.Name, b.Name), cmp.Compare(a.Name, b.Name))
+}
+
+func compareFold(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) }
 
 func initial(name string) string {
 	r, _ := utf8.DecodeRuneInString(name)
