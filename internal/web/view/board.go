@@ -148,6 +148,10 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 		if e.Run != nil && e.Run.Verdict != nil {
 			redLeaves = e.Run.Verdict.RedLeaves
 		}
+		question := ""
+		if e.State == plan.AwaitingInput {
+			question = latestRun.Question
+		}
 		var pgid, elapsed string
 		var elapsedSeconds int
 		if e.Pgid != nil {
@@ -164,7 +168,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot) []Row
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
-			Question:       latestRun.Question,
+			Question:       question,
 			Glyph:          plan.Glyph(e.State),
 			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[t.URL].Alive,
