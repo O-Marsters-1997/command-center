@@ -35,7 +35,7 @@ func TestSessionAndBoardCarryTheTicketsSquare(t *testing.T) {
 	pages := strings.Split(squareServer(t), "\x00")
 	square := `<span class="avatar" data-hue="1" title="acme" aria-hidden="true">A</span>`
 
-	if got := strings.Count(pages[1], `class="avatar"`); got != 1 {
+	if got := strings.Count(pages[1], `class="avatar" data-hue="1" title=`); got != 1 {
 		t.Errorf("board has %d squares, want 1: the loose repo's ticket carries none", got)
 	}
 	for name, body := range map[string]string{"session": pages[0], "board": pages[1]} {

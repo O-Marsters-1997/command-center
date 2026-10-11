@@ -50,6 +50,19 @@
       else a.removeAttribute("aria-current");
     });
   }
+  function closeScopeMenu() {
+    var here = location.pathname + location.search;
+    document.querySelectorAll("details[data-scope-menu]").forEach(function (d) {
+      d.open = false;
+      d.querySelectorAll("a").forEach(function (a) {
+        var current = a.getAttribute("href") === here;
+        if (current) d.querySelector("summary").innerHTML = a.innerHTML;
+        if (current) a.setAttribute("aria-current", "true");
+        else a.removeAttribute("aria-current");
+      });
+    });
+  }
+  document.addEventListener("htmx:pushedIntoHistory", closeScopeMenu);
   document.addEventListener("htmx:pushedIntoHistory", markCurrent);
   document.addEventListener("htmx:historyRestore", markCurrent);
 </script>
@@ -181,6 +194,14 @@
     <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
     <a class="sidebar-item" href="{{.LaunchPath}}" data-key="c" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon-launch"}}<span>Launch</span></a>
   </nav>
+  <details class="scope-menu mx-2" data-scope-menu>
+    <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
+    <nav class="flex flex-col gap-0.5" aria-label="scope">
+      <a class="rail-link" href="/tickets" data-key="g 0" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
+      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Current}} aria-current="true"{{end}}>{{if eq .Kind "project"}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
+      {{end}}
+    </nav>
+  </details>
   <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()">{{template "icon-keys"}}<span>Shortcuts</span><kbd>?</kbd></button>

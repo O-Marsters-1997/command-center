@@ -41,7 +41,7 @@ func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
 	}
 
 	unknown := renderPath(t, server, "/tickets?project="+url.QueryEscape("nope"))
-	if !strings.Contains(unknown, "/s/acme/solo/4") || strings.Contains(unknown, "project=") {
+	if !strings.Contains(unknown, "/s/acme/solo/4") || strings.Contains(unknown, "project=nope") {
 		t.Errorf("GET /tickets?project=nope want the unscoped board:\n%s", unknown)
 	}
 }

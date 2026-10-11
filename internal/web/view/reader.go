@@ -143,8 +143,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		groups = filterGroupsByProject(groups, project.Repos)
 	}
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
-	chrome.scopeToProject(project)
-	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+	if err := r.scopeChrome(ctx, &chrome, project, params.Repo); err != nil {
 		return Board{}, err
 	}
 	sections := Sectioned(rowsIn(groups))
@@ -190,11 +189,25 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
-	chrome.scopeToProject(project)
-	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+	if err := r.scopeChrome(ctx, &chrome, project, params.Repo); err != nil {
 		return Chrome{}, err
 	}
 	return chrome, nil
+}
+
+func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, project store.Project, repo string) error {
+	c.scopeToProject(project)
+	projects, err := r.store.Projects(ctx)
+	if err != nil {
+		return err
+	}
+	repos, err := r.store.Repos(ctx)
+	if err != nil {
+		return err
+	}
+	c.ScopeMenu = scopeChoices(ScopeList(projects, repos), project.Name, repo)
+	c.RefusedRepos, err = r.refusedRepos(ctx)
+	return err
 }
 
 func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {

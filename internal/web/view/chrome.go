@@ -30,6 +30,7 @@ type Chrome struct {
 	ProjectHue     int
 	ProjectQuery   string
 	ProjectInitial string
+	ScopeMenu      []ScopeChoice
 	TicketsPath    string
 	InsightsPath   string
 	ReposPath      string
