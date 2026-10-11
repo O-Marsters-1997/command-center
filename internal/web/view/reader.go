@@ -122,7 +122,13 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in))
 	applySpend(rows, r.spend)
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
-	applyViewState(rows, params, r.renderLine)
+	var records []store.Event
+	if params.Sel != "" {
+		if records, err = r.store.TicketEventsAfter(ctx, params.Sel, 0); err != nil {
+			return Board{}, err
+		}
+	}
+	applyViewState(rows, params, records, r.renderLine)
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {

@@ -117,6 +117,32 @@ func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	}
 }
 
+func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	st, _ := sessionStore(t, "agent", "", false, false)
+	logPath, _, err := st.LatestRunLog(ctx, sessionTicket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(logPath); err != nil {
+		t.Fatal(err)
+	}
+	merged := storepkg.Event{At: testNow, TicketURL: sessionTicket, Kind: "pr_merged", Detail: "PR #1 merged"}
+	if err := st.AppendEvent(ctx, merged); err != nil {
+		t.Fatal(err)
+	}
+
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
+
+	if !strings.Contains(body, `<span class="line-label">merged</span> PR #1 merged`) {
+		t.Errorf("session page lacks the merge line:\n%s", body)
+	}
+	if strings.Contains(body, "Nothing to show yet") {
+		t.Errorf("session page claims there is nothing to show:\n%s", body)
+	}
+}
+
 func TestSessionPageGolden(t *testing.T) {
 	t.Parallel()
 	st, _ := sessionStore(t, "agent", "Implement #1\n", true, false)

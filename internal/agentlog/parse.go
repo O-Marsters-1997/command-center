@@ -5,12 +5,15 @@ package agentlog
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +29,9 @@ const (
 	Fail
 	Pass
 	Say
+	Cmd
+	Record
+	Commit
 )
 
 func (k Kind) String() string {
@@ -42,6 +48,12 @@ func (k Kind) String() string {
 		return "pass"
 	case Say:
 		return "say"
+	case Cmd:
+		return "cmd"
+	case Record:
+		return "record"
+	case Commit:
+		return "commit"
 	default:
 		return "unknown"
 	}
@@ -58,6 +70,10 @@ type Event struct {
 	Output      string
 	OutputLines int
 	Diff        Diff
+	Done        bool
+	ExitCode    int
+	Interrupted bool
+	Elapsed     time.Duration
 }
 
 // Phase is the work between one Skill tool use and the next. A run's first phase has no skill:
@@ -85,6 +101,7 @@ type Run struct {
 	Phases []Phase
 	Result *Result
 	Lines  int
+	Start  time.Time
 	End    time.Duration
 }
 
@@ -109,13 +126,22 @@ func Parse(r io.Reader) (Run, error) {
 			run.Result = &result
 			return
 		}
-		for _, event := range tail.keep(parsed.events()) {
+		for _, event := range tail.feed(parsed) {
 			if !parsed.Timestamp.IsZero() {
 				if base.IsZero() {
 					base = parsed.Timestamp
 				}
 				event.At = parsed.Timestamp.Sub(base)
 				run.End = max(run.End, event.At)
+			}
+			if event.Done && (event.Kind == Cmd || event.Kind == Commit) {
+				phase, ok := callPhase[event.CallID]
+				if !ok {
+					phase = len(run.Phases) - 1
+				}
+				if phase >= 0 && run.Phases[phase].answerCmd(event) {
+					continue
+				}
 			}
 			if phase, ok := callPhase[event.CallID]; ok && (event.Kind == Pass || event.Kind == Fail) {
 				run.Phases[phase].Events = append(run.Phases[phase].Events, event)
@@ -129,6 +155,7 @@ func Parse(r io.Reader) (Run, error) {
 		ledger.note(parsed, len(run.Phases)-1)
 	})
 	ledger.settle(run.Phases)
+	run.Start = base
 	return run, err
 }
 
@@ -140,6 +167,17 @@ func ParseLine(line []byte) []Event {
 		return nil
 	}
 	return parsed.events()
+}
+
+func (p *Phase) answerCmd(done Event) bool {
+	for i, e := range p.Events {
+		if e.Kind == Cmd && !e.Done && e.CallID == done.CallID {
+			done.At = e.At
+			p.Events[i] = done
+			return true
+		}
+	}
+	return false
 }
 
 func (run *Run) append(event Event) {
@@ -166,12 +204,13 @@ type logLine struct {
 		Content []contentBlock `json:"content"`
 		Usage   usage          `json:"usage"`
 	} `json:"message"`
-	Subtype       string         `json:"subtype"`
-	DurationMS    int64          `json:"duration_ms"`
-	NumTurns      int            `json:"num_turns"`
-	CostUSD       *float64       `json:"total_cost_usd"`
-	Usage         usage          `json:"usage"`
-	RateLimitInfo *rateLimitInfo `json:"rate_limit_info"`
+	ToolUseResult json.RawMessage `json:"tool_use_result"`
+	Subtype       string          `json:"subtype"`
+	DurationMS    int64           `json:"duration_ms"`
+	NumTurns      int             `json:"num_turns"`
+	CostUSD       *float64        `json:"total_cost_usd"`
+	Usage         usage           `json:"usage"`
+	RateLimitInfo *rateLimitInfo  `json:"rate_limit_info"`
 }
 
 type rateLimitInfo struct {
@@ -260,10 +299,40 @@ func (l logLine) result() Result {
 // launch, as Parse does.
 type Tail struct {
 	skillCalls map[string]bool
+	cmdCalls   map[string]cmdCall
+}
+
+type cmdCall struct {
+	command string
+	at      time.Time
 }
 
 func (t *Tail) Read(line []byte) []Event {
-	return t.keep(ParseLine(line))
+	parsed, err := decode(line)
+	if err != nil {
+		return nil
+	}
+	return t.feed(parsed)
+}
+
+func (t *Tail) feed(l logLine) []Event {
+	events := l.events()
+	for i, e := range events {
+		switch e.Kind {
+		case Cmd:
+			if t.cmdCalls == nil {
+				t.cmdCalls = make(map[string]cmdCall)
+			}
+			t.cmdCalls[e.CallID] = cmdCall{command: e.Detail, at: l.Timestamp}
+		case Pass, Fail:
+			if call, ok := t.cmdCalls[e.CallID]; ok {
+				events[i] = l.cmdDone(call, e.CallID)
+				delete(t.cmdCalls, e.CallID)
+			}
+		default:
+		}
+	}
+	return t.keep(events)
 }
 
 func (t *Tail) keep(events []Event) []Event {
@@ -293,7 +362,11 @@ func (l logLine) events() []Event {
 				events = append(events, Event{Kind: Say, Detail: say})
 			}
 		case l.Type == "user" && block.Type == "tool_result":
-			events = append(events, block.resultEvent())
+			event := block.resultEvent()
+			if l.toolResults() == 1 {
+				event.Diff = changeCounts(l.ToolUseResult)
+			}
+			events = append(events, event)
 		}
 	}
 	return events
@@ -309,14 +382,68 @@ func (b contentBlock) toolEvent() Event {
 		return Event{Kind: Skill, Tool: text(input["skill"]), Detail: text(input["args"]), CallID: b.ID}
 	}
 	kind := Tool
-	if slices.Contains(fileTools, b.Name) {
+	switch {
+	case b.Name == "Bash":
+		kind = Cmd
+	case slices.Contains(fileTools, b.Name):
 		kind = File
 	}
 	event := Event{Kind: kind, Tool: b.Name, Detail: primaryInput(input), CallID: b.ID}
-	if b.Name == "Edit" {
+	switch b.Name {
+	case "Edit":
 		event.Diff = lineDiff(text(input["old_string"]), text(input["new_string"]))
+	case "Write":
+		event.Diff = Diff{Added: countLines(text(input["content"]))}
 	}
 	return event
+}
+
+func (l logLine) toolResults() int {
+	n := 0
+	for _, b := range l.Message.Content {
+		if b.Type == "tool_result" {
+			n++
+		}
+	}
+	return n
+}
+
+func changeCounts(raw json.RawMessage) Diff {
+	if !bytes.Contains(raw, []byte(`"structuredPatch"`)) {
+		return Diff{}
+	}
+	var result struct {
+		Type            string `json:"type"`
+		Content         string `json:"content"`
+		StructuredPatch []struct {
+			Lines []string `json:"lines"`
+		} `json:"structuredPatch"`
+	}
+	if json.Unmarshal(raw, &result) != nil {
+		return Diff{}
+	}
+	if result.Type == "create" {
+		return Diff{Added: countLines(result.Content)}
+	}
+	var counts Diff
+	for _, hunk := range result.StructuredPatch {
+		for _, line := range hunk.Lines {
+			switch {
+			case strings.HasPrefix(line, "+"):
+				counts.Added++
+			case strings.HasPrefix(line, "-"):
+				counts.Removed++
+			}
+		}
+	}
+	return counts
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(strings.TrimSuffix(s, "\n"), "\n") + 1
 }
 
 func (b contentBlock) resultEvent() Event {
@@ -327,6 +454,82 @@ func (b contentBlock) resultEvent() Event {
 	whole := strings.TrimRight(b.resultText(), "\n")
 	output, lines := boundOutput(whole)
 	return Event{Kind: kind, Detail: firstLine(whole), CallID: b.ToolUseID, Output: output, OutputLines: lines}
+}
+
+var exitCodePrefix = regexp.MustCompile(`^(?:Error: )?Exit code (\d+)\n?`)
+
+func (l logLine) cmdDone(call cmdCall, callID string) Event {
+	var block contentBlock
+	results := 0
+	for _, b := range l.Message.Content {
+		if b.Type != "tool_result" {
+			continue
+		}
+		results++
+		if b.ToolUseID == callID {
+			block = b
+		}
+	}
+
+	done := Event{Kind: Cmd, Tool: "Bash", Detail: call.command, CallID: callID, Done: true}
+	var output string
+	if results == 1 {
+		var failure string
+		var bash struct {
+			Stdout      string `json:"stdout"`
+			Stderr      string `json:"stderr"`
+			Interrupted bool   `json:"interrupted"`
+		}
+		switch {
+		case json.Unmarshal(l.ToolUseResult, &failure) == nil:
+			output = failure
+		case json.Unmarshal(l.ToolUseResult, &bash) == nil:
+			output = joinNonEmpty(bash.Stdout, bash.Stderr)
+			done.Interrupted = bash.Interrupted
+		}
+	}
+	if output == "" {
+		output = block.resultText()
+	}
+	if block.IsError {
+		done.ExitCode = 1
+		if match := exitCodePrefix.FindStringSubmatch(output); match != nil {
+			done.ExitCode, _ = strconv.Atoi(match[1])
+			output = output[len(match[0]):]
+		}
+	}
+	if !l.Timestamp.IsZero() && !call.at.IsZero() {
+		done.Elapsed = max(0, l.Timestamp.Sub(call.at))
+	}
+	done.Output, done.OutputLines = boundOutput(strings.TrimRight(output, "\n"))
+	if done.ExitCode == 0 && !done.Interrupted && gitCommit.MatchString(call.command) &&
+		!strings.Contains(call.command, "--dry-run") {
+		done.Kind = Commit
+		done.Detail = commitMessage(call.command)
+		done.Output, done.OutputLines = "", 0
+	}
+	return done
+}
+
+var (
+	gitCommit     = regexp.MustCompile(`(?:^|[;&|(]\s*|\s)git\s+(?:(?:-[Cc]\s+\S+|-\S+)\s+)*commit(?:\s|$)`)
+	commitFlagM   = regexp.MustCompile(`(?:^|\s)(?:-[a-zA-Z]*m|--message)(?:\s+|=)(?:"((?:[^"\\]|\\.)*)"|'([^']*)')`)
+	commitHeredoc = regexp.MustCompile(`<<|\s(?:-F|--file)\b`)
+)
+
+func commitMessage(command string) string {
+	if commitHeredoc.MatchString(command) {
+		return ""
+	}
+	match := commitFlagM.FindStringSubmatch(command)
+	if match == nil {
+		return ""
+	}
+	return firstLine(match[1] + match[2])
+}
+
+func joinNonEmpty(parts ...string) string {
+	return strings.Join(slices.DeleteFunc(slices.Clone(parts), func(p string) bool { return p == "" }), "\n")
 }
 
 // The CLI writes a tool result's content either as a bare string or as Messages API blocks.

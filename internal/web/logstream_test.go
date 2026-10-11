@@ -69,7 +69,7 @@ func jsonToolLine(text string) string {
 func renderedToolLine(t *testing.T, text string) string {
 	t.Helper()
 
-	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Tool, Tool: "Bash", Detail: text}, false)
+	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: text}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	rec := get(t, server, sessionPagePath(ticket))
 	body := rec.Body.String()
 
-	stream := fmt.Sprintf("/ticket/%s/log?from=%d", url.PathEscape(ticket), info.Size())
+	stream := fmt.Sprintf("/ticket/%s/log?from=%d&amp;records=0", url.PathEscape(ticket), info.Size())
 	for _, want := range []string{
 		`hx-ext="sse"`,
 		`sse-connect="` + stream + `"`,

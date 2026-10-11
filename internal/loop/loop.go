@@ -196,9 +196,15 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 }
 
 func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
+	prev, _, err := l.store.LastObservation(ctx)
+	if err != nil {
+		return err
+	}
 	return runSteps(
 		func() error { return l.recordRepoStates(ctx, obs) },
 		func() error { return l.tickCheckingWaits(ctx) },
+		func() error { return l.recordOpenedEvents(ctx, prev, obs) },
+		func() error { return l.recordChecksLanded(ctx, prev, obs) },
 		func() error { return l.store.SaveObservation(ctx, obs) },
 		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
 		func() error { return l.applyCancelIntents(ctx) },
