@@ -135,7 +135,7 @@ func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
 		`href="/insights" data-key="g i"`,
 		`href="/repos" data-key="g r"`,
 		`href="/launch" data-key="c"`,
-		`<script src="/assets/keys.js" defer></script>`,
+		`<script type="module" src="/assets/dist/keys.js"></script>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("home page is missing %q:\n%s", want, body)

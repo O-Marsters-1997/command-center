@@ -77,7 +77,8 @@ For styling, load `tailwind-design-system`. **Do not load `tailwind-shadcn`**: i
 ## Boundaries: never hand-edit
 
 - `internal/store/ccdb/**` → `just sqlc`, committed with the query or migration change
-- `internal/web/assets/dist/app.css` → `just assets`, committed; CI diffs it
+- `internal/web/assets/dist/app.css` and `internal/web/assets/dist/keys.js` → `just assets`,
+  committed; CI diffs the dist directory
 - `internal/web/testdata/` goldens → `go test ./internal/web -update`, then read the diff
 - `.github/**`, `go.mod`, `go.sum` are deny-listed for agent pushes. Work that needs a CI change or
   a new Go dependency stops and says so.
