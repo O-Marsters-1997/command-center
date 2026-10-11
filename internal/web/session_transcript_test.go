@@ -99,5 +99,6 @@ func TestSessionPageWithOneRunHasNoYouLine(t *testing.T) {
 func TestSessionTranscriptGolden(t *testing.T) {
 	t.Parallel()
 	st := transcriptStore(t, "", "also add tests", "ship it")
-	assertGolden(t, "testdata/session_transcript.golden.html", []byte(renderPath(t, newServer(st, testNow), "/s/acme/web/1")))
+	page := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
+	assertGolden(t, "testdata/session_transcript.golden.html", []byte(page))
 }
