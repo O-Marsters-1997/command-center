@@ -22,10 +22,11 @@ _Avoid_: Ticket (a ref names the work, it is not the work), number, key, ID
 The tracker's own grouping of tickets. It is the unit the board scopes to, the unit a launch is
 offered against, and the only grouping with routes of its own, `/f/{feature}` and its graph. A
 ticket belongs to at most one feature; a ticket the tracker puts in two is a tracker problem the app refuses rather than
-resolves. A feature is closed under `blocked_by`: every blocker of every ticket it holds is
+resolves. Its tracker label prefix is `project:`, an outside string the app reads and does not rename.
+A feature is closed under `blocked_by`: every blocker of every ticket it holds is
 itself in the feature, unless that blocker has already merged. An import that would break
 closure is refused whole, the same way a two-feature ticket is.
-_Avoid_: Group, epic, project, milestone, slice
+_Avoid_: Group, epic, milestone, slice
 
 **Slice**:
 The set of tickets a single authorisation covers.
@@ -104,8 +105,8 @@ renders on `/tickets`, `/f/{feature}` and a repo page, and is also `#board`, the
 _Avoid_: Table, list, grid, dashboard
 
 **Scope**:
-The narrowing applied to the board, by feature or by repo, reached through `/f/{feature}` and
-`/repos/{owner}/{name}`. It decides which tickets render, never what the loop reconciles: every
+The narrowing applied to the board, by feature, by repo or by project, reached through `/f/{feature}`,
+`/repos/{owner}/{name}` and `?project=`. It decides which tickets render, never what the loop reconciles: every
 ticket is still observed, derived and acted on whatever the scope. A blocker chain is admitted
 whole when any of its tickets is in scope, so a blocker outside the scope stays visible.
 _Avoid_: Filter (that is the attention tabs on `/tickets`), view, selection, narrowing
@@ -115,8 +116,14 @@ One tracked repository, named `owner/name` from its remote and cloned by the app
 one repo, matched from its URL. The second scope axis, and the one a working directory can imply.
 A GitHub repository the app does not track is not a repo here; it is a search result until you
 track it.
-_Avoid_: Project (that is the tracker's label prefix for a feature), codebase, checkout (that is
+_Avoid_: Codebase, checkout (that is
 where a repo's working copy sits), configured repo (repos are no longer configured)
+
+**Project**:
+A named set of repos. A repo belongs to at most one project. The third scope
+axis. Made only by grouping repos on the Repos page and never inferred. Not the tracker's `project:`
+label prefix, which marks a feature (ADR 23).
+_Avoid_: Workspace, folder, feature (that is the tracker's grouping of tickets)
 
 **Track**:
 To make a GitHub repository a repo: the app records it, clones it and starts reconciling its
@@ -195,6 +202,7 @@ _Avoid_: Header, nav
 - A **grammar** has one definition and many use sites, in templates and **islands** alike
 - A **ticket** has zero or more **peers**; peership crosses **slice** and **feature** alike
 - A **ticket** has exactly one **ref**
+- A **project** contains zero or more **repos**; a **repo** belongs to at most one **project**
 - A **ticket** belongs to exactly one **repo**; a **feature** spans one or more **repos**
 - A **feature** contains every unmerged blocker of every **ticket** it contains
 - A **scope** admits a blocker chain whole when any of its **tickets** matches
@@ -245,7 +253,10 @@ _Avoid_: Header, nav
   term.
 - **"status"** was used for both a ticket's derived label and the Linear project status in the
   prototype. Resolved: **state** is the derived label; the prototype's project status has no
-  referent in this app, which has no project concept.
+  referent in this app, whose **project** is a set of repos and has no status.
+- **"project"** named the tracker's label prefix (`project:<slug>`) for a **feature** and now also
+  the app's set of repos. Resolved: **project** is the set of repos (ADR 23). The label prefix stays
+  an outside string, and what it marks is a **feature**.
 - **"scoped feature"** was used for "every feature the app knows about", while **scope** is
   reserved here for the board's narrowing by feature or repo, which made the phrase circular.
   Resolved: the features list shows every feature the **tracker** offers, imported or not, and
