@@ -31,6 +31,7 @@ type RepoRow struct {
 	Tracked       bool
 	Path          string
 	RefusedBranch string
+	Project       string
 	Steps         []CheckStep
 }
 
@@ -46,6 +47,9 @@ type RepoGroup struct {
 	Scope ScopeEntry
 	Count int
 	Rows  []RepoRow
+
+	Projects []string
+	Hues     []int
 }
 
 type NewProjectForm struct {
@@ -81,7 +85,7 @@ func RepoPath(fullName string) string {
 
 func trackedRow(r store.Repo) RepoRow {
 	return RepoRow{
-		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name),
+		FullName: r.Name, Tracked: true, Path: RepoPath(r.Name), Project: r.Project,
 		Steps: checkSteps(bannerState(r), r.RefusalKind),
 	}
 }
@@ -160,6 +164,10 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 		byName[repo.Name] = repo
 		names = append(names, repo.Name)
 	}
+	projectNames := make([]string, 0, len(projects))
+	for _, p := range projects {
+		projectNames = append(projectNames, p.Name)
+	}
 	var groups []RepoGroup
 	for _, scope := range ScopeList(projects, repos) {
 		members := []string{scope.Value}
@@ -167,7 +175,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 			i := slices.IndexFunc(projects, func(p store.Project) bool { return p.Name == scope.Value })
 			members = projects[i].Repos
 		}
-		group := RepoGroup{Scope: scope, Count: len(members)}
+		group := RepoGroup{Scope: scope, Count: len(members), Projects: projectNames, Hues: hues()}
 		for _, name := range members {
 			group.Rows = append(group.Rows, trackedRow(byName[name]))
 		}

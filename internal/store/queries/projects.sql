@@ -9,3 +9,9 @@ SELECT id FROM projects WHERE lower(name) = lower($1);
 
 -- name: SetRepoProjectID :execrows
 UPDATE repos SET project_id = $2 WHERE name = $1;
+
+-- name: EditProject :execrows
+UPDATE projects SET name = sqlc.arg(new_name), hue = sqlc.arg(hue) WHERE lower(name) = lower(sqlc.arg(old_name));
+
+-- name: DeleteProject :execrows
+DELETE FROM projects WHERE lower(name) = lower($1);

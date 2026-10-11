@@ -33,6 +33,46 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 	return s.respondRepoGroups(w, r)
 }
 
+func (s *Server) handleEditProject(w http.ResponseWriter, r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return errorf(http.StatusBadRequest, "malformed form: %v", err)
+	}
+	name := r.PathValue("name")
+	newName := strings.TrimSpace(r.PostForm.Get("name"))
+	if !store.ProjectNamePattern.MatchString(newName) {
+		return errorf(http.StatusBadRequest, "project name %q is malformed", newName)
+	}
+	hue, err := strconv.Atoi(r.PostForm.Get("hue"))
+	if err != nil {
+		return errorf(http.StatusBadRequest, "hue %q is not %d to %d", r.PostForm.Get("hue"), store.MinHue, store.MaxHue)
+	}
+	if err := s.store.EditProject(r.Context(), name, newName, hue); err != nil {
+		return projectError(err)
+	}
+	return s.respondRepoGroups(w, r)
+}
+
+func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) error {
+	if err := s.store.DeleteProject(r.Context(), r.PathValue("name")); err != nil {
+		return projectError(err)
+	}
+	return s.respondRepoGroups(w, r)
+}
+
+func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return errorf(http.StatusBadRequest, "malformed form: %v", err)
+	}
+	repo := r.PathValue("owner") + "/" + r.PathValue("name")
+	if !repoName.MatchString(repo) || hasDotSegment(repo) {
+		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
+	}
+	if err := s.store.SetRepoProject(r.Context(), repo, strings.TrimSpace(r.PostForm.Get("project"))); err != nil {
+		return projectError(err)
+	}
+	return s.respondRepoGroups(w, r)
+}
+
 func projectError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrProjectExists):

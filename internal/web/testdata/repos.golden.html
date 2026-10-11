@@ -181,6 +181,15 @@
     <tr>
       <td><a href="/repos/acme/alpha">acme/alpha</a></td>
       <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">ok</span> clone</li><li><span class="glyph glyph-done">ok</span> squash-only merges</li><li><span class="glyph glyph-done">ok</span> default branch is main</li><li><span class="glyph glyph-done">ok</span> settings file</li></ul></td>
+      <td>
+        <form method="post" action="/repos/acme/alpha/project" hx-post="/repos/acme/alpha/project"
+          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+          <select name="project" aria-label="project of acme/alpha" class="border border-border rounded px-2 py-1">
+            <option value="">No project</option>
+            
+          </select>
+        </form>
+      </td>
     </tr>
     
   </table>
@@ -193,6 +202,15 @@
     <tr>
       <td><a href="/repos/acme/beta">acme/beta</a></td>
       <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">ok</span> clone</li><li><span class="glyph glyph-done">ok</span> squash-only merges</li><li><span class="glyph glyph-done">ok</span> default branch is main</li><li><span class="glyph glyph-done">ok</span> settings file</li></ul></td>
+      <td>
+        <form method="post" action="/repos/acme/beta/project" hx-post="/repos/acme/beta/project"
+          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+          <select name="project" aria-label="project of acme/beta" class="border border-border rounded px-2 py-1">
+            <option value="">No project</option>
+            
+          </select>
+        </form>
+      </td>
     </tr>
     
   </table>

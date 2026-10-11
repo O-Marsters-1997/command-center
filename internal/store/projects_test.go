@@ -175,3 +175,115 @@ func TestSetRepoProjectMovesAndLoosensARepo(t *testing.T) {
 		t.Errorf("SetRepoProject(unknown repo) = %v, want ErrNotFound", err)
 	}
 }
+
+func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	trackRepos(t, store, "acme/web", "acme/api")
+	if err := store.CreateProject(ctx, "acme", 1, []string{"acme/web", "acme/api"}, trackedAt); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.EditProject(ctx, "acme", "acme-co", 1); err != nil {
+		t.Fatalf("EditProject rename: %v", err)
+	}
+	got, err := store.Projects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertProjects(t, got, storepkg.Project{Name: "acme-co", Hue: 1, Repos: []string{"acme/api", "acme/web"}})
+
+	if err := store.EditProject(ctx, "acme-co", "acme-co", 3); err != nil {
+		t.Fatalf("EditProject hue: %v", err)
+	}
+	if got, err = store.Projects(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertProjects(t, got, storepkg.Project{Name: "acme-co", Hue: 3, Repos: []string{"acme/api", "acme/web"}})
+}
+
+func TestEditProjectRefusesBadEdits(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	for _, name := range []string{"acme", "beta"} {
+		if err := store.CreateProject(ctx, name, 1, nil, trackedAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := store.EditProject(ctx, "acme", "BETA", 1); !errors.Is(err, storepkg.ErrProjectExists) {
+		t.Errorf("EditProject onto existing = %v, want ErrProjectExists", err)
+	}
+	if err := store.EditProject(ctx, "ghost", "x", 1); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Errorf("EditProject(ghost) = %v, want ErrNotFound", err)
+	}
+	if err := store.EditProject(ctx, "acme", "acme", 4); !errors.Is(err, storepkg.ErrInvalidProject) {
+		t.Errorf("EditProject(hue 4) = %v, want ErrInvalidProject", err)
+	}
+	got, err := store.Projects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1}, storepkg.Project{Name: "beta", Hue: 1})
+}
+
+func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	trackRepos(t, store, "acme/web")
+	if err := store.CreateProject(ctx, "acme", 2, []string{"acme/web"}, trackedAt); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteProject(ctx, "acme"); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	got, err := store.Projects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertProjects(t, got)
+	repos, err := store.Repos(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 1 || repos[0].Project != "" {
+		t.Errorf("Repos() = %+v, want acme/web tracked and loose", repos)
+	}
+	if err := store.DeleteProject(ctx, "acme"); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Errorf("DeleteProject(again) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetRepoProjectMovesAndLoosens(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	ctx := t.Context()
+	trackRepos(t, store, "acme/web")
+	for _, name := range []string{"acme", "beta"} {
+		if err := store.CreateProject(ctx, name, 1, nil, trackedAt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetRepoProject(ctx, "acme/web", "acme"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.SetRepoProject(ctx, "acme/web", "beta"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	got, _ := store.Projects(ctx)
+	assertProjects(t, got,
+		storepkg.Project{Name: "acme", Hue: 1},
+		storepkg.Project{Name: "beta", Hue: 1, Repos: []string{"acme/web"}})
+
+	if err := store.SetRepoProject(ctx, "acme/web", ""); err != nil {
+		t.Fatalf("loosen: %v", err)
+	}
+	got, _ = store.Projects(ctx)
+	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1}, storepkg.Project{Name: "beta", Hue: 1})
+}

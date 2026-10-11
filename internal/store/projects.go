@@ -112,3 +112,31 @@ func setRepoProjectID(ctx context.Context, q *ccdb.Queries, repo string, id sql.
 	}
 	return nil
 }
+
+func (s *Store) EditProject(ctx context.Context, name, newName string, hue int) error {
+	if !ProjectNamePattern.MatchString(newName) || hue < MinHue || hue > MaxHue {
+		return fmt.Errorf("edit project %q to %q with hue %d: %w", name, newName, hue, ErrInvalidProject)
+	}
+	n, err := s.q.EditProject(ctx, ccdb.EditProjectParams{OldName: name, NewName: newName, Hue: int16(hue)})
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
+		return fmt.Errorf("edit project %q to %q: %w", name, newName, ErrProjectExists)
+	}
+	if err != nil {
+		return fmt.Errorf("edit project %q: %w", name, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("project %q: %w", name, ErrNotFound)
+	}
+	return nil
+}
+
+func (s *Store) DeleteProject(ctx context.Context, name string) error {
+	n, err := s.q.DeleteProject(ctx, name)
+	if err != nil {
+		return fmt.Errorf("delete project %q: %w", name, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("project %q: %w", name, ErrNotFound)
+	}
+	return nil
+}
