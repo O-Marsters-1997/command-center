@@ -105,6 +105,16 @@ func TestLineOfLinksAPROpenedRecord(t *testing.T) {
 	}
 }
 
+func TestLineOfSplitsAChecksLandedRecordIntoResultAndCheckName(t *testing.T) {
+	t.Parallel()
+
+	got := LineOf(RecordOf(store.Event{Kind: "checks_landed", Detail: "Unit tests (go) passed"}))
+
+	if got.Verb != "passed" || got.Arg != "Unit tests (go)" {
+		t.Errorf("LineOf(checks_landed) = %+v, want verb passed and arg Unit tests (go)", got)
+	}
+}
+
 func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
 	t.Parallel()
 
