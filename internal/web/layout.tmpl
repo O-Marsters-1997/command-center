@@ -136,6 +136,7 @@
 {{define "scopeCrumbs" -}}
 <li>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</li>
 <li><a href="/repos">repos</a></li>
+{{with .ProjectScope}}<li><span class="avatar" data-hue="{{$.ProjectHue}}" aria-hidden="true">{{$.ProjectInitial}}</span> {{.}}</li>{{end}}
 {{with .RepoCrumb}}<li><a href="{{$.RepoCrumbPath}}">{{.}}</a></li>{{end}}
 {{with .FeatureScope}}<li>{{.}}</li>{{end}}
 {{- end}}
@@ -175,10 +176,10 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <a class="sidebar-head text-inherit no-underline" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</a>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/tickets" data-key="g t" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
-    <a class="sidebar-item" href="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" data-key="g i" hx-get="/insights{{if .FeatureScope}}?feature={{.FeatureQuery}}{{end}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
-    <a class="sidebar-item" href="/launch" data-key="c" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon-launch"}}<span>Launch</span></a>
+    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
+    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
+    <a class="sidebar-item" href="{{.LaunchPath}}" data-key="c" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon-launch"}}<span>Launch</span></a>
   </nav>
   <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>

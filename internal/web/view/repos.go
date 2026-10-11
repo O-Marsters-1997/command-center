@@ -97,6 +97,17 @@ func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
 	return normalizeRepoScope(scope, repos), nil
 }
 
+func (r *Reader) projectScope(ctx context.Context, scope string) (store.Project, error) {
+	if scope == "" {
+		return store.Project{}, nil
+	}
+	projects, err := r.store.Projects(ctx)
+	if err != nil {
+		return store.Project{}, err
+	}
+	return normalizeProjectScope(scope, projects), nil
+}
+
 // KnownRepo finds the tracked repo whose owner/name is scope, ignoring case.
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
 	repos, err := r.store.Repos(ctx)

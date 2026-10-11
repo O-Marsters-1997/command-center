@@ -42,6 +42,56 @@ func TestFilterGroupsByRepoAdmitsAGroupWholeOnEitherMember(t *testing.T) {
 	}
 }
 
+func TestFilterGroupsByProjectAdmitsAGroupWholeOnAnyMember(t *testing.T) {
+	t.Parallel()
+
+	web := Row{URL: "web", Repo: "acme/web"}
+	api := Row{URL: "api", Repo: "acme/api"}
+	elsewhere := Row{URL: "elsewhere", Repo: "other/repo"}
+	groups := []Group{
+		{Root: &web, Children: []Row{elsewhere}},
+		{Root: &elsewhere, Children: []Row{api}},
+		{Root: &elsewhere, Children: []Row{{URL: "x", Repo: "other/repo"}}},
+	}
+
+	got := filterGroupsByProject(groups, []string{"acme/web", "acme/api"})
+	if len(got) != 2 {
+		t.Fatalf("filterGroupsByProject(groups, acme) = %+v, want the two groups with an acme member", got)
+	}
+	if got[0].Root.URL != "web" || len(got[0].Children) != 1 || got[0].Children[0].URL != "elsewhere" {
+		t.Errorf("group rooted in acme = %+v, want it whole with its other-project child", got[0])
+	}
+	if got[1].Root.URL != "elsewhere" || got[1].Children[0].URL != "api" {
+		t.Errorf("group with an acme child = %+v, want it admitted whole", got[1])
+	}
+}
+
+func TestApplyViewStateCarriesTheProjectOnRowLinks(t *testing.T) {
+	t.Parallel()
+
+	rows := []Row{{URL: "https://github.com/acme/web/issues/7"}}
+	applyViewState(rows, Params{Project: "acme"}, nil, nil)
+
+	if want := "/s/acme/web/7?project=acme"; rows[0].SessionPath != want {
+		t.Errorf("SessionPath = %q, want %q", rows[0].SessionPath, want)
+	}
+	if want := "/verb?project=acme"; rows[0].VerbPath != want {
+		t.Errorf("VerbPath = %q, want %q", rows[0].VerbPath, want)
+	}
+}
+
+func TestNormalizeProjectScopeIgnoresCase(t *testing.T) {
+	t.Parallel()
+
+	projects := []store.Project{{Name: "acme", Hue: 2}}
+	if got := normalizeProjectScope("ACME", projects); got.Name != "acme" {
+		t.Errorf("normalizeProjectScope(ACME) = %+v, want acme", got)
+	}
+	if got := normalizeProjectScope("nope", projects); got.Name != "" {
+		t.Errorf("normalizeProjectScope(nope) = %+v, want no project", got)
+	}
+}
+
 func TestFilterGroupsByFeatureIsUnscopedWhenFeatureIsBlank(t *testing.T) {
 	t.Parallel()
 

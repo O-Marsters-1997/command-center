@@ -72,18 +72,19 @@ func filterSections(sections []Section, filter string) []Section {
 	return out
 }
 
-func filterTabs(sections []Section, filter string) []FilterTab {
+func filterTabs(sections []Section, params Params) []FilterTab {
+	filter := params.Filter
 	total := 0
 	counts := make(map[string]int, len(sections))
 	for _, s := range sections {
 		counts[s.Key] = len(s.Rows)
 		total += len(s.Rows)
 	}
-	tabs := []FilterTab{{Key: "all", Title: "All", Path: "/tickets", Count: total, Current: filter == ""}}
+	tabs := []FilterTab{{Key: "all", Title: "All", Path: params.withScope(ticketsPath), Count: total, Current: filter == ""}}
 	for _, s := range sectionOrder {
 		tabs = append(tabs, FilterTab{
 			Key: s.Key, Title: s.Title, Count: counts[s.Key], Current: filter == s.Key,
-			Path: Params{Filter: s.Key, All: true}.pagePath(),
+			Path: Params{Filter: s.Key, Project: params.Project, All: true}.pagePath(),
 		})
 	}
 	return tabs
