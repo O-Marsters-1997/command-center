@@ -124,7 +124,7 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 	for i := range rows {
 		r := &rows[i]
 		r.Checked = slices.Contains(params.Tickets, r.URL)
-		r.SessionPath = cmp.Or(SessionPath(r.URL), ticketsPath)
+		r.SessionPath = params.withScope(cmp.Or(SessionPath(r.URL), ticketsPath))
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
@@ -325,6 +325,13 @@ func flattenChain(root string, childrenByRoot map[string][]Row) []Row {
 
 func filterGroupsByRepo(groups []Group, repo string) []Group {
 	return filterGroups(groups, repo, func(r Row) string { return r.Repo })
+}
+
+func filterGroupsByProject(groups []Group, repos []string) []Group {
+	inProject := func(r Row) bool { return slices.Contains(repos, r.Repo) }
+	return slices.DeleteFunc(slices.Clone(groups), func(g Group) bool {
+		return (g.Root == nil || !inProject(*g.Root)) && !slices.ContainsFunc(g.Children, inProject)
+	})
 }
 
 func filterGroupsByFeature(groups []Group, feature string) []Group {

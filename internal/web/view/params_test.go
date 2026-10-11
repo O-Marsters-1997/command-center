@@ -142,6 +142,11 @@ func TestViewParamsQueryRoundTripsThroughParse(t *testing.T) {
 			"log=fails&repo=support-app&sel=a",
 		},
 		{
+			"a project scope sits between log and sel",
+			Params{Sel: "a", Log: "fails", Project: "acme"},
+			"log=fails&project=acme&sel=a",
+		},
+		{
 			"a feature scope sorts ahead of log and repo, neither overriding the other",
 			Params{Sel: "a", Log: "fails", Repo: "support-app", Feature: "board-scope"},
 			"feature=board-scope&log=fails&repo=support-app&sel=a",

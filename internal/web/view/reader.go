@@ -95,6 +95,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
 		return Board{}, err
 	}
+	project, err := r.projectScope(ctx, params.Project)
+	if err != nil {
+		return Board{}, err
+	}
+	params.Project = project.Name
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
@@ -134,7 +139,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	applyViewState(rows, params, records, r.renderLine)
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
+	if project.Name != "" {
+		groups = filterGroupsByProject(groups, project.Repos)
+	}
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
+	chrome.scopeToProject(project)
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
 		return Board{}, err
 	}
@@ -143,7 +152,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Chrome:           chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
-		Tabs:             filterTabs(sections, params.Filter),
+		Tabs:             filterTabs(sections, params),
 		BoardPath:        params.boardPath(),
 		BoardPollSeconds: r.boardPollSeconds,
 	}, nil
@@ -157,6 +166,11 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
 		return Chrome{}, err
 	}
+	project, err := r.projectScope(ctx, params.Project)
+	if err != nil {
+		return Chrome{}, err
+	}
+	params.Project = project.Name
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 
 	obs, observed, err := r.store.LastObservation(ctx)
@@ -176,6 +190,7 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
+	chrome.scopeToProject(project)
 	if chrome.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
 		return Chrome{}, err
 	}
@@ -225,6 +240,10 @@ func (r *Reader) buildChrome(
 		RepoScope:    params.Repo,
 		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
+		TicketsPath:  params.withScope(ticketsPath),
+		ReposPath:    params.withScope("/repos"),
+		LaunchPath:   params.withScope("/launch"),
+		InsightsPath: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
 	}
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
 		c.SpendPaused = &SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h}

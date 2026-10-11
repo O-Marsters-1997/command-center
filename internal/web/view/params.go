@@ -23,6 +23,7 @@ type Params struct {
 	Tickets []string
 	Log     string
 	Repo    string
+	Project string
 	Feature string
 	Filter  string
 	All     bool
@@ -31,7 +32,7 @@ type Params struct {
 func ParseParams(q url.Values) Params {
 	v := Params{
 		Tickets: q["ticket"], Log: NormalizeLogFilter(q.Get("log")),
-		Repo: q.Get("repo"), Feature: q.Get("feature"),
+		Repo: q.Get("repo"), Project: q.Get("project"), Feature: q.Get("feature"),
 		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
 	if sel := q["sel"]; len(sel) > 0 {
@@ -55,6 +56,14 @@ func normalizeRepoScope(repo string, tracked []store.Repo) string {
 		return ""
 	}
 	return tracked[i].Name
+}
+
+func normalizeProjectScope(project string, projects []store.Project) store.Project {
+	i := slices.IndexFunc(projects, func(p store.Project) bool { return strings.EqualFold(p.Name, project) })
+	if i < 0 || project == "" {
+		return store.Project{}
+	}
+	return projects[i]
 }
 
 func normalizeFeatureScope(feature string, fleetFeatures []string) string {
@@ -81,6 +90,9 @@ func (v Params) query() string {
 	if v.Repo != "" {
 		q.Set("repo", v.Repo)
 	}
+	if v.Project != "" {
+		q.Set("project", v.Project)
+	}
 	if v.Sel != "" {
 		q.Set("sel", v.Sel)
 	}
@@ -88,6 +100,10 @@ func (v Params) query() string {
 		q.Add("ticket", ticket)
 	}
 	return q.Encode()
+}
+
+func (v Params) withScope(path string) string {
+	return withQuery(path, Params{Project: v.Project}.query())
 }
 
 func (v Params) boardPath() string { return withQuery("/board", v.query()) }
