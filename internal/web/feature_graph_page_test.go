@@ -12,7 +12,7 @@ func TestFeatureGraphPageMarksTheGraphTabCurrentAndScopesItsData(t *testing.T) {
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope/graph")
 
 	for _, want := range []string{
-		`<a class="pill-tab" href="/f/board-scope">Board</a>`,
+		`<a class="pill-tab" href="/f/board-scope" data-key="v">Board</a>`,
 		`<a class="pill-tab" href="/f/board-scope/graph" aria-current="page">Graph</a>`,
 		`<cc-graph data-src="/graph.json?feature=board-scope">`,
 	} {

@@ -4,7 +4,7 @@
 <a class="button" href="/f/{{.FeatureScope | pathEscape}}/launch" data-key="c" hx-get="/f/{{.FeatureScope | pathEscape}}/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Launch</a>
 {{template "shellContent" .}}
 <nav class="pill-tabs" aria-label="feature views">
-  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}">Board</a>
+  <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}" data-key="v">Board</a>
   <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}/graph" aria-current="page">Graph</a>
 </nav>
 <cc-graph data-src="/graph.json?feature={{.FeatureScope}}">
