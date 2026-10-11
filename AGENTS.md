@@ -53,7 +53,9 @@ The stack is unusual and the wrong assumption is expensive.
 - **Tailwind v4, CSS-first.** `web/app.css` holds the `@theme` oklch tokens. The
   theme is light only: no dark block, no toggle
   ([ADR 17](docs/adr/0017-signal-replaces-the-theme.md)). There is no `tailwind.config.*` and will not be one.
-- **Go never depends on Node.** `test`, `e2e` and `lint` are Go-only.
+- **Go never depends on Node.** `test`, `e2e` and `lint` are Go-only; the tests that read the built
+  built assets skip when they are absent. Everything in `dist` is generated and gitignored
+  ([ADR 21](docs/adr/0021-built-assets-are-generated-not-committed.md)).
 
 For styling, load `tailwind-design-system`. **Do not load `tailwind-shadcn`**: it mistakes
 `solid-js` for a shadcn-solid project. Add no component library, CLI scaffolding or new dependency.
@@ -77,7 +79,9 @@ For styling, load `tailwind-design-system`. **Do not load `tailwind-shadcn`**: i
 ## Boundaries: never hand-edit
 
 - `internal/store/ccdb/**` → `just sqlc`, committed with the query or migration change
-- `internal/web/assets/dist/app.css` → `just assets`, committed; CI diffs it
+- `internal/web/assets/dist/**` → `just assets`, gitignored; a binary built without it is unstyled
+  and has no keys or islands, so `just build` and `just run` depend on `assets`
+  ([ADR 21](docs/adr/0021-built-assets-are-generated-not-committed.md))
 - `internal/web/testdata/` goldens → `go test ./internal/web -update`, then read the diff
 - `.github/**`, `go.mod`, `go.sum` are deny-listed for agent pushes. Work that needs a CI change or
   a new Go dependency stops and says so.

@@ -122,6 +122,27 @@ func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
 	}
 }
 
+func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(shellStore(t, &now, ""), now)
+	body := renderPath(t, server, "/")
+
+	for _, want := range []string{
+		`href="/" data-key="g h"`,
+		`href="/tickets" data-key="g t"`,
+		`href="/insights" data-key="g i"`,
+		`href="/repos" data-key="g r"`,
+		`href="/launch" data-key="c"`,
+		`<script type="module" src="/assets/dist/keys.js"></script>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("home page is missing %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	t.Parallel()
 

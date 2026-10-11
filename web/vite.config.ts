@@ -10,9 +10,10 @@ export default defineConfig({
     outDir: "../internal/web/assets/dist",
     emptyOutDir: false,
     lib: {
-      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx" },
+      entry: { graph: "src/graph.tsx", "launch-modal": "src/launch-modal.tsx", keys: "src/keys.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
+    rollupOptions: { output: { entryFileNames: "[name].js", chunkFileNames: "[name].js" } },
   },
 });

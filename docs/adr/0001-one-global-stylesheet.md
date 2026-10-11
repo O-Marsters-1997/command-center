@@ -16,7 +16,8 @@ at render time (`"pill pill-" + tone`). Those must be named classes already in t
 
 ## Decision
 
-- The compiled stylesheet is served from `/assets/app.css`; golden files carry markup only.
+- The compiled stylesheet is served from `/assets/app.css`; golden files carry markup only. `just assets`
+  generates it and it is gitignored ([ADR 21](0021-built-assets-are-generated-not-committed.md)).
 - Every island calls `noShadowDOM()` first, so one global sheet styles Go- and Solid-rendered markup.
 - Templates use utilities for layout and spacing. The state grammar stays named classes in
   `@layer components`: `pill` (with `pill-disc`, `-ring`, `-pulse` and the tones `-done`, `-live`,
