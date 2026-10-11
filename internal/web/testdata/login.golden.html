@@ -61,6 +61,14 @@
 <script src="/assets/sse.min.js"></script>
 <script type="module" src="/assets/dist/keys.js"></script>
 <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
+    document.querySelectorAll("#key-sheet kbd").forEach(function (k) {
+      k.textContent = k.textContent.replace("⌘", "Ctrl ");
+    });
+  });
+</script>
+<script>
   document.addEventListener("htmx:sseMessage", function (e) {
     var pre = e.target;
     while (pre.childElementCount > 1000) pre.firstElementChild.remove();

@@ -27,8 +27,8 @@ func TestFeaturePageHasNoDialogUntilLaunchIsOpened(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope")
 
-	if strings.Contains(page, "<dialog") {
-		t.Errorf("/f/board-scope rendered a dialog:\n%s", page)
+	if strings.Contains(page, `<dialog id="launch-modal-body"`) {
+		t.Errorf("/f/board-scope rendered the launch dialog:\n%s", page)
 	}
 }
 

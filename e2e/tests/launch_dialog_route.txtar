@@ -15,7 +15,7 @@ stdout '<dialog id="launch-modal-body"'
 stdout '<cc-launch-modal feature="project:two-tasks">'
 
 exec cc request GET /f/project:two-tasks
-! stdout '<dialog'
+! stdout '<dialog id="launch-modal-body"'
 
 exec cc request GET /launch
 stdout 'href="/f/project:two-tasks/launch"'

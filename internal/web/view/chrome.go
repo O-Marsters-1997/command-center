@@ -19,6 +19,7 @@ type Chrome struct {
 	RefusedRepos  []RefusedRepo
 	Section       string
 	Home          bool
+	Keymap        []KeyRow
 	RepoScope     string
 	RepoCrumb     string
 	RepoCrumbPath string
