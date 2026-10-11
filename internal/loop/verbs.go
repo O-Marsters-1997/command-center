@@ -2,7 +2,9 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -100,10 +102,45 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 	if err != nil {
 		return fmt.Errorf("read baseline for follow-up of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, spawnSpec{
+	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText),
-	})
+		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
+	}
+
+	sessionID, err := l.resumableSession(ctx, ticket.URL)
+	if err != nil {
+		return err
+	}
+	if sessionID != "" {
+		latest, err := l.store.LatestRunsByTicket(ctx)
+		if err != nil {
+			return err
+		}
+		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome)
+		spec.resumeSessionID = sessionID
+	}
+	return l.spawnRun(ctx, spec)
+}
+
+func (l *Loop) resumableSession(ctx context.Context, ticketURL string) (string, error) {
+	sessionID, err := l.store.LatestSessionID(ctx, ticketURL)
+	if err != nil || sessionID == "" {
+		return "", err
+	}
+	projects, err := os.ReadDir(l.cfg.ClaudeProjectsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read claude projects dir: %w", err)
+	}
+	for _, project := range projects {
+		transcript := filepath.Join(l.cfg.ClaudeProjectsDir, project.Name(), sessionID+".jsonl")
+		if _, err := os.Stat(transcript); err == nil {
+			return sessionID, nil
+		}
+	}
+	return "", nil
 }
 
 func (l *Loop) applyCancelIntents(ctx context.Context) error {

@@ -1,0 +1,22 @@
+cc-init-repo
+cc-config session-resume
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+grep -count=1 '(?m)^session.sh session-id [0-9a-f-]{36}$' $WORK/agent.log
+! grep 'resume' $WORK/agent.log
+
+exec cc request -form 'verb=follow-up&ticket=https://github.com/sandbox-org/single-task/issues/CC-1&prompt=go+on' POST /verb
+exec cc tick --count 1
+exec sleep 0.5
+
+grep -count=1 '(?m)^session.sh resume [0-9a-f-]{36}$' $WORK/agent.log
+exec sh -c 'test "$(sed -E "s/^session.sh [a-z-]+ //" $WORK/agent.log | sort -u | wc -l)" -eq 1'

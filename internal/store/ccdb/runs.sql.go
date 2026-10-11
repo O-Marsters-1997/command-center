@@ -215,7 +215,12 @@ func (q *Queries) InsertRunRequest(ctx context.Context, arg InsertRunRequestPara
 }
 
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
-INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash) VALUES ($1, $2, $3, $4) RETURNING id
+INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
+VALUES (
+  $1, $2, $3, $4,
+  CASE WHEN $5::boolean THEN gen_random_uuid() ELSE $6::text::uuid END,
+  $7
+) RETURNING id, COALESCE(session_id::text, '')::text AS session_id
 `
 
 type InsertRunSkeletonParams struct {
@@ -223,18 +228,29 @@ type InsertRunSkeletonParams struct {
 	Kind        string
 	BaselineSHA sql.NullString
 	PromptHash  sql.NullString
+	NewSession  bool
+	SessionID   sql.NullString
+	Message     sql.NullString
 }
 
-func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonParams) (int64, error) {
+type InsertRunSkeletonRow struct {
+	ID        int64
+	SessionID string
+}
+
+func (q *Queries) InsertRunSkeleton(ctx context.Context, arg InsertRunSkeletonParams) (InsertRunSkeletonRow, error) {
 	row := q.db.QueryRowContext(ctx, insertRunSkeleton,
 		arg.TicketID,
 		arg.Kind,
 		arg.BaselineSHA,
 		arg.PromptHash,
+		arg.NewSession,
+		arg.SessionID,
+		arg.Message,
 	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+	var i InsertRunSkeletonRow
+	err := row.Scan(&i.ID, &i.SessionID)
+	return i, err
 }
 
 const latestRunLog = `-- name: LatestRunLog :one
@@ -308,6 +324,18 @@ func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketR
 		return nil, err
 	}
 	return items, nil
+}
+
+const latestSessionID = `-- name: LatestSessionID :one
+SELECT COALESCE(session_id::text, '')::text AS session_id FROM runs
+WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') ORDER BY id DESC LIMIT 1
+`
+
+func (q *Queries) LatestSessionID(ctx context.Context, ticketID sql.NullString) (string, error) {
+	row := q.db.QueryRowContext(ctx, latestSessionID, ticketID)
+	var session_id string
+	err := row.Scan(&session_id)
+	return session_id, err
 }
 
 const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many

@@ -69,10 +69,13 @@ func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *tes
 	}
 	got := strings.ToLower(string(raw))
 
-	for _, want := range []string{"single-shot", "background", "subagent", "commit"} {
+	for _, want := range []string{"continue the session later", "background", "subagent", "commit"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("system prompt = %q, want it to mention %q", raw, want)
 		}
+	}
+	if strings.Contains(got, "will not resume") {
+		t.Errorf("system prompt = %q, want it no longer to say the session will not resume", raw)
 	}
 	if !strings.Contains(got, "do not spawn a background subagent") {
 		t.Errorf("system prompt = %q, want background subagents still forbidden", raw)

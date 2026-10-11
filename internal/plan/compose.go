@@ -59,6 +59,10 @@ func ComposeFollowUp(text string) string {
 	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
 }
 
+func ComposeMessage(text string, _ Outcome) string {
+	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
+}
+
 const ReviewFixLines = 50
 
 // ComposeReview is the prompt for a review run of the branch against base.
