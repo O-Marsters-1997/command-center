@@ -219,6 +219,28 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 	}
 }
 
+func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
+	t.Parallel()
+	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomePush)
+	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
+	obs := plan.Observation{
+		ObservedAt: testNow,
+		Runs:       map[string]plan.RunObservation{sessionTicket: {Alive: false}},
+		PRs:        map[string]plan.PR{plan.BranchKey("acme/web", "cc-1"): pr},
+	}
+	if err := st.SaveObservation(t.Context(), obs); err != nil {
+		t.Fatal(err)
+	}
+
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?part=actions")
+
+	for _, want := range []string{`value="remove-worktree" data-key="e"`, `data-key="o" target="_blank"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("merged session lacks %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestRailVerbButtonsCarryNoKey(t *testing.T) {
 	t.Parallel()
 	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
