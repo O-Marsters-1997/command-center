@@ -16,6 +16,9 @@ const (
 func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	for _, e := range snap.Entries {
 		t, row := e.Ticket, e.LastPush
+		if e.HoldsWorktree() {
+			continue
+		}
 		if row == nil || row.BaseBranch == "" || row.BaseBranch == plan.DefaultBaseBranch {
 			continue
 		}
