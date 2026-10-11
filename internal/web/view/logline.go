@@ -73,6 +73,12 @@ func recordLine(kind, detail string) LogLine {
 			return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: detail}
 		}
 		return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: number, Href: "https://" + href}
+	case "checks_landed":
+		i := strings.LastIndexByte(detail, ' ')
+		if i < 0 {
+			return LogLine{Kind: agentlog.Record.String(), Verb: "check", Arg: detail}
+		}
+		return LogLine{Kind: agentlog.Record.String(), Verb: detail[i+1:], Arg: detail[:i]}
 	case "pr_merged":
 		return LogLine{Kind: agentlog.Record.String(), Verb: "merged", Arg: detail}
 	default:

@@ -1,0 +1,41 @@
+# A PR that opens with two pending checks appends pr_opened and nothing else. When the checks
+# land, each appends one checks_landed event, after pr_opened and in check-name order; a further
+# tick over the unchanged rollup appends nothing (internal/loop/checks_events.go).
+
+cc-init-repo
+cp mergify-v1.yml repo/.mergify.yml
+exec git -C $WORK/repo add .mergify.yml
+exec git -C $WORK/repo commit -q -m 'add mergify config'
+exec git -C $WORK/repo push -q origin main
+
+cc-config verdict-single-task
+cc-fake-gh no-prs
+
+exec cc import project:single-task
+exec cc tick --count 1
+exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+exec sleep 0.5
+exec cc tick --count 1
+
+cc-fake-gh-head checks-pending cc-1-x
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=1 '"Kind":"pr_opened"'
+! stdout '"Kind":"checks_landed"'
+
+cc-fake-gh-head checks-landed cc-1-x
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=2 '"Kind":"checks_landed"'
+stdout '(?s)"Kind":"pr_opened".*"Kind":"checks_landed","Detail":"Build passed".*"Kind":"checks_landed","Detail":"Lint failed"'
+
+exec cc tick --count 1
+exec cc request GET /events
+stdout -count=2 '"Kind":"checks_landed"'
+
+-- mergify-v1.yml --
+queue_rules: []
+pull_request_rules: []
