@@ -33,11 +33,15 @@
     });
   }
   function closeScopeMenu() {
-    var here = location.pathname + location.search;
+    function scopeOf(href) {
+      var q = new URL(href, location.origin).searchParams;
+      return q.get("project") ? "project=" + q.get("project") : q.get("repo") ? "repo=" + q.get("repo") : "";
+    }
+    var here = scopeOf(location.href);
     document.querySelectorAll("details[data-scope-menu]").forEach(function (d) {
       d.open = false;
       d.querySelectorAll("a").forEach(function (a) {
-        var current = a.getAttribute("href") === here;
+        var current = scopeOf(a.getAttribute("href")) === here;
         if (current) d.querySelector("summary").innerHTML = a.innerHTML;
         if (current) a.setAttribute("aria-current", "true");
         else a.removeAttribute("aria-current");
@@ -45,6 +49,7 @@
     });
   }
   document.addEventListener("htmx:pushedIntoHistory", closeScopeMenu);
+  document.addEventListener("htmx:historyRestore", closeScopeMenu);
   document.addEventListener("htmx:pushedIntoHistory", markCurrent);
   document.addEventListener("htmx:historyRestore", markCurrent);
 </script>
