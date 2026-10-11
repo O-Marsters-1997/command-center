@@ -385,29 +385,24 @@ function xe(e) {
   }, l = () => {
     for (; i() && (t = t._$host || t.parentNode || t.host); ) ;
   };
-  Object.defineProperty(e, "currentTarget", {
+  if (Object.defineProperty(e, "currentTarget", {
     configurable: !0,
     get() {
       return t || document;
     }
-  });
-  try {
-    if (e.composedPath) {
-      const u = e.composedPath();
-      o(u[0]);
-      for (let f = 0; f < u.length - 2 && (t = u[f], !!i()); f++) {
-        if (t._$host) {
-          t = t._$host, l();
-          break;
-        }
-        if (t.parentNode === s)
-          break;
+  }), e.composedPath) {
+    const u = e.composedPath();
+    o(u[0]);
+    for (let f = 0; f < u.length - 2 && (t = u[f], !!i()); f++) {
+      if (t._$host) {
+        t = t._$host, l();
+        break;
       }
-    } else l();
-    o(r);
-  } finally {
-    e = t = null;
-  }
+      if (t.parentNode === s)
+        break;
+    }
+  } else l();
+  o(r);
 }
 function U(e, t, n, r, s) {
   for (; typeof n == "function"; ) n = n();
