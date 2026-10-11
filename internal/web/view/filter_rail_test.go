@@ -35,7 +35,12 @@ func TestFilterRailNarrowsEachSection(t *testing.T) {
 		live     map[string][]string
 		settled  []string
 	}{
-		{query: "", needsYou: []string{"#12"}, live: map[string][]string{"billing": {"#2", "#3"}, "checkout": {"#40"}}, settled: []string{"#5"}},
+		{
+			query:    "",
+			needsYou: []string{"#12"},
+			live:     map[string][]string{"billing": {"#2", "#3"}, "checkout": {"#40"}},
+			settled:  []string{"#5"},
+		},
 		{query: "#12", needsYou: []string{"#12"}, live: map[string][]string{}},
 		{query: "12", needsYou: []string{"#12"}, live: map[string][]string{}},
 		{query: "INVOICE", needsYou: []string{"#12"}, live: map[string][]string{}},
