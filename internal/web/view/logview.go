@@ -23,7 +23,7 @@ func KindShown(mode string, k agentlog.Kind) bool {
 	case "skills":
 		return k == agentlog.Skill
 	case "tools":
-		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd
+		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd || k == agentlog.Commit
 	case "fails":
 		return k == agentlog.Fail
 	default:
@@ -204,13 +204,13 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
 		if line, err := b.render(sayLine(event.Detail)); err == nil {
 			b.items = append(b.items, logItem{Kind: "say", Line: line})
 		}
-	case agentlog.Record:
+	case agentlog.Record, agentlog.Commit:
 		b.flush()
 		if !KindShown(b.mode, event.Kind) {
 			return
 		}
 		if line, err := b.render(LineOf(event)); err == nil {
-			b.items = append(b.items, logItem{Kind: "record", Line: line})
+			b.items = append(b.items, logItem{Kind: event.Kind.String(), Line: line})
 		}
 	case agentlog.Pass, agentlog.Fail:
 		b.answer(event, anchor)

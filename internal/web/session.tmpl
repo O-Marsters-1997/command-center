@@ -40,7 +40,7 @@
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if or (eq .Kind "say") (eq .Kind "record")}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+        {{if or (eq .Kind "say") (eq .Kind "record") (eq .Kind "commit")}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
         {{- end}}
       </section>
       {{- end}}

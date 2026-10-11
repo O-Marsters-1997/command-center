@@ -52,6 +52,9 @@ func LineOf(e agentlog.Event) LogLine {
 		return LogLine{Kind: e.Kind.String(), Verb: e.Tool, Arg: e.Detail}
 	case agentlog.Record:
 		return recordLine(e.Tool, e.Detail)
+	case agentlog.Commit:
+		result := "✓" + elapsedSuffix(e.Elapsed)
+		return LogLine{Kind: e.Kind.String(), Verb: "commit", Arg: e.Detail, Result: result, CallID: e.CallID}
 	case agentlog.Pass, agentlog.Fail:
 		return callPair{result: e, answered: true}.line()
 	case agentlog.Cmd:

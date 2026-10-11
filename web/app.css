@@ -425,6 +425,7 @@
   .line-file,
   .line-tool,
   .line-cmd,
+  .line-commit,
   .line-fail,
   .line-pass,
   .line-say {
