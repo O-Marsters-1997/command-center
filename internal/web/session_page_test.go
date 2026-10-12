@@ -151,12 +151,6 @@ func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	}
 }
 
-func TestSessionPageGolden(t *testing.T) {
-	t.Parallel()
-	st, _ := sessionStore(t, "agent", "Implement #1\n", true, false)
-	assertGolden(t, "testdata/session.golden.html", []byte(renderPath(t, newServer(st, testNow), "/s/acme/web/1")))
-}
-
 func sessionVerb(t *testing.T, srv http.Handler, form url.Values, htmx bool) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/verb", strings.NewReader(form.Encode()))

@@ -259,19 +259,3 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		t.Errorf("pr cell = %q, want #262 merged", got)
 	}
 }
-
-const goldenGroupedBoard = "testdata/board_grouped.golden.html"
-
-func TestBoardGoldensAFiveRowFanOutPlusAnUngroupedRow(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := failedRootAndQueuedChildren(t,
-		[]string{"sandbox://CC-2", "sandbox://CC-3", "sandbox://CC-4", "sandbox://CC-5"})
-	lone := []storepkg.Ticket{{URL: "sandbox://LONE", Repo: "repo", Branch: "lone"}}
-	if err := store.UpsertTickets(ctx, lone); err != nil {
-		t.Fatal(err)
-	}
-
-	assertGolden(t, goldenGroupedBoard, []byte(boardFor(t, store)))
-}

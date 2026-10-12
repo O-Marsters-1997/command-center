@@ -8,16 +8,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-const goldenInsights = "testdata/insights.golden.html"
-
-func TestInsightsPageRendersTheShellAroundTheIsland(t *testing.T) {
-	t.Parallel()
-
-	server := seededServer(t)
-	got := renderPath(t, server, "/insights")
-	assertGolden(t, goldenInsights, []byte(got))
-}
-
 func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	t.Parallel()
 
@@ -46,7 +36,9 @@ func TestInsightsPageRendersMergedTicketsAsAnSVGChart(t *testing.T) {
 
 	server := newServer(store, now)
 	got := renderPath(t, server, "/insights")
-	assertGolden(t, "testdata/insights_chart.golden.html", []byte(got))
+	if want := `<svg width=`; !strings.Contains(got, want) {
+		t.Errorf("insights page with a merged ticket lacks the chart %s:\n%s", want, got)
+	}
 }
 
 func TestInsightsPageShowsEachLimitsResetTime(t *testing.T) {

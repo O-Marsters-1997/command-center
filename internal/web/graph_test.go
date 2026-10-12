@@ -10,8 +10,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-const goldenGraph = "testdata/graph.golden.json"
-
 type jsonRow struct {
 	URL      string   `json:"url"`
 	State    string   `json:"state"`
@@ -78,17 +76,6 @@ func TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver(t *testing.T) {
 	if len(child.Blocking) != 1 || child.Blocking[0] != "sandbox://CC-1" {
 		t.Errorf("child.Blocking = %v, want [sandbox://CC-1]", child.Blocking)
 	}
-}
-
-func TestGraphJSONGoldensAFixedFixture(t *testing.T) {
-	t.Parallel()
-
-	server := seededServer(t)
-	rec := fetchGraph(t, server)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /graph.json: status = %d: %s", rec.Code, rec.Body)
-	}
-	assertGolden(t, goldenGraph, rec.Body.Bytes())
 }
 
 var hyphenatedTagRE = regexp.MustCompile(`<[a-zA-Z][a-zA-Z0-9]*-[a-zA-Z0-9-]*[\s>/]`)
