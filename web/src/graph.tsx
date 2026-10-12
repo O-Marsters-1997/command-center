@@ -1,6 +1,6 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { COL_W, MARGIN, bounds as layoutBounds, edgePath, edgesFor, layoutWaves, traceChain, waveLabel } from "./layout";
+import { CARD, MARGIN, bounds as layoutBounds, edgePath, edgesFor, layoutWaves, traceChain, waveLabel } from "./layout";
 import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
@@ -36,6 +36,25 @@ function ticketRef(url: string): string {
   return `#${parts[parts.length - 1]}`;
 }
 
+function nodeTag(node: GraphNode): string {
+  if (node.glyph === "failed") return node.reason;
+  if (node.glyph === "attention") return "Review";
+  return node.glyph === "running" ? node.elapsed : "";
+}
+
+function nodeFoot(node: GraphNode): string {
+  switch (node.glyph) {
+    case "blocked":
+      return node.after?.length ? `after ${node.after.join(", ")}` : "Blocked";
+    case "ready":
+      return "Ready to launch";
+    case "done":
+      return node.pr_number ? `Merged #${node.pr_number}` : "Merged";
+    default:
+      return node.reason || (node.pr_number ? `PR #${node.pr_number}` : node.state);
+  }
+}
+
 customElement("cc-graph", {}, () => {
   noShadowDOM();
   // solid-element inserts into the element rather than clearing it first, so the light-DOM
@@ -69,10 +88,10 @@ customElement("cc-graph", {}, () => {
 
   const nodes = createMemo(() => {
     const rows = groups().flatMap((g) => (g.root ? [g.root, ...g.children] : g.children));
-    return layoutWaves(rows).map((p) => toNode(p, p.col, p.x, p.y));
+    return layoutWaves(rows, CARD).map((p) => toNode(p, p.col, p.x, p.y));
   });
   const edges = createMemo(() => edgesFor(nodes(), (n) => n.blocking));
-  const bounds = createMemo(() => layoutBounds(nodes()));
+  const bounds = createMemo(() => layoutBounds(nodes(), CARD));
 
   const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
 
@@ -133,8 +152,8 @@ customElement("cc-graph", {}, () => {
           <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
             {(col) => (
               <span
-                class="absolute top-1 text-[0.75em] uppercase tracking-wide text-muted"
-                style={{ left: `${MARGIN + col * COL_W}px` }}
+                class="absolute top-1 text-xs font-medium text-fg-2"
+                style={{ left: `${MARGIN + col * CARD.colW}px` }}
               >
                 {waveLabel(col)}
               </span>
@@ -151,7 +170,7 @@ customElement("cc-graph", {}, () => {
                       "stroke-border stroke-[1.5]": !lit(),
                       "stroke-s-attention stroke-[2.5]": lit(),
                     }}
-                    d={edgePath(edge)}
+                    d={edgePath(edge, CARD)}
                   />
                 );
               }}
@@ -165,9 +184,12 @@ customElement("cc-graph", {}, () => {
                 <button
                   type="button"
                   data-node
-                  class="absolute flex w-[200px] cursor-pointer items-center gap-[0.4rem] rounded border bg-surface px-2 py-[0.3rem] text-left [font:inherit] text-inherit"
+                  class="absolute grid h-[104px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left [font:inherit] text-inherit"
                   classList={{
-                    "border-border": !isLit(),
+                    "bg-surface": node.glyph !== "blocked",
+                    "bg-canvas border-dashed": node.glyph === "blocked",
+                    "border-border": !isLit() && node.glyph !== "done",
+                    "border-border-soft": !isLit() && node.glyph === "done",
                     "border-s-attention": isLit(),
                     "shadow-[0_0_0_1px_var(--color-s-attention)]": isSelected(),
                   }}
@@ -181,14 +203,18 @@ customElement("cc-graph", {}, () => {
                   onBlur={() => setFocused(null)}
                   onKeyDown={(e) => onNodeKeyDown(e, node)}
                 >
+                  <span class="flex items-center gap-[7px]">
+                    <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
+                    <span class="text-xs text-meta">{ticketRef(node.url)}</span>
+                    <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
+                  </span>
                   <span
-                    class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}
+                    class="overflow-hidden text-sm font-medium leading-[1.35]"
+                    style={{ display: "-webkit-box", "-webkit-line-clamp": 2, "-webkit-box-orient": "vertical" }}
                   >
-                    {node.state}
+                    {node.title || "untitled"}
                   </span>
-                  <span class="overflow-hidden text-ellipsis whitespace-nowrap text-[0.85em]">
-                    {ticketRef(node.url)} {node.title || "untitled"}
-                  </span>
+                  <span class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted">{nodeFoot(node)}</span>
                 </button>
               );
             }}

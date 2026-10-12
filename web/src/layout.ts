@@ -1,12 +1,14 @@
-
-export const COL_W = 260;
-export const ROW_H = 64;
-// Tailwind's static scanner needs a literal class, so each island's node button carries its own
-// literal `w-[200px]` rather than an interpolated one, and that literal must be kept in sync with
-// NODE_W by hand.
-export const NODE_W = 200;
-export const NODE_H = 40;
 export const MARGIN = 24;
+
+export interface Metrics {
+  colW: number;
+  rowH: number;
+  nodeW: number;
+  nodeH: number;
+}
+
+export const COMPACT: Metrics = { colW: 260, rowH: 64, nodeW: 200, nodeH: 40 };
+export const CARD: Metrics = { colW: 288, rowH: 120, nodeW: 240, nodeH: 104 };
 
 export interface Wave {
   url: string;
@@ -34,21 +36,30 @@ export function waveDepths(rows: Wave[]): Map<string, number> {
   return depth;
 }
 
-export function layoutWaves<Row extends Wave>(rows: Row[]): (Row & { col: number; x: number; y: number })[] {
+export function layoutWaves<Row extends Wave>(
+  rows: Row[],
+  m: Metrics = COMPACT,
+): (Row & { col: number; x: number; y: number })[] {
   const depth = waveDepths(rows);
-  return stackByColumn(rows.map((row) => ({ ...row, col: depth.get(row.url) ?? 0 })));
+  return stackByColumn(
+    rows.map((row) => ({ ...row, col: depth.get(row.url) ?? 0 })),
+    m,
+  );
 }
 
 export function waveLabel(col: number): string {
   return `Wave ${col + 1}`;
 }
 
-export function stackByColumn<T extends { col: number }>(nodes: T[]): (T & { x: number; y: number })[] {
+export function stackByColumn<T extends { col: number }>(
+  nodes: T[],
+  m: Metrics = COMPACT,
+): (T & { x: number; y: number })[] {
   const yByCol = new Map<number, number>();
   return nodes.map((n) => {
     const y = yByCol.get(n.col) ?? MARGIN;
-    yByCol.set(n.col, y + ROW_H);
-    return { ...n, x: MARGIN + n.col * COL_W, y };
+    yByCol.set(n.col, y + m.rowH);
+    return { ...n, x: MARGIN + n.col * m.colW, y };
   });
 }
 
@@ -72,19 +83,22 @@ export function edgesFor<T extends { url: string }>(
   return edges;
 }
 
-export function edgePath(edge: Edge<{ x: number; y: number }>): string {
-  const x1 = edge.from.x + NODE_W;
-  const y1 = edge.from.y + NODE_H / 2;
+export function edgePath(edge: Edge<{ x: number; y: number }>, m: Metrics = COMPACT): string {
+  const x1 = edge.from.x + m.nodeW;
+  const y1 = edge.from.y + m.nodeH / 2;
   const x2 = edge.to.x;
-  const y2 = edge.to.y + NODE_H / 2;
+  const y2 = edge.to.y + m.nodeH / 2;
   const dx = Math.max(40, (x2 - x1) / 2);
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 }
 
-export function bounds(nodes: { col: number; y: number }[]): { width: number; height: number } {
-  const maxCol = nodes.reduce((m, n) => Math.max(m, n.col), 0);
-  const maxY = nodes.reduce((m, n) => Math.max(m, n.y), 0);
-  return { width: MARGIN * 2 + maxCol * COL_W + NODE_W, height: maxY + NODE_H + MARGIN };
+export function bounds(
+  nodes: { col: number; y: number }[],
+  m: Metrics = COMPACT,
+): { width: number; height: number } {
+  const maxCol = nodes.reduce((acc, n) => Math.max(acc, n.col), 0);
+  const maxY = nodes.reduce((acc, n) => Math.max(acc, n.y), 0);
+  return { width: MARGIN * 2 + maxCol * m.colW + m.nodeW, height: maxY + m.nodeH + MARGIN };
 }
 
 export function traceChain<T extends { url: string }>(url: string, edges: Edge<T>[]): Set<string> {
