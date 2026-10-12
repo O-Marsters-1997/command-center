@@ -29,10 +29,10 @@ func TestRailRendersTheLatestStoredReading(t *testing.T) {
 	server := newServer(store, observedAt.Add(45*time.Second))
 	board := renderPath(t, server, "/rail")
 
-	if !strings.Contains(board, "five-hour · 42%") {
+	if !strings.Contains(board, "<span>five-hour</span>") || !strings.Contains(board, `width: 42%`) {
 		t.Errorf("page does not show the newer five-hour reading (42%%):\n%s", board)
 	}
-	if !strings.Contains(board, "weekly · 0%") {
+	if !strings.Contains(board, "<span>weekly</span>") || !strings.Contains(board, `width: 0%`) {
 		t.Errorf("page does not show weekly at 0%% (no reading stored yet):\n%s", board)
 	}
 }

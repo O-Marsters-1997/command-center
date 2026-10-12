@@ -5,7 +5,7 @@
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
   <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
-  <span class="rail-state">{{.Glyph}}</span>
+  <span class="rail-state sr-only">{{.Glyph}}</span>
   {{- if .Started}}<span class="rail-timer" data-started="{{.Started}}"></span>{{end}}
 </a>
 {{end}}
@@ -44,7 +44,7 @@
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>{{range .Marks}}{{template "mark" .}}{{end}}{{.Name}} <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
+      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
       {{- range .Live}}{{template "railItem" .}}{{end}}
       {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
     </details>
@@ -55,7 +55,7 @@
   {{- with .Settled}}{{if or .Items $.Query}}
   <section class="rail-group" data-group="settled" aria-label="Settled">
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>Settled <span class="rail-count">{{len .Items}}</span></summary>
+      <summary>{{template "icon" "chev"}}<span class="rail-name">Settled</span> <span class="rail-count">{{len .Items}}</span></summary>
       {{- range .Items}}
       <div class="rail-settled">
         {{template "railItem" .}}
@@ -70,7 +70,7 @@
   {{- end}}
   <footer class="rail-footer">
     {{- range .Gauges}}
-    <span class="rail-gauge"><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span> {{.Label}} · {{.Pct}}%</span>
+    <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{.Pct}}%</span></span>
     {{- end}}
     {{- with .Health}}
     {{- if .Error}}
