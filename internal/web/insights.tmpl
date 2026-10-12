@@ -31,7 +31,7 @@
   {{end -}}
   <path class="chart-line chart-series-1" d="{{.MedianPath}}"></path>
 </svg>
-{{range .Dots}}<span class="chart-pt" tabindex="0" style="--x: {{.X}}; --y: {{.Y}}" aria-label="{{.Title}}"><span class="chart-tip" role="tooltip" aria-hidden="true">{{.Title}}</span></span>
+{{range .Dots}}<span class="chart-pt" role="img" tabindex="0"style="--x: {{.X}}; --y: {{.Y}}" aria-label="{{.Title}}"><span class="chart-tip" role="tooltip" aria-hidden="true">{{.Title}}</span></span>
 {{end -}}
 </div>
 <div class="mt-2 flex items-center gap-3 text-xs text-muted">

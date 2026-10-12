@@ -2,9 +2,9 @@
 {{with .SearchError}}
 <p class="banner ribbon mb-2" data-glyph="failed" role="status">gh search failed: {{.}}</p>
 {{end}}
-<div class="track-results" role="listbox" aria-label="repos found">
+<div class="track-results" aria-label="repos found">
   {{range .Rows}}
-  <div class="track-hit" role="option" aria-selected="false">
+  <div class="track-hit">
     <a class="font-mono" href="{{.Path}}">{{.FullName}}</a>
     {{if .Tracked}}<ul class="checks">{{range .Steps}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>
     {{else}}<span class="text-muted text-xs">not tracked{{with .RefusedBranch}} <span class="glyph glyph-failed text-s-failed">will be refused: default branch is <code>{{.}}</code></span>{{end}}</span>

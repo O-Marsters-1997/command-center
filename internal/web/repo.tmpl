@@ -4,7 +4,7 @@
 {{template "shellContent" .}}
 <div class="page-narrow">
 <div class="repo-head mb-4">
-  <span class="badge" data-glyph="{{.Banner.Glyph}}"><span class="glyph glyph-{{.Banner.Glyph}}">{{.Banner.State}}</span></span>
+  {{if not .Banner.Polling}}<span class="badge" data-glyph="{{.Banner.Glyph}}"><span class="glyph glyph-{{.Banner.Glyph}}">{{.Banner.State}}</span></span>{{end}}
   <h1>{{.Title}}</h1>
   {{with .Remote}}<p class="page-purpose mb-0">{{.}}</p>{{end}}
 </div>
