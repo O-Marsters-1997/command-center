@@ -67,7 +67,6 @@ customElement("cc-graph", {}, () => {
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
   const [focused, setFocused] = createSignal<string | null>(null);
   const [hovered, setHovered] = createSignal<string | null>(null);
-  const [pinned, setPinned] = createSignal<string | null>(null);
 
   const nodeRefs = new Map<string, HTMLButtonElement>();
 
@@ -100,12 +99,16 @@ customElement("cc-graph", {}, () => {
 
   const phoneQuery = window.matchMedia(PHONE);
   const [phone, setPhone] = createSignal(phoneQuery.matches);
-  const onPhoneChange = (e: MediaQueryListEvent) => setPhone(e.matches);
+  const onPhoneChange = (e: MediaQueryListEvent) => {
+    setHovered(null);
+    setFocused(null);
+    setPhone(e.matches);
+  };
   phoneQuery.addEventListener("change", onPhoneChange);
   onCleanup(() => phoneQuery.removeEventListener("change", onPhoneChange));
 
   const traced = createMemo(() => {
-    const from = hovered() ?? focused() ?? pinned();
+    const from = hovered() ?? focused();
     return from ? traceChain(from, edges()) : new Set<string>();
   });
 
@@ -128,8 +131,6 @@ customElement("cc-graph", {}, () => {
 
   function onNodeClick(url: string) {
     toggle(url);
-    if (window.matchMedia(PHONE).matches) setPinned((prev) => (prev === url ? null : url));
-    else setPinned(null);
   }
 
   function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
