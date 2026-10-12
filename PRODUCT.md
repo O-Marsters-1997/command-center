@@ -62,7 +62,7 @@ merge, and show a whole feature's wave progress across repos.
   (ADR 23). It is the third scope axis after feature and repo, chosen from the rail's scope
   menu or with `G 0`–`G 9`. It is not the tracker's `project:` label, which marks a feature.
 - **Terminology** follows `CONTEXT.md`.
-- **Not built yet**, shown in the design as target UI: the composer's model, effort and worktree
+- **Not built yet**, designed in `DESIGN.md` as target UI: the composer's model, effort and worktree
   pickers; Undo on every verb; the peek panel; the merged-tickets table on Insights; and graph
   nodes that open their session.
 
@@ -70,21 +70,15 @@ merge, and show a whole feature's wave progress across repos.
 
 - The live data is the owner's own tracked repos and tickets. `internal/demo` simulates a fleet
   for screenshots, and `e2e/` drives the binary against a fake `gh` and `tp`.
-- The design reference is `design/signal/`, a static prototype vendored from
-  `command-center-design`. Only its `acme` billing feature comes from real fixtures. Its other
-  projects, logs, insights numbers and extra repos are illustrative and must stay labelled as
-  such outside the prototype.
+- The running app is the design reference, and `DESIGN.md` describes it.
 
 ## UI Direction
 
-The goal is to converge every page on **Signal**, the design system in `DESIGN.md`, using
-`design/signal/` as the visual reference. The functionality of the prototype already exists. The
-remaining work is visual parity, in this order: shared foundations (primitives, glyph ring,
-tokens, icons), the shell and rail, the session and composer, the feature board and graph, the
-launch dialog, then tickets, insights and repos, the keyboard sheet and toasts, and finally a
-phone pass. A page is done when its PR shows it beside the matching prototype route at 1440px and
-390px, and an `/impeccable audit` against `DESIGN.md` finds no P0 or P1 issues. Prototype
-elements that need new data or behaviour become their own tickets and do not hold a page back.
+Every page has converged on **Signal**, the design system in `DESIGN.md`. The migration is done:
+shared foundations, the shell and rail, the session and composer, the feature board and graph,
+the launch dialog, tickets, insights and repos, the keyboard sheet and toasts, and the phone
+pass all shipped. A changed page is judged against `DESIGN.md` with an `/impeccable audit` that
+finds no P0 or P1 issues.
 
 ## Product Principles
 

@@ -194,12 +194,6 @@ nothing else moves. Colour that pulls the eye is kept for the moments that need 
 waiting, a failure to repair, a question to answer. Indigo always means "your move", so a screen
 with nothing to do shows almost no indigo.
 
-The visual reference is the prototype vendored at `design/signal/` (open
-`design/signal/index.html`; the specimen is `design/signal/design-system/index.html`). This file
-restates that prototype against this repo. Where the two differ, the running prototype (`app/`)
-is the authority over its own `design-system/DESIGN.md`, and this file records the prototype's
-values.
-
 **Key Characteristics:**
 
 - Light only. There is no dark theme and no toggle ([ADR 17](docs/adr/0017-signal-replaces-the-theme.md)).
@@ -311,17 +305,15 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 
 ### Routes
 
-Each prototype route pairs with a real path. A slice compares the pair side by side.
-
-| Prototype (`design/signal/index.html`) | App route | Page |
-|---|---|---|
-| `#/s/<repo>#<n>` | `/s/{owner}/{name}/{n}` | Session: transcript or raw log, composer, stack panel |
-| `#/f/<feature>/graph` | `/f/{feature}/graph` | Feature graph: dependency waves |
-| `#/f/<feature>/board` | `/f/{feature}` | Feature board, grouped by attention |
-| `#/f/<feature>/launch`, `#/launch` | `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
-| `#/tickets` | `/tickets` | All tickets, filter tabs |
-| `#/insights` | `/insights` | Limits, spend per merged ticket |
-| `#/repos`, `#/repos/<owner>/<name>` | `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
+| App route | Page |
+|---|---|
+| `/s/{owner}/{name}/{n}` | Session: transcript or raw log, composer, stack panel |
+| `/f/{feature}/graph` | Feature graph: dependency waves |
+| `/f/{feature}` | Feature board, grouped by attention |
+| `/f/{feature}/launch`, `/launch` | Launch dialog, feature picker |
+| `/tickets` | All tickets, filter tabs |
+| `/insights` | Limits, spend per merged ticket |
+| `/repos`, `/repos/{owner}/{name}` | Tracked repos; repo banner, checks, tickets |
 
 ## Elevation & Depth
 
@@ -357,7 +349,7 @@ A blocked node or an empty state uses a dashed border.
 This is the signature component. It is a 14px ring with a 1.5px stroke whose fill shows
 progress, drawn by the named class family `glyph glyph-{word}` with `[data-glyph]`. Go returns the
 word through `plan.Glyph`, and the template composes the class
-([ADR 18](docs/adr/0018-glyph-replaces-tone.md)). The words are the prototype's `data-s` values.
+([ADR 18](docs/adr/0018-glyph-replaces-tone.md)). The words are `plan.Glyph`'s.
 
 | Word | Ring | Covers |
 |---|---|---|
@@ -463,7 +455,7 @@ loop: the shimmer on a running line and a 2.4s breathe on a live glyph. Everythi
   utilities only for layout and spacing.
 - **Do** pair every glyph with its state word somewhere on screen.
 - **Do** keep one primary button per screen, on the owner's next move.
-- **Do** compare every changed page against its `design/signal` route at 1440px and 390px.
+- **Do** check every changed page at 1440px and 390px.
 - **Do** keep every unblocking verb usable on a phone: 36–40px targets below 760px.
 
 ### Don't:
