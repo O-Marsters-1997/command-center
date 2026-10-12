@@ -1620,6 +1620,22 @@
   box-shadow: var(--shadow-float), var(--shadow-focus);
 }
 
+.composer-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.composer-chip {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-border-soft);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
 .btn-send {
   display: inline-grid;
   flex: none;
