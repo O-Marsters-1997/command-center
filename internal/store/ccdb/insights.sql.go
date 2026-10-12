@@ -94,7 +94,7 @@ explore_shares AS (
       ON n.launch_id = lm.launch_id
     JOIN runs r ON r.launch_id = lm.launch_id AND r.ended_at IS NOT NULL AND r.cost_usd IS NOT NULL
 )
-SELECT t.url AS ticket_id, t.title, m.merged_at,
+SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd,
@@ -106,7 +106,7 @@ LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_a
 WHERE ($1::text = '' OR t.repo = $1)
   AND ($2::text = '' OR t.feature = $2)
   AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
-GROUP BY t.url, t.title, m.merged_at
+GROUP BY t.url, t.title, t.feature, m.merged_at
 ORDER BY m.merged_at
 `
 
@@ -121,6 +121,7 @@ type MergedTicketSpendParams struct {
 type MergedTicketSpendRow struct {
 	TicketID    string
 	Title       string
+	Feature     string
 	MergedAt    time.Time
 	AgentUsd    float64
 	ResolveUsd  float64
@@ -148,6 +149,7 @@ func (q *Queries) MergedTicketSpend(ctx context.Context, arg MergedTicketSpendPa
 		if err := rows.Scan(
 			&i.TicketID,
 			&i.Title,
+			&i.Feature,
 			&i.MergedAt,
 			&i.AgentUsd,
 			&i.ResolveUsd,
