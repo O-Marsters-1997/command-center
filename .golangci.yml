@@ -26,7 +26,7 @@ linters:
     lll:
       line-length: 120
     exhaustive:
-      default-signifies-exhaustive: true
+      ignore-enum-members: \.stateCount$
     usetesting:
       context-background: true
       context-todo: true
@@ -37,6 +37,12 @@ linters:
           msg: compare fields with == and slices.Equal instead
         - pattern: ^time\.Sleep$
           msg: poll a condition with a deadline, or wait on a channel
+        - pattern: ^log\.(Print|Fatal|Panic)
+          msg: use the injected *slog.Logger, or return the error (log.* is allowed only in cmd/cc/main.go)
+        - pattern: ^time\.Now$
+          msg: take a loop.Clock and call Now on it (time.Now is allowed only in loop.RealClock)
+        - pattern: ^(\*?errors\.errorString|\*?fmt\.wrapError|error)\.Error$
+          msg: match errors with errors.Is/As, not by their text
     depguard:
       rules:
         plan-pure:
@@ -67,8 +73,30 @@ linters:
   exclusions:
     rules:
       - path-except: _test\.go
+        text: reflect\.DeepEqual|time\.Sleep|Error\b
         linters:
           - forbidigo
+      - path: _test\.go
+        text: log\.(Print|Fatal|Panic)|time\.Now
+        linters:
+          - forbidigo
+      - path: ^(cmd/cc/main\.go|internal/loop/clock\.go)$
+        linters:
+          - forbidigo
+      - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/)
+        text: log\.(Print|Fatal|Panic)|time\.Now
+        linters:
+          - forbidigo
+      - path: ^internal/(app|command|config|git)/.*_test\.go$
+        text: Error
+        linters:
+          - forbidigo
+      - path: ^internal/(agentlog/(parse|diff)|verdict/verdict|loop/checks_events|web/view/(logview|logline))\.go$
+        linters:
+          - exhaustive
+      - path: ^internal/plan/(plan|compose|draftgate)\.go$
+        linters:
+          - exhaustive
 
 formatters:
   enable:

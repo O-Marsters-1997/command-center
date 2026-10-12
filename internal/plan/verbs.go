@@ -59,6 +59,8 @@ func Verbs(s State) []string {
 		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case WaitingOnProducerDeploy:
 		return []string{VerbReRun, VerbFollowUp}
+	case PushPending, ReviewMe:
+		return nil
 	default:
 		return nil
 	}
@@ -68,6 +70,10 @@ func (s State) Unattended() bool {
 	switch s {
 	case Queued, Running, PushPending, Checking, BaseMoved:
 		return true
+	case Blocked, Ready, Failed, CutFailed, NeedsYou, PushFailed, ReviewMe, PRMerged, PRClosedUnmerged,
+		BaseGone, Cancelled, CIFailed, RefreshConflicted, ConflictsWithMain, VerificationFailed,
+		WaitingOnProducerDeploy, ConflictResolved, AwaitingInput:
+		return false
 	default:
 		return false
 	}
