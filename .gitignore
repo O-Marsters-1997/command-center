@@ -18,6 +18,5 @@ docs/prds/
 .codegraph/*
 !.codegraph/.gitignore
 
-design/*
-!design/signal/
+/design
 .od-skills

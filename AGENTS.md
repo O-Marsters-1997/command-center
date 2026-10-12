@@ -38,9 +38,8 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 
 The stack is unusual and the wrong assumption is expensive.
 
-- **The visual target is `DESIGN.md` (Signal)**, with `design/signal/index.html` as the reference
-  prototype and `PRODUCT.md` as the product record `/impeccable` reads. Compare a changed page
-  against its prototype route.
+- **The visual target is `DESIGN.md` (Signal)**, with `PRODUCT.md` as the product record
+  `/impeccable` reads. Check a changed page against `DESIGN.md` at 1440px and 390px.
 
 - **Go `html/template` renders every page** (`internal/web/*.tmpl`). No React, no app framework.
 - **htmx drives updates.** Pages are path routes (`/s/{owner}/{name}/{n}`, `/f/{feature}`, `/tickets`
