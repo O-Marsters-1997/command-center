@@ -159,26 +159,6 @@
 {{with .FeatureScope}}<li>{{.}}</li>{{end}}
 {{- end}}
 
-{{define "icon-board" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg>
-{{- end}}
-
-{{define "icon-features" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg>
-{{- end}}
-
-{{define "icon-insights" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg>
-{{- end}}
-
-{{define "icon-launch" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg>
-{{- end}}
-
-{{define "icon-keys" -}}
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4.5 7h.01M7.5 7h.01M10.5 7h.01M5 9.5h6" stroke-linecap="round"/></svg>
-{{- end}}
-
 {{define "keySheet" -}}
 <dialog id="key-sheet" class="key-sheet" aria-labelledby="key-sheet-title">
   <h2 id="key-sheet-title">Keyboard shortcuts</h2>
@@ -194,10 +174,10 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <a class="sidebar-head text-inherit no-underline" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</a>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon-board"}}<span>All tickets</span></a>
-    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon-insights"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon-features"}}<span>Repos</span></a>
-    <a class="sidebar-item" href="{{.LaunchPath}}" data-key="c" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon-launch"}}<span>Launch</span></a>
+    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
+    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span></a>
+    <a class="sidebar-item" href="{{.LaunchPath}}" data-key="c" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}<span>Launch</span></a>
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
@@ -209,7 +189,7 @@
   </details>
   <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
-  <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()">{{template "icon-keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
+  <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
   <form method="post" action="/logout">
     <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
   </form>

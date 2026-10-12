@@ -4,7 +4,7 @@
   <p>{{.Text}}</p>
   <ul class="flex flex-wrap gap-3 mt-1">
     {{range .Steps -}}
-    <li><span class="glyph glyph-{{.Glyph}}">{{.Mark}}</span> {{.Label}}</li>
+    <li><span class="glyph glyph-{{.Glyph}}">{{.Label}}</span> <span class="text-muted">{{.Glyph}}</span></li>
     {{end -}}
   </ul>
   {{if .CanTrack -}}
