@@ -24,7 +24,7 @@ stdout '>Reply</a>'
 exec cc request GET /s/sandbox-org/single-task/CC-1
 stdout 'class="line line-ask"'
 stdout 'Postgres or SQLite\.'
-stdout '>Reply</button>'
+stdout 'aria-label="Reply"'
 
 exec cc request -form 'verb=follow-up&ticket=https://github.com/sandbox-org/single-task/issues/CC-1&prompt=Postgres' POST /verb
 exec cc tick --count 1
