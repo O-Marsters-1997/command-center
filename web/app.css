@@ -42,7 +42,9 @@
   --color-s-attention: oklch(0.56 0.15 276);
   --color-s-done: oklch(0.6 0.14 155);
   --color-s-failed: oklch(0.6 0.2 27);
-  --color-s-check: oklch(0.62 0.12 200);
+  --color-s-running-soft: color-mix(in oklab, var(--color-s-running), var(--color-surface) 86%);
+  --color-s-done-soft: color-mix(in oklab, var(--color-s-done), var(--color-surface) 88%);
+  --color-s-failed-soft: color-mix(in oklab, var(--color-s-failed), var(--color-surface) 90%);
 
   --color-hue-1: oklch(0.93 0.045 200);
   --color-hue-1-ink: oklch(0.42 0.1 200);
@@ -51,23 +53,7 @@
   --color-hue-3: oklch(0.93 0.045 145);
   --color-hue-3-ink: oklch(0.42 0.1 145);
 
-  --color-bg: var(--color-surface);
-  --color-sunken: var(--color-surface-2);
-  --color-soft: var(--color-fg-2);
-  --color-track: color-mix(in oklab, var(--color-border) 70%, var(--color-surface));
-  --color-spark: var(--color-s-running);
-  --color-s-live: var(--color-s-attention);
-  --color-s-wait: var(--color-s-running);
-  --color-s-stop: var(--color-s-failed);
-  --color-s-idle: var(--color-s-queued);
-  --color-add-bg: color-mix(in oklab, var(--color-s-done), var(--color-surface) 88%);
-  --color-del-bg: color-mix(in oklab, var(--color-s-failed), var(--color-surface) 90%);
-  --color-add-mark: var(--color-s-done);
-  --color-del-mark: var(--color-s-failed);
-
-  --color-k-agent: var(--color-s-attention);
-  --color-k-resolve: var(--color-s-done);
-  --color-k-follow-up: var(--color-s-running);
+  --color-accent-hover: color-mix(in oklab, var(--color-accent), black 8%);
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -134,7 +120,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-s-live);
+    outline: 2px solid var(--color-s-attention);
     outline-offset: 1px;
   }
 
@@ -165,7 +151,7 @@
   }
 
   th {
-    background: color-mix(in oklab, var(--color-border) 40%, var(--color-bg));
+    background: color-mix(in oklab, var(--color-border) 40%, var(--color-surface));
   }
 
   button,
@@ -229,48 +215,48 @@
   .meter,
   .banner,
   .segbar-segment {
-    --glyph: var(--color-s-idle);
+    --glyph: var(--color-s-queued);
   }
 
   [data-glyph="failed"],
   .glyph-failed {
-    --glyph: var(--color-s-stop);
+    --glyph: var(--color-s-failed);
     --fill: 100%;
   }
 
   [data-glyph="attention"],
   .glyph-attention {
     --glyph: var(--color-s-attention);
-    --fill: 100%;
+    --fill: 75%;
   }
 
   [data-glyph="running"],
   .glyph-running {
-    --glyph: var(--color-s-live);
+    --glyph: var(--color-s-running);
     --fill: 50%;
   }
 
   [data-glyph="pending"],
   .glyph-pending {
-    --glyph: var(--color-s-wait);
-    --fill: 25%;
+    --glyph: var(--color-s-running);
+    --fill: 62%;
   }
 
   [data-glyph="checking"],
   .glyph-checking {
-    --glyph: var(--color-s-check);
+    --glyph: var(--color-s-running);
     --fill: 75%;
   }
 
   [data-glyph="ready"],
   .glyph-ready {
-    --glyph: var(--color-s-idle);
+    --glyph: var(--color-fg-2);
     --fill: 0%;
   }
 
   [data-glyph="blocked"],
   .glyph-blocked {
-    --glyph: var(--color-s-idle);
+    --glyph: var(--color-s-queued);
     --fill: 0%;
   }
 
@@ -281,59 +267,146 @@
   }
 
   [data-kind="agent"] {
-    --glyph: var(--color-k-agent);
+    --glyph: var(--color-s-attention);
   }
 
   [data-kind="resolve"] {
-    --glyph: var(--color-k-resolve);
+    --glyph: var(--color-s-done);
   }
 
   [data-kind="follow_up"] {
-    --glyph: var(--color-k-follow-up);
+    --glyph: var(--color-s-running);
   }
 
   .glyph {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 0.35em;
-    padding: 0.05rem 0.45rem;
-    border: 1px solid color-mix(in oklab, var(--glyph) 45%, transparent);
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--glyph) 12%, transparent);
-    color: var(--glyph);
+    gap: 6px;
+    color: var(--color-fg-2);
     white-space: nowrap;
   }
 
   .glyph::before {
     content: "";
-    display: inline-block;
     flex: none;
-    width: 0.6em;
-    height: 0.6em;
-    border: 1px solid var(--glyph);
-    border-radius: 999px;
-    background: conic-gradient(var(--glyph) var(--fill, 0%), transparent 0);
+    box-sizing: border-box;
+    width: 14px;
+    height: 14px;
+    padding: 2px;
+    border: 1.5px solid var(--glyph);
+    border-radius: 50%;
+    background: conic-gradient(var(--glyph) var(--fill, 0%), transparent 0) content-box;
   }
 
-  .glyph-blocked::before {
+  .glyph.glyph-blocked::before,
+  .glyph[data-glyph="blocked"]::before {
     border-style: dashed;
   }
 
-  .glyph:empty {
+  .glyph.glyph-done::before,
+  .glyph[data-glyph="done"]::before,
+  .glyph.glyph-failed::before,
+  .glyph[data-glyph="failed"]::before {
     padding: 0;
-    border: 0;
-    background: none;
+    background: var(--glyph);
+  }
+
+  .glyph.glyph-done::after,
+  .glyph[data-glyph="done"]::after {
+    content: "";
+    position: absolute;
+    left: 4.7px;
+    top: 50%;
+    width: 3.4px;
+    height: 6px;
+    border: solid var(--color-surface);
+    border-width: 0 1.5px 1.5px 0;
+    translate: 0 calc(-50% - 0.9px);
+    rotate: 42deg;
+  }
+
+  .glyph.glyph-failed::after,
+  .glyph[data-glyph="failed"]::after {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    width: 6px;
+    height: 1.6px;
+    translate: -50% -50%;
+    border-radius: 1px;
+    background: var(--color-surface);
   }
 
   .glyph-pulse::before {
-    animation: glyph-pulse 1.6s ease-in-out infinite;
+    animation: glyph-pulse 2.4s ease-in-out infinite;
   }
 
   @keyframes glyph-pulse {
     50% {
-      opacity: 0.25;
-      transform: scale(0.7);
+      opacity: 0.45;
     }
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 8px 0 5px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    color: var(--color-fg-2);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+  }
+
+  .badge .glyph {
+    color: inherit;
+  }
+
+  .badge .glyph::before {
+    width: 12px;
+    height: 12px;
+    padding: 1.5px;
+  }
+
+  .badge .glyph.glyph-done::before,
+  .badge .glyph.glyph-failed::before {
+    padding: 0;
+  }
+
+  .badge .glyph.glyph-done::after {
+    left: 3.8px;
+  }
+
+  .badge .glyph.glyph-failed::after {
+    left: 6px;
+    width: 5px;
+  }
+
+  .badge[data-glyph="attention"] {
+    background: var(--color-accent-soft);
+    color: color-mix(in oklab, var(--color-accent), black 10%);
+  }
+
+  .badge[data-glyph="failed"] {
+    background: var(--color-s-failed-soft);
+    color: color-mix(in oklab, var(--color-s-failed), black 15%);
+  }
+
+  .badge[data-glyph="done"] {
+    background: var(--color-s-done-soft);
+    color: color-mix(in oklab, var(--color-s-done), black 30%);
+  }
+
+  .badge[data-glyph="running"],
+  .badge[data-glyph="pending"],
+  .badge[data-glyph="checking"] {
+    background: var(--color-s-running-soft);
+    color: color-mix(in oklab, var(--color-s-running), black 50%);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -354,8 +427,8 @@
   }
 
   .flag-warning {
-    border-color: color-mix(in oklab, var(--color-s-stop) 45%, transparent);
-    color: var(--color-s-stop);
+    border-color: color-mix(in oklab, var(--color-s-failed) 45%, transparent);
+    color: var(--color-s-failed);
   }
 
   .ribbon {
@@ -368,7 +441,7 @@
     width: 6rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--color-border) 70%, var(--color-bg));
+    background: color-mix(in oklab, var(--color-border) 70%, var(--color-surface));
   }
 
   .meter-fill {
@@ -392,8 +465,8 @@
   }
 
   .chart-unsettled {
-    fill: var(--color-s-wait);
-    background: var(--color-s-wait);
+    fill: var(--color-s-running);
+    background: var(--color-s-running);
   }
 
   .chart-legend {
@@ -415,8 +488,8 @@
   }
 
   .chart-series-0 {
-    stroke: var(--color-s-live);
-    background: var(--color-s-live);
+    stroke: var(--color-s-attention);
+    background: var(--color-s-attention);
   }
 
   .chart-series-1 {
@@ -425,23 +498,23 @@
   }
 
   .chart-series-2 {
-    stroke: var(--color-s-wait);
-    background: var(--color-s-wait);
+    stroke: var(--color-s-running);
+    background: var(--color-s-running);
   }
 
   .chart-series-3 {
-    stroke: var(--color-s-stop);
-    background: var(--color-s-stop);
+    stroke: var(--color-s-failed);
+    background: var(--color-s-failed);
   }
 
   .chart-series-4 {
-    stroke: var(--color-s-idle);
-    background: var(--color-s-idle);
+    stroke: var(--color-s-queued);
+    background: var(--color-s-queued);
   }
 
   .chart-dot {
-    fill: var(--color-s-live);
-    background: var(--color-s-live);
+    fill: var(--color-s-attention);
+    background: var(--color-s-attention);
   }
 
   .line {
@@ -465,7 +538,7 @@
   .line-fail,
   .line-pass,
   .line-say {
-    --glyph: var(--color-s-idle);
+    --glyph: var(--color-s-queued);
   }
 
   .line-ask {
@@ -474,7 +547,7 @@
   }
 
   .line-you {
-    --glyph: var(--color-s-live);
+    --glyph: var(--color-s-attention);
     margin: 0 0 1.25rem;
     padding-left: 0.75rem;
     border-left: 2px solid var(--glyph);
@@ -537,7 +610,7 @@
   }
 
   .worked-spark {
-    color: var(--color-spark);
+    color: var(--color-s-running);
   }
 
   .worked-stats {
@@ -613,7 +686,7 @@
   }
 
   .fold-fail {
-    color: var(--color-s-stop);
+    color: var(--color-s-failed);
   }
 
   .fold-body {
@@ -636,7 +709,7 @@
   .call-verb {
     flex: none;
     font-weight: 500;
-    color: var(--color-soft);
+    color: var(--color-fg-2);
   }
 
   .call-arg {
@@ -663,9 +736,9 @@
     margin: 0.4rem 0 0.2rem;
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
-    background: var(--color-sunken);
+    background: var(--color-surface-2);
     font-size: 12.5px;
-    color: var(--color-soft);
+    color: var(--color-fg-2);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -675,7 +748,7 @@
     overflow: hidden;
     border: 1px solid var(--color-border);
     border-radius: 9px;
-    background: var(--color-bg);
+    background: var(--color-surface);
     font-family: var(--font-mono);
     font-size: 12.5px;
     line-height: 1.7;
@@ -688,21 +761,21 @@
   }
 
   .diff-add {
-    background: var(--color-add-bg);
-    box-shadow: inset 2px 0 var(--color-add-mark);
+    background: var(--color-s-done-soft);
+    box-shadow: inset 2px 0 var(--color-s-done);
   }
 
   .diff-del {
-    background: var(--color-del-bg);
-    box-shadow: inset 2px 0 var(--color-del-mark);
+    background: var(--color-s-failed-soft);
+    box-shadow: inset 2px 0 var(--color-s-failed);
   }
 
   .diff-plus {
-    color: var(--color-add-mark);
+    color: var(--color-s-done);
   }
 
   .diff-minus {
-    color: var(--color-del-mark);
+    color: var(--color-s-failed);
   }
 
   .run-final {
@@ -841,9 +914,12 @@
 
   .rail-link .glyph {
     flex: none;
-    padding: 0;
-    border: 0;
-    background: none;
+  }
+
+  .rail-state {
+    flex: none;
+    color: var(--color-meta);
+    font-size: var(--text-2xs);
   }
 
   .rail-ref {
@@ -1133,7 +1209,7 @@
   padding: 0.6rem 0.9rem;
   border: 1px solid var(--color-border);
   border-radius: 0.9rem 0.9rem 0.2rem 0.9rem;
-  background: var(--color-sunken);
+  background: var(--color-surface-2);
 }
 
 .prompt-text,
@@ -1230,7 +1306,7 @@
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   background: var(--color-fg);
-  color: var(--color-bg);
+  color: var(--color-surface);
   box-shadow: var(--shadow-overlay);
   animation: toast-out 4s forwards;
 }
