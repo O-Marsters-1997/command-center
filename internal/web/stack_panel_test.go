@@ -71,7 +71,11 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 		t.Fatal(err)
 	}
 	body := renderPath(t, server, "/s/acme/web/3")
-	panel := body[strings.Index(body, "Blocked by"):strings.Index(body, "Merging this unlocks")]
+	_, afterBlockedBy, ok := strings.Cut(body, `<h2 class="stack-title">Blocked by</h2>`)
+	if !ok {
+		t.Fatalf("no Blocked by heading:\n%s", body)
+	}
+	panel, _, _ := strings.Cut(afterBlockedBy, "Merging this unlocks")
 	if !strings.Contains(panel, `href="/s/acme/web/1"`) || strings.Contains(panel, `href="/s/acme/web/2"`) {
 		t.Errorf("panel does not reflect the edit:\n%s", panel)
 	}

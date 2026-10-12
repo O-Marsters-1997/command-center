@@ -72,7 +72,7 @@
       <a class="btn" href="{{$.Stack.GraphPath}}">Graph</a>
       <a class="btn" href="{{$.Stack.BoardPath}}">Board</a>
     </div>
-    <ul class="stack-list">{{range $.Stack.Members}}<li>{{template "stackLink" .}}{{with .Title}} <span class="text-muted">{{.}}</span>{{end}}</li>{{end}}</ul>
+    <ul class="stack-list">{{range $.Stack.Members}}<li{{if eq .Path $.TranscriptPath}} aria-current="page"{{end}}>{{template "stackLink" .}}{{with .Title}} <span class="text-muted">{{.}}</span>{{end}}</li>{{end}}</ul>
     {{- end}}
     <h2 class="stack-title">Blocked by</h2>
     {{- if .Stack.Blockers}}
