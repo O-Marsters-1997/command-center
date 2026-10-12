@@ -39,3 +39,12 @@ UPDATE launches SET state = 'cancelled' WHERE id IN (
 
 -- name: LaunchMemberTickets :many
 SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id;
+
+-- name: FeatureFirstLaunch :one
+SELECT l.created_at
+FROM launches l
+JOIN launch_members lm ON lm.launch_id = l.id
+JOIN tickets t ON t.url = lm.ticket_id
+WHERE t.feature = $1 AND l.state <> 'cancelled'
+ORDER BY l.created_at
+LIMIT 1;
