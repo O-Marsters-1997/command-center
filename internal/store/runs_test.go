@@ -137,7 +137,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 	}
 }
 
-func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
+func TestRecordDispositionWritesCostAlongsideOutcome(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -169,7 +169,7 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 	}
 }
 
-func TestRecordDispositionLeavesMetricsNullWithoutAParse(t *testing.T) {
+func TestRecordDispositionLeavesCostNullWithoutAParse(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
