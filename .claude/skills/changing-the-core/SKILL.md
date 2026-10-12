@@ -31,7 +31,7 @@ where.
 Steps are plain `func() error` literals in `absorb` and `act`, run in order by `runSteps`. No
 slice, no dispatch table. Order is meaning: a spawning verb runs before retarget, retarget before
 refresh, and launch last so `Snapshot.LaunchAfter(spawned)` shares `max_agents` with verb spawns.
-A new step goes where its inputs are already true and its effects are not needed earlier.
+`launchReviews` also spawns, after refresh. A new step goes where its inputs are already true and its effects are not needed earlier.
 
 ## New verb
 
@@ -44,11 +44,12 @@ Miss one and the verb queues, then does nothing.
 4. `apply<X>Intents` in `internal/loop`, built on `eachIntent` and looking the ticket up with
    `snap.Entry(intent.TicketID)`. `l.ticket` reads the whole tickets table per call; use it only
    where the handler needs a `store.Ticket` that `plan.Ticket` lacks.
-5. Its position in `act()`. If it spawns, it runs before launch and goes through `spawnRun`, which records it in `l.spawned`.
+5. Its position in `act()`. If it spawns, it runs before launch and goes through `spawnRun`,
+   which records it in `l.spawned`.
 6. If it carries a payload, the branch in `handleVerb` (`VerbFollowUp` is the model: validate,
    then `QueueVerbIntentWithPayload`) and the loop handler reading `intent.Payload`.
-7. The button: `board.tmpl` and `session.tmpl` range over `.Verbs`, so a plain verb needs no
-   template edit; one with a payload or a confirm needs its form there.
+7. The button: `board.tmpl` ranges over `.Verbs` and `session.tmpl` over `.ActionVerbs`, so a
+   plain verb needs no template edit; one with a payload or a confirm needs its form there.
 8. Tests:
    - a `verbs_test.go` table row per state that offers it;
    - a loop test that ticks **twice** and asserts the second tick does nothing: intents are
@@ -69,7 +70,7 @@ Miss one and the verb queues, then does nothing.
    its fact should win, and add a `status_test.go` case proving it beats the states below it
    and loses to those above.
 4. `Verbs(state)`, and the `verbs_test.go` row.
-5. `Unattended()` names every state in an explicit case list, no reliance on `default`;
+5. `Unattended()` lists every state in an explicit case, not only in `default`;
    `TestUnattendedNamesEveryState` fails otherwise, and `exhaustive` lints the switch.
 6. `Glyph(state)`: one of the eight glyph words. The `default` is `GlyphFailed`, so a state
    left out looks like a failure.
