@@ -131,7 +131,11 @@
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
-    <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+    <div class="composer-bar">
+      <span class="composer-chip" title="Model for this run">{{.Model}}</span>
+      {{- with .Row.Worktree}}<span class="composer-chip" title="{{.}}" aria-label="Worktree {{.}}">worktree</span>{{end}}
+      <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+    </div>
   </form>
   {{- end}}
 </div>{{end}}
