@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 const goldenFeaturePage = "testdata/feature_page.golden.html"
@@ -56,5 +57,35 @@ func TestFeaturePageUnknownFeatureIs404(t *testing.T) {
 	rec := get(t, threeFeatureServer(t), "/f/bogus")
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus: status = %d, want 404", rec.Code)
+	}
+}
+
+func TestFeaturePageHeaderNamesLaunchTicketsAndWaves(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := threeFeatureStore(t)
+	launchedAt := testNow.Add(-2 * time.Hour)
+	if err := store.QueueLaunchIntent(ctx, "sandbox://ROOT", "hash-1", "group-a", launchedAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApplyLaunchIntents(ctx, launchedAt); err != nil {
+		t.Fatal(err)
+	}
+	server := newServer(store, testNow)
+
+	launched := renderPath(t, server, "/f/board-scope")
+	stamp := launchedAt.UTC().Format(time.RFC3339)
+	want := `launched <time datetime="` + stamp + `">2h0m0s ago</time> · 2 tickets in 2 waves`
+	if !strings.Contains(launched, want) {
+		t.Errorf("launched feature header missing %q:\n%s", want, launched)
+	}
+
+	unlaunched := renderPath(t, server, "/f/sqlc-migration")
+	if strings.Contains(unlaunched, "launched") {
+		t.Errorf("a feature no launch holds should not read launched:\n%s", unlaunched)
+	}
+	if want := "1 ticket in 1 wave"; !strings.Contains(unlaunched, want) {
+		t.Errorf("unlaunched feature header missing %q:\n%s", want, unlaunched)
 	}
 }

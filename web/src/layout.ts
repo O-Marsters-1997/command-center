@@ -123,3 +123,9 @@ export function traceChain<T extends { url: string }>(url: string, edges: Edge<T
   }
   return traced;
 }
+
+export function sessionPath(ticketURL: string): string {
+  const parts = ticketURL.replace(/\/$/, "").split("/");
+  if (parts.length < 5 || parts[parts.length - 2] !== "issues") return "";
+  return `/s/${parts[parts.length - 4]}/${parts[parts.length - 3]}/${parts[parts.length - 1]}`;
+}

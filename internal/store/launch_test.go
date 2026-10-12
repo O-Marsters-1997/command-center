@@ -311,3 +311,39 @@ func launchMemberHashes(t *testing.T, dsn string) map[string]string {
 	}
 	return hashes
 }
+
+func TestFeatureFirstLaunchIsTheEarliestLaunchOfTheFeature(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStoreAt(t, cctest.DSN(t))
+	tickets := []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Feature: "f"},
+		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Feature: "f"},
+		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", Feature: "g"},
+	}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatalf("UpsertTickets: %v", err)
+	}
+	first := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	later := first.Add(time.Hour)
+	for _, launch := range []struct {
+		ticket string
+		at     time.Time
+	}{{"sandbox://CC-2", later}, {"sandbox://CC-1", first}} {
+		if err := store.QueueLaunchIntent(ctx, launch.ticket, "hash", launch.ticket, launch.at); err != nil {
+			t.Fatalf("QueueLaunchIntent %s: %v", launch.ticket, err)
+		}
+		if err := store.ApplyLaunchIntents(ctx, launch.at); err != nil {
+			t.Fatalf("ApplyLaunchIntents: %v", err)
+		}
+	}
+
+	got, ok, err := store.FeatureFirstLaunch(ctx, "f")
+	if err != nil || !ok || !got.Equal(first) {
+		t.Errorf("FeatureFirstLaunch(f) = %v, %v, %v; want %v, true, nil", got, ok, err, first)
+	}
+	if _, ok, err := store.FeatureFirstLaunch(ctx, "g"); err != nil || ok {
+		t.Errorf("FeatureFirstLaunch(g) ok = %v, err = %v; want false, nil", ok, err)
+	}
+}

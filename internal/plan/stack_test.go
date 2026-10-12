@@ -67,3 +67,34 @@ func TestStackDepth(t *testing.T) {
 		})
 	}
 }
+
+func TestWaveCount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		blocking map[string][]string
+		want     int
+	}{
+		{name: "no tickets", blocking: map[string][]string{}, want: 0},
+		{name: "independent tickets share one wave", blocking: map[string][]string{"a": nil, "b": nil}, want: 1},
+		{
+			name:     "a chain is one wave per link",
+			blocking: map[string][]string{"a": nil, "b": {"a"}, "c": {"b"}},
+			want:     3,
+		},
+		{
+			name:     "a blocker outside the set is ignored",
+			blocking: map[string][]string{"a": {"elsewhere"}},
+			want:     1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := plan.WaveCount(tt.blocking); got != tt.want {
+				t.Errorf("WaveCount(%v) = %d, want %d", tt.blocking, got, tt.want)
+			}
+		})
+	}
+}

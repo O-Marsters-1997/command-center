@@ -3,7 +3,7 @@
 {{define "featureHead" -}}
 <header class="feature-head">
   <h1>{{.FeatureScope}}</h1>
-  <p>{{with .ProjectScope}}{{.}} · {{end}}<kbd>V</kbd> switches view</p>
+  <p>{{with .ProjectScope}}{{.}} · {{end}}{{with .Launched}}launched {{template "age" .}} · {{end}}{{.TicketCount}} {{if eq .TicketCount 1}}ticket{{else}}tickets{{end}} in {{.WaveCount}} {{if eq .WaveCount 1}}wave{{else}}waves{{end}} · <kbd>V</kbd> switches view</p>
   <div class="feature-stats">
     <span class="segbar">
       {{- range .Sections}}<span class="segbar-segment" data-glyph="{{template "sectionGlyph" .Key}}" style="flex-grow: {{len .Rows}}"></span>{{end -}}
