@@ -39,10 +39,13 @@ migrate-reset:
     just migrate-up
 
 test:
-    go test ./...
+    go test -shuffle=on ./...
+    cd web && bun install --frozen-lockfile && bun test
 
 test-e2e:
     go test -tags=e2e ./e2e/...
+
+golangci_version := trim(read(".golangci-version"))
 
 lint:
     docker run --rm \
@@ -50,7 +53,7 @@ lint:
         -v command-center-golangci-lint-cache:/root/.cache \
         -v command-center-go-mod-cache:/root/go/pkg/mod \
         -w /app \
-        golangci/golangci-lint:latest \
+        golangci/golangci-lint:{{golangci_version}} \
         golangci-lint run ./...
 
 fmt:
