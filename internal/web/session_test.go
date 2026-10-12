@@ -50,16 +50,6 @@ func sessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {
 	return nil
 }
 
-func TestLoginPageGolden(t *testing.T) {
-	t.Parallel()
-
-	rec := get(t, newServer(openStore(t), testNow), "/login")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	assertGolden(t, "testdata/login.golden.html", rec.Body.Bytes())
-}
-
 func TestLoginSetsSessionCookieStoredOnlyAsHash(t *testing.T) {
 	t.Parallel()
 

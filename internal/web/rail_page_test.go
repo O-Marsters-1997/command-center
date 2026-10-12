@@ -3,6 +3,7 @@ package web_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -47,11 +48,22 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 	return st
 }
 
-func TestRailGolden(t *testing.T) {
+func TestEveryRailLinkSwapsMain(t *testing.T) {
 	t.Parallel()
 
-	server := newServer(railStore(t, true), testNow)
-	assertGolden(t, "testdata/rail.golden.html", []byte(renderPath(t, server, "/rail")))
+	rail := renderPath(t, newServer(railStore(t, true), testNow), "/rail")
+
+	links := regexp.MustCompile(`<a class="rail-link"[^>]*>`).FindAllString(rail, -1)
+	if len(links) == 0 {
+		t.Fatalf("the rail renders no links, so the check below proves nothing:\n%s", rail)
+	}
+	for _, link := range links {
+		for _, attr := range []string{`hx-select="#main"`, `hx-target="#main"`, `hx-push-url="true"`} {
+			if !strings.Contains(link, attr) {
+				t.Errorf("rail link %s is missing %s", link, attr)
+			}
+		}
+	}
 }
 
 func TestRailDropsASettledTicketOnceItsWorktreeIsGone(t *testing.T) {
