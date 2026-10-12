@@ -55,6 +55,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 				row.Now++
 			case plan.OnUnlock:
 				row.OnUnlock++
+			case plan.Refused:
 			}
 		}
 		if row.Now+row.OnUnlock > 0 {
