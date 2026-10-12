@@ -160,6 +160,15 @@
   <a class="pill-tab" href="/f/board-scope" aria-current="page">Board</a>
   <a class="pill-tab" href="/f/board-scope/graph" data-key="v">Graph</a>
 </nav>
+<header class="feature-head">
+  <h1>board-scope</h1>
+  <p><kbd>V</kbd> switches view</p>
+  <div class="feature-stats">
+    <span class="segbar"><span class="segbar-segment" data-glyph="ready" style="flex-grow: 1"></span><span class="segbar-segment" data-glyph="blocked" style="flex-grow: 1"></span></span>
+    <span class="glyph glyph-ready">1 ready</span>
+    <span class="glyph glyph-blocked">1 blocked</span>
+  </div>
+</header>
 
 <form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 <table id="board" hx-get="/board?feature=board-scope" hx-trigger="every 5s" hx-swap="outerHTML">
@@ -169,7 +178,7 @@
   </tr>
   
   <tbody data-section="ready" aria-labelledby="section-ready">
-    <tr class="section-head"><th id="section-ready" colspan="10">Ready <span class="section-count">1</span></th></tr>
+    <tr class="section-head"><th id="section-ready" colspan="10">Ready to launch <span class="section-count">1</span></th></tr>
     
   <tr class="group">
     <td>
