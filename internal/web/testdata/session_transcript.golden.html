@@ -135,7 +135,7 @@
     <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
     
   </dl>
-  <form method="dialog"><button class="key-close">Close</button></form>
+  <form method="dialog"><button class="btn key-close">Close</button></form>
 </dialog>
 </aside>
 <div class="pane">
@@ -168,9 +168,9 @@
   </header>
   <section class="prompt-bubble" aria-label="prompt"><pre class="prompt-text">opening prompt</pre>
   </section>
-  <nav class="session-tabs" aria-label="log view">
-    <a href="/s/acme/web/1" hx-get="/s/acme/web/1" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Transcript</a>
-    <a href="/s/acme/web/1?log=raw" hx-get="/s/acme/web/1?log=raw" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Raw log</a>
+  <nav class="pill-tabs" aria-label="log view">
+    <a class="pill-tab" href="/s/acme/web/1" hx-get="/s/acme/web/1" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Transcript</a>
+    <a class="pill-tab" href="/s/acme/web/1?log=raw" hx-get="/s/acme/web/1?log=raw" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Raw log</a>
   </nav>
   <div class="run-thread">
     <div class="run-work">
@@ -218,11 +218,11 @@
         <legend class="stack-title">Edit blockers</legend>
         <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
       </fieldset>
-      <button type="submit" class="button">save</button>
+      <button type="submit" class="btn">save</button>
     </form>
   </aside>
   <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  <div class="verbs"><a class="verb" href="/s/acme/web/1?log=raw">Open log</a>
+  <div class="verbs"><a class="btn" href="/s/acme/web/1?log=raw">Open log</a>
   </div>
 </div>
 </article>

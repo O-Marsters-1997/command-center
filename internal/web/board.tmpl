@@ -79,7 +79,7 @@
       {{- else}}
       <form method="post" action="/verb" hx-post="{{or $row.VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML"{{with confirmation . $row.Row}} hx-confirm="{{.}}"{{end}}>
         <input type="hidden" name="ticket" value="{{$row.URL}}">
-        <button type="submit" name="verb" value="{{.}}">
+        <button type="submit" class="btn btn-sm" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
         </button>
       </form>
@@ -95,5 +95,5 @@
      instead would nest the per-row verb forms inside it, which HTML forbids. -->
 <form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 {{template "board" .}}
-<button type="submit" form="launch">launch selected</button>
+<button type="submit" form="launch" class="btn">Launch selected</button>
 {{- end}}

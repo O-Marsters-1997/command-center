@@ -1,7 +1,7 @@
 {{template "shellStart" .}}
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
-<a class="button" href="/f/{{.FeatureScope | pathEscape}}/launch" data-key="c" hx-get="/f/{{.FeatureScope | pathEscape}}/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Launch</a>
+<a class="btn btn-primary" href="/f/{{.FeatureScope | pathEscape}}/launch" data-key="c" hx-get="/f/{{.FeatureScope | pathEscape}}/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Launch</a>
 {{template "shellContent" .}}
 <nav class="pill-tabs" aria-label="feature views">
   <a class="pill-tab" href="/f/{{.FeatureScope | pathEscape}}" data-key="v">Board</a>

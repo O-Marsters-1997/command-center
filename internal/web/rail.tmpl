@@ -13,7 +13,7 @@
 <form method="post" action="/verb" hx-post="/verb" hx-include="#rail-search" hx-target="#rail-body" hx-swap="outerHTML">
   <input type="hidden" name="ticket" value="{{.URL}}">
   <input type="hidden" name="from" value="rail">
-  <button class="rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
+  <button class="btn btn-sm rail-verb" type="submit" name="verb" value="{{.Verb}}">{{.Verb}}</button>
 </form>
 {{end}}
 

@@ -170,10 +170,10 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
             <Section title="On unlock" rows={sections().onUnlock} />
             <Section title="Refused" rows={sections().refused} />
             <div class="launch-actions">
-              <a class="button" href={cancelHref(props.feature)}>
+              <a class="btn" href={cancelHref(props.feature)}>
                 Cancel
               </a>
-              <button type="submit" class="button launch-confirm" disabled={tickedCandidates().length === 0}>
+              <button type="submit" class="btn btn-primary" disabled={tickedCandidates().length === 0}>
                 Confirm launch
               </button>
             </div>

@@ -30,7 +30,7 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"`,
 		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"`,
-		`<button type="submit" form="launch">launch selected</button>`,
+		`<button type="submit" form="launch" class="btn">Launch selected</button>`,
 	}
 	for _, want := range wants {
 		if !strings.Contains(body, want) {
