@@ -216,6 +216,12 @@
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
+    <h2 class="stack-title stack-feature">checkout<span class="text-muted stack-progress">0/1 merged</span></h2>
+    <div class="stack-links">
+      <a class="btn" href="/f/checkout/graph">Graph</a>
+      <a class="btn" href="/f/checkout">Board</a>
+    </div>
+    <ul class="stack-list"><li><span class="glyph glyph-pending" data-glyph="pending" aria-hidden="true"></span><a href="/s/acme/web/1">#1</a> <span class="text-muted">push_pending</span></li></ul>
     <h2 class="stack-title">Blocked by</h2><p class="text-muted">Nothing blocks this ticket.</p>
     <h2 class="stack-title">Merging this unlocks</h2><p class="text-muted">Nothing waits on this ticket.</p>
     <form method="post" action="/ticket" class="stack-form">
@@ -228,6 +234,13 @@
       </fieldset>
       <button type="submit" class="btn">save</button>
     </form>
+    <dl class="stack-props">
+      <dt>Repo</dt><dd>acme/web</dd>
+      <dt>Branch</dt><dd class="mono">cc-1</dd>
+      <dt>PR</dt><dd>—</dd>
+      <dt>Checks</dt><dd>—</dd>
+      <dt>Spend</dt><dd class="mono">—</dd>
+    </dl>
   </aside>
 </article>
 </div>
