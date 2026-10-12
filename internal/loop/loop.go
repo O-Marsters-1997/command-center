@@ -84,10 +84,20 @@ func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIn
 		return err
 	}
 	for _, intent := range intents {
-		if err := fn(intent); errors.Is(err, errIntentPending) {
+		handlerErr := fn(intent)
+		if errors.Is(handlerErr, errIntentPending) {
 			continue
-		} else if err != nil {
-			return err
+		}
+		if handlerErr != nil {
+			detail := fmt.Sprintf("%s: %v", verb, handlerErr)
+			ticketURL := intent.TicketID
+			if verb == store.ImportVerb || verb == store.TrackVerb {
+				ticketURL = ""
+				detail = fmt.Sprintf("%s %s: %v", verb, intent.TicketID, handlerErr)
+			}
+			if err := l.event(ctx, ticketURL, eventIntentFailed, detail); err != nil {
+				return err
+			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
 			return err

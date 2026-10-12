@@ -19,6 +19,7 @@ const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays
 const (
 	eventWorktreeRemoved  = "worktree_removed"
 	eventLaunchCancelled  = "launch_cancelled"
+	eventIntentFailed     = "intent_failed"
 	eventMergeAborted     = "merge_aborted"
 	eventMergeAbortFailed = "merge_abort_failed"
 	eventResolveRefused   = "resolve_refused"
