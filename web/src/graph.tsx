@@ -170,15 +170,15 @@ customElement("cc-graph", {}, () => {
                     "border-s-attention": isLit(),
                   }}
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
-                  href={href()}
-                  hx-get={href()}
+                  href={href() || undefined}
+                  hx-get={href() || undefined}
                   hx-select="#main"
                   hx-target="#main"
                   hx-swap="outerHTML"
                   hx-push-url="true"
                   ref={(el) => {
                     nodeRefs.set(node.url, el);
-                    window.htmx?.process(el);
+                    queueMicrotask(() => window.htmx?.process(el));
                   }}
                   onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
                   onPointerLeave={() => setHovered(null)}
