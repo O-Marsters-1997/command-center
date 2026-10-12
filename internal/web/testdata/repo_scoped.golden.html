@@ -137,7 +137,7 @@
     <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
     
   </dl>
-  <form method="dialog"><button class="key-close">Close</button></form>
+  <form method="dialog"><button class="btn">Close</button></form>
 </dialog>
 </aside>
 <div class="pane">
@@ -183,7 +183,7 @@
     <td>
       <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
         <input type="hidden" name="feature" value="project:x">
-        <button type="submit">[ launch ]</button>
+        <button type="submit" class="btn btn-sm">Launch</button>
       </form>
       
     </td>
@@ -200,7 +200,7 @@
   </tr>
   
 </table>
-<button type="submit" form="launch">launch selected</button>
+<button type="submit" form="launch" class="btn">Launch selected</button>
 
 <div id="launch-modal"></div>
 </div>

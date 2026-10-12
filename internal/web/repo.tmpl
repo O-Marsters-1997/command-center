@@ -19,11 +19,11 @@
     <td>
       <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
         <input type="hidden" name="feature" value="{{.Feature}}">
-        <button type="submit">[ launch ]</button>
+        <button type="submit" class="btn btn-sm">Launch</button>
       </form>
       {{if .Imported}}
       <form method="post" action="/features/{{.Feature | pathEscape}}/import">
-        <button type="submit">[ reimport ]</button>
+        <button type="submit" class="btn btn-sm">Reimport</button>
       </form>
       {{end}}
     </td>

@@ -30,17 +30,17 @@
       <form method="post" action="/projects/{{.Scope.Value}}" hx-post="/projects/{{.Scope.Value}}"
         hx-target="#repo-results" hx-swap="innerHTML" class="flex items-center gap-2">
         <input type="text" name="name" required maxlength="40" value="{{.Scope.Value}}"
-          autocomplete="off" aria-label="project name" class="border border-border rounded px-2 py-1">
+          autocomplete="off" aria-label="project name">
         {{range .Hues}}
         <label class="flex items-center gap-1"><input type="radio" name="hue" value="{{.}}"{{if eq . $g.Scope.Hue}} checked{{end}}>
           <span class="avatar" data-hue="{{.}}" aria-label="hue {{.}}">{{$g.Scope.Initial}}</span></label>
         {{end}}
-        <button type="submit" class="border border-border rounded px-3 py-1">Save</button>
+        <button type="submit" class="btn btn-sm">Save</button>
       </form>
     </details>
     <form method="post" action="/projects/{{.Scope.Value}}/delete" hx-post="/projects/{{.Scope.Value}}/delete"
       hx-target="#repo-results" hx-swap="innerHTML" hx-confirm="Delete project {{.Scope.Value}}? Its repos stay tracked and become loose.">
-      <button type="submit" class="border border-border rounded px-3 py-1 text-base font-normal">Delete</button>
+      <button type="submit" class="btn btn-sm btn-danger">Delete</button>
     </form>
   </h2>
   {{- end}}
@@ -75,7 +75,7 @@
   <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
     hx-on::after-request="if (event.detail.successful) this.reset()" class="flex flex-col gap-2 mt-2">
     <input type="text" name="name" required maxlength="40" placeholder="project name"
-      autocomplete="off" aria-label="project name" class="border border-border rounded px-3 py-2">
+      autocomplete="off" aria-label="project name">
     <fieldset class="flex items-center gap-3">
       <legend class="text-muted">hue</legend>
       {{range .Hues}}
@@ -89,7 +89,7 @@
       <label class="flex items-center gap-2"><input type="checkbox" name="repo" value="{{.}}"> {{.}}</label>
       {{end}}
     </fieldset>
-    <button type="submit" class="self-start border border-border rounded px-3 py-1">Create project</button>
+    <button type="submit" class="btn btn-primary self-start">Create project</button>
   </form>
 </details>
 {{- end}}

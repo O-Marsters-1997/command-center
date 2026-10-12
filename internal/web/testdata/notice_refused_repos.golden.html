@@ -145,7 +145,7 @@
     <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
     
   </dl>
-  <form method="dialog"><button class="key-close">Close</button></form>
+  <form method="dialog"><button class="btn">Close</button></form>
 </dialog>
 </aside>
 <div class="pane">
@@ -180,7 +180,7 @@
   <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
     hx-on::after-request="if (event.detail.successful) this.reset()" class="flex flex-col gap-2 mt-2">
     <input type="text" name="name" required maxlength="40" placeholder="project name"
-      autocomplete="off" aria-label="project name" class="border border-border rounded px-3 py-2">
+      autocomplete="off" aria-label="project name">
     <fieldset class="flex items-center gap-3">
       <legend class="text-muted">hue</legend>
       
@@ -202,7 +202,7 @@
       <label class="flex items-center gap-2"><input type="checkbox" name="repo" value="acme/beta"> acme/beta</label>
       
     </fieldset>
-    <button type="submit" class="self-start border border-border rounded px-3 py-1">Create project</button>
+    <button type="submit" class="btn btn-primary self-start">Create project</button>
   </form>
 </details>
 <div id="repo-results">

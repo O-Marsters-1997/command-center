@@ -564,7 +564,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 
 	body := rec.Body.String()
 	wants := []string{"running", "1m30s",
-		`<button type="submit" name="verb" value="kill">kill</button>`}
+		`<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`}
 	for _, want := range wants {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
@@ -675,7 +675,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	if got := rowState(t, page, ticket.URL); got != "running · kill queued" {
 		t.Errorf("state = %q, want %q", got, "running · kill queued")
 	}
-	const killButton = `<button type="submit" name="verb" value="kill">kill</button>`
+	const killButton = `<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`
 	if !strings.Contains(page, killButton) {
 		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
 	}

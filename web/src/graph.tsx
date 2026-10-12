@@ -124,7 +124,7 @@ customElement("cc-graph", {}, () => {
     <div>
       <div class="mb-[0.4rem] flex items-center gap-[0.6rem] text-[0.85em] text-muted">
         <span>{selected().size} selected</span>
-        <button type="button" class="ml-auto" disabled={selected().size === 0} onClick={submit}>
+        <button type="button" class="btn ml-auto" disabled={selected().size === 0} onClick={submit}>
           launch selected
         </button>
       </div>
