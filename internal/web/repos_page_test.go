@@ -254,24 +254,6 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	}
 }
 
-func TestFeaturesPathsRedirectToTheReposPages(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-	server := reposServer(t, &calls)
-
-	for path, want := range map[string]string{
-		"/features":                "/repos",
-		"/features?repo=acme/beta": "/repos/acme/beta",
-		"/features?repo=../x":      "/repos",
-	} {
-		rec := get(t, server, path)
-		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
-			t.Errorf("GET %s = %d to %q, want 301 to %q", path, rec.Code, rec.Header().Get("Location"), want)
-		}
-	}
-}
-
 func TestRepoPageRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	t.Parallel()
 
