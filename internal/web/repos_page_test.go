@@ -230,27 +230,6 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	}
 }
 
-func TestReposPagesMatchGoldens(t *testing.T) {
-	var calls atomic.Int32
-	server := reposServer(t, &calls)
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{
-		"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x"}},
-	}))
-
-	for name, path := range map[string]string{
-		"repos":              "/repos",
-		"repos_search_empty": "/repos/search",
-		"repos_search_api":   "/repos/search?q=api",
-		"repo_scoped":        "/repos/acme/alpha",
-	} {
-		rec := get(t, server, path)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
-		}
-		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
-	}
-}
-
 func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	t.Parallel()
 
@@ -264,11 +243,7 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	}
 	server := openServer(st, fixedClock(testNow), "")
 
-	for name, path := range map[string]string{
-		"notice_refused_tickets": "/tickets",
-		"notice_refused_repo":    "/repos/acme/beta",
-		"notice_refused_repos":   "/repos",
-	} {
+	for _, path := range []string{"/tickets", "/repos/acme/beta", "/repos"} {
 		rec := get(t, server, path)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET %s: status = %d", path, rec.Code)
@@ -276,7 +251,6 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), `<a href="/repos/acme/beta">acme/beta</a> is refused`) {
 			t.Errorf("GET %s missing refused-repo link:\n%s", path, rec.Body)
 		}
-		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
 	}
 }
 

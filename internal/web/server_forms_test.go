@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,8 +15,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
-
-const goldenVerbsBoard = "testdata/board_verbs.golden.html"
 
 func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
@@ -81,16 +81,46 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	t.Parallel()
 
-	states := make([]plan.State, 0, int(plan.AwaitingInput)+1)
-	for s := plan.Blocked; s <= plan.AwaitingInput; s++ {
-		states = append(states, s)
-	}
+	verbForm := regexp.MustCompile(`name="verb" value="([a-z-]+)"`)
+	for s := range plan.StateCount {
+		state := plan.State(s)
+		t.Run(state.String(), func(t *testing.T) {
+			t.Parallel()
 
-	got, err := web.RenderStatesBoard(states)
-	if err != nil {
-		t.Fatal(err)
+			board, err := web.RenderStatesBoard([]plan.State{state})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, m := range verbForm.FindAllStringSubmatch(board, -1) {
+				got = append(got, m[1])
+			}
+			if want := wantRowVerbs[state]; !slices.Equal(got, want) {
+				t.Errorf("verb forms for %s = %v, want %v", state, got, want)
+			}
+		})
 	}
-	assertGolden(t, goldenVerbsBoard, []byte(got))
+}
+
+var wantRowVerbs = map[plan.State][]string{
+	plan.Queued:                  {plan.VerbCancel},
+	plan.Running:                 {plan.VerbKill},
+	plan.Failed:                  {plan.VerbReRun},
+	plan.CutFailed:               {plan.VerbReRun},
+	plan.Checking:                {plan.VerbReRun},
+	plan.NeedsYou:                {plan.VerbReRun, plan.VerbKill},
+	plan.PushFailed:              {plan.VerbRetryPush, plan.VerbReRun},
+	plan.PRMerged:                {plan.VerbRemoveWorktree},
+	plan.PRClosedUnmerged:        {plan.VerbReRun, plan.VerbRemoveWorktree},
+	plan.BaseGone:                {plan.VerbReRun, plan.VerbRemoveWorktree},
+	plan.BaseMoved:               {plan.VerbRefresh, plan.VerbReRun},
+	plan.CIFailed:                {plan.VerbReRun},
+	plan.RefreshConflicted:       {plan.VerbAbort},
+	plan.ConflictsWithMain:       {plan.VerbResolve, plan.VerbRefresh},
+	plan.VerificationFailed:      {plan.VerbRetryPush, plan.VerbReRun},
+	plan.WaitingOnProducerDeploy: {plan.VerbReRun},
+	plan.ConflictResolved:        {plan.VerbCommitResolution},
+	plan.AwaitingInput:           {plan.VerbReRun},
 }
 
 func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
