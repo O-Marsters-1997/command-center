@@ -107,10 +107,14 @@
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <a class="sidebar-head text-inherit no-underline" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Command Centre</a>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/tickets" data-key="g t" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
-    <a class="sidebar-item" href="/insights" data-key="g i" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
-    <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
-    <a class="sidebar-item" href="/launch" data-key="c" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg><span>Launch</span></a>
+    <a class="sidebar-item" href="/tickets" data-key="g t" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6l2-8Z"/>
+</svg><span>All tickets</span></a>
+    <a class="sidebar-item" href="/insights" data-key="g i" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M8 16v-4M13 16V8M18 16v-6"/>
+</svg><span>Insights</span></a>
+    <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h12"/>
+</svg><span>Repos</span></a>
+    <a class="sidebar-item" href="/launch" data-key="c" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/>
+</svg><span>Launch</span></a>
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">All projects · 0 running</summary>
@@ -123,7 +127,8 @@
   </details>
   <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
-  <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4.5 7h.01M7.5 7h.01M10.5 7h.01M5 9.5h6" stroke-linecap="round"/></svg><span>Shortcuts</span><kbd>?</kbd></button>
+  <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 17 5-5-5-5"/><path d="M12 19h7"/>
+</svg><span>Shortcuts</span><kbd>?</kbd></button>
   <form method="post" action="/logout">
     <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
   </form>
