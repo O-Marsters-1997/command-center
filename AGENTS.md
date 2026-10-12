@@ -38,6 +38,10 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 
 The stack is unusual and the wrong assumption is expensive.
 
+- **The visual target is `DESIGN.md` (Signal)**, with `design/signal/index.html` as the reference
+  prototype and `PRODUCT.md` as the product record `/impeccable` reads. Compare a changed page
+  against its prototype route.
+
 - **Go `html/template` renders every page** (`internal/web/*.tmpl`). No React, no app framework.
 - **htmx drives updates.** Pages are path routes (`/s/{owner}/{name}/{n}`, `/f/{feature}`, `/tickets`
   and so on), each rendered in full by one handler. Rail links fetch a page with
