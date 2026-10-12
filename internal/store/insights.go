@@ -12,6 +12,7 @@ import (
 type TicketSpend struct {
 	Ticket      string
 	Title       string
+	Feature     string
 	MergedAt    time.Time
 	AgentUSD    float64
 	ResolveUSD  float64
@@ -39,7 +40,7 @@ func (s *Store) MergedTicketSpend(
 	points := make([]TicketSpend, len(rows))
 	for i, row := range rows {
 		points[i] = TicketSpend{
-			Ticket: row.TicketID, Title: row.Title, MergedAt: row.MergedAt,
+			Ticket: row.TicketID, Title: row.Title, Feature: row.Feature, MergedAt: row.MergedAt,
 			AgentUSD: row.AgentUsd, ResolveUSD: row.ResolveUsd, FollowUpUSD: row.FollowUpUsd,
 			ExploreUSD: row.ExploreUsd,
 		}
