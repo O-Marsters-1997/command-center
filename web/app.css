@@ -1603,7 +1603,13 @@
     letter-spacing: var(--tracking-display);
   }
 
+  .key-sheet[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
   .key-sheet-body {
+    overflow-y: auto;
     padding: 14px 18px;
   }
 
