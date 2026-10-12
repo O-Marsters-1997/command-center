@@ -56,6 +56,8 @@ type RailFeature struct {
 	Live    []RailItem
 	Blocked int
 	Ready   int
+	Merged  int
+	Total   int
 }
 
 func (f RailFeature) Waiting() int { return f.Blocked + f.Ready }
@@ -222,6 +224,7 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 	for key, members := range byFeature {
 		_, name := railFeatureKey(members[0])
 		f := RailFeature{Key: key, Name: name, Open: open(key)}
+		f.Total = len(members)
 		for _, r := range members {
 			if mark := r.Mark(); mark.Name != "" && !slices.Contains(f.Marks, mark) {
 				f.Marks = append(f.Marks, mark)
@@ -231,6 +234,8 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 				f.Ready++
 			case plan.GlyphBlocked:
 				f.Blocked++
+			case plan.GlyphDone:
+				f.Merged++
 			}
 			if group, folded := plan.RailGroup(r.Glyph); group == plan.GroupInFlight && !folded {
 				f.Live = append(f.Live, item(r))

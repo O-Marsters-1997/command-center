@@ -44,7 +44,7 @@
     <h2 class="rail-heading">In flight</h2>
     {{- range .Features}}
     <details class="rail-feature" data-rail-key="{{.Key}}"{{if .Open}} open{{end}}{{if $.Query}} data-rail-forced{{end}}>
-      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting</span></summary>
+      <summary>{{template "icon" "chev"}}{{range .Marks}}{{template "mark" .}}{{end}}<span class="rail-name">{{.Name}}</span> <span class="rail-count">{{len .Live}} live · {{.Waiting}} waiting · {{.Merged}}/{{.Total}} merged</span></summary>
       {{- range .Live}}{{template "railItem" .}}{{end}}
       {{- if .Waiting}}<p class="rail-waiting">{{.WaitingLine}}</p>{{end}}
     </details>

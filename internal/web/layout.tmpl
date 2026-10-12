@@ -184,9 +184,9 @@
     <a class="btn btn-ghost btn-sm btn-icon" href="{{.LaunchPath}}" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>
   </div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span></a>
+    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span><span class="sidebar-count">{{.OpenTickets}}</span></a>
     <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span></a>
+    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span>{{with .RefusedRepos}}<span class="sidebar-count sidebar-count-warn">{{len .}} refused</span>{{end}}</a>
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
