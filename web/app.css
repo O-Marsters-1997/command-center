@@ -1304,6 +1304,11 @@
     text-decoration: none;
   }
 
+  .btn:focus-visible,
+  .pill-tab:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
   .btn:active {
     background: var(--color-surface-3);
   }
