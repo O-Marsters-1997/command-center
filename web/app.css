@@ -192,8 +192,10 @@
     font-size: var(--text-sm);
   }
 
-  tr:last-child > td,
-  tr:last-child > th {
+  tbody:last-child > tr:last-child > td,
+  tbody:last-child > tr:last-child > th,
+  tfoot > tr:last-child > td,
+  tfoot > tr:last-child > th {
     border-bottom: 0;
   }
 
@@ -1090,6 +1092,7 @@
     }
 
     .content {
+      padding: var(--space-4);
       overflow-x: auto;
     }
   }
