@@ -120,24 +120,39 @@
     <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
   </form>
   <dialog id="key-sheet" class="key-sheet" aria-labelledby="key-sheet-title">
-  <h2 id="key-sheet-title">Keyboard shortcuts</h2>
-  <dl class="key-list">
-    <div class="key-row"><dt><kbd>⌘K</kbd></dt><dd>Search sessions, refs, repos and features</dd></div>
-    <div class="key-row"><dt><kbd>J / K</kbd></dt><dd>Next / previous session in the rail</dd></div>
-    <div class="key-row"><dt><kbd>G H · G T · G I · G R</kbd></dt><dd>Home · All tickets · Insights · Repos</dd></div>
-    <div class="key-row"><dt><kbd>G 1 – G 9</kbd></dt><dd>Scope to project 1–9</dd></div>
-    <div class="key-row"><dt><kbd>G 0</kbd></dt><dd>All projects</dd></div>
-    <div class="key-row"><dt><kbd>C</kbd></dt><dd>Launch a feature</dd></div>
-    <div class="key-row"><dt><kbd>F · V</kbd></dt><dd>Open the feature graph · switch graph and board</dd></div>
-    <div class="key-row"><dt><kbd>E</kbd></dt><dd>Settle a merged session (removes its worktree)</dd></div>
-    <div class="key-row"><dt><kbd>R</kbd></dt><dd>Re-run</dd></div>
-    <div class="key-row"><dt><kbd>O</kbd></dt><dd>Open the PR</dd></div>
-    <div class="key-row"><dt><kbd>Enter</kbd></dt><dd>Focus the composer</dd></div>
-    <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Close the sheet; clear the search</dd></div>
-    <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
+  <form method="dialog" class="key-sheet-head">
+    <h2 id="key-sheet-title">Keyboard shortcuts</h2>
+    <button type="submit" class="btn btn-ghost btn-sm">Close</button>
+  </form>
+  <div class="key-sheet-body">
+    <h3 class="key-group">Anywhere</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>⌘K</kbd></dt><dd>Search sessions, refs, repos and features</dd></div>
+      <div class="key-row"><dt><kbd>J / K</kbd></dt><dd>Next / previous session in the rail</dd></div>
+      <div class="key-row"><dt><kbd>G H · G T · G I · G R</kbd></dt><dd>Home · All tickets · Insights · Repos</dd></div>
+      <div class="key-row"><dt><kbd>G 1 – G 9</kbd></dt><dd>Scope to project 1–9</dd></div>
+      <div class="key-row"><dt><kbd>G 0</kbd></dt><dd>All projects</dd></div>
+      <div class="key-row"><dt><kbd>C</kbd></dt><dd>Launch a feature</dd></div>
+      <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
+      <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Close the sheet; clear the search</dd></div>
+      
+    </dl>
+    <h3 class="key-group">In a session</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>F</kbd></dt><dd>Open the feature graph</dd></div>
+      <div class="key-row"><dt><kbd>E</kbd></dt><dd>Settle a merged session (removes its worktree)</dd></div>
+      <div class="key-row"><dt><kbd>R</kbd></dt><dd>Re-run</dd></div>
+      <div class="key-row"><dt><kbd>O</kbd></dt><dd>Open the PR</dd></div>
+      <div class="key-row"><dt><kbd>Enter</kbd></dt><dd>Focus the composer</dd></div>
+      
+    </dl>
+    <h3 class="key-group">In a feature</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>V</kbd></dt><dd>Switch graph and board</dd></div>
+      
+    </dl>
     
-  </dl>
-  <form method="dialog"><button class="btn">Close</button></form>
+  </div>
 </dialog>
 </aside>
 <div class="pane">
@@ -182,5 +197,6 @@
 </main>
 </div>
 </div>
+<div id="toast" class="toast" role="status"></div>
 </body>
 </html>

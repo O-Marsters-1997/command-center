@@ -147,6 +147,7 @@
 </main>
 </div>
 </div>
+<div id="toast" class="toast" role="status"></div>
 </body>
 </html>
 {{- end}}
@@ -161,12 +162,18 @@
 
 {{define "keySheet" -}}
 <dialog id="key-sheet" class="key-sheet" aria-labelledby="key-sheet-title">
-  <h2 id="key-sheet-title">Keyboard shortcuts</h2>
-  <dl class="key-list">
-    {{range .Keymap}}<div class="key-row"><dt><kbd>{{.Keys}}</kbd></dt><dd>{{.Does}}</dd></div>
+  <form method="dialog" class="key-sheet-head">
+    <h2 id="key-sheet-title">Keyboard shortcuts</h2>
+    <button type="submit" class="btn btn-ghost btn-sm">Close</button>
+  </form>
+  <div class="key-sheet-body">
+    {{range .Keymap}}<h3 class="key-group">{{.Title}}</h3>
+    <dl class="key-list">
+      {{range .Rows}}<div class="key-row"><dt><kbd>{{.Keys}}</kbd></dt><dd>{{.Does}}</dd></div>
+      {{end}}
+    </dl>
     {{end}}
-  </dl>
-  <form method="dialog"><button class="btn">Close</button></form>
+  </div>
 </dialog>
 {{- end}}
 

@@ -162,10 +162,15 @@ func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
 		if !strings.Contains(body, `data-key="?"`) {
 			t.Errorf("GET %s: no Shortcuts button with data-key=\"?\"", path)
 		}
-		for _, row := range view.Keymap {
-			want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s: sheet is missing the row %q", path, want)
+		for _, group := range view.Keymap {
+			if !strings.Contains(body, ">"+html.EscapeString(group.Title)+"</h3>") {
+				t.Errorf("GET %s: sheet is missing the group heading %q", path, group.Title)
+			}
+			for _, row := range group.Rows {
+				want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
+				if !strings.Contains(body, want) {
+					t.Errorf("GET %s: sheet is missing the row %q", path, want)
+				}
 			}
 		}
 	}
