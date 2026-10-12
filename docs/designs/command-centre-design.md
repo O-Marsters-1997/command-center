@@ -54,7 +54,7 @@ The app never imports treepad's `batch/` package. This is **a rule, not a struct
 ever needs a treepad predicate verbatim, import it rather than mirroring it.
 
 The app's unlock gate is **OPEN or MERGED**, matching `batch.ReadyToMaterialise`
-(`batch/ready.go:20-22`) even though the app no longer calls that code path. OPEN alone
+(`batch/ready.go:20-22`), without calling it. OPEN alone
 would strand descendants whose parent merged before they got a slot.
 
 ## 2 · Data flow
@@ -438,6 +438,10 @@ augmentation of `--fill`). `gh pr create --base` makes an ordinary PR, not a Git
 (Stacks exist only via the `gh stack` CLI — treepad ADR 0003), so without this line a
 reviewer sees a correct diff against a branch name they don't recognise and no ordering at
 all.
+
+## 6 · Reserved
+
+Section numbers are stable, so this one stays empty.
 
 ## 7 · What "done enough to push" means, and who can push at all
 
