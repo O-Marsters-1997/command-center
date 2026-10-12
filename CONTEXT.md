@@ -162,7 +162,7 @@ _Avoid_: Section, stage, step
 **Spend**:
 What a run or ticket cost, as a percentage of the five-hour and weekly subscription windows. A
 ticket's spend sums its runs until its PR merges (ADR 10).
-_Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight), usage, price, dollars
+_Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight, which no page shows), usage, price, dollars
 
 **Utilization reading**:
 One `rate_limit_event`'s account-wide utilization of a window, stored with its time.

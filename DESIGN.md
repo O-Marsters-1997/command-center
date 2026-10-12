@@ -256,7 +256,7 @@ composed by a named class.
 
 **Display Font:** Inter, variable with optical size 14–32 (system-ui fallback)
 **Body Font:** Inter, with `cv01` and `ss03` on
-**Label/Mono Font:** JetBrains Mono, for refs, branches, commands, money and durations only
+**Label/Mono Font:** JetBrains Mono, for refs, branches, commands and durations only
 
 **Character:** One sans at a 13px UI default, with weight doing the hierarchy and mono kept for
 machine text. Both fonts are vendored woff2 under `internal/web/assets`; no page requests Google
