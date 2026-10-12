@@ -37,14 +37,15 @@ function ticketRef(url: string): string {
 }
 
 function nodeTag(node: GraphNode): string {
-  if (node.glyph === "failed" || node.glyph === "attention") return node.state;
+  if (node.glyph === "failed") return node.reason;
+  if (node.glyph === "attention") return "Review";
   return node.glyph === "running" ? node.elapsed : "";
 }
 
 function nodeFoot(node: GraphNode): string {
   switch (node.glyph) {
     case "blocked":
-      return `after ${(node.after ?? []).join(", ")}`;
+      return node.after?.length ? `after ${node.after.join(", ")}` : "Blocked";
     case "ready":
       return "Ready to launch";
     case "done":
@@ -183,11 +184,10 @@ customElement("cc-graph", {}, () => {
                 <button
                   type="button"
                   data-node
-                  class="absolute grid h-[96px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left [font:inherit] text-inherit"
+                  class="absolute grid h-[104px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left [font:inherit] text-inherit"
                   classList={{
-                    "bg-surface": node.glyph !== "blocked" && node.glyph !== "done",
+                    "bg-surface": node.glyph !== "blocked",
                     "bg-canvas border-dashed": node.glyph === "blocked",
-                    "bg-transparent": node.glyph === "done",
                     "border-border": !isLit() && node.glyph !== "done",
                     "border-border-soft": !isLit() && node.glyph === "done",
                     "border-s-attention": isLit(),

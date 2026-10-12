@@ -8,7 +8,7 @@ export interface Metrics {
 }
 
 export const COMPACT: Metrics = { colW: 260, rowH: 64, nodeW: 200, nodeH: 40 };
-export const CARD: Metrics = { colW: 288, rowH: 112, nodeW: 240, nodeH: 96 };
+export const CARD: Metrics = { colW: 288, rowH: 120, nodeW: 240, nodeH: 104 };
 
 export interface Wave {
   url: string;
