@@ -24,8 +24,9 @@ type Row struct {
 	ProjectHue int    `json:"project_hue"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
-	Title           string   `json:"title"`
-	State           string   `json:"state"`
+	Title           string `json:"title"`
+	State           string `json:"state"`
+	state           plan.State
 	Reason          string   `json:"reason"`
 	Question        string   `json:"question"`
 	Glyph           string   `json:"glyph"`
@@ -87,7 +88,7 @@ func ticketRef(url string) string { return "#" + path.Base(url) }
 
 func (r Row) FollowUpAvailable() bool { return slices.Contains(r.Verbs, plan.VerbFollowUp) }
 
-func (r Row) AwaitingInput() bool { return r.State == plan.AwaitingInput.String() }
+func (r Row) AwaitingInput() bool { return r.state == plan.AwaitingInput }
 
 func (r Row) Stack() string {
 	if r.Base == "" || r.Base == defaultBaseBranch {
@@ -173,6 +174,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			ProjectHue:     projects[t.Repo].Hue,
 			Title:          in.Obs.Titles[t.URL],
 			State:          e.State.String(),
+			state:          e.State,
 			Reason:         string(e.Reason),
 			Question:       question,
 			Glyph:          plan.Glyph(e.State),

@@ -12,12 +12,13 @@ import (
 
 // Candidate is one ticket the launch preview would start, as GET /launch/candidates serves it.
 type Candidate struct {
-	URL         string   `json:"url"`
-	Ref         string   `json:"ref"`
-	Title       string   `json:"title"`
-	Repo        string   `json:"repo"`
-	Feature     string   `json:"feature"`
-	Label       string   `json:"label"`
+	URL         string `json:"url"`
+	Ref         string `json:"ref"`
+	Title       string `json:"title"`
+	Repo        string `json:"repo"`
+	Feature     string `json:"feature"`
+	Label       string `json:"label"`
+	label       plan.PreviewLabel
 	Reason      string   `json:"reason"`
 	Base        string   `json:"base"`
 	BaseVerdict string   `json:"base_verdict"`
@@ -87,7 +88,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]Candidate, err
 		t := stored[row.Ticket.URL]
 		candidates = append(candidates, Candidate{
 			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
-			Label: row.Label.String(), Reason: string(row.Reason),
+			Label: row.Label.String(), label: row.Label, Reason: string(row.Reason),
 			Base:        "origin/" + row.Base,
 			BaseVerdict: runVerdictLabel(row.BaseRun),
 			PromptHash:  row.PromptHash, BlockedBy: t.BlockedBy, Prompt: row.Prompt,

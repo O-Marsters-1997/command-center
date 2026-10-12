@@ -42,9 +42,9 @@ func (s Session) Empty() bool {
 	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
-func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
+func (s Session) Running() bool { return s.Row.state == plan.Running }
 
-func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+func (s Session) AwaitingInput() bool { return s.Row.state == plan.AwaitingInput }
 
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
 func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }

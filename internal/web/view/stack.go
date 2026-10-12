@@ -61,7 +61,7 @@ func buildStack(board Board, row Row) Stack {
 			continue
 		}
 		s.Total++
-		if r.State == plan.Merged.String() {
+		if r.state == plan.PRMerged {
 			s.Merged++
 		}
 		s.Members = append(s.Members, link(r.URL))

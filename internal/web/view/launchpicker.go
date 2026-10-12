@@ -50,11 +50,12 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 		}
 		row := LaunchFeature{Name: feature, Path: "/f/" + url.PathEscape(feature) + "/launch"}
 		for _, c := range candidates {
-			switch c.Label {
-			case plan.Now.String():
+			switch c.label {
+			case plan.Now:
 				row.Now++
-			case plan.OnUnlock.String():
+			case plan.OnUnlock:
 				row.OnUnlock++
+			case plan.Refused:
 			}
 		}
 		if row.Now+row.OnUnlock > 0 {
