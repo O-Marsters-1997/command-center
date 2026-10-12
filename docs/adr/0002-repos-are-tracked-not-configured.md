@@ -17,7 +17,7 @@ touch, reviewed by no one who owns the repo and read once at startup.
 - **The config describes the daemon.** It is tracked at `cc/config.toml`, the `--config` default.
   `data_dir` is a key, `CC_DATA_DIR`, or `os.UserConfigDir()/command-centre`. `CC_AGENT_COMMAND` is a
   JSON array, since a shell split could silently mis-split, and the argv must name
-  `--permission-mode`, `{agents}`, `{system_prompt}` and `{model}` or startup refuses.
+  `--permission-mode`, `{system_prompt}` and `{model}` or startup refuses.
 - **A repo's settings live in `.command-centre.toml`** at its root, read from `origin/main`, never from
   a ticket's branch or worktree. The observer reads them after its fetch into `plan.Observation`, and
   `plan.RulesFor` builds `Rules` from them, so the loop and the board derive with the same settings and

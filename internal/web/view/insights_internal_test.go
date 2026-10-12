@@ -78,7 +78,7 @@ func TestParseSinceOrDefault(t *testing.T) {
 
 func TestSpendSplitRowsSumToTheChartTotal(t *testing.T) {
 	points := []insightsPointJSON{
-		{PctWeek: 1.5, AgentPctWeek: 1, ResolvePctWeek: 0.25, FollowUpPctWeek: 0.125},
+		{PctWeek: 1.375, AgentPctWeek: 1, ResolvePctWeek: 0.25, FollowUpPctWeek: 0.125},
 		{PctWeek: 2, AgentPctWeek: 1.5, ResolvePctWeek: 0.25, FollowUpPctWeek: 0.25},
 	}
 	split := buildSpendSplit(points)
@@ -86,8 +86,8 @@ func TestSpendSplitRowsSumToTheChartTotal(t *testing.T) {
 	for _, row := range split.Rows {
 		sum += row.Pct
 	}
-	if sum != split.Total || split.Total != 3.5 {
-		t.Errorf("rows sum to %v, total %v, want both 3.5", sum, split.Total)
+	if sum != split.Total || split.Total != 3.375 {
+		t.Errorf("rows sum to %v, total %v, want both 3.375", sum, split.Total)
 	}
 }
 

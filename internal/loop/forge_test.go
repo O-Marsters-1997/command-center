@@ -112,23 +112,21 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	}
 
 	tick()
-	runner.Alive[1] = false
-	tick()
-	if len(runner.Spawns) != 2 {
-		t.Fatalf("spawns = %d, want the explore run then the imported ticket's implement run", len(runner.Spawns))
+	if len(runner.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want the imported ticket's implement run", len(runner.Spawns))
 	}
-	commitFile(t, runner.Spawns[1].WorktreePath, "x.go", "package x\n")
+	commitFile(t, runner.Spawns[0].WorktreePath, "x.go", "package x\n")
 
-	runner.Alive[2] = false
-	runner.CanReap[2] = true
+	runner.Alive[1] = false
+	runner.CanReap[1] = true
 	for range 4 {
 		tick()
 	}
 
-	if len(runner.Spawns) != 3 {
-		t.Fatalf("spawns = %d, want the explore, implement and review runs", len(runner.Spawns))
+	if len(runner.Spawns) != 2 {
+		t.Fatalf("spawns = %d, want the implement and review runs", len(runner.Spawns))
 	}
-	runner.Alive[3] = false
+	runner.Alive[2] = false
 	for range 2 {
 		tick()
 	}

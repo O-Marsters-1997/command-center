@@ -53,13 +53,10 @@ const (
 	DefaultReviewMaxTurns   = 20
 )
 
-// {model} is filled per run kind, so the model is always named: the claude CLI's own default
-// tracks Anthropic's latest release.
 var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
 	"--settings", "{settings}",
-	"--agents", "{agents}",
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--model", "{model}",
@@ -151,7 +148,7 @@ func applyAgentCommandEnv(cfg *Config) error {
 	return nil
 }
 
-var requiredAgentCommandParts = []string{"--permission-mode", "{agents}", "{system_prompt}", "{model}"}
+var requiredAgentCommandParts = []string{"--permission-mode", "{system_prompt}", "{model}"}
 
 func requireAgentCommandParts(argv []string) error {
 	if len(argv) == 0 {

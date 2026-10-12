@@ -120,7 +120,7 @@ func TestAPushedImplementRunIsFollowedByExactlyOneReviewRun(t *testing.T) {
 	if !strings.HasPrefix(spawn.Prompt, "/code-review --fix") || !strings.Contains(spawn.Prompt, ".findings.md") {
 		t.Errorf("prompt = %q, want the review command naming a findings file", spawn.Prompt)
 	}
-	if spawn.SystemPromptPath == "" && spawn.AgentsPath == "" && spawn.SettingsPath == "" {
+	if spawn.SystemPromptPath == "" && spawn.SettingsPath == "" {
 		t.Errorf("review spawned with no agent files")
 	}
 	if got := f.latestRun(t).Kind; got != "review" {
