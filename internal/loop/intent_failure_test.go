@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -53,6 +54,42 @@ func TestAFailingIntentIsConsumedWithAnEventAndTheTickCarriesOn(t *testing.T) {
 	f.Tick(t)
 	if again := intentFailures(t, f, first.URL); len(again) != 1 {
 		t.Errorf("intent_failed events after a second tick = %v, want still 1", again)
+	}
+}
+
+func TestAFailingImportIntentIsConsumedWithoutATicketOnItsEvent(t *testing.T) {
+	ctx := t.Context()
+	store := openStore(t)
+	if err := store.QueueVerbIntent(ctx, "project:x", "import", testAt); err != nil {
+		t.Fatal(err)
+	}
+	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+
+	lp := loop.NewLoop(store, noOpObserve, fixedClock(testAt), config.Config{}, config.Workspace{}, runner.NewFake())
+	lp.SetTrackerSource(resolveByRemote(nil))
+	if err := lp.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce = %v, want nil", err)
+	}
+
+	pending, err := store.PendingVerbIntents(ctx, "import")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending import intents = %+v, want none", pending)
+	}
+	events, err := store.Events(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail string
+	for _, e := range events {
+		if e.Kind == "intent_failed" {
+			detail = e.Detail
+		}
+	}
+	if !strings.HasPrefix(detail, "import project:x: ") {
+		t.Errorf("intent_failed detail = %q, want it to name the verb and the feature", detail)
 	}
 }
 

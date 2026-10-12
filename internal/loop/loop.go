@@ -84,12 +84,18 @@ func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIn
 		return err
 	}
 	for _, intent := range intents {
-		err := fn(intent)
-		if errors.Is(err, errIntentPending) {
+		handlerErr := fn(intent)
+		if errors.Is(handlerErr, errIntentPending) {
 			continue
 		}
-		if err != nil {
-			if err := l.event(ctx, intent.TicketID, eventIntentFailed, fmt.Sprintf("%s: %v", verb, err)); err != nil {
+		if handlerErr != nil {
+			detail := fmt.Sprintf("%s: %v", verb, handlerErr)
+			ticketURL := intent.TicketID
+			if verb == store.ImportVerb || verb == store.TrackVerb {
+				ticketURL = ""
+				detail = fmt.Sprintf("%s %s: %v", verb, intent.TicketID, handlerErr)
+			}
+			if err := l.event(ctx, ticketURL, eventIntentFailed, detail); err != nil {
 				return err
 			}
 		}
