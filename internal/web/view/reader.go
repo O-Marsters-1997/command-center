@@ -23,6 +23,9 @@ type Board struct {
 	Tabs             []FilterTab
 	BoardPath        string
 	BoardPollSeconds int
+	Launched         *Age
+	TicketCount      int
+	WaveCount        int
 	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
 	Launch *LaunchModal
 }
@@ -146,8 +149,27 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err := r.scopeChrome(ctx, &chrome, project, params.Repo); err != nil {
 		return Board{}, err
 	}
-	sections := Sectioned(rowsIn(groups))
+	scoped := rowsIn(groups)
+	sections := Sectioned(scoped)
+	blocking := make(map[string][]string, len(scoped))
+	for _, row := range scoped {
+		blocking[row.URL] = row.Blocking
+	}
+	var launched *Age
+	if params.Feature != "" {
+		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
+		if err != nil {
+			return Board{}, err
+		}
+		if ok {
+			age := relative(now, at)
+			launched = &age
+		}
+	}
 	return Board{
+		Launched:         launched,
+		TicketCount:      len(scoped),
+		WaveCount:        plan.WaveCount(blocking),
 		Chrome:           chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
