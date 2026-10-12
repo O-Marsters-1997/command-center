@@ -68,50 +68,25 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 	return nil
 }
 
-// RecordDisposition writes a dead run's outcome, metrics and per-request rows in one
-// transaction. exitCode and metrics are nil when there is nothing to report.
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
 	metrics *agentlog.RunMetrics,
-) (err error) {
+) error {
 	var exitCodeParam sql.NullInt64
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
+	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+		Outcome:  notNull(outcome.String()),
+		ExitCode: exitCodeParam,
+		EndedAt:  notNullTime(endedAt.UTC()),
+		CostUsd:  costUSD(metrics),
+		ID:       runID,
+	})
 	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-	qtx := s.q.WithTx(tx)
-
-	m := runMetricsColumns(metrics)
-	if err = qtx.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Outcome:        notNull(outcome.String()),
-		ExitCode:       exitCodeParam,
-		EndedAt:        notNullTime(endedAt.UTC()),
-		TokensIn:       m.TokensIn,
-		TokensOut:      m.TokensOut,
-		Turns:          m.Turns,
-		DurationMs:     m.DurationMs,
-		CostUsd:        m.CostUsd,
-		Model:          m.Model,
-		MetricsSettled: m.MetricsSettled,
-		ID:             runID,
-	}); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", runID, err)
 	}
-	if metrics != nil {
-		if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
@@ -122,78 +97,11 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 	return nil
 }
 
-func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, requests []agentlog.Request) error {
-	for _, r := range requests {
-		if err := q.InsertRunRequest(ctx, ccdb.InsertRunRequestParams{
-			RunID:               runID,
-			RequestID:           r.ID,
-			Thread:              r.Thread,
-			InputTokens:         r.InputTokens,
-			CacheCreationTokens: r.CacheCreationTokens,
-			CacheReadTokens:     r.CacheReadTokens,
-			OutputTokens:        r.OutputTokens,
-		}); err != nil {
-			return fmt.Errorf("insert run request for run %d: %w", runID, err)
-		}
+func costUSD(metrics *agentlog.RunMetrics) sql.NullFloat64 {
+	if metrics == nil || metrics.CostUSD == nil {
+		return sql.NullFloat64{}
 	}
-	return nil
-}
-
-type runMetricsCols struct {
-	TokensIn, TokensOut, Turns, DurationMs sql.NullInt64
-	CostUsd                                sql.NullFloat64
-	Model                                  sql.NullString
-	MetricsSettled                         sql.NullBool
-}
-
-func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
-	if metrics == nil {
-		return runMetricsCols{}
-	}
-	var costUSD sql.NullFloat64
-	if metrics.CostUSD != nil {
-		costUSD = sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
-	}
-	return runMetricsCols{
-		TokensIn:       sql.NullInt64{Int64: metrics.TokensIn, Valid: true},
-		TokensOut:      sql.NullInt64{Int64: metrics.TokensOut, Valid: true},
-		Turns:          sql.NullInt64{Int64: int64(metrics.Turns), Valid: true},
-		DurationMs:     sql.NullInt64{Int64: metrics.Duration.Milliseconds(), Valid: true},
-		CostUsd:        costUSD,
-		Model:          sql.NullString{String: metrics.Model, Valid: metrics.Model != ""},
-		MetricsSettled: sql.NullBool{Bool: metrics.Settled, Valid: true},
-	}
-}
-
-// RunRequest is one run_requests row: one deduplicated request_id's usage, attributed to its
-// thread -- the main run or the tool_use id of the Task call that spawned it.
-type RunRequest struct {
-	RequestID           string
-	Thread              string
-	InputTokens         int64
-	CacheCreationTokens int64
-	CacheReadTokens     int64
-	OutputTokens        int64
-}
-
-// RunRequestsForRun returns one run's per-request rows in recorded order.
-func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequest, error) {
-	rows, err := s.q.RunRequestsForRun(ctx, runID)
-	if err != nil {
-		return nil, fmt.Errorf("select run requests for run %d: %w", runID, err)
-	}
-	requests := make([]RunRequest, len(rows))
-	for i, row := range rows {
-		requests[i] = RunRequest{
-			RequestID:           row.RequestID,
-			Thread:              row.Thread,
-			InputTokens:         row.InputTokens,
-			CacheCreationTokens: row.CacheCreationTokens,
-			CacheReadTokens:     row.CacheReadTokens,
-			OutputTokens:        row.OutputTokens,
-		}
-	}
-	return requests, nil
+	return sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
 }
 
 // InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.

@@ -151,27 +151,6 @@ func testConfigAndWorkspace(
 	return cfg, ws
 }
 
-type runMetricsRow struct {
-	TokensIn, TokensOut sql.NullInt64
-	MetricsSettled      sql.NullBool
-}
-
-func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	var row runMetricsRow
-	err = db.QueryRow(`SELECT tokens_in, tokens_out, metrics_settled FROM runs WHERE id = $1`, runID).
-		Scan(&row.TokensIn, &row.TokensOut, &row.MetricsSettled)
-	if err != nil {
-		t.Fatalf("read run metrics for run %d: %v", runID, err)
-	}
-	return row
-}
-
 func pushSettingsFile(t *testing.T, repoPath, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(repoPath, config.SettingsFile), []byte(body), 0o600); err != nil {

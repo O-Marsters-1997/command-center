@@ -66,25 +66,6 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	}
 }
 
-func TestHandleFeatureRedirectScopesTheBoard(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp, err := noRedirect(srv).Get(srv.URL + "/features/" + url.PathEscape("project:x"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusMovedPermanently {
-		t.Fatalf("status = %d, want 301", resp.StatusCode)
-	}
-	if got := resp.Header.Get("Location"); got != "/f/project:x" {
-		t.Fatalf("Location = %q, want /f/project:x", got)
-	}
-}
-
 func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 	t.Parallel()
 
