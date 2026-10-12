@@ -102,7 +102,7 @@
 
   --sidebar-w: 300px;
   --topbar-h: 44px;
-  --hit-min: 44px;
+  --hit-min: 40px;
 }
 
 @layer base {
