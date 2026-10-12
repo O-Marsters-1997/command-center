@@ -95,7 +95,19 @@ type MergedRow struct {
 	Agent, Resolve, FollowUp, Total float64
 }
 
-func buildMergedRows(points []insightsPointJSON) []MergedRow {
+func mergedDay(mergedAt, timezone string) string {
+	at, err := time.Parse(time.RFC3339, mergedAt)
+	if err != nil {
+		return ""
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return at.In(loc).Format(insightsDateFormat)
+}
+
+func buildMergedRows(points []insightsPointJSON, timezone string) []MergedRow {
 	rows := make([]MergedRow, 0, len(points))
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
@@ -104,7 +116,7 @@ func buildMergedRows(points []insightsPointJSON) []MergedRow {
 			name = p.Ticket
 		}
 		rows = append(rows, MergedRow{
-			Name: name, Feature: p.Feature, Day: p.MergedAt[:len(insightsDateFormat)],
+			Name: name, Feature: p.Feature, Day: mergedDay(p.MergedAt, timezone),
 			Agent: p.AgentPctWeek, Resolve: p.ResolvePctWeek, FollowUp: p.FollowUpPctWeek, Total: p.PctWeek,
 		})
 	}
@@ -190,7 +202,7 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
 		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
-		Merged: buildMergedRows(resp.Points),
+		Merged: buildMergedRows(resp.Points, resp.Timezone),
 	}, nil
 }
 
