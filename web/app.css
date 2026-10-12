@@ -1719,8 +1719,7 @@
       min-height: 48px;
     }
 
-    .launch-row-ref,
-    .launch-row-meta {
+    .launch-row-ref {
       display: none;
     }
 

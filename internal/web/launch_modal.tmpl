@@ -1,6 +1,6 @@
 {{define "launchDialog" -}}
-<dialog id="launch-modal-body" class="launch-dialog" aria-label="Launch {{.Feature}}" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}}>
-<h2 class="launch-dialog-title">Launch {{if .Feature}}{{.Feature}}{{else}}tickets{{end}}</h2>
+<dialog id="launch-modal-body" class="launch-dialog" aria-labelledby="launch-dialog-title" open{{if .Pending}} hx-get="/launch/candidates?feature={{.FeatureQuery}}" hx-trigger="load, every 1s" hx-swap="outerHTML"{{end}}>
+<h2 id="launch-dialog-title" class="launch-dialog-title">Launch {{if .Feature}}{{.Feature}}{{else}}tickets{{end}}</h2>
 {{if .Pending -}}
 <p>importing {{.Feature}}&hellip;</p>
 {{- else if .Refused -}}
@@ -16,12 +16,12 @@
   <p class="banner ribbon" data-glyph="pending" role="status">
     the launch modal needs the built assets: run `just assets`.
   </p>
-  <a class="btn" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
+  <a class="btn btn-ghost" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
 </cc-launch-modal>
 <script type="module" src="/assets/dist/launch-modal.js"></script>
 {{- end}}
 {{- if or .Pending .Refused .Empty}}
-<a class="btn" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
+<a class="btn btn-ghost" href="{{if .Feature}}/f/{{.Feature | pathEscape}}{{else}}/{{end}}">Cancel</a>
 {{- end}}
 </dialog>
 {{- end}}
