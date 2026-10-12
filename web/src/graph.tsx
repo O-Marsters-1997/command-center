@@ -149,7 +149,7 @@ customElement("cc-graph", {}, () => {
                     class="fill-none"
                     classList={{
                       "stroke-border stroke-[1.5]": !lit(),
-                      "stroke-s-live stroke-[2.5]": lit(),
+                      "stroke-s-attention stroke-[2.5]": lit(),
                     }}
                     d={edgePath(edge)}
                   />
@@ -165,11 +165,11 @@ customElement("cc-graph", {}, () => {
                 <button
                   type="button"
                   data-node
-                  class="absolute flex w-[200px] cursor-pointer items-center gap-[0.4rem] rounded border bg-bg px-2 py-[0.3rem] text-left [font:inherit] text-inherit"
+                  class="absolute flex w-[200px] cursor-pointer items-center gap-[0.4rem] rounded border bg-surface px-2 py-[0.3rem] text-left [font:inherit] text-inherit"
                   classList={{
                     "border-border": !isLit(),
-                    "border-s-live": isLit(),
-                    "shadow-[0_0_0_1px_var(--color-s-live)]": isSelected(),
+                    "border-s-attention": isLit(),
+                    "shadow-[0_0_0_1px_var(--color-s-attention)]": isSelected(),
                   }}
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
                   ref={(el) => nodeRefs.set(node.url, el)}

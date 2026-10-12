@@ -156,7 +156,7 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
             <For each={dagNodes()}>
               {(node) => (
                 <div
-                  class="absolute flex w-[200px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-bg px-2 py-[0.3rem] text-[0.85em]"
+                  class="absolute flex w-[200px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-surface px-2 py-[0.3rem] text-[0.85em]"
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
                 >
                   {ticketRef(node.url)} {node.title || "untitled"}
