@@ -217,7 +217,13 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	return chrome, nil
 }
 
-func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, tickets []store.Ticket, project store.Project, repo string) error {
+func (r *Reader) scopeChrome(
+	ctx context.Context,
+	c *Chrome,
+	tickets []store.Ticket,
+	project store.Project,
+	repo string,
+) error {
 	c.scopeToProject(project)
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
