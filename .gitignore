@@ -1,6 +1,9 @@
 /bin/
 .vscode
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/solid-islands/
 .agents/
 .treepad.toml
 .treepad
