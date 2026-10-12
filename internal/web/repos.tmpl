@@ -2,7 +2,8 @@
 {{with .SearchError}}
 <p class="banner ribbon mb-2" data-glyph="failed" role="status">gh search failed: {{.}}</p>
 {{end}}
-<table class="w-full max-w-3xl">
+<div class="table-frame max-w-3xl">
+<table class="w-full">
   {{range .Rows}}
   <tr>
     <td><a href="{{.Path}}">{{.FullName}}</a></td>
@@ -13,13 +14,14 @@
   <tr><td colspan="3" class="text-muted">no repos match.</td></tr>
   {{end}}
 </table>
+</div>
 {{- end}}
 
 {{define "repoGroups" -}}
 {{range $g := .}}
-<section class="mb-4 max-w-3xl" data-scope="{{.Scope.Kind}}">
+<section class="mb-7 max-w-3xl" data-scope="{{.Scope.Kind}}">
   {{if eq .Scope.Kind "project" -}}
-  <h2 class="flex items-center gap-2 mb-1">
+  <h2 class="flex items-center gap-2">
     <span class="avatar" data-hue="{{.Scope.Hue}}" aria-hidden="true">{{.Scope.Initial}}</span>
     {{.Scope.Label}}
     <span class="text-muted">{{.Count}} repo{{if ne .Count 1}}s{{end}}</span>
@@ -42,6 +44,7 @@
     </form>
   </h2>
   {{- end}}
+  <div class="table-frame">
   <table class="w-full">
     {{range $row := .Rows}}
     <tr>
@@ -59,6 +62,7 @@
     </tr>
     {{end}}
   </table>
+  </div>
 </section>
 {{else}}
 <p class="text-muted">no repos tracked.</p>
@@ -102,7 +106,8 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<h1 class="mb-3">REPOS</h1>
+<h1>Repos</h1>
+<p class="page-purpose">Tracked repositories, grouped by project.</p>
 {{template "importRefusal" .LastImportError}}
 <input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
   class="block w-full max-w-3xl border border-border rounded px-3 py-2 text-lg mb-1"

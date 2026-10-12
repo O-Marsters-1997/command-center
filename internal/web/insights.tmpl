@@ -3,8 +3,9 @@
 <li>insights</li>
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<h1 class="mb-3">INSIGHTS</h1>
-<h2 class="mb-2 text-[0.9em] text-muted">limits</h2>
+<h1>Insights</h1>
+<p class="page-purpose">Limits and spend across the week.</p>
+<h2>Limits</h2>
 <ul class="mb-4 flex flex-col gap-2" aria-label="limits">
   {{range .Limits}}<li class="flex flex-wrap items-center gap-3">
     <span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
@@ -13,7 +14,7 @@
   </li>
   {{end -}}
 </ul>
-<h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
+<h2>Spend per merged ticket</h2>
 {{with .Chart}}{{if .Dots}}
 <svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img">
   <title>spend as a percentage of the week, {{.Count}} merged tickets</title>
@@ -32,8 +33,9 @@
   {{if .HasWaste}}<span class="chart-legend"><span class="chart-legend-swatch chart-series-3"></span> waste: {{.WasteLabel}}</span>{{end}}
 </div>
 {{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}{{end}}
-<h2 class="mt-4 mb-2 text-[0.9em] text-muted">spend split</h2>
-<table aria-label="spend split">
+<h2 class="mt-7">Spend split</h2>
+<div class="table-frame max-w-md">
+<table class="w-full" aria-label="spend split">
   <thead><tr><th scope="col">kind</th><th scope="col" class="text-right">% of week</th></tr></thead>
   <tbody>
     {{range .Split.Rows}}<tr><th scope="row">{{.Kind}}</th><td class="text-right">{{printf "%.2f" .Pct}}%</td></tr>
@@ -41,4 +43,5 @@
   </tbody>
   <tfoot><tr><th scope="row">total</th><td class="text-right">{{printf "%.2f" .Split.Total}}%</td></tr></tfoot>
 </table>
+</div>
 {{template "shellEnd" .}}
