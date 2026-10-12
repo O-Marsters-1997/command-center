@@ -3,14 +3,14 @@
 <li>launch</li>
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<h1>Launch</h1>
+<h1>Launch a feature</h1>
 {{if .Features -}}
 <p class="page-purpose">Choose a feature to review what would start.</p>
-<ul class="flex max-w-3xl flex-col gap-2" aria-label="features with launchable work">
+<ul class="flex max-w-3xl flex-col gap-0.5" aria-label="features with launchable work">
   {{range .Features -}}
-  <li><a class="btn flex items-center justify-between gap-3 min-h-11" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
-    <span>{{.Name}}</span>
-    <span class="text-muted">{{.Now}} ready now{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
+  <li><a class="launch-pick" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+    <span class="launch-pick-name">{{.Name}}</span>
+    <span class="launch-pick-n">{{.Now}} ready now{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
   </a></li>
   {{- end}}
 </ul>
