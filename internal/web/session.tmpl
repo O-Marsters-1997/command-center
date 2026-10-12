@@ -87,7 +87,7 @@
   {{template "sessionActions" .}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  {{- with .Toast}}<p class="toast" role="status">{{.}}</p>{{end}}
+  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="true" role="status">{{.}}</div>{{end}}
   <div class="verbs">
     {{- $s := .}}
     {{- range .ActionVerbs}}
