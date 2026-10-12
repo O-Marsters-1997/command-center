@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -29,10 +30,12 @@ func TestRailRendersTheLatestStoredReading(t *testing.T) {
 	server := newServer(store, observedAt.Add(45*time.Second))
 	board := renderPath(t, server, "/rail")
 
-	if !strings.Contains(board, `<span>five-hour</span><span class="meter"><span class="meter-fill" style="width: 42%"></span></span><span class="rail-pct">42%</span>`) {
+	const meter = `<span class="meter"><span class="meter-fill" style="width: %d%%"></span></span>` +
+		`<span class="rail-pct">%d%%</span>`
+	if !strings.Contains(board, "<span>five-hour</span>"+fmt.Sprintf(meter, 42, 42)) {
 		t.Errorf("page does not show the newer five-hour reading (42%%):\n%s", board)
 	}
-	if !strings.Contains(board, `<span>weekly</span><span class="meter"><span class="meter-fill" style="width: 0%"></span></span><span class="rail-pct">0%</span>`) {
+	if !strings.Contains(board, "<span>weekly</span>"+fmt.Sprintf(meter, 0, 0)) {
 		t.Errorf("page does not show weekly at 0%% (no reading stored yet):\n%s", board)
 	}
 }
