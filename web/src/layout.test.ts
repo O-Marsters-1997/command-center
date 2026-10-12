@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bounds, edgePath, edgesFor, layoutWaves, stackByColumn, traceChain, waveDepths, waveLabel } from "./layout";
+import { bounds, edgePath, edgesFor, layoutWaves, sessionPath, stackByColumn, traceChain, waveDepths, waveLabel } from "./layout";
 
 interface Row {
   url: string;
@@ -115,4 +115,14 @@ test("bounds grows with the widest column and the tallest row", () => {
       { col: 1, y: 88 },
     ]),
   ).toEqual({ width: 24 * 2 + 260 + 200, height: 88 + 40 + 24 });
+});
+
+describe("sessionPath", () => {
+  test("maps a ticket URL to its session page", () => {
+    expect(sessionPath("https://github.com/acme/widgets/issues/42")).toBe("/s/acme/widgets/42");
+  });
+
+  test("returns an empty path for a URL that is not an issue", () => {
+    expect(sessionPath("https://github.com/acme/widgets/pull/42")).toBe("");
+  });
 });

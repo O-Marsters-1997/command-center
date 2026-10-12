@@ -1,14 +1,23 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { CARD, MARGIN, bounds as layoutBounds, edgePath, edgesFor, layoutWaves, traceChain, waveLabel } from "./layout";
+import {
+  CARD,
+  MARGIN,
+  bounds as layoutBounds,
+  edgePath,
+  edgesFor,
+  layoutWaves,
+  sessionPath,
+  traceChain,
+  waveLabel,
+} from "./layout";
 import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
-const PHONE = "(max-width: 759px)";
 
 declare global {
   interface Window {
-    htmx?: { ajax: (verb: string, path: string, options: Record<string, unknown>) => void };
+    htmx?: { process: (el: Element) => void };
   }
 }
 
@@ -64,12 +73,10 @@ customElement("cc-graph", {}, () => {
   element.textContent = "";
 
   const [groups, setGroups] = createSignal<Group[]>([]);
-  const [selected, setSelected] = createSignal<Set<string>>(new Set());
   const [focused, setFocused] = createSignal<string | null>(null);
   const [hovered, setHovered] = createSignal<string | null>(null);
-  const [pinned, setPinned] = createSignal<string | null>(null);
 
-  const nodeRefs = new Map<string, HTMLButtonElement>();
+  const nodeRefs = new Map<string, HTMLAnchorElement>();
 
   async function load() {
     try {
@@ -96,32 +103,9 @@ customElement("cc-graph", {}, () => {
   const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
 
   const traced = createMemo(() => {
-    const from = hovered() ?? focused() ?? pinned();
+    const from = hovered() ?? focused();
     return from ? traceChain(from, edges()) : new Set<string>();
   });
-
-  function toggle(url: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(url)) next.delete(url);
-      else next.add(url);
-      return next;
-    });
-  }
-
-  function submit() {
-    window.htmx?.ajax("POST", "/launch/open", {
-      target: "#launch-modal",
-      swap: "innerHTML",
-      values: { ticket: [...selected()] },
-    });
-  }
-
-  function onNodeClick(url: string) {
-    toggle(url);
-    if (window.matchMedia(PHONE).matches) setPinned((prev) => (prev === url ? null : url));
-    else setPinned(null);
-  }
 
   function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
     const dir = ({ ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] } as const)[
@@ -141,12 +125,6 @@ customElement("cc-graph", {}, () => {
 
   return (
     <div>
-      <div class="mb-[0.4rem] flex items-center gap-[0.6rem] text-[0.85em] text-muted">
-        <span>{selected().size} selected</span>
-        <button type="button" class="btn ml-auto" disabled={selected().size === 0} onClick={submit}>
-          launch selected
-        </button>
-      </div>
       <div class="relative h-[70vh] overflow-auto rounded border border-border" data-graph-panel>
         <div class="relative" style={{ width: `${bounds().width}px`, height: `${bounds().height}px` }}>
           <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
@@ -178,25 +156,30 @@ customElement("cc-graph", {}, () => {
           </svg>
           <For each={nodes()}>
             {(node) => {
-              const isSelected = () => selected().has(node.url);
-              const isLit = () => isSelected() || traced().has(node.url);
+              const isLit = () => traced().has(node.url);
+              const href = () => sessionPath(node.url);
               return (
-                <button
-                  type="button"
+                <a
                   data-node
-                  class="absolute grid h-[104px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left [font:inherit] text-inherit"
+                  class="absolute grid h-[104px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left no-underline [font:inherit] text-inherit"
                   classList={{
                     "bg-surface": node.glyph !== "blocked",
                     "bg-canvas border-dashed": node.glyph === "blocked",
                     "border-border": !isLit() && node.glyph !== "done",
                     "border-border-soft": !isLit() && node.glyph === "done",
                     "border-s-attention": isLit(),
-                    "shadow-[0_0_0_1px_var(--color-s-attention)]": isSelected(),
                   }}
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
-                  ref={(el) => nodeRefs.set(node.url, el)}
-                  aria-pressed={isSelected()}
-                  onClick={() => onNodeClick(node.url)}
+                  href={href() || undefined}
+                  hx-get={href() || undefined}
+                  hx-select="#main"
+                  hx-target="#main"
+                  hx-swap="outerHTML"
+                  hx-push-url="true"
+                  ref={(el) => {
+                    nodeRefs.set(node.url, el);
+                    queueMicrotask(() => window.htmx?.process(el));
+                  }}
                   onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
                   onPointerLeave={() => setHovered(null)}
                   onFocus={(e) => e.currentTarget.matches(":focus-visible") && setFocused(node.url)}
@@ -215,7 +198,7 @@ customElement("cc-graph", {}, () => {
                     {node.title || "untitled"}
                   </span>
                   <span class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted">{nodeFoot(node)}</span>
-                </button>
+                </a>
               );
             }}
           </For>
