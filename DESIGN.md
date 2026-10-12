@@ -26,6 +26,12 @@ colors:
   s-running-soft: "color-mix(in oklab, oklch(0.76 0.15 75), oklch(0.995 0.001 90) 86%)"
   s-done-soft: "color-mix(in oklab, oklch(0.6 0.14 155), oklch(0.995 0.001 90) 88%)"
   s-failed-soft: "color-mix(in oklab, oklch(0.6 0.2 27), oklch(0.995 0.001 90) 90%)"
+  hue-1: "oklch(0.93 0.045 200)"
+  hue-1-ink: "oklch(0.42 0.1 200)"
+  hue-2: "oklch(0.93 0.045 320)"
+  hue-2-ink: "oklch(0.42 0.1 320)"
+  hue-3: "oklch(0.93 0.045 145)"
+  hue-3-ink: "oklch(0.42 0.1 145)"
 typography:
   display:
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
@@ -225,6 +231,11 @@ each key in the frontmatter.
   deletions. `s-failed-soft` is the failed badge and callout ground.
 - **Queued Grey** (`s-queued`): the blocked ring and queued segments.
 
+### Tertiary
+
+- **Project hues** (`hue-1`…`hue-3`, each with an `-ink` partner): the project avatar's ground
+  and letter. Three soft hues (teal, orchid, sage) tell projects apart. They are never a status.
+
 ### Neutral
 
 - **Canvas** (`canvas`): the app background and the session rail. The rail sits one step dimmer
@@ -241,7 +252,7 @@ each key in the frontmatter.
 **The Your-Move Rule.** Indigo marks the next action and nothing else. If a screen has no action
 waiting, it should have almost no indigo.
 
-**The State-or-Nothing Rule.** A colour is a state, a scope avatar's hue, or your next move.
+**The State-or-Nothing Rule.** A colour is a state, a project's hue, or your next move.
 Nothing else gets colour.
 
 **The No-Literal Rule.** Templates and islands never carry a colour literal. Colour is a token,
@@ -377,9 +388,11 @@ state's soft colour.
 - **Chip:** a 22px pill with a hairline border, in 12px/510, for features, branches (mono
   variant) and filters.
 - **Badge:** see Status glyph.
-- **Scope avatar:** a 16px lettered square, 4px corners, in one of three soft hues. It stands for
-  the repo, keyed by owner, wherever the prototype shows a project. The hue tells repos apart
-  and is never a status. The app has no project concept (`CONTEXT.md`).
+- **Project avatar:** a 16px lettered square on a project hue, drawn by the named class `avatar`
+  with `[data-hue]`. A project is a named set of repos
+  ([ADR 23](docs/adr/0023-a-project-is-a-set-of-repos.md)). The avatar marks the project beside
+  every ticket, feature and repo, and in the rail's scope menu (`G 0`–`G 9`). A repo with no
+  project gets the neutral `surface-3` square.
 
 ### Tabs
 
@@ -446,8 +459,8 @@ loop: the shimmer on a running line and a 2.4s breathe on a live glyph. Everythi
 ### Do:
 
 - **Do** compose state colour through the named classes (`glyph`, `meter`, `meter-fill`,
-  `segbar-segment`, `banner`, `flag`, `line-*`, `[data-glyph]`). Use utilities only for layout
-  and spacing.
+  `segbar-segment`, `banner`, `flag`, `avatar`, `line-*`, `[data-glyph]`, `[data-hue]`). Use
+  utilities only for layout and spacing.
 - **Do** pair every glyph with its state word somewhere on screen.
 - **Do** keep one primary button per screen, on the owner's next move.
 - **Do** compare every changed page against its `design/signal` route at 1440px and 390px.
@@ -460,5 +473,5 @@ loop: the shimmer on a running line and a 2.4s breathe on a live glyph. Everythi
   `s-live`, `s-wait`, `s-stop`, `s-idle`, `s-check`) are on their way out.
 - **Don't** colour `running` indigo or `checking` teal. Every working state is amber.
 - **Don't** draw full table grids, tinted table heads or `[bracket]` buttons.
-- **Don't** use mono as decoration, or a colour that is not a state, a scope hue or your move.
+- **Don't** use mono as decoration, or a colour that is not a state, a project hue or your move.
 - **Don't** add a dark theme, a component library, or a third-party font request.

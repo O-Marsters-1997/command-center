@@ -19,7 +19,7 @@ for a team.
 Command Centre launches coding agents on scoped tickets and watches each one through to a merged
 PR. Tickets are grouped into features, and a feature carries a dependency stack. Launching a
 feature therefore means many agents running in waves, as each blocker merges. Success is the
-owner keeping several features moving across repos at once without losing track of which agent
+owner keeping several features moving across projects at once without losing track of which agent
 needs them.
 
 ## Positioning
@@ -30,7 +30,7 @@ merge, and show a whole feature's wave progress across repos.
 
 ## Operating Context
 
-- On a heavy day: 2–3 repos' worth of work, 2–4 features running, under 10 live agents.
+- On a heavy day: 2–3 projects, 2–4 features running, under 10 live agents.
 - Agents run in one git worktree per ticket. They open draft PRs and wait on required checks. The
   repos are squash-merge only, so GitHub's PR state is the merge test.
 - Usage is bounded by five-hour and weekly model limits, shown as meters. Launching pauses when
@@ -58,8 +58,10 @@ merge, and show a whole feature's wave progress across repos.
 - **Destinations:** the session view (transcript, raw log, feature stack), the feature graph and
   board, the launch dialog, all tickets, insights (limits, spend per merged ticket), and the
   tracked repos and repo pages. Every page is a path route beside a polling rail.
-- **Terminology** follows `CONTEXT.md`. There is no project concept: where the design shows a
-  project, the repo stands in.
+- **Projects.** A project is a named set of repos that the owner groups on the Repos page
+  (ADR 23). It is the third scope axis after feature and repo, chosen from the rail's scope
+  menu or with `G 0`–`G 9`. It is not the tracker's `project:` label, which marks a feature.
+- **Terminology** follows `CONTEXT.md`.
 - **Not built yet**, shown in the design as target UI: the composer's model, effort and worktree
   pickers; Undo on every verb; the peek panel; the merged-tickets table on Insights; and graph
   nodes that open their session.
