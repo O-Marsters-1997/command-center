@@ -54,6 +54,8 @@ The stack is unusual and the wrong assumption is expensive.
   ([ADR 1](docs/adr/0001-one-global-stylesheet.md)), so their classes are page-global. They share
   `web/src/layout.ts`; neither imports the other. Load the `solid-islands` skill before editing
   `web/src/` or adding a `cc-*` element.
+- **Load the `changing-the-core` skill** before editing `internal/plan` or `internal/loop`, adding a
+  verb, state, intent or tick step, or touching `handleVerb`.
 - **Tailwind v4, CSS-first.** `web/app.css` holds the `@theme` oklch tokens. The
   theme is light only: no dark block, no toggle
   ([ADR 17](docs/adr/0017-signal-replaces-the-theme.md)). There is no `tailwind.config.*` and will not be one.
