@@ -157,6 +157,7 @@
 </header>
 <div class="content">
 <article class="session" data-session="https://github.com/acme/web/issues/1">
+<div class="session-main">
   <header class="session-head">
     <span class="badge" data-glyph="pending"><span class="glyph glyph-pending">push_pending</span></span>
     <h1 class="session-ref">#1</h1>
@@ -186,7 +187,13 @@
       <div class="run-log-live" hx-ext="sse" sse-connect="/ticket/https:%2F%2Fgithub.com%2Facme%2Fweb%2Fissues%2F1/log?from=144&amp;records=0" sse-swap="message" sse-close="end" hx-swap="beforeend"></div>
     </div>
   </div>
-  <aside class="stack-panel" aria-label="feature stack">
+  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
+  <div class="verbs" data-glyph="pending"><a class="btn" href="/s/acme/web/1?log=raw">Open log</a>
+  </div>
+</div>
+</div>
+<button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
+  <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
     <h2 class="stack-title">Blocked by</h2><p class="text-muted">Nothing blocks this ticket.</p>
     <h2 class="stack-title">Merging this unlocks</h2><p class="text-muted">Nothing waits on this ticket.</p>
     <form method="post" action="/ticket" class="stack-form">
@@ -200,10 +207,6 @@
       <button type="submit" class="btn">save</button>
     </form>
   </aside>
-  <div id="session-actions" class="session-actions" hx-get="/s/acme/web/1?part=actions" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  <div class="verbs"><a class="btn" href="/s/acme/web/1?log=raw">Open log</a>
-  </div>
-</div>
 </article>
 </div>
 </main>
