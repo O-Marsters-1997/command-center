@@ -4,6 +4,7 @@
 {{template "shellAction" .}}
 {{template "shellContent" .}}
 <article class="session" data-session="{{.Row.URL}}">
+<div class="session-main">
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.State}}</span></span>
     <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
@@ -61,7 +62,10 @@
     {{- end}}
   </div>
   {{- end}}
-  <aside class="stack-panel" aria-label="feature stack">
+  {{template "sessionActions" .}}
+</div>
+<button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
+  <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
     <h2 class="stack-title">Blocked by</h2>
     {{- if .Stack.Blockers}}
     <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
@@ -84,11 +88,10 @@
       <button type="submit" class="btn">save</button>
     </form>
   </aside>
-  {{template "sessionActions" .}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
   {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="true" role="status">{{.}}</div>{{end}}
-  <div class="verbs">
+  <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .ActionVerbs}}
     <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
@@ -113,7 +116,7 @@
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
-    <button class="btn btn-primary" type="submit">{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
+    <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
   </form>
   {{- end}}
 </div>{{end}}
