@@ -84,10 +84,14 @@ func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIn
 		return err
 	}
 	for _, intent := range intents {
-		if err := fn(intent); errors.Is(err, errIntentPending) {
+		err := fn(intent)
+		if errors.Is(err, errIntentPending) {
 			continue
-		} else if err != nil {
-			return err
+		}
+		if err != nil {
+			if err := l.event(ctx, intent.TicketID, eventIntentFailed, fmt.Sprintf("%s: %v", verb, err)); err != nil {
+				return err
+			}
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
 			return err

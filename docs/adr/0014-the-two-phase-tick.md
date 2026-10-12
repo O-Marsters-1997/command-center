@@ -22,6 +22,12 @@ A tick is observe, **absorb**, one `PlanInput` and `Derive`, then **act**.
 - Retarget runs after the spawning verbs and before refresh, so a refresh never repeats a restack.
 - Import and edit-ticket intents still run before observe, so the observation reads the new branch.
 - Steps stay `func(ctx, snap) error`, called in order in `RunOnce`: no slice, no dispatch table.
+- Errors split three ways. A refusal is an event, recorded and the intent consumed. An intent whose
+  handler fails (a git error, a failed cancel) is consumed with an `intent_failed` event naming the
+  verb and the error, and the tick carries on; the operator presses the verb again. Only an error
+  from the loop's own store calls aborts the tick, and the event is written before the intent is
+  consumed, so a database outage leaves the intent queued. An intent that is not ready yet
+  (`errIntentPending`, a follow-up queued while the run is alive) stays queued.
 - Launch asks `Snapshot.LaunchAfter(spawned)`, so a verb's spawn and an automatic launch share
   `max_agents`.
 
