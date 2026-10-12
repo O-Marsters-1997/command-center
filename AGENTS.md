@@ -52,7 +52,8 @@ The stack is unusual and the wrong assumption is expensive.
   ([ADR 20](docs/adr/0020-the-board-sections-by-attention.md)).
 - **Two Solid islands**, `web/src/graph.tsx` and `web/src/launch-modal.tsx`, opt out of shadow DOM
   ([ADR 1](docs/adr/0001-one-global-stylesheet.md)), so their classes are page-global. They share
-  `web/src/layout.ts`; neither imports the other.
+  `web/src/layout.ts`; neither imports the other. Load the `solid-islands` skill before editing
+  `web/src/` or adding a `cc-*` element.
 - **Tailwind v4, CSS-first.** `web/app.css` holds the `@theme` oklch tokens. The
   theme is light only: no dark block, no toggle
   ([ADR 17](docs/adr/0017-signal-replaces-the-theme.md)). There is no `tailwind.config.*` and will not be one.
