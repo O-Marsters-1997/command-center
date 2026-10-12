@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"slices"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -17,11 +16,11 @@ func TestStateStringIsDistinctAndOnlyBlockedReadsBlocked(t *testing.T) {
 	for i := range plan.StateCount {
 		name := plan.State(i).String()
 		if prev, dup := seen[name]; dup {
-			t.Errorf("State(%d).String() = %q, same as State(%d)", i, name, prev)
+			t.Errorf("State(%d).String() = %q, want a name distinct from State(%d)", i, name, prev)
 		}
 		seen[name] = i
 		if name == "blocked" && plan.State(i) != plan.Blocked {
-			t.Errorf("State(%d).String() = %q, want a case of its own", i, name)
+			t.Errorf("State(%d).String() = %q, want only Blocked to read %q", i, name, "blocked")
 		}
 	}
 	if got := plan.Blocked.String(); got != "blocked" {
@@ -75,12 +74,14 @@ func TestUnattendedNamesEveryState(t *testing.T) {
 	})
 
 	for _, state := range states {
-		switch n := countOf(named, state); n {
-		case 1:
-		case 0:
-			t.Errorf("Unattended has no case for %s", state)
-		default:
-			t.Errorf("Unattended names %s %d times", state, n)
+		n := 0
+		for _, name := range named {
+			if name == state {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("Unattended names %s %d times, want once", state, n)
 		}
 	}
 }
@@ -91,8 +92,4 @@ func isStateSpec(spec *ast.ValueSpec, seen []string) bool {
 		return ok && id.Name == "State"
 	}
 	return spec.Type == nil && len(spec.Values) == 0
-}
-
-func countOf(names []string, want string) int {
-	return len(slices.DeleteFunc(slices.Clone(names), func(s string) bool { return s != want }))
 }
