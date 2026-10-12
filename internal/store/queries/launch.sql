@@ -45,6 +45,6 @@ SELECT l.created_at
 FROM launches l
 JOIN launch_members lm ON lm.launch_id = l.id
 JOIN tickets t ON t.url = lm.ticket_id
-WHERE t.feature = $1
+WHERE t.feature = $1 AND l.state <> 'cancelled'
 ORDER BY l.created_at
 LIMIT 1;

@@ -153,7 +153,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	sections := Sectioned(scoped)
 	blocking := make(map[string][]string, len(scoped))
 	for _, row := range scoped {
-		blocking[row.URL] = row.Blocking
+		blocking[row.URL] = row.BlockedBy
 	}
 	var launched *Age
 	if params.Feature != "" {
