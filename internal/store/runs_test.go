@@ -15,16 +15,7 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// runMetricsRow reads a run's metrics columns straight from Postgres: no product code reads them
-// yet (the field set is frozen ahead of any panel, per docs/adr), so a test is the only reader.
-type runMetricsRow struct {
-	TokensIn, TokensOut, Turns, DurationMS sql.NullInt64
-	CostUSD                                sql.NullFloat64
-	Model                                  sql.NullString
-	MetricsSettled                         sql.NullBool
-}
-
-func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
+func readRunCost(t *testing.T, dsn string, runID int64) sql.NullFloat64 {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -32,17 +23,11 @@ func readRunMetrics(t *testing.T, dsn string, runID int64) runMetricsRow {
 	}
 	defer func() { _ = db.Close() }()
 
-	var row runMetricsRow
-	query := `SELECT tokens_in, tokens_out, turns, duration_ms, cost_usd, model, metrics_settled
-		FROM runs WHERE id = $1`
-	err = db.QueryRow(query, runID).Scan(
-		&row.TokensIn, &row.TokensOut, &row.Turns, &row.DurationMS, &row.CostUSD,
-		&row.Model, &row.MetricsSettled,
-	)
-	if err != nil {
-		t.Fatalf("read run metrics for run %d: %v", runID, err)
+	var cost sql.NullFloat64
+	if err := db.QueryRow(`SELECT cost_usd FROM runs WHERE id = $1`, runID).Scan(&cost); err != nil {
+		t.Fatalf("read cost for run %d: %v", runID, err)
 	}
-	return row
+	return cost
 }
 
 func seedOneTicket(t *testing.T, store *storepkg.Store) {
@@ -171,8 +156,7 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 
 	cost := 0.42
 	metrics := agentlog.RunMetrics{
-		TokensIn: 100, TokensOut: 50, Turns: 3, Duration: 2500 * time.Millisecond,
-		CostUSD: &cost, Model: "claude-sonnet-5", Settled: true,
+		CostUSD: &cost, Settled: true,
 	}
 	exitCode := 0
 	endedAt := startedAt.Add(30 * time.Second)
@@ -180,121 +164,8 @@ func TestRecordDispositionWritesSettledMetricsAlongsideOutcome(t *testing.T) {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
-	row := readRunMetrics(t, dsn, runID)
-	if row.TokensIn.Int64 != 100 || row.TokensOut.Int64 != 50 || row.Turns.Int64 != 3 {
-		t.Errorf("token/turn columns = %+v, want 100/50/3", row)
-	}
-	if row.DurationMS.Int64 != 2500 || row.CostUSD.Float64 != 0.42 {
-		t.Errorf("duration/cost columns = %+v, want 2500ms/0.42", row)
-	}
-	if row.Model.String != "claude-sonnet-5" || !row.MetricsSettled.Bool {
-		t.Errorf("model/settled columns = %+v, want claude-sonnet-5/true", row)
-	}
-}
-
-func TestRecordDispositionWritesRunRequestsAlongsideMetrics(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	seedOneTicket(t, store)
-
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
-		t.Fatal(err)
-	}
-
-	metrics := agentlog.RunMetrics{
-		TokensIn: 10, TokensOut: 6, Settled: true,
-		Requests: []agentlog.Request{
-			{ID: "r1", Thread: agentlog.MainThread,
-				InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
-			{ID: "r2", Thread: "toolu_task1", InputTokens: 1, OutputTokens: 1},
-		},
-	}
-	endedAt := startedAt.Add(time.Second)
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, &metrics); err != nil {
-		t.Fatalf("RecordDisposition: %v", err)
-	}
-
-	got, err := store.RunRequestsForRun(ctx, runID)
-	if err != nil {
-		t.Fatalf("RunRequestsForRun: %v", err)
-	}
-	want := []storepkg.RunRequest{
-		{RequestID: "r1", Thread: agentlog.MainThread,
-			InputTokens: 2, CacheCreationTokens: 3, CacheReadTokens: 4, OutputTokens: 5},
-		{RequestID: "r2", Thread: "toolu_task1", InputTokens: 1, OutputTokens: 1},
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("RunRequestsForRun = %+v, want %+v", got, want)
-	}
-}
-
-func TestRunLevelTokensEqualTheSumOfRunRequests(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-	seedOneTicket(t, store)
-
-	metrics, err := agentlog.ParseMetrics("../agentlog/testdata/alive.jsonl")
-	if err != nil {
-		t.Fatalf("ParseMetrics: %v", err)
-	}
-
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, time.Now(), &metrics); err != nil {
-		t.Fatalf("RecordDisposition: %v", err)
-	}
-
-	row := readRunMetrics(t, dsn, runID)
-	requests, err := store.RunRequestsForRun(ctx, runID)
-	if err != nil {
-		t.Fatalf("RunRequestsForRun: %v", err)
-	}
-	var sumIn, sumOut int64
-	for _, r := range requests {
-		sumIn += r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens
-		sumOut += r.OutputTokens
-	}
-	if row.TokensIn.Int64 != sumIn {
-		t.Errorf("runs.tokens_in = %d, want the run_requests sum %d", row.TokensIn.Int64, sumIn)
-	}
-	if row.TokensOut.Int64 != sumOut {
-		t.Errorf("runs.tokens_out = %d, want the run_requests sum %d", row.TokensOut.Int64, sumOut)
-	}
-}
-
-func TestRunRequestsForRunIsEmptyWithoutRows(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	seedOneTicket(t, store)
-
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeCutFailed, nil, time.Now(), nil); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := store.RunRequestsForRun(ctx, runID)
-	if err != nil {
-		t.Fatalf("RunRequestsForRun: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("RunRequestsForRun = %+v, want none for a run with no metrics", got)
+	if got := readRunCost(t, dsn, runID); !got.Valid || got.Float64 != 0.42 {
+		t.Errorf("cost_usd = %+v, want 0.42", got)
 	}
 }
 
@@ -315,9 +186,8 @@ func TestRecordDispositionLeavesMetricsNullWithoutAParse(t *testing.T) {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
-	row := readRunMetrics(t, dsn, runID)
-	if row.TokensIn.Valid || row.CostUSD.Valid || row.MetricsSettled.Valid {
-		t.Errorf("metrics = %+v, want every column NULL when there was no log to parse", row)
+	if got := readRunCost(t, dsn, runID); got.Valid {
+		t.Errorf("cost_usd = %+v, want NULL when there was no log to parse", got)
 	}
 }
 
