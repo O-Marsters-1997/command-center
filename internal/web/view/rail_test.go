@@ -107,7 +107,7 @@ func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
 	t.Parallel()
 
 	row := railRow("3", "billing", plan.GlyphAttention)
-	row.State = plan.AwaitingInput.String()
+	row.state = plan.AwaitingInput
 	row.Reason = "Which database?"
 	row.Verbs = []string{plan.VerbFollowUp, plan.VerbReRun}
 
@@ -127,7 +127,7 @@ func TestBuildRailKeepsTheVerbWhenAnAwaitingInputRunCannotBeRepliedTo(t *testing
 	t.Parallel()
 
 	row := railRow("4", "billing", plan.GlyphAttention)
-	row.State = plan.AwaitingInput.String()
+	row.state = plan.AwaitingInput
 	row.Reason = "Which database?"
 	row.Verbs = []string{plan.VerbReRun}
 
