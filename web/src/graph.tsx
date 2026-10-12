@@ -1,5 +1,5 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
-import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import {
   CARD,
   MARGIN,
@@ -14,6 +14,7 @@ import {
 import type { Group, Row } from "./types";
 
 const POLL_MS = 5000;
+const PHONE = "(max-width: 759px)";
 
 declare global {
   interface Window {
@@ -102,6 +103,20 @@ customElement("cc-graph", {}, () => {
 
   const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
 
+  const waves = createMemo(() =>
+    Array.from({ length: waveCount() }, (_, col) => ({ col, nodes: nodes().filter((n) => n.col === col) })),
+  );
+
+  const phoneQuery = window.matchMedia(PHONE);
+  const [phone, setPhone] = createSignal(phoneQuery.matches);
+  const onPhoneChange = (e: MediaQueryListEvent) => {
+    setHovered(null);
+    setFocused(null);
+    setPhone(e.matches);
+  };
+  phoneQuery.addEventListener("change", onPhoneChange);
+  onCleanup(() => phoneQuery.removeEventListener("change", onPhoneChange));
+
   const traced = createMemo(() => {
     const from = hovered() ?? focused();
     return from ? traceChain(from, edges()) : new Set<string>();
@@ -123,87 +138,107 @@ customElement("cc-graph", {}, () => {
     nodeRefs.get(inDirection[0].url)?.focus();
   }
 
+  function nodeLink(node: GraphNode, stacked: boolean) {
+    const isLit = () => traced().has(node.url);
+    const href = () => sessionPath(node.url);
+    return (
+      <a
+        data-node
+        class="grid h-[104px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left no-underline [font:inherit] text-inherit"
+        classList={{
+          "absolute w-[240px]": !stacked,
+          "w-full": stacked,
+          "bg-surface": node.glyph !== "blocked",
+          "bg-canvas border-dashed": node.glyph === "blocked",
+          "border-border": !isLit() && node.glyph !== "done",
+          "border-border-soft": !isLit() && node.glyph === "done",
+          "border-s-attention": isLit(),
+        }}
+        style={stacked ? undefined : { left: `${node.x}px`, top: `${node.y}px` }}
+        href={href() || undefined}
+        hx-get={href() || undefined}
+        hx-select="#main"
+        hx-target="#main"
+        hx-swap="outerHTML"
+        hx-push-url="true"
+        ref={(el) => {
+          nodeRefs.set(node.url, el);
+          queueMicrotask(() => window.htmx?.process(el));
+        }}
+        onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
+        onPointerLeave={() => setHovered(null)}
+        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setFocused(node.url)}
+        onBlur={() => setFocused(null)}
+        onKeyDown={(e) => onNodeKeyDown(e, node)}
+      >
+        <span class="flex items-center gap-[7px]">
+          <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
+          <span class="text-xs text-meta">{ticketRef(node.url)}</span>
+          <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
+        </span>
+        <span
+          class="overflow-hidden text-sm font-medium leading-[1.35]"
+          style={{ display: "-webkit-box", "-webkit-line-clamp": 2, "-webkit-box-orient": "vertical" }}
+        >
+          {node.title || "untitled"}
+        </span>
+        <span class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted">
+          {nodeFoot(node)}
+        </span>
+      </a>
+    );
+  }
+
   return (
     <div>
-      <div class="relative h-[70vh] overflow-auto rounded border border-border" data-graph-panel>
-        <div class="relative" style={{ width: `${bounds().width}px`, height: `${bounds().height}px` }}>
-          <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
-            {(col) => (
-              <span
-                class="absolute top-1 text-xs font-medium text-fg-2"
-                style={{ left: `${MARGIN + col * CARD.colW}px` }}
-              >
-                {waveLabel(col)}
-              </span>
-            )}
-          </For>
-          <svg width={bounds().width} height={bounds().height} aria-hidden="true" role="presentation">
-            <For each={edges()}>
-              {(edge) => {
-                const lit = () => traced().has(edge.from.url) && traced().has(edge.to.url);
-                return (
-                  <path
-                    class="fill-none"
-                    classList={{
-                      "stroke-border stroke-[1.5]": !lit(),
-                      "stroke-s-attention stroke-[2.5]": lit(),
-                    }}
-                    d={edgePath(edge, CARD)}
-                  />
-                );
-              }}
+      <Show
+        when={!phone()}
+        fallback={
+          <div class="grid gap-4">
+            <For each={waves()}>
+              {(wave) => (
+                <section class="grid gap-2" aria-label={waveLabel(wave.col)}>
+                  <h3 class="text-xs font-medium text-fg-2">{waveLabel(wave.col)}</h3>
+                  <For each={wave.nodes}>{(node) => nodeLink(node, true)}</For>
+                </section>
+              )}
             </For>
-          </svg>
-          <For each={nodes()}>
-            {(node) => {
-              const isLit = () => traced().has(node.url);
-              const href = () => sessionPath(node.url);
-              return (
-                <a
-                  data-node
-                  class="absolute grid h-[104px] w-[240px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left no-underline [font:inherit] text-inherit"
-                  classList={{
-                    "bg-surface": node.glyph !== "blocked",
-                    "bg-canvas border-dashed": node.glyph === "blocked",
-                    "border-border": !isLit() && node.glyph !== "done",
-                    "border-border-soft": !isLit() && node.glyph === "done",
-                    "border-s-attention": isLit(),
-                  }}
-                  style={{ left: `${node.x}px`, top: `${node.y}px` }}
-                  href={href() || undefined}
-                  hx-get={href() || undefined}
-                  hx-select="#main"
-                  hx-target="#main"
-                  hx-swap="outerHTML"
-                  hx-push-url="true"
-                  ref={(el) => {
-                    nodeRefs.set(node.url, el);
-                    queueMicrotask(() => window.htmx?.process(el));
-                  }}
-                  onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
-                  onPointerLeave={() => setHovered(null)}
-                  onFocus={(e) => e.currentTarget.matches(":focus-visible") && setFocused(node.url)}
-                  onBlur={() => setFocused(null)}
-                  onKeyDown={(e) => onNodeKeyDown(e, node)}
+          </div>
+        }
+      >
+        <div class="relative h-[70vh] overflow-auto rounded border border-border" data-graph-panel>
+          <div class="relative" style={{ width: `${bounds().width}px`, height: `${bounds().height}px` }}>
+            <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
+              {(col) => (
+                <span
+                  class="absolute top-1 text-xs font-medium text-fg-2"
+                  style={{ left: `${MARGIN + col * CARD.colW}px` }}
                 >
-                  <span class="flex items-center gap-[7px]">
-                    <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
-                    <span class="text-xs text-meta">{ticketRef(node.url)}</span>
-                    <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
-                  </span>
-                  <span
-                    class="overflow-hidden text-sm font-medium leading-[1.35]"
-                    style={{ display: "-webkit-box", "-webkit-line-clamp": 2, "-webkit-box-orient": "vertical" }}
-                  >
-                    {node.title || "untitled"}
-                  </span>
-                  <span class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted">{nodeFoot(node)}</span>
-                </a>
-              );
-            }}
-          </For>
+                  {waveLabel(col)}
+                </span>
+              )}
+            </For>
+            <svg width={bounds().width} height={bounds().height} aria-hidden="true" role="presentation">
+              <For each={edges()}>
+                {(edge) => {
+                  const lit = () => traced().has(edge.from.url) && traced().has(edge.to.url);
+                  return (
+                    <path
+                      class="fill-none"
+                      classList={{
+                        "stroke-border stroke-[1.5]": !lit(),
+                        "stroke-s-attention stroke-[2.5]": lit(),
+                      }}
+                      d={edgePath(edge, CARD)}
+                    />
+                  );
+                }}
+              </For>
+            </svg>
+            <For each={nodes()}>{(node) => nodeLink(node, false)}</For>
+          </div>
         </div>
-      </div>
+      </Show>
     </div>
   );
 });
