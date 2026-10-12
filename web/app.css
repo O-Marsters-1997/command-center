@@ -603,7 +603,6 @@
   }
 
   .line-you {
-    --glyph: var(--color-s-attention);
     display: block;
     margin: 0 0 var(--space-5) auto;
     max-width: 80%;
@@ -1254,7 +1253,10 @@
   flex-direction: column;
   gap: var(--space-2);
   position: sticky;
-  top: 0;
+  inset: 0 auto auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
   margin: 0;
   padding: var(--space-4) var(--space-3);
   border: 0;
@@ -1449,6 +1451,17 @@
 
 .btn-send:hover {
   background: var(--color-accent-hover);
+}
+
+.btn-send:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+
+@media (max-width: 759px) {
+  .btn-send {
+    width: var(--hit-min);
+    height: var(--hit-min);
+  }
 }
 
 .toast {
