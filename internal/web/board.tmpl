@@ -84,7 +84,6 @@
         <span class="segbar-segment" data-kind="follow_up" style="flex-grow: {{.FollowUpPctWeek}}"></span>
       </span>
       {{printf "%.2f" .SpendPctWeek}}% week{{if .TicketOpen}} <span class="text-muted text-[0.85em]">open</span>{{end}}
-      {{- else if .SpendSettled}}${{printf "%.2f" .SpendUSD}}
       {{- else if .SpendTokens}}{{.SpendTokens}} tok
       {{- else}}no spend{{end}}
     </td>

@@ -27,31 +27,24 @@ func writeLog(t *testing.T, lines ...string) string {
 	return path
 }
 
-func TestSpendCacheReportsTokensWhileAliveAndDollarsOnceSettled(t *testing.T) {
+func TestSpendCacheReportsTokensWhetherAliveOrSettled(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
 
-	alive := writeLog(t, aliveLine)
-	tokens, usd, settled := cache.Spend(alive)
-	if tokens != 15 || usd != 0 || settled {
-		t.Errorf("Spend(alive) = (%d, %v, %v); want (15, 0, false)", tokens, usd, settled)
+	if got := cache.Spend(writeLog(t, aliveLine)); got != 15 {
+		t.Errorf("Spend(alive) = %d, want 15", got)
 	}
-
-	ended := writeLog(t, aliveLine, resultLine)
-	tokens, usd, settled = cache.Spend(ended)
-	if tokens != 15 || usd != 1.23 || !settled {
-		t.Errorf("Spend(ended) = (%d, %v, %v); want (15, 1.23, true)", tokens, usd, settled)
+	if got := cache.Spend(writeLog(t, aliveLine, resultLine)); got != 15 {
+		t.Errorf("Spend(ended) = %d, want 15", got)
 	}
 }
 
 func TestSpendCacheReturnsTheZeroSpendForNoLogPath(t *testing.T) {
 	t.Parallel()
 
-	cache := NewSpendCache()
-	tokens, usd, settled := cache.Spend("")
-	if tokens != 0 || usd != 0 || settled {
-		t.Errorf("Spend(\"\") = (%d, %v, %v); want (0, 0, false)", tokens, usd, settled)
+	if got := NewSpendCache().Spend(""); got != 0 {
+		t.Errorf("Spend(\"\") = %d, want 0", got)
 	}
 }
 
@@ -60,20 +53,14 @@ func TestSpendCacheNeverRescansASettledLog(t *testing.T) {
 
 	cache := NewSpendCache()
 	path := writeLog(t, aliveLine, resultLine)
-
-	tokens, usd, settled := cache.Spend(path)
-	if !settled {
-		t.Fatalf("Spend(path) settled = false, want true")
-	}
+	tokens := cache.Spend(path)
 
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	for range 5 {
-		gotTokens, gotUSD, gotSettled := cache.Spend(path)
-		if gotTokens != tokens || gotUSD != usd || !gotSettled {
-			t.Errorf("Spend(path) after settling = (%d, %v, %v); want (%d, %v, true): a settled log is never rescanned",
-				gotTokens, gotUSD, gotSettled, tokens, usd)
+		if got := cache.Spend(path); got != tokens {
+			t.Errorf("Spend(path) after settling = %d, want %d: a settled log is never rescanned", got, tokens)
 		}
 	}
 }
@@ -82,14 +69,10 @@ func TestSpendCacheTreatsARerunsNewLogPathAsANewEntry(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
-	first := writeLog(t, aliveLine, resultLine)
-	cache.Spend(first)
+	cache.Spend(writeLog(t, aliveLine, resultLine))
 
-	second := writeLog(t, aliveLine, aliveLine)
-	tokens, usd, settled := cache.Spend(second)
-	if tokens != 15 || usd != 0 || settled {
-		t.Errorf("Spend(second) = (%d, %v, %v); want (15, 0, false): a fresh key, not the first's settled value",
-			tokens, usd, settled)
+	if got := cache.Spend(writeLog(t, aliveLine, aliveLine)); got != 15 {
+		t.Errorf("Spend(second) = %d, want 15: a fresh key, not the first's settled value", got)
 	}
 }
 
@@ -104,27 +87,25 @@ func TestSpendCacheRereadsALiveLogOnEveryCall(t *testing.T) {
 	if err := os.WriteFile(path, []byte(aliveLine+appended+resultLine), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tokens, usd, settled := cache.Spend(path)
-	if tokens != 18 || usd != 1.23 || !settled {
-		t.Errorf("Spend(path) after appending = (%d, %v, %v); want (18, 1.23, true)", tokens, usd, settled)
+	if got := cache.Spend(path); got != 18 {
+		t.Errorf("Spend(path) after appending = %d, want 18", got)
 	}
 }
 
 func TestSpendCacheSumsEveryDeduplicatedRequestOfAFixtureLog(t *testing.T) {
 	t.Parallel()
 
-	tokens, usd, settled := NewSpendCache().Spend(filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl"))
-	if tokens != 611097 || usd != 8.288799200000001 || !settled {
-		t.Errorf("Spend(run27) = (%d, %v, %v); want (611097, 8.288799200000001, true)", tokens, usd, settled)
+	got := NewSpendCache().Spend(filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl"))
+	if got != 611097 {
+		t.Errorf("Spend(run27) = %d, want 611097", got)
 	}
 }
 
 func TestSpendCacheReportsNoSpendForALogNotYetWritten(t *testing.T) {
 	t.Parallel()
 
-	tokens, usd, settled := NewSpendCache().Spend(filepath.Join(t.TempDir(), "absent.jsonl"))
-	if tokens != 0 || usd != 0 || settled {
-		t.Errorf("Spend(absent) = (%d, %v, %v); want (0, 0, false)", tokens, usd, settled)
+	if got := NewSpendCache().Spend(filepath.Join(t.TempDir(), "absent.jsonl")); got != 0 {
+		t.Errorf("Spend(absent) = %d, want 0", got)
 	}
 }
 
