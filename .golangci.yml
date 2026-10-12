@@ -55,16 +55,16 @@ linters:
             - github.com/O-Marsters-1997/command-center/internal/verdict
           deny:
             - pkg: database/sql
-              desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0015)
+              desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0013)
             - pkg: os/exec
-              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0015)
+              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
             - pkg: net/http
-              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0015)
+              desc: plan imports nothing impure; the loop observes and passes facts in (ADR 0013)
         ccdb-in-store:
           files: ["$all", "!**/internal/store/**"]
           deny:
             - pkg: github.com/O-Marsters-1997/command-center/internal/store/ccdb
-              desc: only internal/store uses the generated queries; call a Store method (ADR 0005)
+              desc: only internal/store uses the generated queries; call a Store method (ADR 0004)
         no-testify:
           files: ["**/*_test.go"]
           deny:

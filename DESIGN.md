@@ -196,7 +196,7 @@ with nothing to do shows almost no indigo.
 
 **Key Characteristics:**
 
-- Light only. There is no dark theme and no toggle ([ADR 17](docs/adr/0017-signal-replaces-the-theme.md)).
+- Light only. There is no dark theme and no toggle ([ADR 1](docs/adr/0001-one-global-stylesheet.md)).
 - Lists, not cards. Rows run 30–46px. Cards appear only for the few sessions that need you.
 - Structure comes from surface steps and spacing, with few borders and soft ones.
 - One status grammar: eight glyph words, each a 14px ring that fills as work progresses.
@@ -286,7 +286,7 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 
 - **Shell.** A 300px session rail on `canvas`, then the main pane on `surface`. The rail is the
   scroll container that never swaps; `#main` is the swap target
-  ([ADR 19](docs/adr/0019-pages-are-routes-beside-a-polling-rail.md)).
+  ([ADR 15](docs/adr/0015-pages-are-routes-beside-a-polling-rail.md)).
 - **Rail anatomy.** From the top: a 44px head with the mark and the launch button, a 30px search
   field with a `⌘K` key hint, then the nav. Below that are three sections: Needs you (cards),
   In flight (feature groups with 28px heads and 30px rows), and Settled (collapsed). A footer
@@ -298,7 +298,7 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
   A 300px feature-stack panel sits on the right. Below 1180px the panel becomes an overlay that
   opens on demand.
 - **Lists.** Every list groups by attention: Needs you → In progress → Ready to launch → Blocked
-  → Done ([ADR 20](docs/adr/0020-the-board-sections-by-attention.md)). Group heads are 34px;
+  → Done ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). Group heads are 34px;
   board rows are at least 46px.
 - **Phone (≤760px).** The rail is the home screen. Every page opens over it with a back button.
   Rows grow to 40px, dialogs become bottom sheets, and the graph stacks its waves vertically.
@@ -349,7 +349,7 @@ A blocked node or an empty state uses a dashed border.
 This is the signature component. It is a 14px ring with a 1.5px stroke whose fill shows
 progress, drawn by the named class family `glyph glyph-{word}` with `[data-glyph]`. Go returns the
 word through `plan.Glyph`, and the template composes the class
-([ADR 18](docs/adr/0018-glyph-replaces-tone.md)). The words are `plan.Glyph`'s.
+([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). The words are `plan.Glyph`'s.
 
 | Word | Ring | Covers |
 |---|---|---|
@@ -382,7 +382,7 @@ state's soft colour.
 - **Badge:** see Status glyph.
 - **Project avatar:** a 16px lettered square on a project hue, drawn by the named class `avatar`
   with `[data-hue]`. A project is a named set of repos
-  ([ADR 23](docs/adr/0023-a-project-is-a-set-of-repos.md)). The avatar marks the project beside
+  ([ADR 6](docs/adr/0006-scope-is-a-view-concern.md)). The avatar marks the project beside
   every ticket, feature and repo, and in the rail's scope menu (`G 0`–`G 9`). A repo with no
   project gets the neutral `surface-3` square.
 

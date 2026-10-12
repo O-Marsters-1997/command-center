@@ -59,7 +59,7 @@ merge, and show a whole feature's wave progress across repos.
   board, the launch dialog, all tickets, insights (limits, spend per merged ticket), and the
   tracked repos and repo pages. Every page is a path route beside a polling rail.
 - **Projects.** A project is a named set of repos that the owner groups on the Repos page
-  (ADR 23). It is the third scope axis after feature and repo, chosen from the rail's scope
+  (ADR 6). It is the third scope axis after feature and repo, chosen from the rail's scope
   menu or with `G 0`–`G 9`. It is not the tracker's `project:` label, which marks a feature.
 - **Terminology** follows `CONTEXT.md`.
 - **Not built yet**, designed in `DESIGN.md` as target UI: the composer's model, effort and worktree

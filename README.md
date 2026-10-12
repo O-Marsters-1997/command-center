@@ -177,11 +177,7 @@ embedded template: `page.tmpl`, `board.tmpl`, `launch_modal.tmpl`,
 The board polls `GET /board` every five seconds and swaps the table into
 `<div id="board">`, so a tick never re-renders the shell. The header rides the
 shell as an `hx-swap-oob` region, so the live-agent count, the observe chip and
-the tick-error banner only refresh on a full page load. `data-theme` sits on
-`<html>`, outside every swap target; a head script reads the stored theme before
-first paint and the toggle writes it back to `localStorage`, which holds nothing
-else. Each row's detail sits in a sibling `<tr>` carrying `hx-preserve` and a
-stable id, so an expanded row survives the board's own swap.
+the tick-error banner only refresh on a full page load.
 
 The whole mux sits behind `http.CrossOriginProtection`, which rejects a
 cross-site POST -- read from `Sec-Fetch-Site`, with an `Origin`-vs-`Host`
@@ -326,9 +322,8 @@ stale banner use them; the board's own rows do not yet. Go emits no utility
 class anywhere, so nothing depends on Tailwind's scan and no class can be
 purged. `just assets` compiles it into
 `internal/web/assets/dist/app.css`, which is gitignored; `just build` and
-`just run` run `just assets` first. The built JS beside it is committed, so
-change `web/src` and you must commit the rebuilt output, or the `assets` job
-fails (ADR 21).
+`just run` run `just assets` first, and so does the built JS beside it
+(ADR 16).
 
 ## Docs
 

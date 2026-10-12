@@ -1,0 +1,28 @@
+# 13. Only plan derives
+
+**Date:** 2026-10-06 · **Status:** accepted
+
+## Context
+
+The board, the launch preview and the loop all need a ticket's state. If each composes it from the
+store and the observation, a caller can reach a different answer than the board.
+
+## Decision
+
+Only `internal/plan` derives. `Rules.Derive(Input)` returns a `Snapshot` holding every ticket's
+unlock, state, reason, run fact, conflicted base and draft reason, and `Snapshot.Offers` answers
+whether a row's state offers a verb.
+
+- The store returns `plan.Input` (`Store.PlanInput`). There is one adapter, with no store interface
+  and no fake.
+- `plan` owns `Observation` and the fact types a derivation reads, and imports only `spend` and
+  `verdict`, enforced by depguard.
+- The web derives per render. Nothing is cached between requests, so a page never shows a label the
+  stored facts no longer support.
+- `POST /verb` reads the snapshot and answers 409 with the row's state when it does not offer the verb.
+- The gates are tested through `Derive` as table tests, not layered under it.
+
+## Consequences
+
+A new rule is a change in `plan` and nowhere else. A handler that wants a ticket's state asks the
+snapshot; one that composes it from store reads is a bug.
