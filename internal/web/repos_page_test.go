@@ -104,7 +104,7 @@ func TestRepoSearchMarksARepoWhoseDefaultBranchIsNotMain(t *testing.T) {
 
 func searchRow(t *testing.T, body, fullName string) string {
 	t.Helper()
-	for row := range strings.SplitSeq(body, "<tr>") {
+	for row := range strings.SplitSeq(body, `<div class="track-hit"`) {
 		if strings.Contains(row, ">"+fullName+"</a>") {
 			return row
 		}

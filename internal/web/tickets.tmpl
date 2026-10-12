@@ -2,6 +2,8 @@
 {{template "scopeCrumbs" .}}
 {{template "shellAction" .}}
 {{template "shellContent" .}}
+<h1>All tickets</h1>
+{{with .Tabs}}{{with index . 0}}<p class="page-purpose">{{.Count}} ticket{{if ne .Count 1}}s{{end}} across your tracked repos.</p>{{end}}{{end}}
 <nav class="pill-tabs" aria-label="ticket filters">
   {{- range .Tabs}}
   <a class="pill-tab" href="{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}} <span class="section-count">{{.Count}}</span></a>

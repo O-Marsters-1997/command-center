@@ -1,18 +1,16 @@
 
-<div class="table-frame max-w-3xl">
-<table class="w-full">
+<div class="track-results" role="listbox" aria-label="repos found">
   
-  <tr>
-    <td><a href="/repos/acme/api">acme/api</a></td>
-    <td><span class="text-muted">not tracked</span></td>
-    <td><a href="/repos/acme/api">track &rarr;</a></td>
-  </tr>
+  <div class="track-hit" role="option" aria-selected="false">
+    <a class="font-mono" href="/repos/acme/api">acme/api</a>
+    <span class="text-muted text-xs">not tracked</span>
+    <a href="/repos/acme/api">track &rarr;</a>
+  </div>
   
-  <tr>
-    <td><a href="/repos/acme/payments-api">acme/payments-api</a></td>
-    <td><span class="text-muted">not tracked</span> <span class="glyph glyph-failed text-xs text-s-failed">will be refused: default branch is <code>master</code></span></td>
-    <td><a href="/repos/acme/payments-api">track &rarr;</a></td>
-  </tr>
+  <div class="track-hit" role="option" aria-selected="false">
+    <a class="font-mono" href="/repos/acme/payments-api">acme/payments-api</a>
+    <span class="text-muted text-xs">not tracked <span class="glyph glyph-failed text-s-failed">will be refused: default branch is <code>master</code></span></span>
+    <a href="/repos/acme/payments-api">track &rarr;</a>
+  </div>
   
-</table>
 </div>

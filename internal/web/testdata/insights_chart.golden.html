@@ -156,39 +156,48 @@
 </div>
 </header>
 <div class="content">
+<div class="page-narrow">
 <h1>Insights</h1>
-<p class="page-purpose">Limits and spend across the week.</p>
-<h2>Limits</h2>
-<ul class="mb-4 flex flex-col gap-2" aria-label="limits">
-  <li class="flex flex-wrap items-center gap-3">
-    <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-    <span>five-hour · 0%</span>
-    <span class="text-muted">no reset time yet</span>
-  </li>
-  <li class="flex flex-wrap items-center gap-3">
-    <span class="meter"><span class="meter-fill" style="width: 0%"></span></span>
-    <span>weekly · 0%</span>
-    <span class="text-muted">no reset time yet</span>
-  </li>
-  </ul>
-<h2>Spend per merged ticket</h2>
+<p class="page-purpose">What merged work costs, measured against your model limits.</p>
+<section class="module" aria-labelledby="limits-h">
+  <h2 id="limits-h">Limits</h2>
+  <ul class="limits" aria-label="limits">
+    <li class="limit">
+      <span>five-hour</span>
+      <span class="meter" role="meter" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="five-hour"><span class="meter-fill" style="width: 0%"></span></span>
+      <b>0%</b>
+      <span class="text-muted text-xs">no reset time yet</span>
+    </li>
+    <li class="limit">
+      <span>weekly</span>
+      <span class="meter" role="meter" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="weekly"><span class="meter-fill" style="width: 0%"></span></span>
+      <b>0%</b>
+      <span class="text-muted text-xs">no reset time yet</span>
+    </li>
+    </ul>
+</section>
+<section class="module" aria-labelledby="spend-h">
+  <h2 id="spend-h">Spend per merged ticket</h2>
+  <p class="module-sub">Share of the weekly limit each ticket used, from launch to merge.</p>
 
-<svg width="720" height="220" viewBox="0 0 720 220" role="img">
-  <title>spend as a percentage of the week, 1 merged tickets</title>
+<div class="chart" style="--w: 720; --h: 220">
+<svg width="720" height="220" viewBox="0 0 720 220" role="img" aria-label="spend as a percentage of the week, 1 merged tickets">
   <g><line class="chart-grid" x1="52" x2="720" y1="200" y2="200"></line>
   <text class="chart-tick" x="48" y="200" dy="0.32em" text-anchor="end">0%</text></g>
   <path class="chart-line chart-series-1" d="M 386.00 200.00"></path>
-  <circle class="chart-dot" cx="386" cy="200" r="3"><title>sandbox://CC-1: 0.00% week (agent 0.00, resolve 0.00, follow-up 0.00), merged 2026-09-20T15:00:00Z</title></circle>
-  </svg>
-<div class="mt-1 flex items-center gap-3 text-[0.8em] text-muted">
+</svg>
+<span class="chart-pt" tabindex="0" style="--x: 386; --y: 200" aria-label="sandbox://CC-1: 0.00% week (agent 0.00, resolve 0.00, follow-up 0.00), merged 2026-09-20T15:00:00Z"><span class="chart-tip" role="tooltip" aria-hidden="true">sandbox://CC-1: 0.00% week (agent 0.00, resolve 0.00, follow-up 0.00), merged 2026-09-20T15:00:00Z</span></span>
+</div>
+<div class="mt-2 flex items-center gap-3 text-xs text-muted">
   <span class="chart-legend"><span class="chart-legend-swatch chart-dot"></span> ticket</span>
   <span class="chart-legend"><span class="chart-legend-swatch chart-series-1"></span> rolling median (10)</span>
   
 </div>
 
-<h2 class="mt-7">Spend split</h2>
-<div class="table-frame max-w-md">
-<table class="w-full" aria-label="spend split">
+</section>
+<section class="module" aria-labelledby="split-h">
+<h2 id="split-h">Spend split</h2>
+<table class="w-full max-w-md" aria-label="spend split">
   <thead><tr><th scope="col">kind</th><th scope="col" class="text-right">% of week</th></tr></thead>
   <tbody>
     <tr><th scope="row">agent</th><td class="text-right">0.00%</td></tr>
@@ -198,6 +207,7 @@
     </tbody>
   <tfoot><tr><th scope="row">total</th><td class="text-right">0.00%</td></tr></tfoot>
 </table>
+</section>
 </div>
 </div>
 </main>
