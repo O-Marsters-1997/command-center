@@ -244,8 +244,9 @@ _Avoid_: Header, nav
   `prd-command-centre.md`, build-step phases in GitHub issues #2–#7, and a span of a run's log.
   Resolved: the log sense is always **run phase**, never bare "phase". The other two collision
   remains, and the operator-surface PRD's rule stands — name a phase, do not number it.
-- **"cost"** was used for both the live token count and the settled dollar figure. Resolved: both
-  are **spend**, which reads as tokens while a run is alive and as dollars once it ends.
+- **"cost"** was used for both the live token count and the settled dollar figure. Resolved: the
+  figure shown is **spend**, a token count on a run and a percentage of the windows on a ticket,
+  never dollars.
 - **"group"** named three things at once: the board's layout of a blocker and the tickets waiting
   on it, the tracker's own grouping that the import page lists, and an internal key tying one
   authorisation's intents together. Resolved: the board no longer lays out groups (ADR 14), so

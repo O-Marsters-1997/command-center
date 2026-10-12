@@ -270,7 +270,7 @@ Fonts.
 - **Body** (400, 13px, 1.45, −0.006em): the UI default. Row titles and controls use 510.
 - **Body-read** (400, 14px, 1.6): agent messages, prompts and the composer. Max 68ch.
 - **Label** (510, 12px): metadata, group heads, nav labels, chips and badges.
-- **Mono** (400, 0.9em, 0 tracking, tabular numerals): refs (`#42`), branches, commands, costs and
+- **Mono** (400, 0.9em, 0 tracking, tabular numerals): refs (`#42`), branches, commands and
   durations.
 
 ### Named Rules
