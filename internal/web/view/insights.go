@@ -29,6 +29,7 @@ type InsightsResponse struct {
 type insightsPointJSON struct {
 	Ticket          string  `json:"ticket"`
 	Title           string  `json:"title"`
+	Feature         string  `json:"feature"`
 	MergedAt        string  `json:"merged_at"`
 	PctWeek         float64 `json:"pct_week"`
 	AgentPctWeek    float64 `json:"agent_pct_week"`
@@ -86,6 +87,40 @@ type InsightsPage struct {
 	Chart  InsightsChart
 	Limits []Limit
 	Split  SpendSplit
+	Merged []MergedRow
+}
+
+type MergedRow struct {
+	Name, Feature, Day              string
+	Agent, Resolve, FollowUp, Total float64
+}
+
+func mergedDay(mergedAt, timezone string) string {
+	at, err := time.Parse(time.RFC3339, mergedAt)
+	if err != nil {
+		return ""
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return at.In(loc).Format(insightsDateFormat)
+}
+
+func buildMergedRows(points []insightsPointJSON, timezone string) []MergedRow {
+	rows := make([]MergedRow, 0, len(points))
+	for i := len(points) - 1; i >= 0; i-- {
+		p := points[i]
+		name := p.Title
+		if name == "" {
+			name = p.Ticket
+		}
+		rows = append(rows, MergedRow{
+			Name: name, Feature: p.Feature, Day: mergedDay(p.MergedAt, timezone),
+			Agent: p.AgentPctWeek, Resolve: p.ResolvePctWeek, FollowUp: p.FollowUpPctWeek, Total: p.PctWeek,
+		})
+	}
+	return rows
 }
 
 // Limit is one rate-limit window on the insights page. ResetsIn is empty when no reading has
@@ -167,6 +202,7 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
 		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
+		Merged: buildMergedRows(resp.Points, resp.Timezone),
 	}, nil
 }
 
@@ -200,7 +236,7 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 		agentPct, resolvePct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
 		totalPct += spend.PctWeek(p.ExploreUSD, factor)
 		resp.Points[i] = insightsPointJSON{
-			Ticket: p.Ticket, Title: p.Title, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
+			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,
 			AgentPctWeek:    agentPct,
 			ResolvePctWeek:  resolvePct,

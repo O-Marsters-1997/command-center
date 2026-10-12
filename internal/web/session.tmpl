@@ -66,6 +66,14 @@
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
+    {{- with .Stack.Feature}}
+    <h2 class="stack-title stack-feature">{{.}}<span class="text-muted stack-progress">{{$.Stack.Merged}}/{{$.Stack.Total}} merged</span></h2>
+    <div class="stack-links">
+      <a class="btn" href="{{$.Stack.GraphPath}}">Graph</a>
+      <a class="btn" href="{{$.Stack.BoardPath}}">Board</a>
+    </div>
+    <ul class="stack-list">{{range $.Stack.Members}}<li{{if eq .Path $.TranscriptPath}} aria-current="page"{{end}}>{{template "stackLink" .}}{{with .Title}} <span class="text-muted">{{.}}</span>{{end}}</li>{{end}}</ul>
+    {{- end}}
     <h2 class="stack-title">Blocked by</h2>
     {{- if .Stack.Blockers}}
     <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
@@ -87,6 +95,13 @@
       </fieldset>
       <button type="submit" class="btn">save</button>
     </form>
+    <dl class="stack-props">
+      <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
+      <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
+      <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
+      <dt>Checks</dt><dd>{{if .Row.Checks}}{{.Row.ChecksPassed}}/{{len .Row.Checks}} passing{{else}}—{{end}}</dd>
+      <dt>Spend</dt><dd class="mono">{{if .Row.SpendSettled}}${{printf "%.2f" .Row.SpendUSD}}{{else}}—{{end}}</dd>
+    </dl>
   </aside>
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
@@ -116,7 +131,11 @@
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
-    <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+    <div class="composer-bar">
+      <span class="composer-chip" title="Model for this run">{{.Model}}</span>
+      {{- with .Row.Worktree}}<span class="composer-chip" title="{{.}}" aria-label="Worktree {{.}}">worktree</span>{{end}}
+      <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+    </div>
   </form>
   {{- end}}
 </div>{{end}}

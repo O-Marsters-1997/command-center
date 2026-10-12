@@ -53,6 +53,23 @@ func (q *Queries) ConsumeLaunchIntent(ctx context.Context, arg ConsumeLaunchInte
 	return err
 }
 
+const featureFirstLaunch = `-- name: FeatureFirstLaunch :one
+SELECT l.created_at
+FROM launches l
+JOIN launch_members lm ON lm.launch_id = l.id
+JOIN tickets t ON t.url = lm.ticket_id
+WHERE t.feature = $1 AND l.state <> 'cancelled'
+ORDER BY l.created_at
+LIMIT 1
+`
+
+func (q *Queries) FeatureFirstLaunch(ctx context.Context, feature string) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, featureFirstLaunch, feature)
+	var created_at time.Time
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
 const insertLaunch = `-- name: InsertLaunch :one
 INSERT INTO launches (created_at, state) VALUES ($1, 'active') RETURNING id
 `

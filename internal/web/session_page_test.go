@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -175,6 +176,7 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	for _, want := range []string{
 		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
 		`class="composer"`, `value="follow-up"`, "Send the running agent a message",
+		`class="composer-chip"`, loop.AgentModel,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("running session lacks %q:\n%s", want, body)
