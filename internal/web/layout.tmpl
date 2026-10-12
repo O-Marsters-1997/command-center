@@ -99,7 +99,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
-    document.querySelectorAll("#key-sheet kbd").forEach(function (k) {
+    document.querySelectorAll("#key-sheet kbd, .rail-search-wrap kbd").forEach(function (k) {
       k.textContent = k.textContent.replace("⌘", "Ctrl ");
     });
   });

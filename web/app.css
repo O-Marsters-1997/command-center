@@ -1053,15 +1053,6 @@
     flex: none;
   }
 
-  .rail-state {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
   .rail-ref {
     flex: none;
     order: 2;
@@ -1188,7 +1179,7 @@
     background: var(--color-surface-3);
   }
 
-  .rail-feature > summary > .icon {
+  .rail-feature > summary > .icon:first-child {
     flex: none;
     width: 12px;
     height: 12px;
@@ -1197,7 +1188,7 @@
     transition: rotate var(--motion-fast);
   }
 
-  .rail-feature[open] > summary > .icon {
+  .rail-feature[open] > summary > .icon:first-child {
     rotate: 90deg;
   }
 
@@ -1234,7 +1225,7 @@
 
   .rail-gauge {
     display: grid;
-    grid-template-columns: 3rem 1fr auto;
+    grid-template-columns: 4.5rem 1fr auto;
     align-items: center;
     gap: var(--space-2);
     color: var(--color-muted);
@@ -1376,6 +1367,8 @@
     .rail-link,
     .rail-verb,
     .rail-feature > summary,
+    .rail-card .rail-link,
+    .sidebar-head .btn,
     .topbar-action > *,
     .topbar-action button {
       min-height: var(--hit-min);
