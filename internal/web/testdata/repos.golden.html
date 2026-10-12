@@ -180,13 +180,14 @@
 </div>
 </header>
 <div class="content">
+<div class="page-narrow">
 <h1>Repos</h1>
-<p class="page-purpose">Tracked repositories, grouped by project.</p>
+<p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file.</p>
 
-<input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
-  class="block w-full max-w-3xl border border-border rounded px-3 py-2 text-lg mb-1"
+<input type="search" name="q" placeholder="Track a repo: search owner/name" autocomplete="off" aria-label="search repos"
+  class="block w-full"
   hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
-<p class="text-muted mb-3">Search runs as this box's gh identity.</p>
+<p class="text-muted text-xs mt-1 mb-3">Search runs as this box's gh identity.</p>
 <details class="mb-4 max-w-3xl">
   <summary>New project</summary>
   <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
@@ -221,50 +222,43 @@
 
 <section class="mb-7 max-w-3xl" data-scope="repo">
   
-  <div class="table-frame">
-  <table class="w-full">
+  <div class="repo-rows">
     
-    <tr>
-      <td><a href="/repos/acme/alpha">acme/alpha</a></td>
-      <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">clone</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">squash-only merges</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">default branch is main</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">settings file</span> <span class="text-muted">done</span></li></ul></td>
-      <td>
-        <form method="post" action="/repos/acme/alpha/project" hx-post="/repos/acme/alpha/project"
-          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
-          <select name="project" aria-label="project of acme/alpha" class="border border-border rounded px-2 py-1">
-            <option value="">No project</option>
-            
-          </select>
-        </form>
-      </td>
-    </tr>
+    <div class="repo-row">
+      <a class="font-mono font-medium" href="/repos/acme/alpha">acme/alpha</a>
+      <ul class="checks" aria-label="checks"><li><span class="glyph glyph-done"><span class="sr-only">clone: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">squash-only merges: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">default branch is main: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">settings file: done</span></span></li></ul>
+      <form method="post" action="/repos/acme/alpha/project" hx-post="/repos/acme/alpha/project"
+        hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+        <select name="project" aria-label="project of acme/alpha" class="select">
+          <option value="">No project</option>
+          
+        </select>
+      </form>
+    </div>
     
-  </table>
   </div>
 </section>
 
 <section class="mb-7 max-w-3xl" data-scope="repo">
   
-  <div class="table-frame">
-  <table class="w-full">
+  <div class="repo-rows">
     
-    <tr>
-      <td><a href="/repos/acme/beta">acme/beta</a></td>
-      <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">clone</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">squash-only merges</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">default branch is main</span> <span class="text-muted">done</span></li><li><span class="glyph glyph-done">settings file</span> <span class="text-muted">done</span></li></ul></td>
-      <td>
-        <form method="post" action="/repos/acme/beta/project" hx-post="/repos/acme/beta/project"
-          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
-          <select name="project" aria-label="project of acme/beta" class="border border-border rounded px-2 py-1">
-            <option value="">No project</option>
-            
-          </select>
-        </form>
-      </td>
-    </tr>
+    <div class="repo-row">
+      <a class="font-mono font-medium" href="/repos/acme/beta">acme/beta</a>
+      <ul class="checks" aria-label="checks"><li><span class="glyph glyph-done"><span class="sr-only">clone: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">squash-only merges: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">default branch is main: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">settings file: done</span></span></li></ul>
+      <form method="post" action="/repos/acme/beta/project" hx-post="/repos/acme/beta/project"
+        hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+        <select name="project" aria-label="project of acme/beta" class="select">
+          <option value="">No project</option>
+          
+        </select>
+      </form>
+    </div>
     
-  </table>
   </div>
 </section>
 
+</div>
 </div>
 </div>
 </main>

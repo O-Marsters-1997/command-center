@@ -172,8 +172,12 @@
 </div>
 </header>
 <div class="content">
-<h1>acme/alpha</h1>
-<p class="text-muted mb-2">git@github.com:acme/alpha.git</p>
+<div class="page-narrow">
+<div class="repo-head mb-4">
+  <span class="badge" data-glyph="done"><span class="glyph glyph-done">ready</span></span>
+  <h1>acme/alpha</h1>
+  <p class="page-purpose mb-0">git@github.com:acme/alpha.git</p>
+</div>
 <section id="repo-banner" class="banner ribbon mb-3" data-glyph="done" data-state="ready" role="status">
   <p>No .command-centre.toml on main: defaults are in use.</p>
   <ul class="flex flex-wrap gap-3 mt-1">
@@ -186,8 +190,11 @@
 
 
 
-<table class="w-full max-w-3xl">
-  <tr><th>feature</th><th>imported</th><th></th></tr>
+<section class="module" aria-labelledby="features-h">
+<h2 id="features-h">Features</h2>
+<table class="w-full">
+  <thead><tr><th scope="col">feature</th><th scope="col">imported</th><th scope="col"><span class="sr-only">actions</span></th></tr></thead>
+  <tbody>
   
   <tr>
     <td>
@@ -196,16 +203,21 @@
     </td>
     <td>no</td>
     <td>
-      <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
-        <input type="hidden" name="feature" value="project:x">
-        <button type="submit" class="btn btn-sm">Launch</button>
-      </form>
-      
+      <div class="flex justify-end gap-2">
+        <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+          <input type="hidden" name="feature" value="project:x">
+          <button type="submit" class="btn btn-sm">Launch</button>
+        </form>
+        
+      </div>
     </td>
   </tr>
   
+  </tbody>
 </table>
-<h2 class="mt-4 mb-2">Tickets</h2>
+</section>
+<section class="module" aria-labelledby="tickets-h">
+<h2 id="tickets-h">Tickets</h2>
 
 <form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 <table id="board" hx-get="/board?repo=acme%2Falpha" hx-trigger="every 5s" hx-swap="outerHTML">
@@ -216,7 +228,9 @@
   
 </table>
 <button type="submit" form="launch" class="btn">Launch selected</button>
+</section>
 
+</div>
 <div id="launch-modal"></div>
 </div>
 </main>
