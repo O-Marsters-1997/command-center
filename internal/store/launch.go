@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -178,4 +179,17 @@ func (s *Store) LaunchMemberTickets(ctx context.Context, launchID int64) ([]stri
 		return nil, fmt.Errorf("select members of launch %d: %w", launchID, err)
 	}
 	return urls, nil
+}
+
+// FeatureFirstLaunch returns when the earliest launch holding a ticket of feature was created;
+// ok is false when none has launched.
+func (s *Store) FeatureFirstLaunch(ctx context.Context, feature string) (at time.Time, ok bool, err error) {
+	at, err = s.q.FeatureFirstLaunch(ctx, feature)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("select first launch of feature %q: %w", feature, err)
+	}
+	return at, true, nil
 }

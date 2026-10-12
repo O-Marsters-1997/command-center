@@ -4,8 +4,9 @@
 {{template "shellAction" .}}
 {{template "shellContent" .}}
 <article class="session" data-session="{{.Row.URL}}">
+<div class="session-main">
   <header class="session-head">
-    <span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}" data-glyph="{{.Row.Glyph}}">{{.Row.State}}</span>
+    <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.State}}</span></span>
     <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
     <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" hx-get="/f/{{. | pathEscape}}/graph" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.}}</a>{{end}}</p>
     {{- with .Row.Worktree}}
@@ -22,9 +23,9 @@
     {{- if .Prompt.Kept}}<pre class="prompt-text">{{.Prompt.Text}}</pre>
     {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
   </section>
-  <nav class="session-tabs" aria-label="log view">
-    <a href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
-    <a href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+  <nav class="pill-tabs" aria-label="log view">
+    <a class="pill-tab" href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a class="pill-tab" href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
   </nav>
   {{- if .Raw}}
   {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
@@ -61,7 +62,18 @@
     {{- end}}
   </div>
   {{- end}}
-  <aside class="stack-panel" aria-label="feature stack">
+  {{template "sessionActions" .}}
+</div>
+<button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
+  <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
+    {{- with .Stack.Feature}}
+    <h2 class="stack-title stack-feature">{{.}}<span class="text-muted stack-progress">{{$.Stack.Merged}}/{{$.Stack.Total}} merged</span></h2>
+    <div class="stack-links">
+      <a class="btn" href="{{$.Stack.GraphPath}}">Graph</a>
+      <a class="btn" href="{{$.Stack.BoardPath}}">Board</a>
+    </div>
+    <ul class="stack-list">{{range $.Stack.Members}}<li{{if eq .Path $.TranscriptPath}} aria-current="page"{{end}}>{{template "stackLink" .}}{{with .Title}} <span class="text-muted">{{.}}</span>{{end}}</li>{{end}}</ul>
+    {{- end}}
     <h2 class="stack-title">Blocked by</h2>
     {{- if .Stack.Blockers}}
     <ul class="stack-list">{{range .Stack.Blockers}}<li>{{template "stackLink" .}}</li>{{end}}</ul>
@@ -81,25 +93,31 @@
         {{- end}}
         <input type="text" name="blocked_by" placeholder="add a blocker URL" aria-label="add a blocker">
       </fieldset>
-      <button type="submit" class="button">save</button>
+      <button type="submit" class="btn">save</button>
     </form>
+    <dl class="stack-props">
+      <dt>Repo</dt><dd>{{.Row.Repo}}</dd>
+      <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
+      <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
+      <dt>Checks</dt><dd>{{if .Row.Checks}}{{.Row.ChecksPassed}}/{{len .Row.Checks}} passing{{else}}—{{end}}</dd>
+      <dt>Spend</dt><dd class="mono">{{if .Row.SpendSettled}}${{printf "%.2f" .Row.SpendUSD}}{{else}}—{{end}}</dd>
+    </dl>
   </aside>
-  {{template "sessionActions" .}}
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  {{- with .Toast}}<p class="toast" role="status">{{.}}</p>{{end}}
-  <div class="verbs">
+  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="true" role="status">{{.}}</div>{{end}}
+  <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .ActionVerbs}}
     <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
-      <button class="verb" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
+      <button class="btn" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
       {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
     </form>
     {{- end}}
-    {{- with .PRURL}}<a class="verb" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
-    {{- if .Row.LogPath}}<a class="verb" href="{{.RawPath}}">Open log</a>{{end}}
+    {{- with .PRURL}}<a class="btn" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
+    {{- if .Row.LogPath}}<a class="btn" href="{{.RawPath}}">Open log</a>{{end}}
   </div>
   {{- if .Running}}
   <p class="composer-running" data-glyph="running">Agent is running{{with .Row.Log.Worked.Stats}} · {{.}}{{end}}{{with .Row.Elapsed}} · {{.}}{{end}}</p>
@@ -113,7 +131,11 @@
     <input type="hidden" name="from" value="session">
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
-    <button class="verb" type="submit">{{if .AwaitingInput}}Reply{{else}}Send{{end}}</button>
+    <div class="composer-bar">
+      <span class="composer-chip" title="Model for this run">{{.Model}}</span>
+      {{- with .Row.Worktree}}<span class="composer-chip" title="{{.}}" aria-label="Worktree {{.}}">worktree</span>{{end}}
+      <button class="btn-send" type="submit" aria-label="{{if .AwaitingInput}}Reply{{else}}Send{{end}}">↑</button>
+    </div>
   </form>
   {{- end}}
 </div>{{end}}

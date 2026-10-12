@@ -3,37 +3,47 @@
 <li>insights</li>
 {{template "shellAction" .}}
 {{template "shellContent" .}}
-<h1 class="mb-3">INSIGHTS</h1>
-<h2 class="mb-2 text-[0.9em] text-muted">limits</h2>
-<ul class="mb-4 flex flex-col gap-2" aria-label="limits">
-  {{range .Limits}}<li class="flex flex-wrap items-center gap-3">
-    <span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
-    <span>{{.Label}} · {{.Pct}}%</span>
-    <span class="text-muted">{{if .ResetsIn}}resets <time datetime="{{.ResetsAt}}">{{.ResetsIn}}</time>{{else}}no reset time yet{{end}}</span>
-  </li>
-  {{end -}}
-</ul>
-<h2 class="mb-2 text-[0.9em] text-muted">spend per merged ticket</h2>
+<div class="page-narrow">
+<h1>Insights</h1>
+<p class="page-purpose">What merged work costs, measured against your model limits.</p>
+<section class="module" aria-labelledby="limits-h">
+  <h2 id="limits-h">Limits</h2>
+  <ul class="limits" aria-label="limits">
+    {{range .Limits}}<li class="limit">
+      <span>{{.Label}}</span>
+      <span class="meter" role="meter" aria-valuenow="{{.Pct}}" aria-valuemin="0" aria-valuemax="100" aria-label="{{.Label}}"><span class="meter-fill" style="width: {{.Pct}}%"></span></span>
+      <b>{{.Pct}}%</b>
+      <span class="text-muted text-xs">{{if .ResetsIn}}resets <time datetime="{{.ResetsAt}}">{{.ResetsIn}}</time>{{else}}no reset time yet{{end}}</span>
+    </li>
+    {{end -}}
+  </ul>
+</section>
+<section class="module" aria-labelledby="spend-h">
+  <h2 id="spend-h">Spend per merged ticket</h2>
+  <p class="module-sub">Share of the weekly limit each ticket used, from launch to merge.</p>
 {{with .Chart}}{{if .Dots}}
-<svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img">
-  <title>spend as a percentage of the week, {{.Count}} merged tickets</title>
+<div class="chart" style="--w: {{.Width}}; --h: {{.Height}}">
+<svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img" aria-label="spend as a percentage of the week, {{.Count}} merged tickets">
   {{range .Ticks}}<g><line class="chart-grid" x1="{{$.Chart.PadLeft}}" x2="{{$.Chart.Width}}" y1="{{.Y}}" y2="{{.Y}}"></line>
   <text class="chart-tick" x="48" y="{{.Y}}" dy="0.32em" text-anchor="end">{{.Label}}</text></g>
   {{end -}}
-  {{if .HasWaste}}<line class="chart-line chart-series-3" stroke-dasharray="4 3" x1="{{.PadLeft}}" x2="{{.Width}}" y1="{{.WasteY}}" y2="{{.WasteY}}"><title>{{.WasteTitle}}</title></line>
+  {{if .HasWaste}}<line class="chart-line chart-series-3" stroke-dasharray="4 3" x1="{{.PadLeft}}" x2="{{.Width}}" y1="{{.WasteY}}" y2="{{.WasteY}}"></line>
   {{end -}}
   <path class="chart-line chart-series-1" d="{{.MedianPath}}"></path>
-  {{range .Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="3"><title>{{.Title}}</title></circle>
-  {{end -}}
 </svg>
-<div class="mt-1 flex items-center gap-3 text-[0.8em] text-muted">
+{{range .Dots}}<span class="chart-pt" role="img" tabindex="0"style="--x: {{.X}}; --y: {{.Y}}" aria-label="{{.Title}}"><span class="chart-tip" role="tooltip" aria-hidden="true">{{.Title}}</span></span>
+{{end -}}
+</div>
+<div class="mt-2 flex items-center gap-3 text-xs text-muted">
   <span class="chart-legend"><span class="chart-legend-swatch chart-dot"></span> ticket</span>
   <span class="chart-legend"><span class="chart-legend-swatch chart-series-1"></span> rolling median ({{.MedianWindow}})</span>
   {{if .HasWaste}}<span class="chart-legend"><span class="chart-legend-swatch chart-series-3"></span> waste: {{.WasteLabel}}</span>{{end}}
 </div>
 {{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}{{end}}
-<h2 class="mt-4 mb-2 text-[0.9em] text-muted">spend split</h2>
-<table aria-label="spend split">
+</section>
+<section class="module" aria-labelledby="split-h">
+<h2 id="split-h">Spend split</h2>
+<table class="w-full max-w-md" aria-label="spend split">
   <thead><tr><th scope="col">kind</th><th scope="col" class="text-right">% of week</th></tr></thead>
   <tbody>
     {{range .Split.Rows}}<tr><th scope="row">{{.Kind}}</th><td class="text-right">{{printf "%.2f" .Pct}}%</td></tr>
@@ -41,4 +51,17 @@
   </tbody>
   <tfoot><tr><th scope="row">total</th><td class="text-right">{{printf "%.2f" .Split.Total}}%</td></tr></tfoot>
 </table>
+</section>
+<section class="module" aria-labelledby="merged-h">
+<h2 id="merged-h">Merged tickets</h2>
+{{if .Merged}}<div class="table-frame"><table class="w-full" aria-label="merged tickets">
+  <thead><tr><th scope="col">ticket</th><th scope="col">feature</th><th scope="col">merged</th><th scope="col" class="text-right">agent</th><th scope="col" class="text-right">resolve</th><th scope="col" class="text-right">follow-up</th><th scope="col" class="text-right">total</th></tr></thead>
+  <tbody>
+    {{range .Merged}}<tr><th scope="row">{{.Name}}</th><td class="text-muted">{{.Feature}}</td><td class="text-muted">{{.Day}}</td><td class="text-right">{{printf "%.2f" .Agent}}%</td><td class="text-right">{{if .Resolve}}{{printf "%.2f" .Resolve}}%{{else}}—{{end}}</td><td class="text-right">{{if .FollowUp}}{{printf "%.2f" .FollowUp}}%{{else}}—{{end}}</td><td class="text-right"><b>{{printf "%.2f" .Total}}%</b></td></tr>
+    {{end -}}
+  </tbody>
+</table></div>
+{{else}}<p class="text-muted">no merged tickets in range.</p>{{end}}
+</section>
+</div>
 {{template "shellEnd" .}}

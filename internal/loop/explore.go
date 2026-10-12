@@ -14,14 +14,14 @@ import (
 
 const (
 	exploreModel = "claude-haiku-5-5"
-	agentModel   = "claude-sonnet-5-5"
+	AgentModel   = "claude-sonnet-5-5"
 )
 
 func modelFor(kind string) string {
 	if kind == runKindExplore {
 		return exploreModel
 	}
-	return agentModel
+	return AgentModel
 }
 
 func (l *Loop) launchDir(launchID int64) string {

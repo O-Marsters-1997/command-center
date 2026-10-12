@@ -8,6 +8,10 @@ export interface Row {
   unattended: boolean;
   alive: boolean;
   blocking: string[] | null;
+  after: string[] | null;
+  reason: string;
+  elapsed: string;
+  pr_number: number;
 }
 
 export interface Group {

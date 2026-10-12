@@ -1,3 +1,20 @@
+{{define "sectionGlyph"}}{{if eq . "needs-you"}}attention{{else if eq . "in-progress"}}running{{else}}{{.}}{{end}}{{end}}
+{{define "sectionStat"}}{{if eq . "needs-you"}}need you{{else if eq . "in-progress"}}in progress{{else if eq . "done"}}merged{{else}}{{.}}{{end}}{{end}}
+{{define "featureHead" -}}
+<header class="feature-head">
+  <h1>{{.FeatureScope}}</h1>
+  <p>{{with .ProjectScope}}{{.}} · {{end}}{{with .Launched}}launched {{template "age" .}} · {{end}}{{.TicketCount}} {{if eq .TicketCount 1}}ticket{{else}}tickets{{end}} in {{.WaveCount}} {{if eq .WaveCount 1}}wave{{else}}waves{{end}} · <kbd>V</kbd> switches view</p>
+  <div class="feature-stats">
+    <span class="segbar">
+      {{- range .Sections}}<span class="segbar-segment" data-glyph="{{template "sectionGlyph" .Key}}" style="flex-grow: {{len .Rows}}"></span>{{end -}}
+    </span>
+    {{- range .Sections}}
+    <span class="glyph glyph-{{template "sectionGlyph" .Key}}">{{len .Rows}} {{template "sectionStat" .Key}}</span>
+    {{- end}}
+  </div>
+</header>
+{{- end}}
+
 {{define "board" -}}
 <table id="board" hx-get="{{.BoardPath}}" hx-trigger="every {{.BoardPollSeconds}}s" hx-swap="outerHTML">
   <tr>
@@ -6,7 +23,7 @@
   </tr>
   {{range $section := .Sections}}
   <tbody data-section="{{$section.Key}}" aria-labelledby="section-{{$section.Key}}">
-    <tr class="section-head"><th id="section-{{$section.Key}}" colspan="10">{{$section.Title}} <span class="section-count">{{len $section.Rows}}</span></th></tr>
+    <tr class="section-head"><th id="section-{{$section.Key}}" colspan="10">{{if eq $section.Key "ready"}}Ready to launch{{else}}{{$section.Title}}{{end}} <span class="section-count">{{len $section.Rows}}</span></th></tr>
     {{range $section.Rows}}{{template "row" (slot . $.RepoScope $.FeatureScope)}}{{end}}
   </tbody>
   {{end}}
@@ -61,7 +78,7 @@
     </td>
     <td>
       {{- if gt .SpendPctWeek 0.0}}
-      <span class="flex h-[0.4rem] w-24 overflow-hidden rounded-full bg-track" title="{{printf "%.2f" .SpendPctWeek}}% week (agent {{printf "%.2f" .AgentPctWeek}}, resolve {{printf "%.2f" .ResolvePctWeek}}, follow-up {{printf "%.2f" .FollowUpPctWeek}})">
+      <span class="flex h-[0.4rem] w-24 overflow-hidden rounded-full bg-border" title="{{printf "%.2f" .SpendPctWeek}}% week (agent {{printf "%.2f" .AgentPctWeek}}, resolve {{printf "%.2f" .ResolvePctWeek}}, follow-up {{printf "%.2f" .FollowUpPctWeek}})">
         <span class="segbar-segment" data-kind="agent" style="flex-grow: {{.AgentPctWeek}}"></span>
         <span class="segbar-segment" data-kind="resolve" style="flex-grow: {{.ResolvePctWeek}}"></span>
         <span class="segbar-segment" data-kind="follow_up" style="flex-grow: {{.FollowUpPctWeek}}"></span>
@@ -79,7 +96,7 @@
       {{- else}}
       <form method="post" action="/verb" hx-post="{{or $row.VerbPath "/verb"}}" hx-target="#board" hx-swap="outerHTML"{{with confirmation . $row.Row}} hx-confirm="{{.}}"{{end}}>
         <input type="hidden" name="ticket" value="{{$row.URL}}">
-        <button type="submit" name="verb" value="{{.}}">
+        <button type="submit" class="btn btn-sm" name="verb" value="{{.}}">
           {{- .}}{{if eq . $row.CancelVerb}} launch ({{$row.CancelCount}} tickets){{end -}}
         </button>
       </form>
@@ -95,5 +112,5 @@
      instead would nest the per-row verb forms inside it, which HTML forbids. -->
 <form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 {{template "board" .}}
-<button type="submit" form="launch">launch selected</button>
+<button type="submit" form="launch" class="btn">Launch selected</button>
 {{- end}}

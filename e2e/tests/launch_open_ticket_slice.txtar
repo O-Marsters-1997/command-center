@@ -1,5 +1,5 @@
-# POST /launch/open with a hand-picked ticket slice -- the board's checkboxes and the graph
-# island's selection both post this shape -- mounts the same modal a feature does, but straight
+# POST /launch/open with a hand-picked ticket slice -- the board's checkboxes post
+# this shape -- mounts the same modal a feature does, but straight
 # away: the tickets are already stored, so there is no import to queue and nothing to poll.
 
 cc-init-repo

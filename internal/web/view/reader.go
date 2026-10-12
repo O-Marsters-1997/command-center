@@ -23,6 +23,9 @@ type Board struct {
 	Tabs             []FilterTab
 	BoardPath        string
 	BoardPollSeconds int
+	Launched         *Age
+	TicketCount      int
+	WaveCount        int
 	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
 	Launch *LaunchModal
 }
@@ -143,11 +146,30 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		groups = filterGroupsByProject(groups, project.Repos)
 	}
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, project, params.Repo); err != nil {
+	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
 		return Board{}, err
 	}
-	sections := Sectioned(rowsIn(groups))
+	scoped := rowsIn(groups)
+	sections := Sectioned(scoped)
+	blocking := make(map[string][]string, len(scoped))
+	for _, row := range scoped {
+		blocking[row.URL] = row.BlockedBy
+	}
+	var launched *Age
+	if params.Feature != "" {
+		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
+		if err != nil {
+			return Board{}, err
+		}
+		if ok {
+			age := relative(now, at)
+			launched = &age
+		}
+	}
 	return Board{
+		Launched:         launched,
+		TicketCount:      len(scoped),
+		WaveCount:        plan.WaveCount(blocking),
 		Chrome:           chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
@@ -189,13 +211,19 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 		return Chrome{}, err
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, project, params.Repo); err != nil {
+	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
 		return Chrome{}, err
 	}
 	return chrome, nil
 }
 
-func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, project store.Project, repo string) error {
+func (r *Reader) scopeChrome(
+	ctx context.Context,
+	c *Chrome,
+	tickets []store.Ticket,
+	project store.Project,
+	repo string,
+) error {
 	c.scopeToProject(project)
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
@@ -206,8 +234,21 @@ func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, project store.Proje
 		return err
 	}
 	c.ScopeMenu = scopeChoices(ScopeList(projects, repos), project.Name, repo)
-	c.RefusedRepos, err = r.refusedRepos(ctx)
-	return err
+	if c.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
+		return err
+	}
+	in, err := r.store.PlanInput(ctx)
+	if err != nil {
+		return err
+	}
+	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil)
+	rows = scopeRailRows(rows, RailParams{Project: project.Name, Repo: repo, projectRepos: project.Repos})
+	for _, row := range rows {
+		if row.Glyph != plan.GlyphDone {
+			c.OpenTickets++
+		}
+	}
+	return nil
 }
 
 func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {

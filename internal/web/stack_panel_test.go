@@ -71,8 +71,31 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 		t.Fatal(err)
 	}
 	body := renderPath(t, server, "/s/acme/web/3")
-	if !strings.Contains(body, `href="/s/acme/web/1"`) || strings.Contains(body, `href="/s/acme/web/2"`) {
-		t.Errorf("panel does not reflect the edit:\n%s", body)
+	_, afterBlockedBy, ok := strings.Cut(body, `<h2 class="stack-title">Blocked by</h2>`)
+	if !ok {
+		t.Fatalf("no Blocked by heading:\n%s", body)
+	}
+	panel, _, _ := strings.Cut(afterBlockedBy, "Merging this unlocks")
+	if !strings.Contains(panel, `href="/s/acme/web/1"`) || strings.Contains(panel, `href="/s/acme/web/2"`) {
+		t.Errorf("panel does not reflect the edit:\n%s", panel)
+	}
+}
+
+func TestSessionPeekPanelShowsTheFeatureAndTheTicketsProps(t *testing.T) {
+	t.Parallel()
+	body := renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
+	panel := body[strings.Index(body, `class="stack-panel"`):]
+	for _, want := range []string{
+		"checkout",
+		"0/4 merged",
+		`href="/f/checkout/graph"`,
+		`href="/f/checkout"`,
+		`<dd class="mono">cc-2</dd>`,
+		`href="/s/acme/web/4"`,
+	} {
+		if !strings.Contains(panel, want) {
+			t.Errorf("peek panel lacks %q:\n%s", want, panel)
+		}
 	}
 }
 

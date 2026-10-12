@@ -564,7 +564,7 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 
 	body := rec.Body.String()
 	wants := []string{"running", "1m30s",
-		`<button type="submit" name="verb" value="kill">kill</button>`}
+		`<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`}
 	for _, want := range wants {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
@@ -651,7 +651,7 @@ func TestServesTheBuiltStylesheet(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
 		t.Errorf("Content-Type = %q, want text/css", got)
 	}
-	for _, want := range []string{"--color-s-live", ".glyph", "inter-variable.woff2"} {
+	for _, want := range []string{"--color-s-attention", ".glyph", "inter-variable.woff2"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}
@@ -675,7 +675,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	if got := rowState(t, page, ticket.URL); got != "running · kill queued" {
 		t.Errorf("state = %q, want %q", got, "running · kill queued")
 	}
-	const killButton = `<button type="submit" name="verb" value="kill">kill</button>`
+	const killButton = `<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`
 	if !strings.Contains(page, killButton) {
 		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
 	}

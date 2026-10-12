@@ -11,7 +11,7 @@ explore_shares AS (
       ON n.launch_id = lm.launch_id
     JOIN runs r ON r.launch_id = lm.launch_id AND r.ended_at IS NOT NULL AND r.cost_usd IS NOT NULL
 )
-SELECT t.url AS ticket_id, t.title, m.merged_at,
+SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd,
@@ -23,7 +23,7 @@ LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_a
 WHERE (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
   AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
   AND (m.merged_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
-GROUP BY t.url, t.title, m.merged_at
+GROUP BY t.url, t.title, t.feature, m.merged_at
 ORDER BY m.merged_at;
 
 -- name: BoardTicketSpend :many

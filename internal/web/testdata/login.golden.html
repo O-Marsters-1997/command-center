@@ -81,7 +81,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
-    document.querySelectorAll("#key-sheet kbd").forEach(function (k) {
+    document.querySelectorAll("#key-sheet kbd, .rail-search-wrap kbd").forEach(function (k) {
       k.textContent = k.textContent.replace("⌘", "Ctrl ");
     });
   });
@@ -96,16 +96,17 @@
 <body>
 <a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
 <main id="main" class="p-4 max-w-sm mx-auto mt-16">
-<h1 class="mb-3">LOG IN</h1>
+<h1>Log in</h1>
+<p class="page-purpose">Sign in to reach your command centre.</p>
 
 <form method="post" action="/login" class="flex flex-col gap-2">
   <label for="email">email</label>
   <input id="email" type="email" name="email" required autocomplete="username" autofocus
-    class="block w-full border border-border rounded px-3 py-2">
+    class="block w-full">
   <label for="password">password</label>
   <input id="password" type="password" name="password" required autocomplete="current-password"
-    class="block w-full border border-border rounded px-3 py-2">
-  <button type="submit" class="border border-border rounded px-3 py-2">log in</button>
+    class="block w-full">
+  <button type="submit" class="btn btn-primary">Log in</button>
 </form>
 </main>
 </body>

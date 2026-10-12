@@ -156,7 +156,7 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
             <For each={dagNodes()}>
               {(node) => (
                 <div
-                  class="absolute flex w-[200px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-bg px-2 py-[0.3rem] text-[0.85em]"
+                  class="absolute flex w-[200px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-surface px-2 py-[0.3rem] text-[0.85em]"
                   style={{ left: `${node.x}px`, top: `${node.y}px` }}
                 >
                   {ticketRef(node.url)} {node.title || "untitled"}
@@ -170,10 +170,10 @@ customElement("cc-launch-modal", { feature: "", tickets: "" }, (props: { feature
             <Section title="On unlock" rows={sections().onUnlock} />
             <Section title="Refused" rows={sections().refused} />
             <div class="launch-actions">
-              <a class="button" href={cancelHref(props.feature)}>
+              <a class="btn btn-ghost" href={cancelHref(props.feature)}>
                 Cancel
               </a>
-              <button type="submit" class="button launch-confirm" disabled={tickedCandidates().length === 0}>
+              <button type="submit" class="btn btn-primary" disabled={tickedCandidates().length === 0}>
                 Confirm launch
               </button>
             </div>

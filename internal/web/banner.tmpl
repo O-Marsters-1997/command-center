@@ -4,13 +4,13 @@
   <p>{{.Text}}</p>
   <ul class="flex flex-wrap gap-3 mt-1">
     {{range .Steps -}}
-    <li><span class="glyph glyph-{{.Glyph}}">{{.Mark}}</span> {{.Label}}</li>
+    <li><span class="glyph glyph-{{.Glyph}}">{{.Label}}</span> <span class="text-muted">{{.Glyph}}</span></li>
     {{end -}}
   </ul>
   {{if .CanTrack -}}
   <form class="mt-1" hx-post="/repos/track" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
     <input type="hidden" name="repo" value="{{.Repo}}">
-    <button type="submit">[ {{.TrackLabel}} ]</button>
+    <button type="submit" class="btn btn-primary">{{.TrackLabel}}</button>
   </form>
   {{end -}}
 </section>

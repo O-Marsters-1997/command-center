@@ -16,12 +16,9 @@ const (
 	BannerRefused   = "refused"
 )
 
-// CheckStep is one line of a repo's four-step check list. Glyph is one of the eight glyph words and
-// Mark is the glyph shown beside Label.
 type CheckStep struct {
 	Label string
 	Glyph string
-	Mark  string
 }
 
 // Banner is the tracking state of one repo as the fragment GET /repos/banner renders it.
@@ -119,16 +116,16 @@ func checkSteps(state, refusalKind string) []CheckStep {
 	}
 	steps := make([]CheckStep, 0, len(labels))
 	for _, l := range labels {
-		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady, Mark: "-"}
+		step := CheckStep{Label: l.label, Glyph: plan.GlyphReady}
 		switch {
 		case state == BannerReady:
-			step.Glyph, step.Mark = plan.GlyphDone, "ok"
+			step.Glyph = plan.GlyphDone
 		case state == BannerCloning:
-			step.Glyph, step.Mark = plan.GlyphRunning, "..."
+			step.Glyph = plan.GlyphRunning
 		case state == BannerRefused && rank(l.kind) < rank(refusalKind):
-			step.Glyph, step.Mark = plan.GlyphDone, "ok"
+			step.Glyph = plan.GlyphDone
 		case state == BannerRefused && l.kind == refusalKind:
-			step.Glyph, step.Mark = plan.GlyphFailed, "x"
+			step.Glyph = plan.GlyphFailed
 		}
 		steps = append(steps, step)
 	}

@@ -89,7 +89,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
-    document.querySelectorAll("#key-sheet kbd").forEach(function (k) {
+    document.querySelectorAll("#key-sheet kbd, .rail-search-wrap kbd").forEach(function (k) {
       k.textContent = k.textContent.replace("⌘", "Ctrl ");
     });
   });
@@ -105,12 +105,14 @@
 <a class="absolute left-[-100vw] px-[0.6rem] py-[0.35rem] bg-surface focus:left-2 focus:top-2" href="#main">skip to content</a>
 <div class="app">
 <aside class="sidebar" id="sidebar" aria-label="sections">
-  <a class="sidebar-head text-inherit no-underline" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Command Centre</a>
+  <div class="sidebar-head">
+    <a class="sidebar-brand" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><span class="sidebar-mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 17 5-5-5-5"/><path d="M12 19h7"/></svg></span><b>Command Centre</b></a>
+    <a class="btn btn-ghost btn-sm btn-icon" href="/launch" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a>
+  </div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="/tickets" data-key="g t" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1"/><line x1="1.5" y1="6" x2="14.5" y2="6"/><line x1="6" y1="6" x2="6" y2="13.5"/></svg><span>All tickets</span></a>
-    <a class="sidebar-item" href="/insights" data-key="g i" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2v11.5h12" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 11V8M8 11V5.5M11.5 11V7" stroke-linecap="round"/></svg><span>Insights</span></a>
-    <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 2h6l6 6-6.5 6.5L2 8.5V2Z" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg><span>Repos</span></a>
-    <a class="sidebar-item" href="/launch" data-key="c" hx-get="/launch" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke-linecap="round"/></svg><span>Launch</span></a>
+    <a class="sidebar-item" href="/tickets" data-key="g t" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6l2-8Z"/></svg><span>All tickets</span><span class="sidebar-count">0</span></a>
+    <a class="sidebar-item" href="/insights" data-key="g i" hx-get="/insights" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M8 16v-4M13 16V8M18 16v-6"/></svg><span>Insights</span></a>
+    <a class="sidebar-item" href="/repos" data-key="g r" hx-get="/repos" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h12"/></svg><span>Repos</span></a>
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">All projects · 0 running</summary>
@@ -121,31 +123,51 @@
       
     </nav>
   </details>
-  <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
+  <div class="rail-search-wrap">
+    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><kbd aria-hidden="true">⌘K</kbd>
+  </div>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
-  <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4.5 7h.01M7.5 7h.01M10.5 7h.01M5 9.5h6" stroke-linecap="round"/></svg><span>Shortcuts</span><kbd>?</kbd></button>
-  <form method="post" action="/logout">
-    <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
-  </form>
+  <div class="sidebar-foot">
+    <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span>Shortcuts</span><kbd>?</kbd></button>
+    <form method="post" action="/logout">
+      <button type="submit" class="sidebar-item w-full border-0 bg-transparent text-left">log out</button>
+    </form>
+  </div>
   <dialog id="key-sheet" class="key-sheet" aria-labelledby="key-sheet-title">
-  <h2 id="key-sheet-title">Keyboard shortcuts</h2>
-  <dl class="key-list">
-    <div class="key-row"><dt><kbd>⌘K</kbd></dt><dd>Search sessions, refs, repos and features</dd></div>
-    <div class="key-row"><dt><kbd>J / K</kbd></dt><dd>Next / previous session in the rail</dd></div>
-    <div class="key-row"><dt><kbd>G H · G T · G I · G R</kbd></dt><dd>Home · All tickets · Insights · Repos</dd></div>
-    <div class="key-row"><dt><kbd>G 1 – G 9</kbd></dt><dd>Scope to project 1–9</dd></div>
-    <div class="key-row"><dt><kbd>G 0</kbd></dt><dd>All projects</dd></div>
-    <div class="key-row"><dt><kbd>C</kbd></dt><dd>Launch a feature</dd></div>
-    <div class="key-row"><dt><kbd>F · V</kbd></dt><dd>Open the feature graph · switch graph and board</dd></div>
-    <div class="key-row"><dt><kbd>E</kbd></dt><dd>Settle a merged session (removes its worktree)</dd></div>
-    <div class="key-row"><dt><kbd>R</kbd></dt><dd>Re-run</dd></div>
-    <div class="key-row"><dt><kbd>O</kbd></dt><dd>Open the PR</dd></div>
-    <div class="key-row"><dt><kbd>Enter</kbd></dt><dd>Focus the composer</dd></div>
-    <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Close the sheet; clear the search</dd></div>
-    <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
+  <form method="dialog" class="key-sheet-head">
+    <h2 id="key-sheet-title">Keyboard shortcuts</h2>
+    <button type="submit" class="btn btn-ghost btn-sm">Close</button>
+  </form>
+  <div class="key-sheet-body">
+    <h3 class="key-group">Anywhere</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>⌘K</kbd></dt><dd>Search sessions, refs, repos and features</dd></div>
+      <div class="key-row"><dt><kbd>J / K</kbd></dt><dd>Next / previous session in the rail</dd></div>
+      <div class="key-row"><dt><kbd>G H · G T · G I · G R</kbd></dt><dd>Home · All tickets · Insights · Repos</dd></div>
+      <div class="key-row"><dt><kbd>G 1 – G 9</kbd></dt><dd>Scope to project 1–9</dd></div>
+      <div class="key-row"><dt><kbd>G 0</kbd></dt><dd>All projects</dd></div>
+      <div class="key-row"><dt><kbd>C</kbd></dt><dd>Launch a feature</dd></div>
+      <div class="key-row"><dt><kbd>?</kbd></dt><dd>Show this sheet</dd></div>
+      <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Close the sheet; clear the search</dd></div>
+      
+    </dl>
+    <h3 class="key-group">In a session</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>F</kbd></dt><dd>Open the feature graph</dd></div>
+      <div class="key-row"><dt><kbd>E</kbd></dt><dd>Settle a merged session (removes its worktree)</dd></div>
+      <div class="key-row"><dt><kbd>R</kbd></dt><dd>Re-run</dd></div>
+      <div class="key-row"><dt><kbd>O</kbd></dt><dd>Open the PR</dd></div>
+      <div class="key-row"><dt><kbd>Enter</kbd></dt><dd>Focus the composer</dd></div>
+      
+    </dl>
+    <h3 class="key-group">In a feature</h3>
+    <dl class="key-list">
+      <div class="key-row"><dt><kbd>V</kbd></dt><dd>Switch graph and board</dd></div>
+      
+    </dl>
     
-  </dl>
-  <form method="dialog"><button class="key-close">Close</button></form>
+  </div>
 </dialog>
 </aside>
 <div class="pane">
@@ -165,18 +187,20 @@
 </div>
 </header>
 <div class="content">
-<h1 class="mb-3">REPOS</h1>
+<div class="page-narrow">
+<h1>Repos</h1>
+<p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file.</p>
 
-<input type="search" name="q" placeholder="search repos" autocomplete="off" aria-label="search repos"
-  class="block w-full max-w-3xl border border-border rounded px-3 py-2 text-lg mb-1"
+<input type="search" name="q" placeholder="Track a repo: search owner/name" autocomplete="off" aria-label="search repos"
+  class="block w-full"
   hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
-<p class="text-muted mb-3">Search runs as this box's gh identity.</p>
+<p class="text-muted text-xs mt-1 mb-3">Search runs as this box's gh identity.</p>
 <details class="mb-4 max-w-3xl">
   <summary>New project</summary>
   <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
     hx-on::after-request="if (event.detail.successful) this.reset()" class="flex flex-col gap-2 mt-2">
     <input type="text" name="name" required maxlength="40" placeholder="project name"
-      autocomplete="off" aria-label="project name" class="border border-border rounded px-3 py-2">
+      autocomplete="off" aria-label="project name">
     <fieldset class="flex items-center gap-3">
       <legend class="text-muted">hue</legend>
       
@@ -198,57 +222,55 @@
       <label class="flex items-center gap-2"><input type="checkbox" name="repo" value="acme/beta"> acme/beta</label>
       
     </fieldset>
-    <button type="submit" class="self-start border border-border rounded px-3 py-1">Create project</button>
+    <button type="submit" class="btn btn-primary self-start">Create project</button>
   </form>
 </details>
 <div id="repo-results">
 
-<section class="mb-4 max-w-3xl" data-scope="repo">
+<section class="mb-7 max-w-3xl" data-scope="repo">
   
-  <table class="w-full">
+  <div class="repo-rows">
     
-    <tr>
-      <td><a href="/repos/acme/alpha">acme/alpha</a></td>
-      <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">ok</span> clone</li><li><span class="glyph glyph-done">ok</span> squash-only merges</li><li><span class="glyph glyph-done">ok</span> default branch is main</li><li><span class="glyph glyph-done">ok</span> settings file</li></ul></td>
-      <td>
-        <form method="post" action="/repos/acme/alpha/project" hx-post="/repos/acme/alpha/project"
-          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
-          <select name="project" aria-label="project of acme/alpha" class="border border-border rounded px-2 py-1">
-            <option value="">No project</option>
-            
-          </select>
-        </form>
-      </td>
-    </tr>
+    <div class="repo-row">
+      <a class="font-mono font-medium" href="/repos/acme/alpha">acme/alpha</a>
+      <ul class="checks" aria-label="checks"><li><span class="glyph glyph-done"><span class="sr-only">clone: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">squash-only merges: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">default branch is main: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">settings file: done</span></span></li></ul>
+      <form method="post" action="/repos/acme/alpha/project" hx-post="/repos/acme/alpha/project"
+        hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+        <select name="project" aria-label="project of acme/alpha" class="select">
+          <option value="">No project</option>
+          
+        </select>
+      </form>
+    </div>
     
-  </table>
+  </div>
 </section>
 
-<section class="mb-4 max-w-3xl" data-scope="repo">
+<section class="mb-7 max-w-3xl" data-scope="repo">
   
-  <table class="w-full">
+  <div class="repo-rows">
     
-    <tr>
-      <td><a href="/repos/acme/beta">acme/beta</a></td>
-      <td><ul class="flex flex-wrap gap-3"><li><span class="glyph glyph-done">ok</span> clone</li><li><span class="glyph glyph-done">ok</span> squash-only merges</li><li><span class="glyph glyph-done">ok</span> default branch is main</li><li><span class="glyph glyph-done">ok</span> settings file</li></ul></td>
-      <td>
-        <form method="post" action="/repos/acme/beta/project" hx-post="/repos/acme/beta/project"
-          hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
-          <select name="project" aria-label="project of acme/beta" class="border border-border rounded px-2 py-1">
-            <option value="">No project</option>
-            
-          </select>
-        </form>
-      </td>
-    </tr>
+    <div class="repo-row">
+      <a class="font-mono font-medium" href="/repos/acme/beta">acme/beta</a>
+      <ul class="checks" aria-label="checks"><li><span class="glyph glyph-done"><span class="sr-only">clone: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">squash-only merges: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">default branch is main: done</span></span></li><li><span class="glyph glyph-done"><span class="sr-only">settings file: done</span></span></li></ul>
+      <form method="post" action="/repos/acme/beta/project" hx-post="/repos/acme/beta/project"
+        hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+        <select name="project" aria-label="project of acme/beta" class="select">
+          <option value="">No project</option>
+          
+        </select>
+      </form>
+    </div>
     
-  </table>
+  </div>
 </section>
 
+</div>
 </div>
 </div>
 </main>
 </div>
 </div>
+<div id="toast" class="toast" role="status"></div>
 </body>
 </html>

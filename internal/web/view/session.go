@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -34,6 +35,7 @@ type Session struct {
 	Toast          string
 
 	PendingMessages []string
+	Model           string
 }
 
 func (s Session) Empty() bool {
@@ -142,6 +144,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		RawPath:        self + "?log=raw",
 
 		PendingMessages: pendingMessages,
+		Model:           loop.AgentModel,
 	}, nil
 }
 

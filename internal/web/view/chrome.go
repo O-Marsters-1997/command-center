@@ -18,9 +18,10 @@ type Chrome struct {
 	Gauges         []Gauge
 	SpendPaused    *SpendPaused
 	RefusedRepos   []RefusedRepo
+	OpenTickets    int
 	Section        string
 	Home           bool
-	Keymap         []KeyRow
+	Keymap         []KeyGroup
 	RepoScope      string
 	RepoCrumb      string
 	RepoCrumbPath  string
