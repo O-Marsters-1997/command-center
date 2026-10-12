@@ -1,12 +1,10 @@
-# 22. A conversation continues by resume, never by pipe
+# 17. A conversation continues by resume, never by pipe
 
 **Date:** 2026-10-11 · **Status:** accepted
 
 ## Context
 
-A follow-up started a fresh `claude -p` run with only the owner's text, so the agent lost the
-context it had built. The owner will also steer a running agent and answer its questions, and each
-of those needs the agent's own context back.
+A follow-up, a steer and a reply to an agent's question each need the agent's own context back.
 
 Checked against `claude` 2.1.296 on 2026-10-11:
 
@@ -29,16 +27,14 @@ message. A run that is alive is cancelled first. Nothing is piped to a running p
   `follow_up` runs carry a session. Review, resolve and explore runs never do.
 - A session is resumable when its latest agent or follow-up run has a `session_id` and
   `*/<id>.jsonl` exists under `claude_projects_dir`. Otherwise a message falls back to a fresh
-  follow-up, which covers runs from before this decision, a pruned transcript and a custom
-  `agent_command` without `{session}`.
+  follow-up, which covers a pruned transcript and a custom `agent_command` without `{session}`.
 - `{session}` in `agent_command` expands to `--session-id <id>`, `--resume <id>` or nothing.
   `runner` owns the expansion and knows nothing about resumability; `loop` chooses.
 
 ## Consequences
 
 The runner keeps its invariants: stdout is a file, no goroutine per run, and agents survive a cc
-restart. A custom `agent_command` that omits `{session}` simply never resumes.
+restart. A custom `agent_command` that omits `{session}` never resumes.
 
-The system prompt no longer calls a session single-shot. It says each run ends with its turn and
-the owner may continue the session later. The ban on background subagents stays, because each
-process still has no later turn to receive their result.
+The system prompt says each run ends with its turn and the owner may continue the session later. The
+ban on background subagents stays, because each process has no later turn to receive their result.

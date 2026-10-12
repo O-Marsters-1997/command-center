@@ -29,7 +29,7 @@ ORDER BY m.merged_at;
 -- name: BoardTicketSpend :many
 -- One row per ticket in scope, weighing every run disposed before its own pr_merged event when
 -- merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
--- uses, generalised past merged-only tickets and off any date window (ADR 12).
+-- uses, generalised past merged-only tickets and off any date window (ADR 10).
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
 ),

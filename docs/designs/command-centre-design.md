@@ -2,12 +2,9 @@
 
 **Date:** 2026-08-22 · **Revision 4** · **Status:** built, and normative
 
-The mechanism this document specifies is implemented, with two exceptions where an ADR has
-overruled it. §6, the seam mechanism, was deleted by
-`docs/adr/0003-seams-are-removed.md` on 2026-08-27, and is kept here only so the shape is
-recoverable if a second repo ever wants shared prompt text. A launch's `done` state was
-refused by `docs/adr/0006-exhaustion-is-derived.md` on 2026-09-13; exhaustion is derived every
-tick and never written, so §4b and §8 are annotated rather than describing live behaviour.
+The mechanism this document specifies is implemented, with two exceptions. §6, the seam
+mechanism, and every seam field elsewhere are not built. A launch has no `done` state
+(`docs/adr/0005-exhaustion-is-derived.md`); exhaustion is derived every tick and never written.
 Where the code and this document disagree anywhere else, the disagreement is a bug in the code.
 
 **Supersedes:** `.claude/handoffs/treepad__command-centre-architecture.md`, and revisions 1–3
@@ -343,7 +340,7 @@ agents run on).
 
 A launch is `active` until the user cancels it. It is never marked finished: a launch is
 **exhausted** once every ticket it covers has a pull request, and the tick derives that fresh
-each pass rather than writing it down (`docs/adr/0006-exhaustion-is-derived.md`). **Cancelling
+each pass rather than writing it down (`docs/adr/0005-exhaustion-is-derived.md`). **Cancelling
 stops the tick starting anything further from that slice and leaves running agents alone**;
 the tick still pushes and reads CI for work already in flight — cancel withdraws consent for
 *future* work, it does not orphan finished work. Killing is per-row and separate. A
@@ -375,7 +372,7 @@ A, and lets C go, because C's only conflict is no longer ready.
 
 **`resolve` is the verb for everything else.** `conflicts_with_main` offers `resolve`, which
 spawns an agent composed against `cc/skills/resolve-merge-conflict/SKILL.md` rather than
-`/implement` — the skill ADR 4 named and left unwired. The agent resolves in the worktree
+`/implement` — the skill ADR 3 names. The agent resolves in the worktree
 and stops. It commits nothing and pushes nothing, so the row lands at `conflict_resolved`,
 reading "resolved with nothing committed; read it in the worktree before deciding what
 happens next". Go decides what may commit, not the agent (§7): `commit-resolution` is the
@@ -427,7 +424,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
 | `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
-| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 4) | **resolve**, refresh, close PR |
+| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **resolve**, refresh, close PR |
 | `conflict resolved` | a `resolve` run left the conflict staged in the worktree and committed nothing; read it before deciding | **commit-resolution** |
 | `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
@@ -689,7 +686,7 @@ tasks           ticket_url PK · repo · branch · blocked_by[] · seams[]
                 (intake upserts on ticket_url — re-running to-tickets must not mint rows,
                  or invariant 8 loses its key and double-launches)
 launches        id · created_at · state (active/cancelled)
-                (no `done`: exhaustion is derived every tick, never stored. ADR 6)
+                (no `done`: exhaustion is derived every tick, never stored. ADR 5)
 launch_members  launch_id · task_id · prompt_hash        ← consent, bound to content (§4b)
 runs            id · task_id · kind · pgid · proc_started_at · baseline_sha ·
                 prompt_hash · log_path · outcome · exit_code · ended_at
@@ -892,7 +889,7 @@ API, not citations inherited from earlier revisions).
 | Generating the predicate from `.mergify.yml` (YAML-alias parser) | the hash detector (§7) fires more than twice; the boolean grammar is already the parse target |
 | Adaptive rate-limit governor | you hit rate limits often enough to notice. Until then `max_agents` is the knob |
 | `POST /tasks` | you want to add a ticket without re-running `to-tickets` |
-| Slack / OTel / Datadog egress | a localhost page is not enough. Tick-age and last-error are already Phase 1 page fields; `GET /insights` (docs/adr/0010-run-metrics-are-captured-per-request-at-disposition.md) now answers the same question for mechanical run spend without leaving the box, so this row is only the external-egress half — a ping or a trace leaving the process — not observability in general |
+| Slack / OTel / Datadog egress | a localhost page is not enough. Tick-age and last-error are already Phase 1 page fields; `GET /insights` (docs/adr/0010-spend-is-a-share-of-the-subscription-windows.md) now answers the same question for mechanical run spend without leaving the box, so this row is only the external-egress half — a ping or a trace leaving the process — not observability in general |
 | An inbox — one channel for a decision the agent cannot make: a `waiting on you` state, the question and the reply as rows, answering resumes the run | an agent guesses wrong, or a `failed` run turns out to have been an unanswerable question, more than once. It is the app's **first tool grant**, so invariant 17 flips from a denylist to an explicit allowlist on the same change; it removes one *cause* of an apparently-wedged run (limit 2) without detecting one |
 | MCP permission-prompt loop | denied permissions become a common failure mode |
 | TUI | the HTTP page is demonstrably the wrong shape |
@@ -946,7 +943,7 @@ API, not citations inherited from earlier revisions).
     per-workspace; the subscription limit is per-account.
 13. **`GET /insights` plots one panel, static per load, with no drill-down.** One dot per merged
     ticket, not one bar per day: a ticket's weight is every run disposed before its own
-    `pr_merged` event, all kinds summed (`cost_usd`, nullable and provider-computed, docs/adr/0010-run-metrics-are-captured-per-request-at-disposition.md),
+    `pr_merged` event, all kinds summed (`cost_usd`, nullable and provider-computed, docs/adr/0010-spend-is-a-share-of-the-subscription-windows.md),
     converted to a percentage of the week by the same trailing-fit `usage.Factor` the masthead
     gauge already applies to its own cost (CC-313), not a dollar axis — dollars alone
     say nothing about how much of the subscription a ticket actually spent. A withdrawn ticket that

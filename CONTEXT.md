@@ -122,7 +122,7 @@ where a repo's working copy sits), configured repo (repos are no longer configur
 **Project**:
 A named set of repos. A repo belongs to at most one project. The third scope
 axis. Made only by grouping repos on the Repos page and never inferred. Not the tracker's `project:`
-label prefix, which marks a feature (ADR 23).
+label prefix, which marks a feature (ADR 6).
 _Avoid_: Workspace, folder, feature (that is the tracker's grouping of tickets)
 
 **Track**:
@@ -161,7 +161,7 @@ _Avoid_: Section, stage, step
 
 **Spend**:
 What a run or ticket cost, as a percentage of the five-hour and weekly subscription windows. A
-ticket's spend sums its runs until its PR merges (ADR 12).
+ticket's spend sums its runs until its PR merges (ADR 10).
 _Avoid_: Cost (ambiguous with `cost_usd`, the API-equivalent weight), usage, price, dollars
 
 **Utilization reading**:
@@ -171,7 +171,7 @@ _Avoid_: Quota, limit (the limit is what utilization is a fraction of)
 **Glyph**:
 The status mark drawn beside a ticket, one of eight words derived from its state by `plan.Glyph`:
 blocked, ready, running, pending, checking, attention, done, failed. The surface colours by glyph,
-never by state, and the rail's group is a function of it (ADR 18).
+never by state, and the rail's group is a function of it (ADR 14).
 _Avoid_: Pill, tone, badge, icon, status
 
 **Sidebar**:
@@ -183,7 +183,7 @@ _Avoid_: Nav, menu, drawer
 **Rail**:
 The sidebar's session list: Needs you, In flight by feature, and Settled. It polls `GET /rail`
 inside a scroll container that never swaps, keeps its expanded features in a cookie and takes the
-selected session from the current URL (ADR 19). Below 760px it is the home screen.
+selected session from the current URL (ADR 15). Below 760px it is the home screen.
 _Avoid_: Collapsed nav, mini sidebar, icon bar, session list
 
 **Breadcrumb**:
@@ -248,14 +248,14 @@ _Avoid_: Header, nav
   are **spend**, which reads as tokens while a run is alive and as dollars once it ends.
 - **"group"** named three things at once: the board's layout of a blocker and the tickets waiting
   on it, the tracker's own grouping that the import page lists, and an internal key tying one
-  authorisation's intents together. Resolved: the board no longer lays out groups (ADR 20), so
+  authorisation's intents together. Resolved: the board no longer lays out groups (ADR 14), so
   **group** has no entry here. The tracker's grouping is a **feature**. The third is not a domain
   term.
 - **"status"** was used for both a ticket's derived label and the Linear project status in the
   prototype. Resolved: **state** is the derived label; the prototype's project status has no
   referent in this app, whose **project** is a set of repos and has no status.
 - **"project"** named the tracker's label prefix (`project:<slug>`) for a **feature** and now also
-  the app's set of repos. Resolved: **project** is the set of repos (ADR 23). The label prefix stays
+  the app's set of repos. Resolved: **project** is the set of repos (ADR 6). The label prefix stays
   an outside string, and what it marks is a **feature**.
 - **"scoped feature"** was used for "every feature the app knows about", while **scope** is
   reserved here for the board's narrowing by feature or repo, which made the phrase circular.
