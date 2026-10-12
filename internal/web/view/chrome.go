@@ -18,6 +18,7 @@ type Chrome struct {
 	Gauges         []Gauge
 	SpendPaused    *SpendPaused
 	RefusedRepos   []RefusedRepo
+	OpenTickets    int
 	Section        string
 	Home           bool
 	Keymap         []KeyGroup
