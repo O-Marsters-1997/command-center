@@ -19,7 +19,6 @@ func writeAgentFiles(t *testing.T) config.Workspace {
 	ws := config.Workspace{
 		SettingsPath:     filepath.Join(dir, "agent.json"),
 		SystemPromptPath: filepath.Join(dir, "system-prompt.md"),
-		AgentsPath:       filepath.Join(dir, "agents.json"),
 	}
 	if err := loop.WriteAgentFiles(ws); err != nil {
 		t.Fatalf("WriteAgentFiles: %v", err)
@@ -83,9 +82,6 @@ func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *tes
 	if !strings.Contains(got, "foreground") {
 		t.Errorf("system prompt = %q, want it to allow foreground subagents", raw)
 	}
-	if !strings.Contains(got, "digest subagent") {
-		t.Errorf("system prompt = %q, want it to delegate read-heavy work to the digest subagent", raw)
-	}
 	if !strings.Contains(got, "zsh") {
 		t.Errorf("system prompt = %q, want it to name the shell as zsh", raw)
 	}
@@ -96,42 +92,6 @@ func TestWriteAgentSystemPromptWarnsAgainstDeferringToABackgroundSubagent(t *tes
 		if !strings.Contains(got, want) {
 			t.Errorf("system prompt = %q, want the comment rule inlined, missing %q", raw, want)
 		}
-	}
-}
-
-func TestWriteAgentDigestDefinitionDefinesDigestOnHaikuWithReadOnlyTools(t *testing.T) {
-	t.Parallel()
-
-	path := writeAgentFiles(t).AgentsPath
-
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read written agents definition: %v", err)
-	}
-
-	var defs map[string]struct {
-		Prompt string   `json:"prompt"`
-		Model  string   `json:"model"`
-		Tools  []string `json:"tools"`
-	}
-	if err := json.Unmarshal(raw, &defs); err != nil {
-		t.Fatalf("agents definition is not valid JSON: %v\n%s", err, raw)
-	}
-
-	digest, ok := defs["digest"]
-	if !ok {
-		t.Fatalf("agents definition = %v, want a %q entry", defs, "digest")
-	}
-	if digest.Model != "haiku" {
-		t.Errorf("digest model = %q, want haiku", digest.Model)
-	}
-	for _, want := range []string{"Read", "Grep", "Glob", "Bash"} {
-		if !slices.Contains(digest.Tools, want) {
-			t.Errorf("digest tools = %v, want %q", digest.Tools, want)
-		}
-	}
-	if !strings.Contains(digest.Prompt, "codegraph explore") {
-		t.Errorf("digest prompt = %q, want it to query an indexed repo through codegraph explore", digest.Prompt)
 	}
 }
 

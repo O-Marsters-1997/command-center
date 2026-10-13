@@ -100,7 +100,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 
-	f.TickPastExplore(t)
+	f.Tick(t)
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns after launch = %d, want 1: max_agents caps the rest as queued",
 			len(f.ImplementSpawns()))
@@ -175,7 +175,7 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
 	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
 	authoriseTicket(t, f.Store, hidden.URL, plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL})), testAt)
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",

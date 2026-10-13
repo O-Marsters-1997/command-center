@@ -177,15 +177,13 @@ func buildSpendSplit(points []insightsPointJSON) SpendSplit {
 		followUp += p.FollowUpPctWeek
 		total += p.PctWeek
 	}
-	explore := max(0, total-agent-resolve-followUp)
 	return SpendSplit{
 		Rows: []SplitRow{
 			{Kind: "agent", Pct: agent},
 			{Kind: "resolve", Pct: resolve},
 			{Kind: "follow-up", Pct: followUp},
-			{Kind: "explore", Pct: explore},
 		},
-		Total: agent + resolve + followUp + explore,
+		Total: agent + resolve + followUp,
 	}
 }
 
@@ -234,7 +232,6 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	}
 	for i, p := range merged {
 		agentPct, resolvePct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
-		totalPct += spend.PctWeek(p.ExploreUSD, factor)
 		resp.Points[i] = insightsPointJSON{
 			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,

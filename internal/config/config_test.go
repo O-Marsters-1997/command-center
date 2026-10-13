@@ -70,7 +70,6 @@ func TestLoadConfigDefaults(t *testing.T) {
 		"claude", "-p", "{prompt}",
 		"--output-format", "stream-json", "--verbose",
 		"--settings", "{settings}",
-		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
 		"--model", "{model}",
@@ -109,7 +108,6 @@ func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
 
 func withRequiredParts(head ...string) []string {
 	return append(slices.Clone(head),
-		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
 		"--model", "{model}",
@@ -163,7 +161,6 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	complete := []string{
 		"claude", "-p", "{prompt}",
-		"--agents", "{agents}",
 		"--append-system-prompt-file", "{system_prompt}",
 		"--permission-mode", "auto",
 		"--model", "{model}",
@@ -184,7 +181,6 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 		missing string
 	}{
 		{"no permission mode", without("--permission-mode"), "--permission-mode"},
-		{"no agents placeholder", without("{agents}"), "{agents}"},
 		{"no system prompt placeholder", without("{system_prompt}"), "{system_prompt}"},
 		{"no model placeholder", without("{model}"), "{model}"},
 	}
@@ -228,7 +224,6 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
-				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
 				"--model", "{model}",
@@ -242,7 +237,6 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
 				"--settings", "{settings}",
-				"--agents", "{agents}",
 				"--append-system-prompt-file", "{system_prompt}",
 				"--permission-mode", "auto",
 				"--model", "{model}",

@@ -29,7 +29,7 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	f := newLoopFixture(t)
 	f.AuthoriseAll(t)
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
@@ -52,8 +52,8 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
-	if summary.Pgid == nil || *summary.Pgid != 2 {
-		t.Errorf("pgid = %v, want 2 (after the explore run's 1)", summary.Pgid)
+	if summary.Pgid == nil || *summary.Pgid != 1 {
+		t.Errorf("pgid = %v, want 1", summary.Pgid)
 	}
 	if summary.BaselineSHA == "" {
 		t.Error("baseline_sha is empty")
@@ -68,7 +68,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	ticket.Body = "fake ticket body"
 	f := newLoopFixture(t, withTickets(ticket))
 	f.AuthoriseAll(t)
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
@@ -101,7 +101,7 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	f := newLoopFixture(t, withFailingTp())
 	f.AuthoriseAll(t)
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 0 {
 		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.ImplementSpawns()))
@@ -118,7 +118,7 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
 	f.AuthoriseAll(t)
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {
 		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.ImplementSpawns()))

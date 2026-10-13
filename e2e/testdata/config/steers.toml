@@ -1,5 +1,5 @@
 max_agents = 1
-agent_command = ["{{agents}}/steers.sh", "{worktree}", "{settings}", "{prompt_file}", "--agents", "{agents}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}", "{session}"]
+agent_command = ["{{agents}}/steers.sh", "{worktree}", "{settings}", "{prompt_file}", "--append-system-prompt-file", "{system_prompt}", "--permission-mode", "auto", "--model", "{model}", "{session}"]
 
 [[repo]]
 name     = "repo"

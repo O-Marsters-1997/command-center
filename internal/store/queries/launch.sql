@@ -37,9 +37,6 @@ UPDATE launches SET state = 'cancelled' WHERE id IN (
     WHERE l.state = 'active' AND lm.ticket_id = $1
 );
 
--- name: LaunchMemberTickets :many
-SELECT ticket_id FROM launch_members WHERE launch_id = $1 ORDER BY ticket_id;
-
 -- name: FeatureFirstLaunch :one
 SELECT l.created_at
 FROM launches l

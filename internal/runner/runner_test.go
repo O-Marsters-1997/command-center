@@ -203,22 +203,6 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.SystemPromptPath }),
 		},
 		{
-			name:    "substitutes the agents path into argv",
-			script:  dumpArg,
-			command: []string{"{agents}"},
-			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
-				t.Helper()
-				cfg.AgentsPath = writeFile(t, "{}")
-			},
-			check: wantArgv(func(cfg runner.SpawnConfig) string { return cfg.AgentsPath }),
-		},
-		{
-			name:    "drops the agents flag when the path is empty",
-			script:  dumpArgs,
-			command: []string{"before", "--agents", "{agents}", "after"},
-			check:   wantArgv(func(runner.SpawnConfig) string { return "before after" }),
-		},
-		{
 			name:    "drops the system prompt flag when the path is empty",
 			script:  dumpArgs,
 			command: []string{"before", "--append-system-prompt-file", "{system_prompt}", "after"},

@@ -28,14 +28,14 @@ const (
 	runKindResolve  = plan.RunKindResolve
 	runKindFollowUp = "follow_up"
 	runKindReview   = "review"
-	runKindExplore  = "explore"
 )
 
 const (
-	eventRunLaunched     = "run_launched"
-	eventExploreLaunched = "explore_launched"
-	eventRunDisposed     = "run_disposed"
+	eventRunLaunched = "run_launched"
+	eventRunDisposed = "run_disposed"
 )
+
+const AgentModel = "claude-sonnet-5-5"
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
@@ -494,9 +494,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 		if err != nil {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
-		if run.Kind != runKindExplore {
-			obs.Runs[run.TicketID] = plan.RunObservation{Alive: alive}
-		}
+		obs.Runs[run.TicketID] = plan.RunObservation{Alive: alive}
 		if alive {
 			continue
 		}
@@ -529,10 +527,6 @@ func (l *Loop) disposeRun(
 	readings, _ := parseLog(run.LogPath, "run readings", agentlog.ParseReadings)
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
-	}
-	if run.Kind == runKindExplore {
-		l.removeExploreWorktree(ctx, run.LaunchID)
-		return nil
 	}
 	if err := l.event(ctx, ticket.URL, eventRunDisposed, outcome.String()); err != nil {
 		return err
@@ -647,21 +641,10 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
 		return err
 	}
 	byTicket := ticketsByURL(tickets)
-	explore, err := l.exploreState(ctx)
-	if err != nil {
-		return err
-	}
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
 		ticket := byTicket[ticketURL]
-		brief, ready, err := l.briefFor(ctx, explore, ticket, entry.Unlock.BaseBranch, byTicket)
-		if err != nil {
-			return err
-		}
-		if !ready {
-			continue
-		}
-		if err := l.cutAndSpawn(ctx, ticket, entry.Unlock.BaseBranch, entry.PromptHash, brief); err != nil {
+		if err := l.cutAndSpawn(ctx, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
 			return err
 		}
 	}
@@ -689,7 +672,7 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 }
 
 func (l *Loop) cutAndSpawn(
-	ctx context.Context, ticket store.Ticket, baseBranch, promptHash, briefPath string,
+	ctx context.Context, ticket store.Ticket, baseBranch, promptHash string,
 ) error {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
@@ -715,14 +698,12 @@ func (l *Loop) cutAndSpawn(
 
 	return l.spawnRun(ctx, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: runKindAgent, prompt: agentPrompt(ticket, briefPath),
+		kind: runKindAgent, prompt: agentPrompt(ticket),
 	})
 }
 
-func agentPrompt(ticket store.Ticket, briefPath string) string {
-	composed := ticket.Plan()
-	composed.BriefPath = briefPath
-	prompt := plan.Compose(composed)
+func agentPrompt(ticket store.Ticket) string {
+	prompt := plan.Compose(ticket.Plan())
 	if ticket.Body != "" {
 		prompt += "\n\n## Ticket\n\n" + ticket.Body
 	}
@@ -731,7 +712,6 @@ func agentPrompt(ticket store.Ticket, briefPath string) string {
 
 type spawnSpec struct {
 	ticket                                 store.Ticket
-	launchID                               int64
 	worktree, baseline, hash, kind, prompt string
 	promptFor                              func(runID int64) string
 	resumeSessionID, message               string
@@ -749,10 +729,6 @@ func (spec spawnSpec) session() store.RunSession {
 }
 
 func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64, sessionID string, err error) {
-	if spec.kind == runKindExplore {
-		runID, err = l.store.InsertExploreRunSkeleton(ctx, spec.launchID)
-		return runID, "", err
-	}
 	return l.store.InsertSessionRunSkeleton(
 		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 }
@@ -792,7 +768,7 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		AgentCommand: agentCommand,
 		WorktreePath: spec.worktree,
 		SettingsPath: l.ws.SettingsPath,
-		Model:        modelFor(spec.kind),
+		Model:        AgentModel,
 		Prompt:       prompt,
 		PromptPath:   promptPath,
 		SessionID:    sessionID,
@@ -801,21 +777,14 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	}
 	if spec.kind == runKindAgent || spec.kind == runKindReview {
 		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
-		spawnCfg.AgentsPath = l.ws.AgentsPath
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		if spec.kind == runKindExplore {
-			l.removeExploreWorktree(ctx, spec.launchID)
-		}
 		return l.store.RecordDisposition(ctx, runID, dispositionFor(spec.kind, 0), nil, l.clock.Now(), nil)
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
 		return err
-	}
-	if spec.kind == runKindExplore {
-		return l.event(ctx, "", eventExploreLaunched, fmt.Sprintf("launch %d: spawned pid %d", spec.launchID, result.Pid))
 	}
 	l.spawned = append(l.spawned, ticket.URL)
 	return l.event(ctx, ticket.URL, eventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))

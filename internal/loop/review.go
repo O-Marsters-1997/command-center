@@ -27,7 +27,7 @@ func (l *Loop) findingsPath(runID int64) string {
 }
 
 func dispositionFor(kind string, commits int) plan.Outcome {
-	if kind == runKindReview || kind == runKindExplore {
+	if kind == runKindReview {
 		return plan.OutcomePush
 	}
 	return plan.Disposition(commits)

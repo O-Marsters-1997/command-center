@@ -221,7 +221,6 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 		RunsDir:          sb.RunsDir(),
 		SettingsPath:     filepath.Join(state, "agent.json"),
 		SystemPromptPath: filepath.Join(state, "system-prompt.md"),
-		AgentsPath:       filepath.Join(state, "agents.json"),
 	}
 	if err := os.MkdirAll(ws.RunsDir, 0o750); err != nil {
 		return ws, err
