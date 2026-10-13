@@ -3,6 +3,7 @@ package view
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"net/url"
 	"slices"
 	"time"
@@ -46,7 +47,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 	for feature, urls := range byFeature {
 		candidates, err := previewCandidates(urls, in)
 		if err != nil {
-			continue
+			return LaunchPicker{}, fmt.Errorf("preview launch of feature %s: %w", feature, err)
 		}
 		row := LaunchFeature{Name: feature, Path: "/f/" + url.PathEscape(feature) + "/launch"}
 		for _, c := range candidates {

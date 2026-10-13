@@ -2,7 +2,8 @@ package store
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -38,35 +39,51 @@ type ticketBlockedBy struct {
 func closeUnderBlockedBy(
 	feature string,
 	tickets []ticketBlockedBy,
-	ticketFeature func(url string) string,
-	merged func(url string) bool,
-) *FeatureClosureError {
+	ticketFeature func(url string) (string, error),
+	merged func(url string) (bool, error),
+) (*FeatureClosureError, error) {
 	for _, t := range tickets {
 		for _, blocker := range t.BlockedBy {
-			blockerFeature := ticketFeature(blocker)
-			if blockerFeature == feature || merged(blocker) {
+			blockerFeature, err := ticketFeature(blocker)
+			if err != nil {
+				return nil, err
+			}
+			if blockerFeature == feature {
 				continue
 			}
-			return &FeatureClosureError{Feature: feature, URL: t.URL, Blocker: blocker, BlockerFeature: blockerFeature}
+			isMerged, err := merged(blocker)
+			if err != nil {
+				return nil, err
+			}
+			if isMerged {
+				continue
+			}
+			return &FeatureClosureError{Feature: feature, URL: t.URL, Blocker: blocker, BlockerFeature: blockerFeature}, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
-func ticketFeatureLookup(ctx context.Context, qtx *ccdb.Queries) func(url string) string {
-	return func(url string) string {
-		feature, _ := qtx.TicketFeatureAny(ctx, url)
-		return feature
+func ticketFeatureLookup(ctx context.Context, qtx *ccdb.Queries) func(url string) (string, error) {
+	return func(url string) (string, error) {
+		feature, err := qtx.TicketFeatureAny(ctx, url)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("read feature for %s: %w", url, err)
+		}
+		return feature, nil
 	}
 }
 
-func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observation) func(url string) bool {
-	return func(url string) bool {
+func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observation) func(url string) (bool, error) {
+	return func(url string) (bool, error) {
 		branch, err := qtx.TicketBranch(ctx, url)
-		if err != nil {
-			return false
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
 		}
-		return obs.PRs[plan.BranchKey(branch.Repo, branch.Branch)].State == plan.Merged
+		if err != nil {
+			return false, fmt.Errorf("read branch for %s: %w", url, err)
+		}
+		return obs.PRs[plan.BranchKey(branch.Repo, branch.Branch)].State == plan.Merged, nil
 	}
 }
 
@@ -83,8 +100,8 @@ func featureTicketsWithOverride(
 		if row.URL != overrideURL {
 			// json.Unmarshal reuses a destination slice's capacity, so decoding into override
 			// would overwrite the edit under validation.
-			var decoded []string
-			if err := json.Unmarshal(row.BlockedBy, &decoded); err != nil {
+			decoded, err := decodeBlockedBy(row.BlockedBy)
+			if err != nil {
 				return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
 			}
 			blockedBy = decoded

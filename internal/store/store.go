@@ -84,7 +84,11 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 
 	qtx := s.q.WithTx(tx)
 	for _, t := range tickets {
-		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
+		var blockedBy []byte
+		blockedBy, err = encodeBlockedBy(t.BlockedBy)
+		if err != nil {
+			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+		}
 		err = qtx.UpsertTicket(ctx, ccdb.UpsertTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
@@ -124,7 +128,11 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			Feature:  row.Feature,
 			SyncedAt: row.SyncedAt,
 		}
-		_ = json.Unmarshal(row.BlockedBy, &t.BlockedBy) // jsonb rejects malformed JSON at write, so this can't fail
+		blockedBy, err := decodeBlockedBy(row.BlockedBy)
+		if err != nil {
+			return nil, fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+		}
+		t.BlockedBy = blockedBy
 		tickets = append(tickets, t)
 	}
 	return tickets, nil
@@ -173,7 +181,11 @@ func (s *Store) ImportTickets(
 		}
 
 		returned[t.URL] = true
-		blockedBy, _ := json.Marshal(nonNil(t.BlockedBy)) // json.Marshal of a []string cannot error
+		var blockedBy []byte
+		blockedBy, err = encodeBlockedBy(t.BlockedBy)
+		if err != nil {
+			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+		}
 		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
 			URL:       t.URL,
 			Repo:      t.Repo,
@@ -206,14 +218,19 @@ func (s *Store) ImportTickets(
 			continue
 		}
 		var blockedBy []string
-		if err = json.Unmarshal(row.BlockedBy, &blockedBy); err != nil {
+		blockedBy, err = decodeBlockedBy(row.BlockedBy)
+		if err != nil {
 			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
 		}
 		intended = append(intended, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
 	}
-	if violation := closeUnderBlockedBy(
+	violation, err := closeUnderBlockedBy(
 		feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
-	); violation != nil {
+	)
+	if err != nil {
+		return err
+	}
+	if violation != nil {
 		return violation
 	}
 
@@ -251,8 +268,8 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 		return fmt.Errorf("list tickets for blocker repair: %w", err)
 	}
 	for _, row := range rows {
-		var blockedBy []string
-		if err := json.Unmarshal(row.BlockedBy, &blockedBy); err != nil {
+		blockedBy, err := decodeBlockedBy(row.BlockedBy)
+		if err != nil {
 			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
 		}
 		pruned := make([]string, 0, len(blockedBy))
@@ -267,7 +284,10 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 		if !changed {
 			continue
 		}
-		blob, _ := json.Marshal(nonNil(pruned)) // json.Marshal of a []string cannot error
+		blob, err := encodeBlockedBy(pruned)
+		if err != nil {
+			return fmt.Errorf("encode blocked_by for %s: %w", row.URL, err)
+		}
 		if err := qtx.SetBlockedBy(ctx, ccdb.SetBlockedByParams{BlockedBy: blob, URL: row.URL}); err != nil {
 			return fmt.Errorf("repair blocked_by for %s: %w", row.URL, err)
 		}
@@ -298,6 +318,18 @@ func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, m
 		}
 	}
 	return tx.Commit()
+}
+
+func encodeBlockedBy(urls []string) ([]byte, error) {
+	return json.Marshal(nonNil(urls))
+}
+
+func decodeBlockedBy(raw []byte) ([]string, error) {
+	var urls []string
+	if err := json.Unmarshal(raw, &urls); err != nil {
+		return nil, err
+	}
+	return urls, nil
 }
 
 func nonNil(s []string) []string {

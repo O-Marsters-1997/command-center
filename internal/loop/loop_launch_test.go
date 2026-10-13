@@ -115,6 +115,38 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	}
 }
 
+func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
+	tests := []struct {
+		name      string
+		opts      []fixtureOption
+		failSpawn bool
+		kind      string
+		cause     string
+	}{
+		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: "cut_failed", cause: "forced failure"},
+		{name: "spawn", failSpawn: true, kind: "spawn_failed", cause: "spawn failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newLoopFixture(t, tt.opts...)
+			f.Fake.FailNext = tt.failSpawn
+			f.AuthoriseAll(t)
+			f.Tick(t)
+
+			events, err := f.Store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range events {
+				if e.Kind == tt.kind && e.TicketURL == f.Tickets[0].URL && strings.Contains(e.Detail, tt.cause) {
+					return
+				}
+			}
+			t.Errorf("events = %+v, want a %s event whose detail contains %q", events, tt.kind, tt.cause)
+		})
+	}
+}
+
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
 	f.AuthoriseAll(t)

@@ -262,8 +262,12 @@ func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
 		return err
 	}
 	for _, id := range ids {
-		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", id)))
-		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", id)))
+		for _, ext := range []string{"jsonl", "prompt"} {
+			path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.%s", id, ext))
+			if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				l.logger.Warn("remove run file", "path", path, "err", err)
+			}
+		}
 	}
 	return nil
 }

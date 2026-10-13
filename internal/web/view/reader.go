@@ -132,7 +132,9 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, err
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
-	applySpend(rows, r.spend)
+	if err := applySpend(rows, r.spend); err != nil {
+		return Board{}, err
+	}
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
@@ -140,7 +142,9 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 			return Board{}, err
 		}
 	}
-	applyViewState(rows, params, records, r.renderLine)
+	if err := applyViewState(rows, params, records, r.renderLine); err != nil {
+		return Board{}, err
+	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	if project.Name != "" {
 		groups = filterGroupsByProject(groups, project.Repos)

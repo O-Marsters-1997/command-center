@@ -137,6 +137,31 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 	}
 }
 
+func TestLatestRunsByTicketRejectsAnUnknownStoredOutcome(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dsn := cctest.DSN(t)
+	store := openStoreAt(t, dsn)
+	seedOneTicket(t, store)
+	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(ctx, `UPDATE runs SET outcome = 'bogus' WHERE id = $1`, runID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.LatestRunsByTicket(ctx); err == nil {
+		t.Error("LatestRunsByTicket error = nil, want an error for outcome \"bogus\"")
+	}
+}
+
 func TestRecordDispositionWritesCostAlongsideOutcome(t *testing.T) {
 	t.Parallel()
 
