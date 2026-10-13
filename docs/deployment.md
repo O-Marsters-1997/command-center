@@ -17,7 +17,7 @@ header configuration; nothing on the other end would look at it.
 
 ## Out of scope
 
-This slice hardens one thing: the transport between a browser and cc. It does not touch:
+Caddy secures the transport between a browser and cc. It does not touch:
 
 - **Postgres.** Still `cc:cc` with `sslmode=disable` (`internal/config/statedir.go`,
   `defaultDatabaseURL`). Fine on loopback/localhost-only Postgres; not fine if Postgres itself is

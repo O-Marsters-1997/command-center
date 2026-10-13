@@ -17,7 +17,7 @@ func TestLoginAndLogoutRoutesDoNotExist(t *testing.T) {
 	} {
 		rec := httptest.NewRecorder()
 		server.ServeHTTP(rec, httptest.NewRequest(req.method, req.path, nil))
-		if rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+		if rec.Code != http.StatusNotFound {
 			t.Errorf("%s %s = %d, want 404", req.method, req.path, rec.Code)
 		}
 	}
