@@ -57,8 +57,8 @@ flattening every merge.
 ## Run it
 
 `--config` defaults to `cc/config.toml`, which is tracked: it is the config this
-project runs itself on, and it names its repo by remote, so the same file works
-on a machine with nothing checked out. Everything machine-specific is an
+project runs itself on, and it names no repo, so the same file works on a
+machine with nothing checked out. Everything machine-specific is an
 environment variable:
 
 | Variable | What |
@@ -71,9 +71,9 @@ environment variable:
 CC_AGENT_COMMAND='["caffeinate","-i","claude","-p","{prompt}"]' just run
 ```
 
-`docs/command-centre.sample.toml` is the read-only tour instead. It points at
-this repository through a relative path and renders two rows off real `gh`
-output, one `ready` and one `blocked`:
+`docs/command-centre.sample.toml` is the read-only tour instead. It names no
+repos; track one from the page and it renders that repo's tickets off real `gh`
+output:
 
 ```
 just run --config docs/command-centre.sample.toml
@@ -230,13 +230,8 @@ each named `owner/name`.
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{model}`, `{prompt}` and `{prompt_file}` are substituted into every element; `{model}` is `claude-sonnet-5-5` for every run. A non-empty argv must name `--permission-mode` and carry `{system_prompt}` and `{model}`; startup refuses one that does not. |
 | `max_turns` | Caps an implement or follow-up run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
-| `[[repo]]` | Legacy: `name` and `remote`, read once by the first-boot import. A block that still carries a per-repo setting is refused at load. |
 
-On the first boot against an empty `repos` table, each `[[repo]]` block is imported as a ready
-repo named by its remote's `owner/name`, every ticket's `repo` is rewritten to match, and an
-existing `repos/<name>` checkout moves to `repos/<owner>/<name>` with a symlink left at the old
-path so existing worktrees still resolve. Once `repos` holds a row, a config that still has
-`[[repo]]` blocks is refused: delete them.
+Repos are not configured: track one from the page at `/repos`.
 
 A tracked repo's checkout is `<data_dir>/repos/<owner>/<name>`. Startup clones when the
 directory is absent, and refuses to start when it holds something whose `origin` names a
@@ -333,7 +328,7 @@ purged. `just assets` compiles it into
 | [docs/prds/prd-operator-surface.md](docs/prds/prd-operator-surface.md) | The page and the operator surface. Part A lands inside Phase 1. |
 | [docs/designs/cloud-agents.md](docs/designs/cloud-agents.md) | Where an always-on host and a hosted runner would fit. A sketch, normative about nothing. |
 | [docs/plans/](docs/plans/) | Build plans for work not yet shipped. A plan is deleted once its phases land. |
-| [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config, pointed at this repository. |
+| [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config that names no repos. |
 | [e2e/README.md](e2e/README.md) | The end-to-end harness: scripts, fakes, fixtures, and how to add one. |
 
 ### Reviews

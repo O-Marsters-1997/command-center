@@ -13,6 +13,3 @@ ON CONFLICT (name) DO UPDATE SET
 -- name: SetRepoState :exec
 UPDATE repos SET state = $2, refusal_kind = $3, refusal = $4, settings_source = $5, settings_read_at = $6
 WHERE name = $1;
-
--- name: RenameTicketRepo :exec
-UPDATE tickets SET repo = sqlc.arg(new_name) WHERE repo = sqlc.arg(old_name);

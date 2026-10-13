@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -31,11 +30,6 @@ type Repo struct {
 	TrackedAt      time.Time
 	Project        string
 	Hue            int
-}
-
-type RepoImport struct {
-	ShortName string
-	Repo      Repo
 }
 
 func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
@@ -83,29 +77,6 @@ func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 		return fmt.Errorf("set repo %s state %s: %w", r.Name, r.State, err)
 	}
 	return nil
-}
-
-func (s *Store) ImportRepos(ctx context.Context, imports []RepoImport) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-	qtx := s.q.WithTx(tx)
-	for _, imp := range imports {
-		if err = upsertRepo(ctx, qtx, imp.Repo); err != nil {
-			return err
-		}
-		err = qtx.RenameTicketRepo(ctx, ccdb.RenameTicketRepoParams{NewName: imp.Repo.Name, OldName: imp.ShortName})
-		if err != nil {
-			return fmt.Errorf("rename tickets of %s to %s: %w", imp.ShortName, imp.Repo.Name, err)
-		}
-	}
-	return tx.Commit()
 }
 
 // QueueTrackIntent queues a Track for repo unless one is already pending, and reports whether it
