@@ -662,11 +662,10 @@ func (l *Loop) cutAndSpawn(
 	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
-		if eventErr := l.event(ctx, ticket.URL, eventCutFailed, err.Error()); eventErr != nil {
-			return eventErr
+		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
+			return insertErr
 		}
-		_, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now())
-		return insertErr
+		return l.event(ctx, ticket.URL, eventCutFailed, err.Error())
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, branch)
@@ -767,10 +766,12 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		if eventErr := l.event(ctx, ticket.URL, eventSpawnFailed, err.Error()); eventErr != nil {
-			return eventErr
+		if dispositionErr := l.store.RecordDisposition(
+			ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil,
+		); dispositionErr != nil {
+			return dispositionErr
 		}
-		return l.store.RecordDisposition(ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil)
+		return l.event(ctx, ticket.URL, eventSpawnFailed, err.Error())
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {

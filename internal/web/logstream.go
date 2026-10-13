@@ -30,7 +30,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 	// A reconnecting browser sends the offset of the last event it swapped, which outranks the
 	// offset the fragment was rendered with (WHATWG HTML § server-sent events).
-	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil {
+	if resumed, err := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64); err == nil && resumed >= 0 {
 		offset = resumed
 	}
 	afterRecord, err := queryOffset(r, "records")
@@ -79,8 +79,8 @@ func (s *Server) followLog(
 			return err
 		}
 		sent += records
-		if err := flusher.Flush(); err != nil {
-			return fmt.Errorf("%w: %w", errClientGone, err)
+		if err := flushStream(flusher); err != nil {
+			return err
 		}
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
@@ -114,10 +114,16 @@ func writeEnd(w io.Writer, flusher *http.ResponseController) error {
 	if _, err := io.WriteString(w, "event: end\ndata:\n\n"); err != nil {
 		return fmt.Errorf("%w: %w", errClientGone, err)
 	}
-	if err := flusher.Flush(); err != nil {
-		return fmt.Errorf("%w: %w", errClientGone, err)
+	return flushStream(flusher)
+}
+
+func flushStream(flusher *http.ResponseController) error {
+	err := flusher.Flush()
+	switch {
+	case err == nil, errors.Is(err, http.ErrNotSupported):
+		return err
 	}
-	return nil
+	return fmt.Errorf("%w: %w", errClientGone, err)
 }
 
 func (s *Server) sendRecords(
