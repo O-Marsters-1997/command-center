@@ -44,7 +44,9 @@ func (ProcessRunner) Liveness(pgid int, wantStart, now time.Time) (bool, error) 
 }
 
 func psStatAndEtime(pid int) (stat, etime string, ok bool) {
-	out, err := command.OutputWithin(context.Background(), psTimeout, "", "ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid))
+	out, err := command.OutputWithin(
+		context.Background(), psTimeout, "", "ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid),
+	)
 	if err != nil {
 		return "", "", false
 	}
