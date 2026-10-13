@@ -3,7 +3,9 @@ package view
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"slices"
@@ -71,19 +73,24 @@ type LogDetail struct {
 
 func buildLogDetail(
 	render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
-) LogDetail {
+) (LogDetail, error) {
 	detail := LogDetail{Path: path, Streaming: streaming}
 	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })
 
-	whole, resumeAt := wholeLines(path)
+	whole, resumeAt, err := wholeLines(path)
+	if err != nil {
+		return LogDetail{}, err
+	}
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
 	if whole == nil && len(records) == 0 {
-		return detail
+		return detail, nil
 	}
 
 	var run agentlog.Run
 	if whole != nil {
-		run, _ = agentlog.Parse(bytes.NewReader(whole))
+		if run, err = agentlog.Parse(bytes.NewReader(whole)); err != nil {
+			return LogDetail{}, fmt.Errorf("parse agent log %s: %w", path, err)
+		}
 	}
 	final := takeFinalAnswer(&run)
 	stats := measure(run)
@@ -93,13 +100,15 @@ func buildLogDetail(
 	detail.PhaseCount = len(run.Phases)
 	detail.Worked = stats.worked()
 	mergeRecords(&run, records)
-	detail.Phases = renderPhases(render, run.Phases, mode)
+	if detail.Phases, err = renderPhases(render, run.Phases, mode); err != nil {
+		return LogDetail{}, err
+	}
 	if final != "" {
-		if line, err := render(sayLine(final)); err == nil {
-			detail.Final = line
+		if detail.Final, err = render(sayLine(final)); err != nil {
+			return LogDetail{}, fmt.Errorf("render final answer: %w", err)
 		}
 	}
-	return detail
+	return detail, nil
 }
 
 func RecordShown(e store.Event) bool {
@@ -144,16 +153,19 @@ func mergeRecords(run *agentlog.Run, records []store.Event) {
 
 // wholeLines reads path's complete lines only: an agent flushes mid-line, so a trailing partial
 // line is left for the live SSE tail.
-func wholeLines(path string) ([]byte, int64) {
+func wholeLines(path string) ([]byte, int64, error) {
 	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, 0, nil
+	}
 	if err != nil {
-		return nil, 0
+		return nil, 0, fmt.Errorf("read agent log %s: %w", path, err)
 	}
 	end := bytes.LastIndexByte(data, '\n')
 	if end < 0 {
-		return nil, 0
+		return nil, 0, nil
 	}
-	return data[:end+1], int64(end + 1)
+	return data[:end+1], int64(end + 1), nil
 }
 
 func takeFinalAnswer(run *agentlog.Run) string {
@@ -169,7 +181,7 @@ func takeFinalAnswer(run *agentlog.Run) string {
 	return final
 }
 
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) []phaseView {
+func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) ([]phaseView, error) {
 	firstFail := firstFailureIndex(phases)
 	openGroups := mode == "tools" || mode == "fails"
 	idx := 0
@@ -177,13 +189,17 @@ func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) []p
 	for _, phase := range phases {
 		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
-			b.add(event, idx == firstFail)
+			if err := b.add(event, idx == firstFail); err != nil {
+				return nil, err
+			}
 			idx++
 		}
-		b.flush()
+		if err := b.flush(); err != nil {
+			return nil, err
+		}
 		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
-	return views
+	return views, nil
 }
 
 type phaseBuilder struct {
@@ -194,24 +210,32 @@ type phaseBuilder struct {
 	pending    []callPair
 }
 
-func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
+func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 	switch event.Kind {
 	case agentlog.Say:
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 		if !KindShown(b.mode, event.Kind) {
-			return
+			return nil
 		}
-		if line, err := b.render(sayLine(event.Detail)); err == nil {
-			b.items = append(b.items, logItem{Kind: "say", Line: line})
+		line, err := b.render(sayLine(event.Detail))
+		if err != nil {
+			return fmt.Errorf("render say line: %w", err)
 		}
+		b.items = append(b.items, logItem{Kind: "say", Line: line})
 	case agentlog.Record, agentlog.Commit:
-		b.flush()
+		if err := b.flush(); err != nil {
+			return err
+		}
 		if !KindShown(b.mode, event.Kind) {
-			return
+			return nil
 		}
-		if line, err := b.render(LineOf(event)); err == nil {
-			b.items = append(b.items, logItem{Kind: event.Kind.String(), Line: line})
+		line, err := b.render(LineOf(event))
+		if err != nil {
+			return fmt.Errorf("render %s line: %w", event.Kind, err)
 		}
+		b.items = append(b.items, logItem{Kind: event.Kind.String(), Line: line})
 	case agentlog.Pass, agentlog.Fail:
 		b.answer(event, anchor)
 	case agentlog.Cmd:
@@ -219,6 +243,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) {
 	default:
 		b.pending = append(b.pending, callPair{call: event, called: true})
 	}
+	return nil
 }
 
 func (b *phaseBuilder) answer(result agentlog.Event, anchor bool) {
@@ -232,7 +257,7 @@ func (b *phaseBuilder) answer(result agentlog.Event, anchor bool) {
 	b.pending = append(b.pending, callPair{result: result, answered: true, anchor: anchor})
 }
 
-func (b *phaseBuilder) flush() {
+func (b *phaseBuilder) flush() error {
 	defer func() { b.pending = nil }()
 
 	var shown []callPair
@@ -250,7 +275,7 @@ func (b *phaseBuilder) flush() {
 		for _, p := range shown {
 			line, err := b.render(p.line())
 			if err != nil {
-				continue
+				return fmt.Errorf("render call line: %w", err)
 			}
 			group.Lines = append(group.Lines, line)
 			group.Open = group.Open || p.anchor
@@ -266,6 +291,7 @@ func (b *phaseBuilder) flush() {
 	if hiddenAnchor {
 		b.items = append(b.items, logItem{Kind: "anchor"})
 	}
+	return nil
 }
 
 func firstFailureIndex(phases []agentlog.Phase) int {

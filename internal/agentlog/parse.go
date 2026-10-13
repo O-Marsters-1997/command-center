@@ -244,12 +244,16 @@ func decode(line []byte) (logLine, error) {
 	return parsed, err
 }
 
-func forEachLine(logPath string, fn func(logLine, time.Time)) error {
+func forEachLine(logPath string, fn func(logLine, time.Time)) (err error) {
 	f, err := os.Open(logPath)
 	if err != nil {
 		return fmt.Errorf("open agent log %s: %w", logPath, err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close agent log %s: %w", logPath, closeErr))
+		}
+	}()
 
 	var last time.Time
 	err = eachLine(f, func(line []byte) {
@@ -376,7 +380,9 @@ var fileTools = []string{"Read", "Write", "Edit", "NotebookEdit"}
 
 func (b contentBlock) toolEvent() Event {
 	var input map[string]any
-	_ = json.Unmarshal(b.Input, &input)
+	if err := json.Unmarshal(b.Input, &input); err != nil {
+		input = nil
+	}
 
 	if b.Name == "Skill" {
 		return Event{Kind: Skill, Tool: text(input["skill"]), Detail: text(input["args"]), CallID: b.ID}
@@ -494,7 +500,9 @@ func (l logLine) cmdDone(call cmdCall, callID string) Event {
 	if block.IsError {
 		done.ExitCode = 1
 		if match := exitCodePrefix.FindStringSubmatch(output); match != nil {
-			done.ExitCode, _ = strconv.Atoi(match[1])
+			if code, err := strconv.Atoi(match[1]); err == nil {
+				done.ExitCode = code
+			}
 			output = output[len(match[0]):]
 		}
 	}

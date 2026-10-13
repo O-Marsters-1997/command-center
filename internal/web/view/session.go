@@ -3,6 +3,8 @@ package view
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"slices"
@@ -124,11 +126,21 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
-		turns = r.turns(row, runs)
+		if turns, err = r.turns(row, runs); err != nil {
+			return Session{}, err
+		}
 	}
 	promptLog := row.LogPath
 	if len(runs) > 0 {
 		promptLog = runs[0].LogPath
+	}
+	prompt, err := readPrompt(promptLog)
+	if err != nil {
+		return Session{}, err
+	}
+	rawText, err := rawLog(raw, row.LogPath)
+	if err != nil {
+		return Session{}, err
 	}
 	return Session{
 		Turns:          turns,
@@ -138,9 +150,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		Row:            row,
 		Stack:          buildStack(board, row),
 		Ref:            ticketRef(ticketURL),
-		Prompt:         readPrompt(promptLog),
+		Prompt:         prompt,
 		Raw:            raw,
-		RawText:        rawLog(raw, row.LogPath),
+		RawText:        rawText,
 		TranscriptPath: self,
 		RawPath:        self + "?log=raw",
 
@@ -149,45 +161,55 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}, nil
 }
 
-func (r *Reader) turns(row Row, runs []store.SessionRun) []Turn {
+func (r *Reader) turns(row Row, runs []store.SessionRun) ([]Turn, error) {
 	if len(runs) < 2 {
-		return []Turn{{Log: row.Log, Ask: row.Question}}
+		return []Turn{{Log: row.Log, Ask: row.Question}}, nil
 	}
 	turns := make([]Turn, len(runs))
 	for i, run := range runs {
 		turns[i].Log = row.Log
 		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
-			turns[i].Log = buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
+			log, err := buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
+			if err != nil {
+				return nil, fmt.Errorf("build log of run %d: %w", run.ID, err)
+			}
+			turns[i].Log = log
 			turns[i].Log.StreamPath = ""
 		}
 		if i > 0 {
 			turns[i].You = run.Message
 		}
 	}
-	return turns
+	return turns, nil
 }
 
-func readPrompt(logPath string) Prompt {
+func readPrompt(logPath string) (Prompt, error) {
 	if logPath == "" {
-		return Prompt{}
+		return Prompt{}, nil
 	}
 	data, err := os.ReadFile(strings.TrimSuffix(logPath, path.Ext(logPath)) + ".prompt")
-	if err != nil {
-		return Prompt{}
+	if errors.Is(err, fs.ErrNotExist) {
+		return Prompt{}, nil
 	}
-	return Prompt{Text: string(data), Kept: true}
+	if err != nil {
+		return Prompt{}, fmt.Errorf("read prompt for %s: %w", logPath, err)
+	}
+	return Prompt{Text: string(data), Kept: true}, nil
 }
 
-func rawLog(raw bool, logPath string) string {
+func rawLog(raw bool, logPath string) (string, error) {
 	if !raw || logPath == "" {
-		return ""
+		return "", nil
 	}
 	data, err := os.ReadFile(logPath)
-	if err != nil {
-		return ""
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
 	}
-	return string(data)
+	if err != nil {
+		return "", fmt.Errorf("read log %s: %w", logPath, err)
+	}
+	return string(data), nil
 }
 
 // ActionVerbs is the state's verbs minus launch, which has its own modal, and follow-up, which

@@ -117,7 +117,7 @@ type Group struct {
 	Children []Row `json:"children"`
 }
 
-func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) {
+func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) error {
 	for i := range rows {
 		r := &rows[i]
 		r.Checked = slices.Contains(params.Tickets, r.URL)
@@ -126,9 +126,14 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
 		if params.Sel == r.URL {
-			r.Log = buildLogDetail(render, r.LogPath, r.Alive, r.URL, records, params)
+			log, err := buildLogDetail(render, r.LogPath, r.Alive, r.URL, records, params)
+			if err != nil {
+				return fmt.Errorf("build log for %s: %w", r.URL, err)
+			}
+			r.Log = log
 		}
 	}
+	return nil
 }
 
 func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, projects map[string]ProjectMark) []Row {

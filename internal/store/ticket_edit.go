@@ -92,14 +92,23 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 		if err != nil {
 			return fmt.Errorf("read observation for closure check: %w", err)
 		}
-		if violation := closeUnderBlockedBy(
+		var violation *FeatureClosureError
+		violation, err = closeUnderBlockedBy(
 			feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
-		); violation != nil {
+		)
+		if err != nil {
+			return err
+		}
+		if violation != nil {
 			return violation
 		}
 	}
 
-	blob, _ := json.Marshal(nonNil(blockedBy)) // json.Marshal of a []string cannot error
+	var blob []byte
+	blob, err = encodeBlockedBy(blockedBy)
+	if err != nil {
+		return fmt.Errorf("encode blocked_by for %s: %w", ticketURL, err)
+	}
 	if err = qtx.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL}); err != nil {
 		return fmt.Errorf("edit ticket %s: %w", ticketURL, err)
 	}

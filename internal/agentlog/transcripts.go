@@ -1,6 +1,8 @@
 package agentlog
 
 import (
+	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 )
@@ -11,15 +13,21 @@ import (
 func LoadRequests(dir string) ([]RequestUsage, error) {
 	var requests []RequestUsage
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
-			return nil //nolint:nilerr // pedantic here: a missing or unreadable dir weighs zero, not a bug to surface
+			return fmt.Errorf("walk %s: %w", path, err)
 		}
 		if entry.IsDir() || filepath.Ext(path) != ".jsonl" {
 			return nil
 		}
 		found, err := ParseTranscriptUsage(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		if err != nil {
-			return nil //nolint:nilerr // pedantic here: an unreadable transcript weighs zero, not a bug to surface
+			return fmt.Errorf("parse transcript %s: %w", path, err)
 		}
 		requests = append(requests, found...)
 		return nil
