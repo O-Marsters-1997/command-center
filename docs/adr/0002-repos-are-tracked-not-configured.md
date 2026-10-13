@@ -25,8 +25,7 @@ touch, reviewed by no one who owns the repo and read once at startup.
 - A missing file answers defaults. A parse error, an unknown key or an invalid predicate is a read
   error: it becomes the tick's last error and the repo is skipped for every act step that tick.
 - The settings file's own path is always denied to pushes, whatever the repo's `deny` says.
-- The skills the app's agents run are tracked under `cc/skills/`, not `.claude/skills/`, whose
-  symlinks `npx skills` manages.
+- The skills the app's agents run are tracked under `cc/skills/`, not `.claude/skills/`.
 
 ## Consequences
 
