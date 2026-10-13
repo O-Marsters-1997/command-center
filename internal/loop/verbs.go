@@ -227,11 +227,14 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}
-		if state == git.NotRemovable {
-			return refuse("worktree holds unpushed commits")
-		}
-		if state == git.RemovableByForce {
+		switch state {
+		case git.RemovableByMerged:
+		case git.RemovableByForce:
 			mode = git.RemoveForced
+		case git.NotRemovable:
+			return refuse("worktree holds unpushed commits")
+		default:
+			return fmt.Errorf("check unpushed commits for %s: removal state %d is unknown", ticket.URL, state)
 		}
 
 		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {

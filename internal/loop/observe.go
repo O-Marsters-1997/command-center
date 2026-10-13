@@ -137,17 +137,23 @@ func observeRepo(
 	}
 	maps.Copy(obs.Titles, titles)
 
-	mainTip, mainErr := git.RevParse(ctx, path, "origin/"+plan.DefaultBaseBranch)
-	if mainErr == nil {
+	mainTip, mainPresent, err := git.TipIfPresent(ctx, path, "origin/"+plan.DefaultBaseBranch)
+	if err != nil {
+		return plan.Observation{}, fmt.Errorf("read tip of origin/%s: %w", plan.DefaultBaseBranch, err)
+	}
+	if mainPresent {
 		obs.BranchTips[plan.BranchKey(name, plan.DefaultBaseBranch)] = mainTip
 	}
 	for _, branch := range branches {
-		tip, err := git.RevParse(ctx, path, "origin/"+branch)
+		tip, present, err := git.TipIfPresent(ctx, path, "origin/"+branch)
 		if err != nil {
+			return plan.Observation{}, fmt.Errorf("read tip of origin/%s: %w", branch, err)
+		}
+		if !present {
 			continue
 		}
 		obs.BranchTips[plan.BranchKey(name, branch)] = tip
-		if mainErr != nil {
+		if !mainPresent {
 			continue
 		}
 		clean, err := git.MergesCleanly(ctx, path, mainTip, tip)

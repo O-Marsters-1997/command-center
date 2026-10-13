@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -127,6 +128,16 @@ func (l *Loop) refreshOne(
 	}
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		conflicted, midErr := git.MidMerge(ctx, worktreePath)
+		if midErr != nil {
+			return fmt.Errorf("check %s for a conflict: %w", worktreePath, errors.Join(err, midErr))
+		}
+		if !conflicted {
+			return fmt.Errorf("advance %s: %w", ticket.URL, err)
+		}
 		if restacked {
 			if err := l.event(ctx, ticket.URL, store.EventRestacked, detail+", conflicted"); err != nil {
 				return err

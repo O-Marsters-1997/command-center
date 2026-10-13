@@ -31,7 +31,7 @@ grep -count=4 'pr create --base cc-1-x --fill --label keep-open --body Merge aft
 # origin/cc-1-x no longer resolves for anything downstream.
 exec git -C $WORK/repo push -q origin cc-1-x:main
 exec git -C $WORK/repo push -q origin --delete cc-1-x
-cc-fake-gh fanout-root-merged
+cc-fake-gh-head fanout-root-merged cc-1-x
 
 exec cc tick --count 1
 grep -count=1 'pr edit cc-2-x --base main' $WORK/gh.log

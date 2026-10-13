@@ -141,8 +141,13 @@ func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 // post-prune gap treepad's own docs describe, where there is nothing left to compare against.
 func hasUnpushedCommits(root, branch string, stderr io.Writer) (unpushed bool, code int) {
 	remote, err := gitOutput(root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch)
-	if err != nil {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
 		return false, 0
+	}
+	if err != nil {
+		printf(stderr, "faketp remove: %v\n", err)
+		return false, 1
 	}
 	local, err := gitOutput(root, "rev-parse", "refs/heads/"+branch)
 	if err != nil {
