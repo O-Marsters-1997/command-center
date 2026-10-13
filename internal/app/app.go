@@ -59,8 +59,7 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
 
-// New resolves the workspace, takes the flock, opens the store and imports any [[repo]] blocks
-// into it on first boot. It checks no repo: the loop's first tick settles each one. A second
+// New resolves the workspace, takes the flock, opens the store. It checks no repo: the loop's first tick settles each one. A second
 // instance against the same workspace is refused.
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
@@ -96,9 +95,6 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		}
 	}()
 
-	if err := importLegacyRepos(ctx, store, configPath, cfg, settings.clock.Now()); err != nil {
-		return nil, err
-	}
 	if err := loop.WriteAgentFiles(ws); err != nil {
 		return nil, err
 	}

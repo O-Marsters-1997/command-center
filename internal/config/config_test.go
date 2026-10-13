@@ -35,10 +35,6 @@ ticket_url = "sandbox://CC-1"
 repo       = "cc-sandbox"
 branch     = "cc-1-first"
 blocked_by = []
-
-[[repo]]
-name = "cc-sandbox"
-path = "cc-sandbox"
 `
 	got, err := config.LoadConfig(writeConfig(t, body))
 	if err != nil {
@@ -47,16 +43,12 @@ path = "cc-sandbox"
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
 	}
-	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
-		t.Errorf("legacy repos = %+v", got.LegacyRepos)
-	}
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Parallel()
 
-	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := config.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, ""))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -83,8 +75,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestLoadConfigSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
-	body := "spend_limit_5h = 80\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := config.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, "spend_limit_5h = 80\n"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -96,8 +87,7 @@ func TestLoadConfigSpendLimit5h(t *testing.T) {
 func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
 	t.Parallel()
 
-	body := "[[repo]]\nname = \"r\"\npath = \"r\"\n"
-	got, err := config.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, ""))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -219,7 +209,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 	}{
 		{
 			name: "unset leaves agent_command untouched",
-			body: "[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			body: "",
 			want: []string{
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
@@ -232,7 +222,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 		},
 		{
 			name: "set appends --max-turns with the configured value",
-			body: "max_turns = 40\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			body: "max_turns = 40\n",
 			want: []string{
 				"claude", "-p", "{prompt}",
 				"--output-format", "stream-json", "--verbose",
@@ -246,7 +236,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 		},
 		{
 			name: "an explicit empty agent_command stays empty so spawning stays off",
-			body: "max_turns = 40\nagent_command = []\n\n[[repo]]\nname = \"r\"\npath = \"r\"\n",
+			body: "max_turns = 40\nagent_command = []\n",
 			want: []string{},
 		},
 	}
@@ -305,7 +295,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 func TestLoadConfigBoardPollSeconds(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	got, err := config.LoadConfig(writeConfig(t, ""))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -313,7 +303,7 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
 	}
 
-	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -325,54 +315,17 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 	t.Parallel()
 
-	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n"))
 	if err == nil {
 		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
 	}
 }
 
-func TestLoadConfigRejectsAPerRepoKeyAndPointsToTheSettingsFile(t *testing.T) {
+func TestSampleConfigLoads(t *testing.T) {
 	t.Parallel()
 
-	for _, tt := range []struct{ key, line string }{
-		{"tracker", `tracker = "github"`},
-		{"stacking", "stacking = true"},
-		{"deny", `deny = ["go.mod"]`},
-		{"compat_check", `compat_check = "x"`},
-		{"mergify_sha", `mergify_sha = "sha256:1"`},
-		{"verify_command", `verify_command = ["true"]`},
-		{"checks", "[repo.checks]\nsuccess = \"CI\""},
-	} {
-		t.Run(tt.key, func(t *testing.T) {
-			t.Parallel()
-
-			_, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"+tt.line+"\n"))
-			if err == nil {
-				t.Fatalf("LoadConfig accepted %q in a [[repo]] block", tt.key)
-			}
-			if !strings.Contains(err.Error(), `"`+tt.key+`"`) || !strings.Contains(err.Error(), config.SettingsFile) {
-				t.Errorf("err = %v, want it to name %q and %s", err, tt.key, config.SettingsFile)
-			}
-		})
-	}
-}
-
-func TestLoadConfigIgnoresTheRemovedGeneratedKeys(t *testing.T) {
-	t.Parallel()
-
-	body := `
-[[repo]]
-name          = "cc-sandbox"
-path          = "cc-sandbox"
-generated     = ["dist/**"]
-build_command = ["just", "assets"]
-`
-	got, err := config.LoadConfig(writeConfig(t, body))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(got.LegacyRepos) != 1 || got.LegacyRepos[0].Name != "cc-sandbox" {
-		t.Errorf("legacy repos = %+v", got.LegacyRepos)
+	if _, err := config.LoadConfig("../../docs/command-centre.sample.toml"); err != nil {
+		t.Fatalf("LoadConfig(docs/command-centre.sample.toml): %v", err)
 	}
 }
 
@@ -383,7 +336,7 @@ func TestCheckedInConfigPinsTheDefaultModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig(cc/config.toml): %v", err)
 	}
-	defaults, err := config.LoadConfig(writeConfig(t, "[[repo]]\nname = \"r\"\npath = \"r\"\n"))
+	defaults, err := config.LoadConfig(writeConfig(t, ""))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}

@@ -29,13 +29,6 @@ type Config struct {
 	SpendLimit5h int `toml:"spend_limit_5h"`
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
 	BoardPollSeconds int `toml:"board_poll_seconds"`
-	// LegacyRepos is the [[repo]] blocks, read only by the first-boot import into the repos table.
-	LegacyRepos []LegacyRepo `toml:"repo"`
-}
-
-type LegacyRepo struct {
-	Name   string `toml:"name"`
-	Remote string `toml:"remote"`
 }
 
 const (
@@ -62,10 +55,6 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
-	}
-
-	if err := rejectPerRepoKeys(path); err != nil {
-		return Config{}, err
 	}
 
 	if cfg.BoardPollSeconds < 1 {
@@ -134,26 +123,4 @@ func requireAgentCommandParts(argv []string) error {
 // CheckoutPath is where the app keeps the working copy of the repo named owner/name.
 func CheckoutPath(dataDir, fullName string) string {
 	return filepath.Join(dataDir, "repos", filepath.FromSlash(fullName))
-}
-
-var perRepoKeys = []string{
-	"tracker", "stacking", "deny", "checks", "compat_check", "mergify_sha", "verify_command",
-}
-
-func rejectPerRepoKeys(path string) error {
-	var raw struct {
-		Repos []map[string]any `toml:"repo"`
-	}
-	if _, err := toml.DecodeFile(path, &raw); err != nil {
-		return fmt.Errorf("read config %s: %w", path, err)
-	}
-	for _, block := range raw.Repos {
-		for _, key := range perRepoKeys {
-			if _, ok := block[key]; ok {
-				return fmt.Errorf("config %s: [[repo]] %v sets %q; per-repo settings now live in %s on the repo's origin/main",
-					path, block["name"], key, SettingsFile)
-			}
-		}
-	}
-	return nil
 }
