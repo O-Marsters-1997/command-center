@@ -369,22 +369,6 @@ func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]Pendin
 	return items, nil
 }
 
-const precedingRunKind = `-- name: PrecedingRunKind :one
-SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1
-`
-
-type PrecedingRunKindParams struct {
-	TicketID sql.NullString
-	ID       int64
-}
-
-func (q *Queries) PrecedingRunKind(ctx context.Context, arg PrecedingRunKindParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, precedingRunKind, arg.TicketID, arg.ID)
-	var kind string
-	err := row.Scan(&kind)
-	return kind, err
-}
-
 const queueVerbIntent = `-- name: QueueVerbIntent :exec
 INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3)
 `

@@ -25,7 +25,7 @@ func Glyph(s State) string {
 	case Failed, CutFailed, PushFailed, CIFailed, ConflictsWithMain, RefreshConflicted,
 		BaseGone, VerificationFailed, PRClosedUnmerged:
 		return GlyphFailed
-	case ReviewMe, NeedsYou, ConflictResolved, AwaitingInput:
+	case ReviewMe, NeedsYou, AwaitingInput:
 		return GlyphAttention
 	case Running:
 		return GlyphRunning

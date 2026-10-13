@@ -228,8 +228,7 @@ each named `owner/name`.
 | `max_agents` | How many agents may run at once. Default 1. |
 | `port` | The page's port. Default 7777. |
 | `agent_command` | The argv the runner spawns. Overridden wholesale by `CC_AGENT_COMMAND`, a JSON array.  `{worktree}`, `{settings}`, `{model}`, `{prompt}` and `{prompt_file}` are substituted into every element; `{model}` is `claude-sonnet-5-5` for every run. A non-empty argv must name `--permission-mode` and carry `{system_prompt}` and `{model}`; startup refuses one that does not. |
-| `max_turns` | Caps an implement, follow-up or resolve run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
-| `review_max_turns` | Caps a review run the same way. Defaults to 20, or half of `max_turns` when that is lower; must be below `max_turns`. |
+| `max_turns` | Caps an implement or follow-up run at this many agent turns, appended to `agent_command` as `--max-turns`. Absent (default) sets no cap. |
 | `[[task]]` | `ticket_url`, `repo`, `branch`, `blocked_by`. Upserted at startup only, so the tick never adds rows to its own intake table. |
 | `[[repo]]` | Legacy: `name` and `remote`, read once by the first-boot import. A block that still carries a per-repo setting is refused at load. |
 

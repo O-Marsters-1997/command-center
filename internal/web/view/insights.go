@@ -33,7 +33,6 @@ type insightsPointJSON struct {
 	MergedAt        string  `json:"merged_at"`
 	PctWeek         float64 `json:"pct_week"`
 	AgentPctWeek    float64 `json:"agent_pct_week"`
-	ResolvePctWeek  float64 `json:"resolve_pct_week"`
 	FollowUpPctWeek float64 `json:"follow_up_pct_week"`
 }
 
@@ -91,8 +90,8 @@ type InsightsPage struct {
 }
 
 type MergedRow struct {
-	Name, Feature, Day              string
-	Agent, Resolve, FollowUp, Total float64
+	Name, Feature, Day     string
+	Agent, FollowUp, Total float64
 }
 
 func mergedDay(mergedAt, timezone string) string {
@@ -117,7 +116,7 @@ func buildMergedRows(points []insightsPointJSON, timezone string) []MergedRow {
 		}
 		rows = append(rows, MergedRow{
 			Name: name, Feature: p.Feature, Day: mergedDay(p.MergedAt, timezone),
-			Agent: p.AgentPctWeek, Resolve: p.ResolvePctWeek, FollowUp: p.FollowUpPctWeek, Total: p.PctWeek,
+			Agent: p.AgentPctWeek, FollowUp: p.FollowUpPctWeek, Total: p.PctWeek,
 		})
 	}
 	return rows
@@ -170,20 +169,18 @@ func untilReset(now, at time.Time) string {
 }
 
 func buildSpendSplit(points []insightsPointJSON) SpendSplit {
-	var agent, resolve, followUp, total float64
+	var agent, followUp, total float64
 	for _, p := range points {
 		agent += p.AgentPctWeek
-		resolve += p.ResolvePctWeek
 		followUp += p.FollowUpPctWeek
 		total += p.PctWeek
 	}
 	return SpendSplit{
 		Rows: []SplitRow{
 			{Kind: "agent", Pct: agent},
-			{Kind: "resolve", Pct: resolve},
 			{Kind: "follow-up", Pct: followUp},
 		},
-		Total: agent + resolve + followUp,
+		Total: agent + followUp,
 	}
 }
 
@@ -231,12 +228,11 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 		Points: make([]insightsPointJSON, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
 	}
 	for i, p := range merged {
-		agentPct, resolvePct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.ResolveUSD, p.FollowUpUSD, factor)
+		agentPct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.FollowUpUSD, factor)
 		resp.Points[i] = insightsPointJSON{
 			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,
 			AgentPctWeek:    agentPct,
-			ResolvePctWeek:  resolvePct,
 			FollowUpPctWeek: followUpPct,
 		}
 	}

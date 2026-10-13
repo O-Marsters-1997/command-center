@@ -10,7 +10,7 @@ web
 
 One developer, the owner. They scope work into GitHub tickets and hand the tickets to coding
 agents. Mostly they work at a desk. They also check in from a phone to see what is running and to
-unblock agents: answer a question, resolve, re-run, review, or arm a launch for when its blockers
+unblock agents: answer a question, re-run, or arm a launch for when its blockers
 merge. Some tickets on the board belong to other humans; the "yours" split exists for that, not
 for a team.
 
@@ -45,7 +45,7 @@ merge, and show a whole feature's wave progress across repos.
 
 - **States.** `plan` derives a ticket's state from observation. The surface knows each state only
   through one of eight glyph words: blocked, ready, running, pending, checking, attention, done
-  and failed. Attention covers review me, needs you, awaiting input and conflict resolved. Failed
+  and failed. Attention covers review me, needs you, and awaiting input. Failed
   covers every state a human must repair, such as failed runs, failing checks, conflicts with
   main and a gone base.
 - **Talking to an agent.** An agent can ask the owner a question mid-run. The ticket then awaits
@@ -53,7 +53,7 @@ merge, and show a whole feature's wave progress across repos.
   follow-up resumes the agent's own session, and the session reads as one transcript across
   turns.
 - **Verbs:** launch (now, or armed to launch on unlock), kill, re-run, retry push, cancel,
-  refresh, abort, resolve, commit resolution, follow-up, and remove worktree. Verbs queue intents;
+  refresh, abort, follow-up, and remove worktree. Verbs queue intents;
   the loop is the only writer of reconciled state.
 - **Destinations:** the session view (transcript, raw log, feature stack), the feature graph and
   board, the launch dialog, all tickets, insights (limits, spend per merged ticket), and the

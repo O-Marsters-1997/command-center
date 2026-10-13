@@ -22,11 +22,9 @@ blocker edge, so nothing else compares them, and the second merge fights the fir
   branch order and holds a ticket when an earlier one conflicts with it. The lower ref is never held,
   a held peer does not hold others, and stacked branches are out of scope. A held ticket reads
   `blocked` naming the peer, ranked below `ConflictsWithMain` and above `VerdictReviewMe`.
-- **`resolve`** spawns an agent on `cc/skills/resolve-merge-conflict/SKILL.md` that commits nothing.
-  The row lands at `conflict_resolved` with the resolution staged for a human.
 
 ## Consequences
 
 Conflicts still stop the loop: `rerere` removes the thinking, not the stop. The gate refuses and does
-not fix. Only one of a conflicting pair shows `review_me`, so the second is resolved once, not at a
+not fix; the owner resolves in the worktree, or refreshes. Only one of a conflicting pair shows `review_me`, so the second is resolved once, not at a
 surprise merge.

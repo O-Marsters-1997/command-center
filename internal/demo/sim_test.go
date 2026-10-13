@@ -13,8 +13,7 @@ import (
 var recoveryVerb = map[string]string{
 	"failed":              "re-run",
 	"ci_failed":           "re-run",
-	"conflicts_with_main": "resolve",
-	"conflict_resolved":   "commit-resolution",
+	"conflicts_with_main": "refresh",
 }
 
 func TestGeneratedBoardDrainsAfterRecovery(t *testing.T) {

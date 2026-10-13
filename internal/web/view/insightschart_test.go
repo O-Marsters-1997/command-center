@@ -38,7 +38,7 @@ func TestBuildInsightsChartScalesPointsAndWasteOntoTheTicks(t *testing.T) {
 	if !chart.HasWaste || chart.WasteLabel != "4.00% week" {
 		t.Errorf("waste = %v %q", chart.HasWaste, chart.WasteLabel)
 	}
-	if chart.Dots[1].Title != "Bee: 2.00% week (agent 0.00, resolve 0.00, follow-up 0.00), merged m2" {
+	if chart.Dots[1].Title != "Bee: 2.00% week (agent 0.00, follow-up 0.00), merged m2" {
 		t.Errorf("title = %q", chart.Dots[1].Title)
 	}
 	if chart.Dots[0].Y >= chart.Dots[1].Y {

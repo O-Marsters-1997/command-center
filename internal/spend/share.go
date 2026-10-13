@@ -17,9 +17,8 @@ func Share(totalPct int, fit Result, ccUSD float64) (pct int, calibrating bool) 
 
 func PctWeek(usd, factor float64) float64 { return usd * factor * 100 }
 
-func KindPctWeek(agentUSD, resolveUSD, followUpUSD, factor float64) (agent, resolve, followUp, total float64) {
+func KindPctWeek(agentUSD, followUpUSD, factor float64) (agent, followUp, total float64) {
 	agent = PctWeek(agentUSD, factor)
-	resolve = PctWeek(resolveUSD, factor)
 	followUp = PctWeek(followUpUSD, factor)
-	return agent, resolve, followUp, agent + resolve + followUp
+	return agent, followUp, agent + followUp
 }

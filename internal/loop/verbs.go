@@ -21,7 +21,6 @@ const (
 	eventLaunchCancelled  = "launch_cancelled"
 	eventMergeAborted     = "merge_aborted"
 	eventMergeAbortFailed = "merge_abort_failed"
-	eventResolveRefused   = "resolve_refused"
 	eventFollowUpRefused  = "follow_up_refused"
 )
 
@@ -46,32 +45,6 @@ func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observ
 
 	delete(obs.MidMerge, plan.BranchKey(ticket.Repo, ticket.Branch))
 	return l.event(ctx, ticket.URL, eventMergeAborted, "")
-}
-
-func (l *Loop) applyResolveIntents(ctx context.Context, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbResolve, func(intent store.VerbIntent) error {
-		ticket, ok, err := l.ticket(ctx, intent.TicketID)
-		if err != nil || !ok {
-			return err
-		}
-		return l.resolveOne(ctx, ticket, obs)
-	})
-}
-
-func (l *Loop) resolveOne(ctx context.Context, ticket store.Ticket, obs plan.Observation) error {
-	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
-	if refusal != "" {
-		return l.event(ctx, ticket.URL, eventResolveRefused, refusal)
-	}
-
-	baselineSHA, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
-	if err != nil {
-		return fmt.Errorf("read baseline for resolve of %s: %w", ticket.URL, err)
-	}
-	return l.spawnRun(ctx, spawnSpec{
-		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: runKindResolve, prompt: plan.ComposeResolve(ticket.Plan()),
-	})
 }
 
 func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, refusal string) {

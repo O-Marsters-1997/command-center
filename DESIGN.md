@@ -358,7 +358,7 @@ word through `plan.Glyph`, and the template composes the class
 | `running` | amber, half pie; breathes when live (`glyph-pulse`) | running |
 | `pending` | amber, ⅝ pie | push pending, queued, base moved |
 | `checking` | amber, ¾ pie | checking |
-| `attention` | indigo, ¾ pie | review me, needs you, awaiting input, conflict resolved |
+| `attention` | indigo, ¾ pie | review me, needs you, awaiting input |
 | `done` | green disc with a check | merged |
 | `failed` | red disc with a bar | every state a human must repair |
 

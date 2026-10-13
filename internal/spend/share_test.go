@@ -72,8 +72,8 @@ func TestShare(t *testing.T) {
 
 func TestKindPctWeek(t *testing.T) {
 	t.Parallel()
-	agent, resolve, followUp, total := spend.KindPctWeek(1, 2, 3, 0.5)
-	if agent != 50 || resolve != 100 || followUp != 150 || total != 300 {
-		t.Errorf("KindPctWeek(1,2,3,0.5) = %v %v %v %v, want 50 100 150 300", agent, resolve, followUp, total)
+	agent, followUp, total := spend.KindPctWeek(1, 3, 0.5)
+	if agent != 50 || followUp != 150 || total != 200 {
+		t.Errorf("KindPctWeek(1,3,0.5) = %v %v %v, want 50 150 200", agent, followUp, total)
 	}
 }

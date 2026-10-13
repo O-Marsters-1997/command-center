@@ -55,9 +55,9 @@
 <section class="module" aria-labelledby="merged-h">
 <h2 id="merged-h">Merged tickets</h2>
 {{if .Merged}}<div class="table-frame"><table class="w-full" aria-label="merged tickets">
-  <thead><tr><th scope="col">ticket</th><th scope="col">feature</th><th scope="col">merged</th><th scope="col" class="text-right">agent</th><th scope="col" class="text-right">resolve</th><th scope="col" class="text-right">follow-up</th><th scope="col" class="text-right">total</th></tr></thead>
+  <thead><tr><th scope="col">ticket</th><th scope="col">feature</th><th scope="col">merged</th><th scope="col" class="text-right">agent</th><th scope="col" class="text-right">follow-up</th><th scope="col" class="text-right">total</th></tr></thead>
   <tbody>
-    {{range .Merged}}<tr><th scope="row">{{.Name}}</th><td class="text-muted">{{.Feature}}</td><td class="text-muted">{{.Day}}</td><td class="text-right">{{printf "%.2f" .Agent}}%</td><td class="text-right">{{if .Resolve}}{{printf "%.2f" .Resolve}}%{{else}}—{{end}}</td><td class="text-right">{{if .FollowUp}}{{printf "%.2f" .FollowUp}}%{{else}}—{{end}}</td><td class="text-right"><b>{{printf "%.2f" .Total}}%</b></td></tr>
+    {{range .Merged}}<tr><th scope="row">{{.Name}}</th><td class="text-muted">{{.Feature}}</td><td class="text-muted">{{.Day}}</td><td class="text-right">{{printf "%.2f" .Agent}}%</td><td class="text-right">{{if .FollowUp}}{{printf "%.2f" .FollowUp}}%{{else}}—{{end}}</td><td class="text-right"><b>{{printf "%.2f" .Total}}%</b></td></tr>
     {{end -}}
   </tbody>
 </table></div>

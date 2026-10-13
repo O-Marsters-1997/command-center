@@ -16,7 +16,6 @@ WITH merges AS (
 )
 SELECT t.url AS ticket_id, (m.merged_at IS NOT NULL)::boolean AS merged,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 LEFT JOIN merges m ON m.ticket_id = t.url
@@ -36,7 +35,6 @@ type BoardTicketSpendRow struct {
 	TicketID    string
 	Merged      bool
 	AgentUsd    float64
-	ResolveUsd  float64
 	FollowUpUsd float64
 }
 
@@ -56,7 +54,6 @@ func (q *Queries) BoardTicketSpend(ctx context.Context, arg BoardTicketSpendPara
 			&i.TicketID,
 			&i.Merged,
 			&i.AgentUsd,
-			&i.ResolveUsd,
 			&i.FollowUpUsd,
 		); err != nil {
 			return nil, err
@@ -78,7 +75,6 @@ WITH merges AS (
 )
 SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
@@ -104,7 +100,6 @@ type MergedTicketSpendRow struct {
 	Feature     string
 	MergedAt    time.Time
 	AgentUsd    float64
-	ResolveUsd  float64
 	FollowUpUsd float64
 }
 
@@ -129,7 +124,6 @@ func (q *Queries) MergedTicketSpend(ctx context.Context, arg MergedTicketSpendPa
 			&i.Feature,
 			&i.MergedAt,
 			&i.AgentUsd,
-			&i.ResolveUsd,
 			&i.FollowUpUsd,
 		); err != nil {
 			return nil, err

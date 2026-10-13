@@ -71,8 +71,5 @@ WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.kind IN ('agent', 'follow_up
 )
 ORDER BY runs.id;
 
--- name: PrecedingRunKind :one
-SELECT kind FROM runs WHERE ticket_id = $1 AND id < $2 ORDER BY id DESC LIMIT 1;
-
 -- name: LatestRunLog :one
 SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1;

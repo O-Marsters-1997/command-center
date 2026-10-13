@@ -343,13 +343,9 @@ B and B with C but A and C do not, that order holds C behind a B which is itself
 be held. Sweeping in ref order while carrying the ready set leaves A ready, holds B behind
 A, and lets C go, because C's only conflict is no longer ready.
 
-**`resolve` is the verb for everything else.** `conflicts_with_main` offers `resolve`, which
-spawns an agent composed against `cc/skills/resolve-merge-conflict/SKILL.md` rather than
-`/implement` — the skill ADR 3 names. The agent resolves in the worktree
-and stops. It commits nothing and pushes nothing, so the row lands at `conflict_resolved`,
-reading "resolved with nothing committed; read it in the worktree before deciding what
-happens next". Go decides what may commit, not the agent (§7): `commit-resolution` is the
-verb that commits the staged resolution with git's own merge message and pushes it.
+**Everything else is the owner's.** `conflicts_with_main` offers `refresh`; a conflicting
+refresh leaves the worktree mid-merge for the owner to resolve there or abort. No agent
+resolves a conflict.
 
 ## 5 · State machine
 
@@ -396,8 +392,7 @@ parent PR closed unmerged:  a member that has RUN  ──► base gone
 | `review me` | PR open, every gating check green (stacked base unmoved) | close PR |
 | `base moved` | stacked base advanced past the recorded base SHA, or the parent merged (base now `main`) | **refresh**, re-run |
 | `refresh conflicted` | `refresh`'s merge conflicted; worktree left mid-merge for a human | abort, (shell — path on the row) |
-| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **resolve**, refresh, close PR |
-| `conflict resolved` | a `resolve` run left the conflict staged in the worktree and committed nothing; read it before deciding | **commit-resolution** |
+| `conflicts with main` | this branch's own merge-tree read against `origin/main` conflicts (ADR 3) | **refresh**, close PR |
 | `verification failed` | a clean merge or restack's configured `verify_command` failed (issue #110) | retry push, re-run |
 | `waiting on producer deploy` | every gating check green except the cross-repo compat one | re-check |
 | `needs you` | a gating check red (other than the compat one), a refused push, or a refused fast-forward | re-run, kill, close PR |

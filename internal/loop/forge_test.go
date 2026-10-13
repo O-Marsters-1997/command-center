@@ -123,10 +123,9 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 		tick()
 	}
 
-	if len(runner.Spawns) != 2 {
-		t.Fatalf("spawns = %d, want the implement and review runs", len(runner.Spawns))
+	if len(runner.Spawns) != 1 {
+		t.Fatalf("spawns = %d, want only the implement run", len(runner.Spawns))
 	}
-	runner.Alive[2] = false
 	for range 2 {
 		tick()
 	}

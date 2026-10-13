@@ -12,8 +12,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-const RunKindResolve = "resolve"
-
 // BranchKey is the repo-qualified key every branch-keyed Observation map must use.
 func BranchKey(repo, branch string) string { return repo + "//" + branch }
 
@@ -25,7 +23,6 @@ type LaunchMembership struct {
 }
 
 // RunSummary is the latest run the board and the launch-eligibility check need per ticket.
-// Kind is "agent" for a launch or re-run and RunKindResolve for a conflict resolution.
 type RunSummary struct {
 	ID            int64
 	Pgid          *int
@@ -358,17 +355,6 @@ func (r Rules) runFor(
 			fact.ConflictingPeer = peer
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
 				r.ApplyVerdict(fact, t, in.Obs, in.Verdict)
-			}
-		}
-		if summary.Outcome == OutcomeFailed && summary.Kind == RunKindResolve && in.Obs.MidMerge[key] {
-			switch unmerged := in.Obs.UnmergedPaths[key]; {
-			case len(unmerged) > 0:
-				fact.ResolveIncompleteReason = Reason(fmt.Sprintf(
-					"resolve run stopped mid-merge with files still unmerged: %s", strings.Join(unmerged, ", ")))
-			case !in.Obs.HasStaged[key]:
-				fact.ResolveIncompleteReason = "resolve run stopped mid-merge with nothing staged"
-			default:
-				fact.Resolved = true
 			}
 		}
 	}
