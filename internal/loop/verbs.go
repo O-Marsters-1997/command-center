@@ -233,8 +233,8 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 			mode = git.RemoveForced
 		case git.NotRemovable:
 			return refuse("worktree holds unpushed commits")
-		default:
-			return fmt.Errorf("check unpushed commits for %s: removal state %d is unknown", ticket.URL, state)
+		case git.RemovalUnknown:
+			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", ticket.URL)
 		}
 
 		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
