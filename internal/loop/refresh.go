@@ -160,7 +160,7 @@ func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath s
 	if err == nil {
 		return nil
 	}
-	detail := strings.TrimSpace(string(out) + "\n" + err.Error())
+	detail := strings.TrimSpace(err.Error() + "\n" + string(out))
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}

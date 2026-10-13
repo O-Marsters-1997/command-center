@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,14 +26,26 @@ func OutputWithin(ctx context.Context, timeout time.Duration, dir, name string, 
 	defer cancel()
 	cmd, stderr := build(ctx, dir, name, args)
 	out, err := cmd.Output()
-	return out, wrap(err, cmd, stderr)
+	return out, finish(ctx, timeout, err, cmd, stderr)
 }
 
 func Run(ctx context.Context, dir, name string, args ...string) error {
-	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	return RunWithin(ctx, defaultTimeout, dir, name, args...)
+}
+
+func RunWithin(ctx context.Context, timeout time.Duration, dir, name string, args ...string) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd, stderr := build(ctx, dir, name, args)
-	return wrap(cmd.Run(), cmd, stderr)
+	return finish(ctx, timeout, cmd.Run(), cmd, stderr)
+}
+
+func finish(ctx context.Context, timeout time.Duration, err error, cmd *exec.Cmd, stderr *bytes.Buffer) error {
+	err = wrap(err, cmd, stderr)
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("timed out after %s: %w", timeout, err)
+	}
+	return err
 }
 
 func build(ctx context.Context, dir, name string, args []string) (*exec.Cmd, *bytes.Buffer) {
