@@ -522,10 +522,7 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	if err := l.event(ctx, ticket.URL, eventRunDisposed, outcome.String()); err != nil {
-		return err
-	}
-	return nil
+	return l.event(ctx, ticket.URL, eventRunDisposed, outcome.String())
 }
 
 func (l *Loop) outcomeFor(

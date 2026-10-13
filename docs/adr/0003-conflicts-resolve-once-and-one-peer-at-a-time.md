@@ -26,5 +26,5 @@ blocker edge, so nothing else compares them, and the second merge fights the fir
 ## Consequences
 
 Conflicts still stop the loop: `rerere` removes the thinking, not the stop. The gate refuses and does
-not fix; the owner resolves in the worktree, or refreshes. Only one of a conflicting pair shows `review_me`, so the second is resolved once, not at a
-surprise merge.
+not fix; the owner resolves in the worktree, or refreshes. Only one of a conflicting pair shows
+`review_me`, so the second is resolved once, not at a surprise merge.
