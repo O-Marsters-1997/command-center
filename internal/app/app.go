@@ -59,8 +59,6 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
 
-// New resolves the workspace, takes the flock, opens the store. It checks no repo: the loop's first tick settles each one. A second
-// instance against the same workspace is refused.
 func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {

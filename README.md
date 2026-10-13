@@ -328,7 +328,7 @@ purged. `just assets` compiles it into
 | [docs/prds/prd-operator-surface.md](docs/prds/prd-operator-surface.md) | The page and the operator surface. Part A lands inside Phase 1. |
 | [docs/designs/cloud-agents.md](docs/designs/cloud-agents.md) | Where an always-on host and a hosted runner would fit. A sketch, normative about nothing. |
 | [docs/plans/](docs/plans/) | Build plans for work not yet shipped. A plan is deleted once its phases land. |
-| [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config, pointed at this repository. |
+| [docs/command-centre.sample.toml](docs/command-centre.sample.toml) | A runnable config that names no repos. |
 | [e2e/README.md](e2e/README.md) | The end-to-end harness: scripts, fakes, fixtures, and how to add one. |
 
 ### Reviews
