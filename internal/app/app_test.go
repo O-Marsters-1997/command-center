@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -191,15 +193,17 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = inst.Close() })
 
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- inst.Run(t.Context()) }()
+	go func() { done <- inst.Run(ctx) }()
 
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Error("Run = nil, want the bind error")
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			t.Errorf("Run = %v, want the address-in-use error", err)
 		}
-	case <-time.After(30 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Run kept running though the server could not bind")
 	}
 }
