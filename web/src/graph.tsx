@@ -66,8 +66,7 @@ customElement("cc-graph", {}, () => {
 
   let inflight: AbortController | undefined;
   async function load() {
-    if (document.hidden) return;
-    inflight?.abort();
+    if (document.hidden || inflight) return;
     const ctl = new AbortController();
     inflight = ctl;
     try {
@@ -80,18 +79,28 @@ customElement("cc-graph", {}, () => {
     } catch (err) {
       if (ctl.signal.aborted) return;
       setStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      if (inflight === ctl) inflight = undefined;
     }
   }
 
   let timer: ReturnType<typeof setInterval>;
+  const onVisible = () => load();
   onMount(() => {
     load();
     timer = setInterval(load, POLL_MS);
+    document.addEventListener("visibilitychange", onVisible);
   });
   onCleanup(() => {
     clearInterval(timer);
+    document.removeEventListener("visibilitychange", onVisible);
     inflight?.abort();
   });
+
+  const message = () => {
+    const s = status();
+    return s.kind === "error" ? `Graph out of date: ${s.message}` : "Loading graph";
+  };
 
   const edges = createMemo(() => edgesFor(nodes, (n) => n.blocking));
   const bounds = createMemo(() => layoutBounds(nodes, CARD));
@@ -184,14 +193,10 @@ customElement("cc-graph", {}, () => {
 
   return (
     <div>
-      <Show when={status()} keyed>
-        {(s) => (
-          <Show when={s.kind !== "ok"}>
-            <output class="banner ribbon mb-3 block" data-glyph={s.kind === "error" ? "failed" : "pending"}>
-              {s.kind === "error" ? `Graph out of date: ${s.message}` : "Loading graph"}
-            </output>
-          </Show>
-        )}
+      <Show when={status().kind !== "ok"}>
+        <output class="banner ribbon mb-3 block" data-glyph={status().kind === "error" ? "failed" : "pending"}>
+          {message()}
+        </output>
       </Show>
       <Show
         when={!phone()}

@@ -77,7 +77,7 @@ island.
 
 ## Checking
 
-- `cd web && bun test && bun run typecheck && bun run lint`. `tsc` excludes the tests, so
-  `bun test` is the only thing that runs them.
+- `cd web && bun run test && bun run typecheck && bun run lint`. `tsc` excludes the tests, so
+  `bun run test` is the only thing that runs them.
 - `just assets`, then check the page against `DESIGN.md` at 1440px and 390px.
 - Without `dist`, the element's fallback text still renders.

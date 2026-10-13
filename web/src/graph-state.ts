@@ -10,7 +10,7 @@ export interface GraphNode extends Row {
 
 export function placeNodes(groups: Group[]): GraphNode[] {
   const rows = groups.flatMap((g) => (g.root ? [g.root, ...g.children] : g.children));
-  return layoutWaves(rows, CARD).map((p) => ({ ...p }));
+  return layoutWaves(rows, CARD);
 }
 
 export function applyPoll(setNodes: SetStoreFunction<GraphNode[]>, groups: Group[]): void {
