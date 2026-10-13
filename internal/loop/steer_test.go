@@ -77,7 +77,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	}
 	return &steerFixture{
 		store: store, dsn: dsn, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, at: at,
-		loop: loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
+		loop: loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
 	}
 }
 

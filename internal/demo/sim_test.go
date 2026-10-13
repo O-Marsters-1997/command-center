@@ -3,6 +3,7 @@
 package demo
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,7 +18,7 @@ var recoveryVerb = map[string]string{
 }
 
 func TestGeneratedBoardDrainsAfterRecovery(t *testing.T) {
-	sim, err := NewSim(t.Context(), Generate(6, 12))
+	sim, err := NewSim(t.Context(), slog.New(slog.DiscardHandler), Generate(6, 12))
 	if err != nil {
 		t.Fatal(err)
 	}

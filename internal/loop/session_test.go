@@ -98,7 +98,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

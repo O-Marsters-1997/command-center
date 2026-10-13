@@ -6,7 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"strconv"
 	"time"
@@ -16,15 +16,15 @@ import (
 
 func init() { demoSubcmd = lookupDemo }
 
-func lookupDemo(args []string) func(ctx context.Context, configPath string) error {
+func lookupDemo(args []string) command {
 	if len(args) == 0 || args[0] != "demo" {
 		return nil
 	}
 	rest := args[1:]
-	return func(ctx context.Context, _ string) error { return runDemo(ctx, rest) }
+	return func(ctx context.Context, logger *slog.Logger, _ string) error { return runDemo(ctx, logger, rest) }
 }
 
-func runDemo(ctx context.Context, args []string) error {
+func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 	flags := flag.NewFlagSet("demo", flag.ContinueOnError)
 	seed := flags.Int64("seed", time.Now().UnixNano(), "seed for the generated board; defaults to the time")
 	tickets := flags.Int("tickets", 12, "number of tickets to generate")
@@ -38,6 +38,6 @@ func runDemo(ctx context.Context, args []string) error {
 	}
 
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(*port))
-	log.Printf("demo: seed %d, serving http://%s", *seed, addr)
-	return demo.Serve(ctx, demo.Generate(*seed, *tickets), *speed, addr)
+	logger.Info("serving demo", "seed", *seed, "addr", "http://"+addr)
+	return demo.Serve(ctx, logger, demo.Generate(*seed, *tickets), *speed, addr)
 }

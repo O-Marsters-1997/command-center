@@ -55,7 +55,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	}
 
 	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-	lp := loop.NewLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
@@ -91,7 +91,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 		return plan.Observation{}, nil
 	}
 	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-	lp := loop.NewLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -65,6 +66,7 @@ func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
 // Server is the status page plus the launch, authorisation and features routes. It only queues
 // intents; it never writes the database directly.
 type Server struct {
+	logger     *slog.Logger
 	store      *store.Store
 	clock      loop.Clock
 	view       *view.Reader
@@ -101,9 +103,9 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 }
 
 // NewServer assembles the page and its routes over a store, a clock and the data directory.
-func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
+func NewServer(logger *slog.Logger, store *store.Store, clock loop.Clock, dataDir string) *Server {
 	s := &Server{
-		store: store, clock: clock,
+		logger: logger, store: store, clock: clock,
 		view:       view.NewReader(store, dataDir, renderLogLine),
 		trackerFor: tracker.New,
 		nudge:      func() {},
