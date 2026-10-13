@@ -79,8 +79,8 @@ func TestTrackRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	server := openServer(openStore(t), fixedClock(testNow), "")
 
 	for _, repo := range []string{"", "acme", "acme/a/b", "acme/ x", "../..", "./."} {
-		if rec := postTrack(t, server, repo, true); rec.Code != http.StatusBadRequest {
-			t.Errorf("Track %q = %d, want 400", repo, rec.Code)
+		if rec := postTrack(t, server, repo, true); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("Track %q = %d, want 422", repo, rec.Code)
 		}
 	}
 }

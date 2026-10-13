@@ -105,7 +105,7 @@
   </aside>
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
-  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="true" role="status">{{.}}</div>{{end}}
+  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}</div>{{end}}
   <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .ActionVerbs}}

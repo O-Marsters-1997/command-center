@@ -112,37 +112,37 @@ func NewServer(logger *slog.Logger, store *store.Store, clock loop.Clock, dataDi
 		pushable:   pushableCache{list: gh.PushableRepos},
 	}
 	mux := http.NewServeMux()
-	mux.Handle("GET /{$}", handler(s.handleIndex))
-	mux.Handle("GET /tickets", handler(s.handleTickets))
-	mux.Handle("GET /f/{feature}", handler(s.handleFeature))
-	mux.Handle("GET /f/{feature}/graph", handler(s.handleFeatureGraph))
-	mux.Handle("GET /f/{feature}/launch", handler(s.handleFeatureLaunch))
-	mux.Handle("GET /launch", handler(s.handleLaunchPicker))
-	mux.Handle("GET /board", handler(s.handleBoard))
-	mux.Handle("GET /rail", handler(s.handleRail))
-	mux.Handle("GET /graph.json", handler(s.handleGraph))
-	mux.Handle("GET /s/{owner}/{name}/{n}", handler(s.handleSession))
-	mux.Handle("GET /insights", handler(s.handleInsightsPage))
-	mux.Handle("GET /insights.json", handler(s.handleInsights))
+	mux.Handle("GET /{$}", s.handle(s.handleIndex))
+	mux.Handle("GET /tickets", s.handle(s.handleTickets))
+	mux.Handle("GET /f/{feature}", s.handle(s.handleFeature))
+	mux.Handle("GET /f/{feature}/graph", s.handle(s.handleFeatureGraph))
+	mux.Handle("GET /f/{feature}/launch", s.handle(s.handleFeatureLaunch))
+	mux.Handle("GET /launch", s.handle(s.handleLaunchPicker))
+	mux.Handle("GET /board", s.handle(s.handleBoard))
+	mux.Handle("GET /rail", s.handle(s.handleRail))
+	mux.Handle("GET /graph.json", s.handle(s.handleGraph))
+	mux.Handle("GET /s/{owner}/{name}/{n}", s.handle(s.handleSession))
+	mux.Handle("GET /insights", s.handle(s.handleInsightsPage))
+	mux.Handle("GET /insights.json", s.handle(s.handleInsights))
 	mux.Handle("GET /assets/", http.FileServerFS(assetsDir))
 	mux.HandleFunc("GET /assets/app.css", s.handleStylesheet)
-	mux.Handle("GET /ticket/{ticket}/log", handler(s.handleLog))
-	mux.Handle("GET /repos", handler(s.handleRepos))
-	mux.Handle("GET /repos/{owner}/{name}", handler(s.handleRepo))
-	mux.Handle("GET /repos/search", handler(s.handleRepoSearch))
-	mux.Handle("GET /repos/banner", handler(s.handleBanner))
-	mux.Handle("POST /repos/track", handler(s.handleTrack))
-	mux.Handle("POST /projects", handler(s.handleCreateProject))
-	mux.Handle("POST /projects/{name}", handler(s.handleEditProject))
-	mux.Handle("POST /projects/{name}/delete", handler(s.handleDeleteProject))
-	mux.Handle("POST /repos/{owner}/{name}/project", handler(s.handleSetRepoProject))
-	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
-	mux.Handle("GET /launch/candidates", handler(s.handleCandidates))
-	mux.Handle("GET /events", handler(s.handleEvents))
-	mux.Handle("POST /launch/open", handler(s.handleLaunchOpen))
-	mux.Handle("POST /launch", handler(s.handleLaunch))
-	mux.Handle("POST /verb", handler(s.handleVerb))
-	mux.Handle("POST /ticket", handler(s.handleTicket))
+	mux.Handle("GET /ticket/{ticket}/log", s.handle(s.handleLog))
+	mux.Handle("GET /repos", s.handle(s.handleRepos))
+	mux.Handle("GET /repos/{owner}/{name}", s.handle(s.handleRepo))
+	mux.Handle("GET /repos/search", s.handle(s.handleRepoSearch))
+	mux.Handle("GET /repos/banner", s.handle(s.handleBanner))
+	mux.Handle("POST /repos/track", s.handle(s.handleTrack))
+	mux.Handle("POST /projects", s.handle(s.handleCreateProject))
+	mux.Handle("POST /projects/{name}", s.handle(s.handleEditProject))
+	mux.Handle("POST /projects/{name}/delete", s.handle(s.handleDeleteProject))
+	mux.Handle("POST /repos/{owner}/{name}/project", s.handle(s.handleSetRepoProject))
+	mux.Handle("POST /features/{feature}/import", s.handle(s.handleImportFeature))
+	mux.Handle("GET /launch/candidates", s.handle(s.handleCandidates))
+	mux.Handle("GET /events", s.handle(s.handleEvents))
+	mux.Handle("POST /launch/open", s.handle(s.handleLaunchOpen))
+	mux.Handle("POST /launch", s.handle(s.handleLaunch))
+	mux.Handle("POST /verb", s.handle(s.handleVerb))
+	mux.Handle("POST /ticket", s.handle(s.handleTicket))
 	s.rawMux = mux
 	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
@@ -165,11 +165,31 @@ func (s *Server) SetSpendLimit5h(pct int) { s.view.SetSpendLimit5h(pct) }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
-type handler func(http.ResponseWriter, *http.Request) error
+func (s *Server) handle(h func(http.ResponseWriter, *http.Request) error) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h(w, r); err != nil {
+			s.writeError(w, r, err)
+		}
+	})
+}
 
-func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := h(w, r); err != nil {
-		http.Error(w, err.Error(), statusOf(err))
+func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	status := statusOf(err)
+	if status >= http.StatusInternalServerError {
+		s.logger.ErrorContext(r.Context(), "request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+		http.Error(w, "internal error", status)
+		return
+	}
+	if r.Header.Get("HX-Request") == "" {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("HX-Retarget", "#flash")
+	w.Header().Set("HX-Reswap", "innerHTML")
+	w.Header().Set("HX-Reselect", "p.banner")
+	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", err.Error()); renderErr != nil {
+		s.logger.ErrorContext(r.Context(), "render flash", "err", renderErr)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }
 
@@ -187,12 +207,27 @@ func errorf(status int, format string, args ...any) error {
 	return withStatus(status, fmt.Errorf(format, args...))
 }
 
+var statusMap = []struct {
+	target error
+	status int
+}{
+	{store.ErrProjectExists, http.StatusConflict},
+	{store.ErrNotFound, http.StatusNotFound},
+	{store.ErrInvalidProject, http.StatusBadRequest},
+	{view.ErrSessionNotFound, http.StatusNotFound},
+}
+
 func statusOf(err error) int {
 	if se, ok := errors.AsType[statusError](err); ok {
 		return se.status
 	}
 	if view.IsInvalid(err) {
 		return http.StatusBadRequest
+	}
+	for _, m := range statusMap {
+		if errors.Is(err, m.target) {
+			return m.status
+		}
 	}
 	return http.StatusInternalServerError
 }

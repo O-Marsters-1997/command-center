@@ -316,8 +316,8 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 		t.Fatalf("status %d:\n%s", rec.Code, rec.Body.String())
 	}
 	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("blank follow-up status = %d, want 400", rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("blank follow-up status = %d, want 422", rec.Code)
 	}
 }
 

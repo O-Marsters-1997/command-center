@@ -281,8 +281,8 @@ func TestHandleCandidatesFragmentRejectsAnUnknownTicket(t *testing.T) {
 
 	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FGHOST")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d, want 422", resp.StatusCode)
 	}
 }
 
