@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"database/sql"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +20,7 @@ func openStore(t *testing.T) *storepkg.Store {
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(dsn)
+	store, err := storepkg.OpenStore(t.Context(), dsn)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -56,6 +58,69 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}
 	if got := gooseVersion(t, dsn); got != 19 {
 		t.Errorf("goose version = %d, want 19", got)
+	}
+}
+
+func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
+	t.Parallel()
+
+	start := time.Now()
+	_, err := storepkg.OpenStore(t.Context(), "postgres://cc@127.0.0.1:1/cc?sslmode=disable")
+	if err == nil {
+		t.Fatal("OpenStore on a dead address succeeded")
+	}
+	if !strings.Contains(err.Error(), "ping database") {
+		t.Errorf("OpenStore error = %q, want it to name the ping step", err)
+	}
+	if elapsed := time.Since(start); elapsed > 6*time.Second {
+		t.Errorf("OpenStore took %v, want under the 5s ping timeout", elapsed)
+	}
+}
+
+func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
+	t.Parallel()
+
+	dsn := cctest.DSN(t)
+	const opens = 4
+	errs := make(chan error, opens)
+	for range opens {
+		go func() {
+			st, err := storepkg.OpenStore(t.Context(), dsn)
+			if err == nil {
+				err = st.Close()
+			}
+			errs <- err
+		}()
+	}
+	for range opens {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent OpenStore: %v", err)
+		}
+	}
+	if got := gooseVersion(t, dsn); got != 19 {
+		t.Errorf("goose version = %d, want 19", got)
+	}
+}
+
+func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
+	t.Parallel()
+
+	u, err := url.Parse(cctest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	q.Set("statement_timeout", "100")
+	u.RawQuery = q.Encode()
+
+	db, err := storepkg.OpenStore(t.Context(), u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.DB().ExecContext(t.Context(), `SELECT pg_sleep(2)`); err == nil {
+		t.Error("a 2s query under a 100ms statement_timeout succeeded")
 	}
 }
 

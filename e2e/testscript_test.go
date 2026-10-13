@@ -210,7 +210,7 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 }
 
 func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
-	st, err := store.OpenStore(ts.Getenv("CC_DATABASE_URL"))
+	st, err := store.OpenStore(context.Background(), ts.Getenv("CC_DATABASE_URL"))
 	ts.Check(err)
 	defer func() { ts.Check(st.Close()) }()
 	for _, block := range blocks {

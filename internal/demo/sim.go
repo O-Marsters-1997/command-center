@@ -161,7 +161,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	if err != nil {
 		return nil, err
 	}
-	st, err := store.OpenStore(sb.DSN)
+	st, err := store.OpenStore(ctx, sb.DSN)
 	if err != nil {
 		return nil, err
 	}
