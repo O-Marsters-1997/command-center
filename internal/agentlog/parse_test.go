@@ -277,7 +277,7 @@ func assertRun(t *testing.T, got, want agentlog.Run) {
 	for i, wantPhase := range want.Phases {
 		gotPhase := got.Phases[i]
 		if gotPhase.Skill != wantPhase.Skill || gotPhase.Note != wantPhase.Note || gotPhase.At != wantPhase.At ||
-			gotPhase.Turns != wantPhase.Turns || gotPhase.Spend != wantPhase.Spend {
+			gotPhase.Turns != wantPhase.Turns || math.Abs(gotPhase.Spend-wantPhase.Spend) > 1e-12 {
 			t.Errorf("phase %d = {%q %q %v %d %v}; want {%q %q %v %d %v}", i,
 				gotPhase.Skill, gotPhase.Note, gotPhase.At, gotPhase.Turns, gotPhase.Spend,
 				wantPhase.Skill, wantPhase.Note, wantPhase.At, wantPhase.Turns, wantPhase.Spend)
