@@ -56,7 +56,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			obs := mergedObservation(f, childBaseRef)
 			observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 			cfg, ws := stackedConfigAndWorkspace(t, root)
-			lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+			lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 			if err := lp.RunOnce(t.Context()); err != nil {
 				t.Fatalf("RunOnce: %v", err)
 			}
@@ -110,11 +110,11 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 
 	firstTick := at.Add(time.Minute)
-	if err := loop.NewLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}).
+	if err := loop.NewLoop(discardLog, store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if err := loop.NewLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{}).
+	if err := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{}).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	obs := mergedObservation(f, "main")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	obs := baseObservation(f, newParentTip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	obs := baseObservation(f, f.parentTip0)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -545,7 +545,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("restack RunOnce: %v", err)
 	}
@@ -618,7 +618,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	obs.MidMerge[plan.BranchKey("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}

@@ -77,7 +77,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	fake := runner.NewFake()
 	return &loopFixture{
 		Store:   store,
-		Loop:    loop.NewLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
+		Loop:    loop.NewLoop(discardLog, store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
 		Fake:    fake,
 		Cfg:     cfg,
 		WS:      ws,

@@ -259,7 +259,7 @@ func ccFakeGhHead(ts *testscript.TestScript, neg bool, args []string) {
 }
 
 // daemonReady is the line cc logs once it holds the flock and is about to serve.
-const daemonReady = "serving http://"
+const daemonReady = "addr=http://"
 
 // ccDaemon starts a real cc in the background and returns only once it is holding the flock.
 // The readiness poll is the point: sleeping instead would make the second-instance assertion a

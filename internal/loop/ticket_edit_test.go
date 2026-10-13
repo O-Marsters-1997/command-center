@@ -32,7 +32,9 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := loop.NewLoop(
+		discardLog, store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
+	)
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -78,6 +80,7 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	lp := loop.NewLoop(
+		discardLog,
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {
@@ -139,6 +142,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	}
 
 	lp := loop.NewLoop(
+		discardLog,
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {

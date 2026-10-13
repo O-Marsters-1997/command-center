@@ -3,16 +3,21 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
-const pidReuseTolerance = 5 * time.Second
+const (
+	pidReuseTolerance = 5 * time.Second
+	psTimeout         = 10 * time.Second
+)
 
 // Liveness reports whether pgid is still the process launched at wantStart. It uses ps, not
 // kill(-pgid, 0): on Darwin a group whose leader is a zombie returns EPERM, not ESRCH.
@@ -39,7 +44,9 @@ func (ProcessRunner) Liveness(pgid int, wantStart, now time.Time) (bool, error) 
 }
 
 func psStatAndEtime(pid int) (stat, etime string, ok bool) {
-	out, err := exec.Command("ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid)).Output()
+	out, err := command.OutputWithin(
+		context.Background(), psTimeout, "", "ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid),
+	)
 	if err != nil {
 		return "", "", false
 	}

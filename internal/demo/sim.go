@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -137,7 +137,7 @@ type Sim struct {
 	landed     int
 }
 
-func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
+func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err error) {
 	sb, err := NewSandbox(sc.Repos)
 	if err != nil {
 		return nil, err
@@ -181,11 +181,11 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 		}
 	}
 
-	lp := loop.NewLoop(st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
+	lp := loop.NewLoop(logger, st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
 	lp.SetForge(forge)
 	lp.SetWorktrees(Worktrees{})
 	lp.SetTrackerSource(resolve)
-	server := web.NewServer(st, clock, ws.DataDir)
+	server := web.NewServer(logger, st, clock, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
 
@@ -259,14 +259,14 @@ func (s *Sim) Tick(ctx context.Context) error {
 
 // Serve runs the sim at speed sim seconds per real second and serves its board on addr until ctx
 // is cancelled.
-func Serve(ctx context.Context, sc Scenario, speed float64, addr string) error {
-	sim, err := NewSim(ctx, sc)
+func Serve(ctx context.Context, logger *slog.Logger, sc Scenario, speed float64, addr string) error {
+	sim, err := NewSim(ctx, logger, sc)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err := sim.Close(); err != nil {
-			log.Printf("demo: close: %v", err)
+			logger.Error("close demo", "err", err)
 		}
 	}()
 

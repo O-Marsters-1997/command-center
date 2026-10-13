@@ -39,7 +39,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

@@ -3,13 +3,11 @@
 package main
 
 import (
-	"context"
-
 	"github.com/O-Marsters-1997/command-center/e2e/register"
 	"github.com/O-Marsters-1997/command-center/internal/app"
 )
 
-func subcmd(args []string) func(ctx context.Context, configPath string) error {
+func subcmd(args []string) command {
 	return register.Lookup(args)
 }
 

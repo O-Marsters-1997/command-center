@@ -40,7 +40,7 @@ migrate-reset:
 
 test:
     go test -shuffle=on ./...
-    cd web && bun install --frozen-lockfile && bun test
+    cd web && bun install --frozen-lockfile && bun run test
 
 test-e2e:
     go test -tags=e2e ./e2e/...
