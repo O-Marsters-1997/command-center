@@ -86,7 +86,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 		},
 		Worktrees: map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
-	lp := loop.NewLoop(store,
+	lp := loop.NewLoop(discardLog, store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
@@ -120,7 +120,9 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	lp := loop.NewLoop(
+		discardLog, store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
+	)
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -150,7 +152,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	observed := plan.Observation{
 		PRs: map[string]plan.PR{plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
-	ok := loop.NewLoop(store,
+	ok := loop.NewLoop(discardLog, store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(good), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := ok.RunOnce(ctx); err != nil {
@@ -164,7 +166,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	boom := errors.New("gh pr list: exit status 1")
-	failing := loop.NewLoop(store, func(context.Context) (plan.Observation, error) {
+	failing := loop.NewLoop(discardLog, store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
 	}, fixedClock(bad), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 

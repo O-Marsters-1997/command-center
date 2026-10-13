@@ -2,6 +2,7 @@ package loop_test
 
 import (
 	"flag"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,7 +20,7 @@ import (
 )
 
 func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Server {
-	return web.NewServer(st, clock, dataDir)
+	return web.NewServer(slog.New(slog.DiscardHandler), st, clock, dataDir)
 }
 
 func renderPage(t *testing.T, server *web.Server) string {

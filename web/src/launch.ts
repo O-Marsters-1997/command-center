@@ -32,6 +32,34 @@ export function missingBlockersOf(candidates: Candidate[], ticked: Set<string>, 
   return blockers.filter((b) => !ticked.has(b)).map((b) => byURL.get(b) as Candidate);
 }
 
+export type ToggleResult = { ticked: Set<string> } | { refusal: string };
+
+export function ticketRef(url: string): string {
+  const parts = url.split("/");
+  return `#${parts[parts.length - 1]}`;
+}
+
+function names(candidates: Candidate[]): string {
+  return candidates.map((c) => `${ticketRef(c.url)} ${c.title}`).join(", ");
+}
+
+export function toggleResult(candidates: Candidate[], ticked: Set<string>, url: string): ToggleResult {
+  if (!ticked.has(url)) {
+    const missing = missingBlockersOf(candidates, ticked, url);
+    if (missing.length > 0) {
+      return { refusal: `${ticketRef(url)} is blocked by ${names(missing)} -- tick it first` };
+    }
+    return { ticked: new Set(ticked).add(url) };
+  }
+  const dependents = dependentsOf(candidates, ticked, url);
+  if (dependents.length > 0) {
+    return { refusal: `${names(dependents)} depends on ${ticketRef(url)} -- clear it first` };
+  }
+  const next = new Set(ticked);
+  next.delete(url);
+  return { ticked: next };
+}
+
 export function columnsFor(candidates: Candidate[]): Map<string, number> {
   const byURL = new Map(candidates.map((c) => [c.url, c]));
   const col = new Map<string, number>();

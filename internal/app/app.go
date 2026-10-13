@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -22,6 +22,7 @@ import (
 // App is one Command Centre instance: the flock, the store, the loop and the page.
 type App struct {
 	cfg    config.Config
+	logger *slog.Logger
 	lock   *Flock
 	store  *store.Store
 	loop   *loop.Loop
@@ -59,7 +60,7 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
 
-func New(ctx context.Context, configPath string, opts ...Option) (app *App, err error) {
+func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Option) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
@@ -102,7 +103,7 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
 
-	lp := loop.NewLoop(store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(logger, store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
 	lp.SetForge(gh.CLI{})
 	lp.SetWorktrees(git.CLI{})
 	if settings.validate != nil {
@@ -111,13 +112,14 @@ func New(ctx context.Context, configPath string, opts ...Option) (app *App, err 
 	if settings.remoteOf != nil {
 		lp.SetRemoteSource(settings.remoteOf)
 	}
-	server := web.NewServer(store, settings.clock, ws.DataDir)
+	server := web.NewServer(logger, store, settings.clock, ws.DataDir)
 	server.SetNudge(lp.Nudge)
 	server.SetSpendLimit5h(cfg.SpendLimit5h)
 	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
 
 	return &App{
 		cfg:    cfg,
+		logger: logger,
 		lock:   lock,
 		store:  store,
 		loop:   lp,
@@ -140,7 +142,7 @@ func (a *App) Run(ctx context.Context) error {
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
-	log.Printf("serving http://%s", srv.Addr)
+	a.logger.Info("serving", "addr", "http://"+srv.Addr)
 
 	errs := make(chan error, 2)
 	go func() { errs <- a.loop.Run(ctx) }()

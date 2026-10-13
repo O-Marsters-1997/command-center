@@ -47,7 +47,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
 	fake.CanReap[999] = true
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

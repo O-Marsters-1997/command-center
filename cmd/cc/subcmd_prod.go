@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -19,19 +21,21 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func subcmd(args []string) func(ctx context.Context, configPath string) error {
+func subcmd(args []string) command {
 	if len(args) == 0 {
 		return nil
 	}
 	switch args[0] {
 	case "open":
-		return open
+		return func(ctx context.Context, _ *slog.Logger, configPath string) error {
+			return open(ctx, configPath, os.Stdout, os.Stderr)
+		}
 	default:
 		return nil
 	}
 }
 
-func open(ctx context.Context, configPath string) error {
+func open(ctx context.Context, configPath string, stdout, stderr io.Writer) error {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
@@ -42,7 +46,7 @@ func open(ctx context.Context, configPath string) error {
 	}
 	repos, err := trackedRepos(ctx, cfg.DatabaseURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cc open: cannot read tracked repos: %v\n", err)
+		fmt.Fprintf(stderr, "cc open: cannot read tracked repos: %v\n", err)
 	}
 
 	target := fmt.Sprintf("http://127.0.0.1:%d/", cfg.Port)
@@ -50,12 +54,12 @@ func open(ctx context.Context, configPath string) error {
 		owner, repo, _ := strings.Cut(name, "/")
 		target += "repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo)
 	} else {
-		fmt.Fprintln(os.Stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
+		fmt.Fprintln(stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
 	if !daemonListening(cfg.Port) {
-		fmt.Fprintf(os.Stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
-		fmt.Println(target)
+		fmt.Fprintf(stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
+		fmt.Fprintln(stdout, target)
 		return nil
 	}
 
