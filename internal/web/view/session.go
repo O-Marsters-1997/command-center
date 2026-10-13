@@ -33,6 +33,7 @@ type Session struct {
 	ActionsPath    string
 	PRURL          string
 	Toast          string
+	ResetComposer  bool
 
 	PendingMessages []string
 	Model           string

@@ -612,6 +612,9 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	if seen := r.URL.Query().Get("seen"); seen != "" && seen != banner.State {
 		w.Header().Set("HX-Refresh", "true")
 	}
+	if r.URL.Query().Get("seen") != "" && !banner.Polling() {
+		return renderHTMLStatus(w, 286, "repoBanner", banner)
+	}
 	return renderHTML(w, "repoBanner", banner)
 }
 
