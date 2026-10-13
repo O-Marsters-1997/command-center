@@ -55,8 +55,6 @@ stdout 'no commits after this run'
 cc-config spawn-sleeps
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-3'
 exec cc tick --count 1
-exec sleep 0.5
-exec cc tick --count 1
 
 # A tick reconciles liveness before it launches anything, so the tick that spawns a run cannot
 # also observe it: running is derived by the tick after it.

@@ -188,7 +188,6 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	server := web.NewServer(st, clock, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
-	server.AllowAnonymous()
 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
@@ -221,7 +220,6 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 		RunsDir:          sb.RunsDir(),
 		SettingsPath:     filepath.Join(state, "agent.json"),
 		SystemPromptPath: filepath.Join(state, "system-prompt.md"),
-		AgentsPath:       filepath.Join(state, "agents.json"),
 	}
 	if err := os.MkdirAll(ws.RunsDir, 0o750); err != nil {
 		return ws, err

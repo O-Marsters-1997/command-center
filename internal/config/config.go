@@ -23,43 +23,24 @@ type Config struct {
 	MaxAgents         int      `toml:"max_agents"`
 	Port              int      `toml:"port"`
 	AgentCommand      []string `toml:"agent_command"`
-	// MaxTurns caps an implement, follow-up or resolve run at this many agent turns, appended to
-	// AgentCommand as --max-turns. Zero (the default) sets no cap.
-	MaxTurns int `toml:"max_turns"`
-	// ReviewMaxTurns caps a review run. LoadConfig defaults it to DefaultReviewMaxTurns, or to half
-	// of MaxTurns when that is lower, and refuses a value not below MaxTurns.
-	ReviewMaxTurns int `toml:"review_max_turns"`
-	// ReviewAgentCommand is AgentCommand with ReviewMaxTurns appended. LoadConfig fills it; empty
-	// means spawn with AgentCommand.
-	ReviewAgentCommand []string `toml:"-"`
+	MaxTurns          int      `toml:"max_turns"`
 	// SpendLimit5h is the percent of the account's five-hour window at or above which nothing new
 	// spawns; 0 means unset.
 	SpendLimit5h int `toml:"spend_limit_5h"`
 	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
 	BoardPollSeconds int `toml:"board_poll_seconds"`
-	// LegacyRepos is the [[repo]] blocks, read only by the first-boot import into the repos table.
-	LegacyRepos []LegacyRepo `toml:"repo"`
-}
-
-type LegacyRepo struct {
-	Name   string `toml:"name"`
-	Remote string `toml:"remote"`
 }
 
 const (
 	defaultPort             = 7777
 	defaultMaxAgents        = 1
 	DefaultBoardPollSeconds = 5
-	DefaultReviewMaxTurns   = 20
 )
 
-// {model} is filled per run kind, so the model is always named: the claude CLI's own default
-// tracks Anthropic's latest release.
 var defaultAgentCommand = []string{
 	"claude", "-p", "{prompt}",
 	"--output-format", "stream-json", "--verbose",
 	"--settings", "{settings}",
-	"--agents", "{agents}",
 	"--append-system-prompt-file", "{system_prompt}",
 	"--permission-mode", "auto",
 	"--model", "{model}",
@@ -74,10 +55,6 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
-	}
-
-	if err := rejectPerRepoKeys(path); err != nil {
-		return Config{}, err
 	}
 
 	if cfg.BoardPollSeconds < 1 {
@@ -101,32 +78,10 @@ func LoadConfig(path string) (Config, error) {
 	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
 		return Config{}, err
 	}
-	reviewTurns, err := resolveReviewMaxTurns(cfg.MaxTurns, cfg.ReviewMaxTurns)
-	if err != nil {
-		return Config{}, fmt.Errorf("config %s: %w", path, err)
-	}
-	cfg.ReviewMaxTurns = reviewTurns
-	if len(cfg.AgentCommand) > 0 {
-		cfg.ReviewAgentCommand = withMaxTurns(cfg.AgentCommand, reviewTurns)
-	}
 	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
 		cfg.AgentCommand = withMaxTurns(cfg.AgentCommand, cfg.MaxTurns)
 	}
 	return cfg, nil
-}
-
-func resolveReviewMaxTurns(implement, review int) (int, error) {
-	switch {
-	case review < 0:
-		return 0, fmt.Errorf("review_max_turns must be positive, got %d", review)
-	case review == 0 && implement > 0:
-		return max(1, min(DefaultReviewMaxTurns, implement/2)), nil
-	case review == 0:
-		return DefaultReviewMaxTurns, nil
-	case implement > 0 && review >= implement:
-		return 0, fmt.Errorf("review_max_turns %d must be below max_turns %d", review, implement)
-	}
-	return review, nil
 }
 
 func withMaxTurns(argv []string, turns int) []string {
@@ -151,7 +106,7 @@ func applyAgentCommandEnv(cfg *Config) error {
 	return nil
 }
 
-var requiredAgentCommandParts = []string{"--permission-mode", "{agents}", "{system_prompt}", "{model}"}
+var requiredAgentCommandParts = []string{"--permission-mode", "{system_prompt}", "{model}"}
 
 func requireAgentCommandParts(argv []string) error {
 	if len(argv) == 0 {
@@ -168,26 +123,4 @@ func requireAgentCommandParts(argv []string) error {
 // CheckoutPath is where the app keeps the working copy of the repo named owner/name.
 func CheckoutPath(dataDir, fullName string) string {
 	return filepath.Join(dataDir, "repos", filepath.FromSlash(fullName))
-}
-
-var perRepoKeys = []string{
-	"tracker", "stacking", "deny", "checks", "compat_check", "mergify_sha", "verify_command",
-}
-
-func rejectPerRepoKeys(path string) error {
-	var raw struct {
-		Repos []map[string]any `toml:"repo"`
-	}
-	if _, err := toml.DecodeFile(path, &raw); err != nil {
-		return fmt.Errorf("read config %s: %w", path, err)
-	}
-	for _, block := range raw.Repos {
-		for _, key := range perRepoKeys {
-			if _, ok := block[key]; ok {
-				return fmt.Errorf("config %s: [[repo]] %v sets %q; per-repo settings now live in %s on the repo's origin/main",
-					path, block["name"], key, SettingsFile)
-			}
-		}
-	}
-	return nil
 }

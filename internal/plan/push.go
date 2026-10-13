@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-// Policy is one repo's push-refusal policy: the default deny set every repo enforces plus this
-// repo's own [[repo]] additions.
 type Policy struct {
 	Deny []string
 }

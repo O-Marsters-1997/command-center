@@ -3,14 +3,11 @@ package loop
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
-
-const eventCommitResolutionRefused = "commit_resolution_refused"
 
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	lastPushed, err := l.store.LastPushedTips(ctx)
@@ -70,59 +67,6 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 		}
 		return l.pushOne(ctx, e, tip, obs)
 	})
-}
-
-func (l *Loop) applyCommitResolutionIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return l.eachIntent(ctx, plan.VerbCommitResolution, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(intent.TicketID)
-		if !ok {
-			return nil
-		}
-		return l.commitResolutionOne(ctx, e, obs)
-	})
-}
-
-func (l *Loop) commitResolutionOne(ctx context.Context, e plan.Entry, obs plan.Observation) error {
-	ticket := e.Ticket
-	refuse := func(detail string) error {
-		return l.event(ctx, ticket.URL, eventCommitResolutionRefused, detail)
-	}
-
-	worktreePath, refusal := idleWorktreeFor(ticket, obs)
-	if refusal != "" {
-		return refuse(refusal)
-	}
-
-	unmerged, err := git.UnmergedPaths(ctx, worktreePath)
-	if err != nil {
-		return fmt.Errorf("read unmerged paths for %s: %w", ticket.URL, err)
-	}
-	if len(unmerged) > 0 {
-		return refuse(fmt.Sprintf("still unmerged: %s", strings.Join(unmerged, ", ")))
-	}
-
-	midMerge, err := git.MidMerge(ctx, worktreePath)
-	if err != nil {
-		return fmt.Errorf("read merge state for %s: %w", ticket.URL, err)
-	}
-	if midMerge {
-		staged, err := git.StagedPaths(ctx, worktreePath)
-		if err != nil {
-			return fmt.Errorf("read staged paths for %s: %w", ticket.URL, err)
-		}
-		if len(staged) == 0 {
-			return refuse("nothing staged to commit")
-		}
-		if err := git.CommitNoEdit(ctx, worktreePath); err != nil {
-			return refuse(err.Error())
-		}
-	}
-
-	tip, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
-	if err != nil {
-		return fmt.Errorf("read tip after commit resolution for %s: %w", ticket.URL, err)
-	}
-	return l.pushOne(ctx, e, tip, obs)
 }
 
 func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, restacked bool) error {

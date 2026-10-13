@@ -12,8 +12,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-const RunKindResolve = "resolve"
-
 // BranchKey is the repo-qualified key every branch-keyed Observation map must use.
 func BranchKey(repo, branch string) string { return repo + "//" + branch }
 
@@ -25,7 +23,6 @@ type LaunchMembership struct {
 }
 
 // RunSummary is the latest run the board and the launch-eligibility check need per ticket.
-// Kind is "agent" for a launch or re-run and RunKindResolve for a conflict resolution.
 type RunSummary struct {
 	ID            int64
 	Pgid          *int
@@ -117,12 +114,6 @@ type Snapshot struct {
 	spendPaused bool
 }
 
-// Launch is the ticket URLs to cut and spawn: every eligible candidate in input order, capped at
-// the free agent slots, and none while the five-hour reading is at spend_limit_5h.
-func (s Snapshot) Launch() []string { return s.LaunchAfter(0) }
-
-// LaunchAfter is Launch for a tick that has since spawned agents, so the snapshot's running
-// count is stale by that much.
 func (s Snapshot) LaunchAfter(spawned int) []string {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
@@ -364,17 +355,6 @@ func (r Rules) runFor(
 			fact.ConflictingPeer = peer
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
 				r.ApplyVerdict(fact, t, in.Obs, in.Verdict)
-			}
-		}
-		if summary.Outcome == OutcomeFailed && summary.Kind == RunKindResolve && in.Obs.MidMerge[key] {
-			switch unmerged := in.Obs.UnmergedPaths[key]; {
-			case len(unmerged) > 0:
-				fact.ResolveIncompleteReason = Reason(fmt.Sprintf(
-					"resolve run stopped mid-merge with files still unmerged: %s", strings.Join(unmerged, ", ")))
-			case !in.Obs.HasStaged[key]:
-				fact.ResolveIncompleteReason = "resolve run stopped mid-merge with nothing staged"
-			default:
-				fact.Resolved = true
 			}
 		}
 	}

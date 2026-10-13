@@ -1,13 +1,11 @@
 package web_test
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -18,28 +16,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
-
-var update = flag.Bool("update", false, "regenerate golden files")
-
-const goldenShell = "testdata/shell.golden.html"
-const goldenBoard = "testdata/board.golden.html"
-
-func assertGolden(t *testing.T, path string, got []byte) {
-	t.Helper()
-
-	if *update {
-		if err := os.WriteFile(path, got, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
-	}
-}
 
 func noRedirect(srv *httptest.Server) *http.Client {
 	client := *srv.Client()
@@ -168,8 +144,6 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 		t.Fatalf("GET /tickets does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s",
 			swap, full)
 	}
-	assertGolden(t, goldenBoard, []byte(swap))
-	assertGolden(t, goldenShell, []byte(strings.Replace(full, nested, "", 1)))
 }
 
 func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {

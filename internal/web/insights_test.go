@@ -58,7 +58,6 @@ func TestMergedTicketSpendSumsAllRunKinds(t *testing.T) {
 	before := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
 	mergedAt := time.Date(2026, 6, 10, 18, 0, 0, 0, time.UTC)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", before, 1.00)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "resolve", before, 0.25)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", before, 0.10)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
@@ -72,11 +71,11 @@ func TestMergedTicketSpendSumsAllRunKinds(t *testing.T) {
 		t.Fatalf("points = %d, want 1: %+v", len(points), points)
 	}
 	got := points[0]
-	if got.AgentUSD != 1.00 || got.ResolveUSD != 0.25 || got.FollowUpUSD != 0.10 {
-		t.Errorf("kind split = %+v, want 1.00/0.25/0.10", got)
+	if got.AgentUSD != 1.00 || got.FollowUpUSD != 0.10 {
+		t.Errorf("kind split = %+v, want 1.00/0.10", got)
 	}
-	if got.TotalUSD() != 1.35 {
-		t.Errorf("TotalUSD() = %v, want 1.35", got.TotalUSD())
+	if got.TotalUSD() != 1.10 {
+		t.Errorf("TotalUSD() = %v, want 1.10", got.TotalUSD())
 	}
 }
 
@@ -160,7 +159,7 @@ func TestTicketSpendSumsSpendSoFarForAnOpenTicket(t *testing.T) {
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now, 1.00)
-	disposeInsightsRun(t, store, "sandbox://CC-1", "resolve", now, 0.50)
+	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", now, 0.50)
 
 	byURL, err := store.BoardTicketSpend(ctx, "", "")
 	if err != nil {
@@ -173,7 +172,7 @@ func TestTicketSpendSumsSpendSoFarForAnOpenTicket(t *testing.T) {
 	if got.Merged {
 		t.Error("Merged = true, want false: no pr_merged event")
 	}
-	if got.AgentUSD != 1.00 || got.ResolveUSD != 0.50 {
+	if got.AgentUSD != 1.00 || got.FollowUpUSD != 0.50 {
 		t.Errorf("kind split = %+v, want 1.00/0.50", got)
 	}
 }
@@ -315,51 +314,6 @@ func TestHandleInsightsFallsBackToThirtyDaysOnBadSince(t *testing.T) {
 		_, body := fetchInsights(t, server, query)
 		if body.Since != "2026-08-21" {
 			t.Errorf("query %q: since = %q, want the 30-day default 2026-08-21", query, body.Since)
-		}
-	}
-}
-
-func TestMergedTicketSpendSplitsALaunchsExploreRunAcrossItsMembers(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	urls := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"}
-	hash := plan.Hash(plan.Compose(plan.Ticket{}))
-	for _, url := range urls {
-		insightsTicket(t, store, url, "cc-sandbox", "feat-a")
-		if err := store.QueueLaunchIntent(ctx, url, hash, "one-launch", civilDay(t, 2026, 6, 10)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := store.ApplyLaunchIntents(ctx, civilDay(t, 2026, 6, 10)); err != nil {
-		t.Fatal(err)
-	}
-	exploreID, err := store.InsertExploreRunSkeleton(ctx, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cost := 0.30
-	ended := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
-	metrics := &agentlog.RunMetrics{CostUSD: &cost, Settled: true}
-	if err := store.RecordDisposition(ctx, exploreID, plan.OutcomePush, nil, ended, metrics); err != nil {
-		t.Fatal(err)
-	}
-	for _, url := range urls {
-		disposeInsightsRun(t, store, url, "agent", ended, 1.00)
-		mergeInsightsTicket(t, store, url, time.Date(2026, 6, 10, 18, 0, 0, 0, time.UTC))
-	}
-
-	points, err := store.MergedTicketSpend(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
-	if err != nil {
-		t.Fatalf("MergedTicketSpend: %v", err)
-	}
-	if len(points) != 3 {
-		t.Fatalf("points = %d, want 3", len(points))
-	}
-	for _, p := range points {
-		if diff := p.ExploreUSD - 0.10; diff > 1e-9 || diff < -1e-9 {
-			t.Errorf("%s explore share = %v, want 0.10 (a third of 0.30)", p.Ticket, p.ExploreUSD)
 		}
 	}
 }

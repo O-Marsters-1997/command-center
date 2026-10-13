@@ -138,7 +138,7 @@ func TestBuildLogDetailFoldsTheClosingResultIntoTheWorkedLine(t *testing.T) {
 	t.Parallel()
 
 	ended := buildLogDetail(testLine, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
-	want := workedLine{Label: "Worked for 17m 11s", Stats: "· 129 turns · $8.29"}
+	want := workedLine{Label: "Worked for 17m 11s", Stats: "· 129 turns"}
 	if ended.Worked != want {
 		t.Errorf("Worked = %+v, want %+v (closed: the run has ended and nothing is filtered)", ended.Worked, want)
 	}

@@ -21,14 +21,13 @@ type Runner interface {
 }
 
 // SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {system_prompt}, {agents}, {model}, {prompt} and
+// configured argv template; {worktree}, {settings}, {system_prompt}, {model}, {prompt} and
 // {prompt_file} are substituted into every element before exec.
 type SpawnConfig struct {
 	AgentCommand     []string
 	WorktreePath     string
 	SettingsPath     string
 	SystemPromptPath string
-	AgentsPath       string
 	Model            string
 	Prompt           string
 	PromptPath       string
@@ -50,7 +49,6 @@ func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)
 	arg = strings.ReplaceAll(arg, "{settings}", cfg.SettingsPath)
 	arg = strings.ReplaceAll(arg, "{system_prompt}", cfg.SystemPromptPath)
-	arg = strings.ReplaceAll(arg, "{agents}", cfg.AgentsPath)
 	arg = strings.ReplaceAll(arg, "{model}", cfg.Model)
 	arg = strings.ReplaceAll(arg, "{prompt_file}", cfg.PromptPath)
 	arg = strings.ReplaceAll(arg, "{prompt}", cfg.Prompt)
@@ -71,7 +69,6 @@ func sessionArgs(cfg SpawnConfig) []string {
 func buildArgv(cfg SpawnConfig) []string {
 	omitWhenEmpty := map[string]string{
 		"{system_prompt}": cfg.SystemPromptPath,
-		"{agents}":        cfg.AgentsPath,
 	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {

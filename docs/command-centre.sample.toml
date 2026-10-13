@@ -1,15 +1,6 @@
-# A runnable sample config, pointed at this repository.
-#
 # This is the copy a reviewer can run:
 #
 #   just run --config docs/command-centre.sample.toml
-#
-# Where the config file sits decides nothing except what a relative [[repo]] path is relative
-# to. Where the database, run logs and checkouts live is data_dir's job, below.
-#
-# This sample carries no tickets: label an issue `project:<name>` on GitHub, then browse what's
-# importable at GET /features. Stacking is on, so a dependent cuts and pushes off its blocker's
-# own branch rather than main once the blocker's PR opens.
 
 # Where the app keeps everything except the database: state/ for the lock, run logs and agent
 # settings, repos/ for checkouts. Absent, CC_DATA_DIR answers; absent that,
@@ -35,7 +26,6 @@ agent_command = [
   "claude", "-p", "{prompt}",
   "--output-format", "stream-json", "--verbose",
   "--settings", "{settings}",
-  "--agents", "{agents}",
   "--append-system-prompt-file", "{system_prompt}",
   "--permission-mode", "auto",
   "--model", "{model}",
@@ -45,17 +35,3 @@ agent_command = [
 # --max-turns <n>. Absent (the default) sets no cap, so a runaway run can eat
 # an entire launch window.
 # max_turns = 60
-
-# Caps a review run. Defaults to 20 (or half of max_turns when that is lower); must be below
-# max_turns, so a review that outgrows it writes findings instead of turning into an implement.
-# review_max_turns = 20
-
-# A repo is located by exactly one of remote and path. path points at a checkout that already
-# exists; remote is a git URL the app clones to <data_dir>/repos/<name>, which is what lets this
-# same file run on a machine with no tree on it:
-#
-#   remote = "git@github.com:O-Marsters-1997/command-center.git"
-[[repo]]
-name     = "command-center"
-path     = ".."            # relative to this file's own directory, docs/, so: the repo root
-stacking = true

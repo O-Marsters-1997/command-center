@@ -10,55 +10,47 @@ import (
 
 type SpendCache struct {
 	mu      sync.Mutex
-	settled map[string]runSpend
-}
-
-type runSpend struct {
-	tokens int
-	usd    float64
+	settled map[string]int
 }
 
 func NewSpendCache() *SpendCache {
-	return &SpendCache{settled: make(map[string]runSpend)}
+	return &SpendCache{settled: make(map[string]int)}
 }
 
-func (c *SpendCache) Spend(path string) (tokens int, usd float64, settled bool) {
+func (c *SpendCache) Spend(path string) int {
 	if path == "" {
-		return 0, 0, false
+		return 0
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if spent, ok := c.settled[path]; ok {
-		return spent.tokens, spent.usd, true
+	if tokens, ok := c.settled[path]; ok {
+		return tokens
 	}
 
 	metrics, err := agentlog.ParseMetrics(path)
 	if err != nil {
-		return 0, 0, false
+		return 0
 	}
-	spent := spendOf(metrics)
+	tokens := tokensOf(metrics)
 	if metrics.Settled {
-		c.settled[path] = spent
+		c.settled[path] = tokens
 	}
-	return spent.tokens, spent.usd, metrics.Settled
+	return tokens
 }
 
-func spendOf(metrics agentlog.RunMetrics) runSpend {
-	var spent runSpend
+func tokensOf(metrics agentlog.RunMetrics) int {
+	var tokens int
 	for _, r := range metrics.Requests {
-		spent.tokens += int(r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens + r.OutputTokens)
+		tokens += int(r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens + r.OutputTokens)
 	}
-	if metrics.Settled && metrics.CostUSD != nil {
-		spent.usd = *metrics.CostUSD
-	}
-	return spent
+	return tokens
 }
 
 func applySpend(rows []Row, cache *SpendCache) {
 	for i := range rows {
-		rows[i].SpendTokens, rows[i].SpendUSD, rows[i].SpendSettled = cache.Spend(rows[i].LogPath)
+		rows[i].SpendTokens = cache.Spend(rows[i].LogPath)
 	}
 }
 
@@ -68,9 +60,8 @@ func applyTicketSpend(rows []Row, byURL map[string]store.BoardTicketSpend, facto
 		if !ok {
 			continue
 		}
-		rows[i].AgentPctWeek, rows[i].ResolvePctWeek, rows[i].FollowUpPctWeek, rows[i].SpendPctWeek =
-			spend.KindPctWeek(ts.AgentUSD, ts.ResolveUSD, ts.FollowUpUSD, factor)
-		rows[i].SpendPctWeek += spend.PctWeek(ts.ExploreUSD, factor)
+		rows[i].AgentPctWeek, rows[i].FollowUpPctWeek, rows[i].SpendPctWeek =
+			spend.KindPctWeek(ts.AgentUSD, ts.FollowUpUSD, factor)
 		rows[i].TicketOpen = !ts.Merged
 	}
 }

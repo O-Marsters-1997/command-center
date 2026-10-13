@@ -57,9 +57,7 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 func openServer(st *store.Store, clock loop.Clock, dataDir string) *web.Server {
-	server := web.NewServer(st, clock, dataDir)
-	server.AllowAnonymous()
-	return server
+	return web.NewServer(st, clock, dataDir)
 }
 
 func newServer(st *store.Store, now time.Time) *web.Server {

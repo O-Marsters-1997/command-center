@@ -12,7 +12,7 @@ attention, not by dependency.
 
 - `plan.Glyph(State)` returns one of eight words: `blocked`, `ready`, `running`, `pending`,
   `checking`, `attention`, `done`, `failed`. The mapping is one table in `plan`, with `attention`
-  covering `ReviewMe`, `NeedsYou` and `ConflictResolved`, and `failed` covering every state a human
+  covering `ReviewMe`, `NeedsYou` and `AwaitingInput`, and `failed` covering every state a human
   must repair.
 - The template composes `glyph glyph-{word}` and `[data-glyph]`. Go returns a word, never a utility
   string. Segbars and meters colour by glyph too.

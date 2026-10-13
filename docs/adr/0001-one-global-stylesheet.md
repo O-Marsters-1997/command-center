@@ -16,7 +16,7 @@ must not depend on a third-party origin.
 
 ## Decision
 
-- The compiled stylesheet is served from `/assets/app.css`; golden files carry markup only.
+- The compiled stylesheet is served from `/assets/app.css`.
 - Every island calls `noShadowDOM()` first, so one global sheet styles Go- and Solid-rendered markup.
 - Templates use utilities for layout and spacing. The state grammar is named classes in
   `@layer components`: the `glyph` family, `ribbon`, `meter`, `meter-fill`, `segbar-segment`,

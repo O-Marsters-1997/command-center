@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const goldenFeaturePage = "testdata/feature_page.golden.html"
-
 func TestFeaturePageSectionsTheBoardAndNamesDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -32,7 +30,6 @@ func TestFeaturePageSectionsTheBoardAndNamesDependencies(t *testing.T) {
 	if cell := rowCellAt(t, page, "sandbox://ROOT", 3); !strings.Contains(cell, "unlocks #CHILD") {
 		t.Errorf("ROOT ticket cell = %q, want it to read unlocks #CHILD", cell)
 	}
-	assertGolden(t, goldenFeaturePage, []byte(page))
 }
 
 func TestFeaturePageTabPairMarksTheBoardCurrent(t *testing.T) {

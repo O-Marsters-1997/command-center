@@ -41,7 +41,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 	return store
 }
 
-func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T) {
+func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -67,7 +67,7 @@ func TestBoardRendersTokensWhileARunIsAliveAndDollarsOnceItHasEnded(t *testing.T
 	endedServer := newServer(endedStore, now)
 	rec = httptest.NewRecorder()
 	endedServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tickets", nil))
-	if !strings.Contains(rec.Body.String(), "$1.23") {
-		t.Errorf("ended run's page does not contain \"$1.23\":\n%s", rec.Body)
+	if strings.Contains(rec.Body.String(), "$1.23") {
+		t.Errorf("ended run's page contains \"$1.23\", want no dollar amount:\n%s", rec.Body)
 	}
 }

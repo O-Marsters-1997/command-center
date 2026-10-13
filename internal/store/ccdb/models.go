@@ -73,47 +73,22 @@ type Repo struct {
 }
 
 type Run struct {
-	ID             int64
-	TicketID       sql.NullString
-	Kind           string
-	Pgid           sql.NullInt64
-	ProcStartedAt  sql.NullTime
-	BaselineSHA    sql.NullString
-	PromptHash     sql.NullString
-	LogPath        sql.NullString
-	Outcome        sql.NullString
-	ExitCode       sql.NullInt64
-	EndedAt        sql.NullTime
-	TokensIn       sql.NullInt64
-	TokensOut      sql.NullInt64
-	Turns          sql.NullInt64
-	DurationMs     sql.NullInt64
-	CostUsd        sql.NullFloat64
-	Model          sql.NullString
-	MetricsSettled sql.NullBool
-	LaunchID       sql.NullInt64
-	SessionID      sql.NullString
-	Message        sql.NullString
-	Question       sql.NullString
-}
-
-type RunRequest struct {
-	ID                  int64
-	RunID               int64
-	RequestID           string
-	Thread              string
-	InputTokens         int64
-	CacheCreationTokens int64
-	CacheReadTokens     int64
-	OutputTokens        int64
-}
-
-type Session struct {
-	ID        int64
-	UserID    int64
-	TokenSHA  string
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID            int64
+	TicketID      sql.NullString
+	Kind          string
+	Pgid          sql.NullInt64
+	ProcStartedAt sql.NullTime
+	BaselineSHA   sql.NullString
+	PromptHash    sql.NullString
+	LogPath       sql.NullString
+	Outcome       sql.NullString
+	ExitCode      sql.NullInt64
+	EndedAt       sql.NullTime
+	CostUsd       sql.NullFloat64
+	LaunchID      sql.NullInt64
+	SessionID     sql.NullString
+	Message       sql.NullString
+	Question      sql.NullString
 }
 
 type Ticket struct {
@@ -128,15 +103,6 @@ type Ticket struct {
 	Feature     string
 	SyncedAt    string
 	WithdrawnAt sql.NullTime
-}
-
-type User struct {
-	ID            int64
-	Email         string
-	PasswordHash  string
-	CreatedAt     time.Time
-	FailedCount   int32
-	NextAttemptAt sql.NullTime
 }
 
 type UtilizationInterval struct {

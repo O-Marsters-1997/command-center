@@ -167,7 +167,7 @@ func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {
 	f := newLoopFixture(t)
 	f.AuthoriseAll(t)
 
-	f.TickPastExplore(t)
+	f.Tick(t)
 
 	implements := f.ImplementSpawns()
 	if len(implements) != 1 {
@@ -175,10 +175,5 @@ func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {
 	}
 	if implements[0].SessionID == "" || implements[0].Resume {
 		t.Errorf("implement spawn = session %q resume %v, want a new session", implements[0].SessionID, implements[0].Resume)
-	}
-	for _, explore := range f.ExploreSpawns() {
-		if explore.SessionID != "" {
-			t.Errorf("explore spawn session = %q, want none", explore.SessionID)
-		}
 	}
 }

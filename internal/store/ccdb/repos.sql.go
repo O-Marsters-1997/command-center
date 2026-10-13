@@ -11,20 +11,6 @@ import (
 	"time"
 )
 
-const renameTicketRepo = `-- name: RenameTicketRepo :exec
-UPDATE tickets SET repo = $1 WHERE repo = $2
-`
-
-type RenameTicketRepoParams struct {
-	NewName string
-	OldName string
-}
-
-func (q *Queries) RenameTicketRepo(ctx context.Context, arg RenameTicketRepoParams) error {
-	_, err := q.db.ExecContext(ctx, renameTicketRepo, arg.NewName, arg.OldName)
-	return err
-}
-
 const repos = `-- name: Repos :many
 SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at,
     p.name AS project, p.hue AS project_hue

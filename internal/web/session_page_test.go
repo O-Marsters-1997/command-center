@@ -72,7 +72,7 @@ func sessionStoreInFeature(
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"agent", "follow-up", "resolve"} {
+	for _, kind := range []string{"agent", "follow-up"} {
 		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
 		st, _ := sessionStore(t, kind, prompt, true, true)
 		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
@@ -149,12 +149,6 @@ func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	if strings.Contains(body, "Nothing to show yet") {
 		t.Errorf("session page claims there is nothing to show:\n%s", body)
 	}
-}
-
-func TestSessionPageGolden(t *testing.T) {
-	t.Parallel()
-	st, _ := sessionStore(t, "agent", "Implement #1\n", true, false)
-	assertGolden(t, "testdata/session.golden.html", []byte(renderPath(t, newServer(st, testNow), "/s/acme/web/1")))
 }
 
 func sessionVerb(t *testing.T, srv http.Handler, form url.Values, htmx bool) *httptest.ResponseRecorder {

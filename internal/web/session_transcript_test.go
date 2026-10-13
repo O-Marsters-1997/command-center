@@ -95,10 +95,3 @@ func TestSessionPageWithOneRunHasNoYouLine(t *testing.T) {
 		t.Errorf("single-run session page wrong:\n%s", body)
 	}
 }
-
-func TestSessionTranscriptGolden(t *testing.T) {
-	t.Parallel()
-	st := transcriptStore(t, "", "also add tests", "ship it")
-	page := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
-	assertGolden(t, "testdata/session_transcript.golden.html", []byte(page))
-}

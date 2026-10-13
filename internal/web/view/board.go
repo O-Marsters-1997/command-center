@@ -53,15 +53,12 @@ type Row struct {
 	LogPath         string   `json:"log_path"`
 	CancelCount     int      `json:"cancel_count"`
 	SpendTokens     int      `json:"spend_tokens"`
-	SpendUSD        float64  `json:"spend_usd"`
-	SpendSettled    bool     `json:"spend_settled"`
 	BaselineSHA     string   `json:"baseline_sha"`
 	Checks          []Check  `json:"checks"`
 	RedChecks       []Check  `json:"red_checks"`
 	Draft           bool     `json:"draft"`
 	DraftReason     string   `json:"draft_reason"`
 	AgentPctWeek    float64  `json:"agent_pct_week"`
-	ResolvePctWeek  float64  `json:"resolve_pct_week"`
 	FollowUpPctWeek float64  `json:"follow_up_pct_week"`
 	SpendPctWeek    float64  `json:"spend_pct_week"`
 	TicketOpen      bool     `json:"ticket_open"`

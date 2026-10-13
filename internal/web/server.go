@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/auth"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -66,16 +65,14 @@ func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
 // Server is the status page plus the launch, authorisation and features routes. It only queues
 // intents; it never writes the database directly.
 type Server struct {
-	store          *store.Store
-	clock          loop.Clock
-	view           *view.Reader
-	trackerFor     tracker.Resolver
-	rawMux         *http.ServeMux
-	mux            http.Handler
-	nudge          func()
-	pushable       pushableCache
-	verifyPassword func(password, encoded string) bool
-	open           bool
+	store      *store.Store
+	clock      loop.Clock
+	view       *view.Reader
+	trackerFor tracker.Resolver
+	rawMux     *http.ServeMux
+	mux        http.Handler
+	nudge      func()
+	pushable   pushableCache
 }
 
 const pushableTTL = time.Minute
@@ -107,11 +104,10 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	s := &Server{
 		store: store, clock: clock,
-		view:           view.NewReader(store, dataDir, renderLogLine),
-		trackerFor:     tracker.New,
-		nudge:          func() {},
-		pushable:       pushableCache{list: gh.PushableRepos},
-		verifyPassword: auth.VerifyPassword,
+		view:       view.NewReader(store, dataDir, renderLogLine),
+		trackerFor: tracker.New,
+		nudge:      func() {},
+		pushable:   pushableCache{list: gh.PushableRepos},
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", handler(s.handleIndex))
@@ -133,13 +129,11 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("GET /repos/{owner}/{name}", handler(s.handleRepo))
 	mux.Handle("GET /repos/search", handler(s.handleRepoSearch))
 	mux.Handle("GET /repos/banner", handler(s.handleBanner))
-	mux.HandleFunc("GET /features", s.handleFeaturesRedirect)
 	mux.Handle("POST /repos/track", handler(s.handleTrack))
 	mux.Handle("POST /projects", handler(s.handleCreateProject))
 	mux.Handle("POST /projects/{name}", handler(s.handleEditProject))
 	mux.Handle("POST /projects/{name}/delete", handler(s.handleDeleteProject))
 	mux.Handle("POST /repos/{owner}/{name}/project", handler(s.handleSetRepoProject))
-	mux.HandleFunc("GET /features/{feature}", s.handleFeatureRedirect)
 	mux.Handle("POST /features/{feature}/import", handler(s.handleImportFeature))
 	mux.Handle("GET /launch/candidates", handler(s.handleCandidates))
 	mux.Handle("GET /events", handler(s.handleEvents))
@@ -147,16 +141,10 @@ func NewServer(store *store.Store, clock loop.Clock, dataDir string) *Server {
 	mux.Handle("POST /launch", handler(s.handleLaunch))
 	mux.Handle("POST /verb", handler(s.handleVerb))
 	mux.Handle("POST /ticket", handler(s.handleTicket))
-	mux.Handle("GET /login", handler(s.handleLoginPage))
-	mux.Handle("POST /login", handler(s.handleLogin))
-	mux.Handle("POST /logout", handler(s.handleLogout))
 	s.rawMux = mux
-	s.mux = http.NewCrossOriginProtection().Handler(s.requireSession(mux))
+	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
 }
-
-// AllowAnonymous turns the session gate off, for the demo build whose board is a local simulation.
-func (s *Server) AllowAnonymous() { s.open = true }
 
 // SetTrackerSource replaces the tracker constructor so a test can drive GET /repos/{owner}/{name} without gh.
 func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
@@ -212,10 +200,6 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
-	if target := legacyIndexTarget(r.URL.Query()); target != "" {
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
-		return nil
-	}
 	home, err := s.view.Home(r.Context(), s.clock.Now())
 	if err != nil {
 		return err
@@ -223,29 +207,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	return renderHTML(w, "home.tmpl", home)
 }
 
-func legacyIndexTarget(q url.Values) string {
-	if sel := view.SessionPath(q.Get("sel")); sel != "" {
-		return sel
-	}
-	if feature := q.Get("feature"); feature != "" {
-		target := "/f/" + url.PathEscape(feature)
-		if q.Get("view") == "graph" {
-			target += "/graph"
-		}
-		return target
-	}
-	if repo := q.Get("repo"); validRepo(repo) {
-		return view.RepoPath(repo)
-	}
-	return ""
-}
-
-func validRepo(repo string) bool { return repoName.MatchString(repo) && !hasDotSegment(repo) }
-
 func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	q.Set("all", "1")
-	q.Del("view")
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
 	if err != nil {
 		return err
@@ -273,7 +237,6 @@ func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
 	feature := r.PathValue("feature")
 	q := r.URL.Query()
 	q.Set("feature", feature)
-	q.Del("view")
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
 	if err != nil {
 		return view.Board{}, err
@@ -606,14 +569,6 @@ func afterTicketEdit(back string) string {
 	return u.EscapedPath()
 }
 
-func (s *Server) handleFeaturesRedirect(w http.ResponseWriter, r *http.Request) {
-	target := "/repos"
-	if repo := r.URL.Query().Get("repo"); validRepo(repo) {
-		target = view.RepoPath(repo)
-	}
-	http.Redirect(w, r, target, http.StatusMovedPermanently)
-}
-
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 	page, err := s.view.Repos(r.Context(), s.clock.Now())
 	if err != nil {
@@ -719,10 +674,6 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 		}
 	}
 	return store.Ticket{}, false
-}
-
-func (s *Server) handleFeatureRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/f/"+url.PathEscape(r.PathValue("feature")), http.StatusMovedPermanently)
 }
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {

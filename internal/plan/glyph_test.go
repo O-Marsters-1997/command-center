@@ -13,7 +13,7 @@ func TestGlyph(t *testing.T) {
 		plan.Failed: "failed", plan.CutFailed: "failed", plan.PushFailed: "failed", plan.CIFailed: "failed",
 		plan.ConflictsWithMain: "failed", plan.RefreshConflicted: "failed", plan.BaseGone: "failed",
 		plan.VerificationFailed: "failed", plan.PRClosedUnmerged: "failed",
-		plan.ReviewMe: "attention", plan.NeedsYou: "attention", plan.ConflictResolved: "attention",
+		plan.ReviewMe: "attention", plan.NeedsYou: "attention",
 		plan.AwaitingInput: "attention",
 		plan.Running:       "running",
 		plan.PushPending:   "pending", plan.Queued: "pending", plan.BaseMoved: "pending",

@@ -94,9 +94,9 @@ func TestSnapshotLaunch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := derive(tt.rules, tt.in).Launch()
+			got := derive(tt.rules, tt.in).LaunchAfter(0)
 			if !slices.Equal(got, tt.want) {
-				t.Errorf("Launch() = %v, want %v", got, tt.want)
+				t.Errorf("LaunchAfter(0) = %v, want %v", got, tt.want)
 			}
 		})
 	}

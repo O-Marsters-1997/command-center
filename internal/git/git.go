@@ -229,32 +229,6 @@ func Merge(ctx context.Context, worktreePath, ref string) error {
 	return err
 }
 
-// UnmergedPaths lists worktreePath's currently unresolved merge conflicts.
-func UnmergedPaths(ctx context.Context, worktreePath string) ([]string, error) {
-	out, err := git(ctx, worktreePath, "diff", "--name-only", "--diff-filter=U")
-	if err != nil {
-		return nil, err
-	}
-	return lines(out), nil
-}
-
-// StagedPaths lists the paths whose index entry differs from HEAD, so a resolution identical to
-// HEAD's side is not listed.
-func StagedPaths(ctx context.Context, worktreePath string) ([]string, error) {
-	out, err := git(ctx, worktreePath, "diff", "--cached", "--name-only")
-	if err != nil {
-		return nil, err
-	}
-	return lines(out), nil
-}
-
-// CommitNoEdit commits worktreePath's staged changes under the message git already wrote for
-// them, via --no-edit.
-func CommitNoEdit(ctx context.Context, worktreePath string) error {
-	_, err := git(ctx, worktreePath, "commit", "--no-edit")
-	return err
-}
-
 // Rebase replays worktreePath's own branch onto onto, dropping every commit reachable from
 // upstream, because a squash-merged base has no ancestry to replay the branch's copies against.
 // A conflict leaves the worktree mid-rebase, which MidMerge reads.

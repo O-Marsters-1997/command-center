@@ -68,50 +68,25 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 	return nil
 }
 
-// RecordDisposition writes a dead run's outcome, metrics and per-request rows in one
-// transaction. exitCode and metrics are nil when there is nothing to report.
 func (s *Store) RecordDisposition(
 	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
 	metrics *agentlog.RunMetrics,
-) (err error) {
+) error {
 	var exitCodeParam sql.NullInt64
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
+	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+		Outcome:  notNull(outcome.String()),
+		ExitCode: exitCodeParam,
+		EndedAt:  notNullTime(endedAt.UTC()),
+		CostUsd:  costUSD(metrics),
+		ID:       runID,
+	})
 	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-	qtx := s.q.WithTx(tx)
-
-	m := runMetricsColumns(metrics)
-	if err = qtx.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Outcome:        notNull(outcome.String()),
-		ExitCode:       exitCodeParam,
-		EndedAt:        notNullTime(endedAt.UTC()),
-		TokensIn:       m.TokensIn,
-		TokensOut:      m.TokensOut,
-		Turns:          m.Turns,
-		DurationMs:     m.DurationMs,
-		CostUsd:        m.CostUsd,
-		Model:          m.Model,
-		MetricsSettled: m.MetricsSettled,
-		ID:             runID,
-	}); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", runID, err)
 	}
-	if metrics != nil {
-		if err = insertRunRequests(ctx, qtx, runID, metrics.Requests); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
@@ -122,78 +97,11 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 	return nil
 }
 
-func insertRunRequests(ctx context.Context, q *ccdb.Queries, runID int64, requests []agentlog.Request) error {
-	for _, r := range requests {
-		if err := q.InsertRunRequest(ctx, ccdb.InsertRunRequestParams{
-			RunID:               runID,
-			RequestID:           r.ID,
-			Thread:              r.Thread,
-			InputTokens:         r.InputTokens,
-			CacheCreationTokens: r.CacheCreationTokens,
-			CacheReadTokens:     r.CacheReadTokens,
-			OutputTokens:        r.OutputTokens,
-		}); err != nil {
-			return fmt.Errorf("insert run request for run %d: %w", runID, err)
-		}
+func costUSD(metrics *agentlog.RunMetrics) sql.NullFloat64 {
+	if metrics == nil || metrics.CostUSD == nil {
+		return sql.NullFloat64{}
 	}
-	return nil
-}
-
-type runMetricsCols struct {
-	TokensIn, TokensOut, Turns, DurationMs sql.NullInt64
-	CostUsd                                sql.NullFloat64
-	Model                                  sql.NullString
-	MetricsSettled                         sql.NullBool
-}
-
-func runMetricsColumns(metrics *agentlog.RunMetrics) runMetricsCols {
-	if metrics == nil {
-		return runMetricsCols{}
-	}
-	var costUSD sql.NullFloat64
-	if metrics.CostUSD != nil {
-		costUSD = sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
-	}
-	return runMetricsCols{
-		TokensIn:       sql.NullInt64{Int64: metrics.TokensIn, Valid: true},
-		TokensOut:      sql.NullInt64{Int64: metrics.TokensOut, Valid: true},
-		Turns:          sql.NullInt64{Int64: int64(metrics.Turns), Valid: true},
-		DurationMs:     sql.NullInt64{Int64: metrics.Duration.Milliseconds(), Valid: true},
-		CostUsd:        costUSD,
-		Model:          sql.NullString{String: metrics.Model, Valid: metrics.Model != ""},
-		MetricsSettled: sql.NullBool{Bool: metrics.Settled, Valid: true},
-	}
-}
-
-// RunRequest is one run_requests row: one deduplicated request_id's usage, attributed to its
-// thread -- the main run or the tool_use id of the Task call that spawned it.
-type RunRequest struct {
-	RequestID           string
-	Thread              string
-	InputTokens         int64
-	CacheCreationTokens int64
-	CacheReadTokens     int64
-	OutputTokens        int64
-}
-
-// RunRequestsForRun returns one run's per-request rows in recorded order.
-func (s *Store) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequest, error) {
-	rows, err := s.q.RunRequestsForRun(ctx, runID)
-	if err != nil {
-		return nil, fmt.Errorf("select run requests for run %d: %w", runID, err)
-	}
-	requests := make([]RunRequest, len(rows))
-	for i, row := range rows {
-		requests[i] = RunRequest{
-			RequestID:           row.RequestID,
-			Thread:              row.Thread,
-			InputTokens:         row.InputTokens,
-			CacheCreationTokens: row.CacheCreationTokens,
-			CacheReadTokens:     row.CacheReadTokens,
-			OutputTokens:        row.OutputTokens,
-		}
-	}
-	return requests, nil
+	return sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
 }
 
 // InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.
@@ -211,11 +119,9 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 }
 
 // PendingRun is one run this tick must check for liveness and, if it has died, dispose of.
-// An explore run has a LaunchID and no TicketID.
 type PendingRun struct {
 	ID            int64
 	TicketID      string
-	LaunchID      int64
 	Kind          string
 	Pgid          int
 	ProcStartedAt time.Time
@@ -233,7 +139,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	var pending []PendingRun
 	for _, row := range rows {
 		p := PendingRun{
-			ID: row.ID, TicketID: row.TicketID.String, LaunchID: row.LaunchID.Int64, Kind: row.Kind, Pgid: int(row.Pgid.Int64),
+			ID: row.ID, TicketID: row.TicketID.String, Kind: row.Kind, Pgid: int(row.Pgid.Int64),
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
@@ -421,72 +327,4 @@ func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string
 	default:
 		return row.LogPath.String, row.EndedAt.Valid, nil
 	}
-}
-
-// PrecedingRunKind is the kind of the ticket's run just before runID, empty when there is none.
-func (s *Store) PrecedingRunKind(ctx context.Context, ticketID string, runID int64) (string, error) {
-	kind, err := s.q.PrecedingRunKind(ctx, ccdb.PrecedingRunKindParams{TicketID: notNull(ticketID), ID: runID})
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("select run before %d: %w", runID, err)
-	}
-	return kind, nil
-}
-
-// InsertExploreRunSkeleton reserves a runs row for a launch's explore run.
-func (s *Store) InsertExploreRunSkeleton(ctx context.Context, launchID int64) (int64, error) {
-	id, err := s.q.InsertExploreRunSkeleton(ctx, sql.NullInt64{Int64: launchID, Valid: true})
-	if err != nil {
-		return 0, fmt.Errorf("insert explore run for launch %d: %w", launchID, err)
-	}
-	return id, nil
-}
-
-// InsertCutFailedExploreRun records an explore run that never got a worktree, so its launch
-// proceeds without a brief.
-func (s *Store) InsertCutFailedExploreRun(ctx context.Context, launchID int64, at time.Time) error {
-	_, err := s.q.InsertCutFailedExploreRun(ctx, ccdb.InsertCutFailedExploreRunParams{
-		LaunchID: sql.NullInt64{Int64: launchID, Valid: true},
-		Outcome:  notNull(plan.OutcomeCutFailed.String()),
-		EndedAt:  notNullTime(at.UTC()),
-	})
-	if err != nil {
-		return fmt.Errorf("insert cut-failed explore run for launch %d: %w", launchID, err)
-	}
-	return nil
-}
-
-// ExploreRun is a launch's explore run: Disposed once it has an outcome, Spawned once it has a pgid.
-type ExploreRun struct {
-	ID       int64
-	Spawned  bool
-	Disposed bool
-}
-
-// ExploreRuns returns each launch's latest explore run, keyed by launch id.
-func (s *Store) ExploreRuns(ctx context.Context) (map[int64]ExploreRun, error) {
-	rows, err := s.q.ExploreRuns(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select explore runs: %w", err)
-	}
-	byLaunch := make(map[int64]ExploreRun, len(rows))
-	for _, row := range rows {
-		byLaunch[row.LaunchID.Int64] = ExploreRun{ID: row.ID, Spawned: row.Pgid.Valid, Disposed: row.Outcome.Valid}
-	}
-	return byLaunch, nil
-}
-
-// ActiveLaunchTickets returns the member ticket URLs of every active launch, keyed by launch id.
-func (s *Store) ActiveLaunchTickets(ctx context.Context) (map[int64][]string, error) {
-	rows, err := s.q.ActiveLaunchTickets(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("select active launch tickets: %w", err)
-	}
-	byLaunch := map[int64][]string{}
-	for _, row := range rows {
-		byLaunch[row.LaunchID] = append(byLaunch[row.LaunchID], row.TicketID)
-	}
-	return byLaunch, nil
 }
