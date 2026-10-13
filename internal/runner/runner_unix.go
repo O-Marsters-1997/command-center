@@ -3,13 +3,15 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 const pidReuseTolerance = 5 * time.Second
@@ -39,7 +41,7 @@ func (ProcessRunner) Liveness(pgid int, wantStart, now time.Time) (bool, error) 
 }
 
 func psStatAndEtime(pid int) (stat, etime string, ok bool) {
-	out, err := exec.Command("ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid)).Output()
+	out, err := command.Output(context.Background(), "", "ps", "-o", "stat=,etime=", "-p", strconv.Itoa(pid))
 	if err != nil {
 		return "", "", false
 	}

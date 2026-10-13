@@ -1,10 +1,12 @@
 package command_test
 
 import (
+	"context"
 	"errors"
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 )
@@ -53,6 +55,30 @@ func TestRunDiscardsStdoutAndNamesTheFailure(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Run error = %q, want it to contain %q", err, want)
 		}
+	}
+}
+
+func TestOutputReturnsWhenAGrandchildHoldsStdoutOpen(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := command.Output(ctx, "", "sh", "-c", "sleep 30 & wait")
+	if err == nil {
+		t.Fatal("Output(stalled child) = nil error, want one")
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Errorf("Output(stalled child) took %v, want it bounded by timeout plus WaitDelay", elapsed)
+	}
+}
+
+func TestOutputSwitchesPromptsOff(t *testing.T) {
+	out, err := command.Output(t.Context(), "", "sh", "-c", `echo "$GIT_TERMINAL_PROMPT $GH_PROMPT_DISABLED"`)
+	if err != nil {
+		t.Fatalf("Output(echo env): %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "0 1" {
+		t.Errorf("GIT_TERMINAL_PROMPT and GH_PROMPT_DISABLED = %q, want %q", got, "0 1")
 	}
 }
 
