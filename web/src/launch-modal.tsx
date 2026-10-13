@@ -49,7 +49,8 @@ customElement(
         };
         dialog.addEventListener("close", onClose);
         onCleanup(() => dialog.removeEventListener("close", onClose));
-        if (!dialog.open) dialog.showModal();
+        dialog.removeAttribute("open");
+      dialog.showModal();
       }
 
       const controller = new AbortController();
@@ -138,6 +139,9 @@ customElement(
           </Match>
           <Match when={status() === "error"}>
             <Banner>could not load candidates{props.feature && ` for ${props.feature}`}.</Banner>
+            <a class="btn btn-ghost" href={cancelHref(props.feature)}>
+              Cancel
+            </a>
           </Match>
           <Match when={status() === "ready"}>
             <Show when={refusal()}>{(message) => <Banner>{message()}</Banner>}</Show>
