@@ -60,6 +60,9 @@ func OpenStore(ctx context.Context, dsn string) (*Store, error) {
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetMaxIdleConns(maxIdleConns)
 	db.SetConnMaxLifetime(connMaxLifetime)
+	if err := db.PingContext(ctx); err != nil {
+		return nil, errors.Join(fmt.Errorf("ping pool: %w", err), db.Close())
+	}
 	return &Store{db: db, q: ccdb.New(db)}, nil
 }
 
