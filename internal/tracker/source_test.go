@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -68,11 +67,12 @@ func TestGithubSourceFullPageErrors(t *testing.T) {
 	src := &githubSource{owner: "o", repo: "r", run: run}
 
 	_, err := src.Features(t.Context())
-	if !errors.Is(err, errFullPage) {
-		t.Fatalf("Features() error = %v, want errFullPage", err)
+	var full *fullPageError
+	if !errors.As(err, &full) {
+		t.Fatalf("Features() error = %v, want *fullPageError", err)
 	}
-	if !strings.Contains(err.Error(), strconv.Itoa(listLimit)) {
-		t.Errorf("error %q does not name the limit %d", err, listLimit)
+	if full.limit != listLimit {
+		t.Errorf("fullPageError.limit = %d, want %d", full.limit, listLimit)
 	}
 }
 

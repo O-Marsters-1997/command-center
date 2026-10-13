@@ -5,7 +5,6 @@ package gh
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -71,7 +70,11 @@ type Snapshot struct {
 
 const listLimit = 100
 
-var errFullPage = errors.New("gh list returned a full page, results may be truncated")
+type fullPageError struct{ limit int }
+
+func (e *fullPageError) Error() string {
+	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
+}
 
 // gh pr list's own defaults (--state open --limit 30) would hide merged PRs and truncate.
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
@@ -82,7 +85,8 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
 func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := run(ctx, repoPath, "pr", "list", "--state", "open", "--limit", strconv.Itoa(listLimit), "--json", bulkFields)
+	out, err := run(ctx, repoPath, "pr", "list", "--state", "open",
+		"--limit", strconv.Itoa(listLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -91,7 +95,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 		return Snapshot{}, fmt.Errorf("decode pr list for %s: %w", repoPath, err)
 	}
 	if len(prs) >= listLimit {
-		return Snapshot{}, fmt.Errorf("read pr list for %s at --limit %d: %w", repoPath, listLimit, errFullPage)
+		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, &fullPageError{limit: listLimit})
 	}
 
 	byBranch := make(map[string]PR, len(tracked))
@@ -197,7 +201,7 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("unmarshal issue list: %w", err)
 	}
 	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues at --limit %d: %w", listLimit, errFullPage)
+		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
 	}
 	titles := make(map[string]string, len(decoded))
 	for _, issue := range decoded {

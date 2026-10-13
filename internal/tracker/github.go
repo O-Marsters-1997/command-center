@@ -15,7 +15,11 @@ import (
 
 const listLimit = 100
 
-var errFullPage = errors.New("gh list returned a full page, results may be truncated")
+type fullPageError struct{ limit int }
+
+func (e *fullPageError) Error() string {
+	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
+}
 
 type githubSource struct {
 	owner, repo string
@@ -93,7 +97,7 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 		}
 	}
 	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read labels at --limit %d: %w", listLimit, errFullPage)
+		return nil, fmt.Errorf("read labels: %w", &fullPageError{limit: listLimit})
 	}
 	return features, nil
 }
@@ -112,7 +116,7 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 		return nil, fmt.Errorf("unmarshal issue list: %w", err)
 	}
 	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues at --limit %d: %w", listLimit, errFullPage)
+		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
 	}
 	return decoded, nil
 }

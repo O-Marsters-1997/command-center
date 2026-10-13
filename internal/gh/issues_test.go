@@ -3,7 +3,6 @@ package gh
 import (
 	"errors"
 	"maps"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -51,11 +50,12 @@ func TestDecodeIssueTitlesFullPageErrors(t *testing.T) {
 
 	raw := "[" + strings.Repeat(`{"title":"t","url":"u"},`, listLimit-1) + `{"title":"t","url":"v"}]`
 	_, err := decodeIssueTitles([]byte(raw))
-	if !errors.Is(err, errFullPage) {
-		t.Fatalf("decodeIssueTitles() error = %v, want errFullPage", err)
+	var full *fullPageError
+	if !errors.As(err, &full) {
+		t.Fatalf("decodeIssueTitles() error = %v, want *fullPageError", err)
 	}
-	if !strings.Contains(err.Error(), strconv.Itoa(listLimit)) {
-		t.Errorf("error %q does not name the limit %d", err, listLimit)
+	if full.limit != listLimit {
+		t.Errorf("fullPageError.limit = %d, want %d", full.limit, listLimit)
 	}
 }
 
