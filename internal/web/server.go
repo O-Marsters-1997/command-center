@@ -186,6 +186,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 	w.Header().Set("HX-Retarget", "#flash")
 	w.Header().Set("HX-Reswap", "innerHTML")
+	w.Header().Set("HX-Reselect", "p.banner")
 	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", err.Error()); renderErr != nil {
 		s.logger.ErrorContext(r.Context(), "render flash", "err", renderErr)
 		http.Error(w, "internal error", http.StatusInternalServerError)

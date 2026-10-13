@@ -25,8 +25,8 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("GET /tickets on a closed store: status = %d, want 500", rec.Code)
 	}
-	if strings.Contains(strings.ToLower(rec.Body.String()), "closed") || strings.Contains(rec.Body.String(), "sql") {
-		t.Errorf("500 body leaks the cause: %q", rec.Body)
+	if got := rec.Body.String(); got != "internal error\n" {
+		t.Errorf("500 body = %q, want only \"internal error\"", got)
 	}
 	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "closed") {
 		t.Errorf("500 not logged with its cause: %q", logs.String())
@@ -45,6 +45,9 @@ func TestRefusedVerbOnHTMXIsAFlashFragment(t *testing.T) {
 	}
 	if got := rec.Header().Get("HX-Retarget"); got != "#flash" {
 		t.Errorf("HX-Retarget = %q, want #flash", got)
+	}
+	if got := rec.Header().Get("HX-Reselect"); got != "p.banner" {
+		t.Errorf("HX-Reselect = %q, want p.banner so a link's hx-select cannot empty the flash", got)
 	}
 	if got := rec.Header().Get("HX-Reswap"); got != "innerHTML" {
 		t.Errorf("HX-Reswap = %q, want innerHTML", got)
