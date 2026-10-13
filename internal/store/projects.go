@@ -57,34 +57,25 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	return projects, nil
 }
 
-func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos []string, at time.Time) (err error) {
+func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos []string, at time.Time) error {
 	if !ProjectNamePattern.MatchString(name) || hue < MinHue || hue > MaxHue {
 		return fmt.Errorf("create project %q with hue %d: %w", name, hue, ErrInvalidProject)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
+	return s.inTx(ctx, func(q *ccdb.Queries) error {
+		id, err := q.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(hue), CreatedAt: at.UTC()})
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
+			return fmt.Errorf("create project %q: %w", name, ErrProjectExists)
+		}
 		if err != nil {
-			err = errors.Join(err, tx.Rollback())
+			return fmt.Errorf("create project %q: %w", name, err)
 		}
-	}()
-
-	qtx := s.q.WithTx(tx)
-	id, err := qtx.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(hue), CreatedAt: at.UTC()})
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
-		return fmt.Errorf("create project %q: %w", name, ErrProjectExists)
-	}
-	if err != nil {
-		return fmt.Errorf("create project %q: %w", name, err)
-	}
-	for _, repo := range repos {
-		if err = setRepoProjectID(ctx, qtx, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
-			return err
+		for _, repo := range repos {
+			if err := setRepoProjectID(ctx, q, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
+				return err
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
 func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error {

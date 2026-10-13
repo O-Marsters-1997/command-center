@@ -36,30 +36,21 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 
 // ApplyLaunchIntents turns every unconsumed launch intent into a launches row per group
 // plus a launch_members row per intent, marking each consumed.
-func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
+func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) error {
+	return s.inTx(ctx, func(q *ccdb.Queries) error {
+		groups, order, err := pendingLaunchIntents(ctx, q)
 		if err != nil {
-			err = errors.Join(err, tx.Rollback())
+			return err
 		}
-	}()
 
-	qtx := s.q.WithTx(tx)
-	groups, order, err := pendingLaunchIntents(ctx, qtx)
-	if err != nil {
-		return err
-	}
-
-	nowUTC := now.UTC()
-	for _, group := range order {
-		if err := insertLaunch(ctx, qtx, nowUTC, groups[group]); err != nil {
-			return fmt.Errorf("apply launch group %s: %w", group, err)
+		nowUTC := now.UTC()
+		for _, group := range order {
+			if err := insertLaunch(ctx, q, nowUTC, groups[group]); err != nil {
+				return fmt.Errorf("apply launch group %s: %w", group, err)
+			}
 		}
-	}
-	return tx.Commit()
+		return nil
+	})
 }
 
 type pendingIntent struct {
@@ -147,29 +138,23 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMe
 
 // CancelLaunchesFor cancels every active launch the ticket belongs to, returning how many
 // memberships it withdraws.
-func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (members int, err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
+func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (int, error) {
+	var members int
+	err := s.inTx(ctx, func(q *ccdb.Queries) error {
+		count, err := q.ActiveLaunchMemberCount(ctx, ticketID)
 		if err != nil {
-			err = errors.Join(err, tx.Rollback())
+			return fmt.Errorf("count members of active launches for %s: %w", ticketID, err)
 		}
-	}()
-
-	qtx := s.q.WithTx(tx)
-	count, err := qtx.ActiveLaunchMemberCount(ctx, ticketID)
+		if err := q.CancelActiveLaunches(ctx, ticketID); err != nil {
+			return fmt.Errorf("cancel launches for %s: %w", ticketID, err)
+		}
+		members = int(count)
+		return nil
+	})
 	if err != nil {
-		return 0, fmt.Errorf("count members of active launches for %s: %w", ticketID, err)
+		return 0, err
 	}
-	if err := qtx.CancelActiveLaunches(ctx, ticketID); err != nil {
-		return 0, fmt.Errorf("cancel launches for %s: %w", ticketID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit: %w", err)
-	}
-	return int(count), nil
+	return members, nil
 }
 
 // FeatureFirstLaunch returns when the earliest launch holding a ticket of feature was created;
