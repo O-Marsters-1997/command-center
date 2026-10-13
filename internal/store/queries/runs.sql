@@ -7,8 +7,8 @@ VALUES (
 ) RETURNING id, COALESCE(session_id::text, '')::text AS session_id;
 
 -- name: LatestSessionID :one
-SELECT COALESCE(session_id::text, '')::text AS session_id FROM runs
-WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') ORDER BY id DESC LIMIT 1;
+SELECT session_id::text AS session_id FROM runs
+WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 
 -- name: RecordSpawn :exec
 UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
