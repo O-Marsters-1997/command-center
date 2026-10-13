@@ -1,7 +1,9 @@
 package gh
 
 import (
+	"errors"
 	"maps"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +42,53 @@ func TestDecodeIssueTitles(t *testing.T) {
 				t.Errorf("titles = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDecodeIssueTitlesFullPageErrors(t *testing.T) {
+	t.Parallel()
+
+	raw := "[" + strings.Repeat(`{"title":"t","url":"u"},`, listLimit-1) + `{"title":"t","url":"v"}]`
+	_, err := decodeIssueTitles([]byte(raw))
+	var full *fullPageError
+	if !errors.As(err, &full) {
+		t.Fatalf("decodeIssueTitles() error = %v, want *fullPageError", err)
+	}
+	if full.limit != listLimit {
+		t.Errorf("fullPageError.limit = %d, want %d", full.limit, listLimit)
+	}
+}
+
+func TestDecodeRejectsUnknownStateAndBadMergedAt(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{name: "unknown state", raw: `[{"number":1,"state":"WEIRD"}]`},
+		{name: "malformed mergedAt", raw: `[{"number":1,"state":"MERGED","mergedAt":"yesterday"}]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := decode([]byte(tt.raw)); err == nil {
+				t.Errorf("decode(%s) accepted it", tt.raw)
+			}
+		})
+	}
+}
+
+func TestDecodeAcceptsEmptyMergedAt(t *testing.T) {
+	t.Parallel()
+
+	got, err := decode([]byte(`[{"number":1,"state":"OPEN","mergedAt":""}]`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 || !got[0].MergedAt.IsZero() {
+		t.Errorf("decode = %+v, want one PR with zero MergedAt", got)
 	}
 }
 

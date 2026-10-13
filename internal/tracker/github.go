@@ -1,13 +1,25 @@
 package tracker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 )
+
+const listLimit = 100
+
+type fullPageError struct{ limit int }
+
+func (e *fullPageError) Error() string {
+	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
+}
 
 type githubSource struct {
 	owner, repo string
@@ -21,7 +33,7 @@ func newGithubSource(owner, repo string) *githubSource {
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 
 func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
-	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", "100")
+	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +42,7 @@ func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 
 func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, error) {
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
-		"--label", feature, "--json", "number,title,body,url,labels", "--limit", "100")
+		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +70,7 @@ func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, e
 }
 
 func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, error) {
-	out, err := s.run(ctx, "api", fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", s.nwo(), number))
+	out, err := s.run(ctx, "api", "--paginate", fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", s.nwo(), number))
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +96,9 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 			features = append(features, Feature(label.Name))
 		}
 	}
+	if len(decoded) >= listLimit {
+		return nil, fmt.Errorf("read labels: %w", &fullPageError{limit: listLimit})
+	}
 	return features, nil
 }
 
@@ -99,6 +114,9 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 	var decoded []rawIssue
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return nil, fmt.Errorf("unmarshal issue list: %w", err)
+	}
+	if len(decoded) >= listLimit {
+		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
 	}
 	return decoded, nil
 }
@@ -118,16 +136,22 @@ type rawDependency struct {
 }
 
 func decodeBlockedBy(raw []byte) ([]string, error) {
-	var decoded []rawDependency
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
-	}
-	urls := make([]string, 0, len(decoded))
-	for _, dep := range decoded {
-		if dep.State == "closed" {
-			continue
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	urls := []string{}
+	for pages := 0; ; pages++ {
+		var page []rawDependency
+		err := dec.Decode(&page)
+		if errors.Is(err, io.EOF) && pages > 0 {
+			return urls, nil
 		}
-		urls = append(urls, dep.HTMLURL)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
+		}
+		for _, dep := range page {
+			if dep.State == "closed" {
+				continue
+			}
+			urls = append(urls, dep.HTMLURL)
+		}
 	}
-	return urls, nil
 }
