@@ -5,7 +5,9 @@ package gh
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
@@ -67,6 +69,10 @@ type Snapshot struct {
 	ByBranch map[string]PR `json:"by_branch"`
 }
 
+const listLimit = 100
+
+var errFullPage = errors.New("gh list returned a full page, results may be truncated")
+
 // gh pr list's own defaults (--state open --limit 30) would hide merged PRs and truncate.
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
 	"statusCheckRollup,author,labels,mergedAt"
@@ -76,13 +82,16 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
 func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := run(ctx, repoPath, "pr", "list", "--state", "open", "--limit", "100", "--json", bulkFields)
+	out, err := run(ctx, repoPath, "pr", "list", "--state", "open", "--limit", strconv.Itoa(listLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, err
 	}
 	prs, err := decode(out)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("decode pr list for %s: %w", repoPath, err)
+	}
+	if len(prs) >= listLimit {
+		return Snapshot{}, fmt.Errorf("read pr list for %s at --limit %d: %w", repoPath, listLimit, errFullPage)
 	}
 
 	byBranch := make(map[string]PR, len(tracked))
@@ -171,7 +180,7 @@ func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 
 // IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
 func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", "100")
+	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +195,9 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 	var decoded []rawIssue
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return nil, fmt.Errorf("unmarshal issue list: %w", err)
+	}
+	if len(decoded) >= listLimit {
+		return nil, fmt.Errorf("read issues at --limit %d: %w", listLimit, errFullPage)
 	}
 	titles := make(map[string]string, len(decoded))
 	for _, issue := range decoded {
@@ -246,6 +258,14 @@ func decode(raw []byte) ([]PR, error) {
 		for _, l := range r.Labels {
 			labels = append(labels, l.Name)
 		}
+		state, err := parseState(r.State)
+		if err != nil {
+			return nil, fmt.Errorf("decode pr %d: %w", r.Number, err)
+		}
+		mergedAt, err := parseMergedAt(r.MergedAt)
+		if err != nil {
+			return nil, fmt.Errorf("decode pr %d: %w", r.Number, err)
+		}
 		prs = append(prs, PR{
 			Number:      r.Number,
 			HeadRef:     r.HeadRefName,
@@ -254,33 +274,36 @@ func decode(raw []byte) ([]PR, error) {
 			BaseOid:     r.BaseRefOid,
 			AuthorLogin: r.Author.Login,
 			IsDraft:     r.IsDraft,
-			State:       parseState(r.State),
+			State:       state,
 			Checks:      normalise(r.StatusCheckRollup),
 			Labels:      labels,
-			MergedAt:    parseMergedAt(r.MergedAt),
+			MergedAt:    mergedAt,
 		})
 	}
 	return prs, nil
 }
 
-func parseMergedAt(s string) time.Time {
+func parseMergedAt(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		return time.Time{}
+		return time.Time{}, fmt.Errorf("parse mergedAt: %w", err)
 	}
-	return t
+	return t, nil
 }
 
-func parseState(s string) PRState {
+func parseState(s string) (PRState, error) {
 	switch s {
 	case "OPEN":
-		return Open
+		return Open, nil
 	case "MERGED":
-		return Merged
+		return Merged, nil
 	case "CLOSED":
-		return Closed
+		return Closed, nil
 	default:
-		return Absent
+		return Absent, fmt.Errorf("unknown pr state %q", s)
 	}
 }
 
