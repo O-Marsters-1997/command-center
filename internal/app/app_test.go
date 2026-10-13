@@ -3,10 +3,12 @@ package app_test
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -166,6 +168,39 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("Run did not return within the shutdown budget")
+	}
+}
+
+func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
+	configPath := appConfig(t)
+
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("hold a port: %v", err)
+	}
+	t.Cleanup(func() { _ = held.Close() })
+	port := held.Addr().(*net.TCPAddr).Port
+	if err := os.WriteFile(configPath, []byte("port = "+strconv.Itoa(port)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
+	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, app.WithObserver(stub))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = inst.Close() })
+
+	done := make(chan error, 1)
+	go func() { done <- inst.Run(t.Context()) }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("Run = nil, want the bind error")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Run kept running though the server could not bind")
 	}
 }
 

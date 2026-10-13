@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
@@ -133,6 +135,10 @@ func (a *App) Handler() http.Handler { return a.server }
 
 // Run ticks and serves until the context is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	g, ctx := errgroup.WithContext(ctx)
+
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(a.cfg.Port)),
 		Handler:           a.server,
@@ -144,21 +150,26 @@ func (a *App) Run(ctx context.Context) error {
 
 	a.logger.Info("serving", "addr", "http://"+srv.Addr)
 
-	errs := make(chan error, 2)
-	go func() { errs <- a.loop.Run(ctx) }()
-	go func() {
+	g.Go(func() error {
+		defer stop()
+		return a.loop.Run(ctx)
+	})
+	g.Go(func() error {
+		defer stop()
 		err := srv.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			errs <- nil
-			return
+			return nil
 		}
-		errs <- fmt.Errorf("serve %s: %w", srv.Addr, err)
-	}()
+		return fmt.Errorf("serve %s: %w", srv.Addr, err)
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdown)
+	})
 
-	<-ctx.Done()
-	shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	return errors.Join(srv.Shutdown(shutdown), <-errs, <-errs)
+	return g.Wait()
 }
 
 func (a *App) Close() error { return errors.Join(a.store.Close(), a.lock.Close()) }
