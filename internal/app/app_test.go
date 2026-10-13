@@ -141,7 +141,7 @@ func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	}
 }
 
-// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main calls log.Fatalf on any
+// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main exits 1 on any
 // non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
 // exit status 1.
 func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
