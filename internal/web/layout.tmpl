@@ -197,7 +197,7 @@
     </nav>
   </details>
   <div class="rail-search-wrap">
-    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
+    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
     {{template "icon" "search"}}<kbd aria-hidden="true">⌘K</kbd>
   </div>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>

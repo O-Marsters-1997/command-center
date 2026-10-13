@@ -41,5 +41,6 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 		return err
 	}
 	page.Toast = "Queued " + verb
+	page.ResetComposer = verb == "follow-up"
 	return renderHTML(w, "sessionActions", page)
 }

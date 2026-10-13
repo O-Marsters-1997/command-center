@@ -160,11 +160,33 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 		"acme/badtoml":  "refused",
 	} {
 		rec := get(t, server, "/repos/banner?repo="+repo)
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusOK && rec.Code != 286 {
 			t.Fatalf("GET banner %s: %d: %s", repo, rec.Code, rec.Body)
 		}
 		if want := `data-state="` + word + `"`; !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("banner for %s lacks %s:\n%s", repo, want, rec.Body)
 		}
+	}
+}
+
+func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
+	st := openStore(t)
+	server := openServer(st, fixedClock(testNow), "")
+	postTrack(t, server, "acme/new", true)
+
+	if rec := get(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != http.StatusOK {
+		t.Errorf("a cloning banner = %d, want 200 so it keeps polling", rec.Code)
+	}
+
+	repo := storepkg.Repo{
+		Name: "acme/new", Remote: "git@github.com:acme/new.git", State: storepkg.RepoReady, TrackedAt: testNow,
+	}
+	if err := st.UpsertRepo(t.Context(), repo); err != nil {
+		t.Fatal(err)
+	}
+	consumeTrack(t, st)
+
+	if rec := get(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != 286 {
+		t.Errorf("a ready banner = %d, want 286 to stop the poll", rec.Code)
 	}
 }
