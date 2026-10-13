@@ -160,7 +160,7 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 		"acme/badtoml":  "refused",
 	} {
 		rec := get(t, server, "/repos/banner?repo="+repo)
-		if rec.Code != http.StatusOK && rec.Code != 286 {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("GET banner %s: %d: %s", repo, rec.Code, rec.Body)
 		}
 		if want := `data-state="` + word + `"`; !strings.Contains(rec.Body.String(), want) {

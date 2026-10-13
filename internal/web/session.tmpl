@@ -109,7 +109,7 @@
   <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .ActionVerbs}}
-    <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+    <form method="post" action="/verb" hx-post="/verb" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
       <button class="btn" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>

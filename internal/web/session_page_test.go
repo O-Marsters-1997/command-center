@@ -335,6 +335,7 @@ func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
 		t.Errorf("session with no feature carries data-key=\"f\":\n%s", body)
 	}
 }
+
 func TestSessionComposerIsOutsideEveryPolledElement(t *testing.T) {
 	t.Parallel()
 	st, _ := sessionStore(t, "agent", "p", true, true)
