@@ -173,8 +173,14 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 
 	cfg := config.Config{DataDir: ws.DataDir, MaxAgents: maxAgents, AgentCommand: []string{"demo-agent"}}
 	for _, repo := range sb.Repos(clock.Now()) {
-		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, config.CheckoutPath(cfg.DataDir, repo.Name)); err != nil {
+		checkout := config.CheckoutPath(cfg.DataDir, repo.Name)
+		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, checkout); err != nil {
 			return nil, err
+		}
+		for _, kv := range [][2]string{{"user.name", authorName}, {"user.email", authorEmail}} {
+			if _, err := git(checkout, "config", kv[0], kv[1]); err != nil {
+				return nil, err
+			}
 		}
 		if err := st.UpsertRepo(ctx, repo); err != nil {
 			return nil, err
@@ -250,6 +256,9 @@ func (s *Sim) Tick(ctx context.Context) error {
 		return err
 	}
 	s.board = states
+	if err := s.resolveConflicts(ctx, states); err != nil {
+		return err
+	}
 	if err := s.launchReady(states); err != nil {
 		return err
 	}
@@ -320,7 +329,7 @@ func (s *Sim) states() (map[string]string, error) {
 	rows := strings.Split(rec.Body.String(), "<tr")
 	states := make(map[string]string, len(s.issues))
 	for _, i := range s.issues {
-		ref := fmt.Sprintf(">#%s</button>", path.Base(i.url))
+		ref := fmt.Sprintf(`href="/s/%s/%s"`, i.Repo, path.Base(i.url))
 		for _, row := range rows {
 			if !strings.Contains(row, ref) {
 				continue
@@ -331,6 +340,33 @@ func (s *Sim) states() (map[string]string, error) {
 		}
 	}
 	return states, nil
+}
+
+func (s *Sim) resolveConflicts(ctx context.Context, states map[string]string) error {
+	for _, i := range s.issues {
+		if states[i.ID] != "refresh_conflicted" {
+			continue
+		}
+		checkout := config.CheckoutPath(s.sandbox.root, i.Repo)
+		worktrees, err := ccgit.WorktreePaths(ctx, checkout)
+		if err != nil {
+			return err
+		}
+		dir, ok := worktrees[i.branch]
+		if !ok {
+			return fmt.Errorf("no worktree for conflicted branch %s", i.branch)
+		}
+		if _, err := git(dir, "checkout", "--ours", "--", "."); err != nil {
+			return err
+		}
+		if _, err := git(dir, "add", "-A"); err != nil {
+			return err
+		}
+		if _, err := git(dir, "commit", "-q", "--no-edit"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Sim) launchReady(states map[string]string) error {

@@ -116,8 +116,8 @@ func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
 	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home>`) {
 		t.Errorf("the bare root is not marked as home:\n%s", body)
 	}
-	if body := renderPath(t, server, "/tickets"); strings.Contains(body, "data-home") {
-		t.Errorf("a destination is marked as home:\n%s", body)
+	if body := renderPath(t, server, "/tickets"); !strings.Contains(body, `<main id="main">`) {
+		t.Errorf("a destination's main is not the plain, non-home element:\n%s", body)
 	}
 	if body := renderPath(t, server, "/insights"); !strings.Contains(body, `class="back"`) {
 		t.Errorf("an opened page has no back link:\n%s", body)
@@ -212,6 +212,8 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 	}
 }
 
+const railBanner = `<p class="rail-health banner ribbon"`
+
 func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	t.Parallel()
 
@@ -219,7 +221,7 @@ func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	now := observedAt.Add(45 * time.Second)
 
 	quiet := newServer(shellStore(t, &observedAt, ""), now)
-	if body := renderPath(t, quiet, "/rail"); strings.Contains(body, "banner") {
+	if body := renderPath(t, quiet, "/rail"); strings.Contains(body, railBanner) {
 		t.Errorf("a banner opened with no failed tick:\n%s", body)
 	}
 
@@ -244,10 +246,10 @@ func TestRailBannerClosesOnceATickSucceeds(t *testing.T) {
 	}
 
 	body := flattenTimes(renderPath(t, newServer(store, now), "/rail"))
-	if strings.Contains(body, "banner") {
+	if strings.Contains(body, railBanner) {
 		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
 	}
-	if !strings.Contains(body, "observed 2s ago") {
+	if !strings.Contains(body, `<p class="rail-health">`) || !strings.Contains(body, "observed 2s ago") {
 		t.Errorf("the chip does not read quietly after a tick recovered:\n%s", body)
 	}
 }
@@ -257,13 +259,13 @@ func TestRailCountsLiveAgents(t *testing.T) {
 
 	now := testNow
 	live := newServer(detailStore(t, writeLog(t, 1), now, now), now)
-	if body := renderPath(t, live, "/rail"); !strings.Contains(body, "1 live") {
+	if body := renderPath(t, live, "/rail"); !strings.Contains(body, `<p class="rail-health">1 live`) {
 		t.Errorf("rail does not count the one live agent:\n%s", body)
 	}
 
 	idle := newServer(shellStore(t, &now, ""), now)
 	body := renderPath(t, idle, "/rail")
-	if !strings.Contains(body, "0 live") {
+	if !strings.Contains(body, `<p class="rail-health">0 live`) {
 		t.Errorf("rail does not count zero live agents:\n%s", body)
 	}
 }

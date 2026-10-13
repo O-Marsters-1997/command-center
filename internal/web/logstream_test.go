@@ -239,19 +239,39 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 func readEvent(t *testing.T, r *bufio.Reader) string {
 	t.Helper()
 
-	var event strings.Builder
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			t.Fatalf("reading the stream: %v", err)
-		}
-		if strings.TrimSpace(line) == "" {
-			if event.Len() > 0 {
-				return event.String()
+	type result struct {
+		event string
+		err   error
+	}
+	got := make(chan result, 1)
+	go func() {
+		var event strings.Builder
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				got <- result{err: err}
+				return
 			}
-			continue
+			if strings.TrimSpace(line) == "" {
+				if event.Len() > 0 {
+					got <- result{event: event.String()}
+					return
+				}
+				continue
+			}
+			event.WriteString(line)
 		}
-		event.WriteString(line)
+	}()
+
+	select {
+	case res := <-got:
+		if res.err != nil {
+			t.Fatalf("reading the stream: %v", res.err)
+		}
+		return res.event
+	case <-time.After(5 * time.Second):
+		t.Fatal("no event arrived from the stream within 5s")
+		return ""
 	}
 }
 

@@ -138,6 +138,7 @@ func TestEnsureCheckoutRefuses(t *testing.T) {
 // a checkout cloned over ssh, configured over https, is one repository.
 func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 	_, repoPath := repoWithOrigin(t)
+	t.Setenv("GIT_SSH_COMMAND", "false")
 	runGit(t, "-C", repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
 
 	// The fetch that follows fails, since git@github.com:o/r is not a repository anyone can

@@ -10,12 +10,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
-const serverEnv = "CC_TEST_DATABASE_URL"
+const (
+	serverEnv    = "CC_TEST_DATABASE_URL"
+	startTimeout = 2 * time.Minute
+)
 
 var (
 	serverOnce sync.Once
@@ -30,20 +34,28 @@ func server() (string, error) {
 			serverDSN = dsn
 			return
 		}
-		ctx := context.Background()
-		container, err := postgres.Run(ctx, "postgres:17",
-			postgres.WithDatabase("cc"),
-			postgres.WithUsername("cc"),
-			postgres.WithPassword("cc"),
-			postgres.BasicWaitStrategies(),
-		)
-		if err != nil {
-			serverErr = fmt.Errorf("start postgres container: %w", err)
-			return
-		}
-		serverDSN, serverErr = container.ConnectionString(ctx, "sslmode=disable")
+		ctx, cancel := context.WithTimeout(context.Background(), startTimeout)
+		defer cancel()
+		serverDSN, serverErr = startContainer(ctx)
 	})
 	return serverDSN, serverErr
+}
+
+func startContainer(ctx context.Context) (string, error) {
+	container, err := postgres.Run(ctx, "postgres:17",
+		postgres.WithDatabase("cc"),
+		postgres.WithUsername("cc"),
+		postgres.WithPassword("cc"),
+		postgres.BasicWaitStrategies(),
+	)
+	if err != nil {
+		return "", fmt.Errorf("start postgres container (set %s to use a running server): %w", serverEnv, err)
+	}
+	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		return "", fmt.Errorf("read postgres container address (set %s to use a running server): %w", serverEnv, err)
+	}
+	return dsn, nil
 }
 
 // DSN returns a connection string for an empty database, dropped when the test ends.

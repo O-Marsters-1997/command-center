@@ -8,6 +8,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
+const openMarker = `<span class="text-muted text-[0.85em]">open</span>`
+
 func TestBoardNamesAnOutOfScopeGroupMembersOwnRepo(t *testing.T) {
 	t.Parallel()
 
@@ -82,7 +84,7 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 		`data-kind="agent" style="flex-grow: 1.5"`,
 		`data-kind="follow_up" style="flex-grow: 0.25"`,
 		"1.75% week",
-		"open",
+		openMarker,
 	}
 	for _, want := range wants {
 		if !strings.Contains(got, want) {
@@ -104,7 +106,7 @@ func TestBoardTemplateOmitsOpenForAMergedTicket(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	if got := buf.String(); strings.Contains(got, "open") {
-		t.Errorf("board contains \"open\" for a merged ticket:\n%s", got)
+	if got := buf.String(); strings.Contains(got, openMarker) {
+		t.Errorf("board contains the open marker for a merged ticket:\n%s", got)
 	}
 }

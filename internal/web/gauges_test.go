@@ -79,7 +79,7 @@ func TestNoticeNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 	server.SetSpendLimit5h(80)
 	board := renderPath(t, server, "/tickets")
 
-	if !strings.Contains(board, "spend_limit_5h") {
+	if !strings.Contains(board, "spawning paused: five-hour usage is 82%, at or above the spend_limit_5h of 80%.") {
 		t.Errorf("page does not name spend_limit_5h as the reason spawning is paused:\n%s", board)
 	}
 }
@@ -101,7 +101,7 @@ func TestNoticeStaysSilentBelowSpendLimit5h(t *testing.T) {
 	server.SetSpendLimit5h(80)
 	board := renderPath(t, server, "/tickets")
 
-	if strings.Contains(board, "spend_limit_5h") {
+	if strings.Contains(board, "spawning paused") {
 		t.Errorf("page names spend_limit_5h though the reading is below it:\n%s", board)
 	}
 }

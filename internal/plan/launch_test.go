@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -27,6 +28,15 @@ func TestLaunchPlan(t *testing.T) {
 			},
 			maxAgents: 1,
 			want:      []string{"sandbox://CC-1"},
+		},
+		{
+			name: "eligible candidates launch in input order",
+			candidates: []plan.LaunchCandidate{
+				{URL: "sandbox://CC-2", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
+			},
+			maxAgents: 2,
+			want:      []string{"sandbox://CC-2", "sandbox://CC-1"},
 		},
 		{
 			name: "a locked candidate is excluded",
@@ -107,7 +117,7 @@ func TestLaunchPlan(t *testing.T) {
 			t.Parallel()
 
 			got := plan.LaunchPlan(tt.candidates, tt.currentlyRunning, tt.maxAgents, tt.spendPaused)
-			if !equalUnordered(got, tt.want) || len(got) != len(tt.want) {
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("LaunchPlan() = %v, want %v", got, tt.want)
 			}
 		})

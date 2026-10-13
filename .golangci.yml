@@ -87,7 +87,7 @@ linters:
         text: time\.Now
         linters:
           - forbidigo
-      - path: ^internal/(app|command|config|git)/.*_test\.go$
+      - path: ^internal/(app|cctest|command|config|git)/.*_test\.go$
         text: Error
         linters:
           - forbidigo
