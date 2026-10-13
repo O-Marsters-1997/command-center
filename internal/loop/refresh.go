@@ -3,9 +3,10 @@ package loop
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -146,24 +147,24 @@ func (l *Loop) refreshOne(
 	return l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand)
 }
 
-const maxVerifyDetail = 4000
+const (
+	maxVerifyDetail = 4000
+	verifyTimeout   = 10 * time.Minute
+)
 
 func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath string, argv []string) error {
 	if len(argv) == 0 {
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Dir = worktreePath
-	out, err := cmd.CombinedOutput()
+	out, err := command.OutputWithin(ctx, verifyTimeout, worktreePath, argv[0], argv[1:]...)
 	if err == nil {
 		return nil
 	}
-	detail := strings.TrimSpace(string(out))
+	detail := strings.TrimSpace(err.Error() + "\n" + string(out))
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}
-	return l.event(ctx, ticket.URL, store.EventVerificationFailed,
-		fmt.Sprintf("%s: %s: %s", strings.Join(argv, " "), err, detail))
+	return l.event(ctx, ticket.URL, store.EventVerificationFailed, detail)
 }
 
 func advanceOnto(

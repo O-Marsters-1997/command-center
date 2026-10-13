@@ -2,9 +2,12 @@ package git
 
 import (
 	"context"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 )
+
+const longTimeout = 10 * time.Minute
 
 // Worktrees is every tp call the reconcile loop and its verbs make. CLI is the real one; a test
 // substitutes its own.
@@ -18,7 +21,7 @@ type CLI struct{}
 
 // New cuts a worktree for branch off baseRef via `tp new`, run inside repoPath.
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	return command.Run(ctx, repoPath, "tp", "new", branch, "--base", baseRef)
+	return command.RunWithin(ctx, longTimeout, repoPath, "tp", "new", branch, "--base", baseRef)
 }
 
 // RemoveMode selects which of tp's own removal checks the caller is asking it to run.

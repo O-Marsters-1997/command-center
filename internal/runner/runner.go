@@ -106,6 +106,9 @@ func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, err
 		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
 	}
 	argv := buildArgv(cfg)
+	if len(argv) == 0 {
+		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command builds an empty argv")
+	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cfg.WorktreePath
 	cmd.Stdout = cfg.LogFile
