@@ -290,7 +290,7 @@ The layout uses a 4px grid and a shell with two panes and an optional third.
 - **Rail anatomy.** From the top: a 44px head with the mark and the launch button, a 30px search
   field with a `⌘K` key hint, then the nav. Below that are three sections: Needs you (cards),
   In flight (feature groups with 28px heads and 30px rows), and Settled (collapsed). A footer
-  holds the 5h and week meters, the shortcuts button and log out.
+  holds the 5h and week meters, and the shortcuts button.
 - **Top bar.** 44px: breadcrumbs on the left and at most one secondary action on the right.
 - **Page anatomy.** 28px padding. A 22px title, a muted one-line purpose, then modules titled at
   15px with 28px between modules. Content is capped at 1100px, or 880px on narrow pages.

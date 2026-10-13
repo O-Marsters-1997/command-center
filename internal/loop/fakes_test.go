@@ -1,14 +1,10 @@
 package loop_test
 
 import (
-	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -32,53 +28,6 @@ func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 		}
 	})
 	return store
-}
-
-func execSQL(t *testing.T, dsn, query string, args ...any) {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.Exec(query, args...); err != nil {
-		t.Fatalf("%s: %v", query, err)
-	}
-}
-
-func seedUserWithSessions(t *testing.T, dsn string, tokens map[string]time.Time) {
-	t.Helper()
-	execSQL(t, dsn,
-		`INSERT INTO users (email, password_hash, created_at) VALUES ('olly@example.com', 'h', now())`)
-	for token, expiresAt := range tokens {
-		execSQL(t, dsn,
-			`INSERT INTO sessions (user_id, token_sha, created_at, expires_at)
-			 SELECT id, $1, now(), $2 FROM users LIMIT 1`,
-			token, expiresAt)
-	}
-}
-
-func sessionTokens(t *testing.T, dsn string) []string {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	rows, err := db.Query(`SELECT token_sha FROM sessions ORDER BY token_sha`)
-	if err != nil {
-		t.Fatalf("query sessions: %v", err)
-	}
-	defer func() { _ = rows.Close() }()
-	var tokens []string
-	for rows.Next() {
-		var token string
-		if err := rows.Scan(&token); err != nil {
-			t.Fatalf("scan session token: %v", err)
-		}
-		tokens = append(tokens, token)
-	}
-	return tokens
 }
 
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so

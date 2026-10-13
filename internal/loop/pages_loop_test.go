@@ -19,9 +19,7 @@ import (
 )
 
 func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Server {
-	server := web.NewServer(st, clock, dataDir)
-	server.AllowAnonymous()
-	return server
+	return web.NewServer(st, clock, dataDir)
 }
 
 func renderPage(t *testing.T, server *web.Server) string {

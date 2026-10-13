@@ -202,8 +202,6 @@
   }
 
   input[type="text"],
-  input[type="email"],
-  input[type="password"],
   input[type="search"] {
     min-height: 30px;
     padding: 0 var(--space-3);
@@ -221,8 +219,6 @@
   }
 
   input[type="text"]:focus-visible,
-  input[type="email"]:focus-visible,
-  input[type="password"]:focus-visible,
   input[type="search"]:focus-visible {
     border-color: var(--color-accent-line);
     box-shadow: 0 0 0 3px var(--color-accent-soft);

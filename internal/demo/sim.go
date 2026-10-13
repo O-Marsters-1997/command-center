@@ -188,7 +188,6 @@ func NewSim(ctx context.Context, sc Scenario) (_ *Sim, err error) {
 	server := web.NewServer(st, clock, ws.DataDir)
 	server.SetTrackerSource(resolve)
 	server.SetBoardPollSeconds(1)
-	server.AllowAnonymous()
 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,

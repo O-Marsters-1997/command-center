@@ -21,8 +21,6 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Store is the Postgres database. Only the loop goroutine writes reconciled state;
-// CreateUser is the one exception, and handlers only queue intents.
 type Store struct {
 	db *sql.DB
 	q  *ccdb.Queries
