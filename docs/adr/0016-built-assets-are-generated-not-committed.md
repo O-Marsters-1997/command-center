@@ -15,7 +15,10 @@ guards) belongs inside Biome, `tsc` and `bun test`, not in hand-written JavaScri
 ## Decision
 
 - Client code is strict TypeScript in `web/src`, with pure logic separate from the DOM listener and
-  unit-tested. The keyboard dispatcher is `web/src/keys.ts`.
+  unit-tested. The keyboard dispatcher is `web/src/keys.ts`; page-wide glue (relative times, the
+  rail cookie, the current-link marks, the home page's desktop redirect) is `web/src/glue.ts`.
+- Templates carry no inline `<script>`, `on*` attribute, `hx-on` or JavaScript trigger filter. A
+  template hands data to the glue through `data-*` attributes, and htmx runs with `allowEval:false`.
 - Vite builds the scripts and their shared chunk, and Tailwind builds `app.css`, all into
   `internal/web/assets/dist` with hash-free names. `just assets` generates the directory and git
   ignores everything in it except `.gitkeep`.
@@ -28,6 +31,6 @@ guards) belongs inside Biome, `tsc` and `bun test`, not in hand-written JavaScri
 ## Consequences
 
 A binary built with plain `go build` and no `just assets` serves 404s for `/assets/app.css` and the
-scripts: it renders unstyled and has no keys or islands. Release builds run `just assets` first.
+scripts: it renders unstyled and has no keys, islands, live times or desktop redirect from `/`. Release builds run `just assets` first.
 Template and `web/src` edits touch no committed build output. Single-character shortcuts still owe
 WCAG 2.1.4 a way to switch them off.
