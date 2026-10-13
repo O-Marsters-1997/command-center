@@ -6,7 +6,7 @@
     "stdout": "[{\"number\":43,\"headRefName\":\"cc-2-x\",\"headRefOid\":\"aaaa000000000000000000000000000000000000\",\"baseRefName\":\"cc-1-x\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":44,\"headRefName\":\"cc-3-x\",\"headRefOid\":\"bbbb000000000000000000000000000000000000\",\"baseRefName\":\"cc-1-x\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":45,\"headRefName\":\"cc-4-x\",\"headRefOid\":\"cccc000000000000000000000000000000000000\",\"baseRefName\":\"cc-1-x\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}},{\"number\":46,\"headRefName\":\"cc-5-x\",\"headRefOid\":\"dddd000000000000000000000000000000000000\",\"baseRefName\":\"cc-1-x\",\"baseRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"isDraft\":false,\"state\":\"OPEN\",\"statusCheckRollup\":[],\"author\":{\"login\":\"cc-bot\"}}]\n"
   },
   "pr list --state all --head cc-1-x": {
-    "stdout": "[{\"number\":42,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\",\"labels\":[]}]\n"
+    "stdout": "[{\"number\":42,\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefOid\":\"{{head}}\",\"labels\":[]}]\n"
   },
   "pr edit": {
     "stdout": "https://example.com/owner/repo/pull/43\n"

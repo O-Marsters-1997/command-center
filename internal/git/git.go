@@ -102,10 +102,11 @@ func BranchTip(ctx context.Context, repoPath, branch string) (string, error) {
 
 // DeleteBranchIfExists removes branch's local ref, doing nothing if it has none.
 func DeleteBranchIfExists(ctx context.Context, repoPath, branch string) error {
-	if _, err := RevParse(ctx, repoPath, "refs/heads/"+branch); err != nil {
-		return nil
+	exists, err := refExists(ctx, repoPath, "refs/heads/"+branch)
+	if err != nil || !exists {
+		return err
 	}
-	_, err := git(ctx, repoPath, "branch", "-D", branch)
+	_, err = git(ctx, repoPath, "branch", "-D", branch)
 	return err
 }
 
@@ -116,6 +117,14 @@ func RevParse(ctx context.Context, repoPath, ref string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func TipIfPresent(ctx context.Context, repoPath, ref string) (sha string, present bool, err error) {
+	out, ok, err := gitRun(ctx, repoPath, "rev-parse", "--verify", "-q", ref)
+	if err != nil || !ok {
+		return "", false, err
+	}
+	return strings.TrimSpace(string(out)), true, nil
 }
 
 // ShowFile reads path's content at ref without touching the working tree.
@@ -179,9 +188,10 @@ func CommitsSince(ctx context.Context, repoPath, baselineSHA, ref string) (int, 
 type RemovalState int
 
 const (
+	RemovalUnknown RemovalState = iota
 	// RemovableByMerged: the remote-tracking ref still resolves, so tp remove --merged can
 	// still check the branch itself.
-	RemovableByMerged RemovalState = iota
+	RemovableByMerged
 	// RemovableByForce: the ref is gone, but the branch sits exactly where this app last
 	// pushed it or at the merged PR's head (docs/adr/0007-cc-proves-what-tp-cannot.md).
 	RemovableByForce
@@ -192,12 +202,16 @@ const (
 // RemovalStateFor resolves branch's RemovalState; a local tip equal to any of provenTips counts
 // as removable by force.
 func RemovalStateFor(ctx context.Context, repoPath, branch string, provenTips ...string) (RemovalState, error) {
-	if _, err := RevParse(ctx, repoPath, "refs/remotes/origin/"+branch); err == nil {
+	tracked, err := refExists(ctx, repoPath, "refs/remotes/origin/"+branch)
+	if err != nil {
+		return RemovalUnknown, err
+	}
+	if tracked {
 		return RemovableByMerged, nil
 	}
 	local, err := RevParse(ctx, repoPath, "refs/heads/"+branch)
 	if err != nil {
-		return NotRemovable, err
+		return RemovalUnknown, err
 	}
 	if local == "" || !slices.Contains(provenTips, local) {
 		return NotRemovable, nil

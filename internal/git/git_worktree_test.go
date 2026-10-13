@@ -284,3 +284,47 @@ func resolveRebase(t *testing.T, worktree string) {
 		t.Fatalf("git rebase --continue: %v: %s", err, out)
 	}
 }
+
+func TestRemovalStateForAPathThatIsNotARepoIsAnErrorNotRemovable(t *testing.T) {
+	t.Parallel()
+
+	got, err := RemovalStateFor(t.Context(), t.TempDir(), "main")
+	if err == nil {
+		t.Fatalf("RemovalStateFor(not a repo) = %v, nil; want an error", got)
+	}
+	if got != RemovalUnknown {
+		t.Errorf("state = %v, want RemovalUnknown", got)
+	}
+}
+
+func TestDeleteBranchIfExistsOnAPathThatIsNotARepoIsAnError(t *testing.T) {
+	t.Parallel()
+
+	if err := DeleteBranchIfExists(t.Context(), t.TempDir(), "main"); err == nil {
+		t.Error("DeleteBranchIfExists(not a repo) = nil, want an error")
+	}
+}
+
+func TestTipIfPresent(t *testing.T) {
+	t.Parallel()
+
+	dir := initRepoForGitTest(t)
+	want, err := RevParse(t.Context(), dir, "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, present, err := TipIfPresent(t.Context(), dir, "refs/heads/main")
+	if err != nil || !present || got != want {
+		t.Errorf("TipIfPresent(main) = %q, %v, %v; want %q, true, nil", got, present, err, want)
+	}
+
+	_, present, err = TipIfPresent(t.Context(), dir, "refs/heads/absent")
+	if err != nil || present {
+		t.Errorf("TipIfPresent(absent) = _, %v, %v; want false, nil", present, err)
+	}
+
+	if _, _, err := TipIfPresent(t.Context(), t.TempDir(), "refs/heads/main"); err == nil {
+		t.Error("TipIfPresent(not a repo) = nil error, want one")
+	}
+}
