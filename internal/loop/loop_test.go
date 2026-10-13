@@ -52,12 +52,6 @@ func (c *manualClock) After(d time.Duration) <-chan time.Time {
 	return ch
 }
 
-func (c *manualClock) waiting() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.waiters)
-}
-
 func (c *manualClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

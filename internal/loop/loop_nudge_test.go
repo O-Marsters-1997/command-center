@@ -40,7 +40,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 			return plan.Observation{}, nil
 		}
 		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-		lp := loop.NewLoop(discardLog, store,observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 		stop := runLoop(t.Context(), t, lp)
 
 		synctest.Wait()
@@ -78,7 +78,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 			return plan.Observation{}, nil
 		}
 		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-		lp := loop.NewLoop(discardLog, store,observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 		stop := runLoop(t.Context(), t, lp)
 
 		synctest.Wait()

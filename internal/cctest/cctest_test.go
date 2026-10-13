@@ -7,7 +7,7 @@ import (
 )
 
 func TestStartContainerGivingUpNamesTheServerVariable(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, err := startContainer(ctx)
