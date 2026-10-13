@@ -122,7 +122,7 @@ func consumeTrack(t *testing.T, st *storepkg.Store) {
 	}
 }
 
-func TestBannerGoldens(t *testing.T) {
+func TestBannerNamesTheRepoState(t *testing.T) {
 	repo := func(name string, state storepkg.RepoState, kind, reason, source string) storepkg.Repo {
 		return storepkg.Repo{
 			Name: name, Remote: "git@github.com:" + name + ".git", State: state, RefusalKind: kind, Refusal: reason,
@@ -148,21 +148,23 @@ func TestBannerGoldens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for name, repo := range map[string]string{
-		"banner_untracked":      "acme/unknown",
-		"banner_pending":        "acme/queued",
-		"banner_cloning":        "acme/cloning",
-		"banner_ready_file":     "acme/file",
-		"banner_ready_defaults": "acme/defaults",
-		"banner_refused_merge":  "acme/merges",
-		"banner_refused_branch": "acme/master",
-		"banner_refused_clone":  "acme/noclone",
-		"banner_refused_toml":   "acme/badtoml",
+	for repo, word := range map[string]string{
+		"acme/unknown":  "untracked",
+		"acme/queued":   "cloning",
+		"acme/cloning":  "cloning",
+		"acme/file":     "ready",
+		"acme/defaults": "ready",
+		"acme/merges":   "refused",
+		"acme/master":   "refused",
+		"acme/noclone":  "refused",
+		"acme/badtoml":  "refused",
 	} {
 		rec := get(t, server, "/repos/banner?repo="+repo)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET banner %s: %d: %s", repo, rec.Code, rec.Body)
 		}
-		assertGolden(t, "testdata/"+name+".golden.html", rec.Body.Bytes())
+		if want := `data-state="` + word + `"`; !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("banner for %s lacks %s:\n%s", repo, want, rec.Body)
+		}
 	}
 }

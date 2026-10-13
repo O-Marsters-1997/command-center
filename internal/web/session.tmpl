@@ -100,7 +100,6 @@
       <dt>Branch</dt><dd class="mono">{{.Row.Branch}}</dd>
       <dt>PR</dt><dd>{{if .PRURL}}<a href="{{.PRURL}}" target="_blank" rel="noopener">#{{.Row.PRNumber}}</a>{{else}}—{{end}}</dd>
       <dt>Checks</dt><dd>{{if .Row.Checks}}{{.Row.ChecksPassed}}/{{len .Row.Checks}} passing{{else}}—{{end}}</dd>
-      <dt>Spend</dt><dd class="mono">{{if .Row.SpendSettled}}${{printf "%.2f" .Row.SpendUSD}}{{else}}—{{end}}</dd>
     </dl>
   </aside>
 </article>

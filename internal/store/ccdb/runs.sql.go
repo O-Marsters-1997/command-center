@@ -83,35 +83,6 @@ func (q *Queries) InsertCutFailedRun(ctx context.Context, arg InsertCutFailedRun
 	return id, err
 }
 
-const insertRunRequest = `-- name: InsertRunRequest :exec
-INSERT INTO run_requests
-  (run_id, request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type InsertRunRequestParams struct {
-	RunID               int64
-	RequestID           string
-	Thread              string
-	InputTokens         int64
-	CacheCreationTokens int64
-	CacheReadTokens     int64
-	OutputTokens        int64
-}
-
-func (q *Queries) InsertRunRequest(ctx context.Context, arg InsertRunRequestParams) error {
-	_, err := q.db.ExecContext(ctx, insertRunRequest,
-		arg.RunID,
-		arg.RequestID,
-		arg.Thread,
-		arg.InputTokens,
-		arg.CacheCreationTokens,
-		arg.CacheReadTokens,
-		arg.OutputTokens,
-	)
-	return err
-}
-
 const insertRunSkeleton = `-- name: InsertRunSkeleton :one
 INSERT INTO runs (ticket_id, kind, baseline_sha, prompt_hash, session_id, message)
 VALUES (
@@ -451,24 +422,16 @@ func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbI
 }
 
 const recordDisposition = `-- name: RecordDisposition :exec
-UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
-  tokens_in = $4, tokens_out = $5, turns = $6, duration_ms = $7, cost_usd = $8,
-  model = $9, metrics_settled = $10
-WHERE id = $11
+UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3, cost_usd = $4
+WHERE id = $5
 `
 
 type RecordDispositionParams struct {
-	Outcome        sql.NullString
-	ExitCode       sql.NullInt64
-	EndedAt        sql.NullTime
-	TokensIn       sql.NullInt64
-	TokensOut      sql.NullInt64
-	Turns          sql.NullInt64
-	DurationMs     sql.NullInt64
-	CostUsd        sql.NullFloat64
-	Model          sql.NullString
-	MetricsSettled sql.NullBool
-	ID             int64
+	Outcome  sql.NullString
+	ExitCode sql.NullInt64
+	EndedAt  sql.NullTime
+	CostUsd  sql.NullFloat64
+	ID       int64
 }
 
 func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) error {
@@ -476,13 +439,7 @@ func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionPa
 		arg.Outcome,
 		arg.ExitCode,
 		arg.EndedAt,
-		arg.TokensIn,
-		arg.TokensOut,
-		arg.Turns,
-		arg.DurationMs,
 		arg.CostUsd,
-		arg.Model,
-		arg.MetricsSettled,
 		arg.ID,
 	)
 	return err
@@ -540,50 +497,6 @@ func (q *Queries) RunIDsForTicket(ctx context.Context, ticketID sql.NullString) 
 			return nil, err
 		}
 		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const runRequestsForRun = `-- name: RunRequestsForRun :many
-SELECT request_id, thread, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens
-FROM run_requests WHERE run_id = $1 ORDER BY id
-`
-
-type RunRequestsForRunRow struct {
-	RequestID           string
-	Thread              string
-	InputTokens         int64
-	CacheCreationTokens int64
-	CacheReadTokens     int64
-	OutputTokens        int64
-}
-
-func (q *Queries) RunRequestsForRun(ctx context.Context, runID int64) ([]RunRequestsForRunRow, error) {
-	rows, err := q.db.QueryContext(ctx, runRequestsForRun, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []RunRequestsForRunRow
-	for rows.Next() {
-		var i RunRequestsForRunRow
-		if err := rows.Scan(
-			&i.RequestID,
-			&i.Thread,
-			&i.InputTokens,
-			&i.CacheCreationTokens,
-			&i.CacheReadTokens,
-			&i.OutputTokens,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

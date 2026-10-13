@@ -250,14 +250,6 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	row := readRunMetrics(t, dsn, runID)
-	if row.TokensIn.Int64 != 12 || row.TokensOut.Int64 != 8 {
-		t.Errorf("metrics = %+v, want the log's partial totals", row)
-	}
-	if !row.MetricsSettled.Valid || row.MetricsSettled.Bool {
-		t.Errorf("metrics_settled = %+v, want false (a killed run's log never reached a result line)", row.MetricsSettled)
-	}
-
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatal(err)

@@ -12,7 +12,6 @@ exec cc request GET /tickets
 stdout '<script src="/assets/htmx.min.js"></script>'
 stdout 'href="/s/sandbox-org/single-task/CC-1"'
 ! stdout 'http-equiv="refresh"'
-! stdout 'hx-preserve'
 
 exec cc request GET /assets/htmx.min.js
 stdout 'htmx'

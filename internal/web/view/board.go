@@ -53,8 +53,6 @@ type Row struct {
 	LogPath         string   `json:"log_path"`
 	CancelCount     int      `json:"cancel_count"`
 	SpendTokens     int      `json:"spend_tokens"`
-	SpendUSD        float64  `json:"spend_usd"`
-	SpendSettled    bool     `json:"spend_settled"`
 	BaselineSHA     string   `json:"baseline_sha"`
 	Checks          []Check  `json:"checks"`
 	RedChecks       []Check  `json:"red_checks"`
