@@ -1,5 +1,3 @@
-//go:build demo
-
 package demo
 
 import (
