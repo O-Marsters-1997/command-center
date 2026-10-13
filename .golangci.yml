@@ -77,14 +77,14 @@ linters:
         linters:
           - forbidigo
       - path: _test\.go
-        text: log\.(Print|Fatal|Panic)|time\.Now
+        text: time\.Now
         linters:
           - forbidigo
       - path: ^(cmd/cc/main\.go|internal/loop/clock\.go)$
         linters:
           - forbidigo
       - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/)
-        text: log\.(Print|Fatal|Panic)|time\.Now
+        text: time\.Now
         linters:
           - forbidigo
       - path: ^internal/(app|command|config|git)/.*_test\.go$

@@ -122,7 +122,7 @@ func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Open, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Open, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
@@ -201,7 +201,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	for i := range 5 {
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -226,7 +226,7 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
@@ -320,7 +320,7 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

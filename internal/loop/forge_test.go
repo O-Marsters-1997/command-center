@@ -91,7 +91,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	forge := &fakeForge{t: t, remote: filepath.Join(root, "remote.git")}
 	runner := runner.NewFake()
-	lp := loop.NewLoop(store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner)
+	lp := loop.NewLoop(discardLog, store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner)
 	lp.SetForge(forge)
 	lp.SetTrackerSource(resolve)
 
