@@ -150,8 +150,6 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
-	l.sweepExpiredSessions(ctx)
-
 	if err := l.applyTrackIntents(ctx); err != nil {
 		return err
 	}
@@ -351,12 +349,6 @@ func (l *Loop) Run(ctx context.Context) error {
 		case <-l.clock.After(store.TickPeriod):
 		case <-l.nudgeCh:
 		}
-	}
-}
-
-func (l *Loop) sweepExpiredSessions(ctx context.Context) {
-	if _, err := l.store.DeleteExpiredSessions(ctx, l.clock.Now()); err != nil {
-		log.Printf("sweep expired sessions: %v", err)
 	}
 }
 

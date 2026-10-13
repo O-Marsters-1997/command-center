@@ -12,7 +12,6 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -221,62 +220,5 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 	if events[1].Kind != "tick_error" || !events[1].At.Equal(bad) {
 		t.Errorf("second event = %+v, want tick_error at the bad tick", events[1])
-	}
-}
-
-func TestRunOnceSweepsExpiredSessionsAndLeavesLiveOnes(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
-
-	seedUserWithSessions(t, dsn, map[string]time.Time{
-		"expired-token": now.Add(-time.Hour),
-		"live-token":    now.Add(time.Hour),
-	})
-
-	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(store, stub, fixedClock(now), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	remaining := sessionTokens(t, dsn)
-	if len(remaining) != 1 || remaining[0] != "live-token" {
-		t.Errorf("remaining sessions = %v, want only live-token", remaining)
-	}
-}
-
-func TestRunOnceSweepErrorDoesNotAbortTheTick(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-	execSQL(t, dsn, `DROP TABLE sessions`)
-
-	at := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
-		t.Fatalf("QueueLaunchIntent: %v", err)
-	}
-
-	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce returned an error for a sweeper failure, want it to log and continue: %v", err)
-	}
-
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	if memberships["sandbox://CC-1"].LaunchID == 0 {
-		t.Error("RunOnce aborted the tick after the sweeper failed")
 	}
 }

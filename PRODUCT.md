@@ -35,7 +35,7 @@ merge, and show a whole feature's wave progress across repos.
   repos are squash-merge only, so GitHub's PR state is the merge test.
 - Usage is bounded by five-hour and weekly model limits, shown as meters. Launching pauses when
   the five-hour limit is spent.
-- It is reached at the desk and from a phone over a tailnet through Caddy, with a login. No page
+- It is reached at the desk and from a phone over a tailnet through Caddy, with no login. No page
   makes a third-party request.
 - The stack is one Go binary (`cmd/cc`). Go `html/template` pages are driven by htmx, with two
   Solid islands (the dependency graph and the launch modal) and Tailwind v4 CSS-first. See
