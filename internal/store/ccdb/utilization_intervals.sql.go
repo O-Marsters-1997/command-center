@@ -82,6 +82,25 @@ func (q *Queries) IntervalsSince(ctx context.Context, endAt time.Time) ([]Interv
 	return items, nil
 }
 
+const pruneIntervals = `-- name: PruneIntervals :execrows
+DELETE FROM utilization_intervals WHERE id IN (
+    SELECT u.id FROM utilization_intervals u WHERE u.end_at < $1 LIMIT $2
+)
+`
+
+type PruneIntervalsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneIntervals(ctx context.Context, arg PruneIntervalsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneIntervals, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recordInterval = `-- name: RecordInterval :exec
 INSERT INTO utilization_intervals (
     "window", start_at, end_at, utilization_start, utilization_end, weight_usd

@@ -16,3 +16,8 @@ SELECT
     COALESCE(SUM(cost_usd) FILTER (WHERE ended_at >= sqlc.arg(seven_day_since)), 0)::double precision AS seven_day_usd
 FROM runs
 WHERE cost_usd IS NOT NULL;
+
+-- name: PruneIntervals :execrows
+DELETE FROM utilization_intervals WHERE id IN (
+    SELECT u.id FROM utilization_intervals u WHERE u.end_at < sqlc.arg(before) LIMIT sqlc.arg(batch)
+);

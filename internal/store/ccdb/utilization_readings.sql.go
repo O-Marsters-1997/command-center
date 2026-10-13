@@ -51,6 +51,31 @@ func (q *Queries) LatestReadingsFull(ctx context.Context) ([]LatestReadingsFullR
 	return items, nil
 }
 
+const pruneReadings = `-- name: PruneReadings :execrows
+DELETE FROM utilization_readings WHERE id IN (
+    SELECT r.id FROM utilization_readings r
+    WHERE r.at < $1
+      AND EXISTS (
+          SELECT 1 FROM utilization_readings newer
+          WHERE newer."window" = r."window" AND newer.at > r.at
+      )
+    LIMIT $2
+)
+`
+
+type PruneReadingsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneReadings(ctx context.Context, arg PruneReadingsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneReadings, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recordReading = `-- name: RecordReading :exec
 INSERT INTO utilization_readings (at, "window", utilization, resets_at)
 VALUES ($1, $2, $3, $4)

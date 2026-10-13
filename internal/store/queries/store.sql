@@ -64,3 +64,13 @@ ON CONFLICT (key) DO UPDATE SET value = excluded.value;
 
 -- name: GetMeta :one
 SELECT value FROM meta WHERE key = $1;
+
+-- name: PruneConsumedIntents :execrows
+DELETE FROM intents WHERE id IN (
+    SELECT i.id FROM intents i WHERE i.consumed_at < sqlc.arg(before) LIMIT sqlc.arg(batch)
+);
+
+-- name: PruneTickErrors :execrows
+DELETE FROM events WHERE id IN (
+    SELECT e.id FROM events e WHERE e.kind = 'tick_error' AND e.at < sqlc.arg(before) LIMIT sqlc.arg(batch)
+);
