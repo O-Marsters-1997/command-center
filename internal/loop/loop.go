@@ -153,7 +153,7 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 // keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.store.PruneHistory(ctx, l.clock.Now()); err != nil {
-		return err
+		l.logger.Warn("prune history", "err", err)
 	}
 	if err := l.applyTrackIntents(ctx); err != nil {
 		return err

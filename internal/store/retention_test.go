@@ -58,6 +58,7 @@ func TestPruneHistoryDeletesOnlyExpiredRows(t *testing.T) {
 		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(91*day)+", 'five_hour', 0.2, "+ago(90*day)+")",
 		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(89*day)+", 'five_hour', 0.3, "+ago(88*day)+")",
 		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(100*day)+", 'seven_day', 0.4, "+ago(99*day)+")",
+		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(150*day)+", 'seven_day', 0.5, "+ago(149*day)+")",
 
 		"INSERT INTO utilization_intervals (\"window\", start_at, end_at, utilization_start, utilization_end, weight_usd) VALUES ('five_hour', "+ago(16*day)+", "+ago(15*day)+", 0, 0.1, 1)",
 		"INSERT INTO utilization_intervals (\"window\", start_at, end_at, utilization_start, utilization_end, weight_usd) VALUES ('five_hour', "+ago(14*day-time.Hour)+", "+ago(13*day)+", 0, 0.1, 1)",
