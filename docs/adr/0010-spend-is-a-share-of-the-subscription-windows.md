@@ -28,7 +28,9 @@ dividing by Anthropic's published hours.
 
 **A run's weight is captured once, at disposition.** `RecordDisposition` parses the run's own stdout
 and stores its weight as `cost_usd` in the transaction that records `outcome`, NULL when never
-measured. The column is frozen once written, since a pruned log cannot be re-parsed. Live runs'
+measured. The column is frozen once written, since a pruned log cannot be re-parsed. It is
+`double precision`, not `numeric`: the weight is a float estimate that the factor fit consumes as
+`float64`, so exact decimals would buy precision the source never had. Live runs'
 spend is re-read from their logs per render.
 
 **A ticket's spend is every run it needed, every kind, until its PR merged.** The cutoff is
