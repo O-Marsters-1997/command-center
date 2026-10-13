@@ -2088,9 +2088,11 @@
     background: var(--color-surface);
     color: var(--color-fg);
     border-radius: var(--radius-xl);
-    box-shadow:
-      0 0 0 100vmax oklch(0.2 0.01 270 / 0.18),
-      var(--shadow-overlay);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .launch-dialog::backdrop {
+    background: oklch(0.2 0.01 270 / 0.18);
   }
 
   .launch-dialog-title {

@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,7 +27,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 		}
 	}
 	if err := s.store.CreateProject(r.Context(), name, hue, repos, s.clock.Now()); err != nil {
-		return projectError(err)
+		return err
 	}
 	return s.respondRepoGroups(w, r)
 }
@@ -47,14 +46,14 @@ func (s *Server) handleEditProject(w http.ResponseWriter, r *http.Request) error
 		return errorf(http.StatusBadRequest, "hue %q is not %d to %d", r.PostForm.Get("hue"), store.MinHue, store.MaxHue)
 	}
 	if err := s.store.EditProject(r.Context(), name, newName, hue); err != nil {
-		return projectError(err)
+		return err
 	}
 	return s.respondRepoGroups(w, r)
 }
 
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) error {
 	if err := s.store.DeleteProject(r.Context(), r.PathValue("name")); err != nil {
-		return projectError(err)
+		return err
 	}
 	return s.respondRepoGroups(w, r)
 }
@@ -68,21 +67,9 @@ func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) er
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
 	if err := s.store.SetRepoProject(r.Context(), repo, strings.TrimSpace(r.PostForm.Get("project"))); err != nil {
-		return projectError(err)
+		return err
 	}
 	return s.respondRepoGroups(w, r)
-}
-
-func projectError(err error) error {
-	switch {
-	case errors.Is(err, store.ErrProjectExists):
-		return withStatus(http.StatusConflict, err)
-	case errors.Is(err, store.ErrNotFound):
-		return withStatus(http.StatusNotFound, err)
-	case errors.Is(err, store.ErrInvalidProject):
-		return withStatus(http.StatusBadRequest, err)
-	}
-	return err
 }
 
 func (s *Server) respondRepoGroups(w http.ResponseWriter, r *http.Request) error {

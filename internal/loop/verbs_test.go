@@ -137,7 +137,7 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
 	return lp.RunOnce(t.Context())
 }
 

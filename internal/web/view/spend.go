@@ -1,6 +1,9 @@
 package view
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"sync"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -17,27 +20,30 @@ func NewSpendCache() *SpendCache {
 	return &SpendCache{settled: make(map[string]int)}
 }
 
-func (c *SpendCache) Spend(path string) int {
+func (c *SpendCache) Spend(path string) (int, error) {
 	if path == "" {
-		return 0
+		return 0, nil
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if tokens, ok := c.settled[path]; ok {
-		return tokens
+		return tokens, nil
 	}
 
 	metrics, err := agentlog.ParseMetrics(path)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, agentlog.ErrNoParseableLines) {
+		return 0, nil
+	}
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("measure spend of %s: %w", path, err)
 	}
 	tokens := tokensOf(metrics)
 	if metrics.Settled {
 		c.settled[path] = tokens
 	}
-	return tokens
+	return tokens, nil
 }
 
 func tokensOf(metrics agentlog.RunMetrics) int {
@@ -48,10 +54,15 @@ func tokensOf(metrics agentlog.RunMetrics) int {
 	return tokens
 }
 
-func applySpend(rows []Row, cache *SpendCache) {
+func applySpend(rows []Row, cache *SpendCache) error {
 	for i := range rows {
-		rows[i].SpendTokens = cache.Spend(rows[i].LogPath)
+		tokens, err := cache.Spend(rows[i].LogPath)
+		if err != nil {
+			return err
+		}
+		rows[i].SpendTokens = tokens
 	}
+	return nil
 }
 
 func applyTicketSpend(rows []Row, byURL map[string]store.BoardTicketSpend, factor float64) {

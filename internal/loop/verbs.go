@@ -227,11 +227,14 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		if err != nil {
 			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
 		}
-		if state == git.NotRemovable {
-			return refuse("worktree holds unpushed commits")
-		}
-		if state == git.RemovableByForce {
+		switch state {
+		case git.RemovableByMerged:
+		case git.RemovableByForce:
 			mode = git.RemoveForced
+		case git.NotRemovable:
+			return refuse("worktree holds unpushed commits")
+		case git.RemovalUnknown:
+			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", ticket.URL)
 		}
 
 		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
@@ -262,8 +265,12 @@ func (l *Loop) pruneRunLogs(ctx context.Context, ticketID string) error {
 		return err
 	}
 	for _, id := range ids {
-		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.jsonl", id)))
-		_ = os.Remove(filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", id)))
+		for _, ext := range []string{"jsonl", "prompt"} {
+			path := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.%s", id, ext))
+			if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				l.logger.Warn("remove run file", "path", path, "err", err)
+			}
+		}
 	}
 	return nil
 }

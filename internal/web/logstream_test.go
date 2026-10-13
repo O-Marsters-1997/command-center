@@ -156,6 +156,34 @@ func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	}
 }
 
+func TestLogStreamSendsAnErrorFrameWhenTheLogCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	store, runID := runStore(t, t.TempDir(), now)
+	endRun(t, store, runID, now)
+	server := newServer(store, now)
+
+	rec := get(t, server, logStreamPath(0))
+
+	if body := rec.Body.String(); !strings.Contains(body, "event: error\ndata: ") {
+		t.Errorf("stream = %q, want an error frame", body)
+	}
+}
+
+func TestLogStreamRefusesAMalformedOffset(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	server := newServer(seededStore(t, now), now)
+
+	rec := get(t, server, fmt.Sprintf("/ticket/%s/log?from=abc", url.PathEscape(logTicket)))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
 func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	t.Parallel()
 
@@ -239,19 +267,39 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 func readEvent(t *testing.T, r *bufio.Reader) string {
 	t.Helper()
 
-	var event strings.Builder
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			t.Fatalf("reading the stream: %v", err)
-		}
-		if strings.TrimSpace(line) == "" {
-			if event.Len() > 0 {
-				return event.String()
+	type result struct {
+		event string
+		err   error
+	}
+	got := make(chan result, 1)
+	go func() {
+		var event strings.Builder
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				got <- result{err: err}
+				return
 			}
-			continue
+			if strings.TrimSpace(line) == "" {
+				if event.Len() > 0 {
+					got <- result{event: event.String()}
+					return
+				}
+				continue
+			}
+			event.WriteString(line)
 		}
-		event.WriteString(line)
+	}()
+
+	select {
+	case res := <-got:
+		if res.err != nil {
+			t.Fatalf("reading the stream: %v", res.err)
+		}
+		return res.event
+	case <-time.After(5 * time.Second):
+		t.Fatal("no event arrived from the stream within 5s")
+		return ""
 	}
 }
 

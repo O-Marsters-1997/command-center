@@ -23,7 +23,7 @@ func TestRecordOpenedEventsAppendsOnceWhenAPRAppears(t *testing.T) {
 	}
 
 	observed := plan.Observation{}
-	lp := loop.NewLoop(store,
+	lp := loop.NewLoop(discardLog, store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)), config.Config{}, config.Workspace{},
 		runner.ProcessRunner{})
@@ -79,7 +79,7 @@ func TestRecordOpenedEventsIgnoresAPRAlreadyInThePreviousObservation(t *testing.
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	lp := loop.NewLoop(store,
+	lp := loop.NewLoop(discardLog, store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {

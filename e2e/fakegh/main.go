@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -48,7 +49,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return 1
 	}
 
-	key := matchKey(fixture, args)
+	key := matchKey(fixture, slices.DeleteFunc(slices.Clone(args), func(a string) bool { return a == "--paginate" }))
 	resp, ok := fixture[key]
 	if !ok {
 		printf(stderr, "fakegh: no fixture entry for %q\n", key)

@@ -63,6 +63,7 @@
   </div>
   {{- end}}
   {{template "sessionActions" .}}
+  {{template "sessionComposer" .}}
 </div>
 <button type="button" class="btn stack-toggle" popovertarget="stack-panel">Stack</button>
   <aside id="stack-panel" class="stack-panel" popover aria-label="feature stack">
@@ -103,12 +104,12 @@
     </dl>
   </aside>
 </article>
-{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s [!document.querySelector('#session-actions textarea')?.value]" hx-swap="outerHTML">
-  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="true" role="status">{{.}}</div>{{end}}
+{{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
+  {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}</div>{{end}}
   <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
     {{- range .ActionVerbs}}
-    <form method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+    <form method="post" action="/verb" hx-post="/verb" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
       <button class="btn" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
@@ -124,6 +125,9 @@
   {{- range .PendingMessages}}
   <p class="pending-message" data-glyph="pending"><span class="text-muted">you</span> {{.}}</p>
   {{- end}}
+</div>
+{{- if .ResetComposer}}{{template "sessionComposer" .}}{{end}}{{end}}
+{{define "sessionComposer"}}<div id="session-composer"{{if .ResetComposer}} hx-swap-oob="true"{{end}}>
   {{- if .Row.FollowUpAvailable}}
   <form class="composer" method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML">
     <input type="hidden" name="ticket" value="{{.Row.URL}}">

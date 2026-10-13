@@ -115,6 +115,38 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	}
 }
 
+func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
+	tests := []struct {
+		name      string
+		opts      []fixtureOption
+		failSpawn bool
+		kind      string
+		cause     string
+	}{
+		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: "cut_failed", cause: "forced failure"},
+		{name: "spawn", failSpawn: true, kind: "spawn_failed", cause: "spawn failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newLoopFixture(t, tt.opts...)
+			f.Fake.FailNext = tt.failSpawn
+			f.AuthoriseAll(t)
+			f.Tick(t)
+
+			events, err := f.Store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range events {
+				if e.Kind == tt.kind && e.TicketURL == f.Tickets[0].URL && strings.Contains(e.Detail, tt.cause) {
+					return
+				}
+			}
+			t.Errorf("events = %+v, want a %s event whose detail contains %q", events, tt.kind, tt.cause)
+		})
+	}
+}
+
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
 	f.AuthoriseAll(t)
@@ -162,7 +194,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	// alive defaults to false in the map (zero value), i.e. the run reads dead this tick.
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -208,7 +240,31 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	}
 }
 
-func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
+const (
+	killedRunAssistantLine = `{"type":"assistant","request_id":"r1","message":{"model":"claude-sonnet-5",` +
+		`"usage":{"input_tokens":12,"output_tokens":8},"content":[]}}` + "\n"
+	killedRunResultLine = `{"type":"result","total_cost_usd":0.42}` + "\n"
+)
+
+func TestLoopRecordsNoCostForAKilledRunWhoseLogNeverSettled(t *testing.T) {
+	got := disposeKilledRun(t, killedRunAssistantLine)
+
+	if got[agentlog.FiveHour] != 0 || got[agentlog.SevenDay] != 0 {
+		t.Errorf("cost of an unsettled run = %v, want none recorded", got)
+	}
+}
+
+func TestLoopRecordsTheCostOfAKilledRunWhoseLogSettled(t *testing.T) {
+	got := disposeKilledRun(t, killedRunAssistantLine+killedRunResultLine)
+
+	if got[agentlog.FiveHour] != 0.42 {
+		t.Errorf("five_hour cost = %v, want 0.42", got[agentlog.FiveHour])
+	}
+}
+
+func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 {
+	t.Helper()
+
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
 	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
@@ -227,9 +283,7 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	logPath := filepath.Join(t.TempDir(), "1.jsonl")
-	partial := `{"type":"assistant","request_id":"r1","message":{"model":"claude-sonnet-5",` +
-		`"usage":{"input_tokens":12,"output_tokens":8},"content":[]}}` + "\n"
-	if err := os.WriteFile(logPath, []byte(partial), 0o600); err != nil {
+	if err := os.WriteFile(logPath, []byte(logBody), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.RecordSpawn(t.Context(), runID, 999, at, logPath); err != nil {
@@ -244,7 +298,7 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	fake.ReapCode[999] = 137 // killed
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -257,6 +311,11 @@ func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	if summary := latest[ticket.URL]; !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
 		t.Errorf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
+	cost, err := store.CCCostUSD(t.Context(), at.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cost
 }
 
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
@@ -295,7 +354,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -350,7 +409,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -398,7 +457,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	fake.ReapCode[4242] = 143
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -493,7 +552,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.SpendLimit5h = 80
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

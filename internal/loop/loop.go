@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,12 +31,15 @@ const (
 const (
 	eventRunLaunched = "run_launched"
 	eventRunDisposed = "run_disposed"
+	eventCutFailed   = "cut_failed"
+	eventSpawnFailed = "spawn_failed"
 )
 
 const AgentModel = "claude-sonnet-5-5"
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
+	logger     *slog.Logger
 	store      *store.Store
 	observe    ObserveFunc
 	clock      Clock
@@ -56,10 +59,11 @@ type Loop struct {
 // and spawn steps need (data_dir, agent_command, max_agents, the state dir's runs and settings
 // paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
 func NewLoop(
-	store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config, ws config.Workspace, spawner runner.Runner,
+	logger *slog.Logger, store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config,
+	ws config.Workspace, spawner runner.Runner,
 ) *Loop {
 	return &Loop{
-		store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
+		logger: logger, store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
 		validate:   ValidateRepo,
 		remoteOf:   git.RepoRemote,
@@ -335,7 +339,7 @@ func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[stri
 func (l *Loop) Run(ctx context.Context) error {
 	for {
 		if err := l.RunOnce(ctx); err != nil {
-			log.Printf("tick: %v", err)
+			l.logger.Error("tick", "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -504,13 +508,13 @@ func (l *Loop) disposeRun(
 		exitCode = &code
 	}
 	var metrics *agentlog.RunMetrics
-	if m, ok := parseLog(run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
+	if m, ok := parseLog(l.logger, run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
 		metrics = &m
 	}
 	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), metrics); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
-	readings, _ := parseLog(run.LogPath, "run readings", agentlog.ParseReadings)
+	readings, _ := parseLog(l.logger, run.LogPath, "run readings", agentlog.ParseReadings)
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
@@ -581,7 +585,7 @@ func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
 	return question, nil
 }
 
-func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bool) {
+func parseLog[T any](logger *slog.Logger, logPath, what string, parse func(string) (T, error)) (T, bool) {
 	var zero T
 	if logPath == "" {
 		return zero, false
@@ -589,7 +593,7 @@ func parseLog[T any](logPath, what string, parse func(string) (T, error)) (T, bo
 	v, err := parse(logPath)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			log.Printf("parse %s %s: %v", what, logPath, err)
+			logger.Warn("parse agent log", "what", what, "path", logPath, "err", err)
 		}
 		return zero, false
 	}
@@ -658,8 +662,10 @@ func (l *Loop) cutAndSpawn(
 	repoPath := l.checkout(ticket.Repo)
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
-		_, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now())
-		return insertErr
+		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
+			return insertErr
+		}
+		return l.event(ctx, ticket.URL, eventCutFailed, err.Error())
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, branch)
@@ -713,7 +719,7 @@ func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64,
 		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 }
 
-func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
+func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 	ticket := spec.ticket
 	runID, sessionID, err := l.insertSkeleton(ctx, spec)
 	if err != nil {
@@ -738,7 +744,11 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	if err != nil {
 		return fmt.Errorf("open log for run %d: %w", runID, err)
 	}
-	defer func() { _ = logFile.Close() }()
+	defer func() {
+		if closeErr := logFile.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close log for run %d: %w", runID, closeErr))
+		}
+	}()
 
 	spawnCfg := runner.SpawnConfig{
 		AgentCommand: l.cfg.AgentCommand,
@@ -756,7 +766,12 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		return l.store.RecordDisposition(ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil)
+		if dispositionErr := l.store.RecordDisposition(
+			ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil,
+		); dispositionErr != nil {
+			return dispositionErr
+		}
+		return l.event(ctx, ticket.URL, eventSpawnFailed, err.Error())
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {

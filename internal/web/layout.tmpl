@@ -1,3 +1,5 @@
+{{define "flash"}}<p class="banner ribbon" data-glyph="failed">{{.}}</p>{{end}}
+
 {{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
 
 {{define "notices" -}}
@@ -21,6 +23,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
 <title>Command Centre</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script>
@@ -96,6 +99,7 @@
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script type="module" src="/assets/dist/keys.js"></script>
+<script type="module" src="/assets/dist/glue.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
@@ -125,6 +129,7 @@
 {{template "sidebar" .}}
 <div class="pane">
 {{template "notices" .}}
+<div id="flash" aria-live="polite"></div>
 <main id="main"{{if .Home}} data-home{{end}}>
 <header class="topbar">
   <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
@@ -197,7 +202,7 @@
     </nav>
   </details>
   <div class="rail-search-wrap">
-    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="this:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
+    <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
     {{template "icon" "search"}}<kbd aria-hidden="true">⌘K</kbd>
   </div>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>

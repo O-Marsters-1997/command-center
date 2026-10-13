@@ -2,11 +2,16 @@ package app_test
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,7 +35,9 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
-	inst, err := app.New(ctx, configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub))
+	inst, err := app.New(
+		ctx, slog.New(slog.DiscardHandler), configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub),
+	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -75,13 +82,13 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := app.New(ctx, configPath)
+	first, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
 
-	if _, err := app.New(ctx, configPath); err == nil {
+	if _, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
@@ -138,7 +145,7 @@ func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	}
 }
 
-// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main calls log.Fatalf on any
+// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main exits 1 on any
 // non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
 // exit status 1.
 func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
@@ -146,7 +153,7 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	inst, err := app.New(ctx, configPath, app.WithObserver(stub))
+	inst, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -166,6 +173,41 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 	}
 }
 
+func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
+	configPath := appConfig(t)
+
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("hold a port: %v", err)
+	}
+	t.Cleanup(func() { _ = held.Close() })
+	port := held.Addr().(*net.TCPAddr).Port
+	if err := os.WriteFile(configPath, []byte("port = "+strconv.Itoa(port)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
+	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, app.WithObserver(stub))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = inst.Close() })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- inst.Run(ctx) }()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, syscall.EADDRINUSE) {
+			t.Errorf("Run = %v, want the address-in-use error", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run kept running though the server could not bind")
+	}
+}
+
 type frozenClock struct{ at time.Time }
 
 func (c frozenClock) Now() time.Time                       { return c.at }
@@ -181,7 +223,7 @@ func TestNewStartsWithNoTrackedRepos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inst, err := app.New(t.Context(), configPath)
+	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

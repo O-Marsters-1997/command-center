@@ -47,7 +47,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

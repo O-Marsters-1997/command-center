@@ -1,9 +1,12 @@
 package agentlog
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
+
+var ErrNoParseableLines = errors.New("no parseable lines")
 
 // RunMetrics is what every dialect must produce. A field a dialect cannot supply is nil or zero
 // with Settled false, never a guess.
@@ -59,7 +62,7 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 	}
 
 	if decoded == 0 {
-		return RunMetrics{}, fmt.Errorf("agent log %s: no parseable lines", logPath)
+		return RunMetrics{}, fmt.Errorf("agent log %s: %w", logPath, ErrNoParseableLines)
 	}
 
 	if result != nil {

@@ -173,8 +173,12 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 			summary.ExitCode = &v
 		}
 		if row.Outcome.Valid {
+			outcome, err := plan.ParseOutcome(row.Outcome.String)
+			if err != nil {
+				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
+			}
 			summary.HasOutcome = true
-			summary.Outcome = outcomeFromString(row.Outcome.String)
+			summary.Outcome = outcome
 		}
 		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
@@ -182,21 +186,6 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 		summaries[row.TicketID] = summary
 	}
 	return summaries, nil
-}
-
-func outcomeFromString(s string) plan.Outcome {
-	switch s {
-	case plan.OutcomePush.String():
-		return plan.OutcomePush
-	case plan.OutcomeCutFailed.String():
-		return plan.OutcomeCutFailed
-	case plan.OutcomeAsked.String():
-		return plan.OutcomeAsked
-	case plan.OutcomeContinued.String():
-		return plan.OutcomeContinued
-	default:
-		return plan.OutcomeFailed
-	}
 }
 
 // VerbIntent is one queued action against a ticket. Payload is empty for verbs that carry none.

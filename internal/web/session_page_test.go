@@ -198,7 +198,7 @@ func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1?part=actions")
+	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
 	for _, want := range []string{`class="pending-message"`, "use sqlite instead", `class="composer"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("running session with a queued message lacks %q:\n%s", want, body)
@@ -229,7 +229,7 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			body := renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1?part=actions")
+			body := renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1")
 			for _, want := range tt.present {
 				if !strings.Contains(body, want) {
 					t.Errorf("actions lack %q:\n%s", want, body)
@@ -316,8 +316,8 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 		t.Fatalf("status %d:\n%s", rec.Code, rec.Body.String())
 	}
 	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("blank follow-up status = %d, want 400", rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("blank follow-up status = %d, want 422", rec.Code)
 	}
 }
 
@@ -333,5 +333,35 @@ func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
 	body = renderPath(t, newServer(noFeature, testNow), "/s/acme/web/1")
 	if strings.Contains(body, `data-key="f"`) {
 		t.Errorf("session with no feature carries data-key=\"f\":\n%s", body)
+	}
+}
+
+func TestSessionComposerIsOutsideEveryPolledElement(t *testing.T) {
+	t.Parallel()
+	st, _ := sessionStore(t, "agent", "p", true, true)
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
+
+	if !strings.Contains(body, "<textarea") {
+		t.Fatalf("no composer textarea on the page:\n%s", body)
+	}
+	start := strings.Index(body, `<div id="session-actions"`)
+	if start < 0 {
+		t.Fatalf("no polled session-actions block:\n%s", body)
+	}
+	polled := body[start:]
+	depth := 0
+	for i := 0; i < len(polled); i++ {
+		switch {
+		case strings.HasPrefix(polled[i:], "<div"):
+			depth++
+		case strings.HasPrefix(polled[i:], "</div>"):
+			depth--
+			if depth == 0 {
+				polled = polled[:i]
+			}
+		}
+	}
+	if strings.Contains(polled, "<textarea") {
+		t.Errorf("the composer textarea sits inside the polled #session-actions:\n%s", polled)
 	}
 }

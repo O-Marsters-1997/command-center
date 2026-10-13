@@ -16,6 +16,11 @@ import (
 func TestParse(t *testing.T) {
 	t.Parallel()
 
+	findOutput, err := os.ReadFile("testdata/run27.find-output.golden")
+	if err != nil {
+		t.Fatalf("read golden: %v", err)
+	}
+
 	tests := []struct {
 		name    string
 		fixture string
@@ -26,18 +31,25 @@ func TestParse(t *testing.T) {
 			fixture: "alive.jsonl",
 			want: agentlog.Run{
 				Lines: 8,
+				Start: time.Date(2026, 1, 1, 0, 0, 1, 0, time.UTC),
+				End:   4 * time.Second,
 				Phases: []agentlog.Phase{
 					{
+						Turns: 1, Spend: 0.0004992,
 						Events: []agentlog.Event{
-							{Kind: agentlog.Cmd, Tool: "Bash", Detail: "go test ./..."},
+							{Kind: agentlog.Cmd, Tool: "Bash", Detail: "go test ./...",
+								Output: "FAIL\tinternal/agentlog\nno such package", OutputLines: 2,
+								Done: true, ExitCode: 1, Elapsed: 1500 * time.Millisecond},
 						},
 					},
 					{
 						Skill: "tdd", Note: "internal/agentlog", At: 2 * time.Second,
+						Turns: 2, Spend: 0.00038592,
 						Events: []agentlog.Event{
 							{At: 3 * time.Second, Kind: agentlog.File, Tool: "Edit",
 								Detail: "internal/agentlog/parse.go"},
-							{At: 4 * time.Second, Kind: agentlog.Pass, Detail: "edited"},
+							{At: 4 * time.Second, Kind: agentlog.Pass, Detail: "edited",
+								Output: "edited\nok", OutputLines: 2},
 						},
 					},
 				},
@@ -53,9 +65,13 @@ func TestParse(t *testing.T) {
 			fixture: "truncated.jsonl",
 			want: agentlog.Run{
 				Lines: 2,
+				Start: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+				End:   time.Second,
 				Phases: []agentlog.Phase{{
+					Turns: 1, Spend: 6.4e-05,
 					Events: []agentlog.Event{
-						{Kind: agentlog.Cmd, Tool: "Bash", Detail: "just test"},
+						{Kind: agentlog.Cmd, Tool: "Bash", Detail: "just test",
+							Output: "ok", OutputLines: 1, Done: true, Elapsed: time.Second},
 					},
 				}},
 			},
@@ -65,32 +81,44 @@ func TestParse(t *testing.T) {
 			fixture: "run27.jsonl",
 			want: agentlog.Run{
 				Lines: 23,
+				Start: time.Date(2026, 8, 25, 10, 56, 4, 185*int(time.Millisecond), time.UTC),
+				End:   1573296 * time.Millisecond,
 				Result: &agentlog.Result{
 					Outcome: "success", Duration: 561464 * time.Millisecond,
 					Turns: 42, CostUSD: 8.288799200000001,
 				},
 				Phases: []agentlog.Phase{
 					{
+						Turns: 1, Spend: 0.38171008,
 						Events: []agentlog.Event{
 							{Kind: agentlog.Say, Detail: "I'll start by exploring the existing code structure — " +
 								"the `internal/cc` package, the `plan` package, and the untracked test file already present."},
 							{At: 1099 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
-								Detail: "find internal/cc internal/plan -type f | sort"},
+								Detail: "find internal/cc internal/plan -type f | sort",
+								CallID: "toolu_01TFGB4Saexqc9Ctwccjqo8U", Output: string(findOutput), OutputLines: 93,
+								Done: true, Elapsed: 1328 * time.Millisecond},
 							{At: 1843 * time.Millisecond, Kind: agentlog.File, Tool: "Read",
 								Detail: "/Users/dev/Documents/personal/ai-development/" +
-									"command-center-cc-74-grouped-board/internal/cc/group_page_test.go"},
-							{At: 1852 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test"},
+									"command-center-cc-74-grouped-board/internal/cc/group_page_test.go",
+								CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi"},
+							{At: 1852 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test",
+								CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi", Output: "1\tpackage cc_test\n2\t", OutputLines: 2},
 						},
 					},
 					{
 						Skill: "go-idiomatic", At: 238544 * time.Millisecond,
+						Turns: 2, Spend: 0.19796928000000003,
 						Events: []agentlog.Event{
 							{At: 764324 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
-								Detail: "type go; type rtk 2>/dev/null; alias go 2>/dev/null"},
+								Detail: "type go; type rtk 2>/dev/null; alias go 2>/dev/null",
+								CallID: "toolu_019SuUKTAJWXx7GiPbakYQSe",
+								Output: "go is /opt/homebrew/bin/go\nrtk is /opt/homebrew/bin/rtk", OutputLines: 2,
+								Done: true, ExitCode: 1, Elapsed: 2477 * time.Millisecond},
 						},
 					},
 					{
 						Skill: "clean-comments",
+						Turns: 1, Spend: 0.19517952000000002,
 						Note: "internal/cc/export_test.go internal/cc/group_page_test.go " +
 							"internal/cc/server.go",
 						At: 1573296 * time.Millisecond,
@@ -232,6 +260,9 @@ func assertRun(t *testing.T, got, want agentlog.Run) {
 	if got.Lines != want.Lines {
 		t.Errorf("Lines = %d; want %d", got.Lines, want.Lines)
 	}
+	if !got.Start.Equal(want.Start) || got.End != want.End {
+		t.Errorf("Start, End = %v, %v; want %v, %v", got.Start, got.End, want.Start, want.End)
+	}
 	switch {
 	case want.Result == nil && got.Result != nil:
 		t.Errorf("Result = %+v; want nil", got.Result)
@@ -245,10 +276,11 @@ func assertRun(t *testing.T, got, want agentlog.Run) {
 	}
 	for i, wantPhase := range want.Phases {
 		gotPhase := got.Phases[i]
-		if gotPhase.Skill != wantPhase.Skill || gotPhase.Note != wantPhase.Note || gotPhase.At != wantPhase.At {
-			t.Errorf("phase %d = {%q %q %v}; want {%q %q %v}", i,
-				gotPhase.Skill, gotPhase.Note, gotPhase.At,
-				wantPhase.Skill, wantPhase.Note, wantPhase.At)
+		if gotPhase.Skill != wantPhase.Skill || gotPhase.Note != wantPhase.Note || gotPhase.At != wantPhase.At ||
+			gotPhase.Turns != wantPhase.Turns || math.Abs(gotPhase.Spend-wantPhase.Spend) > 1e-12 {
+			t.Errorf("phase %d = {%q %q %v %d %v}; want {%q %q %v %d %v}", i,
+				gotPhase.Skill, gotPhase.Note, gotPhase.At, gotPhase.Turns, gotPhase.Spend,
+				wantPhase.Skill, wantPhase.Note, wantPhase.At, wantPhase.Turns, wantPhase.Spend)
 		}
 		if len(gotPhase.Events) != len(wantPhase.Events) {
 			t.Errorf("phase %d has %d events; want %d (%+v)",
@@ -256,7 +288,7 @@ func assertRun(t *testing.T, got, want agentlog.Run) {
 			continue
 		}
 		for j, wantEvent := range wantPhase.Events {
-			if !sameReading(gotPhase.Events[j], wantEvent) {
+			if !sameCmd(gotPhase.Events[j], wantEvent) {
 				t.Errorf("phase %d event %d = %+v; want %+v", i, j, gotPhase.Events[j], wantEvent)
 			}
 		}

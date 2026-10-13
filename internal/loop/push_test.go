@@ -105,8 +105,15 @@ func hasEvent(events []storepkg.Event, kind, detailSubstring string) bool {
 func remoteHasBranch(t *testing.T, root, branch string) bool {
 	t.Helper()
 	remote := filepath.Join(root, "remote.git")
-	cmd := exec.Command("git", "-C", remote, "rev-parse", "--verify", "refs/heads/"+branch)
-	return cmd.Run() == nil
+	err := exec.Command("git", "-C", remote, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch).Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false
+	}
+	if err != nil {
+		t.Fatalf("rev-parse refs/heads/%s in %s: %v", branch, remote, err)
+	}
+	return true
 }
 
 func countLines(t *testing.T, path string) int {
@@ -146,7 +153,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -205,7 +212,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -265,7 +272,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -307,7 +314,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -325,7 +332,11 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if !facts[ticket.URL].Failed {
 		t.Fatal("push facts must record the failure")
 	}
-	if tips, _ := store.LastPushedTips(t.Context()); tips[ticket.URL] != "" {
+	tips, err := store.LastPushedTips(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tips[ticket.URL] != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
@@ -403,7 +414,7 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce must not fail once a pushed ticket's branch has been removed: %v", err)
 	}

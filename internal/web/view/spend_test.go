@@ -27,15 +27,25 @@ func writeLog(t *testing.T, lines ...string) string {
 	return path
 }
 
+func spendOf(t *testing.T, cache *SpendCache, path string) int {
+	t.Helper()
+
+	tokens, err := cache.Spend(path)
+	if err != nil {
+		t.Fatalf("Spend(%q): %v", path, err)
+	}
+	return tokens
+}
+
 func TestSpendCacheReportsTokensWhetherAliveOrSettled(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
 
-	if got := cache.Spend(writeLog(t, aliveLine)); got != 15 {
+	if got := spendOf(t, cache, writeLog(t, aliveLine)); got != 15 {
 		t.Errorf("Spend(alive) = %d, want 15", got)
 	}
-	if got := cache.Spend(writeLog(t, aliveLine, resultLine)); got != 15 {
+	if got := spendOf(t, cache, writeLog(t, aliveLine, resultLine)); got != 15 {
 		t.Errorf("Spend(ended) = %d, want 15", got)
 	}
 }
@@ -43,7 +53,7 @@ func TestSpendCacheReportsTokensWhetherAliveOrSettled(t *testing.T) {
 func TestSpendCacheReturnsTheZeroSpendForNoLogPath(t *testing.T) {
 	t.Parallel()
 
-	if got := NewSpendCache().Spend(""); got != 0 {
+	if got := spendOf(t, NewSpendCache(), ""); got != 0 {
 		t.Errorf("Spend(\"\") = %d, want 0", got)
 	}
 }
@@ -53,13 +63,13 @@ func TestSpendCacheNeverRescansASettledLog(t *testing.T) {
 
 	cache := NewSpendCache()
 	path := writeLog(t, aliveLine, resultLine)
-	tokens := cache.Spend(path)
+	tokens := spendOf(t, cache, path)
 
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	for range 5 {
-		if got := cache.Spend(path); got != tokens {
+		if got := spendOf(t, cache, path); got != tokens {
 			t.Errorf("Spend(path) after settling = %d, want %d: a settled log is never rescanned", got, tokens)
 		}
 	}
@@ -69,9 +79,9 @@ func TestSpendCacheTreatsARerunsNewLogPathAsANewEntry(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
-	cache.Spend(writeLog(t, aliveLine, resultLine))
+	spendOf(t, cache, writeLog(t, aliveLine, resultLine))
 
-	if got := cache.Spend(writeLog(t, aliveLine, aliveLine)); got != 15 {
+	if got := spendOf(t, cache, writeLog(t, aliveLine, aliveLine)); got != 15 {
 		t.Errorf("Spend(second) = %d, want 15: a fresh key, not the first's settled value", got)
 	}
 }
@@ -81,13 +91,13 @@ func TestSpendCacheRereadsALiveLogOnEveryCall(t *testing.T) {
 
 	cache := NewSpendCache()
 	path := writeLog(t, aliveLine)
-	cache.Spend(path)
+	spendOf(t, cache, path)
 
 	appended := `{"type":"assistant","request_id":"r2","message":{"usage":{"input_tokens":1,"output_tokens":2}}}` + "\n"
 	if err := os.WriteFile(path, []byte(aliveLine+appended+resultLine), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := cache.Spend(path); got != 18 {
+	if got := spendOf(t, cache, path); got != 18 {
 		t.Errorf("Spend(path) after appending = %d, want 18", got)
 	}
 }
@@ -95,7 +105,7 @@ func TestSpendCacheRereadsALiveLogOnEveryCall(t *testing.T) {
 func TestSpendCacheSumsEveryDeduplicatedRequestOfAFixtureLog(t *testing.T) {
 	t.Parallel()
 
-	got := NewSpendCache().Spend(filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl"))
+	got := spendOf(t, NewSpendCache(), filepath.Join("..", "..", "agentlog", "testdata", "run27.jsonl"))
 	if got != 611097 {
 		t.Errorf("Spend(run27) = %d, want 611097", got)
 	}
@@ -104,7 +114,7 @@ func TestSpendCacheSumsEveryDeduplicatedRequestOfAFixtureLog(t *testing.T) {
 func TestSpendCacheReportsNoSpendForALogNotYetWritten(t *testing.T) {
 	t.Parallel()
 
-	if got := NewSpendCache().Spend(filepath.Join(t.TempDir(), "absent.jsonl")); got != 0 {
+	if got := spendOf(t, NewSpendCache(), filepath.Join(t.TempDir(), "absent.jsonl")); got != 0 {
 		t.Errorf("Spend(absent) = %d, want 0", got)
 	}
 }

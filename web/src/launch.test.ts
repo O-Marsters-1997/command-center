@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { cancelHref, columnsFor, dependentsOf, initialTicked, missingBlockersOf, REFUSED, sectionsFor } from "./launch";
+import {
+  cancelHref,
+  columnsFor,
+  dependentsOf,
+  initialTicked,
+  missingBlockersOf,
+  REFUSED,
+  sectionsFor,
+  toggleResult,
+} from "./launch";
 import type { Candidate } from "./launch";
 
 function candidate(over: Partial<Candidate> & { url: string }): Candidate {
@@ -143,5 +152,31 @@ describe("cancelHref", () => {
 
   test("returns home for a ticket slice", () => {
     expect(cancelHref("")).toBe("/");
+  });
+});
+
+describe("toggleResult", () => {
+  const candidates = [
+    candidate({ url: "x/1", title: "first" }),
+    candidate({ url: "x/2", title: "second", blocked_by: ["x/1"] }),
+  ];
+
+  test("a refused tick leaves the ticked set unchanged and names the blocker", () => {
+    const ticked = new Set<string>();
+    const result = toggleResult(candidates, ticked, "x/2");
+    expect(result).toEqual({ refusal: "#2 is blocked by #1 first -- tick it first" });
+    expect(ticked).toEqual(new Set());
+  });
+
+  test("a refused clear keeps the blocker ticked", () => {
+    const ticked = new Set(["x/1", "x/2"]);
+    const result = toggleResult(candidates, ticked, "x/1");
+    expect(result).toEqual({ refusal: "#2 second depends on #1 -- clear it first" });
+    expect(ticked).toEqual(new Set(["x/1", "x/2"]));
+  });
+
+  test("an allowed tick and clear return a new set", () => {
+    expect(toggleResult(candidates, new Set(["x/1"]), "x/2")).toEqual({ ticked: new Set(["x/1", "x/2"]) });
+    expect(toggleResult(candidates, new Set(["x/1", "x/2"]), "x/2")).toEqual({ ticked: new Set(["x/1"]) });
   });
 });

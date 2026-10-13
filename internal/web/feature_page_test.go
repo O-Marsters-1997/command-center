@@ -79,7 +79,7 @@ func TestFeaturePageHeaderNamesLaunchTicketsAndWaves(t *testing.T) {
 	}
 
 	unlaunched := renderPath(t, server, "/f/sqlc-migration")
-	if strings.Contains(unlaunched, "launched") {
+	if strings.Contains(unlaunched, "<p>launched") || strings.Contains(unlaunched, " · launched ") {
 		t.Errorf("a feature no launch holds should not read launched:\n%s", unlaunched)
 	}
 	if want := "1 ticket in 1 wave"; !strings.Contains(unlaunched, want) {

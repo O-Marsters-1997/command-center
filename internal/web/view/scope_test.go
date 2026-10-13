@@ -70,7 +70,9 @@ func TestApplyViewStateCarriesTheProjectOnRowLinks(t *testing.T) {
 	t.Parallel()
 
 	rows := []Row{{URL: "https://github.com/acme/web/issues/7"}}
-	applyViewState(rows, Params{Project: "acme"}, nil, nil)
+	if err := applyViewState(rows, Params{Project: "acme"}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 
 	if want := "/s/acme/web/7?project=acme"; rows[0].SessionPath != want {
 		t.Errorf("SessionPath = %q, want %q", rows[0].SessionPath, want)

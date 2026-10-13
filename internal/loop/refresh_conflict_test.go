@@ -77,7 +77,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	return conflictFixture{
 		f:         f,
 		aliveRuns: aliveRuns,
-		loop:      loop.NewLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
+		loop:      loop.NewLoop(discardLog, store, observe, clock, cfg, ws, runner.ProcessRunner{}),
 		server:    openServer(store, clock, ""),
 		store:     store,
 	}
@@ -240,5 +240,25 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 	if got := pushes[c.f.child.URL].BaseSHAAtPush; got != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s: the push step delivers the "+
 			"hand-resolved merge", got, parentTip1)
+	}
+}
+
+func TestAGitFailureDuringRefreshThatIsNotAConflictIsATickError(t *testing.T) {
+	root, repoPath := repoWithOrigin(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	c := newConflictFixture(t, root, repoPath, at)
+	runGit(t, "-C", repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
+
+	err := c.loop.RunOnce(t.Context())
+	if err == nil {
+		t.Errorf("RunOnce = nil, want the failed advance of %s reported as a tick error", c.f.child.URL)
+	}
+
+	events, eventsErr := c.store.Events(t.Context())
+	if eventsErr != nil {
+		t.Fatal(eventsErr)
+	}
+	if hasEvent(events, "refresh_conflicted", "") {
+		t.Errorf("events = %+v, want no refresh_conflicted: the worktree is not mid-merge", events)
 	}
 }

@@ -207,7 +207,7 @@ func TestSidebarOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, seededServer(t), "/tickets")
-	if strings.Contains(page, "feature=") {
+	if strings.Contains(page, `href="/f/`) {
 		t.Errorf("sidebar rendered a feature link though no ticket carries one:\n%s", page)
 	}
 }

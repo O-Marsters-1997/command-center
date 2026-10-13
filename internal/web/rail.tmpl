@@ -23,7 +23,7 @@
 {{end}}
 
 {{define "rail"}}
-<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-include="#rail-search" hx-swap="outerHTML">
+<div id="rail-body" hx-get="/rail" hx-trigger="every 5s, htmx:pushedIntoHistory from:body, htmx:historyRestore from:body" hx-include="#rail-search" hx-sync="this:drop" hx-swap="outerHTML">
   {{- if .NoMatch}}
   <p class="rail-empty">Nothing matches “{{.Query}}”.</p>
   {{- else}}

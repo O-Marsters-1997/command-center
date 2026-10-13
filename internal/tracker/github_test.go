@@ -93,6 +93,14 @@ func TestDecodeBlockedBy(t *testing.T) {
 	}
 }
 
+func TestDecodeBlockedByRejectsEmptyOutput(t *testing.T) {
+	t.Parallel()
+
+	if _, err := decodeBlockedBy(nil); err == nil {
+		t.Fatal("decodeBlockedBy accepted empty output")
+	}
+}
+
 func TestDecodeBlockedByRejectsGarbage(t *testing.T) {
 	t.Parallel()
 

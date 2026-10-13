@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -14,9 +13,6 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 		r.PathValue("owner"), r.PathValue("name"), r.PathValue("n"),
 		r.URL.Query().Get("log") == "raw",
 	)
-	if errors.Is(err, view.ErrSessionNotFound) {
-		return withStatus(http.StatusNotFound, err)
-	}
 	if err != nil {
 		return err
 	}
@@ -41,5 +37,6 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 		return err
 	}
 	page.Toast = "Queued " + verb
+	page.ResetComposer = verb == "follow-up"
 	return renderHTML(w, "sessionActions", page)
 }
