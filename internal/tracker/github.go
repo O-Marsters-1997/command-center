@@ -134,10 +134,10 @@ type rawDependency struct {
 func decodeBlockedBy(raw []byte) ([]string, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	urls := []string{}
-	for {
+	for pages := 0; ; pages++ {
 		var page []rawDependency
 		err := dec.Decode(&page)
-		if errors.Is(err, io.EOF) {
+		if errors.Is(err, io.EOF) && pages > 0 {
 			return urls, nil
 		}
 		if err != nil {
