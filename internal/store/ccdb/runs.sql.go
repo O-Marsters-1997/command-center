@@ -198,8 +198,8 @@ func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketR
 }
 
 const latestSessionID = `-- name: LatestSessionID :one
-SELECT COALESCE(session_id::text, '')::text AS session_id FROM runs
-WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') ORDER BY id DESC LIMIT 1
+SELECT session_id::text AS session_id FROM runs
+WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1
 `
 
 func (q *Queries) LatestSessionID(ctx context.Context, ticketID sql.NullString) (string, error) {

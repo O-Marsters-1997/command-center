@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -39,7 +40,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 	mode := view.NormalizeLogFilter(r.URL.Query().Get("log"))
 
-	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
+	path, ended, err := s.latestRunLog(ctx, ticketURL)
 	if err != nil {
 		return err
 	}
@@ -92,10 +93,18 @@ func (s *Server) followLog(
 			return ctx.Err()
 		case <-s.clock.After(logPollInterval):
 		}
-		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
+		if path, ended, err = s.latestRunLog(ctx, ticketURL); err != nil {
 			return err
 		}
 	}
+}
+
+func (s *Server) latestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
+	path, ended, err = s.store.LatestRunLog(ctx, ticketURL)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", true, nil
+	}
+	return path, ended, err
 }
 
 func queryOffset(r *http.Request, key string) (int64, error) {
