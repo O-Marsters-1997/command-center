@@ -116,10 +116,9 @@ var wantRowVerbs = map[plan.State][]string{
 	plan.BaseMoved:               {plan.VerbRefresh, plan.VerbReRun},
 	plan.CIFailed:                {plan.VerbReRun},
 	plan.RefreshConflicted:       {plan.VerbAbort},
-	plan.ConflictsWithMain:       {plan.VerbResolve, plan.VerbRefresh},
+	plan.ConflictsWithMain:       {plan.VerbRefresh},
 	plan.VerificationFailed:      {plan.VerbRetryPush, plan.VerbReRun},
 	plan.WaitingOnProducerDeploy: {plan.VerbReRun},
-	plan.ConflictResolved:        {plan.VerbCommitResolution},
 	plan.AwaitingInput:           {plan.VerbReRun},
 }
 

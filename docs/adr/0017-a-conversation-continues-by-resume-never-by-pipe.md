@@ -24,7 +24,7 @@ message. A run that is alive is cancelled first. Nothing is piped to a running p
 
 - A session is the set of runs sharing `runs.session_id`. A launch or re-run starts one with
   `gen_random_uuid()` at skeleton insert; a resume run copies the id it continues. Only `agent` and
-  `follow_up` runs carry a session. Review and resolve runs never do.
+  `follow_up` runs carry a session.
 - A session is resumable when its latest agent or follow-up run has a `session_id` and
   `*/<id>.jsonl` exists under `claude_projects_dir`. Otherwise a message falls back to a fresh
   follow-up, which covers a pruned transcript and a custom `agent_command` without `{session}`.

@@ -328,15 +328,3 @@ func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string
 		return row.LogPath.String, row.EndedAt.Valid, nil
 	}
 }
-
-// PrecedingRunKind is the kind of the ticket's run just before runID, empty when there is none.
-func (s *Store) PrecedingRunKind(ctx context.Context, ticketID string, runID int64) (string, error) {
-	kind, err := s.q.PrecedingRunKind(ctx, ccdb.PrecedingRunKindParams{TicketID: notNull(ticketID), ID: runID})
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("select run before %d: %w", runID, err)
-	}
-	return kind, nil
-}

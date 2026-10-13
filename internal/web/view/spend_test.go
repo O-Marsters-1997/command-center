@@ -114,17 +114,17 @@ func TestApplyTicketSpendStacksByKindAndFlagsAnOpenTicket(t *testing.T) {
 
 	rows := []Row{{URL: "sandbox://CC-1"}, {URL: "sandbox://CC-2"}}
 	byURL := map[string]store.BoardTicketSpend{
-		"sandbox://CC-1": {AgentUSD: 1, ResolveUSD: 0.5, FollowUpUSD: 0.25, Merged: true},
+		"sandbox://CC-1": {AgentUSD: 1, FollowUpUSD: 0.25, Merged: true},
 		"sandbox://CC-2": {AgentUSD: 2, Merged: false},
 	}
 	applyTicketSpend(rows, byURL, 0.1)
 
 	merged := rows[0]
-	if merged.AgentPctWeek != 10 || merged.ResolvePctWeek != 5 || merged.FollowUpPctWeek != 2.5 {
-		t.Errorf("merged pct split = %+v, want 10/5/2.5", merged)
+	if merged.AgentPctWeek != 10 || merged.FollowUpPctWeek != 2.5 {
+		t.Errorf("merged pct split = %+v, want 10/2.5", merged)
 	}
-	if merged.SpendPctWeek != 17.5 {
-		t.Errorf("merged SpendPctWeek = %v, want 17.5 (the stacked total)", merged.SpendPctWeek)
+	if merged.SpendPctWeek != 12.5 {
+		t.Errorf("merged SpendPctWeek = %v, want 12.5 (the stacked total)", merged.SpendPctWeek)
 	}
 	if merged.TicketOpen {
 		t.Error("merged TicketOpen = true, want false")

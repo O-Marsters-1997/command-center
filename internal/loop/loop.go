@@ -25,9 +25,7 @@ import (
 
 const (
 	runKindAgent    = "agent"
-	runKindResolve  = plan.RunKindResolve
 	runKindFollowUp = "follow_up"
-	runKindReview   = "review"
 )
 
 const (
@@ -225,17 +223,13 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation
 		func() error { return l.applyReRunIntents(ctx, snap, obs) },
 		func() error { return l.applyFollowUpIntents(ctx, obs) },
 		func() error { return l.applyAbortIntents(ctx, snap, obs) },
-		func() error { return l.applyResolveIntents(ctx, obs) },
 		func() error { l.markSpawnedAlive(obs); return nil },
 		func() error { return l.retargetMerged(ctx, snap, obs) },
 		func() error { return l.applyRefreshIntents(ctx, snap, obs) },
 		func() error { l.rereadLocalTips(ctx, obs); return nil },
 		func() error { return l.applyRetryPushIntents(ctx, snap, obs) },
 		func() error { return l.applyRemoveWorktreeIntents(ctx, snap, obs) },
-		func() error { return l.applyCommitResolutionIntents(ctx, snap, obs) },
-		func() error { return l.launchReviews(ctx, snap, obs) },
 		func() error { return l.pushPushable(ctx, snap, obs) },
-		func() error { return l.applyReviewFindingsIntents(ctx, obs) },
 		func() error { return l.applyDraftGate(ctx, snap) },
 		func() error { return l.launchEligible(ctx, snap) },
 	)
@@ -520,13 +514,7 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	if err := l.event(ctx, ticket.URL, eventRunDisposed, outcome.String()); err != nil {
-		return err
-	}
-	if run.Kind != runKindReview {
-		return nil
-	}
-	return l.queueReviewFindings(ctx, run)
+	return l.event(ctx, ticket.URL, eventRunDisposed, outcome.String())
 }
 
 func (l *Loop) outcomeFor(
@@ -555,7 +543,7 @@ func (l *Loop) outcomeFor(
 			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
 		}
 	}
-	return dispositionFor(run.Kind, commits), nil
+	return plan.Disposition(commits), nil
 }
 
 func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, error) {
@@ -752,12 +740,8 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 	}
 	defer func() { _ = logFile.Close() }()
 
-	agentCommand := l.cfg.AgentCommand
-	if spec.kind == runKindReview && len(l.cfg.ReviewAgentCommand) > 0 {
-		agentCommand = l.cfg.ReviewAgentCommand
-	}
 	spawnCfg := runner.SpawnConfig{
-		AgentCommand: agentCommand,
+		AgentCommand: l.cfg.AgentCommand,
 		WorktreePath: spec.worktree,
 		SettingsPath: l.ws.SettingsPath,
 		Model:        AgentModel,
@@ -767,12 +751,12 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) error {
 		Resume:       spec.resumeSessionID != "",
 		LogFile:      logFile,
 	}
-	if spec.kind == runKindAgent || spec.kind == runKindReview {
+	if spec.kind == runKindAgent {
 		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		return l.store.RecordDisposition(ctx, runID, dispositionFor(spec.kind, 0), nil, l.clock.Now(), nil)
+		return l.store.RecordDisposition(ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil)
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {

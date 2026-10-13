@@ -68,8 +68,8 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 
 	r := view.Row{
 		URL: "sandbox://CC-1", State: "merged", Glyph: "done",
-		AgentPctWeek: 1.5, ResolvePctWeek: 0.5, FollowUpPctWeek: 0.25,
-		SpendPctWeek: 2.25, TicketOpen: true,
+		AgentPctWeek: 1.5, FollowUpPctWeek: 0.25,
+		SpendPctWeek: 1.75, TicketOpen: true,
 	}
 	board := view.Board{Sections: view.Sectioned([]view.Row{r})}
 	var buf bytes.Buffer
@@ -80,9 +80,8 @@ func TestBoardTemplateStacksTheSpendBarByKindAndMarksAnOpenTicket(t *testing.T) 
 	got := buf.String()
 	wants := []string{
 		`data-kind="agent" style="flex-grow: 1.5"`,
-		`data-kind="resolve" style="flex-grow: 0.5"`,
 		`data-kind="follow_up" style="flex-grow: 0.25"`,
-		"2.25% week",
+		"1.75% week",
 		"open",
 	}
 	for _, want := range wants {

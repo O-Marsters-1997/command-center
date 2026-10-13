@@ -31,7 +31,7 @@ Do not spawn a background subagent and end your turn waiting for its result: its
 notification arrives in a later turn, and this session has none. That result never reaches you,
 and the process exits with your work uncommitted.
 
-Do the writing, editing and committing yourself. Code review is a separate run in a fresh context.
+Do the writing, editing and committing yourself.
 
 Write a comment only if it passes this test: name the specific thing a reader would get wrong
 without it, and that thing must live outside this repo's control. If you cannot name it, or the

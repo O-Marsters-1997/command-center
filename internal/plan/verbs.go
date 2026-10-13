@@ -1,23 +1,21 @@
 package plan
 
 const (
-	VerbLaunch           = "launch"
-	VerbKill             = "kill"
-	VerbReRun            = "re-run"
-	VerbRetryPush        = "retry-push"
-	VerbRemoveWorktree   = "remove-worktree"
-	VerbCancel           = "cancel"
-	VerbRefresh          = "refresh"
-	VerbAbort            = "abort"
-	VerbResolve          = "resolve"
-	VerbFollowUp         = "follow-up"
-	VerbCommitResolution = "commit-resolution"
+	VerbLaunch         = "launch"
+	VerbKill           = "kill"
+	VerbReRun          = "re-run"
+	VerbRetryPush      = "retry-push"
+	VerbRemoveWorktree = "remove-worktree"
+	VerbCancel         = "cancel"
+	VerbRefresh        = "refresh"
+	VerbAbort          = "abort"
+	VerbFollowUp       = "follow-up"
 )
 
 func IsRowVerb(v string) bool {
 	switch v {
 	case VerbKill, VerbReRun, VerbRetryPush, VerbRemoveWorktree, VerbCancel,
-		VerbRefresh, VerbAbort, VerbResolve, VerbFollowUp, VerbCommitResolution:
+		VerbRefresh, VerbAbort, VerbFollowUp:
 		return true
 	}
 	return false
@@ -35,8 +33,6 @@ func Verbs(s State) []string {
 		return []string{VerbFollowUp, VerbReRun}
 	case Failed, CutFailed:
 		return []string{VerbReRun, VerbFollowUp}
-	case ConflictResolved:
-		return []string{VerbCommitResolution}
 	case Checking:
 		return []string{VerbReRun, VerbFollowUp}
 	case NeedsYou:
@@ -54,7 +50,7 @@ func Verbs(s State) []string {
 	case RefreshConflicted:
 		return []string{VerbAbort}
 	case ConflictsWithMain:
-		return []string{VerbResolve, VerbRefresh}
+		return []string{VerbRefresh}
 	case VerificationFailed:
 		return []string{VerbRetryPush, VerbReRun, VerbFollowUp}
 	case WaitingOnProducerDeploy:
@@ -72,7 +68,7 @@ func (s State) Unattended() bool {
 		return true
 	case Blocked, Ready, Failed, CutFailed, NeedsYou, PushFailed, ReviewMe, PRMerged, PRClosedUnmerged,
 		BaseGone, Cancelled, CIFailed, RefreshConflicted, ConflictsWithMain, VerificationFailed,
-		WaitingOnProducerDeploy, ConflictResolved, AwaitingInput:
+		WaitingOnProducerDeploy, AwaitingInput:
 		return false
 	default:
 		return false

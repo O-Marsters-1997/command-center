@@ -23,15 +23,7 @@ type Config struct {
 	MaxAgents         int      `toml:"max_agents"`
 	Port              int      `toml:"port"`
 	AgentCommand      []string `toml:"agent_command"`
-	// MaxTurns caps an implement, follow-up or resolve run at this many agent turns, appended to
-	// AgentCommand as --max-turns. Zero (the default) sets no cap.
-	MaxTurns int `toml:"max_turns"`
-	// ReviewMaxTurns caps a review run. LoadConfig defaults it to DefaultReviewMaxTurns, or to half
-	// of MaxTurns when that is lower, and refuses a value not below MaxTurns.
-	ReviewMaxTurns int `toml:"review_max_turns"`
-	// ReviewAgentCommand is AgentCommand with ReviewMaxTurns appended. LoadConfig fills it; empty
-	// means spawn with AgentCommand.
-	ReviewAgentCommand []string `toml:"-"`
+	MaxTurns          int      `toml:"max_turns"`
 	// SpendLimit5h is the percent of the account's five-hour window at or above which nothing new
 	// spawns; 0 means unset.
 	SpendLimit5h int `toml:"spend_limit_5h"`
@@ -50,7 +42,6 @@ const (
 	defaultPort             = 7777
 	defaultMaxAgents        = 1
 	DefaultBoardPollSeconds = 5
-	DefaultReviewMaxTurns   = 20
 )
 
 var defaultAgentCommand = []string{
@@ -98,32 +89,10 @@ func LoadConfig(path string) (Config, error) {
 	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
 		return Config{}, err
 	}
-	reviewTurns, err := resolveReviewMaxTurns(cfg.MaxTurns, cfg.ReviewMaxTurns)
-	if err != nil {
-		return Config{}, fmt.Errorf("config %s: %w", path, err)
-	}
-	cfg.ReviewMaxTurns = reviewTurns
-	if len(cfg.AgentCommand) > 0 {
-		cfg.ReviewAgentCommand = withMaxTurns(cfg.AgentCommand, reviewTurns)
-	}
 	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
 		cfg.AgentCommand = withMaxTurns(cfg.AgentCommand, cfg.MaxTurns)
 	}
 	return cfg, nil
-}
-
-func resolveReviewMaxTurns(implement, review int) (int, error) {
-	switch {
-	case review < 0:
-		return 0, fmt.Errorf("review_max_turns must be positive, got %d", review)
-	case review == 0 && implement > 0:
-		return max(1, min(DefaultReviewMaxTurns, implement/2)), nil
-	case review == 0:
-		return DefaultReviewMaxTurns, nil
-	case implement > 0 && review >= implement:
-		return 0, fmt.Errorf("review_max_turns %d must be below max_turns %d", review, implement)
-	}
-	return review, nil
 }
 
 func withMaxTurns(argv []string, turns int) []string {

@@ -77,8 +77,8 @@ func buildInsightsChart(resp InsightsResponse) InsightsChart {
 		}
 		chart.Dots[i] = insightsDot{
 			X: scaleX(i), Y: scaleY(p.PctWeek),
-			Title: fmt.Sprintf("%s: %.2f%% week (agent %.2f, resolve %.2f, follow-up %.2f), merged %s",
-				name, p.PctWeek, p.AgentPctWeek, p.ResolvePctWeek, p.FollowUpPctWeek, p.MergedAt),
+			Title: fmt.Sprintf("%s: %.2f%% week (agent %.2f, follow-up %.2f), merged %s",
+				name, p.PctWeek, p.AgentPctWeek, p.FollowUpPctWeek, p.MergedAt),
 		}
 	}
 

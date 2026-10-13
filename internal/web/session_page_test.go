@@ -72,7 +72,7 @@ func sessionStoreInFeature(
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"agent", "follow-up", "resolve"} {
+	for _, kind := range []string{"agent", "follow-up"} {
 		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
 		st, _ := sessionStore(t, kind, prompt, true, true)
 		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")

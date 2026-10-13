@@ -4,7 +4,6 @@ WITH merges AS (
 )
 SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
@@ -24,7 +23,6 @@ WITH merges AS (
 )
 SELECT t.url AS ticket_id, (m.merged_at IS NOT NULL)::boolean AS merged,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'agent'), 0)::double precision AS agent_usd,
-       COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'resolve'), 0)::double precision AS resolve_usd,
        COALESCE(SUM(r.cost_usd) FILTER (WHERE r.kind = 'follow_up'), 0)::double precision AS follow_up_usd
 FROM tickets t
 LEFT JOIN merges m ON m.ticket_id = t.url

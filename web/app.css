@@ -323,10 +323,6 @@
     --glyph: var(--color-s-attention);
   }
 
-  [data-kind="resolve"] {
-    --glyph: var(--color-s-done);
-  }
-
   [data-kind="follow_up"] {
     --glyph: var(--color-s-running);
   }

@@ -56,7 +56,7 @@ func TestStateDecisions(t *testing.T) {
 		{state: plan.RefreshConflicted, want: []string{plan.VerbAbort}},
 		{
 			state: plan.ConflictsWithMain,
-			want:  []string{plan.VerbResolve, plan.VerbRefresh},
+			want:  []string{plan.VerbRefresh},
 		},
 		{
 			state: plan.VerificationFailed,
@@ -65,10 +65,6 @@ func TestStateDecisions(t *testing.T) {
 		{
 			state: plan.WaitingOnProducerDeploy,
 			want:  []string{plan.VerbReRun, plan.VerbFollowUp},
-		},
-		{
-			state: plan.ConflictResolved,
-			want:  []string{plan.VerbCommitResolution},
 		},
 	}
 

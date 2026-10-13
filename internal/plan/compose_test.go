@@ -46,24 +46,6 @@ func TestComposeOmitsTheWorkedExampleWithoutABlockerBranch(t *testing.T) {
 	}
 }
 
-func TestComposeResolve(t *testing.T) {
-	t.Parallel()
-
-	ticket := plan.Ticket{URL: "sandbox://CC-1", Branch: "cc-1"}
-
-	got := plan.ComposeResolve(ticket)
-	for _, want := range []string{
-		"cc/skills/resolve-merge-conflict/SKILL.md", "origin/main", "cc-1", "do not commit", "do not push",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("ComposeResolve = %q, want it to mention %q", got, want)
-		}
-	}
-	if got == plan.Compose(ticket) {
-		t.Error("ComposeResolve must not compose the same prompt as a launch")
-	}
-}
-
 func TestComposeFollowUp(t *testing.T) {
 	t.Parallel()
 
@@ -130,18 +112,5 @@ func TestHashChangesOnlyWhenTheWorkedExampleContentChanges(t *testing.T) {
 	sameAgain := plan.Hash(plan.Compose(ticket))
 	if sameAgain != withExample {
 		t.Error("composing the same ticket twice produced different hashes")
-	}
-}
-
-func TestComposeReviewOpensWithTheFixCommandAndStatesTheBound(t *testing.T) {
-	got := plan.ComposeReview("feat/x", "/runs/7.findings.md")
-
-	if !strings.HasPrefix(got, "/code-review --fix origin/feat/x...HEAD") {
-		t.Errorf("prompt = %q, want it to open with the review command against the base", got)
-	}
-	for _, want := range []string{"/runs/7.findings.md", "50 lines", "Do not push", "public interface"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("prompt = %q, want it to contain %q", got, want)
-		}
 	}
 }

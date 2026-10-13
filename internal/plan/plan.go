@@ -149,7 +149,6 @@ const (
 	ConflictsWithMain
 	VerificationFailed
 	WaitingOnProducerDeploy
-	ConflictResolved
 	AwaitingInput
 	stateCount
 )
@@ -198,8 +197,6 @@ func (s State) String() string {
 		return "verification_failed"
 	case WaitingOnProducerDeploy:
 		return "waiting_on_producer_deploy"
-	case ConflictResolved:
-		return "conflict_resolved"
 	case AwaitingInput:
 		return "awaiting_input"
 	case Blocked:
@@ -231,8 +228,6 @@ type RunFact struct {
 	ConflictingPeer          string
 	VerificationFailed       bool
 	VerificationFailedReason Reason
-	Resolved                 bool
-	ResolveIncompleteReason  Reason
 	Question                 string
 }
 
@@ -295,14 +290,6 @@ func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
 	case OutcomeCutFailed:
 		return CutFailed, "tp new failed to cut a worktree", true
 	case OutcomeFailed:
-		if run.Resolved {
-			return ConflictResolved, Reason(fmt.Sprintf(
-				"resolved with nothing committed; read it in the worktree before deciding what happens next, log at %s",
-				run.LogPath)), true
-		}
-		if run.ResolveIncompleteReason != "" {
-			return Failed, Reason(fmt.Sprintf("%s; log at %s", run.ResolveIncompleteReason, run.LogPath)), true
-		}
 		fallthrough
 	default:
 		return Failed, Reason(fmt.Sprintf("no commits after this run's baseline; log at %s", run.LogPath)), true
