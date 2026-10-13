@@ -50,8 +50,11 @@ island.
 4. **Everything an island starts, `onCleanup` stops**: intervals, `matchMedia` and document
    listeners, `AbortController`s. Per-instance state such as caches and ref maps lives inside the
    component, so it dies with the element. A cache keyed by id is pruned to the latest payload.
-5. **Keep DOM identity stable across refreshes.** `<For>` keys by reference, so reuse each node
-   object by id. Focus and hover then survive a poll.
+5. **Keep DOM identity stable across refreshes.** Hold polled data in `createStore` and apply each
+   poll with `reconcile(next, { key: "url" })`, which updates the existing object in place. Never
+   mutate a reused object by hand: `<For>` keys by reference and would not see the change. Focus and
+   hover survive a poll. `bun test --conditions browser` (the `test` script) loads Solid's reactive
+   store build.
 6. **Solid-rendered `hx-*` is inert until htmx processes it.** Pass the element through the one `hx`
    ref helper, which calls `window.htmx?.process(el)` after insertion. `Window.htmx` is declared once
    in `web/src/htmx.d.ts`, never per file. Copy the attribute set the Go templates use for the same

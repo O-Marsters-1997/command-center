@@ -1,17 +1,18 @@
 import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { createStore } from "solid-js/store";
+import { type GraphNode, applyPoll } from "./graph-state";
 import {
   CARD,
   MARGIN,
   bounds as layoutBounds,
   edgePath,
   edgesFor,
-  layoutWaves,
   sessionPath,
   traceChain,
   waveLabel,
 } from "./layout";
-import type { Group, Row } from "./types";
+import type { Group } from "./types";
 
 const POLL_MS = 5000;
 const PHONE = "(max-width: 759px)";
@@ -22,24 +23,7 @@ declare global {
   }
 }
 
-interface GraphNode extends Row {
-  col: number;
-  x: number;
-  y: number;
-}
-
-type Edge = ReturnType<typeof edgesFor<GraphNode>>[number];
-
-// <For> keys children by object identity, so nodes are mutated in place to keep a node button's
-// DOM and keyboard focus stable across a poll.
-const nodeCache = new Map<string, GraphNode>();
-
-function toNode(row: Row, col: number, x: number, y: number): GraphNode {
-  const node = nodeCache.get(row.url) ?? ({} as GraphNode);
-  Object.assign(node, row, { col, x, y });
-  nodeCache.set(row.url, node);
-  return node;
-}
+type Status = { kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string };
 
 function ticketRef(url: string): string {
   const parts = url.split("/");
@@ -73,18 +57,30 @@ customElement("cc-graph", {}, () => {
   const src = element.dataset.src ?? `/graph.json${window.location.search}`;
   element.textContent = "";
 
-  const [groups, setGroups] = createSignal<Group[]>([]);
+  const [nodes, setNodes] = createStore<GraphNode[]>([]);
+  const [status, setStatus] = createSignal<Status>({ kind: "loading" });
   const [focused, setFocused] = createSignal<string | null>(null);
   const [hovered, setHovered] = createSignal<string | null>(null);
 
   const nodeRefs = new Map<string, HTMLAnchorElement>();
 
+  let inflight: AbortController | undefined;
   async function load() {
+    if (document.hidden) return;
+    inflight?.abort();
+    const ctl = new AbortController();
+    inflight = ctl;
     try {
-      const res = await fetch(src);
-      if (!res.ok) return;
-      setGroups(await res.json());
-    } catch {}
+      const res = await fetch(src, { signal: ctl.signal });
+      if (!res.ok) throw new Error(`graph request failed: ${res.status}`);
+      const groups: Group[] = await res.json();
+      if (ctl.signal.aborted) return;
+      applyPoll(setNodes, groups);
+      setStatus({ kind: "ok" });
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   let timer: ReturnType<typeof setInterval>;
@@ -92,20 +88,16 @@ customElement("cc-graph", {}, () => {
     load();
     timer = setInterval(load, POLL_MS);
   });
-  onCleanup(() => clearInterval(timer));
-
-  const nodes = createMemo(() => {
-    const rows = groups().flatMap((g) => (g.root ? [g.root, ...g.children] : g.children));
-    return layoutWaves(rows, CARD).map((p) => toNode(p, p.col, p.x, p.y));
+  onCleanup(() => {
+    clearInterval(timer);
+    inflight?.abort();
   });
-  const edges = createMemo(() => edgesFor(nodes(), (n) => n.blocking));
-  const bounds = createMemo(() => layoutBounds(nodes(), CARD));
 
-  const waveCount = createMemo(() => nodes().reduce((m, n) => Math.max(m, n.col + 1), 0));
+  const edges = createMemo(() => edgesFor(nodes, (n) => n.blocking));
+  const bounds = createMemo(() => layoutBounds(nodes, CARD));
 
-  const waves = createMemo(() =>
-    Array.from({ length: waveCount() }, (_, col) => ({ col, nodes: nodes().filter((n) => n.col === col) })),
-  );
+  const waveCount = createMemo(() => nodes.reduce((m, n) => Math.max(m, n.col + 1), 0));
+  const cols = createMemo(() => Array.from({ length: waveCount() }, (_, col) => col));
 
   const phoneQuery = window.matchMedia(PHONE);
   const [phone, setPhone] = createSignal(phoneQuery.matches);
@@ -131,8 +123,8 @@ customElement("cc-graph", {}, () => {
     const [dCol] = dir;
     const inDirection =
       dCol === 0
-        ? nodes().filter((n) => n.col === node.col && n.url !== node.url)
-        : nodes().filter((n) => Math.sign(n.col - node.col) === dCol);
+        ? nodes.filter((n) => n.col === node.col && n.url !== node.url)
+        : nodes.filter((n) => Math.sign(n.col - node.col) === dCol);
     if (inDirection.length === 0) return;
     inDirection.sort((a, b) => Math.abs(a.y - node.y) - Math.abs(b.y - node.y));
     nodeRefs.get(inDirection[0].url)?.focus();
@@ -163,6 +155,7 @@ customElement("cc-graph", {}, () => {
         hx-push-url="true"
         ref={(el) => {
           nodeRefs.set(node.url, el);
+          onCleanup(() => nodeRefs.get(node.url) === el && nodeRefs.delete(node.url));
           queueMicrotask(() => window.htmx?.process(el));
         }}
         onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
@@ -191,15 +184,24 @@ customElement("cc-graph", {}, () => {
 
   return (
     <div>
+      <Show when={status()} keyed>
+        {(s) => (
+          <Show when={s.kind !== "ok"}>
+            <output class="banner ribbon mb-3 block" data-glyph={s.kind === "error" ? "failed" : "pending"}>
+              {s.kind === "error" ? `Graph out of date: ${s.message}` : "Loading graph"}
+            </output>
+          </Show>
+        )}
+      </Show>
       <Show
         when={!phone()}
         fallback={
           <div class="grid gap-4">
-            <For each={waves()}>
-              {(wave) => (
-                <section class="grid gap-2" aria-label={waveLabel(wave.col)}>
-                  <h3 class="text-xs font-medium text-fg-2">{waveLabel(wave.col)}</h3>
-                  <For each={wave.nodes}>{(node) => nodeLink(node, true)}</For>
+            <For each={cols()}>
+              {(col) => (
+                <section class="grid gap-2" aria-label={waveLabel(col)}>
+                  <h3 class="text-xs font-medium text-fg-2">{waveLabel(col)}</h3>
+                  <For each={nodes.filter((n) => n.col === col)}>{(node) => nodeLink(node, true)}</For>
                 </section>
               )}
             </For>
@@ -208,7 +210,7 @@ customElement("cc-graph", {}, () => {
       >
         <div class="relative h-[70vh] overflow-auto rounded border border-border" data-graph-panel>
           <div class="relative" style={{ width: `${bounds().width}px`, height: `${bounds().height}px` }}>
-            <For each={Array.from({ length: waveCount() }, (_, i) => i)}>
+            <For each={cols()}>
               {(col) => (
                 <span
                   class="absolute top-1 text-xs font-medium text-fg-2"
@@ -235,7 +237,7 @@ customElement("cc-graph", {}, () => {
                 }}
               </For>
             </svg>
-            <For each={nodes()}>{(node) => nodeLink(node, false)}</For>
+            <For each={nodes}>{(node) => nodeLink(node, false)}</For>
           </div>
         </div>
       </Show>
