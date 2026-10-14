@@ -73,7 +73,8 @@ func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
 		t.Fatalf("Status = %v, %q; want push pending naming #259", state, reason)
 	}
 
-	state, reason = plan.Status(plan.Facts{Unlock: plan.Unlock{Blocking: []plan.TicketURL{"#259", "#260"}}, LatestRun: run})
+	twoHeld := plan.Unlock{Blocking: []plan.TicketURL{"#259", "#260"}}
+	state, reason = plan.Status(plan.Facts{Unlock: twoHeld, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "#259, #260") {
 		t.Fatalf("Status = %v, %q; want both blockers named", state, reason)
 	}

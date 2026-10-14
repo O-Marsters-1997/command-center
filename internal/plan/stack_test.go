@@ -77,7 +77,11 @@ func TestWaveCount(t *testing.T) {
 		want     int
 	}{
 		{name: "no tickets", blocking: map[plan.TicketURL][]plan.TicketURL{}, want: 0},
-		{name: "independent tickets share one wave", blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": nil}, want: 1},
+		{
+			name:     "independent tickets share one wave",
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": nil},
+			want:     1,
+		},
 		{
 			name:     "a chain is one wave per link",
 			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": {"a"}, "c": {"b"}},

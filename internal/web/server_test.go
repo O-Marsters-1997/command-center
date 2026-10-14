@@ -494,7 +494,10 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	obs := plan.Observation{ObservedAt: now, Runs: map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}}}
+	obs := plan.Observation{
+		ObservedAt: now,
+		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
+	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

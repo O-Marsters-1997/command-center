@@ -160,7 +160,8 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tic
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		if err := l.reRunOne(ctx, t, cutSpec{ticket: ticket, baseBranch: baseBranch, promptHash: entry.PromptHash}); err != nil {
+		cut := cutSpec{ticket: ticket, baseBranch: baseBranch, promptHash: entry.PromptHash}
+		if err := l.reRunOne(ctx, t, cut); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil

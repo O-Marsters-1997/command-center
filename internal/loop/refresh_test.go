@@ -477,7 +477,8 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
 	// same as advanceMain's (retarget_test.go).
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
-	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD")))
+	cloneHead := strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)

@@ -64,7 +64,10 @@ func sessionStoreInFeature(
 			t.Fatal(err)
 		}
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}}}
+	obs := plan.Observation{
+		ObservedAt: testNow,
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}},
+	}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

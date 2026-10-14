@@ -213,7 +213,9 @@ func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
 func TestDeriveDraftReason(t *testing.T) {
 	t.Parallel()
 
-	consumer := plan.Ticket{URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1", BlockedBy: []plan.TicketURL{"sandbox://PLA-40"}}
+	consumer := plan.Ticket{
+		URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1", BlockedBy: []plan.TicketURL{"sandbox://PLA-40"},
+	}
 	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "other", Branch: "pla-40"}
 	pushedAt := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
 	rules := plan.Rules{Checks: map[string]verdict.Predicate{"r": {Success: "CI"}}}

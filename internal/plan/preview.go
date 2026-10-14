@@ -30,7 +30,9 @@ func (l PreviewLabel) String() string {
 // Preview labels one ticket's row in a launch preview. A locked ticket starts on unlock only if
 // every blocker is in the requested slice, and a non-empty conflictedBase refuses whatever the
 // blockers say.
-func Preview(unlock Unlock, slice map[TicketURL]bool, activeLaunchID int64, conflictedBase string) (PreviewLabel, Reason) {
+func Preview(
+	unlock Unlock, slice map[TicketURL]bool, activeLaunchID int64, conflictedBase string,
+) (PreviewLabel, Reason) {
 	if activeLaunchID != 0 {
 		return Refused, Reason(fmt.Sprintf("already authorised in launch %d", activeLaunchID))
 	}
