@@ -22,15 +22,15 @@ func renderBoard(t *testing.T, server *web.Server) string {
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
 	t.Helper()
-	fetch := get
+	r := req{}
 	if isFragmentRoute(path) {
-		fetch = getHX
+		r.Header = http.Header{"Hx-Request": {"true"}}
 	}
-	rec := fetch(t, server, path)
+	rec := do(t, server, http.MethodGet, path, r)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}
-	return rec.Body.String()
+	return rec.Body
 }
 
 func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }

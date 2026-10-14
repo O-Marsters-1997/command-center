@@ -1,45 +1,24 @@
 package web_test
 
 import (
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
 
-func postVerb(t *testing.T, srv *httptest.Server, target string, headers map[string]string) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
-}
-
 func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededRunning(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := newServer(seededRunning(t), testNow)
+	resp := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
 
-	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", map[string]string{"HX-Request": "true"})
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
 	}
-	body := readBody(t, resp)
+	body := resp.Body
 	if !strings.HasPrefix(strings.TrimSpace(body), `<table id="board"`) {
 		t.Errorf("htmx verb response is not the board fragment:\n%s", body)
 	}
@@ -51,18 +30,17 @@ func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 func TestVerbStillRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededRunning(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := postVerb(t, srv, "/verb?verb=kill&ticket=sandbox://CC-1", nil)
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
+	server := newServer(seededRunning(t), testNow)
+	resp := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
+	if resp.Code != http.StatusSeeOther || resp.Location != "/" {
+		t.Errorf("POST /verb = (%d, %q), want (303, /)", resp.Code, resp.Location)
+	}
 }
 
 func TestBoardSwapIsTheTableAlone(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
+	server := newServer(seededStore(t, testNow), testNow)
 	body := renderPath(t, server, "/board")
 
 	if !strings.HasPrefix(strings.TrimSpace(body), `<table id="board"`) {
@@ -88,14 +66,4 @@ func TestAgesCarryTheAbsoluteInstantForTheClock(t *testing.T) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
 		}
 	}
-}
-
-func readBody(t *testing.T, resp *http.Response) string {
-	t.Helper()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
 }

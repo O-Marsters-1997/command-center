@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -34,8 +33,8 @@ func TestBoardAsksBeforeOnlyDestructiveVerbs(t *testing.T) {
 func TestConfirmPageIsGone(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
-	rec := get(t, server, "/confirm?verb=kill&ticket=sandbox://CC-1")
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	rec := do(t, server, http.MethodGet, "/confirm?verb=kill&ticket=sandbox://CC-1", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}

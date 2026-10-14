@@ -73,21 +73,26 @@ func TestEventShownCmdByMode(t *testing.T) {
 	running := agentlog.Event{Kind: agentlog.Cmd}
 
 	tests := []struct {
+		name  string
 		mode  LogFilter
 		event agentlog.Event
 		want  bool
 	}{
-		{"all", passed, true},
-		{"tools", passed, true},
-		{"tools", running, true},
-		{"skills", failed, false},
-		{"fails", passed, false},
-		{"fails", running, false},
-		{"fails", failed, true},
+		{name: "all passed", mode: LogAll, event: passed, want: true},
+		{name: "tools passed", mode: LogTools, event: passed, want: true},
+		{name: "tools running", mode: LogTools, event: running, want: true},
+		{name: "skills failed", mode: LogSkills, event: failed},
+		{name: "fails passed", mode: LogFails, event: passed},
+		{name: "fails running", mode: LogFails, event: running},
+		{name: "fails failed", mode: LogFails, event: failed, want: true},
 	}
 	for _, tt := range tests {
-		if got := EventShown(tt.mode, tt.event); got != tt.want {
-			t.Errorf("EventShown(%q, %+v) = %v, want %v", tt.mode, tt.event, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := EventShown(tt.mode, tt.event); got != tt.want {
+				t.Errorf("EventShown(%q, %+v) = %v, want %v", tt.mode, tt.event, got, tt.want)
+			}
+		})
 	}
 }

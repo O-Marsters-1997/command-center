@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -10,16 +9,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
-
-func postProjectForm(t *testing.T, server *web.Server, form url.Values) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	return rec
-}
 
 var soloRepo = storepkg.Repo{Name: "acme/solo", Remote: "git@github.com:acme/solo.git"}
 
@@ -32,7 +21,8 @@ func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
 
-	rec := postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha", "acme/beta"}})
+	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha", "acme/beta"}}
+	rec := do(t, server, http.MethodPost, "/projects", req{Form: form})
 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST /projects = %d, want 303: %s", rec.Code, rec.Body)
@@ -53,41 +43,44 @@ func TestCreateProjectAnswersHTMXWithTheGroupsFragment(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
-	req := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
+	rec := do(t, server, http.MethodPost, "/projects", req{Form: form, Header: http.Header{"Hx-Request": {"true"}}})
 
-	server.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-hue="2"`) ||
-		strings.Contains(rec.Body.String(), "<html") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body, `data-hue="2"`) ||
+		strings.Contains(rec.Body, "<html") {
 		t.Errorf("htmx POST /projects = %d, want the groups fragment:\n%s", rec.Code, rec.Body)
 	}
 }
 
 func TestCreateProjectRefusesBadInput(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	if rec := postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}}); rec.Code != http.StatusSeeOther {
+	form := url.Values{"name": {"acme"}, "hue": {"1"}}
+	if rec := do(t, server, http.MethodPost, "/projects", req{Form: form}); rec.Code != http.StatusSeeOther {
 		t.Fatalf("first create = %d, want 303", rec.Code)
 	}
 
-	for name, c := range map[string]struct {
+	for _, c := range []struct {
+		name string
 		form url.Values
 		want int
 	}{
-		"malformed name":   {url.Values{"name": {"-bad name"}, "hue": {"1"}}, http.StatusBadRequest},
-		"hue out of range": {url.Values{"name": {"other"}, "hue": {"4"}}, http.StatusBadRequest},
-		"missing hue":      {url.Values{"name": {"other"}}, http.StatusBadRequest},
-		"malformed repo":   {url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"nope"}}, http.StatusBadRequest},
-		"case-only dupe":   {url.Values{"name": {"ACME"}, "hue": {"1"}}, http.StatusConflict},
-		"untracked repo":   {url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"acme/ghost"}}, http.StatusNotFound},
+		{name: "malformed name", form: url.Values{"name": {"-bad name"}, "hue": {"1"}}, want: http.StatusBadRequest},
+		{name: "hue out of range", form: url.Values{"name": {"other"}, "hue": {"4"}}, want: http.StatusBadRequest},
+		{name: "missing hue", form: url.Values{"name": {"other"}}, want: http.StatusBadRequest},
+		{name: "malformed repo", form: url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"nope"}},
+			want: http.StatusBadRequest},
+		{name: "case-only dupe", form: url.Values{"name": {"ACME"}, "hue": {"1"}}, want: http.StatusConflict},
+		{name: "untracked repo", form: url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"acme/ghost"}},
+			want: http.StatusNotFound},
 	} {
-		if rec := postProjectForm(t, server, c.form); rec.Code != c.want {
-			t.Errorf("%s: POST /projects = %d, want %d: %s", name, rec.Code, c.want, rec.Body)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			before := renderPath(t, server, "/repos")
+			if rec := do(t, server, http.MethodPost, "/projects", req{Form: c.form}); rec.Code != c.want {
+				t.Errorf("POST /projects = %d, want %d: %s", rec.Code, c.want, rec.Body)
+			}
+			if after := renderPath(t, server, "/repos"); after != before {
+				t.Errorf("POST /projects changed the repos page on refusal:\n%s", after)
+			}
+		})
 	}
 }
 
@@ -108,15 +101,19 @@ func TestLooseRepoRendersUnderItsOwnNameWithNoSquare(t *testing.T) {
 }
 
 func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	for _, form := range []url.Values{
-		{"name": {"one"}, "hue": {"1"}},
-		{"name": {"two"}, "hue": {"2"}},
+	for _, tt := range []struct {
+		name string
+		form url.Values
+	}{
+		{name: "first hue", form: url.Values{"name": {"one"}, "hue": {"1"}}},
+		{name: "second hue", form: url.Values{"name": {"two"}, "hue": {"2"}}},
 	} {
-		if rec := postProjectForm(t, server, form); rec.Code != http.StatusSeeOther {
-			t.Fatalf("create %v = %d", form, rec.Code)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if rec := do(t, server, http.MethodPost, "/projects", req{Form: tt.form}); rec.Code != http.StatusSeeOther {
+				t.Fatalf("create %v = %d", tt.form, rec.Code)
+			}
+		})
 	}
 
 	page := renderPath(t, server, "/repos")
@@ -128,22 +125,13 @@ func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
 	}
 }
 
-func postPath(t *testing.T, server *web.Server, path string, form url.Values) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	return rec
-}
-
 func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}})
+	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
+	do(t, server, http.MethodPost, "/projects", req{Form: form})
 
-	rec := postPath(t, server, "/projects/acme", url.Values{"name": {"acme-co"}, "hue": {"2"}})
+	rec := do(t, server, http.MethodPost, "/projects/acme", req{Form: url.Values{"name": {"acme-co"}, "hue": {"2"}}})
 
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST /projects/acme = %d, want 303: %s", rec.Code, rec.Body)
@@ -156,37 +144,46 @@ func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
 }
 
 func TestEditProjectRefusals(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
-	postProjectForm(t, server, url.Values{"name": {"beta"}, "hue": {"1"}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"beta"}, "hue": {"1"}}})
 
-	for name, c := range map[string]struct {
+	for _, c := range []struct {
+		name string
 		path string
 		form url.Values
 		want int
 	}{
-		"onto existing": {"/projects/acme", url.Values{"name": {"beta"}, "hue": {"1"}}, http.StatusConflict},
-		"unknown":       {"/projects/ghost", url.Values{"name": {"x"}, "hue": {"1"}}, http.StatusNotFound},
-		"bad hue":       {"/projects/acme", url.Values{"name": {"acme"}, "hue": {"9"}}, http.StatusBadRequest},
-		"delete ghost":  {"/projects/ghost/delete", nil, http.StatusNotFound},
-		"move unknown project": {
-			"/repos/acme/alpha/project", url.Values{"project": {"ghost"}}, http.StatusNotFound,
-		},
-		"move unknown repo": {"/repos/acme/ghost/project", url.Values{"project": {"acme"}}, http.StatusNotFound},
+		{name: "onto existing", path: "/projects/acme", form: url.Values{"name": {"beta"}, "hue": {"1"}},
+			want: http.StatusConflict},
+		{name: "unknown", path: "/projects/ghost", form: url.Values{"name": {"x"}, "hue": {"1"}}, want: http.StatusNotFound},
+		{name: "bad hue", path: "/projects/acme", form: url.Values{"name": {"acme"}, "hue": {"9"}},
+			want: http.StatusBadRequest},
+		{name: "delete ghost", path: "/projects/ghost/delete", want: http.StatusNotFound},
+		{name: "move unknown project", path: "/repos/acme/alpha/project", form: url.Values{"project": {"ghost"}},
+			want: http.StatusNotFound},
+		{name: "move unknown repo", path: "/repos/acme/ghost/project", form: url.Values{"project": {"acme"}},
+			want: http.StatusNotFound},
 	} {
-		if rec := postPath(t, server, c.path, c.form); rec.Code != c.want {
-			t.Errorf("%s: POST %s = %d, want %d: %s", name, c.path, rec.Code, c.want, rec.Body)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			before := renderPath(t, server, "/repos")
+			if rec := do(t, server, http.MethodPost, c.path, req{Form: c.form}); rec.Code != c.want {
+				t.Errorf("POST %s = %d, want %d: %s", c.path, rec.Code, c.want, rec.Body)
+			}
+			if after := renderPath(t, server, "/repos"); after != before {
+				t.Errorf("POST %s changed the repos page on refusal:\n%s", c.path, after)
+			}
+		})
 	}
 }
 
 func TestDeleteProjectLeavesReposLoose(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}})
+	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}}
+	do(t, server, http.MethodPost, "/projects", req{Form: form})
 
-	if rec := postPath(t, server, "/projects/acme/delete", nil); rec.Code != http.StatusSeeOther {
+	if rec := do(t, server, http.MethodPost, "/projects/acme/delete", req{}); rec.Code != http.StatusSeeOther {
 		t.Fatalf("delete = %d, want 303: %s", rec.Code, rec.Body)
 	}
 
@@ -199,11 +196,12 @@ func TestDeleteProjectLeavesReposLoose(t *testing.T) {
 func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
 
 	move := url.Values{"project": {"acme"}}
-	if rec := postPath(t, server, "/repos/acme/solo/project", move); rec.Code != http.StatusSeeOther {
-		t.Fatalf("move = %d: %s", rec.Code, rec.Body)
+	moveRec := do(t, server, http.MethodPost, "/repos/acme/solo/project", req{Form: move})
+	if moveRec.Code != http.StatusSeeOther {
+		t.Fatalf("move = %d: %s", moveRec.Code, moveRec.Body)
 	}
 	if body := renderPath(t, server, "/repos"); !strings.Contains(body, `data-scope="project"`) ||
 		!strings.Contains(body, `<option value="acme" selected>`) {
@@ -211,8 +209,9 @@ func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
 	}
 
 	loosen := url.Values{"project": {""}}
-	if rec := postPath(t, server, "/repos/acme/solo/project", loosen); rec.Code != http.StatusSeeOther {
-		t.Fatalf("loosen = %d: %s", rec.Code, rec.Body)
+	loosenRec := do(t, server, http.MethodPost, "/repos/acme/solo/project", req{Form: loosen})
+	if loosenRec.Code != http.StatusSeeOther {
+		t.Fatalf("loosen = %d: %s", loosenRec.Code, loosenRec.Body)
 	}
 	if body := renderPath(t, server, "/repos"); strings.Contains(body, `<option value="acme" selected>`) {
 		t.Errorf("GET /repos after loosen still selects acme:\n%s", body)

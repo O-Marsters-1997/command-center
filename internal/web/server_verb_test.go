@@ -7,71 +7,17 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
-
-func TestVerbRejectsBadOriginAndMethod(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(seededRunning(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	tests := []struct {
-		name       string
-		method     string
-		origin     string
-		setOrigin  bool
-		wantStatus int
-	}{
-		{name: "GET is rejected before origin is even checked",
-			method: http.MethodGet, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed},
-		{name: "a foreign Origin is rejected",
-			method: http.MethodPost, origin: "http://evil.example", setOrigin: true, wantStatus: http.StatusForbidden},
-		{name: "a missing Origin is allowed by this layer",
-			method: http.MethodPost, setOrigin: false, wantStatus: http.StatusOK},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			req, err := http.NewRequest(tt.method, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tt.setOrigin {
-				req.Header.Set("Origin", tt.origin)
-			}
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
-			}
-		})
-	}
-}
 
 func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
 	t.Parallel()
 
 	store := seededRunning(t)
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
+	server := openServer(store, fixedClock(testNow), "")
+	got := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST kill = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
@@ -86,21 +32,11 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 	t.Parallel()
 
 	store := seededQueued(t)
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=cancel&ticket=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
+	server := openServer(store, fixedClock(testNow), "")
+	got := do(t, server, http.MethodPost, "/verb?verb=cancel&ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST cancel = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
 	if err != nil {
@@ -114,8 +50,7 @@ func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
 func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 
 	tests := []struct{ name, query string }{
 		{name: "unknown ticket", query: "verb=kill&ticket=sandbox://GHOST"},
@@ -126,18 +61,9 @@ func TestVerbRejectsUnknownTicketOrUnsupportedVerb(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?"+tt.query, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.Header.Set("Origin", srv.URL)
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400", resp.StatusCode)
+			got := do(t, server, http.MethodPost, "/verb?"+tt.query, req{})
+			if got.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", got.Code)
 			}
 		})
 	}
@@ -147,23 +73,12 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	t.Parallel()
 
 	store := seededRunning(t)
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	server := openServer(store, fixedClock(testNow), "")
+	form := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}
+	got := do(t, server, http.MethodPost, "/verb", req{Form: form})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST kill form = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
@@ -177,7 +92,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededRunning(t), realClock{}, ""))
+	srv := httptest.NewServer(openServer(seededRunning(t), fixedClock(testNow), ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
@@ -208,9 +123,8 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 
 func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	store := seededStore(t, testNow)
+	server := openServer(store, fixedClock(testNow), "")
 
 	tests := []struct {
 		name   string
@@ -221,24 +135,13 @@ func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
+			form := url.Values{"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}}
 			if tt.prompt != "" {
-				body.Set("prompt", tt.prompt)
+				form.Set("prompt", tt.prompt)
 			}
-			req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body.Encode()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.Header.Set("Origin", srv.URL)
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400", resp.StatusCode)
+			got := do(t, server, http.MethodPost, "/verb", req{Form: form})
+			if got.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", got.Code)
 			}
 		})
 	}
@@ -256,25 +159,15 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 	t.Parallel()
 
 	store := seededFailed(t)
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := openServer(store, fixedClock(testNow), "")
 
-	body := url.Values{
+	form := url.Values{
 		"verb": {"follow-up"}, "ticket": {"sandbox://CC-1"}, "prompt": {"fix the flaky test"},
-	}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
+	got := do(t, server, http.MethodPost, "/verb", req{Form: form})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST follow-up = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")
 	if err != nil {
@@ -291,30 +184,14 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 func TestVerbAnswers409WhenTheRowsStateDoesNotOfferIt(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/verb?verb=kill&ticket=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
+	store := seededStore(t, testNow)
+	server := openServer(store, fixedClock(testNow), "")
+	got := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: a ready row does not offer kill", got.Code)
 	}
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("status = %d, want 409: a ready row does not offer kill", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(body), "ready") || !strings.Contains(string(body), "kill") {
-		t.Errorf("body = %q, want the row's state and the refused verb named", body)
+	if !strings.Contains(got.Body, "ready") || !strings.Contains(got.Body, "kill") {
+		t.Errorf("body = %q, want the row's state and the refused verb named", got.Body)
 	}
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")

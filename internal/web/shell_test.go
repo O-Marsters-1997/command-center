@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -89,14 +90,21 @@ func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	for _, path := range []string{"/tickets", "/insights", "/repos"} {
-		body := renderPath(t, server, path)
-		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
-		for _, want := range anchors {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s is missing %q:\n%s", path, want, body)
+	for _, tt := range []struct{ name, path string }{
+		{name: "tickets", path: "/tickets"},
+		{name: "insights", path: "/insights"},
+		{name: "repos", path: "/repos"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := renderPath(t, server, tt.path)
+			anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
+			for _, want := range anchors {
+				if !strings.Contains(body, want) {
+					t.Errorf("GET %s is missing %q:\n%s", tt.path, want, body)
+				}
 			}
-		}
+		})
 	}
 
 	body := renderPath(t, server, "/insights")
@@ -152,27 +160,35 @@ func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	for _, path := range []string{"/", "/tickets", "/insights", "/repos"} {
-		body := renderPath(t, server, path)
-		sheet := strings.Index(body, `<dialog id="key-sheet"`)
-		main := strings.Index(body, `id="main"`)
-		if sheet < 0 || main < 0 || sheet > main {
-			t.Errorf("GET %s: sheet at %d, main at %d, want the sheet in the sidebar before main", path, sheet, main)
-		}
-		if !strings.Contains(body, `data-key="?"`) {
-			t.Errorf("GET %s: no Shortcuts button with data-key=\"?\"", path)
-		}
-		for _, group := range view.Keymap {
-			if !strings.Contains(body, ">"+html.EscapeString(group.Title)+"</h3>") {
-				t.Errorf("GET %s: sheet is missing the group heading %q", path, group.Title)
+	for _, tt := range []struct{ name, path string }{
+		{name: "home", path: "/"},
+		{name: "tickets", path: "/tickets"},
+		{name: "insights", path: "/insights"},
+		{name: "repos", path: "/repos"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := renderPath(t, server, tt.path)
+			sheet := strings.Index(body, `<dialog id="key-sheet"`)
+			main := strings.Index(body, `id="main"`)
+			if sheet < 0 || main < 0 || sheet > main {
+				t.Errorf("GET %s: sheet at %d, main at %d, want the sheet in the sidebar before main", tt.path, sheet, main)
 			}
-			for _, row := range group.Rows {
-				want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
-				if !strings.Contains(body, want) {
-					t.Errorf("GET %s: sheet is missing the row %q", path, want)
+			if !strings.Contains(body, `data-key="?"`) {
+				t.Errorf("GET %s: no Shortcuts button with data-key=\"?\"", tt.path)
+			}
+			for _, group := range view.Keymap {
+				if !strings.Contains(body, ">"+html.EscapeString(group.Title)+"</h3>") {
+					t.Errorf("GET %s: sheet is missing the group heading %q", tt.path, group.Title)
+				}
+				for _, row := range group.Rows {
+					want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
+					if !strings.Contains(body, want) {
+						t.Errorf("GET %s: sheet is missing the row %q", tt.path, want)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
@@ -280,9 +296,7 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	dependent := storepkg.Ticket{
 		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},
 	}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{blocker, dependent}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, blocker, dependent)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})

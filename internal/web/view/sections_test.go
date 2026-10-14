@@ -3,6 +3,8 @@ package view_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -19,13 +21,14 @@ func TestSectionedOrdersByAttentionAndDropsEmptySections(t *testing.T) {
 		{URL: "checking", Glyph: plan.GlyphChecking},
 	}
 	want := []struct {
+		name  string
 		title string
 		urls  []string
 	}{
-		{"Needs you", []string{"failed", "attention"}},
-		{"In progress", []string{"running", "checking"}},
-		{"Blocked", []string{"blocked"}},
-		{"Done", []string{"done"}},
+		{name: "needs you", title: "Needs you", urls: []string{"failed", "attention"}},
+		{name: "in progress", title: "In progress", urls: []string{"running", "checking"}},
+		{name: "blocked", title: "Blocked", urls: []string{"blocked"}},
+		{name: "done", title: "Done", urls: []string{"done"}},
 	}
 
 	got := view.Sectioned(rows)
@@ -34,41 +37,46 @@ func TestSectionedOrdersByAttentionAndDropsEmptySections(t *testing.T) {
 		t.Fatalf("got %d sections, want %d: %+v", len(got), len(want), got)
 	}
 	for i, w := range want {
-		if got[i].Title != w.title {
-			t.Errorf("section %d = %q, want %q", i, got[i].Title, w.title)
-		}
-		var urls []string
-		for _, r := range got[i].Rows {
-			urls = append(urls, r.URL)
-		}
-		if len(urls) != len(w.urls) {
-			t.Fatalf("%s rows = %v, want %v", w.title, urls, w.urls)
-		}
-		for j := range urls {
-			if urls[j] != w.urls[j] {
-				t.Errorf("%s rows = %v, want %v", w.title, urls, w.urls)
+		t.Run(w.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got[i].Title != w.title {
+				t.Errorf("section %d = %q, want %q", i, got[i].Title, w.title)
 			}
-		}
+			var urls []string
+			for _, r := range got[i].Rows {
+				urls = append(urls, r.URL)
+			}
+			if diff := cmp.Diff(w.urls, urls); diff != "" {
+				t.Errorf("%s rows (-want +got):\n%s", w.title, diff)
+			}
+		})
 	}
 }
 
 func TestSectionedPresentsTheBoardBands(t *testing.T) {
 	t.Parallel()
 	want := []struct {
+		name  string
 		glyph plan.GlyphWord
 		key   view.SectionKey
 		color plan.GlyphWord
 		stat  string
 		title string
 	}{
-		{plan.GlyphAttention, view.SectionNeedsYou, plan.GlyphAttention, "need you", "Needs you"},
-		{plan.GlyphRunning, view.SectionInProgress, plan.GlyphRunning, "in progress", "In progress"},
-		{plan.GlyphReady, view.SectionReady, plan.GlyphReady, "ready", "Ready to launch"},
-		{plan.GlyphBlocked, view.SectionBlocked, plan.GlyphBlocked, "blocked", "Blocked"},
-		{plan.GlyphDone, view.SectionDone, plan.GlyphDone, "merged", "Done"},
+		{name: "needs you", glyph: plan.GlyphAttention, key: view.SectionNeedsYou,
+			color: plan.GlyphAttention, stat: "need you", title: "Needs you"},
+		{name: "in progress", glyph: plan.GlyphRunning, key: view.SectionInProgress,
+			color: plan.GlyphRunning, stat: "in progress", title: "In progress"},
+		{name: "ready", glyph: plan.GlyphReady, key: view.SectionReady,
+			color: plan.GlyphReady, stat: "ready", title: "Ready to launch"},
+		{name: "blocked", glyph: plan.GlyphBlocked, key: view.SectionBlocked,
+			color: plan.GlyphBlocked, stat: "blocked", title: "Blocked"},
+		{name: "done", glyph: plan.GlyphDone, key: view.SectionDone,
+			color: plan.GlyphDone, stat: "merged", title: "Done"},
 	}
 	for _, tt := range want {
-		t.Run(string(tt.key), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := view.Sectioned([]view.Row{{Glyph: tt.glyph}})
 			if len(got) != 1 {

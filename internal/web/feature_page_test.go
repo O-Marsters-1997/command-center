@@ -57,7 +57,7 @@ func TestFeaturePageTabPairMarksTheBoardCurrent(t *testing.T) {
 func TestFeaturePageUnknownFeatureIs404(t *testing.T) {
 	t.Parallel()
 
-	rec := get(t, threeFeatureServer(t), "/f/bogus")
+	rec := do(t, threeFeatureServer(t), http.MethodGet, "/f/bogus", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus: status = %d, want 404", rec.Code)
 	}

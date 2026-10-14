@@ -35,7 +35,7 @@ func TestFeaturePageHasNoDialogUntilLaunchIsOpened(t *testing.T) {
 func TestFeatureLaunchRouteUnknownFeatureIs404(t *testing.T) {
 	t.Parallel()
 
-	if rec := get(t, threeFeatureServer(t), "/f/bogus/launch"); rec.Code != http.StatusNotFound {
+	if rec := do(t, threeFeatureServer(t), http.MethodGet, "/f/bogus/launch", req{}); rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus/launch: status = %d, want 404", rec.Code)
 	}
 }

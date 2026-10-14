@@ -5,6 +5,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
@@ -15,9 +16,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
 		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Titles: map[plan.TicketURL]string{
@@ -31,17 +30,19 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	page := renderBoard(t, newServer(st, testNow))
 
-	for _, tc := range []struct{ name, got, want string }{
-		{"titled ticket cell", rowCellText(t, page, tickets[0].URL, `a href="[^"]*"[^>]*`, "a"), "#100"},
-		{
-			"titled task cell", rowCellText(t, page, tickets[0].URL, "div", "div"),
-			"Put each ticket&#39;s issue title on its row",
-		},
-		{"untitled ticket cell", rowCellText(t, page, tickets[1].URL, `a href="[^"]*"[^>]*`, "a"), "#101"},
-		{"untitled task cell", rowCellText(t, page, tickets[1].URL, "div", "div"), "untitled"},
+	for _, tc := range []struct{ name, ticketURL, tagPattern, tag, want string }{
+		{name: "titled ticket cell", ticketURL: tickets[0].URL, tagPattern: `a href="[^"]*"[^>]*`, tag: "a", want: "#100"},
+		{name: "titled task cell", ticketURL: tickets[0].URL, tagPattern: "div", tag: "div",
+			want: "Put each ticket&#39;s issue title on its row"},
+		{name: "untitled ticket cell", ticketURL: tickets[1].URL, tagPattern: `a href="[^"]*"[^>]*`, tag: "a", want: "#101"},
+		{name: "untitled task cell", ticketURL: tickets[1].URL, tagPattern: "div", tag: "div", want: "untitled"},
 	} {
-		if tc.got != tc.want {
-			t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := rowCellText(t, page, tc.ticketURL, tc.tagPattern, tc.tag)
+			if got != tc.want {
+				t.Errorf("rowCellText = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

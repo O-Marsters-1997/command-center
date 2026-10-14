@@ -3,7 +3,6 @@ package view
 import (
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -25,7 +24,7 @@ func TestBuildRailNarrowsToAProjectAndKeepsAdmittedChains(t *testing.T) {
 	t.Parallel()
 
 	params := RailParams{Project: "acme", projectRepos: []string{"acme/web", "acme/api"}}
-	rail := buildRail(scopedRailRows(), time.Now(), params)
+	rail := buildRail(scopedRailRows(), testNow, params)
 
 	if got := refs(rail.NeedsYou); !slices.Equal(got, []string{"#1", "#5"}) {
 		t.Errorf("NeedsYou = %v, want acme's #1 and the out-of-project member #5 of its chain", got)
@@ -38,7 +37,7 @@ func TestBuildRailNarrowsToAProjectAndKeepsAdmittedChains(t *testing.T) {
 func TestBuildRailNarrowsToARepo(t *testing.T) {
 	t.Parallel()
 
-	rail := buildRail(scopedRailRows(), time.Now(), RailParams{Repo: "other/repo"})
+	rail := buildRail(scopedRailRows(), testNow, RailParams{Repo: "other/repo"})
 
 	if got := refs(rail.NeedsYou); !slices.Equal(got, []string{"#1", "#3", "#5"}) {
 		t.Errorf("NeedsYou = %v, want %v (#1 rides in on #5's chain)", got, []string{"#1", "#3", "#5"})
@@ -52,7 +51,7 @@ func TestBuildRailLinksCarryTheProject(t *testing.T) {
 	t.Parallel()
 
 	params := RailParams{Project: "acme", projectRepos: []string{"acme/web", "acme/api"}}
-	rail := buildRail(scopedRailRows(), time.Now(), params)
+	rail := buildRail(scopedRailRows(), testNow, params)
 
 	if want := "/s/acme/web/1?project=acme"; rail.NeedsYou[0].Path != want {
 		t.Errorf("Path = %q, want %q", rail.NeedsYou[0].Path, want)

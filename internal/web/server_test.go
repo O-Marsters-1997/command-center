@@ -1,62 +1,37 @@
 package web_test
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func noRedirect(srv *httptest.Server) *http.Client {
-	client := *srv.Client()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &client
-}
-
-func assertSeeOtherHome(t *testing.T, resp *http.Response) {
-	t.Helper()
-
-	if resp.StatusCode != http.StatusSeeOther {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status = %d, want 303: %s", resp.StatusCode, body)
-	}
-	if got := resp.Header.Get("Location"); got != "/" {
-		t.Fatalf("Location = %q, want %q", got, "/")
-	}
-}
-
 func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
-
-	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticketURL, Kind: "agent", BaselineSHA: "basesha", PromptHash: "hash-1",
+	return storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: ticketURL, Kind: plan.RunKindAgent, Pgid: 4242,
+		StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: time.Now(), LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return runID
 }
 
 func seededRunning(t *testing.T) *storepkg.Store {
 	t.Helper()
 
-	store := seededStore(t, time.Now())
+	store := seededStore(t, testNow)
 	seedRun(t, store, "sandbox://CC-1")
 	obs, _, err := store.LastObservation(t.Context())
 	if err != nil {
@@ -72,12 +47,12 @@ func seededRunning(t *testing.T) *storepkg.Store {
 func seededFailed(t *testing.T) *storepkg.Store {
 	t.Helper()
 
-	store := seededStore(t, time.Now())
+	store := seededStore(t, testNow)
 	runID := seedRun(t, store, "sandbox://CC-1")
 	exitCode := 1
 	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
-		Cost: option.None[float64](), EndedAt: time.Now(),
+		Cost: option.None[float64](), EndedAt: testNow,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +62,8 @@ func seededFailed(t *testing.T) *storepkg.Store {
 func seededQueued(t *testing.T) *storepkg.Store {
 	t.Helper()
 
-	store := seededStore(t, time.Now())
-	now := time.Now()
+	store := seededStore(t, testNow)
+	now := testNow
 	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-1", At: now,
 	}); err != nil {
@@ -109,9 +84,7 @@ func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	obs := plan.Observation{
 		ObservedAt: observedAt,
@@ -167,24 +140,18 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	const parentTip, childTip = "parent-tip", "child-tip"
-	if err := store.RecordPush(ctx, storepkg.Push{
-		Ticket: "sandbox://PARENT", Tip: parentTip, BaseBranch: "main", BaseSHA: "main-tip", At: at,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordPush(ctx, storepkg.Push{
-		Ticket: "sandbox://CHILD", Tip: childTip, BaseBranch: "parent", BaseSHA: parentTip, At: at,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: "sandbox://PARENT", Tip: parentTip, Base: "main", BaseTip: "main-tip", At: at,
+	})
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: "sandbox://CHILD", Tip: childTip, Base: "parent", BaseTip: parentTip, At: at,
+	})
 
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{
@@ -228,18 +195,14 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 
 	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	const tip = "ci-tip"
-	if err := store.RecordPush(ctx, storepkg.Push{
-		Ticket: plan.TicketURL(ticket.URL), Tip: plan.SHA(tip), BaseBranch: "main", BaseSHA: "main-tip", At: at,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: ticket.URL, Tip: tip, Base: "main", BaseTip: "main-tip", At: at,
+	})
 
 	obs := plan.Observation{
 		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
@@ -295,18 +258,14 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://CC-1", at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(ctx, storepkg.Push{
-		Ticket: "sandbox://CC-1", Tip: plan.SHA(tip), BaseBranch: "main", BaseSHA: "main-tip", At: at,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: "sandbox://CC-1", Tip: tip, Base: "main", BaseTip: "main-tip", At: at,
+	})
 
 	obs := plan.Observation{
 		Worktrees:  map[plan.BranchRef]string{branchRef("repo", "cc-1"): "/repos/cc-1"},
@@ -346,96 +305,170 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 func TestServerRejectsUnknownPaths(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 
-	rec := get(t, server, "/nope")
+	rec := do(t, server, http.MethodGet, "/nope", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
 	}
 }
 
-func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
+func seededStoreAtTestNow(t *testing.T) *storepkg.Store {
+	t.Helper()
+	return seededStore(t, testNow)
+}
+
+func pendingMutationIntentCount(t *testing.T, store *storepkg.Store) int {
+	t.Helper()
+	byTicket, err := store.PendingIntentsByTicket(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, intents := range byTicket {
+		count += len(intents)
+	}
+	edits, err := store.PendingEditTicketIntents(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return count + len(edits)
+}
+
+func TestMutationRoutesCheckOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	tests := []struct {
-		name       string
-		method     string
-		origin     string
-		setOrigin  bool
-		wantStatus int
+	routes := []struct {
+		name   string
+		target string
+		form   url.Values
+		seed   func(*testing.T) *storepkg.Store
 	}{
-		{
-			name:   "PUT is rejected before origin is even checked",
-			method: http.MethodPut, origin: srv.URL, setOrigin: true, wantStatus: http.StatusMethodNotAllowed,
-		},
-		{
-			name:   "a foreign Origin is rejected",
-			method: http.MethodPost, origin: "http://evil.example", setOrigin: true, wantStatus: http.StatusForbidden,
-		},
-		{
-			name:   "a missing Origin is allowed by this layer",
-			method: http.MethodPost, setOrigin: false, wantStatus: http.StatusOK,
-		},
+		{name: "launch", target: "/launch?ticket=sandbox://CC-1", seed: seededStoreAtTestNow},
+		{name: "verb", target: "/verb?verb=kill&ticket=sandbox://CC-1", seed: seededRunning},
+		{name: "ticket", target: "/ticket", form: url.Values{
+			"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"},
+		}, seed: seededStoreAtTestNow},
+		{name: "launch/open", target: "/launch/open", form: url.Values{"feature": {"x"}}, seed: openStore},
+		{name: "feature import", target: "/features/project:x/import", seed: openStore},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	origins := []struct {
+		name, value string
+		wantStatus  int
+		wantIntents int
+	}{
+		{name: "foreign", value: "http://evil.example", wantStatus: http.StatusForbidden},
+		{name: "missing", value: "-", wantStatus: http.StatusSeeOther, wantIntents: 1},
+	}
+	for _, route := range routes {
+		t.Run(route.name, func(t *testing.T) {
 			t.Parallel()
-			req, err := http.NewRequest(tt.method, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tt.setOrigin {
-				req.Header.Set("Origin", tt.origin)
-			}
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+			for _, tc := range origins {
+				t.Run(tc.name, func(t *testing.T) {
+					store := route.seed(t)
+					before := pendingMutationIntentCount(t, store)
+					beforeTickets, err := store.Tickets(t.Context())
+					if err != nil {
+						t.Fatal(err)
+					}
+					got := do(t, newServer(store, testNow), http.MethodPost, route.target, req{
+						Form: route.form, Origin: tc.value,
+					})
+					if got.Code != tc.wantStatus {
+						t.Errorf("POST %s = %d, want %d: %s", route.target, got.Code, tc.wantStatus, got.Body)
+					}
+					if after := pendingMutationIntentCount(t, store); after != before+tc.wantIntents {
+						t.Errorf("pending intents = %d, want %d", after, before+tc.wantIntents)
+					}
+					afterTickets, err := store.Tickets(t.Context())
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(beforeTickets, afterTickets); diff != "" {
+						t.Errorf("tickets changed before reconciliation (-before +after):\n%s", diff)
+					}
+				})
 			}
 		})
+	}
+}
+
+func TestMutationRoutesAllowSameOrigin(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, target string
+		form         url.Values
+		seed         func(*testing.T) *storepkg.Store
+	}{
+		{
+			name: "launch same origin", target: "/launch?ticket=sandbox://CC-1",
+			seed: seededStoreAtTestNow,
+		},
+		{name: "verb same origin", target: "/verb?verb=kill&ticket=sandbox://CC-1", seed: seededRunning},
+		{
+			name: "ticket same origin", target: "/ticket",
+			form: url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}},
+			seed: seededStoreAtTestNow,
+		},
+		{name: "launch/open same origin", target: "/launch/open", form: url.Values{"feature": {"x"}}, seed: openStore},
+		{name: "feature import same origin", target: "/features/project:x/import", seed: openStore},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := do(t, newServer(tc.seed(t), testNow), http.MethodPost, tc.target, req{Form: tc.form})
+			if got.Code != http.StatusSeeOther {
+				t.Errorf("POST %s = %d, want 303: %s", tc.target, got.Code, got.Body)
+			}
+		})
+	}
+}
+
+func TestMutationRoutesRejectWrongMethod(t *testing.T) {
+	t.Parallel()
+	store := openStore(t)
+	server := newServer(store, testNow)
+	for _, target := range []string{
+		"/launch?ticket=sandbox://CC-1", "/verb?verb=kill&ticket=sandbox://CC-1",
+		"/ticket", "/launch/open", "/features/project:x/import",
+	} {
+		t.Run(target, func(t *testing.T) {
+			t.Parallel()
+			got := do(t, server, http.MethodPut, target, req{})
+			if got.Code != http.StatusMethodNotAllowed {
+				t.Errorf("PUT %s = %d, want 405: %s", target, got.Code, got.Body)
+			}
+		})
+	}
+}
+
+func TestLaunchOpenRedirectsToFeature(t *testing.T) {
+	t.Parallel()
+	got := do(t, newServer(openStore(t), testNow), http.MethodPost, "/launch/open", req{
+		Form: url.Values{"feature": {"x"}}, Origin: "-",
+	})
+	if got.Code != http.StatusSeeOther || got.Location != "/f/x/launch" {
+		t.Errorf("POST /launch/open = %d %q, want 303 /f/x/launch: %s", got.Code, got.Location, got.Body)
 	}
 }
 
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Errorf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 }
 
 func TestGetPreviewIsGone(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp, err := http.Get(srv.URL + "/preview?ticket=sandbox://CC-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", resp.StatusCode)
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
+	got := do(t, server, http.MethodGet, "/preview?ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", got.Code)
 	}
 }
 
@@ -457,34 +490,31 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 		})
 		query += "&ticket=" + ticketURL
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
+	storetest.Tickets(t, store, tickets...)
+	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, query)
+	server := openServer(store, fixedClock(testNow), "")
+	candidateResp := do(t, server, http.MethodGet, "/launch/candidates.json?"+query, req{})
+	if candidateResp.Code != http.StatusOK {
+		t.Fatalf("GET candidates = %d, want 200: %s", candidateResp.Code, candidateResp.Body)
+	}
+	var candidates []jsonCandidate
+	if err := json.Unmarshal([]byte(candidateResp.Body), &candidates); err != nil {
+		t.Fatal(err)
+	}
 	if got := len(candidates); got != fanOut+1 {
 		t.Fatalf("candidates = %d, want %d: the slice must not be truncated", got, fanOut+1)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?"+query, nil)
-	if err != nil {
-		t.Fatal(err)
+	launchResp := do(t, server, http.MethodPost, "/launch?"+query, req{})
+	if launchResp.Code != http.StatusSeeOther || launchResp.Location != "/" {
+		t.Fatalf("POST /launch = %d %q, want 303 /: %s", launchResp.Code, launchResp.Location, launchResp.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-	launchResp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = launchResp.Body.Close() }()
-	assertSeeOtherHome(t, launchResp)
 
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
 		t.Fatal(err)
 	}
 	memberships, err := store.LaunchMemberships(ctx)
@@ -501,20 +531,11 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	storetest.Tickets(t, store, ticket)
+	storetest.Run(t, store, storetest.RunOpts{
+		TicketURL: ticket.URL, Kind: plan.RunKindAgent, Pgid: 4242,
+		StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
-	}); err != nil {
-		t.Fatal(err)
-	}
 	obs := plan.Observation{
 		ObservedAt: now,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
@@ -534,12 +555,12 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	store := runningRowStore(t, ticket, startedAt, now)
 
 	server := newServer(store, now)
-	rec := get(t, server, "/tickets")
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 
-	body := rec.Body.String()
+	body := rec.Body
 	wants := []string{"running", "1m30s",
 		`<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`}
 	for _, want := range wants {
@@ -555,29 +576,19 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
+	storetest.Tickets(t, store, ticket)
+	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch?ticket=sandbox://CC-1", nil)
-	if err != nil {
-		t.Fatal(err)
+	server := openServer(store, fixedClock(testNow), "")
+	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
 	}
-	req.Header.Set("Origin", srv.URL)
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
 		t.Fatal(err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
@@ -596,9 +607,9 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 	observedAt := testNow
 	server := newServer(seededStore(t, observedAt), observedAt)
 
-	rec := get(t, server, "/tickets")
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
 
-	body := rec.Body.String()
+	body := rec.Body
 	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
 		t.Errorf("page is missing %q", want)
 	}
@@ -606,10 +617,9 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 		t.Error("page still inlines a stylesheet")
 	}
 
-	rec = httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page.css", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET /page.css = %d, want 404", rec.Code)
+	css := do(t, server, http.MethodGet, "/page.css", req{})
+	if css.Code != http.StatusNotFound {
+		t.Errorf("GET /page.css = %d, want 404", css.Code)
 	}
 }
 
@@ -620,16 +630,15 @@ func TestServesTheBuiltStylesheet(t *testing.T) {
 	observedAt := testNow
 	server := newServer(seededStore(t, observedAt), observedAt)
 
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app.css", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /assets/app.css = %d, want 200", rec.Code)
+	got := do(t, server, http.MethodGet, "/assets/app.css", req{})
+	if got.Code != http.StatusOK {
+		t.Fatalf("GET /assets/app.css = %d, want 200", got.Code)
 	}
-	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
-		t.Errorf("Content-Type = %q, want text/css", got)
+	if contentType := got.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/css") {
+		t.Errorf("Content-Type = %q, want text/css", contentType)
 	}
 	for _, want := range []string{"--color-s-attention", ".glyph", "inter-variable.woff2"} {
-		if !strings.Contains(rec.Body.String(), want) {
+		if !strings.Contains(got.Body, want) {
 			t.Errorf("built stylesheet is missing %q", want)
 		}
 	}
@@ -713,15 +722,13 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
+	storetest.Tickets(t, store, tickets...)
+	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
+	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := openServer(store, fixedClock(testNow), "")
 
 	previewed := plan.Hash("a prompt sandbox://CC-2 no longer composes to")
 	recomposed := plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"}))
@@ -733,17 +740,17 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 			"sandbox://CC-2 " + previewed,
 		},
 	}
-	resp, body := postLaunchForm(t, srv, form)
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("status = %d, want 409: %s", resp.StatusCode, body)
+	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
+	if got.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", got.Code, got.Body)
 	}
 	for _, want := range []string{"sandbox://CC-2", previewed, recomposed} {
-		if !strings.Contains(body, want) {
-			t.Errorf("409 body does not name %q:\n%s", want, body)
+		if !strings.Contains(got.Body, want) {
+			t.Errorf("409 body does not name %q:\n%s", want, got.Body)
 		}
 	}
 
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
 		t.Fatal(err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
@@ -759,9 +766,8 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	store := seededStore(t, testNow)
+	server := openServer(store, fixedClock(testNow), "")
 
 	form := url.Values{
 		"ticket": {"sandbox://CC-1"},
@@ -770,10 +776,12 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 			"sandbox://CC-2 " + plan.Hash(plan.Compose(plan.Ticket{URL: "sandbox://CC-2"})),
 		},
 	}
-	resp, _ := postLaunchForm(t, srv, form)
-	assertSeeOtherHome(t, resp)
+	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
+	if got.Code != http.StatusSeeOther || got.Location != "/" {
+		t.Fatalf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+	}
 
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
 		t.Fatal(err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
@@ -788,36 +796,13 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 
 	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
-	resp, body := postLaunchForm(t, srv, form)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", got.Code, got.Body)
 	}
-}
-
-func postLaunchForm(t *testing.T, srv *httptest.Server, form url.Values) (*http.Response, string) {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch", strings.NewReader(form.Encode()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = resp.Body.Close() })
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp, string(body)
 }
 
 func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
@@ -828,16 +813,12 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 		ctx := t.Context()
 		store := openStore(t)
 		ticket := storepkg.Ticket{URL: "sandbox://CI", Repo: "repo", Branch: "ci"}
-		if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-			t.Fatal(err)
-		}
+		storetest.Tickets(t, store, ticket)
 		at := testNow
 		dispositionAsPushed(t, store, ticket.URL, at)
-		if err := store.RecordPush(ctx, storepkg.Push{
-			Ticket: plan.TicketURL(ticket.URL), Tip: "ci-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		storetest.Pushed(t, store, storetest.PushedOpts{
+			URL: ticket.URL, Tip: "ci-tip", Base: "main", BaseTip: "main-tip", At: at,
+		})
 		obs := plan.Observation{
 			BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
 			PRs: map[plan.BranchRef]plan.PR{

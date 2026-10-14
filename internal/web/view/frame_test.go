@@ -35,9 +35,9 @@ func TestBoardRailAndHomeEachReadReposAndDeriveOnce(t *testing.T) {
 		name   string
 		render func() error
 	}{
-		{"board", func() error { _, err := r.Board(t.Context(), now, Params{}); return err }},
-		{"rail", func() error { _, err := r.Rail(t.Context(), now, RailParams{}); return err }},
-		{"home", func() error { _, err := r.Home(t.Context(), now); return err }},
+		{name: "board", render: func() error { _, err := r.Board(t.Context(), now, Params{}); return err }},
+		{name: "rail", render: func() error { _, err := r.Rail(t.Context(), now, RailParams{}); return err }},
+		{name: "home", render: func() error { _, err := r.Home(t.Context(), now); return err }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			beforeRepos, beforeDerives := reads.repos, derives

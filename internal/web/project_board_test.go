@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
@@ -17,9 +18,7 @@ func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
 			BlockedBy: []string{"https://github.com/acme/solo/issues/3"}},
 		{URL: "https://github.com/acme/solo/issues/4", Repo: "acme/solo", Branch: "s-4"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	if err := st.CreateProject(t.Context(), storepkg.NewProject{
 		Name: "acme", Hue: 1, Repos: []string{"acme/alpha", "acme/beta"}, At: testNow,
 	}); err != nil {
