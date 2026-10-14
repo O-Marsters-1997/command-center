@@ -77,7 +77,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	}
 
 	// Without a predicate every verdict flag stays false and the row reads `checking`.
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	clock := fixedClock(at.Add(time.Minute))
 	return conflictFixture{
 		f:         f,

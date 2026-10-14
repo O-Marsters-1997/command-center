@@ -1,11 +1,9 @@
 package loop_test
 
 import (
-	"flag"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -103,9 +101,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 
 	f.Tick(t)
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Fatalf("implement spawns after launch = %d, want 1: max_agents caps the rest as queued",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 
 	var runningTicket string
@@ -131,9 +129,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Errorf("implement spawns after tick 2 = %d, want still 1: a cancelled launch starts nothing",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 	if len(f.Fake.Canceled) != 0 {
 		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", f.Fake.Canceled)
@@ -180,33 +178,13 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	authoriseTicket(t, f.Store, hidden.URL, composeHash(hidden.URL), testAt)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Fatalf("implement spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 	if _, ok := f.Latest(t)[hidden.URL]; !ok {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")
 	}
 }
 
-var update = flag.Bool("update", false, "regenerate golden files")
-
 const goldenPrompt = "testdata/prompt.golden.txt"
-
-// assertGolden compares got against the golden file at path, rewriting it under -update.
-func assertGolden(t *testing.T, path string, got []byte) {
-	t.Helper()
-
-	if *update {
-		if err := os.WriteFile(path, got, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
-	}
-}

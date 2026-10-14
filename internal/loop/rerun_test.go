@@ -1,7 +1,6 @@
 package loop_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -17,64 +16,47 @@ import (
 
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	f := newPushFixture(t)
+	at := testAt
+	firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(firstRunID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
-	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+	if err := f.Store.RecordSpawn(t.Context(), spawn); err != nil {
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+	if err := f.Store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(firstRunID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition: %v", err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+	if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "re-run", at.Add(time.Second)); err != nil {
+		t.Fatalf("QueueVerbIntent: %v", err)
 	}
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake, loop.WithForge(&recordingForge{}))
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
+	f.reset(at.Add(time.Second), fake)
+	f.tick(t)
 
 	if len(fake.Spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
-	if fake.Spawns[0].WorktreePath != worktreePath {
-		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.Spawns[0].WorktreePath, worktreePath)
+	if fake.Spawns[0].WorktreePath != f.Worktree {
+		t.Errorf("re-run spawned in %q, want the existing worktree %q", fake.Spawns[0].WorktreePath, f.Worktree)
 	}
-	if fake.Spawns[0].SystemPromptPath != ws.SystemPromptPath {
-		t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, ws.SystemPromptPath)
+	if fake.Spawns[0].SystemPromptPath != f.ws.SystemPromptPath {
+		t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, f.ws.SystemPromptPath)
 	}
 
-	latest, err := store.LatestRunsByTicket(t.Context())
+	latest, err := f.Store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
-	summary, ok := latest[plan.TicketURL(ticket.URL)]
+	summary, ok := latest[plan.TicketURL(f.Ticket.URL)]
 	if !ok {
 		t.Fatal("no run recorded after re-run")
 	}
@@ -85,9 +67,9 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 		t.Error("the freshly spawned re-run must not already have an outcome")
 	}
 
-	pending, err := store.PendingVerbIntents(t.Context(), "re-run")
+	pending, err := f.Store.PendingVerbIntents(t.Context(), "re-run")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending re-run intents = %+v, want none: consumed", pending)
@@ -96,48 +78,33 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 
 func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	gittest.Run(t, repoPath, "worktree", "remove", "--force", worktreePath)
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	f := newPushFixture(t, loop.WithWorktrees(&recordingWorktrees{}))
+	gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
+	at := testAt
+	firstRunID, err := f.Store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: f.Ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(firstRunID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
-	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+	if err := f.Store.RecordSpawn(t.Context(), spawn); err != nil {
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+	if err := f.Store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(firstRunID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition: %v", err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+	if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "re-run", at.Add(time.Second)); err != nil {
+		t.Fatalf("QueueVerbIntent: %v", err)
 	}
-
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
+	delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
 	fake := runner.NewFake()
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake,
-		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
+	f.reset(at.Add(time.Second), fake, loop.WithWorktrees(&recordingWorktrees{}))
+	f.tick(t)
 
 	if len(fake.Spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
@@ -146,11 +113,11 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 		t.Errorf("re-run spawned in %q, want a freshly cut worktree", fake.Spawns[0].WorktreePath)
 	}
 
-	latest, err := store.LatestRunsByTicket(t.Context())
+	latest, err := f.Store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
-	summary, ok := latest[plan.TicketURL(ticket.URL)]
+	summary, ok := latest[plan.TicketURL(f.Ticket.URL)]
 	if !ok {
 		t.Fatal("no run recorded after re-run")
 	}
@@ -158,17 +125,14 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 		t.Error("re-run must create a second runs row, not reuse the first")
 	}
 
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if hasEvent(events, "re_run_refused", "") {
+	events := f.events(t, "re_run_refused")
+	if len(events) != 0 {
 		t.Error("re-run must not refuse when the worktree is gone")
 	}
 
-	pending, err := store.PendingVerbIntents(t.Context(), "re-run")
+	pending, err := f.Store.PendingVerbIntents(t.Context(), "re-run")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending re-run intents = %+v, want none: consumed", pending)

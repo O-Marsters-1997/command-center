@@ -3,6 +3,7 @@ package loop_test
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -44,6 +45,13 @@ func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	gittest.Run(t, repoPath, "push", "-q", "-u", "origin", "main")
 	gittest.Run(t, repoPath, "fetch", "-q", "origin")
 	return root, repoPath
+}
+
+func cutWorktree(t *testing.T, repoPath, branch string) string {
+	t.Helper()
+	worktreePath := filepath.Join(t.TempDir(), "wt-"+branch)
+	gittest.Run(t, repoPath, "worktree", "add", "-b", branch, worktreePath, "origin/main")
+	return worktreePath
 }
 
 type forgeCall struct {
@@ -244,4 +252,29 @@ func trackRepo(t *testing.T, store *storepkg.Store, name, remote string) {
 	if err := store.UpsertRepo(t.Context(), repo); err != nil {
 		t.Fatal(err)
 	}
+}
+
+var update = flag.Bool("update", false, "regenerate golden files")
+
+func assertGolden(t *testing.T, path string, got []byte) {
+	t.Helper()
+	if *update {
+		if err := os.WriteFile(path, got, 0o600); err != nil {
+			t.Fatalf("WriteFile golden: %v", err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile golden (regenerate with -update): %v", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
+	}
+}
+
+func runGitAllowingFailure(t *testing.T, dir string, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = os.Environ()
+	return cmd.CombinedOutput()
 }

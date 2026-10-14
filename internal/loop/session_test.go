@@ -158,7 +158,7 @@ func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {
 
 	f.Tick(t)
 
-	implements := f.ImplementSpawns()
+	implements := f.Fake.Spawns
 	if len(implements) != 1 {
 		t.Fatalf("implement spawns = %d, want 1", len(implements))
 	}
