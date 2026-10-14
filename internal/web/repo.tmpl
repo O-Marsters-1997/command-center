@@ -25,12 +25,13 @@
     <td>{{if .Imported}}yes{{else}}no{{end}}</td>
     <td>
       <div class="flex justify-end gap-2">
-        <form hx-post="/launch/open" hx-target="#launch-modal" hx-swap="innerHTML">
+        <form method="post" action="/launch/open" hx-post="/launch/open" hx-disabled-elt="find button" hx-target="#launch-modal" hx-swap="innerHTML">
           <input type="hidden" name="feature" value="{{.Feature}}">
           <button type="submit" class="btn btn-sm">Launch</button>
         </form>
         {{if .Imported}}
         <form method="post" action="/features/{{.Feature | pathEscape}}/import">
+          <input type="hidden" name="return" value="{{$.RepoCrumbPath}}">
           <button type="submit" class="btn btn-sm">Reimport</button>
         </form>
         {{end}}
