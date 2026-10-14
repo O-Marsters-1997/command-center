@@ -119,8 +119,8 @@ func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
 			t.Errorf("concurrent OpenStore: %v", err)
 		}
 	}
-	if got := gooseVersion(t, dsn); got != 19 {
-		t.Errorf("goose version = %d, want 19", got)
+	if got := gooseVersion(t, dsn); got != 32 {
+		t.Errorf("goose version = %d, want 32", got)
 	}
 }
 
