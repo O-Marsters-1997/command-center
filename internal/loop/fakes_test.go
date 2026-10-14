@@ -14,12 +14,12 @@ import (
 
 func openStore(t *testing.T) *storepkg.Store {
 	t.Helper()
-	return openStoreAt(t, cctest.DSN(t))
+	return cctest.Store(t)
 }
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(t.Context(), dsn)
+	store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

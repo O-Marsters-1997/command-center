@@ -14,6 +14,9 @@ up:
 down:
     docker compose down
 
+test-db-down:
+    docker rm -f cc-cctest-v1
+
 db_url := env_var_or_default("CC_DATABASE_URL", "postgres://cc:cc@localhost:5432/cc?sslmode=disable")
 goose := "go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/store/migrations postgres"
 
