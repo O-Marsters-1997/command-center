@@ -7,12 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
-
-const cloneTimeout = 10 * time.Minute
 
 // EnsureCheckout clones remote into checkout when absent, otherwise verifies its origin. It never
 // resets, pulls or checks anything out. An empty remote means a path repo, never cloned or
@@ -59,7 +57,7 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	return command.RunWithin(ctx, cloneTimeout, "", "git", "clone", remote, checkout)
+	return command.RunWithin(ctx, tp.LongTimeout, "", "git", "clone", remote, checkout)
 }
 
 // OriginURL reads repoPath's origin remote URL.
