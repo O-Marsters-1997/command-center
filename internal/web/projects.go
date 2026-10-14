@@ -27,7 +27,8 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 			return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 		}
 	}
-	if err := s.store.CreateProject(r.Context(), name, hue, repos, s.clock.Now()); err != nil {
+	project := store.NewProject{Name: name, Hue: hue, Repos: repos, At: s.clock.Now()}
+	if err := s.store.CreateProject(r.Context(), project); err != nil {
 		return fmt.Errorf("create project: %w", err)
 	}
 	return s.respondRepoGroups(w, r)

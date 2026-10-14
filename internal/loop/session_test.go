@@ -61,20 +61,23 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	agentRunID, sessionID, err := store.InsertSessionRunSkeleton(
-		t.Context(), ticket.URL, "agent", "", "hash-1", storepkg.RunSession{StartNew: tc.startSession})
+	agentRunID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1", Session: storepkg.RunSession{StartNew: tc.startSession},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tc.startSession && sessionID == "" {
 		t.Fatal("a new session run came back without a session id")
 	}
-	if err := store.RecordSpawn(t.Context(), agentRunID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(agentRunID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordDisposition(
-		t.Context(), agentRunID, plan.OutcomeFailed, option.None[int](), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(agentRunID), Outcome: plan.OutcomeFailed, ExitCode: option.None[int](),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,9 +93,9 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		}
 	}
 
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "now fix the other test", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{

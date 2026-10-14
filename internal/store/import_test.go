@@ -108,7 +108,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	runID, err := store.InsertRunSkeleton(ctx, withdrawn.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{Ticket: withdrawn.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

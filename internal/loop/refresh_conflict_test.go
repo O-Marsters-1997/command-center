@@ -11,20 +11,24 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/store"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // conflictingAdvance has both branches add the same path with different contents, so refresh's
 // step-3 merge can only conflict, and re-records the child's push against the pre-advance base.
-func conflictingAdvance(t *testing.T, repoPath string, store *store.Store, f stackedFixture, at time.Time) string {
+func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
 	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,7 +43,7 @@ type conflictFixture struct {
 	f      stackedFixture
 	loop   *loop.Loop
 	server *web.Server
-	store  *store.Store
+	store  *storepkg.Store
 	// aliveRuns is the liveness every tick's observation reports.
 	aliveRuns map[string]bool
 }

@@ -27,12 +27,15 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 

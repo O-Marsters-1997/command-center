@@ -14,12 +14,11 @@ import (
 
 // InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
 // land in a later RecordSpawn.
-func (s *Store) InsertRunSkeleton(
-	ctx context.Context, ticketID string, kind plan.RunKind, baselineSHA, promptHash string,
-) (int64, error) {
-	id, _, err := s.InsertSessionRunSkeleton(ctx, ticketID, kind, baselineSHA, promptHash, RunSession{})
+func (s *Store) InsertRunSkeleton(ctx context.Context, r RunSkeleton) (int64, error) {
+	r.Session = RunSession{}
+	id, _, err := s.InsertSessionRunSkeleton(ctx, r)
 	if err != nil {
-		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+		return 0, fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
 	}
 	return id, nil
 }
@@ -30,20 +29,18 @@ type RunSession struct {
 	Message  string
 }
 
-func (s *Store) InsertSessionRunSkeleton(
-	ctx context.Context, ticketID string, kind plan.RunKind, baselineSHA, promptHash string, session RunSession,
-) (runID int64, sessionID string, err error) {
+func (s *Store) InsertSessionRunSkeleton(ctx context.Context, r RunSkeleton) (runID int64, sessionID string, err error) {
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
-		TicketID:    notNull(ticketID),
-		Kind:        string(kind),
-		BaselineSHA: notNull(baselineSHA),
-		PromptHash:  notNull(promptHash),
-		NewSession:  session.StartNew,
-		SessionID:   nullIfEmpty(session.JoinID),
-		Message:     nullIfEmpty(session.Message),
+		TicketID:    notNull(r.Ticket),
+		Kind:        string(r.Kind),
+		BaselineSHA: notNull(r.BaselineSHA),
+		PromptHash:  notNull(r.PromptHash),
+		NewSession:  r.Session.StartNew,
+		SessionID:   nullIfEmpty(r.Session.JoinID),
+		Message:     nullIfEmpty(r.Session.Message),
 	})
 	if err != nil {
-		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+		return 0, "", fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
 	}
 	return row.ID, row.SessionID, nil
 }
@@ -60,40 +57,37 @@ func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, e
 }
 
 // RecordSpawn writes the pgid, its process start time and the log path onto a reserved run.
-func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
+func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
 	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
-		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
-		ProcStartedAt: notNullTime(startedAt.UTC()),
-		LogPath:       notNull(logPath),
-		ID:            runID,
+		Pgid:          sql.NullInt64{Int64: int64(sp.Pgid), Valid: true},
+		ProcStartedAt: notNullTime(sp.StartedAt.UTC()),
+		LogPath:       notNull(sp.LogPath),
+		ID:            int64(sp.RunID),
 	})
 	if err != nil {
-		return fmt.Errorf("record spawn for run %d: %w", runID, err)
+		return fmt.Errorf("record spawn for run %d: %w", sp.RunID, err)
 	}
 	return nil
 }
 
-func (s *Store) RecordDisposition(
-	ctx context.Context, runID int64, outcome plan.Outcome, exitCode option.Option[int],
-	endedAt time.Time, cost option.Option[float64],
-) error {
+func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
 	var exitCodeParam sql.NullInt64
-	if exitCode.IsSome() {
-		exitCodeParam = sql.NullInt64{Int64: int64(exitCode.Unwrap()), Valid: true}
+	if d.ExitCode.IsSome() {
+		exitCodeParam = sql.NullInt64{Int64: int64(d.ExitCode.Unwrap()), Valid: true}
 	}
 	var costParam sql.NullFloat64
-	if cost.IsSome() {
-		costParam = sql.NullFloat64{Float64: cost.Unwrap(), Valid: true}
+	if d.Cost.IsSome() {
+		costParam = sql.NullFloat64{Float64: d.Cost.Unwrap(), Valid: true}
 	}
 	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
-		Outcome:  notNull(outcome.String()),
+		Outcome:  notNull(d.Outcome.String()),
 		ExitCode: exitCodeParam,
-		EndedAt:  notNullTime(endedAt.UTC()),
+		EndedAt:  notNullTime(d.EndedAt.UTC()),
 		CostUsd:  costParam,
-		ID:       runID,
+		ID:       int64(d.RunID),
 	})
 	if err != nil {
-		return fmt.Errorf("record disposition for run %d: %w", runID, err)
+		return fmt.Errorf("record disposition for run %d: %w", d.RunID, err)
 	}
 	return nil
 }
@@ -216,17 +210,15 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.
 }
 
 // QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
-func (s *Store) QueueVerbIntentWithPayload(
-	ctx context.Context, ticketID string, verb plan.Verb, payload string, at time.Time,
-) error {
+func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) error {
 	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
-		At:       at.UTC(),
-		TicketID: ticketID,
-		Verb:     string(verb),
-		Payload:  notNull(payload),
+		At:       v.At.UTC(),
+		TicketID: v.Ticket,
+		Verb:     string(v.Verb),
+		Payload:  notNull(v.Payload),
 	})
 	if err != nil {
-		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
+		return fmt.Errorf("queue %s intent for %s: %w", v.Verb, v.Ticket, err)
 	}
 	return nil
 }

@@ -3,12 +3,16 @@ package web_test
 import (
 	"strings"
 	"testing"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestScopeMenuListsProjectsThenLooseReposWithKeys(t *testing.T) {
 	t.Parallel()
 	st := track(t, openStore(t), alphaRepo, betaRepo, soloRepo)
-	if err := st.CreateProject(t.Context(), "acme", 1, []string{"acme/alpha", "acme/beta"}, testNow); err != nil {
+	if err := st.CreateProject(t.Context(), storepkg.NewProject{
+		Name: "acme", Hue: 1, Repos: []string{"acme/alpha", "acme/beta"}, At: testNow,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	server := openServer(st, fixedClock(testNow), "")
@@ -41,7 +45,9 @@ func TestScopeMenuListsProjectsThenLooseReposWithKeys(t *testing.T) {
 func TestScopeMenuSummaryNamesTheScope(t *testing.T) {
 	t.Parallel()
 	st := track(t, openStore(t), alphaRepo, soloRepo)
-	if err := st.CreateProject(t.Context(), "acme", 1, []string{"acme/alpha"}, testNow); err != nil {
+	if err := st.CreateProject(t.Context(), storepkg.NewProject{
+		Name: "acme", Hue: 1, Repos: []string{"acme/alpha"}, At: testNow,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	server := openServer(st, fixedClock(testNow), "")

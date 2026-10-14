@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const insightsDefaultRangeDays = 30
@@ -202,13 +203,19 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	tz := insightsTimezone(now.Location())
 	until := civilDate(now)
 	since := parseSinceOrDefault(q.Get("since"), until)
-	repo, feature := q.Get("repo"), q.Get("feature")
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return InsightsResponse{}, fmt.Errorf("load timezone %s: %w", tz, err)
+	}
+	spendQuery := store.SpendQuery{
+		Repo: q.Get("repo"), Feature: q.Get("feature"), Loc: loc, Since: since, Until: until,
+	}
 
-	merged, err := r.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
+	merged, err := r.store.MergedTicketSpend(ctx, spendQuery)
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load merged ticket spend: %w", err)
 	}
-	wasteUSD, err := r.store.WithdrawnTicketWaste(ctx, repo, feature, tz, since, until)
+	wasteUSD, err := r.store.WithdrawnTicketWaste(ctx, spendQuery)
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load withdrawn ticket waste: %w", err)
 	}

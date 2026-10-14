@@ -87,8 +87,13 @@ func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observ
 	}
 }
 
+type blockedByOverride struct {
+	URL       string
+	BlockedBy []string
+}
+
 func featureTicketsWithOverride(
-	ctx context.Context, qtx *ccdb.Queries, feature, overrideURL string, override []string,
+	ctx context.Context, qtx *ccdb.Queries, feature string, edit blockedByOverride,
 ) ([]ticketBlockedBy, error) {
 	rows, err := qtx.TicketsInFeature(ctx, feature)
 	if err != nil {
@@ -96,8 +101,8 @@ func featureTicketsWithOverride(
 	}
 	tickets := make([]ticketBlockedBy, 0, len(rows))
 	for _, row := range rows {
-		blockedBy := override
-		if row.URL != overrideURL {
+		blockedBy := edit.BlockedBy
+		if row.URL != edit.URL {
 			// json.Unmarshal reuses a destination slice's capacity, so decoding into override
 			// would overwrite the edit under validation.
 			decoded, err := decodeBlockedBy(row.BlockedBy)

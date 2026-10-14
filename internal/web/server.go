@@ -514,7 +514,8 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 
 	now := s.clock.Now()
 	for _, ticketURL := range requested {
-		if err := s.store.QueueLaunchIntent(ctx, ticketURL, hashes[ticketURL], group, now); err != nil {
+		launch := store.LaunchRequest{Ticket: ticketURL, PromptHash: hashes[ticketURL], Group: group, At: now}
+		if err := s.store.QueueLaunchIntent(ctx, launch); err != nil {
 			return fmt.Errorf("queue launch intent: %w", err)
 		}
 	}
@@ -556,7 +557,9 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if verb == plan.VerbFollowUp {
-		err = s.store.QueueVerbIntentWithPayload(ctx, ticketURL, verb, prompt, s.clock.Now())
+		err = s.store.QueueVerbIntentWithPayload(ctx, store.VerbRequest{
+			Ticket: ticketURL, Verb: verb, Payload: prompt, At: s.clock.Now(),
+		})
 	} else {
 		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.clock.Now())
 	}
@@ -622,7 +625,8 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.clock.Now()); err != nil {
+	edit := store.EditRequest{Ticket: ticketURL, Branch: branch, BlockedBy: blockedBy, At: s.clock.Now()}
+	if err := s.store.QueueEditTicketIntent(ctx, edit); err != nil {
 		return fmt.Errorf("queue edit ticket intent: %w", err)
 	}
 	http.Redirect(w, r, afterTicketEdit(r.FormValue("return")), http.StatusSeeOther)

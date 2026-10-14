@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -18,20 +17,18 @@ type editTicketPayload struct {
 }
 
 // QueueEditTicketIntent records one ticket's requested branch and blocked_by.
-func (s *Store) QueueEditTicketIntent(
-	ctx context.Context, ticketURL, branch string, blockedBy []string, at time.Time,
-) error {
-	payload, err := json.Marshal(editTicketPayload{Branch: branch, BlockedBy: nonNil(blockedBy)})
+func (s *Store) QueueEditTicketIntent(ctx context.Context, e EditRequest) error {
+	payload, err := json.Marshal(editTicketPayload{Branch: e.Branch, BlockedBy: nonNil(e.BlockedBy)})
 	if err != nil {
-		return fmt.Errorf("encode edit ticket intent payload for %s: %w", ticketURL, err)
+		return fmt.Errorf("encode edit ticket intent payload for %s: %w", e.Ticket, err)
 	}
 	err = s.q.QueueEditTicketIntent(ctx, ccdb.QueueEditTicketIntentParams{
-		At:       at.UTC(),
-		TicketID: ticketURL,
+		At:       e.At.UTC(),
+		TicketID: e.Ticket,
 		Payload:  notNull(string(payload)),
 	})
 	if err != nil {
-		return fmt.Errorf("queue edit ticket intent for %s: %w", ticketURL, err)
+		return fmt.Errorf("queue edit ticket intent for %s: %w", e.Ticket, err)
 	}
 	return nil
 }
@@ -83,7 +80,7 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 	}
 	if feature != "" {
 		var intended []ticketBlockedBy
-		intended, err = featureTicketsWithOverride(ctx, qtx, feature, ticketURL, blockedBy)
+		intended, err = featureTicketsWithOverride(ctx, qtx, feature, blockedByOverride{URL: ticketURL, BlockedBy: blockedBy})
 		if err != nil {
 			return fmt.Errorf("read feature tickets for %s: %w", ticketURL, err)
 		}

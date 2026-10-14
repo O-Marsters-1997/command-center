@@ -109,7 +109,8 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at}
+	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 
@@ -153,7 +154,8 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 
 	// Queued after the only successful tick, so the failing tick below is the only one that
 	// could apply it — and inv. 10 says a failed observe must apply no transition at all.
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", bad); err != nil {
+	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: bad}
+	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 

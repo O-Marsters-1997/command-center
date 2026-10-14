@@ -15,17 +15,20 @@ import (
 
 func dispositionAs(t *testing.T, store *storepkg.Store, ticketURL string, outcome plan.Outcome, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := store.RecordDisposition(
-		t.Context(), runID, outcome, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exitCode), Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

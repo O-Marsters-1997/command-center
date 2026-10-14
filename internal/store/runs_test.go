@@ -45,7 +45,9 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 	store := openStore(t)
 	seedOneTicket(t, store)
 
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
@@ -59,7 +61,9 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 	}
 
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatalf("RecordSpawn: %v", err)
 	}
 
@@ -98,20 +102,25 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 	store := openStore(t)
 	seedOneTicket(t, store)
 
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	endedAt := startedAt.Add(30 * time.Second)
 	exitCode := 0
-	if err := store.RecordDisposition(
-		ctx, runID, plan.OutcomeFailed, option.Some(exitCode), endedAt, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: endedAt,
+	}); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -147,21 +156,26 @@ func TestRecordDispositionWritesCostAlongsideOutcome(t *testing.T) {
 	store := openStoreAt(t, dsn)
 	seedOneTicket(t, store)
 
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	cost := 0.42
 	exitCode := 0
 	endedAt := startedAt.Add(30 * time.Second)
-	if err := store.RecordDisposition(
-		ctx, runID, plan.OutcomePush, option.Some(exitCode), endedAt, option.Some(cost),
-	); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
+		Cost: option.Some(cost), EndedAt: endedAt,
+	}); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -178,14 +192,17 @@ func TestRecordDispositionLeavesCostNullWithoutAParse(t *testing.T) {
 	store := openStoreAt(t, dsn)
 	seedOneTicket(t, store)
 
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	endedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordDisposition(
-		ctx, runID, plan.OutcomeFailed, option.None[int](), endedAt, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.None[int](),
+		Cost: option.None[float64](), EndedAt: endedAt,
+	}); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -265,7 +282,9 @@ func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTicket(t *testing.T) {
 	seedOneTicket(t, store)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {

@@ -45,11 +45,15 @@ func TestInsertingAValueOutsideItsSetFailsOnTheNamedConstraint(t *testing.T) {
 		insert     func(context.Context, *storepkg.Store, *sql.DB) error
 	}{
 		{"run kind", "runs_kind_check", func(ctx context.Context, s *storepkg.Store, _ *sql.DB) error {
-			_, err := s.InsertRunSkeleton(ctx, "sandbox://CC-1", plan.RunKind("bogus"), "base", "hash")
+			_, err := s.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+				Ticket: "sandbox://CC-1", Kind: plan.RunKind("bogus"), BaselineSHA: "base", PromptHash: "hash",
+			})
 			return err
 		}},
 		{"run outcome", "runs_outcome_check", func(ctx context.Context, s *storepkg.Store, db *sql.DB) error {
-			runID, err := s.InsertRunSkeleton(ctx, "sandbox://CC-1", plan.RunKindAgent, "base", "hash")
+			runID, err := s.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+				Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "base", PromptHash: "hash",
+			})
 			if err != nil {
 				return err
 			}

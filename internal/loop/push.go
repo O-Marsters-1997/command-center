@@ -138,7 +138,10 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs
 	if err != nil {
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
-	if err := l.store.RecordPush(ctx, url, string(localTip), base, baseSHA, l.clock.Now()); err != nil {
+	push := store.Push{
+		Ticket: plan.TicketURL(url), Tip: localTip, BaseSHA: plan.SHA(baseSHA), BaseBranch: base, At: l.clock.Now(),
+	}
+	if err := l.store.RecordPush(ctx, push); err != nil {
 		return fmt.Errorf("record push of %s: %w", t.Branch, err)
 	}
 	return l.event(ctx, url, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", localTip, base))

@@ -25,11 +25,9 @@ func (t TicketSpend) TotalUSD() float64 {
 
 // MergedTicketSpend returns one point per ticket whose pr_merged event falls in
 // [since, until], weighing every run disposed before that event.
-func (s *Store) MergedTicketSpend(
-	ctx context.Context, repo, feature, tz string, since, until time.Time,
-) ([]TicketSpend, error) {
+func (s *Store) MergedTicketSpend(ctx context.Context, q SpendQuery) ([]TicketSpend, error) {
 	rows, err := s.q.MergedTicketSpend(ctx, ccdb.MergedTicketSpendParams{
-		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
+		Repo: q.Repo, Feature: q.Feature, Timezone: q.timezone(), Since: q.Since, Until: q.Until,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select merged ticket spend: %w", err)
@@ -75,11 +73,9 @@ func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map
 }
 
 // WithdrawnTicketWaste sums every disposed run of a ticket withdrawn without merging.
-func (s *Store) WithdrawnTicketWaste(
-	ctx context.Context, repo, feature, tz string, since, until time.Time,
-) (float64, error) {
+func (s *Store) WithdrawnTicketWaste(ctx context.Context, q SpendQuery) (float64, error) {
 	usd, err := s.q.WithdrawnTicketWaste(ctx, ccdb.WithdrawnTicketWasteParams{
-		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
+		Repo: q.Repo, Feature: q.Feature, Timezone: q.timezone(), Since: q.Since, Until: q.Until,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("select withdrawn ticket waste: %w", err)

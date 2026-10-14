@@ -46,12 +46,15 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runID, sessionID, err := store.InsertSessionRunSkeleton(
-		t.Context(), ticket.URL, "agent", baseline, "hash-1", storepkg.RunSession{StartNew: true})
+	runID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+		Session: storepkg.RunSession{StartNew: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,7 +86,10 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	if err := f.store.QueueVerbIntentWithPayload(t.Context(), f.ticket.URL, plan.VerbFollowUp, text, f.at); err != nil {
+	err := f.store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: f.at,
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 }

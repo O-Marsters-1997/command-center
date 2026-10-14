@@ -18,18 +18,18 @@ type launchPayload struct {
 }
 
 // QueueLaunchIntent records one ticket's authorisation to launch.
-func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, group string, at time.Time) error {
-	payload, err := json.Marshal(launchPayload{PromptHash: promptHash, Group: group})
+func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
+	payload, err := json.Marshal(launchPayload{PromptHash: l.PromptHash, Group: l.Group})
 	if err != nil {
-		return fmt.Errorf("encode launch intent payload for %s: %w", ticketID, err)
+		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
 	}
 	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
-		At:       at.UTC(),
-		TicketID: ticketID,
+		At:       l.At.UTC(),
+		TicketID: l.Ticket,
 		Payload:  notNull(string(payload)),
 	})
 	if err != nil {
-		return fmt.Errorf("queue launch intent for %s: %w", ticketID, err)
+		return fmt.Errorf("queue launch intent for %s: %w", l.Ticket, err)
 	}
 	return nil
 }

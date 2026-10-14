@@ -40,8 +40,10 @@ func (l *Loop) retargetOne(
 		return l.event(ctx, url, store.EventRetargetFailed, err.Error())
 	}
 
-	err := l.store.RecordPush(
-		ctx, url, string(row.PushedTip), plan.DefaultBaseBranch, string(row.BaseSHAAtPush), l.clock.Now())
+	err := l.store.RecordPush(ctx, store.Push{
+		Ticket: t.URL, Tip: row.PushedTip, BaseSHA: row.BaseSHAAtPush, BaseBranch: plan.DefaultBaseBranch,
+		At: l.clock.Now(),
+	})
 	if err != nil {
 		return fmt.Errorf("record retargeted push: %w", err)
 	}
