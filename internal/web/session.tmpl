@@ -8,7 +8,7 @@
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.State}}</span></span>
     <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
-    <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" hx-get="/f/{{. | pathEscape}}/graph" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.}}</a>{{end}}</p>
+    <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" {{template "nav" (printf "/f/%s/graph" (. | pathEscape))}}>{{.}}</a>{{end}}</p>
     {{- with .Row.Worktree}}
     <p class="session-worktree text-muted"><code>{{.}}</code></p>
     {{- end}}
@@ -24,8 +24,8 @@
     {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
   </section>
   <nav class="pill-tabs" aria-label="log view">
-    <a class="pill-tab" href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
-    <a class="pill-tab" href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+    <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a class="pill-tab" href="{{.RawPath}}" {{template "nav" .RawPath}}{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
   </nav>
   {{- if .Raw}}
   {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}

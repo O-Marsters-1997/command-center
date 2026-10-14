@@ -8,7 +8,7 @@
 <p class="page-purpose">Choose a feature to review what would start.</p>
 <ul class="flex max-w-3xl flex-col gap-0.5" aria-label="features with launchable work">
   {{range .Features -}}
-  <li><a class="launch-pick" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+  <li><a class="launch-pick" href="{{.Path}}" {{template "nav" .Path}}>
     <span class="launch-pick-name">{{.Name}}</span>
     <span class="launch-pick-n">{{.Now}} ready now{{if .OnUnlock}} &middot; {{.OnUnlock}} on unlock{{end}}</span>
   </a></li>

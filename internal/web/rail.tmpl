@@ -1,7 +1,7 @@
 {{define "mark"}}{{if .Name}}<span class="avatar" data-hue="{{.Hue}}" title="{{.Name}}" aria-hidden="true">{{.Initial}}</span>{{end}}{{end}}
 
 {{define "railItem"}}
-<a class="rail-link" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Selected}} aria-current="page"{{end}}>
+<a class="rail-link" href="{{.Path}}" {{template "nav" .Path}}{{if .Selected}} aria-current="page"{{end}}>
   <span class="glyph" data-glyph="{{.Glyph}}"></span>
   <span class="rail-ref">{{.Ref}}</span>
   <span class="rail-title">{{.Title}}</span>
@@ -19,7 +19,7 @@
 {{end}}
 
 {{define "railReply"}}
-<a class="rail-verb" href="{{.Path}}" hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Reply</a>
+<a class="rail-verb" href="{{.Path}}" {{template "nav" .Path}}>Reply</a>
 {{end}}
 
 {{define "rail"}}
