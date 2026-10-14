@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -8,6 +9,11 @@ import (
 
 func TestSnapshotPreview(t *testing.T) {
 	t.Parallel()
+
+	type wantRow struct {
+		label plan.PreviewLabel
+		base  string
+	}
 
 	first := ticket("1", "cc-1-first")
 	second := ticket("2", "cc-2-second", first.URL)
@@ -19,20 +25,13 @@ func TestSnapshotPreview(t *testing.T) {
 		rules     plan.Rules
 		in        plan.Input
 		selection []plan.TicketURL
-		want      map[plan.TicketURL]struct {
-			label plan.PreviewLabel
-			base  string
-		}
-		wantErr bool
+		want      map[plan.TicketURL]wantRow
 	}{
 		{
 			name:      "a root starts now and a blocker in the slice starts on unlock, both off main",
 			in:        plan.Input{Tickets: tickets},
 			selection: []plan.TicketURL{first.URL, second.URL},
-			want: map[plan.TicketURL]struct {
-				label plan.PreviewLabel
-				base  string
-			}{
+			want: map[plan.TicketURL]wantRow{
 				first.URL:  {plan.Now, "main"},
 				second.URL: {plan.OnUnlock, "main"},
 			},
@@ -41,20 +40,14 @@ func TestSnapshotPreview(t *testing.T) {
 			name:      "a blocker outside the slice is refused",
 			in:        plan.Input{Tickets: tickets},
 			selection: []plan.TicketURL{third.URL},
-			want: map[plan.TicketURL]struct {
-				label plan.PreviewLabel
-				base  string
-			}{third.URL: {plan.Refused, "main"}},
+			want:      map[plan.TicketURL]wantRow{third.URL: {plan.Refused, "main"}},
 		},
 		{
 			name:      "stacking cuts an on-unlock row from its blocker's branch",
 			rules:     plan.Rules{Stacking: map[string]bool{"r": true}},
 			in:        plan.Input{Tickets: tickets},
 			selection: []plan.TicketURL{first.URL, second.URL},
-			want: map[plan.TicketURL]struct {
-				label plan.PreviewLabel
-				base  string
-			}{
+			want: map[plan.TicketURL]wantRow{
 				first.URL:  {plan.Now, "main"},
 				second.URL: {plan.OnUnlock, first.Branch},
 			},
@@ -66,16 +59,7 @@ func TestSnapshotPreview(t *testing.T) {
 				Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: {LaunchID: 7}},
 			},
 			selection: []plan.TicketURL{first.URL},
-			want: map[plan.TicketURL]struct {
-				label plan.PreviewLabel
-				base  string
-			}{first.URL: {plan.Refused, "main"}},
-		},
-		{
-			name:      "an unknown ticket is an error",
-			in:        plan.Input{Tickets: tickets},
-			selection: []plan.TicketURL{"sandbox://CC-404"},
-			wantErr:   true,
+			want:      map[plan.TicketURL]wantRow{first.URL: {plan.Refused, "main"}},
 		},
 	}
 	for _, tt := range tests {
@@ -83,8 +67,8 @@ func TestSnapshotPreview(t *testing.T) {
 			t.Parallel()
 
 			rows, err := derive(tt.rules, tt.in).Preview(tt.selection)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Preview error = %v, wantErr %v", err, tt.wantErr)
+			if err != nil {
+				t.Fatalf("Preview error = %v, want nil", err)
 			}
 			if len(rows) != len(tt.want) {
 				t.Fatalf("Preview returned %d rows, want %d", len(rows), len(tt.want))
@@ -100,6 +84,18 @@ func TestSnapshotPreview(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSnapshotPreviewRejectsAnUnknownTicket(t *testing.T) {
+	t.Parallel()
+	snap := derive(plan.Rules{}, plan.Input{Tickets: []plan.Ticket{ticket("1", "cc-1-first")}})
+	rows, err := snap.Preview([]plan.TicketURL{"sandbox://CC-404"})
+	if !errors.Is(err, plan.ErrUnknownTicket) {
+		t.Errorf("Preview(unknown ticket) = %v, want ErrUnknownTicket", err)
+	}
+	if rows != nil {
+		t.Errorf("Preview(unknown ticket) = %v, want nil rows", rows)
 	}
 }
 

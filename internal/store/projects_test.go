@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -25,16 +28,6 @@ func trackRepos(t *testing.T, store *storepkg.Store, names ...string) {
 	}
 }
 
-func assertProjects(t *testing.T, got []storepkg.Project, want ...storepkg.Project) {
-	t.Helper()
-	same := slices.EqualFunc(got, want, func(a, b storepkg.Project) bool {
-		return a.Name == b.Name && a.Hue == b.Hue && slices.Equal(a.Repos, b.Repos)
-	})
-	if !same {
-		t.Errorf("Projects() = %+v, want %+v", got, want)
-	}
-}
-
 func TestCreateProjectReadsBackWithSortedRepos(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
@@ -50,7 +43,10 @@ func TestCreateProjectReadsBackWithSortedRepos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 2, Repos: []string{"acme/api", "acme/web"}})
+	if diff := cmp.Diff([]storepkg.Project{{Name: "acme", Hue: 2, Repos: []string{"acme/api", "acme/web"}}},
+		got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 	repos, err := store.Repos(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +76,10 @@ func TestCreateProjectRefusesACaseOnlyDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1, Repos: []string{"acme/web"}})
+	if diff := cmp.Diff([]storepkg.Project{{Name: "acme", Hue: 1, Repos: []string{"acme/web"}}},
+		got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestCreateProjectMovesARepoOutOfItsProject(t *testing.T) {
@@ -102,10 +101,13 @@ func TestCreateProjectMovesARepoOutOfItsProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got,
-		storepkg.Project{Name: "new", Hue: 3, Repos: []string{"acme/web"}},
-		storepkg.Project{Name: "old", Hue: 1, Repos: []string{"acme/api"}},
-	)
+	want := []storepkg.Project{
+		{Name: "new", Hue: 3, Repos: []string{"acme/web"}},
+		{Name: "old", Hue: 1, Repos: []string{"acme/api"}},
+	}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestCreateProjectRefusesABadNameOrHue(t *testing.T) {
@@ -199,7 +201,10 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got, storepkg.Project{Name: "acme-co", Hue: 1, Repos: []string{"acme/api", "acme/web"}})
+	want := []storepkg.Project{{Name: "acme-co", Hue: 1, Repos: []string{"acme/api", "acme/web"}}}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 
 	if err := store.EditProject(ctx, "acme-co", "acme-co", 3); err != nil {
 		t.Fatalf("EditProject hue: %v", err)
@@ -207,7 +212,10 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 	if got, err = store.Projects(ctx); err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got, storepkg.Project{Name: "acme-co", Hue: 3, Repos: []string{"acme/api", "acme/web"}})
+	want[0].Hue = 3
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestEditProjectRefusesBadEdits(t *testing.T) {
@@ -233,7 +241,10 @@ func TestEditProjectRefusesBadEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1}, storepkg.Project{Name: "beta", Hue: 1})
+	want := []storepkg.Project{{Name: "acme", Hue: 1}, {Name: "beta", Hue: 1}}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
@@ -254,7 +265,9 @@ func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertProjects(t, got)
+	if diff := cmp.Diff([]storepkg.Project(nil), got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 	repos, err := store.Repos(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -285,13 +298,20 @@ func TestSetRepoProjectMovesAndLoosens(t *testing.T) {
 		t.Fatalf("move: %v", err)
 	}
 	got, _ := store.Projects(ctx)
-	assertProjects(t, got,
-		storepkg.Project{Name: "acme", Hue: 1},
-		storepkg.Project{Name: "beta", Hue: 1, Repos: []string{"acme/web"}})
+	want := []storepkg.Project{
+		{Name: "acme", Hue: 1},
+		{Name: "beta", Hue: 1, Repos: []string{"acme/web"}},
+	}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 
 	if err := store.SetRepoProject(ctx, "acme/web", ""); err != nil {
 		t.Fatalf("loosen: %v", err)
 	}
 	got, _ = store.Projects(ctx)
-	assertProjects(t, got, storepkg.Project{Name: "acme", Hue: 1}, storepkg.Project{Name: "beta", Hue: 1})
+	want[1].Repos = nil
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Projects() mismatch (-want +got):\n%s", diff)
+	}
 }

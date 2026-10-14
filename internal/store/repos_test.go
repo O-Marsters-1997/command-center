@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -36,7 +38,9 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, plan.RefusalMergeSettings, "merge commits allowed"
-	assertRepos(t, repos, repo)
+	if diff := cmp.Diff([]storepkg.Repo{repo}, repos); diff != "" {
+		t.Errorf("Repos() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
@@ -59,24 +63,7 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || repos[0].Phase != plan.RepoReady || repos[0].SettingsSource != "origin/main" ||
-		!repos[0].SettingsReadAt.Equal(repo.SettingsReadAt) {
-		t.Errorf("Repos() = %+v, want one ready repo read from origin/main at %v", repos, repo.SettingsReadAt)
-	}
-}
-
-func assertRepos(t *testing.T, got []storepkg.Repo, want ...storepkg.Repo) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("Repos() = %+v, want %+v", got, want)
-	}
-	for i := range want {
-		if !got[i].TrackedAt.Equal(want[i].TrackedAt) {
-			t.Errorf("Repos()[%d].TrackedAt = %v, want %v", i, got[i].TrackedAt, want[i].TrackedAt)
-		}
-		got[i].TrackedAt = want[i].TrackedAt
-		if got[i] != want[i] {
-			t.Errorf("Repos()[%d] = %+v, want %+v", i, got[i], want[i])
-		}
+	if diff := cmp.Diff([]storepkg.Repo{repo}, repos); diff != "" {
+		t.Errorf("Repos() mismatch (-want +got):\n%s", diff)
 	}
 }

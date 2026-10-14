@@ -1,10 +1,14 @@
 package plan
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
 )
+
+// ErrUnknownTicket indicates a preview selection not present in the snapshot.
+var ErrUnknownTicket = errors.New("unknown ticket")
 
 type PreviewLabel int
 
@@ -84,7 +88,7 @@ func (s Snapshot) Preview(selection []TicketURL) ([]PreviewRow, error) {
 	for _, ticketURL := range selection {
 		e, ok := s.Entry(ticketURL)
 		if !ok {
-			return nil, fmt.Errorf("unknown ticket %q", ticketURL)
+			return nil, fmt.Errorf("%w %q", ErrUnknownTicket, ticketURL)
 		}
 		entries = append(entries, e)
 		slice[ticketURL] = true

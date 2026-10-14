@@ -1,8 +1,8 @@
 package app_test
 
 import (
+	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/app"
@@ -26,7 +26,7 @@ func TestLockRefusesASecondInstance(t *testing.T) {
 	if err == nil {
 		t.Fatal("second Lock succeeded; want a refusal")
 	}
-	if !strings.Contains(err.Error(), "lock") || !strings.Contains(err.Error(), path) {
-		t.Errorf("error %q names neither the lock nor the path", err)
+	if !errors.Is(err, app.ErrLocked) {
+		t.Errorf("Lock(%q) = %v, want ErrLocked", path, err)
 	}
 }

@@ -3,8 +3,9 @@ package agentlog_test
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -60,7 +61,11 @@ func TestParseMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseMetrics: %v", err)
 			}
-			assertMetrics(t, got, tt.want)
+			if diff := cmp.Diff(tt.want, got, cmp.Comparer(func(a, b option.Option[float64]) bool {
+				return a == b
+			})); diff != "" {
+				t.Errorf("ParseMetrics() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -124,16 +129,5 @@ func TestParseMetricsRejectsUnusableLogs(t *testing.T) {
 				t.Error("ParseMetrics = nil error; want an error")
 			}
 		})
-	}
-}
-
-func assertMetrics(t *testing.T, got, want agentlog.RunMetrics) {
-	t.Helper()
-
-	if !slices.Equal(got.Requests, want.Requests) || (got.Requests == nil) != (want.Requests == nil) {
-		t.Errorf("Requests = %+v; want %+v", got.Requests, want.Requests)
-	}
-	if got.CostUSD != want.CostUSD {
-		t.Errorf("CostUSD = %v; want %v", got.CostUSD, want.CostUSD)
 	}
 }

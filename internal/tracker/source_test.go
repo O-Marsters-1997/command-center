@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func fakeRun(t *testing.T) func(ctx context.Context, args ...string) ([]byte, error) {
@@ -54,8 +56,11 @@ func TestGithubSourceTicketsReadsEveryBlockedByPage(t *testing.T) {
 		t.Fatalf("Tickets: %v", err)
 	}
 	want := []string{"https://x/1", "https://x/2"}
-	if len(got) != 1 || !slices.Equal(got[0].BlockedBy, want) {
-		t.Errorf("Tickets() = %+v, want one ticket blocked by %v", got, want)
+	if len(got) != 1 {
+		t.Fatalf("Tickets() = %+v, want one ticket", got)
+	}
+	if diff := cmp.Diff(want, got[0].BlockedBy); diff != "" {
+		t.Errorf("Tickets().BlockedBy mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -86,8 +91,8 @@ func TestGithubSourceFeatures(t *testing.T) {
 	}
 
 	want := []Feature{"project:repo-and-ticket-model", "project:fleet-view"}
-	if !slices.Equal(got, want) {
-		t.Errorf("Features() = %v, want %v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Features() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -134,14 +139,7 @@ func TestGithubSourceTickets(t *testing.T) {
 			BlockedBy: []string{},
 		},
 	}
-	if len(got) != len(want) {
-		t.Fatalf("Tickets() returned %d tickets (%v), want %d", len(got), got, len(want))
-	}
-	for i := range want {
-		g, w := got[i], want[i]
-		if g.URL != w.URL || g.Number != w.Number || g.Title != w.Title || g.Body != w.Body ||
-			g.Status != w.Status || !slices.Equal(g.BlockedBy, w.BlockedBy) || (g.BlockedBy == nil) != (w.BlockedBy == nil) {
-			t.Errorf("ticket[%d] = %+v, want %+v", i, g, w)
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Tickets() mismatch (-want +got):\n%s", diff)
 	}
 }

@@ -2,10 +2,10 @@ package config_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -179,8 +179,9 @@ func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
 			_, err := config.Load(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
-			if err == nil || !strings.Contains(err.Error(), tt.missing) {
-				t.Errorf("Load error = %v, want one naming %s", err, tt.missing)
+			var missing *config.MissingKeyError
+			if !errors.As(err, &missing) || missing.Key != tt.missing {
+				t.Errorf("Load error = %v, want missing key %s", err, tt.missing)
 			}
 		})
 		t.Run(tt.name+" in CC_AGENT_COMMAND", func(t *testing.T) {
@@ -192,8 +193,9 @@ func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
 			env.AgentCommand = string(raw)
 
 			_, err = config.Load(writeConfig(t, agentCommandLine(t, complete)), env)
-			if err == nil || !strings.Contains(err.Error(), tt.missing) {
-				t.Errorf("Load error = %v, want one naming %s", err, tt.missing)
+			var missing *config.MissingKeyError
+			if !errors.As(err, &missing) || missing.Key != tt.missing {
+				t.Errorf("Load error = %v, want missing key %s", err, tt.missing)
 			}
 		})
 	}
@@ -376,8 +378,8 @@ func TestLoadNamesEveryBadField(t *testing.T) {
 				t.Fatal("Load error = nil, want one")
 			}
 			for _, field := range tt.want {
-				if !strings.Contains(err.Error(), field) {
-					t.Errorf("Load error = %v, want it to name %s", err, field)
+				if !errors.Is(err, &config.InvalidValueError{Key: field}) && !errors.Is(err, &config.MissingKeyError{Key: field}) {
+					t.Errorf("Load error = %v, want invalid or missing %s", err, field)
 				}
 			}
 		})
