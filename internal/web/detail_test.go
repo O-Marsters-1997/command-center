@@ -216,12 +216,13 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	server := newServer(seededStore(t, now), now)
+	store := seededStore(t, now)
+	server := newServer(store, now)
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
 		t.Errorf("default board does not poll every 5s:\n%s", got)
 	}
 
-	server.SetBoardPollSeconds(1)
+	server = newServer(store, now, web.WithBoardPollSeconds(1))
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 1s"`) {
 		t.Errorf("board does not poll every 1s:\n%s", got)
 	}

@@ -9,7 +9,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -25,7 +24,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	ok := loop.NewLoop(discardLog, store,
+	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
 		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
@@ -38,7 +37,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 	// An injected clock that keeps moving, standing in for a real outage's wall-clock span,
 	// while every observe across it fails.
 	boom := errors.New("gh pr list: exit status 1")
-	failing := loop.NewLoop(discardLog, store, func(context.Context) (plan.Observation, error) {
+	failing := newLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
 	}, fixedClock(at.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	for i := range 50 {

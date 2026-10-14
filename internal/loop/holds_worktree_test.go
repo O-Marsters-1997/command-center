@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -41,7 +40,7 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -83,7 +82,7 @@ func TestRetargetSkipsAnAwaitingInputTicketUntilItLeavesThatState(t *testing.T) 
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

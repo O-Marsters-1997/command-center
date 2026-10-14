@@ -90,9 +90,10 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
 	forge := &fakeForge{t: t, remote: filepath.Join(root, "remote.git")}
 	runner := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner)
-	lp.SetForge(forge)
-	lp.SetTrackerSource(resolve)
+	lp := newLoop(
+		store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner,
+		loop.WithForge(forge), loop.WithTrackerSource(resolve),
+	)
 
 	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
 		t.Fatal(err)

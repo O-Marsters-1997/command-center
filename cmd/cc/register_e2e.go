@@ -11,8 +11,8 @@ func subcmd(args []string) command {
 	return register.Lookup(args)
 }
 
-func init() {
-	runOptions = []app.Option{
+func appOptions() []app.Option {
+	return []app.Option{
 		app.WithValidator(register.SandboxValidate), app.WithRemoteSource(register.SandboxRemote),
 	}
 }

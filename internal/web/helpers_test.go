@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -33,7 +32,7 @@ type frozenClock struct{ at time.Time }
 func (c frozenClock) Now() time.Time                       { return c.at }
 func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
-func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
+func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
@@ -57,12 +56,23 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
-func openServer(st *store.Store, clock loop.Clock, dataDir string) *web.Server {
-	return web.NewServer(slog.New(slog.DiscardHandler), st, clock, dataDir)
+func openServer(st *store.Store, clock web.Clock, dataDir string, opts ...web.Option) *web.Server {
+	deps := web.Deps{Logger: slog.New(slog.DiscardHandler), Store: st, Clock: clock, DataDir: dataDir}
+	return web.NewServer(deps, opts...)
 }
 
-func newServer(st *store.Store, now time.Time) *web.Server {
-	return openServer(st, fixedClock(now), "")
+type nudgeFunc func()
+
+func (f nudgeFunc) Nudge() { f() }
+
+func openNudgingServer(st *store.Store, nudge func(), opts ...web.Option) *web.Server {
+	return web.NewServer(web.Deps{
+		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: realClock{}, Nudger: nudgeFunc(nudge),
+	}, opts...)
+}
+
+func newServer(st *store.Store, now time.Time, opts ...web.Option) *web.Server {
+	return openServer(st, fixedClock(now), "", opts...)
 }
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {

@@ -48,15 +48,15 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 	upsertRepoAs(t, st, "acme/merges", plan.RepoCloning)
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
 		if repo.Name == "acme/merges" {
 			repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, plan.RefusalMergeSettings, "allows merge commits"
 			return repo, nil
 		}
 		repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "defaults", now
 		return repo, nil
-	})
+	}
+	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -82,14 +82,14 @@ func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *tes
 	upsertRepoAs(t, st, "acme/good", plan.RepoCloning)
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, _ time.Time) (storepkg.Repo, error) {
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, _ time.Time) (storepkg.Repo, error) {
 		if repo.Name == "acme/offline" {
 			return repo, os.ErrDeadlineExceeded
 		}
 		repo.Phase = plan.RepoReady
 		return repo, nil
-	})
+	}
+	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -186,7 +186,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 		t.Fatal(err)
 	}
 	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := loop.NewLoop(discardLog, st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
 	tick := func() storepkg.Repo {
 		t.Helper()
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -224,7 +224,7 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 	st := openStore(t)
 	upsertRepoAs(t, st, "repo", plan.RepoRefused)
 	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := loop.NewLoop(discardLog, st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)

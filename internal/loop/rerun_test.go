@@ -8,7 +8,6 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -47,7 +46,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -120,7 +119,7 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

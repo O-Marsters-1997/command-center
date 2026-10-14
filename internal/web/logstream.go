@@ -90,7 +90,7 @@ func (s *Server) followLog(
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.clock.After(logPollInterval):
+		case <-time.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
 			return err

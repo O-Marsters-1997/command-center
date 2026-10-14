@@ -11,38 +11,44 @@ import (
 	"syscall"
 
 	"github.com/O-Marsters-1997/command-center/internal/app"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
-type command func(ctx context.Context, logger *slog.Logger, configPath string) error
+type command func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error
 
 func main() {
-	config := flag.String("config", "cc/config.toml", "path to config file")
+	configPath := flag.String("config", "cc/config.toml", "path to config file")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	env, err := config.EnvFrom(os.Getenv)
+	if err != nil {
+		logger.Error("cc exited", "err", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	cmd := subcmd(flag.Args())
-	if cmd == nil && demoSubcmd != nil {
+	if cmd == nil {
 		cmd = demoSubcmd(flag.Args())
 	}
 	if cmd == nil {
 		cmd = run
 	}
-	if err := cmd(ctx, logger, *config); err != nil {
+	if err := cmd(ctx, logger, *configPath, env); err != nil {
 		logger.Error("cc exited", "err", err)
+		stop()
 		os.Exit(1)
 	}
 }
 
-var runOptions []app.Option
-
-func run(ctx context.Context, logger *slog.Logger, configPath string) (err error) {
+func run(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) (err error) {
 	logger.Info("loading config", "path", configPath)
 
-	instance, err := app.New(ctx, logger, configPath, runOptions...)
+	instance, err := app.New(ctx, logger, configPath, env, appOptions()...)
 	if err != nil {
 		return err
 	}
@@ -50,5 +56,3 @@ func run(ctx context.Context, logger *slog.Logger, configPath string) (err error
 
 	return instance.Run(ctx)
 }
-
-var demoSubcmd func(args []string) command

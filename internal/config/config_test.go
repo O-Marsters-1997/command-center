@@ -11,6 +11,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
+var testEnv = config.Env{Home: "/home/test", UserConfigDir: "/home/test/.config"}
+
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "command-centre.toml")
@@ -36,7 +38,7 @@ repo       = "cc-sandbox"
 branch     = "cc-1-first"
 blocked_by = []
 `
-	got, err := config.LoadConfig(writeConfig(t, body))
+	got, err := config.LoadConfig(writeConfig(t, body), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -48,7 +50,7 @@ blocked_by = []
 func TestLoadConfigDefaults(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""))
+	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -75,7 +77,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestLoadConfigSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, "spend_limit_5h = 80\n"))
+	got, err := config.LoadConfig(writeConfig(t, "spend_limit_5h = 80\n"), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -87,7 +89,7 @@ func TestLoadConfigSpendLimit5h(t *testing.T) {
 func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""))
+	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -137,7 +139,7 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := config.LoadConfig(writeConfig(t, tt.line))
+			got, err := config.LoadConfig(writeConfig(t, tt.line), testEnv)
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -176,22 +178,20 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
-			t.Setenv("CC_DATA_DIR", t.TempDir())
-
-			_, err := config.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)))
+			_, err := config.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
 		})
 		t.Run(tt.name+" in CC_AGENT_COMMAND", func(t *testing.T) {
-			t.Setenv("CC_DATA_DIR", t.TempDir())
-			env, err := json.Marshal(tt.argv)
+			raw, err := json.Marshal(tt.argv)
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("CC_AGENT_COMMAND", string(env))
+			env := testEnv
+			env.AgentCommand = string(raw)
 
-			_, err = config.LoadConfig(writeConfig(t, agentCommandLine(t, complete)))
+			_, err = config.LoadConfig(writeConfig(t, agentCommandLine(t, complete)), env)
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
 				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
 			}
@@ -244,7 +244,7 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := config.LoadConfig(writeConfig(t, tt.body))
+			got, err := config.LoadConfig(writeConfig(t, tt.body), testEnv)
 			if err != nil {
 				t.Fatalf("LoadConfig: %v", err)
 			}
@@ -258,11 +258,10 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 // TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
 // on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
-	t.Setenv("CC_DATA_DIR", t.TempDir())
 	tracked := withRequiredParts("claude", "-p", "{prompt}")
 	path := writeConfig(t, agentCommandLine(t, tracked))
 
-	got, err := config.LoadConfig(path)
+	got, err := config.LoadConfig(path, testEnv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,12 +270,13 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	}
 
 	override := withRequiredParts("caffeinate", "-i", "claude", "-p", "{prompt}")
-	env, err := json.Marshal(override)
+	raw, err := json.Marshal(override)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CC_AGENT_COMMAND", string(env))
-	got, err = config.LoadConfig(path)
+	env := testEnv
+	env.AgentCommand = string(raw)
+	got, err = config.LoadConfig(path, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,8 +285,8 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	}
 
 	for _, bad := range []string{"caffeinate -i claude", "[]", `{"a":1}`} {
-		t.Setenv("CC_AGENT_COMMAND", bad)
-		if _, err := config.LoadConfig(path); err == nil {
+		env.AgentCommand = bad
+		if _, err := config.LoadConfig(path, env); err == nil {
 			t.Errorf("CC_AGENT_COMMAND=%q was accepted, want a refusal", bad)
 		}
 	}
@@ -295,7 +295,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 func TestLoadConfigBoardPollSeconds(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""))
+	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
 	}
 
-	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n"))
+	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n"), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestLoadConfigBoardPollSeconds(t *testing.T) {
 func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 	t.Parallel()
 
-	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n"))
+	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n"), testEnv)
 	if err == nil {
 		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
 	}
@@ -324,7 +324,7 @@ func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
 func TestSampleConfigLoads(t *testing.T) {
 	t.Parallel()
 
-	if _, err := config.LoadConfig("../../docs/command-centre.sample.toml"); err != nil {
+	if _, err := config.LoadConfig("../../docs/command-centre.sample.toml", testEnv); err != nil {
 		t.Fatalf("LoadConfig(docs/command-centre.sample.toml): %v", err)
 	}
 }
@@ -332,11 +332,11 @@ func TestSampleConfigLoads(t *testing.T) {
 func TestCheckedInConfigPinsTheDefaultModel(t *testing.T) {
 	t.Parallel()
 
-	shipped, err := config.LoadConfig("../../cc/config.toml")
+	shipped, err := config.LoadConfig("../../cc/config.toml", testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig(cc/config.toml): %v", err)
 	}
-	defaults, err := config.LoadConfig(writeConfig(t, ""))
+	defaults, err := config.LoadConfig(writeConfig(t, ""), testEnv)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}

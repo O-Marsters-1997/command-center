@@ -11,17 +11,18 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/demo"
 )
 
-func init() { demoSubcmd = lookupDemo }
-
-func lookupDemo(args []string) command {
+func demoSubcmd(args []string) command {
 	if len(args) == 0 || args[0] != "demo" {
 		return nil
 	}
 	rest := args[1:]
-	return func(ctx context.Context, logger *slog.Logger, _ string) error { return runDemo(ctx, logger, rest) }
+	return func(ctx context.Context, logger *slog.Logger, _ string, _ config.Env) error {
+		return runDemo(ctx, logger, rest)
+	}
 }
 
 func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {

@@ -70,8 +70,10 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
 
-	lp := loop.NewLoop(discardLog, store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})
-	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+	lp := newLoop(
+		store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{},
+		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
+	)
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -118,10 +120,10 @@ func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
 
-	lp := loop.NewLoop(
-		discardLog, store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
+	lp := newLoop(
+		store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
+		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
 	)
-	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
 	}
@@ -193,10 +195,10 @@ func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
 
-	lp := loop.NewLoop(
-		discardLog, store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
+	lp := newLoop(
+		store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
+		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
 	)
-	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
 	}
@@ -265,8 +267,10 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(discardLog, store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{})
-	lp.SetTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}))
+	lp := newLoop(
+		store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{},
+		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
+	)
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

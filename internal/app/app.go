@@ -14,7 +14,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -62,15 +61,25 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
 
-func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Option) (app *App, err error) {
+func New(
+	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, opts ...Option,
+) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath, env)
 	if err != nil {
 		return nil, err
+	}
+	var webOpts []web.Option
+	if env.TZ != "" {
+		loc, err := time.LoadLocation(env.TZ)
+		if err != nil {
+			return nil, fmt.Errorf("load TZ %q: %w", env.TZ, err)
+		}
+		webOpts = append(webOpts, web.WithLocation(loc))
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
@@ -105,19 +114,21 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
 
-	lp := loop.NewLoop(logger, store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
-	lp.SetForge(gh.CLI{})
-	lp.SetWorktrees(git.CLI{})
+	var loopOpts []loop.Option
 	if settings.validate != nil {
-		lp.SetValidator(settings.validate)
+		loopOpts = append(loopOpts, loop.WithValidator(settings.validate))
 	}
 	if settings.remoteOf != nil {
-		lp.SetRemoteSource(settings.remoteOf)
+		loopOpts = append(loopOpts, loop.WithRemoteSource(settings.remoteOf))
 	}
-	server := web.NewServer(logger, store, settings.clock, ws.DataDir)
-	server.SetNudge(lp.Nudge)
-	server.SetSpendLimit5h(cfg.SpendLimit5h)
-	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
+	lp := loop.New(loop.Deps{
+		Logger: logger, Store: store, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
+		Config: cfg, Workspace: ws,
+	}, loopOpts...)
+	webOpts = append(webOpts, web.WithSpendLimit5h(cfg.SpendLimit5h), web.WithBoardPollSeconds(cfg.BoardPollSeconds))
+	server := web.NewServer(web.Deps{
+		Logger: logger, Store: store, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
+	}, webOpts...)
 
 	return &App{
 		cfg:    cfg,

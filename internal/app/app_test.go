@@ -1,8 +1,10 @@
 package app_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -36,7 +38,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 
 	ctx := t.Context()
 	inst, err := app.New(
-		ctx, slog.New(slog.DiscardHandler), configPath, app.WithClock(fixedClock(at)), app.WithObserver(stub),
+		ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithClock(fixedClock(at)), app.WithObserver(stub),
 	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -82,13 +84,13 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath)
+	first, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() { _ = first.Close() })
 
-	if _, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath); err == nil {
+	if _, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
@@ -98,7 +100,6 @@ const sandboxRepo = "sandbox-org/cc-sandbox"
 func appConfig(t *testing.T) string {
 	t.Helper()
 	dataDir := t.TempDir()
-	t.Setenv("CC_DATA_DIR", dataDir)
 
 	root, repoPath := repoWithOrigin(t)
 	checkout := config.CheckoutPath(dataDir, sandboxRepo)
@@ -109,11 +110,11 @@ func appConfig(t *testing.T) string {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
-	if err := os.WriteFile(configPath, []byte("port = 0\n"), 0o600); err != nil {
+	dsn := cctest.DSN(t)
+	body := fmt.Sprintf("port = 0\ndata_dir = %q\ndatabase_url = %q\n", dataDir, dsn)
+	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	dsn := cctest.DSN(t)
-	t.Setenv("CC_DATABASE_URL", dsn)
 	seed(t, dsn, func(db *store.Store) error {
 		repo := store.Repo{
 			Name: sandboxRepo, Remote: filepath.Join(root, "remote.git"), Phase: plan.RepoReady, TrackedAt: time.Now(),
@@ -153,7 +154,7 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	inst, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, app.WithObserver(stub))
+	inst, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -182,12 +183,17 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = held.Close() })
 	port := held.Addr().(*net.TCPAddr).Port
-	if err := os.WriteFile(configPath, []byte("port = "+strconv.Itoa(port)+"\n"), 0o600); err != nil {
+	body, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = bytes.Replace(body, []byte("port = 0\n"), []byte("port = "+strconv.Itoa(port)+"\n"), 1)
+	if err := os.WriteFile(configPath, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, app.WithObserver(stub))
+	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, testEnv, app.WithObserver(stub))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -215,15 +221,18 @@ func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d
 
 func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 
+var testEnv = config.Env{Home: "/home/test", UserConfigDir: "/home/test/.config"}
+
 func TestNewStartsWithNoTrackedRepos(t *testing.T) {
-	t.Setenv("CC_DATA_DIR", t.TempDir())
-	t.Setenv("CC_DATABASE_URL", cctest.DSN(t))
+	env := testEnv
+	env.DataDir = t.TempDir()
+	env.DatabaseURL = cctest.DSN(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath)
+	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, env)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

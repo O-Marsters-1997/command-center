@@ -129,7 +129,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -547,7 +547,7 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -594,7 +594,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("automatic RunOnce: %v", err)

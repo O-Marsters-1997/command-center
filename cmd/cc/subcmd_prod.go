@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -27,16 +28,18 @@ func subcmd(args []string) command {
 	}
 	switch args[0] {
 	case "open":
-		return func(ctx context.Context, _ *slog.Logger, configPath string) error {
-			return open(ctx, configPath, os.Stdout, os.Stderr)
+		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
+			return open(ctx, configPath, env, os.Stdout, os.Stderr)
 		}
 	default:
 		return nil
 	}
 }
 
-func open(ctx context.Context, configPath string, stdout, stderr io.Writer) error {
-	cfg, err := config.LoadConfig(configPath)
+func appOptions() []app.Option { return nil }
+
+func open(ctx context.Context, configPath string, env config.Env, stdout, stderr io.Writer) error {
+	cfg, err := config.LoadConfig(configPath, env)
 	if err != nil {
 		return err
 	}

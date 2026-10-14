@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -32,9 +31,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(
-		discardLog, store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-	)
+	lp := newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -79,8 +76,7 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 	if err := store.QueueEditTicketIntent(ctx, url, "cc-1-custom-branch", nil, at.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	lp := loop.NewLoop(
-		discardLog,
+	lp := newLoop(
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {
@@ -141,8 +137,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(
-		discardLog,
+	lp := newLoop(
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {
