@@ -39,32 +39,11 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.New("").
 	Funcs(template.FuncMap{
-		"slot":         newRowSlot,
-		"confirmation": confirmation,
-		"percent":      view.PercentOf,
-		"pathEscape":   url.PathEscape,
-		"queryEscape":  url.QueryEscape,
+		"percent":     view.PercentOf,
+		"pathEscape":  url.PathEscape,
+		"queryEscape": url.QueryEscape,
 	}).
 	ParseFS(templateFiles, "*.tmpl"))
-
-// html/template resets $ to the invoked subtemplate's own argument, so "row" cannot see
-// pageView's copies of these fields.
-type rowSlot struct {
-	view.Row
-	LaunchVerb   plan.Verb
-	CancelVerb   plan.Verb
-	FollowUpVerb plan.Verb
-	Scope        string
-	FeatureScope string
-}
-
-func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
-	return rowSlot{
-		Row:        r,
-		LaunchVerb: plan.VerbLaunch, CancelVerb: plan.VerbCancel, FollowUpVerb: plan.VerbFollowUp,
-		Scope: scope, FeatureScope: featureScope,
-	}
-}
 
 // Server is the status page plus the launch, authorisation and features routes. It only queues
 // intents; it never writes the database directly.
@@ -780,7 +759,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 	if strings.TrimSpace(query) == "" {
 		groups, err := s.view.RepoGroups(r.Context())
 		if err != nil {
-			return err
+			return fmt.Errorf("load repo groups: %w", err)
 		}
 		return renderFragment(w, r, host, "repoGroups", groups)
 	}
@@ -799,7 +778,7 @@ func (s *Server) searchRepos(ctx context.Context, query string) (view.RepoSearch
 	}
 	rows, err := s.view.SearchRepos(ctx, query, pushable)
 	if err != nil {
-		return view.RepoSearch{}, err
+		return view.RepoSearch{}, fmt.Errorf("search repos: %w", err)
 	}
 	search.Rows = rows
 	return search, nil

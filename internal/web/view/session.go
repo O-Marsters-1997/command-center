@@ -33,6 +33,8 @@ type SessionPage struct {
 	TranscriptPath string
 	RawPath        string
 	ActionsPath    string
+	Actions        []VerbButton
+	Callout        bool
 	PRURL          string
 	Toast          string
 	ResetComposer  bool
@@ -48,11 +50,6 @@ func (s SessionPage) Empty() bool {
 func (s SessionPage) Running() bool { return s.Row.State == plan.Running.String() }
 
 func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
-
-// PendingVerb reports whether a verb is queued and not yet consumed by the loop.
-func (s SessionPage) PendingVerb(verb plan.Verb) bool {
-	return slices.Contains(s.Row.PendingVerbs, verb)
-}
 
 type Turn struct {
 	You string
@@ -139,6 +136,10 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if row.PRNumber > 0 {
 		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)
 	}
+	actions := slices.Clone(row.Buttons)
+	for i := range actions {
+		actions[i].Label = string(actions[i].Verb)
+	}
 	runs, err := r.store.SessionRunsForTicket(ctx, ticketURL)
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load session runs for ticket: %w", err)
@@ -164,6 +165,8 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	return SessionPage{
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
+		Actions:        actions,
+		Callout:        row.Glyph == plan.GlyphFailed || row.Glyph == plan.GlyphAttention,
 		PRURL:          prURL,
 		Chrome:         chrome,
 		Row:            row,
@@ -229,12 +232,4 @@ func rawLog(raw bool, logPath string) (string, error) {
 		return "", fmt.Errorf("read log %s: %w", logPath, err)
 	}
 	return string(data), nil
-}
-
-// ActionVerbs is the state's verbs minus launch, which has its own modal, and follow-up, which
-// is the composer.
-func (s SessionPage) ActionVerbs() []plan.Verb {
-	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v plan.Verb) bool {
-		return v == plan.VerbLaunch || v == plan.VerbFollowUp
-	})
 }
