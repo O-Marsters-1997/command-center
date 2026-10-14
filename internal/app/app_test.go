@@ -29,6 +29,7 @@ import (
 )
 
 func TestNewRunsATickAndServesThePage(t *testing.T) {
+	t.Parallel()
 	configPath := appConfig(t)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -83,6 +84,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 }
 
 func TestNewRefusesASecondInstance(t *testing.T) {
+	t.Parallel()
 	configPath := appConfig(t)
 
 	ctx := t.Context()
@@ -152,6 +154,7 @@ func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 // non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
 // exit status 1.
 func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
+	t.Parallel()
 	configPath := appConfig(t)
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
@@ -177,6 +180,7 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 }
 
 func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
+	t.Parallel()
 	configPath := appConfig(t)
 
 	held, err := net.Listen("tcp", "127.0.0.1:0")

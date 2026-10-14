@@ -3,43 +3,23 @@ package config_test
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v: %s", args, err, out)
-	}
-}
-
 func originedRepo(t *testing.T, settings string) string {
 	t.Helper()
-	root := t.TempDir()
-	checkout := filepath.Join(root, "repo")
-	remote := filepath.Join(root, "remote.git")
-	gitIn(t, root, "init", "-q", "-b", "main", checkout)
-	gitIn(t, root, "init", "-q", "-b", "main", "--bare", remote)
-	writeIn(t, checkout, "README.md", "hi\n")
+	checkout, _ := gittest.WithOrigin(t)
 	if settings != "" {
-		writeIn(t, checkout, config.SettingsFile, settings)
+		gittest.Commit(t, checkout, config.SettingsFile, settings)
+		gittest.Run(t, checkout, "push", "-q", "origin", "main")
 	}
-	gitIn(t, checkout, "add", ".")
-	gitIn(t, checkout, "commit", "-q", "-m", "initial")
-	gitIn(t, checkout, "remote", "add", "origin", remote)
-	gitIn(t, checkout, "push", "-q", "-u", "origin", "main")
-	gitIn(t, checkout, "fetch", "-q", "origin")
 	return checkout
 }
 
@@ -99,9 +79,9 @@ func TestReadRepoSettingsIgnoresABranchAndTheWorkingTree(t *testing.T) {
 	t.Parallel()
 
 	checkout := originedRepo(t, "deny = [\"go.mod\"]\n")
-	gitIn(t, checkout, "switch", "-q", "-c", "ticket")
+	gittest.Run(t, checkout, "switch", "-q", "-c", "ticket")
 	writeIn(t, checkout, config.SettingsFile, "deny = []\n")
-	gitIn(t, checkout, "commit", "-q", "-am", "loosen")
+	gittest.Run(t, checkout, "commit", "-q", "-am", "loosen")
 	writeIn(t, checkout, config.SettingsFile, "deny = []\nstacking = true\n")
 
 	got, _, err := config.ReadRepoSettings(t.Context(), checkout)

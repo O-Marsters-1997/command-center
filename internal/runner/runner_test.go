@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
@@ -21,30 +22,6 @@ func commitsScript(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return abs
-}
-
-// gitRepo creates a real git repo at a temp dir so commits.sh has something to commit into.
-// The git identity is set via t.Setenv, not just on the setup commands' own exec.Cmd, because
-// Spawn's env is os.Environ() minus the API key — it must inherit the same identity commits.sh
-// needs to `git commit` inside the spawned process.
-func gitRepo(t *testing.T) string {
-	t.Helper()
-	t.Setenv("GIT_AUTHOR_NAME", "Command Centre")
-	t.Setenv("GIT_AUTHOR_EMAIL", "cc@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "Command Centre")
-	t.Setenv("GIT_COMMITTER_EMAIL", "cc@example.com")
-
-	dir := t.TempDir()
-	run := func(args ...string) {
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("init", "-q", "-b", "main")
-	run("commit", "-q", "--allow-empty", "-m", "initial")
-	return dir
 }
 
 // waitForFile polls for path to exist, failing the test after a short deadline. Spawn does not
@@ -101,6 +78,7 @@ type spawnCase struct {
 }
 
 func TestProcessRunnerSpawn(t *testing.T) {
+	t.Parallel()
 	writeFile := func(t *testing.T, content string) string {
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "input")
@@ -127,10 +105,9 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			command: []string{commitsScript(t), "{worktree}", "{settings}", "{prompt_file}"},
 			configure: func(t *testing.T, cfg *runner.SpawnConfig) {
 				t.Helper()
-				cfg.WorktreePath = gitRepo(t)
+				cfg.WorktreePath = gittest.Init(t)
 				cfg.SettingsPath = writeFile(t, "{}")
 				cfg.PromptPath = writeFile(t, "/implement sandbox://CC-1")
-				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 			},
 			check: func(t *testing.T, cfg runner.SpawnConfig, _ int, _ string) {
 				t.Helper()
@@ -147,20 +124,6 @@ func TestProcessRunnerSpawn(t *testing.T) {
 				}
 				if len(logged) != 0 {
 					t.Errorf("commits.sh wrote no stdout/stderr, but the log file has content: %q", logged)
-				}
-			},
-		},
-		{
-			name:   "strips ANTHROPIC_API_KEY from the environment",
-			script: "#!/bin/sh\nenv > $DUMP\n",
-			configure: func(t *testing.T, _ *runner.SpawnConfig) {
-				t.Helper()
-				t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
-			},
-			check: func(t *testing.T, _ runner.SpawnConfig, _ int, dump string) {
-				t.Helper()
-				if strings.Contains(dump, "ANTHROPIC_API_KEY=") {
-					t.Errorf("spawned process environment still carries ANTHROPIC_API_KEY:\n%s", dump)
 				}
 			},
 		},
@@ -260,6 +223,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := runner.SpawnConfig{
 				WorktreePath: t.TempDir(),
 				SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
@@ -309,5 +273,48 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			}
 			tt.check(t, cfg, result.Pid, got)
 		})
+	}
+}
+
+func TestProcessRunnerSpawnStripsSecret(t *testing.T) {
+	if os.Getenv("RUNNER_SECRET_CHILD") != "1" {
+		t.Parallel()
+		cmd := exec.Command(os.Args[0], "-test.run=^TestProcessRunnerSpawnStripsSecret$")
+		cmd.Env = append(os.Environ(), "RUNNER_SECRET_CHILD=1", "ANTHROPIC_API_KEY=test-secret-key")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("Spawn with secret: %v: %s", err, out)
+		}
+		return
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") != "test-secret-key" {
+		t.Fatal("secret fixture was not installed in the isolated process")
+	}
+	worktree := t.TempDir()
+	dump := filepath.Join(worktree, "env.txt")
+	script := filepath.Join(t.TempDir(), "agent.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nenv > \"$1\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := logFile.Close(); err != nil {
+			t.Errorf("close run log: %v", err)
+		}
+	})
+	cfg := runner.SpawnConfig{WorktreePath: worktree, AgentCommand: []string{script, dump}, LogFile: logFile}
+	result, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	reapExit(t, result.Pid)
+	got, err := os.ReadFile(dump)
+	if err != nil {
+		t.Fatalf("read spawned environment: %v", err)
+	}
+	if strings.Contains(string(got), "ANTHROPIC_API_KEY=") {
+		t.Errorf("spawned process environment still carries ANTHROPIC_API_KEY:\n%s", got)
 	}
 }

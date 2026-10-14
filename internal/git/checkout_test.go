@@ -1,54 +1,16 @@
-package git
+package git_test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 )
 
 type repoConfig struct{ Name, Remote, Checkout string }
-
-func runGit(t *testing.T, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v: %s", args, err, out)
-	}
-}
-
-func runGitOutput(t *testing.T, args ...string) string {
-	t.Helper()
-	out, err := exec.Command("git", args...).Output()
-	if err != nil {
-		t.Fatalf("git %v: %v", args, err)
-	}
-	return string(out)
-}
-
-func repoWithOrigin(t *testing.T) (root, repoPath string) {
-	t.Helper()
-	root = t.TempDir()
-	repoPath = filepath.Join(root, "repo")
-	remote := filepath.Join(root, "remote.git")
-
-	t.Setenv("GIT_AUTHOR_NAME", "t")
-	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "t")
-	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.com")
-	runGit(t, "init", "-q", "-b", "main", repoPath)
-	if err := os.WriteFile(filepath.Join(repoPath, "README.md"), []byte("hi\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runGit(t, "-C", repoPath, "add", "README.md")
-	runGit(t, "-C", repoPath, "commit", "-q", "-m", "initial")
-	runGit(t, "init", "-q", "-b", "main", "--bare", remote)
-	runGit(t, "-C", repoPath, "remote", "add", "origin", remote)
-	runGit(t, "-C", repoPath, "push", "-q", "-u", "origin", "main")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin")
-	return root, repoPath
-}
 
 func TestSameRemoteAcrossURLForms(t *testing.T) {
 	t.Parallel()
@@ -62,7 +24,7 @@ func TestSameRemoteAcrossURLForms(t *testing.T) {
 		"ssh://git@github.com/o/r.git",
 	}
 	for _, form := range same[1:] {
-		if !SameRemote(same[0], form) {
+		if !git.SameRemote(same[0], form) {
 			t.Errorf("%q and %q are the same repository, but were read as different", same[0], form)
 		}
 	}
@@ -72,19 +34,19 @@ func TestSameRemoteAcrossURLForms(t *testing.T) {
 		"git@github.com:other/r.git",
 		"git@gitlab.com:o/r.git",
 	} {
-		if SameRemote(same[0], other) {
+		if git.SameRemote(same[0], other) {
 			t.Errorf("%q and %q are different repositories, but were read as the same", same[0], other)
 		}
 	}
 }
 
 func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
-	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
+	t.Parallel()
+	_, remote := gittest.WithOrigin(t)
 	checkout := filepath.Join(t.TempDir(), "repos", "r")
 
 	repo := repoConfig{Name: "r", Remote: remote, Checkout: checkout}
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("clone: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(checkout, "README.md")); err != nil {
@@ -95,7 +57,7 @@ func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
 	if err := os.WriteFile(marker, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("second EnsureCheckout: %v", err)
 	}
 	if _, err := os.Stat(marker); err != nil {
@@ -104,8 +66,8 @@ func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
 }
 
 func TestEnsureCheckoutRefuses(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
-	realRemote := filepath.Join(filepath.Dir(repoPath), "remote.git")
+	t.Parallel()
+	repoPath, realRemote := gittest.WithOrigin(t)
 	notARepo := t.TempDir()
 	const configured = "git@github.com:someone/else.git"
 
@@ -121,7 +83,9 @@ func TestEnsureCheckoutRefuses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := EnsureCheckout(t.Context(), "r", tt.remote, tt.checkout)
+			t.Parallel()
+
+			err := git.EnsureCheckout(t.Context(), "r", tt.remote, tt.checkout)
 			if err == nil {
 				t.Fatal("want a refusal")
 			}
@@ -134,17 +98,16 @@ func TestEnsureCheckoutRefuses(t *testing.T) {
 	}
 }
 
-// TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo is the case that makes remote portable:
-// a checkout cloned over ssh, configured over https, is one repository.
 func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
-	t.Setenv("GIT_SSH_COMMAND", "false")
-	runGit(t, "-C", repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
+	t.Parallel()
+	repoPath, _ := gittest.WithOrigin(t)
+	gittest.Run(t, repoPath, "config", "core.sshCommand", "false")
+	gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
 
 	// The fetch that follows fails, since git@github.com:o/r is not a repository anyone can
 	// reach from a test. What must not happen is the origin comparison refusing first.
 	repo := repoConfig{Name: "r", Remote: "https://github.com/o/r", Checkout: repoPath}
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil &&
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil &&
 		strings.Contains(err.Error(), "the config says") {
 		t.Errorf("EnsureCheckout refused the same repository in its other URL form: %v", err)
 	}
@@ -153,24 +116,24 @@ func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 // TestEnsureCheckoutEnablesRerere covers both arms. rerere is local config, so a re-clone on a
 // fresh machine would otherwise lose it, and the live checkout predates the change.
 func TestEnsureCheckoutEnablesRerere(t *testing.T) {
-	_, repoPath := repoWithOrigin(t)
-	remote := filepath.Join(filepath.Dir(repoPath), "remote.git")
+	t.Parallel()
+	_, remote := gittest.WithOrigin(t)
 	checkout := filepath.Join(t.TempDir(), "repos", "r")
 	repo := repoConfig{Name: "r", Remote: remote, Checkout: checkout}
 
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("clone: %v", err)
 	}
 	assertRerereOn(t, checkout)
 
-	runGit(t, "-C", checkout, "config", "--unset", "rerere.enabled")
-	runGit(t, "-C", checkout, "config", "--unset", "rerere.autoupdate")
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
+	gittest.Run(t, checkout, "config", "--unset", "rerere.enabled")
+	gittest.Run(t, checkout, "config", "--unset", "rerere.autoupdate")
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("second EnsureCheckout: %v", err)
 	}
 	assertRerereOn(t, checkout)
 
-	if err := EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
+	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("third EnsureCheckout: %v", err)
 	}
 	assertRerereOn(t, checkout)
@@ -179,7 +142,7 @@ func TestEnsureCheckoutEnablesRerere(t *testing.T) {
 func assertRerereOn(t *testing.T, checkout string) {
 	t.Helper()
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
-		got := strings.TrimSpace(runGitOutput(t, "-C", checkout, "config", "--get", key))
+		got := gittest.Run(t, checkout, "config", "--get", key)
 		if got != "true" {
 			t.Errorf("%s = %q, want \"true\"", key, got)
 		}
@@ -194,7 +157,7 @@ func TestFullNameKeepsCaseAcrossURLForms(t *testing.T) {
 		"https://github.com/O-Marsters-1997/command-center",
 		"ssh://git@github.com/O-Marsters-1997/command-center.git/",
 	} {
-		got, err := FullName(remote)
+		got, err := git.FullName(remote)
 		if err != nil || got != "O-Marsters-1997/command-center" {
 			t.Errorf("FullName(%q) = %q, %v, want O-Marsters-1997/command-center", remote, got, err)
 		}
@@ -203,7 +166,7 @@ func TestFullNameKeepsCaseAcrossURLForms(t *testing.T) {
 		"", "/tmp/remote.git", "https://github.com/o", "https://host/a/b/c", "git@github.com:../evil.git",
 		"https://github.com/o/..",
 	} {
-		if got, err := FullName(remote); err == nil {
+		if got, err := git.FullName(remote); err == nil {
 			t.Errorf("FullName(%q) = %q, want an error", remote, got)
 		}
 	}
