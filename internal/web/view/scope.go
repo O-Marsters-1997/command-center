@@ -55,12 +55,13 @@ type ScopeChoice struct {
 	ScopeEntry
 	Key     string
 	Current bool
+	Avatar  bool
 }
 
 func scopeChoices(entries []ScopeEntry, project, repo string) []ScopeChoice {
 	choices := make([]ScopeChoice, 0, len(entries))
 	for i, e := range entries {
-		c := ScopeChoice{ScopeEntry: e}
+		c := ScopeChoice{ScopeEntry: e, Avatar: e.Kind == ScopeProject}
 		if i < maxScopeKeys {
 			c.Key = "g " + strconv.Itoa(i+1)
 		}

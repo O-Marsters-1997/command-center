@@ -19,7 +19,7 @@
 {{define "repoGroups" -}}
 {{range $g := .}}
 <section class="mb-7 max-w-3xl" data-scope="{{.Scope.Kind}}">
-  {{if eq .Scope.Kind "project" -}}
+  {{if .Editable -}}
   <h2 class="flex items-center gap-2">
     <span class="avatar" data-hue="{{.Scope.Hue}}" aria-hidden="true">{{.Scope.Initial}}</span>
     {{.Scope.Label}}

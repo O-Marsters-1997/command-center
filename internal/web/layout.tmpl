@@ -1,5 +1,7 @@
 {{define "nav"}}hx-get="{{.}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{end}}
 
+{{define "navItem"}}<a class="sidebar-item" href="{{.Path}}" data-key="{{.Key}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" .Icon}}<span>{{.Label}}</span>{{with .Badge}}<span class="sidebar-count{{if $.Warn}} sidebar-count-warn{{end}}">{{.}}</span>{{end}}</a>{{end}}
+
 {{define "flash"}}<p class="banner ribbon" data-glyph="failed">{{.}}</p>{{end}}
 
 {{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
@@ -26,7 +28,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
-<title>Command Centre</title>
+<title>{{.PageTitle}}</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
@@ -43,7 +45,7 @@
 {{template "docHead" .}}
 <body>
 {{template "skipLink" .}}
-<div class="app">
+<div class="app" hx-select-oob="#sidebar-head,#sidebar-nav">
 {{template "sidebar" .}}
 <div class="pane">
 {{template "notices" .}}
@@ -102,20 +104,19 @@
 
 {{define "sidebar" -}}
 <aside class="sidebar" id="sidebar" aria-label="sections">
-  <div class="sidebar-head">
+  <div class="sidebar-head" id="sidebar-head">
     <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
-    <a class="btn btn-ghost btn-sm btn-icon" href="{{.LaunchPath}}" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .LaunchPath}}{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>
+    {{with .Chrome.Launch}}<a class="btn btn-ghost btn-sm btn-icon" href="{{.Path}}" data-key="{{.Key}}" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>{{end}}
   </div>
-  <nav class="sidebar-nav">
-    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" {{template "nav" .TicketsPath}}{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span><span class="sidebar-count">{{.OpenTickets}}</span></a>
-    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" {{template "nav" .InsightsPath}}{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" {{template "nav" .ReposPath}}{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span>{{with .RefusedRepos}}<span class="sidebar-count sidebar-count-warn">{{len .}} refused</span>{{end}}</a>
+  <nav class="sidebar-nav" id="sidebar-nav">
+    {{range .Nav}}{{template "navItem" .}}
+    {{end}}
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
     <nav class="flex flex-col gap-0.5" aria-label="scope">
       <a class="rail-link" href="/tickets" data-key="g 0" {{template "nav" "/tickets"}}{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
-      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if eq .Kind "project"}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
+      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if .Avatar}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
       {{end}}
     </nav>
   </details>

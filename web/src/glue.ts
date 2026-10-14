@@ -33,10 +33,6 @@ export function railOpenCookie(cookie: string, key: string, open: boolean): stri
   return `${railCookieName}=${encodeURIComponent(current.join("|"))}; path=/; max-age=31536000; samesite=lax`;
 }
 
-export function isCurrentPath(linkPath: string, here: string): boolean {
-  return linkPath === "/" ? here === "/" : here.startsWith(linkPath);
-}
-
 export function scopeOf(href: string, origin: string): string {
   const q = new URL(href, origin).searchParams;
   const project = q.get("project");
@@ -76,13 +72,6 @@ function tickStarted(): void {
   for (const el of document.querySelectorAll<HTMLElement>("[data-started]")) {
     const at = Date.parse(el.dataset.started ?? "");
     if (!Number.isNaN(at)) el.textContent = elapsed(now - at);
-  }
-}
-
-function markCurrent(): void {
-  for (const a of document.querySelectorAll<HTMLAnchorElement>(".sidebar-item")) {
-    if (isCurrentPath(a.pathname, location.pathname)) a.setAttribute("aria-current", "page");
-    else a.removeAttribute("aria-current");
   }
 }
 
@@ -167,7 +156,6 @@ function initGlue(): void {
 
   for (const name of ["htmx:pushedIntoHistory", "htmx:historyRestore"]) {
     document.addEventListener(name, closeScopeMenu);
-    document.addEventListener(name, markCurrent);
   }
   document.addEventListener("htmx:afterSwap", tickStarted);
   document.addEventListener("htmx:afterSettle", hop);

@@ -1,10 +1,12 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -157,6 +159,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
 		return Board{}, err
 	}
+	chrome.titled(cmp.Or(params.Feature, project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
 	blocking := make(map[string][]string, len(scoped))
@@ -256,6 +259,10 @@ func (r *Reader) scopeChrome(
 			c.OpenTickets++
 		}
 	}
+	c.Nav[navTickets].Badge = strconv.Itoa(c.OpenTickets)
+	if n := len(c.RefusedRepos); n > 0 {
+		c.Nav[navRepos].Badge, c.Nav[navRepos].Warn = strconv.Itoa(n)+" refused", true
+	}
 	return nil
 }
 
@@ -297,16 +304,22 @@ func (r *Reader) buildChrome(
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
-		Section:      "tickets",
+		PageTitle:    appTitle,
 		Keymap:       Keymap,
 		RepoScope:    params.Repo,
 		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
-		TicketsPath:  params.withScope(ticketsPath),
-		ReposPath:    params.withScope("/repos"),
-		LaunchPath:   params.withScope("/launch"),
-		InsightsPath: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
+		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},
+		Nav: []NavItem{
+			{Label: "All tickets", Path: params.withScope(ticketsPath), Key: keyTickets, Icon: "inbox", Badge: "0"},
+			{
+				Label: "Insights", Key: keyInsights, Icon: "chart",
+				Path: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
+			},
+			{Label: "Repos", Path: params.withScope("/repos"), Key: keyRepos, Icon: "repo"},
+		},
 	}
+	c.setCurrent(keyTickets)
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
 		c.SpendPaused = &SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h}
 	}

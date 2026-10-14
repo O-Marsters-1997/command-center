@@ -43,6 +43,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 			byFeature[t.Feature] = append(byFeature[t.Feature], t.URL)
 		}
 	}
+	chrome.titled("Launch")
 	page := LaunchPicker{Chrome: chrome}
 	for feature, urls := range byFeature {
 		candidates, err := previewCandidates(urls, in)
