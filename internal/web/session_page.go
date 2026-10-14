@@ -3,18 +3,13 @@ package web
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
-	n, err := strconv.Atoi(r.PathValue("n"))
-	if err != nil || n < 1 || strconv.Itoa(n) != r.PathValue("n") {
-		return withStatus(http.StatusNotFound, view.ErrSessionNotFound)
-	}
-	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: n}
+	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: r.PathValue("n")}
 	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, r.URL.Query().Get("log") == "raw")
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)

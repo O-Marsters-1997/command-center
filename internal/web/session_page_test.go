@@ -144,7 +144,7 @@ func TestSessionRefRoundTripsThroughItsPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := view.SessionRef{Owner: "acme", Name: "web", N: 1}
+	want := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
 	if ref != want {
 		t.Errorf("ParseSessionRef(%q) = %+v, want %+v", sessionTicket, ref, want)
 	}

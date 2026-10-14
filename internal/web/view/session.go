@@ -69,7 +69,7 @@ type Prompt struct {
 type SessionRef struct {
 	Owner string
 	Name  string
-	N     int
+	N     string
 }
 
 func ParseSessionRef(ticketURL plan.TicketURL) (SessionRef, error) {
@@ -77,15 +77,11 @@ func ParseSessionRef(ticketURL plan.TicketURL) (SessionRef, error) {
 	if len(parts) < 5 || parts[len(parts)-2] != "issues" {
 		return SessionRef{}, fmt.Errorf("parse session ref %q: not an owner/name/issues/n URL", ticketURL)
 	}
-	n, err := strconv.Atoi(parts[len(parts)-1])
-	if err != nil {
-		return SessionRef{}, fmt.Errorf("parse session ref %q: %w", ticketURL, err)
-	}
-	return SessionRef{Owner: parts[len(parts)-4], Name: parts[len(parts)-3], N: n}, nil
+	return SessionRef{Owner: parts[len(parts)-4], Name: parts[len(parts)-3], N: parts[len(parts)-1]}, nil
 }
 
 func (r SessionRef) Path() string {
-	return "/s/" + r.Owner + "/" + r.Name + "/" + strconv.Itoa(r.N)
+	return "/s/" + r.Owner + "/" + r.Name + "/" + r.N
 }
 
 // SessionPath is the route for a ticket URL's session page, or "" when the URL is not a
