@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -15,12 +16,12 @@ import (
 )
 
 func TestTheObserverReadsSettingsFromOriginMainEachTickAndNeverFromABranch(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	pathWithGitAndTpOnly(t)
 	cfg, _ := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	store := openStore(t)
 	trackRepo(t, store, "repo", root+"/remote.git")
-	observer := loop.NewObserver(store, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
+	observer := loop.NewObserver(store, &recordingForge{}, cfg)
 
 	denyOf := func() []string {
 		t.Helper()
@@ -40,20 +41,20 @@ func TestTheObserverReadsSettingsFromOriginMainEachTickAndNeverFromABranch(t *te
 		t.Errorf("deny after the file landed on main = %v, want [go.mod] on the next tick", got)
 	}
 
-	runGit(t, "-C", repoPath, "switch", "-q", "-c", "ticket")
+	gittest.Run(t, repoPath, "switch", "-q", "-c", "ticket")
 	pushSettingsFile(t, repoPath, "deny = []\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "ticket")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "ticket")
 	if got := denyOf(); !slices.Equal(got, []string{"go.mod"}) {
 		t.Errorf("deny after a branch loosened its own file = %v, want [go.mod]: only origin/main counts", got)
 	}
 }
 
 func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
+	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -71,12 +72,13 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if remoteHasBranch(t, root, "cc-1") {
+	if gittest.HasRef(t, root+"/remote.git", "refs/heads/cc-1") {
 		t.Error("cc-1 was pushed although its repo's settings could not be read")
 	}
 	lastErr, err := store.LastError(t.Context())
@@ -89,11 +91,11 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 }
 
 func TestAPushTouchingTheSettingsFileIsRefusedWhateverTheRepoDenies(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, config.SettingsFile, "deny = []\n")
+	gittest.Commit(t, worktreePath, config.SettingsFile, "deny = []\n")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -110,12 +112,13 @@ func TestAPushTouchingTheSettingsFileIsRefusedWhateverTheRepoDenies(t *testing.T
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if remoteHasBranch(t, root, "cc-1") {
+	if gittest.HasRef(t, root+"/remote.git", "refs/heads/cc-1") {
 		t.Error("cc-1 was pushed although it changes " + config.SettingsFile)
 	}
 	events, err := store.Events(t.Context())

@@ -3,41 +3,34 @@ package loop_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// writeVerifyScript writes an executable shell script and returns its path -- a repo's verify_command in these tests.
-func writeVerifyScript(t *testing.T, script string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "verify.sh")
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	verifyScript := writeVerifyScript(t, "#!/bin/sh\necho 'undefined: dup' >&2\nexit 1\n")
-	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{verifyScript}}
+	verifyCommand := []string{"sh", "-c", "echo 'undefined: dup' >&2; exit 1"}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: verifyCommand}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -48,7 +41,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasEvent(events, "verification_failed", verifyScript) {
+	if !hasEvent(events, "verification_failed", "sh -c") {
 		t.Errorf("events = %+v, want a verification_failed event naming the command", events)
 	}
 	if !hasEvent(events, "verification_failed", "undefined: dup") {
@@ -61,8 +54,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 		}
 	}
 
-	remoteChildTip := strings.TrimSpace(
-		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/child"))
+	remoteChildTip := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/child")
 	if remoteChildTip != childTip0 {
 		t.Errorf("remote child tip = %s, want unchanged %s: a failed verification must not push", remoteChildTip, childTip0)
 	}
@@ -80,6 +72,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 }
 
 func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -109,6 +102,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 }
 
 func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -120,13 +114,12 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	countFile := filepath.Join(t.TempDir(), "count")
-	script := writeVerifyScript(t, "#!/bin/sh\n"+
-		"n=$(cat \""+countFile+"\" 2>/dev/null || echo 0)\n"+
-		"echo $((n+1)) > \""+countFile+"\"\n"+
-		"exit 1\n")
+	countScript := "n=$(cat \"" + countFile + "\" 2>/dev/null || echo 0); " +
+		"echo $((n+1)) > \"" + countFile + "\"; exit 1"
+	command := []string{"sh", "-c", countScript}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{script}}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
@@ -146,6 +139,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 }
 
 func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -157,8 +151,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	failing := writeVerifyScript(t, "#!/bin/sh\nexit 1\n")
-	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{failing}}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{"false"}}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -204,34 +197,38 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 }
 
 func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	commitFile(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
-	commitFile(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
+	gittest.Commit(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
+	gittest.Commit(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "main")
 
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	f := newStackedFixture(t, repoPath, store, at)
 
 	// The parent's own PR adds Dup at the bottom of the file.
-	commitFile(t, f.parentWorktree, "helpers.go", "package fixture\n\nfunc Base() {}\n\nfunc Dup() {}\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent")
+	gittest.Commit(t, f.parentWorktree, "helpers.go", "package fixture\n\nfunc Base() {}\n\nfunc Dup() {}\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
 
 	// Main independently advanced (another PR squash-merged) with the same helper inserted at the
 	// top: a disjoint line range from the parent's own change, so the merge below has no conflict.
 	advanceMain(t, root, "helpers.go", "package fixture\n\nfunc Dup() {}\n\nfunc Base() {}\n")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
-	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
+	gittest.Run(t, repoPath, "fetch", "-q", "origin", "main")
+	mainTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/main")
 
-	remoteParentTip0 := strings.TrimSpace(
-		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent"))
+	remoteParentTip0 := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent")
 
 	obs := baseObservation(f, f.parentTip0)
 	obs.BranchTips[branchRef("repo", "main")] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	vet := []string{mustLookPath(t, "go"), "vet", "./..."}
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vet := []string{goBinary, "vet", "./..."}
 	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: vet}
 	clock := fixedClock(at.Add(time.Minute))
 	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
@@ -256,8 +253,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 		t.Errorf("events = %+v, want a verification_failed event naming go vet's redeclaration error", events)
 	}
 
-	remoteParentTip1 := strings.TrimSpace(
-		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent"))
+	remoteParentTip1 := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent")
 	if remoteParentTip1 != remoteParentTip0 {
 		t.Errorf("remote parent tip = %s, want unchanged %s: a failed verification must not push",
 			remoteParentTip1, remoteParentTip0)

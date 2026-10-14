@@ -3,10 +3,11 @@ package loop_test
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -14,9 +15,8 @@ import (
 )
 
 func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 	store := openStore(t)
@@ -38,7 +38,8 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake,
+		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -56,12 +57,13 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 }
 
 func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
+	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -86,20 +88,21 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if !remoteHasBranch(t, root, "cc-1") {
+	if !gittest.HasRef(t, filepath.Join(root, "remote.git"), "refs/heads/cc-1") {
 		t.Fatal("the run disposed this tick was not pushed in the same tick")
 	}
-	if got := countLines(t, ghLog); got != 1 {
-		t.Errorf("gh invocations = %d, want 1 (pr create)", got)
+	if got := len(forge.Calls("Create")); got != 1 {
+		t.Errorf("Create calls = %d, want 1", got)
 	}
 }
 
 func TestATickPrunesTickErrorsPastRetention(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t)
 	stale := storepkg.Event{At: testAt.Add(-31 * 24 * time.Hour), Kind: storepkg.EventTickError, Detail: "old"}
 	recent := storepkg.Event{At: testAt.Add(-time.Hour), Kind: storepkg.EventTickError, Detail: "new"}

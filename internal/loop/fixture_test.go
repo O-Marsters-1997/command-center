@@ -38,13 +38,15 @@ func newLoop(
 }
 
 type loopFixture struct {
-	Store   *storepkg.Store
-	Loop    *loop.Loop
-	Fake    *runner.Fake
-	Cfg     config.Config
-	WS      config.Workspace
-	Root    string
-	Tickets []storepkg.Ticket
+	Store     *storepkg.Store
+	Loop      *loop.Loop
+	Fake      *runner.Fake
+	Forge     *recordingForge
+	Worktrees *recordingWorktrees
+	Cfg       config.Config
+	WS        config.Workspace
+	Root      string
+	Tickets   []storepkg.Ticket
 }
 
 type fixtureConfig struct {
@@ -83,8 +85,6 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	}
 
 	root, _ := repoWithOrigin(t)
-	installFakeTp(t, fc.tpFails)
-	installFakeGh(t, false)
 
 	cfg, ws := testConfigAndWorkspace(t, root, fc.maxAgents, []string{"true"})
 	cfg.SpendLimit5h = fc.spendLimit
@@ -98,14 +98,22 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 		t.Fatal(err)
 	}
 	fake := runner.NewFake()
+	forge := &recordingForge{}
+	worktrees := &recordingWorktrees{}
+	cut := loop.WithWorktrees(worktrees)
+	if fc.tpFails {
+		cut = loop.WithWorktrees(failingCut{worktrees})
+	}
 	return &loopFixture{
-		Store:   store,
-		Loop:    newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
-		Fake:    fake,
-		Cfg:     cfg,
-		WS:      ws,
-		Root:    root,
-		Tickets: fc.tickets,
+		Store:     store,
+		Loop:      newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake, loop.WithForge(forge), cut),
+		Fake:      fake,
+		Forge:     forge,
+		Worktrees: worktrees,
+		Cfg:       cfg,
+		WS:        ws,
+		Root:      root,
+		Tickets:   fc.tickets,
 	}
 }
 

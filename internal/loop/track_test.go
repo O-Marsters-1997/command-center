@@ -42,6 +42,7 @@ func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
 }
 
 func TestATrackIntentAddsTheRepoAndValidatesItInTheSameTick(t *testing.T) {
+	t.Parallel()
 	st := openStore(t)
 	var validations []string
 	lp := trackLoop(t, st, &validations)
@@ -61,6 +62,7 @@ func TestATrackIntentAddsTheRepoAndValidatesItInTheSameTick(t *testing.T) {
 }
 
 func TestTrackOnARefusedRepoValidatesItAgainAndOnAReadyRepoDoesNothing(t *testing.T) {
+	t.Parallel()
 	st := openStore(t)
 	upsertRepoAs(t, st, "acme/refused", plan.RepoRefused)
 	upsertRepoAs(t, st, "acme/ready", plan.RepoReady)
@@ -82,6 +84,7 @@ func TestTrackOnARefusedRepoValidatesItAgainAndOnAReadyRepoDoesNothing(t *testin
 }
 
 func TestTrackOfARepoGitHubDoesNotKnowRefusesItForTrackAgain(t *testing.T) {
+	t.Parallel()
 	st := openStore(t)
 	var validations []string
 	lp := trackLoop(t, st, &validations)

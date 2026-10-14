@@ -15,6 +15,7 @@ import (
 )
 
 func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
@@ -96,6 +97,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 }
 
 func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
+	t.Parallel()
 	root, _ := repoWithOrigin(t)
 
 	store := openStore(t)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -34,14 +35,16 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 	t.Helper()
 	remote := filepath.Join(root, "remote.git")
 	clone := filepath.Join(t.TempDir(), "divergent-clone")
-	runGit(t, "clone", "-q", remote, clone)
-	runGit(t, "-C", clone, "checkout", "-q", "-b", branch, "origin/main")
+	gittest.Run(t, ".", "clone", "-q", remote, clone)
+	gittest.Run(t, clone, "config", "user.name", "t")
+	gittest.Run(t, clone, "config", "user.email", "t@example.com")
+	gittest.Run(t, clone, "checkout", "-q", "-b", branch, "origin/main")
 	if err := os.WriteFile(filepath.Join(clone, "divergent.txt"), []byte("someone else's history\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, "-C", clone, "add", "divergent.txt")
-	runGit(t, "-C", clone, "commit", "-q", "-m", "diverging commit")
-	runGit(t, "-C", clone, "push", "-q", "--force", "origin", "HEAD:"+branch)
+	gittest.Run(t, clone, "add", "divergent.txt")
+	gittest.Run(t, clone, "commit", "-q", "-m", "diverging commit")
+	gittest.Run(t, clone, "push", "-q", "--force", "origin", "HEAD:"+branch)
 }
 
 // stackedFixture cuts a parent branch and a child stacked on it, both pushed and recorded as
@@ -58,15 +61,15 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	ctx := t.Context()
 
 	parentWorktree := cutWorktree(t, repoPath, "parent")
-	commitFile(t, parentWorktree, "parent.txt", "parent's original work\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent")
-	parentTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	gittest.Commit(t, parentWorktree, "parent.txt", "parent's original work\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
+	parentTip0 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 
 	childWorktree := filepath.Join(t.TempDir(), "wt-child")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "child", childWorktree, "origin/parent")
-	commitFile(t, childWorktree, "child.txt", "child's own work\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "child", childWorktree, "origin/parent")
+	gittest.Commit(t, childWorktree, "child.txt", "child's own work\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip0 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
 	parent := storepkg.Ticket{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"}
 	child := storepkg.Ticket{
@@ -77,7 +80,7 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	}
 	dispositionAsPushed(t, store, parent.URL, at)
 	dispositionAsPushed(t, store, child.URL, at)
-	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 	parentPush := storepkg.Push{
 		Ticket: plan.TicketURL(parent.URL), Tip: plan.SHA(parentTip0), BaseSHA: plan.SHA(mainSHA),
 		BaseBranch: "main", At: at,
@@ -104,9 +107,9 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 // no longer matches.
 func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 	t.Helper()
-	commitFile(t, f.parentWorktree, "parent-fix.txt", "the fix\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent")
-	return strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	gittest.Commit(t, f.parentWorktree, "parent-fix.txt", "the fix\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
+	return gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 }
 
 func baseObservation(f stackedFixture, parentTip string) plan.Observation {
@@ -128,6 +131,7 @@ func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 }
 
 func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -144,8 +148,8 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	childHead := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
-	parents := strings.Fields(runGitOutput(t, "-C", f.childWorktree, "log", "-1", "--format=%P", childHead))
+	childHead := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
+	parents := strings.Fields(gittest.Run(t, f.childWorktree, "log", "-1", "--format=%P", childHead))
 	if len(parents) != 2 {
 		t.Fatalf("child HEAD has %d parents, want 2 (a merge commit): %v", len(parents), parents)
 	}
@@ -153,8 +157,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 		t.Errorf("child worktree does not contain the parent's fix after refresh: %v", err)
 	}
 
-	remoteChildTip := strings.TrimSpace(
-		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/child"))
+	remoteChildTip := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/child")
 	if remoteChildTip != childHead {
 		t.Errorf("remote child tip = %s, want %s: the merge commit must be pushed the same tick", remoteChildTip, childHead)
 	}
@@ -180,13 +183,14 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 }
 
 func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	unresolvable := strings.Repeat("0", 39) + "1"
 	pushedAt := at.Add(time.Second)
 	push := storepkg.Push{
@@ -216,6 +220,7 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 }
 
 func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -225,8 +230,8 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	// advanceMain pushes from a throwaway clone, so repoPath's own tracking ref (what Merge below
 	// resolves "origin/main" against) needs an explicit fetch -- unlike advanceParent, which pushes
 	// straight from repoPath and so updates it as a push side effect.
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "main")
-	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
+	gittest.Run(t, repoPath, "fetch", "-q", "origin", "main")
+	mainTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/main")
 
 	obs := baseObservation(f, f.parentTip0)
 	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainTip1)
@@ -252,13 +257,14 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 }
 
 func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 
 	obs := baseObservation(f, parentTip1)
 	obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
@@ -270,7 +276,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD")); got != childTip0 {
+	if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 		t.Errorf("child worktree HEAD = %s, want unchanged %s: a live run must never see a git write (inv. 4)",
 			got, childTip0)
 	}
@@ -284,6 +290,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 }
 
 func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -315,6 +322,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 }
 
 func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -325,8 +333,8 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	// Someone force-pushed different history to origin/child: the worktree's own branch, still on
 	// its prior commit, can no longer fast-forward onto it.
 	forcePushDivergentCommit(t, root, "child")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin")
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	gittest.Run(t, repoPath, "fetch", "-q", "origin")
+	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
@@ -337,7 +345,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD")); got != childTip0 {
+	if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 		t.Errorf("child worktree HEAD = %s, want unchanged %s: a refused fast-forward must not touch it", got, childTip0)
 	}
 
@@ -377,7 +385,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 
 	// The human's refresh verb retries regardless -- rewrite origin/child to the worktree's own
 	// commit first, standing in for the human resolving the divergence by hand.
-	runGit(t, "-C", f.childWorktree, "push", "-q", "--force", "origin", "child")
+	gittest.Run(t, f.childWorktree, "push", "-q", "--force", "origin", "child")
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +393,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 		t.Fatalf("retry RunOnce: %v", err)
 	}
 
-	newHead := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	newHead := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 	if newHead == childTip0 {
 		t.Error("the refresh verb must retry the fast-forward and merge, but the worktree is unchanged")
 	}
@@ -435,13 +443,14 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 // conflicted -- a later merge of it is genuinely a different one from the failed attempt.
 func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixture) string {
 	t.Helper()
-	runGit(t, "-C", f.parentWorktree, "reset", "-q", "--hard", f.parentTip0)
-	commitFile(t, f.parentWorktree, "parent-fix2.txt", "a later fix that carries none of the clash\n")
-	runGit(t, "-C", repoPath, "push", "-q", "--force", "origin", "parent")
-	return strings.TrimSpace(runGitOutput(t, "-C", f.parentWorktree, "rev-parse", "refs/heads/parent"))
+	gittest.Run(t, f.parentWorktree, "reset", "-q", "--hard", f.parentTip0)
+	gittest.Commit(t, f.parentWorktree, "parent-fix2.txt", "a later fix that carries none of the clash\n")
+	gittest.Run(t, repoPath, "push", "-q", "--force", "origin", "parent")
+	return gittest.Run(t, f.parentWorktree, "rev-parse", "refs/heads/parent")
 }
 
 func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -450,9 +459,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(strings.TrimSpace(
-		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
-	))
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(gittest.Run(t, repoPath, "rev-parse", "refs/heads/child"))
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
@@ -481,15 +488,17 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	// Resolve the conflict and push it from a separate clone, entirely outside the app-managed
 	// worktree: a human fixing it by hand with plain git rather than through the app.
 	clone := filepath.Join(t.TempDir(), "outside-clone")
-	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
-	runGit(t, "-C", clone, "checkout", "-q", "child")
-	runGit(t, "-C", clone, "merge", "-q", "-X", "ours", "-m", "resolved by hand", "origin/parent")
-	runGit(t, "-C", clone, "push", "-q", "origin", "child")
+	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	gittest.Run(t, clone, "config", "user.name", "t")
+	gittest.Run(t, clone, "config", "user.email", "t@example.com")
+	gittest.Run(t, clone, "checkout", "-q", "child")
+	gittest.Run(t, clone, "merge", "-q", "-X", "ours", "-m", "resolved by hand", "origin/parent")
+	gittest.Run(t, clone, "push", "-q", "origin", "child")
 	// The push went straight to the bare remote, so repoPath's own tracking ref -- what
 	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
 	// same as advanceMain's (retarget_test.go).
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
-	cloneHead := strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	gittest.Run(t, repoPath, "fetch", "-q", "origin", "child")
+	cloneHead := gittest.Run(t, clone, "rev-parse", "HEAD")
 	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
@@ -510,13 +519,14 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 }
 
 func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip0 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(childTip0)
@@ -574,13 +584,14 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 }
 
 func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip0 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
 	obs := baseObservation(f, parentTip1)
 	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(childTip0)
@@ -629,6 +640,7 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 }
 
 func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)

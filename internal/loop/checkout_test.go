@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestRepoNameForDir(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		remote    string
@@ -36,7 +38,7 @@ func TestRepoNameForDir(t *testing.T) {
 			dir: func(t *testing.T, repo string) string {
 				t.Helper()
 				worktree := filepath.Join(filepath.Dir(repo), "worktree")
-				runGit(t, "-C", repo, "worktree", "add", worktree)
+				gittest.Run(t, repo, "worktree", "add", worktree)
 				return worktree
 			},
 			wantName: "r", wantOK: true,
@@ -61,13 +63,14 @@ func TestRepoNameForDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			root, repoPath := repoWithOrigin(t)
 			remote := tt.remote
 			if remote == "" {
 				remote = filepath.Join(root, "remote.git")
 			}
 			if tt.setOrigin != "" {
-				runGit(t, "-C", repoPath, "remote", "set-url", "origin", tt.setOrigin)
+				gittest.Run(t, repoPath, "remote", "set-url", "origin", tt.setOrigin)
 			}
 			repos := []store.Repo{{Name: "r", Remote: remote}}
 

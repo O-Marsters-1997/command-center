@@ -4,47 +4,17 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
-
-// installFakeGhReady puts a script named gh on PATH that logs every invocation to a file and
-// answers `pr ready` per readyFails: exit non-zero without touching CC_GH_LOG's caller-visible
-// state, so a test can assert the row stayed untouched after a failed un-draft.
-func installFakeGhReady(t *testing.T, readyFails bool) (logPath, binDir string) {
-	t.Helper()
-	binDir = t.TempDir()
-	logPath = filepath.Join(t.TempDir(), "gh.log")
-	writeFakeGhReadyScript(t, binDir, logPath, readyFails)
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return logPath, binDir
-}
-
-func writeFakeGhReadyScript(t *testing.T, binDir, logPath string, readyFails bool) {
-	t.Helper()
-	fail := "0"
-	if readyFails {
-		fail = "1"
-	}
-	script := "#!/bin/sh\n" +
-		"echo \"$*\" >> \"" + logPath + "\"\n" +
-		"if [ \"$1 $2\" = \"pr ready\" ] && [ \"" + fail + "\" = \"1\" ]; then\n" +
-		"  echo 'fake gh: pr ready failed' >&2\n" +
-		"  exit 1\n" +
-		"fi\n" +
-		"exit 0\n"
-	if err := os.WriteFile(filepath.Join(binDir, "gh"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // draftGateFixture is a consumer ticket with a cross-repo gating blocker, pushed and open, ready
 // for applyDraftGate to decide over -- the shape every test below starts from.
@@ -105,62 +75,53 @@ func draftConsumerPR(
 	}
 }
 
-func countReadyCalls(t *testing.T, logPath string) int {
-	t.Helper()
-	body, err := os.ReadFile(logPath)
-	if os.IsNotExist(err) {
-		return 0
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.Count(string(body), "pr ready")
-}
-
 func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
+	t.Parallel()
 	f := newDraftGateFixture(t)
-	logPath, _ := installFakeGhReady(t, false)
+	forge := &recordingForge{}
 
 	obs := draftConsumerPR(plan.Open, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := countReadyCalls(t, logPath); got != 0 {
+	if got := len(forge.Calls("Ready")); got != 0 {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker is still open", got)
 	}
 }
 
 func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
+	t.Parallel()
 	f := newDraftGateFixture(t)
-	logPath, _ := installFakeGhReady(t, false)
+	forge := &recordingForge{}
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := countReadyCalls(t, logPath); got != 0 {
+	if got := len(forge.Calls("Ready")); got != 0 {
 		t.Errorf("pr ready calls = %d, want 0: the consumer's own CI has not gone green", got)
 	}
 }
 
 func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
+	t.Parallel()
 	f := newDraftGateFixture(t)
-	logPath, _ := installFakeGhReady(t, false)
+	forge := &recordingForge{}
 
 	obs := draftConsumerPR(plan.Open, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{}, loop.WithForge(forge))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
 	}
-	if got := countReadyCalls(t, logPath); got != 0 {
+	if got := len(forge.Calls("Ready")); got != 0 {
 		t.Fatalf("pr ready calls after tick 1 = %d, want 0", got)
 	}
 
@@ -169,7 +130,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 2: %v", err)
 	}
-	if got := countReadyCalls(t, logPath); got != 0 {
+	if got := len(forge.Calls("Ready")); got != 0 {
 		t.Fatalf("pr ready calls after tick 2 = %d, want 0", got)
 	}
 
@@ -178,7 +139,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 3: %v", err)
 	}
-	if got := countReadyCalls(t, logPath); got != 1 {
+	if got := len(forge.Calls("Ready")); got != 1 {
 		t.Fatalf("pr ready calls after tick 3 = %d, want exactly 1", got)
 	}
 
@@ -191,25 +152,26 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 			t.Fatalf("tick %d: %v", i+4, err)
 		}
 	}
-	if got := countReadyCalls(t, logPath); got != 1 {
+	if got := len(forge.Calls("Ready")); got != 1 {
 		t.Errorf("pr ready calls across ten ticks = %d, want exactly 1", got)
 	}
 }
 
 func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
+	t.Parallel()
 	f := newDraftGateFixture(t)
-	logPath, _ := installFakeGhReady(t, false)
+	forge := &recordingForge{}
 
 	obs := draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{}, loop.WithForge(forge))
 
 	for i := range 5 {
 		if err := lp.RunOnce(t.Context()); err != nil {
 			t.Fatalf("tick %d: %v", i+1, err)
 		}
 	}
-	if got := countReadyCalls(t, logPath); got != 0 {
+	if got := len(forge.Calls("Ready")); got != 0 {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
 	}
 
@@ -222,17 +184,19 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 }
 
 func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
+	t.Parallel()
 	f := newDraftGateFixture(t)
-	logPath, binDir := installFakeGhReady(t, true)
+	forge := &recordingForge{}
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{},
+		loop.WithForge(failingReady{forge}))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
 	}
-	if got := countReadyCalls(t, logPath); got != 1 {
+	if got := len(forge.Calls("Ready")); got != 1 {
 		t.Fatalf("pr ready calls after tick 1 = %d, want 1 (the failed attempt)", got)
 	}
 
@@ -244,13 +208,11 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 		t.Errorf("events = %+v, want a draft_ready_failed event naming the failure", events)
 	}
 
-	// Nothing was latched, so a plain second tick (no verb) retries automatically. Fix the fake
-	// gh so this attempt succeeds.
-	writeFakeGhReadyScript(t, binDir, logPath, false)
+	lp = newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 2: %v", err)
 	}
-	if got := countReadyCalls(t, logPath); got != 2 {
+	if got := len(forge.Calls("Ready")); got != 2 {
 		t.Errorf("pr ready calls after tick 2 = %d, want 2 (retried automatically)", got)
 	}
 
@@ -260,6 +222,30 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	}
 	if !hasEvent(events, "draft_ready", "") {
 		t.Errorf("events = %+v, want a draft_ready event for the successful retry", events)
+	}
+}
+
+func TestDraftGateReadyFailurePreservesGhStderr(t *testing.T) {
+	f := newDraftGateFixture(t)
+	bin := t.TempDir()
+	script := "#!/bin/sh\necho 'fake gh: pr ready failed' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	obs := draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	if err := lp.RunOnce(t.Context()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	events, err := f.store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "draft_ready_failed", "fake gh: pr ready failed") {
+		t.Errorf("events = %+v, want gh stderr in draft_ready_failed", events)
 	}
 }
 
@@ -297,11 +283,12 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 }
 
 func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
+	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
 	consumer := storepkg.Ticket{
@@ -320,26 +307,23 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	body, err := os.ReadFile(ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(body), "--draft") {
-		t.Errorf("gh log %q does not contain --draft for a ticket with a gating edge", body)
+	if got := forge.Calls("Create"); len(got) != 1 || !got[0].Draft {
+		t.Errorf("forge Create calls = %+v, want one draft PR for a ticket with a gating edge", got)
 	}
 }
 
 func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
+	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -354,16 +338,12 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	body, err := os.ReadFile(ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(body), "--draft") {
-		t.Errorf("gh log %q contains --draft for a plain ticket; Phase 2 parity requires none", body)
+	if got := forge.Calls("Create"); len(got) != 1 || got[0].Draft {
+		t.Errorf("forge Create calls = %+v, want one non-draft PR for a plain ticket", got)
 	}
 }

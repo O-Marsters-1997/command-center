@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -16,11 +17,12 @@ import (
 )
 
 func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -66,7 +68,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	if !strings.HasPrefix(summary.Question, "Which database?\n") || len(summary.Question) != 4096 {
 		t.Errorf("question has %d bytes, starts %q, want 4096 bytes truncated", len(summary.Question), summary.Question[:16])
 	}
-	if got := runGitOutput(t, "-C", repoPath, "ls-remote", "origin", "refs/heads/cc-1"); strings.TrimSpace(got) != "" {
+	if got := gittest.Run(t, repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
 		t.Errorf("origin carries cc-1 (%q), want nothing pushed", got)
 	}
 }

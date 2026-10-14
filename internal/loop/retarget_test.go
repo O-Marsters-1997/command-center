@@ -6,12 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -23,9 +24,9 @@ import (
 // parent's commits and the parent's branch is gone from the remote (both repos delete on merge).
 func mergeParentIntoMain(t *testing.T, repoPath string) {
 	t.Helper()
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent:main")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "--delete", "parent")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent:main")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "--delete", "parent")
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 }
 
 func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
@@ -39,30 +40,34 @@ func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
 }
 
 func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T) {
+	t.Parallel()
 	// The axis is the base GitHub reports the descendant's PR on: ours to re-point, or already
 	// re-pointed by GitHub itself.
 	for _, childBaseRef := range []string{"parent", "main"} {
 		t.Run("github has it on "+childBaseRef, func(t *testing.T) {
+			t.Parallel()
 			root, repoPath := repoWithOrigin(t)
-			ghLog := installFakeGh(t, false)
+			forge := &recordingForge{}
 			store := openStore(t)
 			at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 			f := newStackedFixture(t, repoPath, store, at)
-			childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+			childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 			mergeParentIntoMain(t, repoPath)
-			mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+			mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 			obs := mergedObservation(f, childBaseRef)
 			observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 			cfg, ws := stackedConfigAndWorkspace(t, root)
-			lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+			lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
+				loop.WithForge(forge))
 			if err := lp.RunOnce(t.Context()); err != nil {
 				t.Fatalf("RunOnce: %v", err)
 			}
 
-			if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 1 || got[0] != "pr edit child --base main" {
-				t.Errorf("gh pr edit calls = %q, want exactly [pr edit child --base main]", got)
+			want := []forgeCall{{Method: "Edit", Repo: repoPath, Branch: "child", Base: "main"}}
+			if got := forge.Calls("Edit"); !slices.Equal(got, want) {
+				t.Errorf("forge Edit calls = %+v, want %+v", got, want)
 			}
 
 			pushes, err := store.LatestPushes(t.Context())
@@ -97,8 +102,9 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 }
 
 func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
@@ -110,11 +116,12 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 
 	firstTick := at.Add(time.Minute)
-	if err := newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}).
+	if err := newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge)).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if err := newLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{}).
+	if err := newLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(forge)).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
@@ -127,14 +134,15 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 		t.Errorf("child's latest push row is stamped %s, want the first tick's %s: an unchanged base "+
 			"must not append a second row", got, firstTick)
 	}
-	if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 1 {
-		t.Errorf("gh pr edit calls = %q, want exactly one: the recorded base is already main", got)
+	if got := forge.Calls("Edit"); len(got) != 1 {
+		t.Errorf("forge Edit calls = %+v, want exactly one: the recorded base is already main", got)
 	}
 }
 
 func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
@@ -144,7 +152,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	obs := mergedObservation(f, "main")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -152,7 +160,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	// Someone else's work lands on main after the retarget, so the merge the refresh performs is
 	// observable rather than an already-up-to-date no-op.
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -173,23 +181,20 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 }
 
 func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
 	mergeParentIntoMain(t, repoPath)
-	if err := os.WriteFile(filepath.Join(filepath.Dir(mustLookPath(t, "gh")), "gh"),
-		[]byte("#!/bin/sh\necho \"$*\" >> \""+ghLog+"\"\necho 'fake gh: pr edit refused' >&2\nexit 1\n"),
-		0o755); err != nil {
-		t.Fatal(err)
-	}
 
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(failingEdit{forge}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -198,7 +203,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasEvent(events, "retarget_failed", "pr edit refused") {
+	if !hasEvent(events, "retarget_failed", "forge refused") {
 		t.Errorf("events = %+v, want a retarget_failed event naming gh's own refusal", events)
 	}
 	if hasEvent(events, "retargeted", "") {
@@ -217,8 +222,8 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
-	if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 2 {
-		t.Errorf("gh pr edit calls over two ticks = %q, want two: a refused retarget is retried", got)
+	if got := forge.Calls("Edit"); len(got) != 2 {
+		t.Errorf("forge Edit calls over two ticks = %+v, want two: a refused retarget is retried", got)
 	}
 }
 
@@ -287,42 +292,32 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	}
 }
 
-func ghLogLines(t *testing.T, logPath, prefix string) []string {
-	t.Helper()
-	body, err := os.ReadFile(logPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	var lines []string
-	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
-		if strings.HasPrefix(line, prefix) {
-			lines = append(lines, line)
-		}
-	}
-	return lines
+type failingEdit struct{ *recordingForge }
+
+func (f failingEdit) Edit(_ context.Context, repo, branch, base string) error {
+	f.record(forgeCall{Method: "Edit", Repo: repo, Branch: branch, Base: base})
+	return errForge
 }
 
 func advanceMain(t *testing.T, root, relPath, contents string) {
 	t.Helper()
 	clone := filepath.Join(t.TempDir(), "main-clone")
-	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
-	commitFile(t, clone, relPath, contents)
-	runGit(t, "-C", clone, "push", "-q", "origin", "HEAD:main")
+	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	gittest.Commit(t, clone, relPath, contents)
+	gittest.Run(t, clone, "push", "-q", "origin", "HEAD:main")
 }
 
 func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
 		BaseBranch: "parent", At: at,
@@ -333,14 +328,14 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 
 	mergeParentIntoMain(t, repoPath)
 	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
-	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 	obs := mergedObservation(f, "parent")
 	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -373,12 +368,12 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 func squashParentIntoMain(t *testing.T, root, repoPath string) {
 	t.Helper()
 	clone := filepath.Join(t.TempDir(), "squash-clone")
-	runGit(t, "clone", "-q", filepath.Join(root, "remote.git"), clone)
-	runGit(t, "-C", clone, "merge", "-q", "--squash", "origin/parent")
-	runGit(t, "-C", clone, "commit", "-q", "-m", "the parent's work (#1)")
-	runGit(t, "-C", clone, "push", "-q", "origin", "HEAD:main")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "--delete", "parent")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
+	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	gittest.Run(t, clone, "merge", "-q", "--squash", "origin/parent")
+	gittest.Run(t, clone, "commit", "-q", "-m", "the parent's work (#1)")
+	gittest.Run(t, clone, "push", "-q", "origin", "HEAD:main")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "--delete", "parent")
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 }
 
 func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
@@ -396,15 +391,16 @@ func isAncestor(t *testing.T, repoPath, commit, ref string) bool {
 }
 
 func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	squashParentIntoMain(t, root, repoPath)
-	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 	obs := mergedObservation(f, "parent")
 	obs.PRs[branchRef("repo", "parent")] = plan.PR{
@@ -413,7 +409,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -429,7 +425,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 		t.Errorf("events = %+v, want no conflict: dropping the parent's commits is what avoids it", events)
 	}
 
-	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD^")); got != mainSHA {
+	if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD^"); got != mainSHA {
 		t.Errorf("child's parent commit = %q, want main's squash %q: the branch sits on main now", got, mainSHA)
 	}
 	if isAncestor(t, f.childWorktree, f.parentTip0, "HEAD") {
@@ -449,8 +445,8 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("push RunOnce: %v", err)
 	}
-	local := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
-	remote := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+	local := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
+	remote := gittest.Run(t, repoPath, "rev-parse", "origin/child")
 	if remote != local {
 		t.Errorf("origin/child = %q, want the restacked tip %q (it was %q before the restack)",
 			remote, local, childTip)
@@ -458,23 +454,24 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 }
 
 func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	commitFile(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
-	runGit(t, "-C", f.parentWorktree, "reset", "-q", "--hard", "HEAD~2")
-	commitFile(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
-	runGit(t, "-C", repoPath, "push", "-q", "--force", "origin", "parent")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
-	newParentTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/parent"))
+	gittest.Commit(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
+	gittest.Run(t, f.parentWorktree, "reset", "-q", "--hard", "HEAD~2")
+	gittest.Commit(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
+	gittest.Run(t, repoPath, "push", "-q", "--force", "origin", "parent")
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
+	newParentTip := gittest.Run(t, repoPath, "rev-parse", "origin/parent")
 
 	obs := baseObservation(f, newParentTip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -490,32 +487,33 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 		t.Errorf("the parent's pre-rewrite tip %s is still in the child's history, so the child "+
 			"carries both takes on parent.txt", f.parentTip0)
 	}
-	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD^")); got != newParentTip {
+	if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD^"); got != newParentTip {
 		t.Errorf("child's parent commit = %q, want the parent's rewritten tip %q", got, newParentTip)
 	}
 }
 
 func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	remoteBefore := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+	remoteBefore := gittest.Run(t, repoPath, "rev-parse", "origin/child")
 
-	runGit(t, "-C", f.childWorktree, "reset", "-q", "--hard", "HEAD~1")
-	commitFile(t, f.childWorktree, "child.txt", "the child's second thoughts\n")
+	gittest.Run(t, f.childWorktree, "reset", "-q", "--hard", "HEAD~1")
+	gittest.Commit(t, f.childWorktree, "child.txt", "the child's second thoughts\n")
 
 	obs := baseObservation(f, f.parentTip0)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child")); got != remoteBefore {
+	if got := gittest.Run(t, repoPath, "rev-parse", "origin/child"); got != remoteBefore {
 		t.Errorf("origin/child = %q, want %q untouched: the app never rewrote this branch, so the "+
 			"commit that was there is the agent's to account for, not the app's to discard", got, remoteBefore)
 	}
@@ -530,15 +528,16 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 }
 
 func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
 		BaseBranch: "parent", At: at,
@@ -549,8 +548,8 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 
 	squashParentIntoMain(t, root, repoPath)
 	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
-	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 	obs := mergedObservation(f, "parent")
 	obs.PRs[branchRef("repo", "parent")] = plan.PR{
@@ -559,7 +558,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("restack RunOnce: %v", err)
 	}
@@ -585,14 +584,14 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	if err := os.WriteFile(conflicted, []byte("both rewrites, reconciled\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, "-C", f.childWorktree, "add", "parent.txt")
-	runGit(t, "-C", f.childWorktree, "-c", "core.editor=true", "rebase", "--continue")
+	gittest.Run(t, f.childWorktree, "add", "parent.txt")
+	gittest.Run(t, f.childWorktree, "-c", "core.editor=true", "rebase", "--continue")
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("push RunOnce: %v", err)
 	}
-	local := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
-	remote := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/child"))
+	local := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
+	remote := gittest.Run(t, repoPath, "rev-parse", "origin/child")
 	if remote != local {
 		t.Errorf("origin/child = %q, want the resolved tip %q (it was %q before the restack): the "+
 			"work never reaches the pull request without the lease", remote, local, childTip)
@@ -600,15 +599,16 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 }
 
 func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	f := newStackedFixture(t, repoPath, store, at)
-	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
 		BaseBranch: "parent", At: at,
@@ -619,8 +619,8 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 
 	squashParentIntoMain(t, root, repoPath)
 	advanceMain(t, root, "parent.txt", "main's own rewrite\n")
-	runGit(t, "-C", repoPath, "fetch", "-q", "--prune", "origin")
-	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
+	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
+	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 	// The worktree is already mid-rebase when the retarget fires, which is the state a stack
 	// restacking one level at a time is in almost all the time.
@@ -636,7 +636,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	obs.MidMerge[branchRef("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -651,7 +651,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 
 	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
 	// it was: still built on the parent's own commit, still needing main.
-	runGit(t, "-C", f.childWorktree, "rebase", "--abort")
+	gittest.Run(t, f.childWorktree, "rebase", "--abort")
 	obs.MidMerge[branchRef("repo", "child")] = false
 
 	if err := lp.RunOnce(t.Context()); err != nil {
