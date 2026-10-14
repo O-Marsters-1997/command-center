@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -41,10 +42,11 @@ func TestAssertRepoSettings(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			kind, reason, err := assertRepoSettings("acme/cc", readRepoSettingsFixture(t, tt.fixture))
+			settings, err := gh.Decode[gh.RepoSettings](readRepoSettingsFixture(t, tt.fixture))
 			if err != nil {
-				t.Fatalf("assertRepoSettings: %v", err)
+				t.Fatalf("Decode: %v", err)
 			}
+			kind, reason := assertRepoSettings("acme/cc", settings)
 			if kind != tt.wantKind {
 				t.Errorf("kind = %q, want %q", kind, tt.wantKind)
 			}
@@ -52,13 +54,5 @@ func TestAssertRepoSettings(t *testing.T) {
 				t.Errorf("reason %q does not contain %q", reason, tt.wantReason)
 			}
 		})
-	}
-}
-
-func TestAssertRepoSettingsFailsClosedOnMalformedJSON(t *testing.T) {
-	t.Parallel()
-
-	if _, _, err := assertRepoSettings("acme/cc", readRepoSettingsFixture(t, "malformed_repo_settings.json")); err == nil {
-		t.Error("assertRepoSettings(malformed) = nil error, want one")
 	}
 }

@@ -1,11 +1,11 @@
 package demo
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -38,7 +39,7 @@ type sandboxRepo struct {
 	merger       string
 }
 
-func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
+func NewSandbox(ctx context.Context, repos []Repo) (_ *Sandbox, err error) {
 	root, err := os.MkdirTemp("", "cc-demo-")
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	}()
 
 	for _, r := range repos {
-		repo, err := sb.addRepo(r)
+		repo, err := sb.addRepo(ctx, r)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +67,7 @@ func NewSandbox(repos []Repo) (_ *Sandbox, err error) {
 	return sb, nil
 }
 
-func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
+func (s *Sandbox) addRepo(ctx context.Context, r Repo) (*sandboxRepo, error) {
 	name := strings.ReplaceAll(r.Name, "/", "-")
 	repo := &sandboxRepo{
 		scenarioName: r.Name,
@@ -78,13 +79,13 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 	if err := os.MkdirAll(repo.origin, 0o750); err != nil {
 		return nil, err
 	}
-	if _, err := git(repo.origin, "init", "-q", "--bare", "-b", "main"); err != nil {
+	if _, err := git(ctx, repo.origin, "init", "-q", "--bare", "-b", "main"); err != nil {
 		return nil, err
 	}
-	if _, err := git(s.root, "clone", "-q", repo.origin, repo.merger); err != nil {
+	if _, err := git(ctx, s.root, "clone", "-q", repo.origin, repo.merger); err != nil {
 		return nil, err
 	}
-	if _, err := git(repo.merger, "checkout", "-q", "-b", "main"); err != nil {
+	if _, err := git(ctx, repo.merger, "checkout", "-q", "-b", "main"); err != nil {
 		return nil, err
 	}
 	seed := maps.Clone(r.Files)
@@ -92,10 +93,10 @@ func (s *Sandbox) addRepo(r Repo) (*sandboxRepo, error) {
 		seed = map[string]string{}
 	}
 	seed[config.SettingsFile] = settingsBody(r)
-	if err := commitAll(repo.merger, "seed "+path.Base(r.Name), seed); err != nil {
+	if err := commitAll(ctx, repo.merger, "seed "+path.Base(r.Name), seed); err != nil {
 		return nil, err
 	}
-	if _, err := git(repo.merger, "push", "-q", "origin", "main"); err != nil {
+	if _, err := git(ctx, repo.merger, "push", "-q", "origin", "main"); err != nil {
 		return nil, err
 	}
 	return repo, nil
@@ -113,29 +114,29 @@ func settingsBody(r Repo) string {
 	return b.String()
 }
 
-func (r *sandboxRepo) syncMain() error {
+func (r *sandboxRepo) syncMain(ctx context.Context) error {
 	for _, args := range [][]string{
 		{"fetch", "-q", "origin"},
 		{"checkout", "-q", "main"},
 		{"reset", "-q", "--hard", "origin/main"},
 	} {
-		if _, err := git(r.merger, args...); err != nil {
+		if _, err := git(ctx, r.merger, args...); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *sandboxRepo) squashMerge(branch, message string) error {
-	if err := r.syncMain(); err != nil {
+func (r *sandboxRepo) squashMerge(ctx context.Context, branch, message string) error {
+	if err := r.syncMain(ctx); err != nil {
 		return err
 	}
-	if _, err := git(r.merger, "merge", "-q", "--squash", "origin/"+branch); err != nil {
-		_, resetErr := git(r.merger, "reset", "-q", "--hard")
+	if _, err := git(ctx, r.merger, "merge", "-q", "--squash", "origin/"+branch); err != nil {
+		_, resetErr := git(ctx, r.merger, "reset", "-q", "--hard")
 		return errors.Join(errMergeConflict, err, resetErr)
 	}
 	for _, args := range [][]string{{"commit", "-q", "-m", message}, {"push", "-q", "origin", "main"}} {
-		if _, err := git(r.merger, args...); err != nil {
+		if _, err := git(ctx, r.merger, args...); err != nil {
 			return err
 		}
 	}
@@ -144,19 +145,19 @@ func (r *sandboxRepo) squashMerge(branch, message string) error {
 
 // LandOnMain commits files to the named scenario repo's origin main, as a push that did not
 // come from cc.
-func (s *Sandbox) LandOnMain(repoName string, files map[string]string) error {
+func (s *Sandbox) LandOnMain(ctx context.Context, repoName string, files map[string]string) error {
 	idx := slices.IndexFunc(s.repos, func(r *sandboxRepo) bool { return r.scenarioName == repoName })
 	if idx < 0 {
 		return fmt.Errorf("no sandbox repo %q", repoName)
 	}
 	repo := s.repos[idx]
-	if err := repo.syncMain(); err != nil {
+	if err := repo.syncMain(ctx); err != nil {
 		return err
 	}
-	if err := commitAll(repo.merger, "land on main", files); err != nil {
+	if err := commitAll(ctx, repo.merger, "land on main", files); err != nil {
 		return err
 	}
-	_, err := git(repo.merger, "push", "-q", "origin", "main")
+	_, err := git(ctx, repo.merger, "push", "-q", "origin", "main")
 	return err
 }
 
@@ -172,8 +173,8 @@ func (s *Sandbox) RunsDir() string { return filepath.Join(s.root, "runs") }
 
 func (s *Sandbox) Close() error { return errors.Join(s.dropDB(), os.RemoveAll(s.root)) }
 
-func (s *Sandbox) repoFor(gitDir string) (*sandboxRepo, error) {
-	origin, err := git(gitDir, "remote", "get-url", "origin")
+func (s *Sandbox) repoFor(ctx context.Context, gitDir string) (*sandboxRepo, error) {
+	origin, err := git(ctx, gitDir, "remote", "get-url", "origin")
 	if err != nil {
 		return nil, err
 	}
@@ -189,15 +190,14 @@ const (
 	authorEmail = "demo@example.com"
 )
 
-func git(dir string, args ...string) (string, error) {
+func git(ctx context.Context, dir string, args ...string) (string, error) {
 	full := append([]string{
-		"-C", dir,
 		"-c", "user.name=" + authorName, "-c", "user.email=" + authorEmail,
 		"-c", "commit.gpgsign=false",
 	}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	out, err := command.Output(ctx, dir, "git", full...)
 	if err != nil {
-		return "", fmt.Errorf("git %s in %s: %w: %s", strings.Join(args, " "), dir, err, strings.TrimSpace(string(out)))
+		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -215,13 +215,13 @@ func writeFiles(dir string, files map[string]string) error {
 	return nil
 }
 
-func commitAll(dir, message string, files map[string]string) error {
+func commitAll(ctx context.Context, dir, message string, files map[string]string) error {
 	if err := writeFiles(dir, files); err != nil {
 		return err
 	}
-	if _, err := git(dir, "add", "-A"); err != nil {
+	if _, err := git(ctx, dir, "add", "-A"); err != nil {
 		return err
 	}
-	_, err := git(dir, "commit", "-q", "--allow-empty", "-m", message)
+	_, err := git(ctx, dir, "commit", "-q", "--allow-empty", "-m", message)
 	return err
 }

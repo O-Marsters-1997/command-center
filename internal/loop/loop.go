@@ -54,7 +54,7 @@ func NewLoop(
 		logger: logger, store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
 		worktrees:  git.CLI{},
 		validate:   ValidateRepo,
-		remoteOf:   git.RepoRemote,
+		remoteOf:   gh.RepoRemote,
 		trackerFor: tracker.New,
 		nudgeCh:    make(chan struct{}, 1),
 	}

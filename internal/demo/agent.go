@@ -51,8 +51,8 @@ func NewAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
 	}
 }
 
-func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error) {
-	branch, err := git(cfg.WorktreePath, "branch", "--show-current")
+func (a *Agent) Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error) {
+	branch, err := git(ctx, cfg.WorktreePath, "branch", "--show-current")
 	if err != nil {
 		return runner.SpawnResult{}, err
 	}
@@ -85,7 +85,7 @@ func (a *Agent) Spawn(_ context.Context, cfg runner.SpawnConfig) (runner.SpawnRe
 
 // Step plays every live run up to the current sim time: one more assistant turn each, and the
 // commit and result line for a run whose time is up.
-func (a *Agent) Step() error {
+func (a *Agent) Step(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.clock.Now()
@@ -100,7 +100,7 @@ func (a *Agent) Step() error {
 		if now.Before(run.started.Add(run.issue.AgentAfter)) {
 			continue
 		}
-		if err := run.finish(now); err != nil {
+		if err := run.finish(ctx, now); err != nil {
 			return err
 		}
 	}
@@ -122,13 +122,13 @@ func (*Agent) turn(run *agentRun) error {
 	})
 }
 
-func (r *agentRun) finish(now time.Time) error {
+func (r *agentRun) finish(ctx context.Context, now time.Time) error {
 	if r.issue.Result == resultCrash && r.attempt == 1 {
 		r.finished = true
 		r.exitCode = 1
 		return r.write(map[string]any{"type": "result", "subtype": "error_during_execution", "is_error": true})
 	}
-	if err := r.commitWork(); err != nil {
+	if err := r.commitWork(ctx); err != nil {
 		return err
 	}
 	r.finished = true
@@ -140,7 +140,7 @@ func (r *agentRun) finish(now time.Time) error {
 	})
 }
 
-func (r *agentRun) commitWork() error {
+func (r *agentRun) commitWork(ctx context.Context) error {
 	content := "package main\n"
 	if r.issue.Result == resultConflict {
 		content = "package main // " + r.issue.ID + "\n"
@@ -149,7 +149,7 @@ func (r *agentRun) commitWork() error {
 	for _, name := range r.issue.Files {
 		files[name] = content
 	}
-	return commitAll(r.worktree, "implement "+r.issue.Title, files)
+	return commitAll(ctx, r.worktree, "implement "+r.issue.Title, files)
 }
 
 func (r *agentRun) write(line map[string]any) error {

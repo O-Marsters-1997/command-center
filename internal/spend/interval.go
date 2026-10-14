@@ -4,6 +4,7 @@
 package spend
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -40,7 +41,7 @@ func Intervals(
 		if ok && reading.Utilization >= prev.Utilization {
 			weight, err := weigh(prev.At, reading.At)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("weigh %s interval: %w", reading.Window, err)
 			}
 			intervals = append(intervals, Interval{
 				Window: reading.Window, Start: prev.At, End: reading.At,
