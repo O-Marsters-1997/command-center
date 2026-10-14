@@ -59,7 +59,10 @@ func (t BoardTicketSpend) TotalUSD() float64 {
 // BoardTicketSpend returns every ticket in scope's weight, keyed by ticket URL: runs
 // disposed before pr_merged when merged, every disposed run when open.
 func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map[string]BoardTicketSpend, error) {
-	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{Repo: nullIfEmpty(repo), Feature: nullIfEmpty(feature)})
+	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{
+		Repo:    nullIfEmpty(repo),
+		Feature: nullIfEmpty(feature),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("select ticket spend: %w", err)
 	}

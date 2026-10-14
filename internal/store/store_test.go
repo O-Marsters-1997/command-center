@@ -381,7 +381,8 @@ func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	const ticketURL = "sandbox://CC-1"
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}); err != nil {
+	tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
