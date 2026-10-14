@@ -131,7 +131,9 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	const parentTip = "parent-tip"
-	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://PARENT", Tip: parentTip, BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,7 +176,9 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Now()
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at); err != nil {

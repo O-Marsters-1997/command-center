@@ -25,17 +25,21 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
+	firstRunID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), firstRunID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(firstRunID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(
-		t.Context(), firstRunID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(firstRunID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
@@ -102,17 +106,21 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	firstRunID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
+	firstRunID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), firstRunID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(firstRunID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(
-		t.Context(), firstRunID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(firstRunID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {

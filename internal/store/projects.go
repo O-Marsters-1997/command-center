@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -57,9 +56,10 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	return projects, nil
 }
 
-func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos []string, at time.Time) (err error) {
-	if !ProjectNamePattern.MatchString(name) || hue < MinHue || hue > MaxHue {
-		return fmt.Errorf("create project %q with hue %d: %w", name, hue, ErrInvalidProject)
+func (s *Store) CreateProject(ctx context.Context, p NewProject) (err error) {
+	name := p.Name
+	if !ProjectNamePattern.MatchString(name) || p.Hue < MinHue || p.Hue > MaxHue {
+		return fmt.Errorf("create project %q with hue %d: %w", name, p.Hue, ErrInvalidProject)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -72,14 +72,14 @@ func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos [
 	}()
 
 	qtx := s.q.WithTx(tx)
-	id, err := qtx.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(hue), CreatedAt: at.UTC()})
+	id, err := qtx.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(p.Hue), CreatedAt: p.At.UTC()})
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
 		return fmt.Errorf("create project %q: %w", name, ErrProjectExists)
 	}
 	if err != nil {
 		return fmt.Errorf("create project %q: %w", name, err)
 	}
-	for _, repo := range repos {
+	for _, repo := range p.Repos {
 		if err = setRepoProjectID(ctx, qtx, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
 			return fmt.Errorf("assign repo %s to project %q: %w", repo, name, err)
 		}

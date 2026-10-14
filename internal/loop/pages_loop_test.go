@@ -95,7 +95,8 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
 	for _, ticket := range f.Tickets {
 		hash := composeHash(ticket.URL)
-		if err := f.Store.QueueLaunchIntent(t.Context(), ticket.URL, hash, "group-a", testAt); err != nil {
+		launch := storepkg.LaunchRequest{Ticket: ticket.URL, PromptHash: hash, Group: "group-a", At: testAt}
+		if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
 			t.Fatal(err)
 		}
 	}

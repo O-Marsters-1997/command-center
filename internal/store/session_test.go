@@ -19,8 +19,9 @@ func TestLatestSessionIDIsTheLatestAgentOrFollowUpRunsSession(t *testing.T) {
 		t.Fatalf("LatestSessionID with no runs = %q, %v, want empty", got, err)
 	}
 
-	_, agentSession, err := store.InsertSessionRunSkeleton(
-		ctx, ticket, "agent", "", "hash", storepkg.RunSession{StartNew: true})
+	_, agentSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +34,9 @@ func TestLatestSessionIDIsTheLatestAgentOrFollowUpRunsSession(t *testing.T) {
 		t.Errorf("LatestSessionID after an agent run = %q, %v, want %q", got, err, agentSession)
 	}
 
-	_, followSession, err := store.InsertSessionRunSkeleton(
-		ctx, ticket, "follow_up", "", "", storepkg.RunSession{JoinID: agentSession, Message: "go on"})
+	_, followSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: agentSession, Message: "go on"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

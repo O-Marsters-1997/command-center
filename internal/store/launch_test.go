@@ -28,10 +28,14 @@ func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatalf("QueueLaunchIntent CC-1: %v", err)
 	}
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-2", "hash-2", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatalf("QueueLaunchIntent CC-2: %v", err)
 	}
 
@@ -81,10 +85,14 @@ func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-2", "hash-2", "group-b", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-b", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
@@ -111,7 +119,9 @@ func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
@@ -161,7 +171,9 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if err := store.QueueLaunchIntent(ctx, ticketID, "hash", "group-a", at); err != nil {
+		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+			Ticket: ticketID, PromptHash: "hash", Group: "group-a", At: at,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -215,7 +227,9 @@ func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
@@ -224,7 +238,9 @@ func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 	if _, err := store.CancelLaunchesFor(ctx, ticket.URL); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-2", "group-b", at.Add(3*time.Second)); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: ticket.URL, PromptHash: "hash-2", Group: "group-b", At: at.Add(3 * time.Second),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(4*time.Second)); err != nil {
@@ -255,7 +271,9 @@ func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
-		if err := store.QueueLaunchIntent(ctx, ticketID, "hash", "group-a", at); err != nil {
+		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+			Ticket: ticketID, PromptHash: "hash", Group: "group-a", At: at,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -332,7 +350,9 @@ func TestFeatureFirstLaunchIsTheEarliestLaunchOfTheFeature(t *testing.T) {
 		ticket string
 		at     time.Time
 	}{{"sandbox://CC-2", later}, {"sandbox://CC-1", first}} {
-		if err := store.QueueLaunchIntent(ctx, launch.ticket, "hash", launch.ticket, launch.at); err != nil {
+		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+			Ticket: launch.ticket, PromptHash: "hash", Group: launch.ticket, At: launch.at,
+		}); err != nil {
 			t.Fatalf("QueueLaunchIntent %s: %v", launch.ticket, err)
 		}
 		if err := store.ApplyLaunchIntents(ctx, launch.at); err != nil {

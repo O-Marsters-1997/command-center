@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/store"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -226,7 +226,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	t.Parallel()
 
 	const parentTip, childTip = "parent-tip", "child-tip"
-	tickets := []store.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
@@ -248,11 +248,17 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			t.Fatal(err)
 		}
 		dispositionAsPushed(t, store, "sandbox://CHILD", at)
-		if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "parent", parentTip, at); err != nil {
+		push := storepkg.Push{
+			Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: parentTip, BaseBranch: "parent", At: at,
+		}
+		if err := store.RecordPush(ctx, push); err != nil {
 			t.Fatal(err)
 		}
 		if retargeted {
-			if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "main", "main-tip", at); err != nil {
+			repointed := storepkg.Push{
+				Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: "main-tip", BaseBranch: "main", At: at,
+			}
+			if err := store.RecordPush(ctx, repointed); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -317,7 +323,11 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -529,7 +539,11 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -595,7 +609,11 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 

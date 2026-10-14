@@ -39,7 +39,9 @@ func sessionStoreInFeature(
 	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := st.InsertRunSkeleton(ctx, sessionTicket, kind, "base", "hash")
+	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +57,17 @@ func sessionStoreInFeature(
 			t.Fatal(err)
 		}
 	}
-	if err := st.RecordSpawn(ctx, runID, 99, testNow, logPath); err != nil {
+	if err := st.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if !alive {
 		exit := 0
-		if err := st.RecordDisposition(ctx, runID, outcome, option.Some(exit), testNow, option.None[float64]()); err != nil {
+		if err := st.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exit),
+			Cost: option.None[float64](), EndedAt: testNow,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -196,9 +203,9 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	t.Parallel()
 	running, _ := sessionStore(t, "agent", "p", true, true)
-	if err := running.QueueVerbIntentWithPayload(
-		t.Context(), sessionTicket, plan.VerbFollowUp, "use sqlite instead", testNow,
-	); err != nil {
+	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
+	}); err != nil {
 		t.Fatal(err)
 	}
 

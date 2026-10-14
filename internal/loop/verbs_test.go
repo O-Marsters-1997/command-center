@@ -85,12 +85,15 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	logPath := filepath.Join("runs", fmt.Sprintf("%d.jsonl", runID))
-	if err := store.RecordSpawn(t.Context(), runID, 111, at, logPath); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: logPath}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	// Disposed as failed, deliberately: remove-worktree's own gate (merged, or base_gone) never
@@ -98,9 +101,10 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	// pushPushable step race to reconcile it too -- exactly the interference a focused verb
 	// test must not have to account for.
 	exitCode := 0
-	if err := store.RecordDisposition(
-		t.Context(), runID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -339,7 +343,10 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-	if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main", At: f.at,
+	}
+	if err := f.store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
@@ -383,7 +390,10 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newRemoveWorktreeFixture(t, "cc-1")
 			head := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-			if err := f.store.RecordPush(t.Context(), f.ticket.URL, "stale", "main", "basesha", f.at); err != nil {
+			stale := storepkg.Push{
+				Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
+			}
+			if err := f.store.RecordPush(t.Context(), stale); err != nil {
 				t.Fatal(err)
 			}
 			runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
@@ -442,7 +452,11 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			setup: func(t *testing.T, f removeWorktreeFixture) {
 				t.Helper()
 				tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-				if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
+				push := storepkg.Push{
+					Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main",
+					At: f.at,
+				}
+				if err := f.store.RecordPush(t.Context(), push); err != nil {
 					t.Fatal(err)
 				}
 				runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")

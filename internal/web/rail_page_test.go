@@ -27,11 +27,15 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 		t.Fatal(err)
 	}
 	dispositionAsPushed(t, st, "sandbox://CC-1", testNow)
-	runID, err := st.InsertRunSkeleton(t.Context(), "sandbox://CC-3", "agent", "", "hash-3")
+	runID, err := st.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.RecordSpawn(t.Context(), runID, 222, testNow, "/state/runs/3.jsonl"); err != nil {
+	if err := st.RecordSpawn(t.Context(), storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 222, StartedAt: testNow, LogPath: "/state/runs/3.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{

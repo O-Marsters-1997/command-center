@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestFeaturePageSectionsTheBoardAndNamesDependencies(t *testing.T) {
@@ -63,7 +65,9 @@ func TestFeaturePageHeaderNamesLaunchTicketsAndWaves(t *testing.T) {
 	ctx := t.Context()
 	store := threeFeatureStore(t)
 	launchedAt := testNow.Add(-2 * time.Hour)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://ROOT", "hash-1", "group-a", launchedAt); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: "sandbox://ROOT", PromptHash: "hash-1", Group: "group-a", At: launchedAt,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, launchedAt); err != nil {

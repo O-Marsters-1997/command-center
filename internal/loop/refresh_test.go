@@ -78,10 +78,18 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	dispositionAsPushed(t, store, parent.URL, at)
 	dispositionAsPushed(t, store, child.URL, at)
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
-	if err := store.RecordPush(ctx, parent.URL, parentTip0, "main", mainSHA, at); err != nil {
+	parentPush := storepkg.Push{
+		Ticket: plan.TicketURL(parent.URL), Tip: plan.SHA(parentTip0), BaseSHA: plan.SHA(mainSHA),
+		BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(ctx, parentPush); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, child.URL, childTip0, "parent", parentTip0, at); err != nil {
+	childPush := storepkg.Push{
+		Ticket: plan.TicketURL(child.URL), Tip: plan.SHA(childTip0), BaseSHA: plan.SHA(parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(ctx, childPush); err != nil {
 		t.Fatal(err)
 	}
 
@@ -181,7 +189,11 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 	unresolvable := strings.Repeat("0", 39) + "1"
 	pushedAt := at.Add(time.Second)
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", unresolvable, pushedAt); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(unresolvable),
+		BaseBranch: "parent", At: pushedAt,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 

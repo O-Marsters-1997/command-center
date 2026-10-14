@@ -25,9 +25,9 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "fix the flaky assertion in TestThing", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "fix the flaky assertion in TestThing", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,9 +105,9 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "do the thing", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "do the thing", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 

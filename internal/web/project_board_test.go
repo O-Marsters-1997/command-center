@@ -20,7 +20,9 @@ func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
 	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateProject(t.Context(), "acme", 1, []string{"acme/alpha", "acme/beta"}, testNow); err != nil {
+	if err := st.CreateProject(t.Context(), storepkg.NewProject{
+		Name: "acme", Hue: 1, Repos: []string{"acme/alpha", "acme/beta"}, At: testNow,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	server := openServer(st, fixedClock(testNow), "")

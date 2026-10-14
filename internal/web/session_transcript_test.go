@@ -28,7 +28,9 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 			kind = plan.RunKindAgent
 		}
 		session.Message = message
-		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, sessionTicket, kind, "base", "hash", session)
+		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash", Session: session,
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,13 +47,16 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 				t.Fatal(err)
 			}
 		}
-		if err := st.RecordSpawn(ctx, runID, 99, testNow, logPath); err != nil {
+		if err := st.RecordSpawn(ctx, storepkg.Spawn{
+			RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+		}); err != nil {
 			t.Fatal(err)
 		}
 		exit := 0
-		if err := st.RecordDisposition(
-			ctx, runID, plan.OutcomePush, option.Some(exit), testNow, option.None[float64](),
-		); err != nil {
+		if err := st.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exit),
+			Cost: option.None[float64](), EndedAt: testNow,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

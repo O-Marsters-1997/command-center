@@ -70,17 +70,21 @@ func commitFile(t *testing.T, worktreePath, relPath, contents string) {
 // already covers that).
 func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := store.RecordDisposition(
-		t.Context(), runID, plan.OutcomePush, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -404,7 +408,10 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
 	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
 	tip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	if err := store.RecordPush(t.Context(), ticket.URL, tip, "main", tip, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: plan.SHA(tip), BaseSHA: plan.SHA(tip), BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 

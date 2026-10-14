@@ -283,11 +283,15 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, dependent.URL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, now, "/logs/run.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: "/logs/run.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{

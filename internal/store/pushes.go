@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -11,19 +10,19 @@ import (
 
 // RecordPush writes one successful push row; its pushed_tip is what later ticks
 // compare against, so a duplicate push or PR create stops once it lands.
-func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch, baseSHA string, at time.Time) error {
+func (s *Store) RecordPush(ctx context.Context, p Push) error {
 	err := s.q.RecordPush(ctx, ccdb.RecordPushParams{
-		TicketID:      ticketID,
-		PushedTip:     pushedTip,
-		BaseBranch:    baseBranch,
-		BaseSHAAtPush: baseSHA,
-		PushedAt:      at.UTC(),
+		TicketID:      string(p.Ticket),
+		PushedTip:     string(p.Tip),
+		BaseBranch:    p.BaseBranch,
+		BaseSHAAtPush: string(p.BaseSHA),
+		PushedAt:      p.At.UTC(),
 	})
 	if err != nil {
-		return fmt.Errorf("record push for %s: %w", ticketID, err)
+		return fmt.Errorf("record push for %s: %w", p.Ticket, err)
 	}
-	if err := s.ResetCheckingTicks(ctx, plan.TicketURL(ticketID)); err != nil {
-		return fmt.Errorf("reset checking ticks for %s: %w", ticketID, err)
+	if err := s.ResetCheckingTicks(ctx, p.Ticket); err != nil {
+		return fmt.Errorf("reset checking ticks for %s: %w", p.Ticket, err)
 	}
 	return nil
 }

@@ -27,11 +27,15 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, logPath); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: logPath,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{

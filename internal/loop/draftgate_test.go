@@ -76,7 +76,8 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(t.Context(), consumer.URL, tip, "main", "main-tip", at); err != nil {
+	push := storepkg.Push{Ticket: plan.TicketURL(consumer.URL), Tip: tip, BaseSHA: "main-tip", BaseBranch: "main", At: at}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 

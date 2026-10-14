@@ -39,11 +39,15 @@ func assertSeeOtherHome(t *testing.T, resp *http.Response) {
 func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "basesha", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", BaselineSHA: "basesha", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 4242, time.Now(), "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: time.Now(), LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return runID
@@ -71,9 +75,10 @@ func seededFailed(t *testing.T) *storepkg.Store {
 	store := seededStore(t, time.Now())
 	runID := seedRun(t, store, "sandbox://CC-1")
 	exitCode := 1
-	if err := store.RecordDisposition(
-		t.Context(), runID, plan.OutcomeFailed, option.Some(exitCode), time.Now(), option.None[float64](),
-	); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: time.Now(),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -84,7 +89,9 @@ func seededQueued(t *testing.T) *storepkg.Store {
 
 	store := seededStore(t, time.Now())
 	now := time.Now()
-	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-1", now); err != nil {
+	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-1", At: now,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(t.Context(), now); err != nil {
@@ -126,7 +133,9 @@ func seededServer(t *testing.T) *web.Server {
 
 	observedAt := testNow
 	store := seededStore(t, observedAt)
-	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", observedAt); err != nil {
+	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: observedAt,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return newServer(store, observedAt.Add(45*time.Second))
@@ -166,10 +175,14 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
 	const parentTip, childTip = "parent-tip", "child-tip"
-	if err := store.RecordPush(ctx, "sandbox://PARENT", parentTip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://PARENT", Tip: parentTip, BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "parent", parentTip, at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://CHILD", Tip: childTip, BaseBranch: "parent", BaseSHA: parentTip, At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -222,7 +235,9 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
 	const tip = "ci-tip"
-	if err := store.RecordPush(ctx, ticket.URL, tip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: plan.SHA(tip), BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,7 +302,9 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://CC-1", at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(ctx, "sandbox://CC-1", tip, "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://CC-1", Tip: plan.SHA(tip), BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -487,11 +504,15 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "deadbeef", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{
@@ -664,7 +685,9 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 
 	now := testNow
 	store := seededStore(t, now)
-	if err := store.QueueLaunchIntent(t.Context(), "sandbox://CC-1", "hash-1", "group-a", now); err != nil {
+	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
+		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: now,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -810,7 +833,9 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 		}
 		at := testNow
 		dispositionAsPushed(t, store, ticket.URL, at)
-		if err := store.RecordPush(ctx, ticket.URL, "ci-tip", "main", "main-tip", at); err != nil {
+		if err := store.RecordPush(ctx, storepkg.Push{
+			Ticket: plan.TicketURL(ticket.URL), Tip: "ci-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
+		}); err != nil {
 			t.Fatal(err)
 		}
 		obs := plan.Observation{

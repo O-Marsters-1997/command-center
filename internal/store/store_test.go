@@ -184,21 +184,29 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	}
 
 	at := time.Now()
-	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(
+		ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 111, at, "runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, ticket.URL, "deadbeef", "main", "cafebabe", at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: "deadbeef", BaseSHA: "cafebabe", BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(ctx, push); err != nil {
 		t.Fatal(err)
 	}
 

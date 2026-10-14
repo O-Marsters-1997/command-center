@@ -21,7 +21,8 @@ func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observ
 
 func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string, at time.Time) {
 	t.Helper()
-	if err := store.QueueLaunchIntent(t.Context(), ticketURL, hash, "group-"+ticketURL, at); err != nil {
+	launch := storepkg.LaunchRequest{Ticket: ticketURL, PromptHash: hash, Group: "group-" + ticketURL, At: at}
+	if err := store.QueueLaunchIntent(t.Context(), launch); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -176,12 +177,15 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -217,11 +221,14 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	newBaseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
 	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
 
-	runID2, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", newBaseline, "hash-2")
+	runID2, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: newBaseline, PromptHash: "hash-2",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID2, 1000, at, "/state/runs/2.jsonl"); err != nil {
+	spawn2 := storepkg.Spawn{RunID: plan.RunID(runID2), Pgid: 1000, StartedAt: at, LogPath: "/state/runs/2.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn2); err != nil {
 		t.Fatal(err)
 	}
 	fake.CanReap[1000] = true
@@ -277,7 +284,9 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +295,8 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err := os.WriteFile(logPath, []byte(logBody), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, logPath); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -330,7 +340,9 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +354,8 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, logPath); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -390,12 +403,15 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -436,12 +452,15 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "kill", at.Add(time.Second)); err != nil {
@@ -531,12 +550,15 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordSpawn(t.Context(), runID, 4242, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.95, ResetsAt: at.Add(time.Hour), At: at}

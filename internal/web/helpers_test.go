@@ -37,17 +37,22 @@ func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
 func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := st.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
+	runID, err := st.InsertRunSkeleton(t.Context(), store.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.RecordSpawn(t.Context(), runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	if err := st.RecordSpawn(t.Context(), store.Spawn{
+		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := st.RecordDisposition(
-		t.Context(), runID, plan.OutcomePush, option.Some(exitCode), at, option.None[float64](),
-	); err != nil {
+	if err := st.RecordDisposition(t.Context(), store.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

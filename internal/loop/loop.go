@@ -507,7 +507,10 @@ func (l *Loop) disposeRun(
 	if m, ok := parseLog(l.logger, run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
 		cost = m.CostUSD
 	}
-	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), cost); err != nil {
+	disposition := store.Disposition{
+		RunID: plan.RunID(run.ID), Outcome: outcome, ExitCode: exitCode, Cost: cost, EndedAt: l.clock.Now(),
+	}
+	if err := l.store.RecordDisposition(ctx, disposition); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
 	readings, _ := parseLog(l.logger, run.LogPath, "run readings", agentlog.ParseReadings)
@@ -740,8 +743,9 @@ func (spec spawnSpec) session() store.RunSession {
 
 func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
-	runID, sessionID, err := l.store.InsertSessionRunSkeleton(
-		ctx, ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
+	runID, sessionID, err := l.store.InsertSessionRunSkeleton(ctx, store.RunSkeleton{
+		Ticket: ticket.URL, Kind: spec.kind, BaselineSHA: spec.baseline, PromptHash: spec.hash, Session: spec.session(),
+	})
 	if err != nil {
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}
@@ -786,9 +790,11 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
-		if dispositionErr := l.store.RecordDisposition(
-			ctx, runID, plan.Disposition(0), option.None[int](), l.clock.Now(), option.None[float64](),
-		); dispositionErr != nil {
+		failed := store.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.Disposition(0),
+			ExitCode: option.None[int](), Cost: option.None[float64](), EndedAt: l.clock.Now(),
+		}
+		if dispositionErr := l.store.RecordDisposition(ctx, failed); dispositionErr != nil {
 			return errors.Join(
 				fmt.Errorf("spawn run %d: %w", runID, err),
 				fmt.Errorf("record disposition for failed spawn of run %d: %w", runID, dispositionErr),
@@ -797,7 +803,8 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		return l.event(ctx, ticket.URL, store.EventSpawnFailed, err.Error())
 	}
 
-	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
+	spawned := store.Spawn{RunID: plan.RunID(runID), Pgid: result.Pid, StartedAt: l.clock.Now(), LogPath: logPath}
+	if err := l.store.RecordSpawn(ctx, spawned); err != nil {
 		return fmt.Errorf("record spawn of run %d: %w", runID, err)
 	}
 	t.spawned = append(t.spawned, plan.TicketURL(ticket.URL))
