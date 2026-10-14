@@ -365,7 +365,10 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
 
 func writeJSON(w http.ResponseWriter, v any) error {
 	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		return fmt.Errorf("encode json: %w", err)
+	}
+	return nil
 }
 
 func renderHTML(w http.ResponseWriter, name string, data any) error {
