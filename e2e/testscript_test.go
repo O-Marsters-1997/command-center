@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -163,7 +164,7 @@ func publishRepoSettings(ts *testscript.TestScript, name string) {
 }
 
 // ccConfig installs a named config fixture at cc's default path, so no script ever passes
-// --config. Port 0 is forced rather than left to the fixture: scripts run in parallel and a
+// --config. A free port is forced rather than left to the fixture: scripts run in parallel and a
 // fixed port collides. {{agents}} is substituted with agentsDir so a fixture's agent_command can
 // point at a fake agent script without hardcoding this checkout's absolute path.
 func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
@@ -176,7 +177,7 @@ func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 
 	var doc map[string]any
 	ts.Check(toml.Unmarshal(body, &doc))
-	doc["port"] = 0
+	doc["port"] = freePort(ts)
 
 	settingsDir := filepath.Join(ts.Getenv("WORK"), "cc", "repo-settings")
 	ts.Check(os.MkdirAll(settingsDir, 0o700))
@@ -343,4 +344,11 @@ func scriptEnv(work, databaseURL string) []string {
 		// many times an agent actually ran, distinct from tp.log's cuts or events' own count.
 		"CC_AGENT_LOG=" + filepath.Join(work, "agent.log"),
 	}
+}
+
+func freePort(ts *testscript.TestScript) int {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	ts.Check(err)
+	defer func() { _ = l.Close() }()
+	return l.Addr().(*net.TCPAddr).Port
 }

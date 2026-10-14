@@ -39,7 +39,7 @@ func subcmd(args []string) command {
 func appOptions() []app.Option { return nil }
 
 func open(ctx context.Context, configPath string, env config.Env, stdout, stderr io.Writer) error {
-	cfg, err := config.LoadConfig(configPath, env)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

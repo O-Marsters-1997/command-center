@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -111,7 +111,7 @@ func appConfig(t *testing.T) string {
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
 	dsn := cctest.DSN(t)
-	body := fmt.Sprintf("port = 0\ndata_dir = %q\ndatabase_url = %q\n", dataDir, dsn)
+	body := fmt.Sprintf("port = %d\ndata_dir = %q\ndatabase_url = %q\n", freePort(t), dataDir, dsn)
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body = bytes.Replace(body, []byte("port = 0\n"), []byte("port = "+strconv.Itoa(port)+"\n"), 1)
+	body = regexp.MustCompile(`port = \d+\n`).ReplaceAll(body, []byte("port = "+strconv.Itoa(port)+"\n"))
 	if err := os.WriteFile(configPath, body, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -251,4 +251,14 @@ func TestNewNamesTheStepThatFailed(t *testing.T) {
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("New(missing config) = %v, want it to wrap os.ErrNotExist", err)
 	}
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("find a free port: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+	return l.Addr().(*net.TCPAddr).Port
 }

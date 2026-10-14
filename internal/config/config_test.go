@@ -22,10 +22,10 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-// TestLoadConfigIgnoresATaskBlock covers phase 7: [[task]] is no longer decoded into anything, so
+// TestLoadIgnoresATaskBlock covers phase 7: [[task]] is no longer decoded into anything, so
 // a config still carrying one from before the tracker import lands loads exactly as if it were
 // absent, rather than refusing to start.
-func TestLoadConfigIgnoresATaskBlock(t *testing.T) {
+func TestLoadIgnoresATaskBlock(t *testing.T) {
 	t.Parallel()
 
 	body := `
@@ -38,21 +38,21 @@ repo       = "cc-sandbox"
 branch     = "cc-1-first"
 blocked_by = []
 `
-	got, err := config.LoadConfig(writeConfig(t, body), testEnv)
+	got, err := config.Load(writeConfig(t, body), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.MaxAgents != 2 || got.Port != 8080 {
 		t.Errorf("max_agents/port = %d/%d, want 2/8080", got.MaxAgents, got.Port)
 	}
 }
 
-func TestLoadConfigDefaults(t *testing.T) {
+func TestLoadDefaults(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
+	got, err := config.Load(writeConfig(t, ""), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.Port != 7777 {
 		t.Errorf("port = %d, want default 7777", got.Port)
@@ -74,24 +74,24 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadConfigSpendLimit5h(t *testing.T) {
+func TestLoadSpendLimit5h(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, "spend_limit_5h = 80\n"), testEnv)
+	got, err := config.Load(writeConfig(t, "spend_limit_5h = 80\n"), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.SpendLimit5h != 80 {
 		t.Errorf("spend_limit_5h = %d, want 80", got.SpendLimit5h)
 	}
 }
 
-func TestLoadConfigSpendLimit5hDefaultsToUnset(t *testing.T) {
+func TestLoadSpendLimit5hDefaultsToUnset(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
+	got, err := config.Load(writeConfig(t, ""), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.SpendLimit5h != 0 {
 		t.Errorf("spend_limit_5h = %d, want default 0 (unset, never pauses)", got.SpendLimit5h)
@@ -115,7 +115,7 @@ func agentCommandLine(t *testing.T, argv []string) string {
 	return "agent_command = " + string(quoted) + "\n"
 }
 
-func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
+func TestLoadAgentCommandOverridesTheDefault(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -139,9 +139,9 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := config.LoadConfig(writeConfig(t, tt.line), testEnv)
+			got, err := config.Load(writeConfig(t, tt.line), testEnv)
 			if err != nil {
-				t.Fatalf("LoadConfig: %v", err)
+				t.Fatalf("Load: %v", err)
 			}
 			if !slices.Equal(got.AgentCommand, tt.want) {
 				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
@@ -150,7 +150,7 @@ func TestLoadConfigAgentCommandOverridesTheDefault(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
+func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	complete := []string{
 		"claude", "-p", "{prompt}",
 		"--append-system-prompt-file", "{system_prompt}",
@@ -178,9 +178,9 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
-			_, err := config.LoadConfig(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
+			_, err := config.Load(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
-				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
+				t.Errorf("Load error = %v, want one naming %s", err, tt.missing)
 			}
 		})
 		t.Run(tt.name+" in CC_AGENT_COMMAND", func(t *testing.T) {
@@ -191,15 +191,15 @@ func TestLoadConfigRefusesAnArgvMissingARequiredPart(t *testing.T) {
 			env := testEnv
 			env.AgentCommand = string(raw)
 
-			_, err = config.LoadConfig(writeConfig(t, agentCommandLine(t, complete)), env)
+			_, err = config.Load(writeConfig(t, agentCommandLine(t, complete)), env)
 			if err == nil || !strings.Contains(err.Error(), tt.missing) {
-				t.Errorf("LoadConfig error = %v, want one naming %s", err, tt.missing)
+				t.Errorf("Load error = %v, want one naming %s", err, tt.missing)
 			}
 		})
 	}
 }
 
-func TestLoadConfigMaxTurns(t *testing.T) {
+func TestLoadMaxTurns(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -244,9 +244,9 @@ func TestLoadConfigMaxTurns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := config.LoadConfig(writeConfig(t, tt.body), testEnv)
+			got, err := config.Load(writeConfig(t, tt.body), testEnv)
 			if err != nil {
-				t.Fatalf("LoadConfig: %v", err)
+				t.Fatalf("Load: %v", err)
 			}
 			if !slices.Equal(got.AgentCommand, tt.want) {
 				t.Errorf("agent_command = %q, want %q", got.AgentCommand, tt.want)
@@ -261,7 +261,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	tracked := withRequiredParts("claude", "-p", "{prompt}")
 	path := writeConfig(t, agentCommandLine(t, tracked))
 
-	got, err := config.LoadConfig(path, testEnv)
+	got, err := config.Load(path, testEnv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	}
 	env := testEnv
 	env.AgentCommand = string(raw)
-	got, err = config.LoadConfig(path, env)
+	got, err = config.Load(path, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,61 +286,100 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 
 	for _, bad := range []string{"caffeinate -i claude", "[]", `{"a":1}`} {
 		env.AgentCommand = bad
-		if _, err := config.LoadConfig(path, env); err == nil {
+		if _, err := config.Load(path, env); err == nil {
 			t.Errorf("CC_AGENT_COMMAND=%q was accepted, want a refusal", bad)
 		}
 	}
 }
 
-func TestLoadConfigBoardPollSeconds(t *testing.T) {
+func TestLoadBoardPollSeconds(t *testing.T) {
 	t.Parallel()
 
-	got, err := config.LoadConfig(writeConfig(t, ""), testEnv)
+	got, err := config.Load(writeConfig(t, ""), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.BoardPollSeconds != 5 {
 		t.Errorf("board_poll_seconds = %d, want default 5", got.BoardPollSeconds)
 	}
 
-	got, err = config.LoadConfig(writeConfig(t, "board_poll_seconds = 1\n"), testEnv)
+	got, err = config.Load(writeConfig(t, "board_poll_seconds = 1\n"), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if got.BoardPollSeconds != 1 {
 		t.Errorf("board_poll_seconds = %d, want 1", got.BoardPollSeconds)
 	}
 }
 
-func TestLoadConfigRejectsANonPositiveBoardPoll(t *testing.T) {
+func TestLoadRejectsANonPositiveBoardPoll(t *testing.T) {
 	t.Parallel()
 
-	_, err := config.LoadConfig(writeConfig(t, "board_poll_seconds = 0\n"), testEnv)
+	_, err := config.Load(writeConfig(t, "board_poll_seconds = 0\n"), testEnv)
 	if err == nil {
-		t.Fatal("LoadConfig accepted board_poll_seconds = 0")
+		t.Fatal("Load accepted board_poll_seconds = 0")
 	}
 }
 
 func TestSampleConfigLoads(t *testing.T) {
 	t.Parallel()
 
-	if _, err := config.LoadConfig("../../docs/command-centre.sample.toml", testEnv); err != nil {
-		t.Fatalf("LoadConfig(docs/command-centre.sample.toml): %v", err)
+	if _, err := config.Load("../../docs/command-centre.sample.toml", testEnv); err != nil {
+		t.Fatalf("Load(docs/command-centre.sample.toml): %v", err)
 	}
 }
 
 func TestCheckedInConfigPinsTheDefaultModel(t *testing.T) {
 	t.Parallel()
 
-	shipped, err := config.LoadConfig("../../cc/config.toml", testEnv)
+	shipped, err := config.Load("../../cc/config.toml", testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig(cc/config.toml): %v", err)
+		t.Fatalf("Load(cc/config.toml): %v", err)
 	}
-	defaults, err := config.LoadConfig(writeConfig(t, ""), testEnv)
+	defaults, err := config.Load(writeConfig(t, ""), testEnv)
 	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if !slices.Equal(shipped.AgentCommand, defaults.AgentCommand) {
 		t.Errorf("cc/config.toml agent_command = %q, want the default %q", shipped.AgentCommand, defaults.AgentCommand)
+	}
+}
+
+func TestLoadNamesEveryBadField(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{"port and max_agents together", "port = 0\nmax_agents = 0\n", []string{"port", "max_agents"}},
+		{"port above range", "port = 70000\n", []string{"port"}},
+		{"spend_limit_5h above 100", "spend_limit_5h = 101\n", []string{"spend_limit_5h"}},
+		{"spend_limit_5h negative", "spend_limit_5h = -1\n", []string{"spend_limit_5h"}},
+		{"board_poll_seconds zero", "board_poll_seconds = 0\n", []string{"board_poll_seconds"}},
+		{"max_turns negative", "max_turns = -3\n", []string{"max_turns"}},
+		{"argv missing parts", "agent_command = [\"claude\"]\n", []string{"--permission-mode", "{system_prompt}", "{model}"}},
+		{
+			name: "all at once",
+			body: "port = 0\nmax_agents = 0\nspend_limit_5h = 200\nboard_poll_seconds = 0\n" +
+				"max_turns = -1\nagent_command = [\"x\"]\n",
+			want: []string{"port", "max_agents", "spend_limit_5h", "board_poll_seconds", "max_turns", "--permission-mode"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := config.Load(writeConfig(t, tt.body), testEnv)
+			if err == nil {
+				t.Fatal("Load error = nil, want one")
+			}
+			for _, field := range tt.want {
+				if !strings.Contains(err.Error(), field) {
+					t.Errorf("Load error = %v, want it to name %s", err, field)
+				}
+			}
+		})
 	}
 }

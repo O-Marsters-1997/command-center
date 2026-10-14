@@ -69,7 +69,7 @@ func New(
 		opt(&settings)
 	}
 
-	cfg, err := config.LoadConfig(configPath, env)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
