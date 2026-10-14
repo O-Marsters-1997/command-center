@@ -10,6 +10,7 @@ import (
 	"github.com/pressly/goose/v3"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -51,7 +52,7 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 	mustExec(ctx, t, db, `INSERT INTO tickets (url, repo, branch, synced_at) VALUES
 		('https://x/1', 'r', 'b1', ''), ('https://x/2', 'r', 'b2', $1)`, at.Format(time.RFC3339))
 	mustExec(ctx, t, db, `INSERT INTO intents (at, ticket_id, verb, payload) VALUES
-		($1, 'https://x/1', 'follow_up', 'fix "the" flaky test'),
+		($1, 'https://x/1', 'follow-up', 'fix "the" flaky test'),
 		($1, 'https://x/1', 'edit_ticket', '{"branch":"nb","blocked_by":["https://x/2"]}'),
 		($1, 'https://x/1', 'launch', '{"prompt_hash":"h","group":"g"}')`, at)
 	mustExec(ctx, t, db, `INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'legacy', NULL)`, at)
@@ -71,7 +72,7 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 		t.Errorf("legacy synced_at = %v, want %v", got, at)
 	}
 
-	followUps, err := store.PendingVerbIntents(ctx, "follow_up")
+	followUps, err := store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,10 +131,10 @@ func TestFollowUpIntentPayloadRoundTripsAsJSON(t *testing.T) {
 	store := openStore(t)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	prompt := "line one\nline \"two\""
-	if err := store.QueueVerbIntentWithPayload(ctx, "https://x/1", "follow_up", prompt, at); err != nil {
+	if err := store.QueueVerbIntentWithPayload(ctx, "https://x/1", plan.VerbFollowUp, prompt, at); err != nil {
 		t.Fatal(err)
 	}
-	got, err := store.PendingVerbIntents(ctx, "follow_up")
+	got, err := store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
 		t.Fatal(err)
 	}
