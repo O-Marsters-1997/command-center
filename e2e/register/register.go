@@ -99,12 +99,13 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	// -form is how a script drives a route the way the page's own forms do, with the fields in
 	// the body: a path-only `cc request POST /verb` cannot express that.
 	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
+	htmx := flags.Bool("hx", false, "send HX-Request: true, as htmx does for a fragment")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: cc request [-origin url] <method> <path>")
+		return fmt.Errorf("usage: cc request [-origin url] [-hx] [-form body] <method> <path>")
 	}
 	method, path := rest[0], rest[1]
 
@@ -136,6 +137,9 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	}
 	if *form != "" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if *htmx {
+		req.Header.Set("HX-Request", "true")
 	}
 	// No default: http.CrossOriginProtection allows a request carrying neither Origin nor
 	// Sec-Fetch-Site, which is what a real non-browser client sends.

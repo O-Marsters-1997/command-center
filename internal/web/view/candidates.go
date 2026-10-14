@@ -37,6 +37,17 @@ type LaunchModal struct {
 	Empty        bool
 }
 
+func (m LaunchModal) Path() string {
+	if m.Feature != "" {
+		return featureLaunchPath(m.Feature)
+	}
+	return "/launch?" + m.TicketQuery
+}
+
+func featureLaunchPath(feature string) string {
+	return "/f/" + url.PathEscape(feature) + "/launch"
+}
+
 type candidateInputs struct {
 	tickets []store.Ticket
 	snap    plan.Snapshot

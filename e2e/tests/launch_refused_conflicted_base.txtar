@@ -26,7 +26,7 @@ exec cc tick --count 1
 exec cc request GET /tickets
 stdout 'cc-1-x already carries an unresolved merge conflict'
 
-exec cc request GET '/launch/candidates?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
+exec cc request GET '/launch/candidates.json?ticket=https://github.com/sandbox-org/fan-out/issues/CC-2'
 stdout '"label":"refused"'
 stdout 'cc-1-x already carries an unresolved merge conflict'
 

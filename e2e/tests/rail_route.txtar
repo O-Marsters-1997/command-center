@@ -18,7 +18,7 @@ exec git -C $WORK/repo push -q origin --delete cc-1-x
 cc-fake-gh single-task-merged
 exec cc tick --count 1
 
-exec cc request GET /rail
+exec cc request -hx GET /rail
 stdout '^<div id="rail-body"'
 stdout 'data-group="needs-you"'
 stdout 'data-group="in-flight"'
@@ -29,5 +29,5 @@ stdout 'value="remove-worktree"'
 exec cc request POST '/verb?verb=remove-worktree&ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
 
-exec cc request GET /rail
+exec cc request -hx GET /rail
 ! stdout 'data-group="settled"'

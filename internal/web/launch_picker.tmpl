@@ -17,4 +17,5 @@
 {{- else -}}
 <p class="page-purpose">No feature has work to launch.</p>
 {{- end}}
+<div id="launch-modal">{{with .Launch}}{{template "launchDialog" .}}{{end}}</div>
 {{template "shellEnd" .}}
