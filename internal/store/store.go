@@ -118,7 +118,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
 		}
 		rows = append(rows, row)
 	}
-	encoded, err := encodeJSON("tickets", rows)
+	encoded, err := encodeJSON("tickets", lastPerURL(rows))
 	if err != nil {
 		return err
 	}
@@ -139,6 +139,20 @@ type ticketRow struct {
 	Status    string          `json:"status"`
 	Feature   string          `json:"feature"`
 	SyncedAt  *time.Time      `json:"synced_at"`
+}
+
+func lastPerURL(rows []ticketRow) []ticketRow {
+	at := make(map[string]int, len(rows))
+	unique := make([]ticketRow, 0, len(rows))
+	for _, row := range rows {
+		if i, seen := at[row.URL]; seen {
+			unique[i] = row
+			continue
+		}
+		at[row.URL] = len(unique)
+		unique = append(unique, row)
+	}
+	return unique
 }
 
 type blockedByUpdate struct {
@@ -261,7 +275,7 @@ func (s *Store) ImportTickets(
 				BlockedBy: blockedBy,
 			})
 		}
-		encodedRows, err := encodeJSON("imported tickets", rows)
+		encodedRows, err := encodeJSON("imported tickets", lastPerURL(rows))
 		if err != nil {
 			return err
 		}

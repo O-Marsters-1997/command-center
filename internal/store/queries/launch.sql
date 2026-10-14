@@ -24,7 +24,7 @@ SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
 FROM launch_members lm
 JOIN launches l ON l.id = lm.launch_id
 WHERE l.state IN ('active', 'cancelled')
-ORDER BY lm.launch_id DESC, lm.ticket_id
+ORDER BY (l.state = 'active') DESC, lm.launch_id DESC, lm.ticket_id
 LIMIT sqlc.arg(max_rows);
 
 -- name: ActiveLaunchMemberCount :one
