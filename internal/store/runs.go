@@ -57,16 +57,13 @@ func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, e
 
 // RecordSpawn writes the pgid, its process start time and the log path onto a reserved run.
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
-	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
+	n, err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
 		ProcStartedAt: notNullTime(startedAt.UTC()),
 		LogPath:       notNull(logPath),
 		ID:            runID,
 	})
-	if err != nil {
-		return fmt.Errorf("record spawn for run %d: %w", runID, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("record spawn for run %d", runID))
 }
 
 func (s *Store) RecordDisposition(
@@ -77,25 +74,19 @@ func (s *Store) RecordDisposition(
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
-	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(outcome.String()),
 		ExitCode: exitCodeParam,
 		EndedAt:  notNullTime(endedAt.UTC()),
 		CostUsd:  costUSD(metrics),
 		ID:       runID,
 	})
-	if err != nil {
-		return fmt.Errorf("record disposition for run %d: %w", runID, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", runID))
 }
 
 func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
-	err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
-	if err != nil {
-		return fmt.Errorf("record question for run %d: %w", runID, err)
-	}
-	return nil
+	n, err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
+	return matchedRow(n, err, fmt.Sprintf("record question for run %d", runID))
 }
 
 func costUSD(metrics *agentlog.RunMetrics) sql.NullFloat64 {
@@ -261,14 +252,11 @@ func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string
 
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
-	err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
+	n, err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
 		ConsumedAt: notNullTime(at.UTC()),
 		ID:         id,
 	})
-	if err != nil {
-		return fmt.Errorf("consume intent %d: %w", id, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
 }
 
 // ActiveLaunchHashes returns the authorised prompt hash per ticket in an active launch.

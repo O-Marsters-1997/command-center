@@ -94,9 +94,7 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 		if err != nil {
 			return fmt.Errorf("encode blocked_by for %s: %w", ticketURL, err)
 		}
-		if err := q.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL}); err != nil {
-			return fmt.Errorf("edit ticket %s: %w", ticketURL, err)
-		}
-		return nil
+		n, err := q.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL})
+		return matchedRow(n, err, "edit ticket "+ticketURL)
 	})
 }

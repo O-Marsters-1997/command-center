@@ -192,7 +192,7 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
-const setBlockedBy = `-- name: SetBlockedBy :exec
+const setBlockedBy = `-- name: SetBlockedBy :execrows
 UPDATE tickets SET blocked_by = $1 WHERE url = $2
 `
 
@@ -201,9 +201,12 @@ type SetBlockedByParams struct {
 	URL       string
 }
 
-func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) error {
-	_, err := q.db.ExecContext(ctx, setBlockedBy, arg.BlockedBy, arg.URL)
-	return err
+func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setBlockedBy, arg.BlockedBy, arg.URL)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const ticketBranch = `-- name: TicketBranch :one
@@ -445,7 +448,7 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) erro
 	return err
 }
 
-const withdrawTicket = `-- name: WithdrawTicket :exec
+const withdrawTicket = `-- name: WithdrawTicket :execrows
 UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL
 `
 
@@ -454,9 +457,12 @@ type WithdrawTicketParams struct {
 	URL         string
 }
 
-func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) error {
-	_, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
-	return err
+func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const withdrawnTickets = `-- name: WithdrawnTickets :many
