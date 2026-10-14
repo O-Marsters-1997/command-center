@@ -161,13 +161,13 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	var launched *Age
 	if params.Feature != "" {
-		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
-		if err != nil {
-			return Board{}, err
-		}
-		if ok {
+		at, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
+		switch {
+		case err == nil:
 			age := relative(now, at)
 			launched = &age
+		case !errors.Is(err, store.ErrNotFound):
+			return Board{}, err
 		}
 	}
 	return Board{

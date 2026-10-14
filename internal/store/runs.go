@@ -46,7 +46,7 @@ func (s *Store) InsertSessionRunSkeleton(
 func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, error) {
 	id, err := s.q.LatestSessionID(ctx, notNull(ticketID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
+		return "", fmt.Errorf("session of %s: %w", ticketID, ErrNotFound)
 	}
 	if err != nil {
 		return "", fmt.Errorf("select latest session of %s: %w", ticketID, err)
@@ -304,13 +304,11 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 	return runs, nil
 }
 
-// LatestRunLog returns the newest run's log path for a ticket and whether it has ended.
-// A ticket with no run reads as ended with no path.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
 	row, err := s.q.LatestRunLog(ctx, notNull(ticketURL))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return "", true, nil
+		return "", false, fmt.Errorf("run of %s: %w", ticketURL, ErrNotFound)
 	case err != nil:
 		return "", false, fmt.Errorf("select latest run log for %s: %w", ticketURL, err)
 	default:

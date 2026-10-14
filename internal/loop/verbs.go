@@ -109,7 +109,10 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 
 func (l *Loop) resumableSession(ctx context.Context, ticketURL string) (string, error) {
 	sessionID, err := l.store.LatestSessionID(ctx, ticketURL)
-	if err != nil || sessionID == "" {
+	if errors.Is(err, store.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
 		return "", err
 	}
 	projects, err := os.ReadDir(l.cfg.ClaudeProjectsDir)
