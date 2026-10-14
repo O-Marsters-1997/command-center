@@ -12,4 +12,6 @@ func MergifyHash(ctx context.Context, repoPath string) (string, error) {
 }
 
 // MainTipKey names the default branch's own tip in Observation.BranchTips.
-func MainTipKey(repo string) string { return plan.BranchKey(repo, plan.DefaultBaseBranch) }
+func MainTipKey(repo string) plan.BranchRef {
+	return plan.BranchRef{Repo: repo, Branch: plan.DefaultBaseBranch}
+}

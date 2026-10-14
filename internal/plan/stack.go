@@ -19,11 +19,11 @@ func StackDepth(branch string, baseByBranch map[string]string) int {
 // WaveCount is the number of dependency waves among tickets: one more than the longest blocking
 // chain. blocking maps each ticket to the tickets it waits on; blockers outside the map are
 // ignored.
-func WaveCount(blocking map[string][]string) int {
-	depth := make(map[string]int, len(blocking))
-	visiting := make(map[string]bool, len(blocking))
-	var depthOf func(url string) int
-	depthOf = func(url string) int {
+func WaveCount(blocking map[TicketURL][]TicketURL) int {
+	depth := make(map[TicketURL]int, len(blocking))
+	visiting := make(map[TicketURL]bool, len(blocking))
+	var depthOf func(url TicketURL) int
+	depthOf = func(url TicketURL) int {
 		if d, ok := depth[url]; ok {
 			return d
 		}

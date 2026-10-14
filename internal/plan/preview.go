@@ -30,7 +30,9 @@ func (l PreviewLabel) String() string {
 // Preview labels one ticket's row in a launch preview. A locked ticket starts on unlock only if
 // every blocker is in the requested slice, and a non-empty conflictedBase refuses whatever the
 // blockers say.
-func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflictedBase string) (PreviewLabel, Reason) {
+func Preview(
+	unlock Unlock, slice map[TicketURL]bool, activeLaunchID int64, conflictedBase string,
+) (PreviewLabel, Reason) {
 	if activeLaunchID != 0 {
 		return Refused, Reason(fmt.Sprintf("already authorised in launch %d", activeLaunchID))
 	}
@@ -52,7 +54,7 @@ func Preview(unlock Unlock, slice map[string]bool, activeLaunchID int64, conflic
 // ProspectiveBase is the base an OnUnlock row would get once unlocked, computed without an
 // existing PR by the rule Unlocked applies to its single-blocker, open-PR arm. Unlock.BaseBranch stays empty for
 // a blocked row.
-func ProspectiveBase(t Ticket, byURL map[string]Ticket, stacking bool) string {
+func ProspectiveBase(t Ticket, byURL map[TicketURL]Ticket, stacking bool) string {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
@@ -76,9 +78,9 @@ type PreviewRow struct {
 	PromptHash string
 }
 
-func (s Snapshot) Preview(selection []string) ([]PreviewRow, error) {
+func (s Snapshot) Preview(selection []TicketURL) ([]PreviewRow, error) {
 	entries := make([]Entry, 0, len(selection))
-	slice := make(map[string]bool, len(selection))
+	slice := make(map[TicketURL]bool, len(selection))
 	for _, ticketURL := range selection {
 		e, ok := s.Entry(ticketURL)
 		if !ok {

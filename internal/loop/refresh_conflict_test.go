@@ -56,10 +56,10 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		obs := baseObservation(f, parentTip1)
 		for ticketURL, alive := range aliveRuns {
-			obs.Runs[ticketURL] = plan.RunObservation{Alive: alive}
+			obs.Runs[plan.TicketURL(ticketURL)] = plan.RunObservation{Alive: alive}
 		}
-		obs.PRs[plan.BranchKey("repo", "child")] = plan.PR{
-			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
+		obs.PRs[branchRef("repo", "child")] = plan.PR{
+			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: plan.SHA(childTip),
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
 		obs.Settings["repo"] = config.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}
@@ -67,7 +67,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
+		obs.MidMerge[branchRef("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -237,7 +237,7 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[c.f.child.URL].BaseSHAAtPush; got != parentTip1 {
+	if got := pushes[plan.TicketURL(c.f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s: the push step delivers the "+
 			"hand-resolved merge", got, parentTip1)
 	}

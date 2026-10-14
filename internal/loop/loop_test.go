@@ -75,10 +75,10 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{
-			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
 		},
-		Worktrees: map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
+		Worktrees: map[plan.BranchRef]string{branchRef("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
 	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
@@ -94,7 +94,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	if !got.ObservedAt.Equal(at) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
-	if got.PRs[plan.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
+	if got.PRs[branchRef("cc-sandbox", "cc-1-first")].State != plan.Open {
 		t.Errorf("prs = %+v", got.PRs)
 	}
 }
@@ -142,7 +142,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
 	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },

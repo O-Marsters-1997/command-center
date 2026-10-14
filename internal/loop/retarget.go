@@ -19,11 +19,11 @@ func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.
 		if row.BaseBranch == "" || row.BaseBranch == plan.DefaultBaseBranch {
 			continue
 		}
-		if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open ||
-			obs.PRs[plan.BranchKey(t.Repo, row.BaseBranch)].State != plan.Merged {
+		if obs.PRs[t.Ref()].State != plan.Open ||
+			obs.PRs[plan.BranchRef{Repo: t.Repo, Branch: row.BaseBranch}].State != plan.Merged {
 			continue
 		}
-		if err := l.retargetOne(ctx, snap, obs, t, row); err != nil {
+		if err := l.retargetOne(ctx, snap, obs, refreshJob{ticket: t, row: row}); err != nil {
 			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}
@@ -31,22 +31,25 @@ func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.
 }
 
 func (l *Loop) retargetOne(
-	ctx context.Context, snap plan.Snapshot, obs plan.Observation, t plan.Ticket, row plan.PushRow,
+	ctx context.Context, snap plan.Snapshot, obs plan.Observation, job refreshJob,
 ) error {
+	t, row := job.ticket, job.row
+	url := string(t.URL)
 	repoPath := l.checkout(t.Repo)
 	if err := l.forge.Edit(ctx, repoPath, t.Branch, plan.DefaultBaseBranch); err != nil {
-		return l.event(ctx, t.URL, store.EventRetargetFailed, err.Error())
+		return l.event(ctx, url, store.EventRetargetFailed, err.Error())
 	}
 
-	err := l.store.RecordPush(ctx, t.URL, row.PushedTip, plan.DefaultBaseBranch, row.BaseSHAAtPush, l.clock.Now())
+	err := l.store.RecordPush(
+		ctx, url, string(row.PushedTip), plan.DefaultBaseBranch, string(row.BaseSHAAtPush), l.clock.Now())
 	if err != nil {
 		return fmt.Errorf("record retargeted push: %w", err)
 	}
 	detail := fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, plan.DefaultBaseBranch)
-	if err := l.event(ctx, t.URL, store.EventRetargeted, detail); err != nil {
+	if err := l.event(ctx, url, store.EventRetargeted, detail); err != nil {
 		return fmt.Errorf("record retarget: %w", err)
 	}
-	if err := l.refreshOne(ctx, snap, obs, t, row, false); err != nil {
+	if err := l.refreshOne(ctx, snap, obs, job); err != nil {
 		return fmt.Errorf("refresh after retarget: %w", err)
 	}
 	return nil

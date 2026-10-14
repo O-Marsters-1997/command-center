@@ -32,7 +32,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{sandboxRepo + "//cc-1-first": {Number: 41, State: plan.Open}},
+		PRs: map[plan.BranchRef]plan.PR{{Repo: sandboxRepo, Branch: "cc-1-first"}: {Number: 41, State: plan.Open}},
 	}
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 

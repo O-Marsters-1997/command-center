@@ -15,7 +15,7 @@ func (l *Loop) recordOpenedEvents(ctx context.Context, prev, obs plan.Observatio
 	}
 
 	for _, t := range tickets {
-		key := plan.BranchKey(t.Repo, t.Branch)
+		key := t.Ref()
 		pr, observed := obs.PRs[key]
 		if _, seen := prev.PRs[key]; !observed || seen {
 			continue

@@ -311,7 +311,7 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingIntentsByTicket: %v", err)
 	}
-	want := map[string][]plan.Verb{
+	want := map[plan.TicketURL][]plan.Verb{
 		"sandbox://CC-1": {plan.VerbKill, plan.VerbFollowUp},
 		"sandbox://CC-2": {plan.VerbReRun},
 	}

@@ -142,15 +142,16 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 	verdictLabelByBranch := make(map[string]string, len(tickets))
 	baseByBranch := make(map[string]string, len(tickets))
 	for _, t := range tickets {
-		e, ok := snap.Entry(t.URL)
+		url := plan.TicketURL(t.URL)
+		e, ok := snap.Entry(url)
 		if !ok {
 			continue
 		}
-		membership := in.Memberships[t.URL]
-		latestRun := in.Runs[t.URL]
+		membership := in.Memberships[url]
+		latestRun := in.Runs[url]
 		verdictLabelByBranch[t.Branch] = runVerdictLabel(e.Run)
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
-		pr := in.Obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
+		pr := in.Obs.PRs[t.Ref()]
 		var redLeaves []string
 		if e.Run.IsSome() && e.Run.Unwrap().Verdict.IsSome() {
 			redLeaves = e.Run.Unwrap().Verdict.Unwrap().RedLeaves
@@ -174,19 +175,19 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Feature:        t.Feature,
 			Project:        projects[t.Repo].Name,
 			ProjectHue:     projects[t.Repo].Hue,
-			Title:          in.Obs.Titles[t.URL],
+			Title:          in.Obs.Titles[url],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
 			Question:       question,
 			Glyph:          e.State.Glyph(),
 			Unattended:     e.State.Unattended(),
-			Alive:          in.Obs.Runs[t.URL].Alive,
+			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),
-			PendingVerbs:   in.PendingVerbs[t.URL],
+			PendingVerbs:   in.PendingVerbs[url],
 			Branch:         t.Branch,
 			BlockedBy:      t.BlockedBy,
 			Base:           e.Unlock.BaseBranch,
-			Worktree:       in.Obs.Worktrees[plan.BranchKey(t.Repo, t.Branch)],
+			Worktree:       in.Obs.Worktrees[t.Ref()],
 			PRNumber:       pr.Number,
 			PRState:        pr.State.String(),
 			Pgid:           pgid,
@@ -194,11 +195,11 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        e.LogPath,
 			CancelCount:    membership.Members,
-			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[t.URL])),
-			BaselineSHA:    latestRun.BaselineSHA,
+			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[url])),
+			BaselineSHA:    string(latestRun.BaselineSHA),
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
-			Blocking:       e.Unlock.Blocking,
+			Blocking:       urlStrings(e.Unlock.Blocking),
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
 		})
@@ -249,6 +250,14 @@ func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []Check
 		if red[c.Name] {
 			out = append(out, c)
 		}
+	}
+	return out
+}
+
+func urlStrings(urls []plan.TicketURL) []string {
+	out := make([]string, len(urls))
+	for i, u := range urls {
+		out[i] = string(u)
 	}
 	return out
 }

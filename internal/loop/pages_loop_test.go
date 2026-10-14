@@ -94,7 +94,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	f := newLoopFixture(t,
 		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
 	for _, ticket := range f.Tickets {
-		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+		hash := composeHash(ticket.URL)
 		if err := f.Store.QueueLaunchIntent(t.Context(), ticket.URL, hash, "group-a", testAt); err != nil {
 			t.Fatal(err)
 		}
@@ -145,7 +145,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ticket := range f.Tickets {
-		if !memberships[ticket.URL].Cancelled {
+		if !memberships[plan.TicketURL(ticket.URL)].Cancelled {
 			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticket.URL)
 		}
 	}
@@ -174,7 +174,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
 	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
-	authoriseTicket(t, f.Store, hidden.URL, plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL})), testAt)
+	authoriseTicket(t, f.Store, hidden.URL, composeHash(hidden.URL), testAt)
 	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {

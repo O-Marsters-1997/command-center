@@ -84,9 +84,9 @@ func TestGatingBlockers(t *testing.T) {
 	crossRepo := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
 	consumer := plan.Ticket{
 		URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2",
-		BlockedBy: []string{"sandbox://CC-1", "sandbox://PLA-40"},
+		BlockedBy: []plan.TicketURL{"sandbox://CC-1", "sandbox://PLA-40"},
 	}
-	byURL := map[string]plan.Ticket{
+	byURL := map[plan.TicketURL]plan.Ticket{
 		sameRepo.URL:  sameRepo,
 		crossRepo.URL: crossRepo,
 		consumer.URL:  consumer,
@@ -102,7 +102,7 @@ func TestOpensAsDraft(t *testing.T) {
 	t.Parallel()
 
 	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	byURL := map[string]plan.Ticket{blocker.URL: blocker}
+	byURL := map[plan.TicketURL]plan.Ticket{blocker.URL: blocker}
 
 	tests := []struct {
 		name   string
@@ -111,7 +111,7 @@ func TestOpensAsDraft(t *testing.T) {
 	}{
 		{
 			name:   "a gating edge alone opens as a draft",
-			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo", BlockedBy: []string{"sandbox://PLA-40"}},
+			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo", BlockedBy: []plan.TicketURL{"sandbox://PLA-40"}},
 			want:   true,
 		},
 		{

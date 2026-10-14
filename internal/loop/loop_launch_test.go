@@ -185,7 +185,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -203,7 +203,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[ticket.URL]
+	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Fatalf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
@@ -234,7 +234,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary = latest[ticket.URL]
+	summary = latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomePush) {
 		t.Fatalf("summary = %+v, want push (one commit after its own baseline)", summary)
 	}
@@ -290,7 +290,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -308,7 +308,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary := latest[ticket.URL]; summary.Outcome != option.Some(plan.OutcomeFailed) {
+	if summary := latest[plan.TicketURL(ticket.URL)]; summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Errorf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
 	cost, err := store.CCCostUSD(t.Context(), at.Add(time.Hour))
@@ -346,7 +346,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -401,7 +401,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 
 	// No entry for "cc-1" in Worktrees: the worktree is gone by the time this tick disposes
 	// the run. BranchTips is what observe would have read from origin/cc-1 this tick.
-	obs := plan.Observation{BranchTips: map[string]string{plan.BranchKey("repo", "cc-1"): originTip}}
+	obs := plan.Observation{BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "cc-1"): plan.SHA(originTip)}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -418,7 +418,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[ticket.URL]
+	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomePush) {
 		t.Fatalf("summary = %+v, want push: origin/cc-1 is ahead of baseline though the worktree is gone", summary)
 	}
@@ -448,7 +448,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -478,7 +478,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[ticket.URL]
+	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome.IsNone() {
 		t.Fatal("the killed run was not disposed of in the same tick")
 	}
@@ -544,7 +544,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()

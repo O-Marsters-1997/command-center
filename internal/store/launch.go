@@ -121,20 +121,20 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 
 // LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
 // Cancelled entry for a ticket whose launch was cancelled and not relaunched.
-func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
+func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.LaunchMembership, error) {
 	rows, err := s.q.LaunchMemberships(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}
 
-	memberships := map[string]plan.LaunchMembership{}
-	cancelled := map[string]bool{}
+	memberships := map[plan.TicketURL]plan.LaunchMembership{}
+	cancelled := map[plan.TicketURL]bool{}
 	for _, row := range rows {
 		if row.State == "cancelled" {
-			cancelled[row.TicketID] = true
+			cancelled[plan.TicketURL(row.TicketID)] = true
 			continue
 		}
-		memberships[row.TicketID] = plan.LaunchMembership{
+		memberships[plan.TicketURL(row.TicketID)] = plan.LaunchMembership{
 			LaunchID:   row.LaunchID,
 			Members:    int(row.Members),
 			PromptHash: row.PromptHash,

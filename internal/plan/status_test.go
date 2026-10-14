@@ -40,7 +40,7 @@ func TestStatus(t *testing.T) {
 		},
 		{
 			name:       "locked and authorised derives queued naming the blocker",
-			unlock:     plan.Unlock{Reason: "blocked by sandbox://CC-1", Blocking: []string{"sandbox://CC-1"}},
+			unlock:     plan.Unlock{Reason: "blocked by sandbox://CC-1", Blocking: []plan.TicketURL{"sandbox://CC-1"}},
 			authorised: true,
 			want:       plan.Queued,
 			wantReason: "waiting on sandbox://CC-1's PR",
@@ -66,14 +66,15 @@ func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
 	t.Parallel()
 
 	run := option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomePush)})
-	held := plan.Unlock{Reason: "blocked", Blocking: []string{"#259"}}
+	held := plan.Unlock{Reason: "blocked", Blocking: []plan.TicketURL{"#259"}}
 
 	state, reason := plan.Status(plan.Facts{Unlock: held, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "#259") {
 		t.Fatalf("Status = %v, %q; want push pending naming #259", state, reason)
 	}
 
-	state, reason = plan.Status(plan.Facts{Unlock: plan.Unlock{Blocking: []string{"#259", "#260"}}, LatestRun: run})
+	twoHeld := plan.Unlock{Blocking: []plan.TicketURL{"#259", "#260"}}
+	state, reason = plan.Status(plan.Facts{Unlock: twoHeld, LatestRun: run})
 	if state != plan.PushPending || !strings.Contains(string(reason), "#259, #260") {
 		t.Fatalf("Status = %v, %q; want both blockers named", state, reason)
 	}
@@ -509,7 +510,7 @@ func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 	t.Parallel()
 
 	blockerClosed := plan.Unlock{
-		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []string{"sandbox://CC-1"},
+		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []plan.TicketURL{"sandbox://CC-1"},
 	}
 
 	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: option.None[plan.RunFact]()})

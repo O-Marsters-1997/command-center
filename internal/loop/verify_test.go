@@ -169,7 +169,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[f.child.URL].VerificationFailed {
+	if !facts[plan.TicketURL(f.child.URL)].VerificationFailed {
 		t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
 	}
 
@@ -198,7 +198,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if factsAfter[f.child.URL].VerificationFailed {
+	if factsAfter[plan.TicketURL(f.child.URL)].VerificationFailed {
 		t.Errorf("refresh facts = %+v, want the latch cleared by the push", factsAfter)
 	}
 }
@@ -227,7 +227,7 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent"))
 
 	obs := baseObservation(f, f.parentTip0)
-	obs.BranchTips["repo//main"] = mainTip1
+	obs.BranchTips[branchRef("repo", "main")] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)

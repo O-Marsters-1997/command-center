@@ -8,6 +8,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -225,7 +226,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] != "deadbeef" {
+	if tips[plan.TicketURL(ticket.URL)] != "deadbeef" {
 		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
 	}
 
@@ -233,7 +234,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := memberships[ticket.URL]; !ok {
+	if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
 		t.Errorf("memberships = %+v, want the launch membership to survive withdrawal", memberships)
 	}
 }

@@ -18,7 +18,7 @@ func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observatio
 	}
 
 	for _, t := range tickets {
-		key := plan.BranchKey(t.Repo, t.Branch)
+		key := t.Ref()
 		now := obs.PRs[key].Checks
 		before := prev.PRs[key].Checks
 		for _, name := range slices.Sorted(maps.Keys(now)) {

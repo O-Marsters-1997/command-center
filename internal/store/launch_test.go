@@ -10,6 +10,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
@@ -181,7 +182,7 @@ func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T)
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if !memberships[ticketID].Cancelled {
+		if !memberships[plan.TicketURL(ticketID)].Cancelled {
 			t.Errorf("memberships = %+v, want %s cancelled too: every sibling, not just the one named",
 				memberships, ticketID)
 		}
@@ -234,7 +235,7 @@ func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if got := memberships[ticket.URL]; got.Cancelled || got.LaunchID == 0 {
+	if got := memberships[plan.TicketURL(ticket.URL)]; got.Cancelled || got.LaunchID == 0 {
 		t.Errorf("membership = %+v, want %s active under its new launch, not cancelled", got, ticket.URL)
 	}
 }

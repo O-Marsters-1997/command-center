@@ -19,7 +19,7 @@ func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	if err != nil {
 		return plan.VerdictFacts{}, fmt.Errorf("read checking ticks: %w", err)
 	}
-	checkingFor := make(map[string]time.Duration, len(checkingTicks))
+	checkingFor := make(map[plan.TicketURL]time.Duration, len(checkingTicks))
 	for url, ticks := range checkingTicks {
 		checkingFor[url] = time.Duration(ticks) * TickPeriod
 	}

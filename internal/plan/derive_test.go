@@ -9,14 +9,14 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-func key(branch string) string { return plan.BranchKey("r", branch) }
+func key(branch string) plan.BranchRef { return plan.BranchRef{Repo: "r", Branch: branch} }
 
-func ticket(n, branch string, blockedBy ...string) plan.Ticket {
-	return plan.Ticket{URL: "sandbox://CC-" + n, Repo: "r", Branch: branch, BlockedBy: blockedBy}
+func ticket(n, branch string, blockedBy ...plan.TicketURL) plan.Ticket {
+	return plan.Ticket{URL: plan.TicketURL("sandbox://CC-" + n), Repo: "r", Branch: branch, BlockedBy: blockedBy}
 }
 
-func openPRs(tickets ...plan.Ticket) map[string]plan.PR {
-	prs := make(map[string]plan.PR, len(tickets))
+func openPRs(tickets ...plan.Ticket) map[plan.BranchRef]plan.PR {
+	prs := make(map[plan.BranchRef]plan.PR, len(tickets))
 	for _, t := range tickets {
 		prs[key(t.Branch)] = plan.PR{Number: 1, State: plan.Open}
 	}
@@ -30,7 +30,7 @@ func derive(rules plan.Rules, in plan.Input) plan.Snapshot {
 	return rules.Derive(in)
 }
 
-func entry(t *testing.T, snap plan.Snapshot, url string) plan.Entry {
+func entry(t *testing.T, snap plan.Snapshot, url plan.TicketURL) plan.Entry {
 	t.Helper()
 	e, ok := snap.Entry(url)
 	if !ok {
@@ -46,9 +46,9 @@ func TestDeriveConflictedBase(t *testing.T) {
 	child := ticket("2", "cc-2-second", root.URL)
 	tickets := []plan.Ticket{root, child}
 
-	conflicts := plan.Observation{ConflictsWithBase: map[string]bool{key(root.Branch): true}}
-	midMerge := plan.Observation{MidMerge: map[string]bool{key(root.Branch): true}}
-	clean := plan.Observation{ConflictsWithBase: map[string]bool{key(root.Branch): false}}
+	conflicts := plan.Observation{ConflictsWithBase: map[plan.BranchRef]bool{key(root.Branch): true}}
+	midMerge := plan.Observation{MidMerge: map[plan.BranchRef]bool{key(root.Branch): true}}
+	clean := plan.Observation{ConflictsWithBase: map[plan.BranchRef]bool{key(root.Branch): false}}
 	withPR := func(o plan.Observation) plan.Observation {
 		o.PRs = openPRs(root)
 		return o
@@ -58,7 +58,7 @@ func TestDeriveConflictedBase(t *testing.T) {
 		name     string
 		stacking bool
 		obs      plan.Observation
-		url      string
+		url      plan.TicketURL
 		want     string
 	}{
 		{
@@ -91,11 +91,11 @@ func pushedRun() plan.RunSummary {
 	return plan.RunSummary{Outcome: option.Some(plan.OutcomePush), LogPath: "run.log"}
 }
 
-func peerConflicts(pairs ...[2]string) map[string]map[string]bool {
-	out := map[string]map[string]bool{}
+func peerConflicts(pairs ...[2]string) map[plan.BranchRef]map[plan.BranchRef]bool {
+	out := map[plan.BranchRef]map[plan.BranchRef]bool{}
 	for _, p := range pairs {
 		if out[key(p[0])] == nil {
-			out[key(p[0])] = map[string]bool{}
+			out[key(p[0])] = map[plan.BranchRef]bool{}
 		}
 		out[key(p[0])][key(p[1])] = true
 	}
@@ -113,31 +113,31 @@ func TestDeriveConflictingPeer(t *testing.T) {
 		name     string
 		tickets  []plan.Ticket
 		stacking bool
-		prs      map[string]plan.PR
-		peers    map[string]map[string]bool
-		want     map[string]string
+		prs      map[plan.BranchRef]plan.PR
+		peers    map[plan.BranchRef]map[plan.BranchRef]bool
+		want     map[plan.TicketURL]string
 	}{
 		{
 			name:    "a conflicting pair holds the higher ref behind the lower",
 			tickets: []plan.Ticket{higher, lower}, prs: openPRs(lower, higher), peers: both,
-			want: map[string]string{higher.URL: lower.Branch},
+			want: map[plan.TicketURL]string{higher.URL: lower.Branch},
 		},
 		{
 			name:    "a clean pair holds neither",
 			tickets: []plan.Ticket{higher, lower}, prs: openPRs(lower, higher),
-			peers: map[string]map[string]bool{key(lower.Branch): {key(higher.Branch): false}},
-			want:  map[string]string{},
+			peers: map[plan.BranchRef]map[plan.BranchRef]bool{key(lower.Branch): {key(higher.Branch): false}},
+			want:  map[plan.TicketURL]string{},
 		},
 		{
 			name:     "a stacked branch is never a candidate",
 			tickets:  []plan.Ticket{lower, ticket("2", higher.Branch, lower.URL)},
 			stacking: true, prs: openPRs(lower, higher), peers: both,
-			want: map[string]string{},
+			want: map[plan.TicketURL]string{},
 		},
 		{
 			name:    "a branch with no open pull request is never a candidate",
 			tickets: []plan.Ticket{higher, lower}, prs: openPRs(lower), peers: both,
-			want: map[string]string{},
+			want: map[plan.TicketURL]string{},
 		},
 		{
 			name: "ref order is by ticket number, not branch string, across a digit-count boundary",
@@ -147,7 +147,7 @@ func TestDeriveConflictingPeer(t *testing.T) {
 			prs: openPRs(ticket("100", "cc-100-hundred"), ticket("9", "cc-9-nine")),
 			peers: peerConflicts(
 				[2]string{"cc-9-nine", "cc-100-hundred"}, [2]string{"cc-100-hundred", "cc-9-nine"}),
-			want: map[string]string{"sandbox://CC-100": "cc-9-nine"},
+			want: map[plan.TicketURL]string{"sandbox://CC-100": "cc-9-nine"},
 		},
 	}
 	for _, tt := range tests {
@@ -157,14 +157,14 @@ func TestDeriveConflictingPeer(t *testing.T) {
 			in := plan.Input{
 				Tickets: tt.tickets,
 				Obs:     plan.Observation{PRs: tt.prs, ConflictsWithPeer: tt.peers},
-				Runs:    map[string]plan.RunSummary{},
+				Runs:    map[plan.TicketURL]plan.RunSummary{},
 			}
 			for _, tk := range tt.tickets {
 				in.Runs[tk.URL] = pushedRun()
 			}
 			snap := derive(plan.Rules{Stacking: map[string]bool{"r": tt.stacking}}, in)
 
-			got := map[string]string{}
+			got := map[plan.TicketURL]string{}
 			for _, tk := range tt.tickets {
 				if e := entry(t, snap, tk.URL); e.Run.IsSome() && e.Run.Unwrap().ConflictingPeer != "" {
 					got[tk.URL] = e.Run.Unwrap().ConflictingPeer
@@ -190,13 +190,13 @@ func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
 		Tickets: []plan.Ticket{c, b, a},
 		Obs: plan.Observation{
 			PRs: openPRs(a, b, c),
-			ConflictsWithPeer: map[string]map[string]bool{
+			ConflictsWithPeer: map[plan.BranchRef]map[plan.BranchRef]bool{
 				key(a.Branch): {key(b.Branch): true},
 				key(b.Branch): {key(a.Branch): true, key(c.Branch): true},
 				key(c.Branch): {key(b.Branch): true},
 			},
 		},
-		Runs: map[string]plan.RunSummary{a.URL: pushedRun(), b.URL: pushedRun(), c.URL: pushedRun()},
+		Runs: map[plan.TicketURL]plan.RunSummary{a.URL: pushedRun(), b.URL: pushedRun(), c.URL: pushedRun()},
 	}
 	snap := derive(plan.Rules{}, in)
 
@@ -213,7 +213,9 @@ func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
 func TestDeriveDraftReason(t *testing.T) {
 	t.Parallel()
 
-	consumer := plan.Ticket{URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1", BlockedBy: []string{"sandbox://PLA-40"}}
+	consumer := plan.Ticket{
+		URL: "sandbox://CC-1", Repo: "r", Branch: "cc-1", BlockedBy: []plan.TicketURL{"sandbox://PLA-40"},
+	}
 	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "other", Branch: "pla-40"}
 	pushedAt := time.Date(2026, 8, 20, 11, 0, 0, 0, time.UTC)
 	rules := plan.Rules{Checks: map[string]verdict.Predicate{"r": {Success: "CI"}}}
@@ -246,17 +248,17 @@ func TestDeriveDraftReason(t *testing.T) {
 			in := plan.Input{
 				Tickets: []plan.Ticket{consumer, blocker},
 				Obs: plan.Observation{
-					PRs: map[string]plan.PR{
+					PRs: map[plan.BranchRef]plan.PR{
 						key(consumer.Branch): {
 							State: plan.Open, IsDraft: tt.draft, HeadOid: "tip",
 							Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: tt.checks}},
 						},
-						plan.BranchKey("other", blocker.Branch): {State: tt.blocker},
+						{Repo: "other", Branch: blocker.Branch}: {State: tt.blocker},
 					},
-					BranchTips: map[string]string{key("main"): "main-tip"},
+					BranchTips: map[plan.BranchRef]plan.SHA{key("main"): "main-tip"},
 				},
-				Runs: map[string]plan.RunSummary{consumer.URL: pushedRun()},
-				Verdict: plan.VerdictFacts{PushRows: map[string]plan.PushRow{
+				Runs: map[plan.TicketURL]plan.RunSummary{consumer.URL: pushedRun()},
+				Verdict: plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{
 					consumer.URL: {PushedTip: "tip", BaseBranch: "main", BaseSHAAtPush: "main-tip", PushedAt: pushedAt},
 				}},
 			}

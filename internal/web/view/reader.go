@@ -155,9 +155,9 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
-	blocking := make(map[string][]string, len(scoped))
+	blocking := make(map[plan.TicketURL][]plan.TicketURL, len(scoped))
 	for _, row := range scoped {
-		blocking[row.URL] = row.BlockedBy
+		blocking[plan.TicketURL(row.URL)] = plan.TicketURLs(row.BlockedBy)
 	}
 	launched := option.None[Age]()
 	if params.Feature != "" {
@@ -347,7 +347,7 @@ func relative(now, then time.Time) Age {
 func liveAgents(tickets []store.Ticket, obs plan.Observation) int {
 	live := 0
 	for _, t := range tickets {
-		if obs.Runs[t.URL].Alive {
+		if obs.Runs[plan.TicketURL(t.URL)].Alive {
 			live++
 		}
 	}

@@ -20,8 +20,8 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Titles: map[string]string{
-			tickets[0].URL: "Put each ticket's issue title on its row",
+		Titles: map[plan.TicketURL]string{
+			plan.TicketURL(tickets[0].URL):             "Put each ticket's issue title on its row",
 			"https://github.com/owner/repo/issues/999": "An issue no ticket on the board is working on",
 		},
 	}

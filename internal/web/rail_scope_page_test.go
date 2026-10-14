@@ -26,7 +26,7 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 	if err := st.CreateProject(t.Context(), "acme", 1, []string{"acme/alpha"}, testNow); err != nil {
 		t.Fatal(err)
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[string]plan.RunObservation{}}
+	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{}}
 	for i, u := range []string{alpha, solo} {
 		runID, err := st.InsertRunSkeleton(t.Context(), u, "agent", "", "hash")
 		if err != nil {
@@ -35,7 +35,7 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 		if err := st.RecordSpawn(t.Context(), runID, 100+i, testNow, "/state/runs/x.jsonl"); err != nil {
 			t.Fatal(err)
 		}
-		obs.Runs[u] = plan.RunObservation{Alive: true}
+		obs.Runs[plan.TicketURL(u)] = plan.RunObservation{Alive: true}
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)

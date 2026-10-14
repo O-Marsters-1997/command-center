@@ -75,7 +75,7 @@ func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([
 }
 
 func previewCandidates(requested []string, in candidateInputs) ([]Candidate, error) {
-	rows, err := in.snap.Preview(requested)
+	rows, err := in.snap.Preview(plan.TicketURLs(requested))
 	if err != nil {
 		return nil, fmt.Errorf("preview: %w", err)
 	}
@@ -85,7 +85,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]Candidate, err
 	}
 	candidates := make([]Candidate, 0, len(rows))
 	for _, row := range rows {
-		t := stored[row.Ticket.URL]
+		t := stored[string(row.Ticket.URL)]
 		candidates = append(candidates, Candidate{
 			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
 			Label: row.Label.String(), Reason: string(row.Reason),

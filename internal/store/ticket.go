@@ -22,8 +22,14 @@ type Ticket struct {
 	SyncedAt  string
 }
 
+func (t Ticket) Ref() plan.BranchRef { return plan.BranchRef{Repo: t.Repo, Branch: t.Branch} }
+
 func (t Ticket) Plan() plan.Ticket {
-	return plan.Ticket{URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
+	blockedBy := make([]plan.TicketURL, len(t.BlockedBy))
+	for i, url := range t.BlockedBy {
+		blockedBy[i] = plan.TicketURL(url)
+	}
+	return plan.Ticket{URL: plan.TicketURL(t.URL), Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy}
 }
 
 // ImportedTicket is one tracker.Ticket with the tracked repo it came from.

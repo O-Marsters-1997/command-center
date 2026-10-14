@@ -19,7 +19,7 @@ const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays
 
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	return l.eachIntent(ctx, plan.VerbAbort, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(intent.TicketID)
+		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
 		if !ok {
 			return nil
 		}
@@ -31,20 +31,21 @@ func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs pl
 }
 
 func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation) error {
+	url := string(ticket.URL)
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
-		return l.event(ctx, ticket.URL, store.EventMergeAbortFailed, refusal)
+		return l.event(ctx, url, store.EventMergeAbortFailed, refusal)
 	}
 	if err := git.MergeAbort(ctx, worktreePath); err != nil {
-		return l.event(ctx, ticket.URL, store.EventMergeAbortFailed, err.Error())
+		return l.event(ctx, url, store.EventMergeAbortFailed, err.Error())
 	}
 
-	delete(obs.MidMerge, plan.BranchKey(ticket.Repo, ticket.Branch))
-	return l.event(ctx, ticket.URL, store.EventMergeAborted, "")
+	delete(obs.MidMerge, ticket.Ref())
+	return l.event(ctx, url, store.EventMergeAborted, "")
 }
 
 func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, refusal string) {
-	worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	worktreePath, ok := obs.Worktrees[ticket.Ref()]
 	if !ok {
 		return "", fmt.Sprintf("no worktree for %s", ticket.Branch)
 	}
@@ -71,7 +72,8 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick) error {
 }
 
 func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, promptText string) error {
-	if t.obs.Runs[ticket.URL].Alive {
+	url := plan.TicketURL(ticket.URL)
+	if t.obs.Runs[url].Alive {
 		return errIntentPending
 	}
 	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), t.obs)
@@ -97,14 +99,14 @@ func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, pr
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome.UnwrapOr(plan.OutcomeFailed))
+		spec.prompt = plan.ComposeMessage(promptText, latest[url].Outcome.UnwrapOr(plan.OutcomeFailed))
 		spec.resumeSessionID = sessionID
 	}
 	if err := l.spawnRun(ctx, t, spec); err != nil {
 		return fmt.Errorf("spawn follow-up: %w", err)
 	}
-	if slices.Contains(t.spawned, ticket.URL) {
-		t.obs.Runs[ticket.URL] = plan.RunObservation{Alive: true}
+	if slices.Contains(t.spawned, url) {
+		t.obs.Runs[url] = plan.RunObservation{Alive: true}
 	}
 	return nil
 }
@@ -153,28 +155,28 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tic
 		if !ok {
 			return nil
 		}
-		entry, _ := snap.Entry(ticket.URL)
+		entry, _ := snap.Entry(plan.TicketURL(ticket.URL))
 		baseBranch := entry.Unlock.BaseBranch
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		if err := l.reRunOne(ctx, t, ticket, baseBranch, entry.PromptHash); err != nil {
+		cut := cutSpec{ticket: ticket, baseBranch: baseBranch, promptHash: entry.PromptHash}
+		if err := l.reRunOne(ctx, t, cut); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
 	})
 }
 
-func (l *Loop) reRunOne(
-	ctx context.Context, t *tick, ticket store.Ticket, baseBranch string, promptHash string,
-) error {
+func (l *Loop) reRunOne(ctx context.Context, t *tick, cut cutSpec) error {
+	ticket, promptHash := cut.ticket, cut.promptHash
 	repoPath := l.checkout(ticket.Repo)
-	worktreePath, ok := t.obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		if err := l.cutAndSpawn(ctx, t, ticket, baseBranch, promptHash); err != nil {
+		if err := l.cutAndSpawn(ctx, t, cut); err != nil {
 			return fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
 		}
 		return nil
@@ -195,7 +197,7 @@ func (l *Loop) reRunOne(
 
 func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	return l.eachIntent(ctx, plan.VerbRemoveWorktree, func(intent store.VerbIntent) error {
-		e, ok := snap.Entry(intent.TicketID)
+		e, ok := snap.Entry(plan.TicketURL(intent.TicketID))
 		if !ok {
 			return nil
 		}
@@ -210,17 +212,18 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapsho
 	})
 }
 
-func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed string) error {
+func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Observation, lastPushed plan.SHA) error {
 	ticket := e.Ticket
+	url := string(ticket.URL)
 	refuse := func(detail string) error {
-		return l.event(ctx, ticket.URL, store.EventRemoveWorktreeRefused, detail)
+		return l.event(ctx, url, store.EventRemoveWorktreeRefused, detail)
 	}
 
 	if e.HoldsWorktree() {
 		return refuse(heldWorktreeRefusal)
 	}
 
-	pr := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	pr := obs.PRs[ticket.Ref()]
 	merged := pr.State == plan.Merged
 	baseGone := e.Run.IsSome() && e.Unlock.BlockerClosed
 	if !merged && !baseGone {
@@ -228,25 +231,25 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	}
 
 	repoPath := l.checkout(ticket.Repo)
-	worktreePath, worktreePresent := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	worktreePath, worktreePresent := obs.Worktrees[ticket.Ref()]
 
 	mode := tp.RemoveMerged
 	if worktreePresent {
 		dirty, err := git.Dirty(ctx, worktreePath)
 		if err != nil {
-			return fmt.Errorf("check worktree dirty for %s: %w", ticket.URL, err)
+			return fmt.Errorf("check worktree dirty for %s: %w", url, err)
 		}
 		if dirty {
 			return refuse("worktree is dirty")
 		}
 
-		provenTips := []string{lastPushed}
+		provenTips := []string{string(lastPushed)}
 		if merged && pr.HeadOid != "" {
-			provenTips = append(provenTips, pr.HeadOid)
+			provenTips = append(provenTips, string(pr.HeadOid))
 		}
 		state, err := git.RemovalStateFor(ctx, repoPath, ticket.Branch, provenTips...)
 		if err != nil {
-			return fmt.Errorf("check unpushed commits for %s: %w", ticket.URL, err)
+			return fmt.Errorf("check unpushed commits for %s: %w", url, err)
 		}
 		switch state {
 		case git.RemovableByMerged:
@@ -255,7 +258,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		case git.NotRemovable:
 			return refuse("worktree holds unpushed commits")
 		case git.RemovalUnknown:
-			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", ticket.URL)
+			return fmt.Errorf("check unpushed commits for %s: removal state is unknown", url)
 		}
 
 		if err := l.worktrees.Remove(ctx, repoPath, ticket.Branch, mode); err != nil {
@@ -263,22 +266,22 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		}
 	}
 
-	if err := l.forge.CloseIssue(ctx, repoPath, ticket.URL); err != nil {
+	if err := l.forge.CloseIssue(ctx, repoPath, url); err != nil {
 		return refuse(err.Error())
 	}
 
-	if err := l.pruneRunLogs(ctx, ticket.URL); err != nil {
-		return fmt.Errorf("prune run logs of %s: %w", ticket.URL, err)
+	if err := l.pruneRunLogs(ctx, url); err != nil {
+		return fmt.Errorf("prune run logs of %s: %w", url, err)
 	}
 	var detail string
 	if mode == tp.RemoveForced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
-	if err := l.event(ctx, ticket.URL, store.EventWorktreeRemoved, detail); err != nil {
+	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {
 		return fmt.Errorf("record worktree removed: %w", err)
 	}
-	if err := l.store.WithdrawTicket(ctx, ticket.URL, l.clock.Now(), merged); err != nil {
-		return fmt.Errorf("withdraw %s: %w", ticket.URL, err)
+	if err := l.store.WithdrawTicket(ctx, url, l.clock.Now(), merged); err != nil {
+		return fmt.Errorf("withdraw %s: %w", url, err)
 	}
 	return nil
 }

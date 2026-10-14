@@ -55,7 +55,7 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 			t.Fatal(err)
 		}
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[string]plan.RunObservation{sessionTicket: {}}}
+	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {}}}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

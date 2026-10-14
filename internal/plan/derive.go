@@ -13,9 +13,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// BranchKey is the repo-qualified key every branch-keyed Observation map must use.
-func BranchKey(repo, branch string) string { return repo + "//" + branch }
-
 type LaunchMembership struct {
 	LaunchID   int64
 	Members    int
@@ -25,23 +22,23 @@ type LaunchMembership struct {
 
 // RunSummary is the latest run the board and the launch-eligibility check need per ticket.
 type RunSummary struct {
-	ID            int64
+	ID            RunID
 	Pgid          option.Option[int]
 	ProcStartedAt option.Option[time.Time]
 	Outcome       option.Option[Outcome]
 	ExitCode      option.Option[int]
 	EndedAt       option.Option[time.Time]
 	LogPath       string
-	BaselineSHA   string
+	BaselineSHA   SHA
 	PromptHash    string
 	Kind          RunKind
 	Question      string
 }
 
 type PushRow struct {
-	PushedTip     string
+	PushedTip     SHA
 	BaseBranch    string
-	BaseSHAAtPush string
+	BaseSHAAtPush SHA
 	PushedAt      time.Time
 }
 
@@ -59,8 +56,8 @@ type RefreshFact struct {
 }
 
 type VerdictFacts struct {
-	PushRows    map[string]PushRow
-	CheckingFor map[string]time.Duration
+	PushRows    map[TicketURL]PushRow
+	CheckingFor map[TicketURL]time.Duration
 }
 
 // Input is every durable fact and the observation one derivation reads, keyed by ticket URL.
@@ -70,13 +67,13 @@ type Input struct {
 	Observed     bool
 	Tickets      []Ticket
 	Obs          Observation
-	Memberships  map[string]LaunchMembership
-	Runs         map[string]RunSummary
-	Pushes       map[string]PushFact
-	Refreshes    map[string]RefreshFact
+	Memberships  map[TicketURL]LaunchMembership
+	Runs         map[TicketURL]RunSummary
+	Pushes       map[TicketURL]PushFact
+	Refreshes    map[TicketURL]RefreshFact
 	Verdict      VerdictFacts
-	PendingVerbs map[string][]Verb
-	Removals     map[string]string
+	PendingVerbs map[TicketURL][]Verb
+	Removals     map[TicketURL]string
 	FiveHour     float64
 }
 
@@ -107,14 +104,14 @@ func (e Entry) HoldsWorktree() bool {
 
 type Snapshot struct {
 	Entries     []Entry
-	byURL       map[string]int
+	byURL       map[TicketURL]int
 	launch      []LaunchCandidate
 	running     int
 	maxAgents   int
 	spendPaused bool
 }
 
-func (s Snapshot) LaunchAfter(spawned int) []string {
+func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
@@ -132,7 +129,7 @@ func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	out := s
 	out.Entries = nil
 	out.launch = nil
-	out.byURL = make(map[string]int, len(s.Entries))
+	out.byURL = make(map[TicketURL]int, len(s.Entries))
 	for _, e := range s.Entries {
 		if repos[e.Ticket.Repo] {
 			continue
@@ -148,7 +145,7 @@ func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	return out
 }
 
-func (s Snapshot) Entry(url string) (Entry, bool) {
+func (s Snapshot) Entry(url TicketURL) (Entry, bool) {
 	i, ok := s.byURL[url]
 	if !ok {
 		return Entry{}, false
@@ -156,13 +153,13 @@ func (s Snapshot) Entry(url string) (Entry, bool) {
 	return s.Entries[i], true
 }
 
-func (s Snapshot) Offers(url string, verb Verb) bool {
+func (s Snapshot) Offers(url TicketURL, verb Verb) bool {
 	e, ok := s.Entry(url)
 	return ok && slices.Contains(Verbs(e.State), verb)
 }
 
-func ticketsByURL(tickets []Ticket) map[string]Ticket {
-	byURL := make(map[string]Ticket, len(tickets))
+func ticketsByURL(tickets []Ticket) map[TicketURL]Ticket {
+	byURL := make(map[TicketURL]Ticket, len(tickets))
 	for _, t := range tickets {
 		byURL[t.URL] = t
 	}
@@ -172,7 +169,7 @@ func ticketsByURL(tickets []Ticket) map[string]Ticket {
 func prsByBranch(tickets []Ticket, obs Observation) map[string]PRState {
 	prs := make(map[string]PRState, len(tickets))
 	for _, t := range tickets {
-		prs[t.Branch] = obs.PRs[BranchKey(t.Repo, t.Branch)].State
+		prs[t.Branch] = obs.PRs[t.Ref()].State
 	}
 	return prs
 }
@@ -186,7 +183,7 @@ func (r Rules) Derive(in Input) Snapshot {
 
 	snap := Snapshot{
 		Entries:     make([]Entry, 0, len(in.Tickets)),
-		byURL:       make(map[string]int, len(in.Tickets)),
+		byURL:       make(map[TicketURL]int, len(in.Tickets)),
 		maxAgents:   r.MaxAgents,
 		spendPaused: spend.Paused(in.FiveHour, r.SpendLimit5h),
 	}
@@ -219,8 +216,9 @@ func (r Rules) Derive(in Input) Snapshot {
 			snap.running++
 		}
 
-		pr := in.Obs.PRs[BranchKey(t.Repo, t.Branch)]
-		draftWhy, readyToUndraft := draftReason(pr, t, byURL, prs, run)
+		pr := in.Obs.PRs[t.Ref()]
+		gating := GatingBlockers(t, byURL)
+		draftWhy, readyToUndraft := draftReason(pr, gating, prs, run)
 		lastPush := option.None[PushRow]()
 		if row, ok := in.Verdict.PushRows[t.URL]; ok {
 			lastPush = option.Some(row)
@@ -230,7 +228,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			Ticket: t, Unlock: unlock, State: state, Reason: reason, Run: run,
 			Pgid: pgid, Elapsed: elapsed, LogPath: logPath, ConflictedBase: conflictedBase,
 			DraftReason: draftWhy, ReadyToUndraft: readyToUndraft && pr.State == Open,
-			OpensAsDraft: len(GatingBlockers(t, byURL)) > 0,
+			OpensAsDraft: len(gating) > 0,
 			PromptHash:   membership.PromptHash, LastPush: lastPush,
 			LaunchID: membership.LaunchID, Base: base,
 		})
@@ -241,7 +239,7 @@ func (r Rules) Derive(in Input) Snapshot {
 // ConflictedBase names the base a launch would cut this ticket from when that base already
 // carries a merge conflict, and "" when it is clean. A locked row is judged on the base it
 // would get once unlocked.
-func (r Rules) ConflictedBase(t Ticket, byURL map[string]Ticket, unlock Unlock, obs Observation) string {
+func (r Rules) ConflictedBase(t Ticket, byURL map[TicketURL]Ticket, unlock Unlock, obs Observation) string {
 	base := unlock.BaseBranch
 	if base == "" {
 		base = ProspectiveBase(t, byURL, r.Stacking[t.Repo])
@@ -249,15 +247,16 @@ func (r Rules) ConflictedBase(t Ticket, byURL map[string]Ticket, unlock Unlock, 
 	if base == DefaultBaseBranch {
 		return ""
 	}
-	if obs.ConflictsWithBase[BranchKey(t.Repo, base)] || obs.MidMerge[BranchKey(t.Repo, base)] {
+	baseRef := BranchRef{Repo: t.Repo, Branch: base}
+	if obs.ConflictsWithBase[baseRef] || obs.MidMerge[baseRef] {
 		return base
 	}
 	return ""
 }
 
 func (r Rules) conflictingPeerHold(
-	tickets []Ticket, byURL map[string]Ticket, prs map[string]PRState, obs Observation,
-) map[string]string {
+	tickets []Ticket, byURL map[TicketURL]Ticket, prs map[string]PRState, obs Observation,
+) map[TicketURL]string {
 	var candidates []Ticket
 	for _, t := range tickets {
 		if prs[t.Branch] != Open {
@@ -270,13 +269,13 @@ func (r Rules) conflictingPeerHold(
 	}
 	slices.SortFunc(candidates, func(a, b Ticket) int { return compareByRef(a.Branch, b.Branch) })
 
-	held := make(map[string]string, len(candidates))
+	held := make(map[TicketURL]string, len(candidates))
 	for i, t := range candidates {
 		for _, peer := range candidates[:i] {
 			if _, peerHeld := held[peer.URL]; peerHeld {
 				continue
 			}
-			if obs.ConflictsWithPeer[BranchKey(t.Repo, t.Branch)][BranchKey(peer.Repo, peer.Branch)] {
+			if obs.ConflictsWithPeer[t.Ref()][peer.Ref()] {
 				held[t.URL] = peer.Branch
 				break
 			}
@@ -305,12 +304,11 @@ func branchNumber(branch string) (int, bool) {
 }
 
 func draftReason(
-	pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run option.Option[RunFact],
+	pr PR, gating []Ticket, prs map[string]PRState, run option.Option[RunFact],
 ) (reason string, ready bool) {
 	if !pr.IsDraft {
 		return "", false
 	}
-	gating := GatingBlockers(t, byURL)
 	reviewMe := run.IsSome() && run.Unwrap().Verdict.IsSome() && run.Unwrap().Verdict.Unwrap().Kind == verdict.ReviewMe
 	draft, gateReason := DraftGate(gating, prs, reviewMe)
 	if !draft {
@@ -327,7 +325,7 @@ func (r Rules) runFor(
 		return option.None[RunFact](), option.None[int](), option.None[time.Duration](), ""
 	}
 
-	key := BranchKey(t.Repo, t.Branch)
+	key := t.Ref()
 	fact := RunFact{LogPath: summary.LogPath, Alive: in.Obs.Runs[t.URL].Alive}
 	ownState := in.Obs.PRs[key].State
 	fact.PROpen = ownState == Open
@@ -375,14 +373,14 @@ func (r Rules) ApplyVerdict(t Ticket, obs Observation, vf VerdictFacts) option.O
 		return option.None[verdict.Result]()
 	}
 
-	pr := obs.PRs[BranchKey(t.Repo, t.Branch)]
+	pr := obs.PRs[t.Ref()]
 	mergifySHA := r.MergifySHA[t.Repo]
 
 	result := verdict.Evaluate(predicate, verdict.Input{
 		Checks:       verdictChecks(pr.Checks),
 		HeadOidMatch: pushRow.PushedTip != "" && pr.HeadOid == pushRow.PushedTip,
 		StackedBase:  pushRow.BaseBranch != "",
-		BaseSHAMatch: obs.BranchTips[BranchKey(t.Repo, pushRow.BaseBranch)] == pushRow.BaseSHAAtPush,
+		BaseSHAMatch: obs.BranchTips[BranchRef{Repo: t.Repo, Branch: pushRow.BaseBranch}] == pushRow.BaseSHAAtPush,
 		ConfigHashOK: mergifySHA == "" || obs.MergifyHash[t.Repo] == mergifySHA,
 		PushedAt:     pushRow.PushedAt,
 		Now:          pushRow.PushedAt.Add(vf.CheckingFor[t.URL]),

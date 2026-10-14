@@ -36,11 +36,11 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Runs:       map[string]plan.RunObservation{"sandbox://CC-3": {Alive: true}},
-		PRs:        map[string]plan.PR{plan.BranchKey("repo", "one"): {Number: 1, State: plan.Merged}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{"sandbox://CC-3": {Alive: true}},
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "one"): {Number: 1, State: plan.Merged}},
 	}
 	if withWorktree {
-		obs.Worktrees = map[string]string{plan.BranchKey("repo", "one"): "/wt/one"}
+		obs.Worktrees = map[plan.BranchRef]string{branchRef("repo", "one"): "/wt/one"}
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)

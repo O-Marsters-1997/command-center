@@ -30,8 +30,8 @@ func TestRecordChecksLandedAppendsOnePerCheckThatLands(t *testing.T) {
 		for _, c := range checks {
 			byName[c.Name] = c
 		}
-		return plan.Observation{PRs: map[string]plan.PR{
-			plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open, Checks: byName},
+		return plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+			branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open, Checks: byName},
 		}}
 	}
 
@@ -82,8 +82,8 @@ func TestRecordChecksLandedIgnoresChecksAlreadyTerminalInThePreviousObservation(
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
-	observed := plan.Observation{PRs: map[string]plan.PR{
-		plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open, Checks: map[string]plan.CheckState{
+	observed := plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+		branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open, Checks: map[string]plan.CheckState{
 			"Build": {Name: "Build", Status: "COMPLETED", Conclusion: "SUCCESS"},
 		}},
 	}}

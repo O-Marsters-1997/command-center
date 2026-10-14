@@ -89,5 +89,5 @@ func (l *Loop) Nudger() Nudger { return Nudger{ch: l.nudgeCh} }
 type tick struct {
 	now     time.Time
 	obs     plan.Observation
-	spawned []string
+	spawned []plan.TicketURL
 }

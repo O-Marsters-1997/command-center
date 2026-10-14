@@ -64,8 +64,8 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees:      map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:            map[string]plan.PR{},
+		Worktrees:      map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath},
+		PRs:            map[plan.BranchRef]plan.PR{},
 		SettingsErrors: map[string]string{"repo": "line 2: unknown key \"stackin\""},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
@@ -104,7 +104,7 @@ func TestAPushTouchingTheSettingsFileIsRefusedWhateverTheRepoDenies(t *testing.T
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 		Settings: map[string]config.RepoSettings{"repo": {}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }

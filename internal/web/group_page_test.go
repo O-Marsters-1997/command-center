@@ -250,7 +250,7 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 
 	obs := plan.Observation{
 		ObservedAt: at,
-		PRs:        map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 262, State: plan.Merged}},
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 262, State: plan.Merged}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

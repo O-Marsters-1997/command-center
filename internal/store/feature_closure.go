@@ -83,7 +83,7 @@ func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observ
 		if err != nil {
 			return false, fmt.Errorf("read branch for %s: %w", url, err)
 		}
-		return obs.PRs[plan.BranchKey(branch.Repo, branch.Branch)].State == plan.Merged, nil
+		return obs.PRs[plan.BranchRef{Repo: branch.Repo, Branch: branch.Branch}].State == plan.Merged, nil
 	}
 }
 

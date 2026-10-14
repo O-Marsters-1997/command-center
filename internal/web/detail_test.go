@@ -36,9 +36,9 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]plan.RunObservation{ticket.URL: {Alive: true}},
-		Worktrees:  map[string]string{plan.BranchKey("repo", "cc-76"): "/repos/repo-cc-76"},
-		PRs: map[string]plan.PR{plan.BranchKey("repo", "cc-76"): {
+		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
+		Worktrees:  map[plan.BranchRef]string{branchRef("repo", "cc-76"): "/repos/repo-cc-76"},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("repo", "cc-76"): {
 			Number: 76, State: plan.Open, HeadRef: "cc-76",
 			Checks: map[string]plan.CheckState{
 				"unit":  {Status: "COMPLETED", Conclusion: "SUCCESS"},

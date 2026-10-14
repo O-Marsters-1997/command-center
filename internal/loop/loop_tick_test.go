@@ -29,12 +29,12 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, tickets[0].URL, at)
-	authoriseTicket(t, store, tickets[1].URL, plan.Hash(plan.Compose(plan.Ticket{URL: tickets[1].URL})), at)
+	authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), at)
 	if err := store.QueueVerbIntent(t.Context(), tickets[0].URL, "re-run", at); err != nil {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
@@ -50,7 +50,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ran := latest[tickets[1].URL]; ran {
+	if _, ran := latest[plan.TicketURL(tickets[1].URL)]; ran {
 		t.Error("sandbox://CC-2 launched past max_agents")
 	}
 }
@@ -77,7 +77,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
