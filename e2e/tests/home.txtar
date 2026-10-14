@@ -8,4 +8,4 @@ exec cc import project:two-tasks
 exec cc tick --count 1
 
 exec cc request GET /
-stdout '<main id="main" data-home>'
+stdout '<main id="main" data-home data-desktop-target='
