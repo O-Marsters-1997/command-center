@@ -11,7 +11,7 @@ import (
 func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 
 	for _, t := range tickets {
@@ -21,7 +21,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 		}
 		exists, err := l.store.HasEvent(ctx, t.URL, store.EventPRMerged)
 		if err != nil {
-			return err
+			return fmt.Errorf("check pr_merged event for %s: %w", t.URL, err)
 		}
 		if exists {
 			continue
@@ -30,7 +30,7 @@ func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) err
 			At: pr.MergedAt, TicketURL: t.URL, Kind: store.EventPRMerged,
 			Detail: fmt.Sprintf("PR #%d merged", pr.Number),
 		}); err != nil {
-			return err
+			return fmt.Errorf("record pr_merged for %s: %w", t.URL, err)
 		}
 	}
 	return nil

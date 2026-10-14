@@ -29,15 +29,15 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 	return func(ctx context.Context) (plan.Observation, error) {
 		repos, err := observableRepos(ctx, store, cfg.DataDir)
 		if err != nil {
-			return plan.Observation{}, err
+			return plan.Observation{}, fmt.Errorf("list observable repos: %w", err)
 		}
 		tickets, err := store.Tickets(ctx)
 		if err != nil {
-			return plan.Observation{}, err
+			return plan.Observation{}, fmt.Errorf("list tickets: %w", err)
 		}
 		prevObs, _, err := store.LastObservation(ctx)
 		if err != nil {
-			return plan.Observation{}, err
+			return plan.Observation{}, fmt.Errorf("last observation: %w", err)
 		}
 
 		obs := newObservation()
@@ -113,7 +113,7 @@ func observeRepo(
 ) (plan.Observation, error) {
 	obs := newObservation()
 	if err := git.Fetch(ctx, path); err != nil {
-		return plan.Observation{}, err
+		return plan.Observation{}, fmt.Errorf("fetch: %w", err)
 	}
 
 	settings, source, settingsErr := config.ReadRepoSettings(ctx, path)
@@ -126,14 +126,14 @@ func observeRepo(
 
 	snapshot, err := forge.List(ctx, path, branches)
 	if err != nil {
-		return plan.Observation{}, err
+		return plan.Observation{}, fmt.Errorf("list pull requests: %w", err)
 	}
 	for branch, pr := range snapshot.ByBranch {
 		obs.PRs[plan.BranchKey(name, branch)] = planPR(pr)
 	}
 	titles, err := forge.IssueTitles(ctx, path)
 	if err != nil {
-		return plan.Observation{}, err
+		return plan.Observation{}, fmt.Errorf("list issue titles: %w", err)
 	}
 	maps.Copy(obs.Titles, titles)
 
@@ -167,12 +167,12 @@ func observeRepo(
 	if err := recordPeerConflicts(
 		ctx, path, name, branches, obs.BranchTips, prevObs, obs.ConflictsWithPeer, git.MergesCleanly,
 	); err != nil {
-		return plan.Observation{}, err
+		return plan.Observation{}, fmt.Errorf("record peer conflicts: %w", err)
 	}
 
 	worktrees, err := git.WorktreePaths(ctx, path)
 	if err != nil {
-		return plan.Observation{}, err
+		return plan.Observation{}, fmt.Errorf("list worktrees: %w", err)
 	}
 	for branch, wtPath := range worktrees {
 		obs.Worktrees[plan.BranchKey(name, branch)] = wtPath
@@ -201,7 +201,7 @@ func observeRepo(
 func mergifyHash(ctx context.Context, repoPath string) (string, error) {
 	data, err := git.ShowFile(ctx, repoPath, "origin/"+plan.DefaultBaseBranch, ".mergify.yml")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("show .mergify.yml: %w", err)
 	}
 	sum := sha256.Sum256([]byte(data))
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
@@ -263,7 +263,7 @@ func recordConflictsWithPeer(m map[string]map[string]bool, repo, a, b string, co
 func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list repos: %w", err)
 	}
 	return slices.DeleteFunc(repos, func(r store.Repo) bool {
 		if r.Phase == plan.RepoCloning {
@@ -278,7 +278,7 @@ func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]st
 func ReadyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list repos: %w", err)
 	}
 	return slices.DeleteFunc(repos, func(r store.Repo) bool { return r.Phase != plan.RepoReady }), nil
 }

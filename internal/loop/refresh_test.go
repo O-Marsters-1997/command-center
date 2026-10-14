@@ -169,6 +169,38 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	}
 }
 
+func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *testing.T) {
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := advanceParent(t, repoPath, f)
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	unresolvable := strings.Repeat("0", 39) + "1"
+	pushedAt := at.Add(time.Second)
+	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", unresolvable, pushedAt); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := baseObservation(f, parentTip1)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+
+	if err := lp.RunOnce(t.Context()); err == nil {
+		t.Fatal("RunOnce = nil, want the refresh failure")
+	}
+
+	tickErr, found, err := store.LastError(t.Context())
+	if err != nil || !found {
+		t.Fatalf("LastError: found=%v err=%v", found, err)
+	}
+	if want := "refresh: repo/child: "; !strings.HasPrefix(tickErr.Message, want) {
+		t.Errorf("tick error = %q, want prefix %q", tickErr.Message, want)
+	}
+}
+
 func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)

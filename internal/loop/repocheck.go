@@ -27,7 +27,7 @@ type RemoteFunc func(ctx context.Context, fullName string) (string, error)
 func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error) {
 	kind, reason, err := git.CheckRepoOnGitHub(ctx, repo.Name)
 	if err != nil {
-		return repo, err
+		return repo, fmt.Errorf("check %s on github: %w", repo.Name, err)
 	}
 	if kind != plan.RefusalUnknown {
 		return refuse(repo, kind, reason), nil
@@ -57,7 +57,7 @@ func refuse(repo store.Repo, kind plan.RefusalKind, reason string) store.Repo {
 func (l *Loop) validateCloningRepos(ctx context.Context) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list repos: %w", err)
 	}
 	var failures []error
 	for _, repo := range repos {
@@ -70,7 +70,7 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 			continue
 		}
 		if err := l.store.SetRepoState(ctx, settled); err != nil {
-			return err
+			return fmt.Errorf("set state of %s: %w", repo.Name, err)
 		}
 	}
 	if len(failures) == 0 {
@@ -82,12 +82,15 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 func (l *Loop) recordTickError(ctx context.Context, message string) error {
 	last, found, err := l.store.LastError(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last tick error: %w", err)
 	}
 	if found && last.Message == message {
 		return nil
 	}
-	return l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message})
+	if err := l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message}); err != nil {
+		return fmt.Errorf("record tick error: %w", err)
+	}
+	return nil
 }
 
 // applyTrackIntents puts each tracked repo into cloning, so the validation that follows in the
@@ -97,7 +100,7 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 	return l.eachIntent(ctx, plan.VerbTrack, func(intent store.VerbIntent) error {
 		repos, err := l.store.Repos(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("list repos: %w", err)
 		}
 		repo := store.Repo{Name: intent.TicketID, TrackedAt: l.clock.Now()}
 		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
@@ -109,11 +112,17 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 		if repo.Remote == "" {
 			remote, err := l.remoteOf(ctx, repo.Name)
 			if err != nil {
-				return l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error()))
+				if upsertErr := l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error())); upsertErr != nil {
+					return fmt.Errorf("refuse %s: %w", repo.Name, upsertErr)
+				}
+				return nil
 			}
 			repo.Remote = remote
 		}
 		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoCloning, plan.RefusalUnknown, ""
-		return l.store.UpsertRepo(ctx, repo)
+		if err := l.store.UpsertRepo(ctx, repo); err != nil {
+			return fmt.Errorf("start cloning %s: %w", repo.Name, err)
+		}
+		return nil
 	})
 }

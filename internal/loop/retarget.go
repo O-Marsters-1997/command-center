@@ -23,7 +23,7 @@ func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.
 			continue
 		}
 		if err := l.retargetOne(ctx, snap, obs, t, *row); err != nil {
-			return err
+			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}
 	return nil
@@ -39,11 +39,14 @@ func (l *Loop) retargetOne(
 
 	err := l.store.RecordPush(ctx, t.URL, row.PushedTip, plan.DefaultBaseBranch, row.BaseSHAAtPush, l.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("record retargeted push: %w", err)
 	}
 	detail := fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, plan.DefaultBaseBranch)
 	if err := l.event(ctx, t.URL, store.EventRetargeted, detail); err != nil {
-		return err
+		return fmt.Errorf("record retarget: %w", err)
 	}
-	return l.refreshOne(ctx, snap, obs, t, row, false)
+	if err := l.refreshOne(ctx, snap, obs, t, row, false); err != nil {
+		return fmt.Errorf("refresh after retarget: %w", err)
+	}
+	return nil
 }
