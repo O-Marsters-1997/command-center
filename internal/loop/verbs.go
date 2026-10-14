@@ -106,7 +106,7 @@ func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, pr
 		return fmt.Errorf("spawn follow-up: %w", err)
 	}
 	if slices.Contains(t.spawned, url) {
-		t.obs.Runs[url] = plan.RunObservation{Alive: true}
+		t.obs.MarkAlive(url)
 	}
 	return nil
 }

@@ -54,3 +54,19 @@ type Observation struct {
 	// carry the last tick's values.
 	RepoErrors map[string]string `json:"repo_errors"`
 }
+
+func NewObservation(at time.Time) Observation {
+	return Observation{
+		ObservedAt: at,
+		PRs:        map[BranchRef]PR{}, Worktrees: map[BranchRef]string{}, Runs: map[TicketURL]RunObservation{},
+		MergifyHash: map[string]string{}, BranchTips: map[BranchRef]SHA{}, LocalTips: map[BranchRef]SHA{},
+		Titles: map[TicketURL]string{}, MidMerge: map[BranchRef]bool{},
+		ConflictsWithBase: map[BranchRef]bool{}, ConflictsWithPeer: map[BranchRef]map[BranchRef]bool{},
+		Settings: map[string]RepoSettings{}, SettingsErrors: map[string]string{},
+		SettingsSources: map[string]string{}, RepoErrors: map[string]string{},
+	}
+}
+
+func (o *Observation) MarkAlive(url TicketURL) {
+	o.Runs[url] = RunObservation{Alive: true}
+}

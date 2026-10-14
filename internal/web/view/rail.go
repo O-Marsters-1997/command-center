@@ -118,50 +118,23 @@ func RailSelection(currentURL string) string {
 }
 
 func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Rail, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, Params{Repo: params.Repo, Project: params.Project})
 	if err != nil {
-		return Rail{}, fmt.Errorf("load tickets: %w", err)
+		return Rail{}, fmt.Errorf("load frame: %w", err)
 	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return Rail{}, fmt.Errorf("load plan input: %w", err)
-	}
-	lastErr, err := r.store.LastError(ctx)
-	if err != nil {
-		return Rail{}, fmt.Errorf("load last error: %w", err)
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Rail{}, fmt.Errorf("load latest readings: %w", err)
-	}
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Rail{}, fmt.Errorf("gauge split: %w", err)
-	}
-	in.Now = now
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Rail{}, fmt.Errorf("load repo scope: %w", err)
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Rail{}, fmt.Errorf("load project scope: %w", err)
-	}
-	params.Project, params.projectRepos = project.Name, project.Repos
-	projects, err := r.projectMarks(ctx)
-	if err != nil {
-		return Rail{}, fmt.Errorf("load project marks: %w", err)
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
-	chrome := r.buildChrome(chromeInput{
-		tickets: tickets, obs: in.Obs, observed: in.Observed, lastErr: lastErr, gauges: gauges, split: split,
-	}, now, Params{})
+	return railFromFrame(f, params), nil
+}
 
-	rail := buildRail(rows, now, params)
-	rail.Gauges = chrome.Gauges
+func railFromFrame(f frame, params RailParams) Rail {
+	params.Repo = f.params.Repo
+	params.Project, params.projectRepos = f.project.Name, f.project.Repos
+	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
+	rail := buildRail(rows, f.now, params)
+	rail.Gauges = f.chrome.Gauges
 	rail.Health = RailHealth{
-		Live: chrome.LiveAgents, Observe: chrome.Observe, Stale: chrome.ObserveStale, Error: chrome.LastError,
+		Live: f.chrome.LiveAgents, Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,
 	}
-	return rail, nil
+	return rail
 }
 
 func scopeRailRows(rows []Row, params RailParams) []Row {

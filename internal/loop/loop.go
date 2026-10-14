@@ -111,12 +111,6 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 
 	t := &tick{now: l.clock.Now(), obs: obs}
 	t.obs.ObservedAt = t.now
-	if t.obs.LocalTips == nil {
-		t.obs.LocalTips = map[plan.BranchRef]plan.SHA{}
-	}
-	if t.obs.Runs == nil {
-		t.obs.Runs = map[plan.TicketURL]plan.RunObservation{}
-	}
 	if err := l.absorb(ctx, t); err != nil {
 		return l.failTick(ctx, err)
 	}
@@ -229,7 +223,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick) error {
 
 func (t *tick) markSpawnedAlive() {
 	for _, url := range t.spawned {
-		t.obs.Runs[url] = plan.RunObservation{Alive: true}
+		t.obs.MarkAlive(url)
 	}
 }
 
@@ -480,7 +474,11 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
 		url := plan.TicketURL(run.TicketID)
-		obs.Runs[url] = plan.RunObservation{Alive: alive}
+		if alive {
+			obs.MarkAlive(url)
+		} else {
+			obs.Runs[url] = plan.RunObservation{}
+		}
 		if alive {
 			continue
 		}

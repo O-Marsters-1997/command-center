@@ -315,9 +315,8 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
+	obs := plan.NewObservation(at)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -350,9 +349,8 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
+	obs := plan.NewObservation(at)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)

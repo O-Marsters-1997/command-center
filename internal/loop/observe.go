@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -34,7 +35,7 @@ func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveF
 			return plan.Observation{}, fmt.Errorf("last observation: %w", err)
 		}
 
-		obs := newObservation()
+		obs := plan.NewObservation(time.Time{})
 		for _, repo := range repos {
 			path := config.CheckoutPath(cfg.DataDir, repo.Name)
 			read := repoRead{name: repo.Name, path: path, branches: branchesFor(tickets, repo.Name)}
@@ -91,17 +92,6 @@ func copyKeyed[K comparable, V any](dst, src map[K]V, keep func(K) bool) {
 	}
 }
 
-func newObservation() plan.Observation {
-	return plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{}, Worktrees: map[plan.BranchRef]string{}, MergifyHash: map[string]string{},
-		BranchTips: map[plan.BranchRef]plan.SHA{}, LocalTips: map[plan.BranchRef]plan.SHA{},
-		MidMerge: map[plan.BranchRef]bool{}, Titles: map[plan.TicketURL]string{},
-		ConflictsWithBase: map[plan.BranchRef]bool{}, ConflictsWithPeer: map[plan.BranchRef]map[plan.BranchRef]bool{},
-		Settings: map[string]config.RepoSettings{}, SettingsErrors: map[string]string{},
-		SettingsSources: map[string]string{}, RepoErrors: map[string]string{},
-	}
-}
-
 type repoRead struct {
 	name, path string
 	branches   []string
@@ -111,7 +101,7 @@ func observeRepo(
 	ctx context.Context, forge gh.Forge, read repoRead, prevObs plan.Observation,
 ) (plan.Observation, error) {
 	name, path, branches := read.name, read.path, read.branches
-	obs := newObservation()
+	obs := plan.NewObservation(time.Time{})
 	if err := git.Fetch(ctx, path); err != nil {
 		return plan.Observation{}, fmt.Errorf("fetch: %w", err)
 	}

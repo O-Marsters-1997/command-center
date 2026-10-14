@@ -92,28 +92,6 @@ func trackedRow(r store.Repo) RepoRow {
 	}
 }
 
-func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
-	if scope == "" {
-		return "", nil
-	}
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return "", fmt.Errorf("load repos: %w", err)
-	}
-	return normalizeRepoScope(scope, repos), nil
-}
-
-func (r *Reader) projectScope(ctx context.Context, scope string) (store.Project, error) {
-	if scope == "" {
-		return store.Project{}, nil
-	}
-	projects, err := r.store.Projects(ctx)
-	if err != nil {
-		return store.Project{}, fmt.Errorf("load projects: %w", err)
-	}
-	return normalizeProjectScope(scope, projects), nil
-}
-
 // KnownRepo finds the tracked repo whose owner/name is scope, ignoring case.
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
 	repos, err := r.store.Repos(ctx)
@@ -130,15 +108,13 @@ func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool,
 
 // Repos shapes the unscoped page: the tracked repos.
 func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
-	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
+	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
-		return ReposPage{}, fmt.Errorf("load chrome: %w", err)
+		return ReposPage{}, fmt.Errorf("load frame: %w", err)
 	}
+	chrome := f.chrome
 	chrome.Section = "repos"
-	groups, form, err := r.repoGroups(ctx)
-	if err != nil {
-		return ReposPage{}, fmt.Errorf("load repo groups: %w", err)
-	}
+	groups, form := repoGroups(f.repos, f.projectList)
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
 		return ReposPage{}, fmt.Errorf("import error: %w", err)
@@ -163,6 +139,11 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 	if err != nil {
 		return nil, NewProjectForm{}, fmt.Errorf("load projects: %w", err)
 	}
+	groups, form := repoGroups(repos, projects)
+	return groups, form, nil
+}
+
+func repoGroups(repos []store.Repo, projects []store.Project) ([]RepoGroup, NewProjectForm) {
 	byName := make(map[string]store.Repo, len(repos))
 	names := make([]string, 0, len(repos))
 	for _, repo := range repos {
@@ -187,7 +168,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 		groups = append(groups, group)
 	}
 	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: hues(), Repos: names}
-	return groups, form, nil
+	return groups, form
 }
 
 // SearchRepos merges the pushable repos whose name contains query with the tracked repos that
