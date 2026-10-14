@@ -33,7 +33,7 @@ func LoadRequests(dir string) ([]RequestUsage, error) {
 		return nil
 	})
 	if err != nil {
-		return requests, fmt.Errorf("load requests from %s: %w", dir, err)
+		return requests, fmt.Errorf("load transcript requests: %w", err)
 	}
 	return requests, nil
 }
