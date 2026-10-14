@@ -32,14 +32,18 @@ func TestFeaturePageSectionsTheBoardAndNamesDependencies(t *testing.T) {
 	}
 }
 
+const navBundleTail = ` hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"`
+
 func TestFeaturePageTabPairMarksTheBoardCurrent(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope")
 
 	for _, want := range []string{
-		`<a class="pill-tab" href="/f/board-scope" hx-get="/f/board-scope" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Board</a>`,
-		`<a class="pill-tab" href="/f/board-scope/graph" data-key="v" hx-get="/f/board-scope/graph" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Graph</a>`,
+		`<a class="pill-tab" href="/f/board-scope" hx-get="/f/board-scope"` + navBundleTail +
+			` aria-current="page">Board</a>`,
+		`<a class="pill-tab" href="/f/board-scope/graph" data-key="v" hx-get="/f/board-scope/graph"` +
+			navBundleTail + `>Graph</a>`,
 		`href="/f/board-scope/launch" data-key="c"`,
 	} {
 		if !strings.Contains(page, want) {

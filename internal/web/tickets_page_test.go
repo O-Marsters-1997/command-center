@@ -24,7 +24,7 @@ func TestTicketsPageShowsEveryFeatureInSections(t *testing.T) {
 			t.Errorf("/tickets missing %s:\n%s", ticketRef(url), page)
 		}
 	}
-	if !strings.Contains(page, `href="/tickets" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">All`) {
+	if !strings.Contains(page, `href="/tickets" hx-get="/tickets"`+navBundleTail+` aria-current="page">All`) {
 		t.Errorf("/tickets does not mark All current:\n%s", page)
 	}
 	if !strings.Contains(page, `hx-get="/board?all=1"`) {
@@ -40,7 +40,9 @@ func TestTicketsFilterKeepsOneSectionAndMarksItsTab(t *testing.T) {
 	if got := sectionKeys(page); got != "blocked" {
 		t.Errorf("sections = %q, want blocked", got)
 	}
-	if !strings.Contains(page, `href="/tickets?filter=blocked" hx-get="/tickets?filter=blocked" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Blocked`) {
+	want := `href="/tickets?filter=blocked" hx-get="/tickets?filter=blocked"` + navBundleTail +
+		` aria-current="page">Blocked`
+	if !strings.Contains(page, want) {
 		t.Errorf("blocked tab not current:\n%s", page)
 	}
 	if !strings.Contains(page, `hx-get="/board?all=1&amp;filter=blocked"`) {

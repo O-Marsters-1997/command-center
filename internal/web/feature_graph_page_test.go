@@ -12,8 +12,10 @@ func TestFeatureGraphPageMarksTheGraphTabCurrentAndScopesItsData(t *testing.T) {
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope/graph")
 
 	for _, want := range []string{
-		`<a class="pill-tab" href="/f/board-scope" data-key="v" hx-get="/f/board-scope" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">Board</a>`,
-		`<a class="pill-tab" href="/f/board-scope/graph" hx-get="/f/board-scope/graph" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true" aria-current="page">Graph</a>`,
+		`<a class="pill-tab" href="/f/board-scope" data-key="v" hx-get="/f/board-scope"` +
+			navBundleTail + `>Board</a>`,
+		`<a class="pill-tab" href="/f/board-scope/graph" hx-get="/f/board-scope/graph"` +
+			navBundleTail + ` aria-current="page">Graph</a>`,
 		`<cc-graph data-src="/graph.json?feature=board-scope">`,
 	} {
 		if !strings.Contains(page, want) {

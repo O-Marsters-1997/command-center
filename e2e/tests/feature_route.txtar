@@ -12,8 +12,8 @@ exec cc request GET /f/project:two-tasks
 stdout 'data-section="ready"'
 stdout '>#CC-1</a>'
 stdout '>#CC-2</a>'
-stdout 'href="/f/project:two-tasks" aria-current="page">Board<'
-stdout 'href="/f/project:two-tasks/graph" data-key="v">Graph<'
+stdout 'href="/f/project:two-tasks" hx-get="/f/project:two-tasks"[^>]*aria-current="page">Board<'
+stdout 'href="/f/project:two-tasks/graph" data-key="v" hx-get="/f/project:two-tasks/graph"[^>]*>Graph<'
 stdout 'href="/f/project:two-tasks/launch"'
 
 ! exec cc request GET /f/bogus
