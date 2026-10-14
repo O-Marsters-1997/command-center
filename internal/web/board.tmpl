@@ -108,7 +108,7 @@
 <!-- Empty, and outside the table on purpose: a launch authorises a whole slice at once, so its
      checkboxes sit in the rows and join this form by form="launch". Wrapping the table in it
      instead would nest the per-row verb forms inside it, which HTML forbids. -->
-<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-disabled-elt="find button" hx-target="#launch-modal" hx-swap="innerHTML"></form>
+<form id="launch" method="post" action="/launch/open" hx-post="/launch/open" hx-disabled-elt="button[form=launch]" hx-target="#launch-modal" hx-swap="innerHTML"></form>
 {{template "board" .}}
 <button type="submit" form="launch" class="btn">Launch selected</button>
 {{- end}}

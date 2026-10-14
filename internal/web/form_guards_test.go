@@ -33,7 +33,7 @@ func TestEveryHTMXPostFormDisablesItsButtonsInFlight(t *testing.T) {
 				continue
 			}
 			seen++
-			if !strings.Contains(form, `hx-disabled-elt="find button"`) {
+			if !strings.Contains(form, `hx-disabled-elt="`) {
 				t.Errorf("%s page: %s lacks hx-disabled-elt", page.name, form)
 			}
 		}
