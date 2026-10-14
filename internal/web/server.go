@@ -647,16 +647,13 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if rawSeen := r.URL.Query().Get("seen"); rawSeen != "" {
-		seen, err := view.ParseBannerState(rawSeen)
-		if err != nil {
-			return errorf(http.StatusBadRequest, "unsupported seen state %q", rawSeen)
-		}
-		if seen != banner.State {
+	rawSeen := r.URL.Query().Get("seen")
+	if rawSeen != "" {
+		if seen, err := view.ParseBannerState(rawSeen); err != nil || seen != banner.State {
 			w.Header().Set("HX-Refresh", "true")
 		}
 	}
-	if r.URL.Query().Get("seen") != "" && !banner.Polling() {
+	if rawSeen != "" && !banner.Polling() {
 		return renderHTMLStatus(w, 286, "repoBanner", banner)
 	}
 	return renderHTML(w, "repoBanner", banner)
