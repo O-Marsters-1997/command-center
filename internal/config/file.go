@@ -84,27 +84,56 @@ func agentCommandFrom(configured []string, env Env) ([]string, error) {
 
 var requiredAgentCommandParts = []string{"--permission-mode", "{system_prompt}", "{model}"}
 
+// MissingKeyError identifies a required agent command part that was omitted.
+type MissingKeyError struct{ Key string }
+
+func (e *MissingKeyError) Error() string {
+	return fmt.Sprintf("agent_command lacks %s, which every run needs", e.Key)
+}
+
+func (e *MissingKeyError) Is(target error) bool {
+	other, ok := target.(*MissingKeyError)
+	return ok && e.Key == other.Key
+}
+
+// InvalidValueError identifies a config key whose supplied value is invalid.
+type InvalidValueError struct {
+	Key string
+	Err error
+}
+
+func (e *InvalidValueError) Error() string { return fmt.Sprintf("%s: %v", e.Key, e.Err) }
+func (e *InvalidValueError) Unwrap() error { return e.Err }
+func (e *InvalidValueError) Is(target error) bool {
+	other, ok := target.(*InvalidValueError)
+	return ok && e.Key == other.Key
+}
+
 func (c Config) validate() error {
 	var errs []error
 	if c.Port < 1 || c.Port > 65535 {
-		errs = append(errs, fmt.Errorf("port must be 1 to 65535, got %d", c.Port))
+		errs = append(errs, &InvalidValueError{Key: "port", Err: fmt.Errorf("must be 1 to 65535, got %d", c.Port)})
 	}
 	if c.MaxAgents < 1 {
-		errs = append(errs, fmt.Errorf("max_agents must be at least 1, got %d", c.MaxAgents))
+		errs = append(errs, &InvalidValueError{Key: "max_agents", Err: fmt.Errorf("must be at least 1, got %d", c.MaxAgents)})
 	}
 	if c.SpendLimit5h < 0 || c.SpendLimit5h > 100 {
-		errs = append(errs, fmt.Errorf("spend_limit_5h must be 0 to 100, got %d", c.SpendLimit5h))
+		errs = append(errs, &InvalidValueError{
+			Key: "spend_limit_5h", Err: fmt.Errorf("must be 0 to 100, got %d", c.SpendLimit5h),
+		})
 	}
 	if c.BoardPollSeconds < 1 {
-		errs = append(errs, fmt.Errorf("board_poll_seconds must be at least 1, got %d", c.BoardPollSeconds))
+		errs = append(errs, &InvalidValueError{
+			Key: "board_poll_seconds", Err: fmt.Errorf("must be at least 1, got %d", c.BoardPollSeconds),
+		})
 	}
 	if c.MaxTurns < 0 {
-		errs = append(errs, fmt.Errorf("max_turns must not be negative, got %d", c.MaxTurns))
+		errs = append(errs, &InvalidValueError{Key: "max_turns", Err: fmt.Errorf("must not be negative, got %d", c.MaxTurns)})
 	}
 	if len(c.AgentCommand) > 0 {
 		for _, part := range requiredAgentCommandParts {
 			if !slices.Contains(c.AgentCommand, part) {
-				errs = append(errs, fmt.Errorf("agent_command %q lacks %s, which every run needs", c.AgentCommand, part))
+				errs = append(errs, &MissingKeyError{Key: part})
 			}
 		}
 	}

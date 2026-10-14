@@ -5,10 +5,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
@@ -38,7 +39,7 @@ func TestParse(t *testing.T) {
 						Turns: 1, Spend: 0.0004992,
 						Events: []agentlog.Event{
 							{Kind: agentlog.Cmd, Tool: "Bash", Detail: "go test ./...",
-								Output: "FAIL\tinternal/agentlog\nno such package", OutputLines: 2,
+									Output: "FAIL\tinternal/agentlog\nno such package", OutputLines: 2,
 								Done: true, ExitCode: 1, Elapsed: 1500 * time.Millisecond},
 						},
 					},
@@ -142,7 +143,9 @@ func TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse: %v", err)
 			}
-			assertRun(t, got, tt.want)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Parse() mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -247,65 +250,11 @@ func TestParseLineKeeps(t *testing.T) {
 			if len(got) != 1 {
 				t.Fatalf("ParseLine(%s) = %+v; want one event", tt.name, got)
 			}
-			if !sameEvent(got[0], tt.want) {
-				t.Errorf("ParseLine = %+v; want %+v", got[0], tt.want)
+			if diff := cmp.Diff(tt.want, got[0]); diff != "" {
+				t.Errorf("ParseLine() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
-}
-
-func assertRun(t *testing.T, got, want agentlog.Run) {
-	t.Helper()
-
-	if got.Lines != want.Lines {
-		t.Errorf("Lines = %d; want %d", got.Lines, want.Lines)
-	}
-	if !got.Start.Equal(want.Start) || got.End != want.End {
-		t.Errorf("Start, End = %v, %v; want %v, %v", got.Start, got.End, want.Start, want.End)
-	}
-	switch {
-	case want.Result == nil && got.Result != nil:
-		t.Errorf("Result = %+v; want nil", got.Result)
-	case want.Result != nil && got.Result == nil:
-		t.Errorf("Result = nil; want %+v", want.Result)
-	case want.Result != nil && *got.Result != *want.Result:
-		t.Errorf("Result = %+v; want %+v", *got.Result, *want.Result)
-	}
-	if len(got.Phases) != len(want.Phases) {
-		t.Fatalf("%d phases; want %d (%+v)", len(got.Phases), len(want.Phases), got.Phases)
-	}
-	for i, wantPhase := range want.Phases {
-		gotPhase := got.Phases[i]
-		if gotPhase.Skill != wantPhase.Skill || gotPhase.Note != wantPhase.Note || gotPhase.At != wantPhase.At ||
-			gotPhase.Turns != wantPhase.Turns || math.Abs(gotPhase.Spend-wantPhase.Spend) > 1e-12 {
-			t.Errorf("phase %d = {%q %q %v %d %v}; want {%q %q %v %d %v}", i,
-				gotPhase.Skill, gotPhase.Note, gotPhase.At, gotPhase.Turns, gotPhase.Spend,
-				wantPhase.Skill, wantPhase.Note, wantPhase.At, wantPhase.Turns, wantPhase.Spend)
-		}
-		if len(gotPhase.Events) != len(wantPhase.Events) {
-			t.Errorf("phase %d has %d events; want %d (%+v)",
-				i, len(gotPhase.Events), len(wantPhase.Events), gotPhase.Events)
-			continue
-		}
-		for j, wantEvent := range wantPhase.Events {
-			if !sameCmd(gotPhase.Events[j], wantEvent) {
-				t.Errorf("phase %d event %d = %+v; want %+v", i, j, gotPhase.Events[j], wantEvent)
-			}
-		}
-	}
-}
-
-func sameReading(got, want agentlog.Event) bool {
-	return got.At == want.At && got.Kind == want.Kind && got.Tool == want.Tool && got.Detail == want.Detail
-}
-
-func sameEvent(got, want agentlog.Event) bool {
-	return sameReading(got, want) && got.CallID == want.CallID && got.Output == want.Output &&
-		got.OutputLines == want.OutputLines && sameDiff(got.Diff, want.Diff)
-}
-
-func sameDiff(got, want agentlog.Diff) bool {
-	return got.Added == want.Added && got.Removed == want.Removed && slices.Equal(got.Lines, want.Lines)
 }
 
 func TestParseLineWalksEveryContentBlock(t *testing.T) {
@@ -321,13 +270,8 @@ func TestParseLineWalksEveryContentBlock(t *testing.T) {
 		{Kind: agentlog.File, Tool: "Read", Detail: "a.go"},
 		{Kind: agentlog.File, Tool: "Read", Detail: "b.go"},
 	}
-	if len(got) != len(want) {
-		t.Fatalf("ParseLine = %+v; want %+v", got, want)
-	}
-	for i := range want {
-		if !sameEvent(got[i], want[i]) {
-			t.Errorf("event %d = %+v; want %+v", i, got[i], want[i])
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ParseLine() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -371,8 +315,8 @@ func TestParseLineDiffsAnEdit(t *testing.T) {
 		{Op: agentlog.Add, Text: "C2"},
 		{Op: agentlog.Keep, Text: "d"},
 	}}
-	if !sameDiff(got[0].Diff, want) {
-		t.Errorf("Diff = %+v; want %+v", got[0].Diff, want)
+	if diff := cmp.Diff(want, got[0].Diff); diff != "" {
+		t.Errorf("ParseLine().Diff mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -505,8 +449,10 @@ func TestParseKeepsASubagentsSkillAndTurnsOutOfTheMainRun(t *testing.T) {
 		t.Fatalf("%d phases; want 1, a subagent's skill opens no phase of the main run", len(run.Phases))
 	}
 	want := agentlog.Event{Kind: agentlog.Tool, Tool: "Skill", Detail: "tdd", CallID: "s"}
-	if got := run.Phases[0].Events; len(got) != 2 || !sameEvent(got[1], want) {
-		t.Errorf("events = %+v; want the subagent's skill as a plain tool call", got)
+	if got := run.Phases[0].Events; len(got) != 2 {
+		t.Errorf("events = %+v; want two events", got)
+	} else if diff := cmp.Diff(want, got[1]); diff != "" {
+		t.Errorf("subagent skill mismatch (-want +got):\n%s", diff)
 	}
 	if run.Phases[0].Turns != 1 {
 		t.Errorf("Turns = %d; want 1, the subagent's request is not a turn of the main run", run.Phases[0].Turns)

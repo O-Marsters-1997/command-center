@@ -30,10 +30,12 @@ func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
 	if err == nil {
 		t.Fatal("Output(exit 3) = nil error, want one")
 	}
-	for _, want := range []string{"sh -c echo partial; echo boom >&2; exit 3", "in " + dir, "boom"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("Output error = %q, want it to contain %q", err, want)
-		}
+	var cmdErr *command.Error
+	if !errors.As(err, &cmdErr) {
+		t.Fatalf("Output error = %v, want *command.Error", err)
+	}
+	if cmdErr.Cmd != "sh -c echo partial; echo boom >&2; exit 3" || cmdErr.Dir != dir || cmdErr.Stderr != "boom" {
+		t.Errorf("Output error fields = %+v, want command, dir and stderr", cmdErr)
 	}
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
@@ -51,10 +53,12 @@ func TestRunDiscardsStdoutAndNamesTheFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("Run(exit 2) = nil error, want one")
 	}
-	for _, want := range []string{"sh -c", "in " + dir, "boom"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("Run error = %q, want it to contain %q", err, want)
-		}
+	var cmdErr *command.Error
+	if !errors.As(err, &cmdErr) {
+		t.Fatalf("Run error = %v, want *command.Error", err)
+	}
+	if cmdErr.Cmd != "sh -c echo boom >&2; exit 2" || cmdErr.Dir != dir || cmdErr.Stderr != "boom" {
+		t.Errorf("Run error fields = %+v, want command, dir and stderr", cmdErr)
 	}
 }
 
@@ -89,10 +93,11 @@ func TestOutputErrorTruncatesALongCommandLine(t *testing.T) {
 	if err == nil {
 		t.Fatal("Output(exit 1) = nil error, want one")
 	}
-	if strings.Contains(err.Error(), body) || len(err.Error()) > 300 {
-		t.Errorf("Output error has %d bytes, want the command line truncated", len(err.Error()))
+	var cmdErr *command.Error
+	if !errors.As(err, &cmdErr) {
+		t.Fatalf("Output error = %v, want *command.Error", err)
 	}
-	if strings.Contains(err.Error(), " in ") {
-		t.Errorf("Output error = %q, want no dir for an empty dir", err)
+	if len(cmdErr.Cmd) > 200 || cmdErr.Dir != "" {
+		t.Errorf("Output command = %q, dir = %q, want at most 200 bytes and no dir", cmdErr.Cmd, cmdErr.Dir)
 	}
 }

@@ -45,7 +45,7 @@ linters:
     depguard:
       rules:
         plan-pure:
-          files: ["**/internal/plan/**"]
+          files: ["**/internal/plan/**", "!$test"]
           list-mode: strict
           allow:
             - $gostd
@@ -96,10 +96,6 @@ linters:
           - forbidigo
       - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/|internal/cctest/cctest\.go$)
         text: time\.Now
-        linters:
-          - forbidigo
-      - path: ^internal/(app|cctest|command|config|git)/.*_test\.go$
-        text: Error
         linters:
           - forbidigo
 

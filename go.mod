@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/moby/moby/api v1.55.0
 	github.com/pressly/goose/v3 v3.27.3

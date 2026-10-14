@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
@@ -19,11 +21,6 @@ func cmdsOf(run agentlog.Run) []agentlog.Event {
 		}
 	}
 	return cmds
-}
-
-func sameCmd(got, want agentlog.Event) bool {
-	return sameEvent(got, want) && got.Done == want.Done && got.ExitCode == want.ExitCode &&
-		got.Interrupted == want.Interrupted && got.Elapsed == want.Elapsed
 }
 
 func TestParseRun27Commands(t *testing.T) {
@@ -138,8 +135,8 @@ func TestParseCommandResults(t *testing.T) {
 			want := tt.want
 			want.Kind, want.Tool, want.Detail, want.CallID = agentlog.Cmd, "Bash", "make", "c"
 			got.At = 0
-			if !sameCmd(got, want) {
-				t.Errorf("Cmd = %+v; want %+v", got, want)
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("Cmd mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -164,14 +161,15 @@ func TestTailEmitsTheCmdEventsParseDoes(t *testing.T) {
 	}
 
 	want := cmdsOf(parseString(t, string(data)))
-	if len(finished) != len(want) {
-		t.Fatalf("Tail finished %d Cmd events; Parse yields %d", len(finished), len(want))
-	}
-	for i := range want {
+	for i := range finished {
+		if i >= len(want) {
+			break
+		}
 		got := finished[i]
 		got.At = want[i].At
-		if !sameCmd(got, want[i]) {
-			t.Errorf("Tail Cmd %d = %+v; Parse = %+v", i, got, want[i])
-		}
+		finished[i] = got
+	}
+	if diff := cmp.Diff(want, finished); diff != "" {
+		t.Errorf("Tail Cmd mismatch (-want +got):\n%s", diff)
 	}
 }

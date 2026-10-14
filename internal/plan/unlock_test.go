@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -40,85 +41,52 @@ func TestUnlocked(t *testing.T) {
 		withCrossRepoEdge.URL: withCrossRepoEdge,
 	}
 
-	tests := []struct {
-		name         string
-		ticket       plan.Ticket
-		prs          map[string]plan.PRState
-		stacking     bool
-		wantUnlocked bool
-		wantBase     string
-		wantBlocking []plan.TicketURL
-		reasonNames  string
+	unlocked := []struct {
+		name     string
+		ticket   plan.Ticket
+		prs      map[string]plan.PRState
+		stacking bool
+		wantBase string
 	}{
 		{
-			name:         "no blockers unlocks off main",
-			ticket:       root,
-			prs:          map[string]plan.PRState{},
-			wantUnlocked: true,
-			wantBase:     "main",
+			name:     "no blockers unlocks off main",
+			ticket:   root,
+			prs:      map[string]plan.PRState{},
+			wantBase: "main",
 		},
 		{
-			name:         "a blocker with no pull request stays blocked",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{},
-			wantUnlocked: false,
-			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
-			reasonNames:  "sandbox://CC-1",
+			name:     "a blocker with an open pull request unlocks off main while stacking is off",
+			ticket:   dependent,
+			prs:      map[string]plan.PRState{"cc-1-first": plan.Open},
+			stacking: false,
+			wantBase: "main",
 		},
 		{
-			name:         "a blocker whose pull request is closed unmerged stays blocked",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Closed},
-			wantUnlocked: false,
-			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
-			reasonNames:  "sandbox://CC-1",
+			name:     "a blocker with an open pull request unlocks off the blocker's branch while stacking is on",
+			ticket:   dependent,
+			prs:      map[string]plan.PRState{"cc-1-first": plan.Open},
+			stacking: true,
+			wantBase: "cc-1-first",
 		},
 		{
-			name:         "a blocker with an open pull request unlocks off main while stacking is off",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Open},
-			stacking:     false,
-			wantUnlocked: true,
-			wantBase:     "main",
+			name:     "a merged blocker unlocks off main while stacking is off",
+			ticket:   dependent,
+			prs:      map[string]plan.PRState{"cc-1-first": plan.Merged},
+			stacking: false,
+			wantBase: "main",
 		},
 		{
-			name:         "a blocker with an open pull request unlocks off the blocker's branch while stacking is on",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Open},
-			stacking:     true,
-			wantUnlocked: true,
-			wantBase:     "cc-1-first",
+			name:     "a merged blocker unlocks off main even while stacking is on",
+			ticket:   dependent,
+			prs:      map[string]plan.PRState{"cc-1-first": plan.Merged},
+			stacking: true,
+			wantBase: "main",
 		},
 		{
-			name:         "a merged blocker unlocks off main while stacking is off",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Merged},
-			stacking:     false,
-			wantUnlocked: true,
-			wantBase:     "main",
-		},
-		{
-			name:         "a merged blocker unlocks off main even while stacking is on",
-			ticket:       dependent,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Merged},
-			stacking:     true,
-			wantUnlocked: true,
-			wantBase:     "main",
-		},
-		{
-			name:         "two blockers with one merely open stays blocked",
-			ticket:       fanIn,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Open, "cc-3-third": plan.Merged},
-			wantUnlocked: false,
-			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
-			reasonNames:  "sandbox://CC-1",
-		},
-		{
-			name:         "two blockers both merged unlocks off main",
-			ticket:       fanIn,
-			prs:          map[string]plan.PRState{"cc-1-first": plan.Merged, "cc-3-third": plan.Merged},
-			wantUnlocked: true,
-			wantBase:     "main",
+			name:     "two blockers both merged unlocks off main",
+			ticket:   fanIn,
+			prs:      map[string]plan.PRState{"cc-1-first": plan.Merged, "cc-3-third": plan.Merged},
+			wantBase: "main",
 		},
 		{
 			name:   "a cross-repo blocker changes neither unlock nor base",
@@ -126,37 +94,58 @@ func TestUnlocked(t *testing.T) {
 			prs: map[string]plan.PRState{
 				"cc-1-first": plan.Open,
 			},
-			stacking:     true,
-			wantUnlocked: true,
-			wantBase:     "cc-1-first",
+			stacking: true,
+			wantBase: "cc-1-first",
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range unlocked {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			got := plan.Unlocked(tt.ticket, byURL, tt.prs, tt.stacking)
-			if got.Unlocked != tt.wantUnlocked {
-				t.Errorf("unlocked = %v, want %v (reason %q)", got.Unlocked, tt.wantUnlocked, got.Reason)
+			if !got.Unlocked {
+				t.Errorf("unlocked = false, want true (reason %q)", got.Reason)
 			}
-			if tt.wantUnlocked && got.BaseBranch != tt.wantBase {
+			if got.BaseBranch != tt.wantBase {
 				t.Errorf("base branch = %q, want %q", got.BaseBranch, tt.wantBase)
-			}
-			if !tt.wantUnlocked && got.BaseBranch != "" {
-				t.Errorf("base branch = %q, want empty for a blocked row", got.BaseBranch)
 			}
 			if got.Reason == "" {
 				t.Error("reason is empty; the page renders it on every row")
 			}
-			if tt.reasonNames != "" && !strings.Contains(string(got.Reason), tt.reasonNames) {
-				t.Errorf("reason %q does not name the blocker %q", got.Reason, tt.reasonNames)
-			}
-			if len(tt.wantBlocking) > 0 && !equalUnordered(got.Blocking, tt.wantBlocking) {
-				t.Errorf("blocking = %v, want %v", got.Blocking, tt.wantBlocking)
-			}
-			if tt.wantUnlocked && len(got.Blocking) != 0 {
+			if len(got.Blocking) != 0 {
 				t.Errorf("blocking = %v, want empty for an unlocked row", got.Blocking)
+			}
+		})
+	}
+
+	blocked := []struct {
+		name         string
+		ticket       plan.Ticket
+		prs          map[string]plan.PRState
+		wantBlocking []plan.TicketURL
+		reasonNames  string
+	}{
+		{"a blocker with no pull request stays blocked", dependent, map[string]plan.PRState{},
+			[]plan.TicketURL{"sandbox://CC-1"}, "sandbox://CC-1"},
+		{"a blocker whose pull request is closed unmerged stays blocked", dependent,
+			map[string]plan.PRState{"cc-1-first": plan.Closed}, []plan.TicketURL{"sandbox://CC-1"}, "sandbox://CC-1"},
+		{"two blockers with one merely open stays blocked", fanIn,
+			map[string]plan.PRState{"cc-1-first": plan.Open, "cc-3-third": plan.Merged},
+			[]plan.TicketURL{"sandbox://CC-1"}, "sandbox://CC-1"},
+	}
+	for _, tt := range blocked {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := plan.Unlocked(tt.ticket, byURL, tt.prs, false)
+			if got.Unlocked || got.BaseBranch != "" {
+				t.Errorf("Unlocked() = %+v, want blocked without a base", got)
+			}
+			if !strings.Contains(string(got.Reason), tt.reasonNames) {
+				t.Errorf("reason %q does not name %q", got.Reason, tt.reasonNames)
+			}
+			if !equalUnordered(got.Blocking, tt.wantBlocking) {
+				t.Errorf("blocking = %v, want %v", got.Blocking, tt.wantBlocking)
 			}
 		})
 	}
@@ -166,16 +155,7 @@ func equalUnordered(got, want []plan.TicketURL) bool {
 	if len(got) != len(want) {
 		return false
 	}
-	seen := make(map[plan.TicketURL]bool, len(got))
-	for _, g := range got {
-		seen[g] = true
-	}
-	for _, w := range want {
-		if !seen[w] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(want)))
 }
 
 func TestUnlockedBlockerClosedFlag(t *testing.T) {

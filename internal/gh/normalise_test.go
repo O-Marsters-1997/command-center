@@ -3,10 +3,11 @@ package gh
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func readFixture(t *testing.T, name string) []byte {
@@ -18,134 +19,88 @@ func readFixture(t *testing.T, name string) []byte {
 	return raw
 }
 
-func TestDecode(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		fixture string
-		want    func(*testing.T, []PR)
-	}{
-		{
-			name:    "no prs",
-			fixture: "no_prs.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if len(prs) != 0 {
-					t.Fatalf("prs = %d, want 0", len(prs))
-				}
-			},
-		},
-		{
-			name:    "one name five times reduces to the latest completed run",
-			fixture: "mixed_rollup.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if len(prs) != 1 {
-					t.Fatalf("prs = %d, want 1", len(prs))
-				}
-				pr := prs[0]
-				if pr.State != Open || pr.Number != 41 || pr.HeadRef != "cc-1-first" {
-					t.Errorf("pr = %+v", pr)
-				}
-				tests, ok := pr.Checks["Tests"]
-				if !ok {
-					t.Fatalf("no Tests check in %v", pr.Checks)
-				}
-				if tests.Conclusion != "SUCCESS" {
-					t.Errorf("conclusion = %q, want SUCCESS (the latest COMPLETED run)", tests.Conclusion)
-				}
-				if want := time.Date(2026, 8, 20, 10, 10, 0, 0, time.UTC); !tests.StartedAt.Equal(want) {
-					t.Errorf("startedAt = %s, want %s", tests.StartedAt, want)
-				}
-			},
-		},
-		{
-			name:    "a status context keeps its context as its name",
-			fixture: "mixed_rollup.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				got, ok := prs[0].Checks["ci/legacy"]
-				if !ok {
-					t.Fatalf("no ci/legacy check in %v", prs[0].Checks)
-				}
-				if got.Conclusion != "SUCCESS" {
-					t.Errorf("conclusion = %q, want SUCCESS", got.Conclusion)
-				}
-			},
-		},
-		{
-			name:    "a nameless entry is dropped, not panicked on",
-			fixture: "mixed_rollup.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if _, ok := prs[0].Checks[""]; ok {
-					t.Error("a nameless rollup entry was kept under the empty name")
-				}
-				if len(prs[0].Checks) != 2 {
-					t.Errorf("checks = %v, want exactly Tests and ci/legacy", prs[0].Checks)
-				}
-			},
-		},
-		{
-			name:    "an empty rollup is empty, not green",
-			fixture: "empty_rollup.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if len(prs[0].Checks) != 0 {
-					t.Errorf("checks = %v, want none", prs[0].Checks)
-				}
-				if !prs[0].IsDraft {
-					t.Error("isDraft was dropped")
-				}
-			},
-		},
-		{
-			name:    "merged state survives the fallback read",
-			fixture: "merged.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if prs[0].State != Merged {
-					t.Errorf("state = %v, want Merged", prs[0].State)
-				}
-				if want := time.Date(2026, 8, 20, 10, 15, 0, 0, time.UTC); !prs[0].MergedAt.Equal(want) {
-					t.Errorf("mergedAt = %s, want %s", prs[0].MergedAt, want)
-				}
-			},
-		},
-		{
-			name:    "an open pr carries a zero mergedAt",
-			fixture: "mixed_rollup.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				if !prs[0].MergedAt.IsZero() {
-					t.Errorf("mergedAt = %s, want zero for an unmerged PR", prs[0].MergedAt)
-				}
-			},
-		},
-		{
-			name:    "labels decode by name",
-			fixture: "stacked_ready_to_merge.json",
-			want: func(t *testing.T, prs []PR) {
-				t.Helper()
-				want := []string{"keep-open", "ready-to-merge"}
-				if !slices.Equal(prs[0].Labels, want) {
-					t.Errorf("labels = %v, want %v", prs[0].Labels, want)
-				}
-			},
-		},
+func decodeFixture(t *testing.T, fixture string) []PR {
+	t.Helper()
+	prs, err := decode(readFixture(t, fixture))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
 	}
+	return prs
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+func TestDecodeNoPRs(t *testing.T) {
+	t.Parallel()
+	if got := decodeFixture(t, "no_prs.json"); len(got) != 0 {
+		t.Errorf("decode(no_prs) = %+v, want no PRs", got)
+	}
+}
 
-			prs, err := decode(readFixture(t, tt.fixture))
-			if err != nil {
-				t.Fatalf("decode: %v", err)
-			}
-			tt.want(t, prs)
-		})
+func TestDecodeRollup(t *testing.T) {
+	t.Parallel()
+	prs := decodeFixture(t, "mixed_rollup.json")
+	if len(prs) != 1 {
+		t.Fatalf("decode(mixed_rollup) = %+v, want one PR", prs)
+	}
+	pr := prs[0]
+	if pr.State != Open || pr.Number != 41 || pr.HeadRef != "cc-1-first" {
+		t.Errorf("decode(mixed_rollup) PR = %+v, want open PR 41 on cc-1-first", pr)
+	}
+	if _, ok := pr.Checks[""]; ok {
+		t.Error("decode(mixed_rollup) kept a nameless check")
+	}
+	if len(pr.Checks) != 2 {
+		t.Errorf("decode(mixed_rollup) checks = %v, want Tests and ci/legacy", pr.Checks)
+	}
+	if tests, ok := pr.Checks["Tests"]; !ok {
+		t.Errorf("decode(mixed_rollup) checks = %v, want Tests", pr.Checks)
+	} else {
+		if tests.Conclusion != "SUCCESS" {
+			t.Errorf("Tests conclusion = %q, want SUCCESS", tests.Conclusion)
+		}
+		if want := time.Date(2026, 8, 20, 10, 10, 0, 0, time.UTC); !tests.StartedAt.Equal(want) {
+			t.Errorf("Tests startedAt = %s, want %s", tests.StartedAt, want)
+		}
+	}
+	if legacy, ok := pr.Checks["ci/legacy"]; !ok || legacy.Conclusion != "SUCCESS" {
+		t.Errorf("ci/legacy = %+v, present %v; want SUCCESS", legacy, ok)
+	}
+	if !pr.MergedAt.IsZero() {
+		t.Errorf("open PR mergedAt = %s, want zero", pr.MergedAt)
+	}
+}
+
+func TestDecodeEmptyRollup(t *testing.T) {
+	t.Parallel()
+	prs := decodeFixture(t, "empty_rollup.json")
+	if len(prs) != 1 {
+		t.Fatalf("decode(empty_rollup) = %+v, want one PR", prs)
+	}
+	if len(prs[0].Checks) != 0 || !prs[0].IsDraft {
+		t.Errorf("decode(empty_rollup) = %+v, want draft with no checks", prs[0])
+	}
+}
+
+func TestDecodeMerged(t *testing.T) {
+	t.Parallel()
+	prs := decodeFixture(t, "merged.json")
+	if len(prs) != 1 {
+		t.Fatalf("decode(merged) = %+v, want one PR", prs)
+	}
+	want := time.Date(2026, 8, 20, 10, 15, 0, 0, time.UTC)
+	if prs[0].State != Merged || !prs[0].MergedAt.Equal(want) {
+		t.Errorf("decode(merged) = %+v, want merged at %s", prs[0], want)
+	}
+}
+
+func TestDecodeLabels(t *testing.T) {
+	t.Parallel()
+	prs := decodeFixture(t, "stacked_ready_to_merge.json")
+	if len(prs) != 1 {
+		t.Fatalf("decode(stacked_ready_to_merge) = %+v, want one PR", prs)
+	}
+	want := []string{"keep-open", "ready-to-merge"}
+	if diff := cmp.Diff(want, prs[0].Labels); diff != "" {
+		t.Errorf("decode() labels mismatch (-want +got):\n%s", diff)
 	}
 }
 

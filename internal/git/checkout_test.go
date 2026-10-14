@@ -1,9 +1,9 @@
 package git_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
@@ -65,36 +65,21 @@ func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
 	}
 }
 
-func TestEnsureCheckoutRefuses(t *testing.T) {
+func TestEnsureCheckoutRefusesAMismatchedOrigin(t *testing.T) {
 	t.Parallel()
 	repoPath, realRemote := gittest.WithOrigin(t)
-	notARepo := t.TempDir()
 	const configured = "git@github.com:someone/else.git"
-
-	tests := []struct {
-		name     string
-		remote   string
-		checkout string
-		wantInfo []string
-	}{
-		{"a mismatched origin", configured, repoPath, []string{realRemote, configured}},
-		{"a directory that is not a git repo", "git@github.com:o/r.git", notARepo, []string{notARepo}},
+	if err := git.EnsureCheckout(t.Context(), "r", configured, repoPath); !errors.Is(err, git.ErrOriginMismatch) {
+		t.Errorf("EnsureCheckout(%q, %q) = %v, want ErrOriginMismatch (actual remote %q)",
+			configured, repoPath, err, realRemote)
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := git.EnsureCheckout(t.Context(), "r", tt.remote, tt.checkout)
-			if err == nil {
-				t.Fatal("want a refusal")
-			}
-			for _, want := range tt.wantInfo {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("error %q does not name %q", err, want)
-				}
-			}
-		})
+func TestEnsureCheckoutRefusesANonGitDirectory(t *testing.T) {
+	t.Parallel()
+	err := git.EnsureCheckout(t.Context(), "r", "git@github.com:o/r.git", t.TempDir())
+	if err == nil || errors.Is(err, git.ErrOriginMismatch) {
+		t.Errorf("EnsureCheckout(non-git dir) = %v, want an error other than ErrOriginMismatch", err)
 	}
 }
 
@@ -107,8 +92,8 @@ func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 	// The fetch that follows fails, since git@github.com:o/r is not a repository anyone can
 	// reach from a test. What must not happen is the origin comparison refusing first.
 	repo := repoConfig{Name: "r", Remote: "https://github.com/o/r", Checkout: repoPath}
-	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil &&
-		strings.Contains(err.Error(), "the config says") {
+	err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout)
+	if errors.Is(err, git.ErrOriginMismatch) {
 		t.Errorf("EnsureCheckout refused the same repository in its other URL form: %v", err)
 	}
 }

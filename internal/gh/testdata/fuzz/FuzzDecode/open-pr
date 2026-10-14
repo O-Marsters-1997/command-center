@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("[{\"number\":7,\"state\":\"OPEN\",\"headRefName\":\"cc-7\",\"labels\":[{\"name\":\"ready\"}]}]")

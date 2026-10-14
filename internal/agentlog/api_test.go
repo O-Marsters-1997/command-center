@@ -26,6 +26,7 @@ func TestNoImpureImports(t *testing.T) {
 	allowed := []string{
 		"github.com/O-Marsters-1997/command-center/internal/agentlog",
 		"github.com/O-Marsters-1997/command-center/internal/option",
+		"github.com/google/go-cmp/cmp",
 	}
 	forbidden := []string{"os/exec", "database/sql", "net/http"}
 	for _, path := range imports {

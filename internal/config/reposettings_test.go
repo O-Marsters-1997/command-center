@@ -1,12 +1,13 @@
 package config_test
 
 import (
-	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -40,7 +41,9 @@ func TestReadRepoSettingsAnswersDefaultsWhenTheFileIsMissing(t *testing.T) {
 	if source != config.SourceDefaults {
 		t.Errorf("source = %q, want %q", source, config.SourceDefaults)
 	}
-	sameSettings(t, config.RepoSettings{Tracker: "github"}, got)
+	if diff := cmp.Diff(config.RepoSettings{Tracker: "github"}, got); diff != "" {
+		t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestReadRepoSettingsDecodesEveryKey(t *testing.T) {
@@ -69,7 +72,9 @@ all_of = [{ success = "Lint" }, { any_of = [{ success = "A" }, { author = "bot" 
 			{AnyOf: []verdict.Predicate{{Success: "A"}, {Author: "bot"}}},
 		}},
 	}
-	sameSettings(t, want, got)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ReadRepoSettings() mismatch (-want +got):\n%s", diff)
+	}
 	if source != config.SourceFile {
 		t.Errorf("source = %q, want %q", source, config.SourceFile)
 	}
@@ -97,18 +102,20 @@ func TestReadRepoSettingsErrorsNameTheLine(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
-		name, body, wantLine string
+		name, body string
+		wantLine   int
 	}{
-		{"parse error", "stacking = true\ndeny = [\n", "line 2"},
-		{"unknown key", "stacking = true\nstackin = true\n", "line 2"},
-		{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", "line 2"},
+		{"parse error", "stacking = true\ndeny = [\n", 2},
+		{"unknown key", "stacking = true\nstackin = true\n", 2},
+		{"invalid predicate", "stacking = true\n[checks]\nsuccess = \"a\"\nskipped = \"b\"\n", 2},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			_, _, err := config.ReadRepoSettings(t.Context(), originedRepo(t, tt.body))
-			if err == nil || !strings.Contains(err.Error(), tt.wantLine) {
-				t.Errorf("err = %v, want one naming %s", err, tt.wantLine)
+			var parseErr *config.SettingsParseError
+			if !errors.As(err, &parseErr) || parseErr.Line != tt.wantLine {
+				t.Errorf("ReadRepoSettings error = %v, want line %d", err, tt.wantLine)
 			}
 		})
 	}
@@ -138,20 +145,7 @@ func TestTheCommittedSettingsFileHoldsWhatTheRepoBlockHeld(t *testing.T) {
 		Deny:     []string{".github/**", "go.mod", "go.sum"},
 		Checks:   verdict.Predicate{AllOf: all},
 	}
-	sameSettings(t, want, got)
-}
-
-func sameSettings(t *testing.T, want, got config.RepoSettings) {
-	t.Helper()
-	wantJSON, err := json.Marshal(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotJSON, err := json.Marshal(got)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(wantJSON) != string(gotJSON) {
-		t.Errorf("settings = %s, want %s", gotJSON, wantJSON)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ParseRepoSettings() mismatch (-want +got):\n%s", diff)
 	}
 }
