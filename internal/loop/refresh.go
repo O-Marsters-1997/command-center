@@ -25,7 +25,10 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 		if e.LastPush != nil {
 			row = *e.LastPush
 		}
-		return l.refreshOne(ctx, snap, obs, e.Ticket, row, true)
+		if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, true); err != nil {
+			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		}
+		return nil
 	})
 	if err != nil {
 		return err
@@ -38,7 +41,7 @@ func (l *Loop) autoRefresh(
 ) error {
 	outcomes, err := l.store.LatestRefreshOutcomes(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("latest refresh outcomes: %w", err)
 	}
 
 	for _, e := range snap.Entries {
@@ -60,7 +63,7 @@ func (l *Loop) autoRefresh(
 			continue
 		}
 		if err := l.refreshOne(ctx, snap, obs, t, *pushRow, false); err != nil {
-			return err
+			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}
 	return nil
@@ -129,7 +132,7 @@ func (l *Loop) refreshOne(
 	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
+			return fmt.Errorf("advance %s: %w", ticket.URL, ctxErr)
 		}
 		conflicted, midErr := git.MidMerge(ctx, worktreePath)
 		if midErr != nil {
@@ -140,7 +143,7 @@ func (l *Loop) refreshOne(
 		}
 		if restacked {
 			if err := l.event(ctx, ticket.URL, store.EventRestacked, detail+", conflicted"); err != nil {
-				return err
+				return fmt.Errorf("record restack of %s: %w", ticket.URL, err)
 			}
 		}
 		baseTip := obs.BranchTips[plan.BranchKey(ticket.Repo, unlock.BaseBranch)]
@@ -153,9 +156,12 @@ func (l *Loop) refreshOne(
 		kind = store.EventRestacked
 	}
 	if err := l.event(ctx, ticket.URL, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
-		return err
+		return fmt.Errorf("record %s of %s: %w", kind, ticket.URL, err)
 	}
-	return l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand)
+	if err := l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand); err != nil {
+		return fmt.Errorf("verify %s: %w", ticket.URL, err)
+	}
+	return nil
 }
 
 const (
@@ -184,17 +190,24 @@ func advanceOnto(
 	ref := "origin/" + base
 	boundary := restackBoundary(repo, row, obs)
 	if boundary == "" {
-		return false, ref, git.Merge(ctx, worktreePath, ref)
+		return false, ref, wrapGit("merge "+ref, git.Merge(ctx, worktreePath, ref))
 	}
 	kept, err := git.Ancestor(ctx, worktreePath, boundary, ref)
 	if err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("check %s is an ancestor of %s: %w", boundary, ref, err)
 	}
 	if kept {
-		return false, ref, git.Merge(ctx, worktreePath, ref)
+		return false, ref, wrapGit("merge "+ref, git.Merge(ctx, worktreePath, ref))
 	}
 	return true, fmt.Sprintf("restacked onto %s, dropping everything up to %s", ref, boundary),
-		git.Rebase(ctx, worktreePath, ref, boundary)
+		wrapGit("rebase onto "+ref, git.Rebase(ctx, worktreePath, ref, boundary))
+}
+
+func wrapGit(step string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", step, err)
 }
 
 func restackBoundary(repo string, row plan.PushRow, obs plan.Observation) string {

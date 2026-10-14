@@ -11,7 +11,7 @@ import (
 func (l *Loop) recordOpenedEvents(ctx context.Context, prev, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 
 	for _, t := range tickets {
@@ -22,14 +22,14 @@ func (l *Loop) recordOpenedEvents(ctx context.Context, prev, obs plan.Observatio
 		}
 		exists, err := l.store.HasEvent(ctx, t.URL, store.EventPROpened)
 		if err != nil {
-			return err
+			return fmt.Errorf("check pr_opened event for %s: %w", t.URL, err)
 		}
 		if exists {
 			continue
 		}
 		detail := fmt.Sprintf("PR #%d https://github.com/%s/pull/%d", pr.Number, t.Repo, pr.Number)
 		if err := l.event(ctx, t.URL, store.EventPROpened, detail); err != nil {
-			return err
+			return fmt.Errorf("record pr_opened for %s: %w", t.URL, err)
 		}
 	}
 	return nil

@@ -12,7 +12,7 @@ import (
 func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	lastPushed, err := l.store.LastPushedTips(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last pushed tips: %w", err)
 	}
 
 	var candidates []plan.PushCandidate
@@ -35,11 +35,11 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 
 	facts, err := l.store.PushFacts(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("push facts: %w", err)
 	}
 	refreshFacts, err := l.store.RefreshFacts(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("refresh facts: %w", err)
 	}
 
 	for _, ticketURL := range toPush {
@@ -49,7 +49,7 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 		e, _ := snap.Entry(ticketURL)
 		tip := obs.LocalTips[plan.BranchKey(e.Ticket.Repo, e.Ticket.Branch)]
 		if err := l.pushOne(ctx, e, tip, obs); err != nil {
-			return err
+			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 	}
 	return nil
@@ -65,22 +65,25 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 		if !ok {
 			return nil
 		}
-		return l.pushOne(ctx, e, tip, obs)
+		if err := l.pushOne(ctx, e, tip, obs); err != nil {
+			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
+		}
+		return nil
 	})
 }
 
 func pushBranch(ctx context.Context, repoPath, branch, recordedTip string, restacked bool) error {
 	if !restacked || recordedTip == "" {
-		return git.Push(ctx, repoPath, branch)
+		return wrapGit("push "+branch, git.Push(ctx, repoPath, branch))
 	}
 	descended, err := git.Ancestor(ctx, repoPath, recordedTip, branch)
 	if err != nil {
-		return err
+		return fmt.Errorf("check %s descends from %s: %w", branch, recordedTip, err)
 	}
 	if descended {
-		return git.Push(ctx, repoPath, branch)
+		return wrapGit("push "+branch, git.Push(ctx, repoPath, branch))
 	}
-	return git.PushRestacked(ctx, repoPath, branch, recordedTip)
+	return wrapGit("force-push restacked "+branch, git.PushRestacked(ctx, repoPath, branch, recordedTip))
 }
 
 func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs plan.Observation) error {
@@ -101,11 +104,11 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs p
 
 	pushedTips, err := l.store.LastPushedTips(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last pushed tips: %w", err)
 	}
 	restacked, err := l.store.RestackedSinceLastPush(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("restacked since last push: %w", err)
 	}
 	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
 		return l.event(ctx, t.URL, store.EventPushFailed, err.Error())
@@ -124,7 +127,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip string, obs p
 		return fmt.Errorf("resolve origin/%s: %w", base, err)
 	}
 	if err := l.store.RecordPush(ctx, t.URL, localTip, base, baseSHA, l.clock.Now()); err != nil {
-		return err
+		return fmt.Errorf("record push of %s: %w", t.Branch, err)
 	}
 	return l.event(ctx, t.URL, store.EventPushed, fmt.Sprintf("pushed %s to origin/%s", localTip, base))
 }

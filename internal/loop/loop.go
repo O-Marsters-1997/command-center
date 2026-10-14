@@ -42,7 +42,11 @@ type Loop struct {
 func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
 
 func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind, detail string) error {
-	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
+	ev := store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail}
+	if err := l.store.AppendEvent(ctx, ev); err != nil {
+		return fmt.Errorf("append %s event for %s: %w", kind, ticketURL, err)
+	}
+	return nil
 }
 
 var errIntentPending = errors.New("intent stays pending")
@@ -50,16 +54,16 @@ var errIntentPending = errors.New("intent stays pending")
 func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.VerbIntent) error) error {
 	intents, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
-		return err
+		return fmt.Errorf("list pending %s intents: %w", verb, err)
 	}
 	for _, intent := range intents {
 		if err := fn(intent); errors.Is(err, errIntentPending) {
 			continue
 		} else if err != nil {
-			return err
+			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
-			return err
+			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 	}
 	return nil
@@ -68,7 +72,7 @@ func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.Ver
 func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, error) {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return store.Ticket{}, false, err
+		return store.Ticket{}, false, fmt.Errorf("list tickets: %w", err)
 	}
 	i := slices.IndexFunc(tickets, func(t store.Ticket) bool { return t.URL == url })
 	if i < 0 {
@@ -82,16 +86,16 @@ func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, erro
 // keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.applyTrackIntents(ctx); err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("track: %w", err))
 	}
 	if err := l.validateCloningRepos(ctx); err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("validate repos: %w", err))
 	}
 	if err := l.applyImportIntents(ctx); err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("import: %w", err))
 	}
 	if err := l.applyEditTicketIntents(ctx); err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("edit ticket: %w", err))
 	}
 
 	obs, err := l.observe(ctx)
@@ -99,7 +103,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		at := l.clock.Now()
 		tickErr := fmt.Errorf("observe: %w", err)
 		if recordErr := l.store.RecordTickError(ctx, store.TickError{At: at, Message: tickErr.Error()}); recordErr != nil {
-			return recordErr
+			return fmt.Errorf("record observe failure: %w", errors.Join(tickErr, recordErr))
 		}
 		return tickErr
 	}
@@ -113,97 +117,113 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		t.obs.Runs = map[string]plan.RunObservation{}
 	}
 	if err := l.absorb(ctx, t); err != nil {
-		return err
+		return l.failTick(ctx, err)
 	}
 	if err := l.recordRepoProblems(ctx, t.obs); err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("record repo problems: %w", err))
 	}
 	skipped, err := l.skippedRepos(ctx, t.obs)
 	if err != nil {
-		return err
+		return l.failTick(ctx, fmt.Errorf("skipped repos: %w", err))
 	}
 	snap, err := l.derive(ctx, t.obs)
 	if err != nil {
+		return l.failTick(ctx, fmt.Errorf("derive: %w", err))
+	}
+	return l.failTick(ctx, l.act(ctx, snap.Skipping(skipped), t))
+}
+
+func (l *Loop) failTick(ctx context.Context, err error) error {
+	if err == nil || ctx.Err() != nil {
 		return err
 	}
-	return l.act(ctx, snap.Skipping(skipped), t)
+	if recordErr := l.recordTickError(ctx, err.Error()); recordErr != nil {
+		return fmt.Errorf("record tick error: %w", errors.Join(err, recordErr))
+	}
+	return err
 }
 
 func (l *Loop) absorb(ctx context.Context, t *tick) error {
 	prev, _, err := l.store.LastObservation(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last observation: %w", err)
 	}
 	if err := l.recordRepoStates(ctx, t.obs); err != nil {
-		return err
+		return fmt.Errorf("record repo states: %w", err)
 	}
 	if err := l.tickCheckingWaits(ctx); err != nil {
-		return err
+		return fmt.Errorf("tick checking waits: %w", err)
 	}
 	if err := l.recordOpenedEvents(ctx, prev, t.obs); err != nil {
-		return err
+		return fmt.Errorf("opened events: %w", err)
 	}
 	if err := l.recordChecksLanded(ctx, prev, t.obs); err != nil {
-		return err
+		return fmt.Errorf("checks landed: %w", err)
 	}
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
-		return err
+		return fmt.Errorf("save observation: %w", err)
 	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
-		return err
+		return fmt.Errorf("apply launch intents: %w", err)
 	}
 	if err := l.applyCancelIntents(ctx); err != nil {
-		return err
+		return fmt.Errorf("cancel: %w", err)
 	}
 	if err := l.applyKillIntents(ctx); err != nil {
-		return err
+		return fmt.Errorf("kill: %w", err)
 	}
 	if err := l.interruptForFollowUps(ctx); err != nil {
-		return err
+		return fmt.Errorf("interrupt for follow-ups: %w", err)
 	}
 	if err := l.reconcileRuns(ctx, t.obs); err != nil {
-		return err
+		return fmt.Errorf("reconcile runs: %w", err)
 	}
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
-		return err
+		return fmt.Errorf("save observation: %w", err)
 	}
 	if err := l.recordVerdictTransitions(ctx, t.obs); err != nil {
-		return err
+		return fmt.Errorf("verdict transitions: %w", err)
 	}
-	return l.recordMergedEvents(ctx, t.obs)
+	if err := l.recordMergedEvents(ctx, t.obs); err != nil {
+		return fmt.Errorf("merged events: %w", err)
+	}
+	return nil
 }
 
 func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick) error {
 	if err := l.applyReRunIntents(ctx, snap, t); err != nil {
-		return err
+		return fmt.Errorf("re-run: %w", err)
 	}
 	if err := l.applyFollowUpIntents(ctx, t); err != nil {
-		return err
+		return fmt.Errorf("follow-up: %w", err)
 	}
 	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("abort: %w", err)
 	}
 	t.markSpawnedAlive()
 	if err := l.retargetMerged(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("retarget: %w", err)
 	}
 	if err := l.applyRefreshIntents(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("refresh: %w", err)
 	}
 	l.rereadLocalTips(ctx, t.obs)
 	if err := l.applyRetryPushIntents(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("retry push: %w", err)
 	}
 	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("remove worktree: %w", err)
 	}
 	if err := l.pushPushable(ctx, snap, t.obs); err != nil {
-		return err
+		return fmt.Errorf("push: %w", err)
 	}
 	if err := l.applyDraftGate(ctx, snap); err != nil {
-		return err
+		return fmt.Errorf("draft gate: %w", err)
 	}
-	return l.launchEligible(ctx, snap, t)
+	if err := l.launchEligible(ctx, snap, t); err != nil {
+		return fmt.Errorf("launch: %w", err)
+	}
+	return nil
 }
 
 func (t *tick) markSpawnedAlive() {
@@ -215,7 +235,7 @@ func (t *tick) markSpawnedAlive() {
 func (l *Loop) derive(ctx context.Context, obs plan.Observation) (plan.Snapshot, error) {
 	in, err := l.store.PlanInput(ctx)
 	if err != nil {
-		return plan.Snapshot{}, err
+		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = l.clock.Now()
 	in.Obs = obs
@@ -231,7 +251,7 @@ func (l *Loop) rules(obs plan.Observation) plan.Rules {
 func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list repos: %w", err)
 	}
 	for _, repo := range repos {
 		current := plan.RepoStatus{
@@ -247,7 +267,7 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 			repo.SettingsSource, repo.SettingsReadAt = source, l.clock.Now()
 		}
 		if err := l.store.SetRepoState(ctx, repo); err != nil {
-			return err
+			return fmt.Errorf("set state of %s: %w", repo.Name, err)
 		}
 	}
 	return nil
@@ -258,7 +278,7 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list repos: %w", err)
 	}
 	var parts []string
 	for repo, reason := range obs.SettingsErrors {
@@ -284,7 +304,7 @@ func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) err
 func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list repos: %w", err)
 	}
 	skipped := map[string]bool{}
 	for _, repo := range repos {
@@ -326,11 +346,11 @@ func (l *Loop) applyImportIntents(ctx context.Context) error {
 func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	lastObs, _, err := l.store.LastObservation(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last observation: %w", err)
 	}
 	repos, err := ReadyRepos(ctx, l.store)
 	if err != nil {
-		return err
+		return fmt.Errorf("list ready repos: %w", err)
 	}
 	var matched []store.ImportedTicket
 	for _, repo := range repos {
@@ -357,20 +377,23 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 
 	err = l.store.ImportTickets(ctx, feature, matched, l.clock.Now())
 	var conflict *store.FeatureConflictError
-	if errors.As(err, &conflict) {
-		return l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
-	}
 	var closure *store.FeatureClosureError
-	if errors.As(err, &closure) {
-		return l.store.RecordImportRefusal(ctx, feature, closure, l.clock.Now())
+	switch {
+	case errors.As(err, &conflict):
+		err = l.store.RecordImportRefusal(ctx, feature, conflict, l.clock.Now())
+	case errors.As(err, &closure):
+		err = l.store.RecordImportRefusal(ctx, feature, closure, l.clock.Now())
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("import tickets for %s: %w", feature, err)
+	}
+	return nil
 }
 
 func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	intents, err := l.store.PendingEditTicketIntents(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list pending edit-ticket intents: %w", err)
 	}
 
 	now := l.clock.Now()
@@ -379,13 +402,13 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 		var closure *store.FeatureClosureError
 		if errors.As(err, &closure) {
 			if err := l.store.RecordImportRefusal(ctx, closure.Feature, closure, now); err != nil {
-				return err
+				return fmt.Errorf("record import refusal for %s: %w", intent.TicketID, err)
 			}
 		} else if err != nil {
-			return err
+			return fmt.Errorf("edit %s: %w", intent.TicketID, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {
-			return err
+			return fmt.Errorf("consume intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 	}
 	return nil
@@ -395,7 +418,7 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 	return l.eachIntent(ctx, plan.VerbKill, func(intent store.VerbIntent) error {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("latest runs: %w", err)
 		}
 		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
 			if err := l.runner.Cancel(*run.Pgid); err != nil {
@@ -408,12 +431,15 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 
 func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
-	if err != nil || len(intents) == 0 {
-		return err
+	if err != nil {
+		return fmt.Errorf("list pending follow-up intents: %w", err)
+	}
+	if len(intents) == 0 {
+		return nil
 	}
 	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("latest runs: %w", err)
 	}
 	cancelled := map[string]bool{}
 	for _, intent := range intents {
@@ -433,7 +459,7 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list runs awaiting disposition: %w", err)
 	}
 	if len(pending) == 0 {
 		return nil
@@ -441,7 +467,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 	byTicket := ticketsByURL(tickets)
 
@@ -456,7 +482,7 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 			continue
 		}
 		if err := l.disposeRun(ctx, run, byTicket[run.TicketID], obs); err != nil {
-			return err
+			return fmt.Errorf("dispose run %d of %s: %w", run.ID, run.TicketID, err)
 		}
 	}
 	return nil
@@ -467,7 +493,7 @@ func (l *Loop) disposeRun(
 ) error {
 	outcome, err := l.outcomeFor(ctx, run, ticket, obs)
 	if err != nil {
-		return err
+		return fmt.Errorf("outcome: %w", err)
 	}
 
 	var exitCode *int
@@ -485,7 +511,10 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	return l.event(ctx, ticket.URL, store.EventRunDisposed, outcome.String())
+	if err := l.event(ctx, ticket.URL, store.EventRunDisposed, outcome.String()); err != nil {
+		return fmt.Errorf("append run disposed event: %w", err)
+	}
+	return nil
 }
 
 func (l *Loop) outcomeFor(
@@ -494,7 +523,7 @@ func (l *Loop) outcomeFor(
 	if run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp {
 		queued, err := l.followUpQueued(ctx, run.TicketID)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("check queued follow-up for %s: %w", run.TicketID, err)
 		}
 		if queued {
 			return plan.OutcomeContinued, nil
@@ -502,10 +531,13 @@ func (l *Loop) outcomeFor(
 	}
 	question, err := l.readQuestion(run)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("read question for run %d: %w", run.ID, err)
 	}
 	if question != "" {
-		return plan.OutcomeAsked, l.store.RecordQuestion(ctx, run.ID, question)
+		if err := l.store.RecordQuestion(ctx, run.ID, question); err != nil {
+			return 0, fmt.Errorf("record question for run %d: %w", run.ID, err)
+		}
+		return plan.OutcomeAsked, nil
 	}
 	commits := 0
 	if run.BaselineSHA != "" {
@@ -520,7 +552,7 @@ func (l *Loop) outcomeFor(
 func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, error) {
 	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("list pending follow-up intents: %w", err)
 	}
 	return slices.ContainsFunc(intents, func(i store.VerbIntent) bool { return i.TicketID == ticketURL }), nil
 }
@@ -571,14 +603,22 @@ func (l *Loop) commitsSinceBaseline(
 	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA string,
 ) (int, error) {
 	if worktreePath := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
-		return git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
+		commits, err := git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
+		if err != nil {
+			return 0, fmt.Errorf("count commits in %s: %w", worktreePath, err)
+		}
+		return commits, nil
 	}
 	tip, ok := obs.BranchTips[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		return 0, nil
 	}
 	repoPath := l.checkout(ticket.Repo)
-	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
+	commits, err := git.CommitsSince(ctx, repoPath, baselineSHA, tip)
+	if err != nil {
+		return 0, fmt.Errorf("count commits on %s/%s: %w", ticket.Repo, ticket.Branch, err)
+	}
+	return commits, nil
 }
 
 func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) error {
@@ -589,14 +629,14 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) 
 
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 	byTicket := ticketsByURL(tickets)
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
 		ticket := byTicket[ticketURL]
 		if err := l.cutAndSpawn(ctx, t, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
-			return err
+			return fmt.Errorf("%s: %w", ticketURL, err)
 		}
 	}
 	return nil
@@ -605,13 +645,16 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) 
 func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 	urls := make([]string, len(tickets))
 	for i, t := range tickets {
 		urls[i] = t.URL
 	}
-	return l.store.IncrementCheckingTicks(ctx, urls)
+	if err := l.store.IncrementCheckingTicks(ctx, urls); err != nil {
+		return fmt.Errorf("increment checking ticks: %w", err)
+	}
+	return nil
 }
 
 func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
@@ -630,7 +673,7 @@ func (l *Loop) cutAndSpawn(
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
 		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
-			return insertErr
+			return fmt.Errorf("record failed cut of %s: %w", branch, errors.Join(err, insertErr))
 		}
 		return l.event(ctx, ticket.URL, store.EventCutFailed, err.Error())
 	}
@@ -649,10 +692,13 @@ func (l *Loop) cutAndSpawn(
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, t, spawnSpec{
+	if err := l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
 		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
-	})
+	}); err != nil {
+		return fmt.Errorf("spawn agent in %s: %w", worktreePath, err)
+	}
+	return nil
 }
 
 func agentPrompt(ticket store.Ticket) string {
@@ -691,7 +737,7 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	ticket := spec.ticket
 	runID, sessionID, err := l.insertSkeleton(ctx, spec)
 	if err != nil {
-		return err
+		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}
 
 	promptFor := spec.promptFor
@@ -737,13 +783,13 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		if dispositionErr := l.store.RecordDisposition(
 			ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil,
 		); dispositionErr != nil {
-			return dispositionErr
+			return fmt.Errorf("record disposition for failed spawn of run %d: %w", runID, errors.Join(err, dispositionErr))
 		}
 		return l.event(ctx, ticket.URL, store.EventSpawnFailed, err.Error())
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
-		return err
+		return fmt.Errorf("record spawn of run %d: %w", runID, err)
 	}
 	t.spawned = append(t.spawned, ticket.URL)
 	return l.event(ctx, ticket.URL, store.EventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))

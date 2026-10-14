@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -10,24 +11,24 @@ import (
 func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 	latest, err := l.store.LatestRunsByTicket(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("latest runs: %w", err)
 	}
 	pushFacts, err := l.store.PushFacts(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("push facts: %w", err)
 	}
 	lastVerdicts, err := l.store.LastVerdicts(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last verdicts: %w", err)
 	}
 
 	vd, err := l.store.VerdictFacts(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("verdict facts: %w", err)
 	}
 
 	changed := false
@@ -51,11 +52,14 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 		lastVerdicts[t.URL] = current
 		changed = true
 		if err := l.event(ctx, t.URL, store.EventVerdictTransition, current+": "+fact.Verdict.Reason); err != nil {
-			return err
+			return fmt.Errorf("record verdict transition for %s: %w", t.URL, err)
 		}
 	}
 	if !changed {
 		return nil
 	}
-	return l.store.SaveLastVerdicts(ctx, lastVerdicts)
+	if err := l.store.SaveLastVerdicts(ctx, lastVerdicts); err != nil {
+		return fmt.Errorf("save last verdicts: %w", err)
+	}
+	return nil
 }

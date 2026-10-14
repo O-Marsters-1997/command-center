@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 
@@ -13,7 +14,7 @@ import (
 func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 
 	for _, t := range tickets {
@@ -29,7 +30,7 @@ func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observatio
 				continue
 			}
 			if err := l.event(ctx, t.URL, store.EventChecksLanded, name+" "+landedWord(landed)); err != nil {
-				return err
+				return fmt.Errorf("record check %s for %s: %w", name, t.URL, err)
 			}
 		}
 	}
