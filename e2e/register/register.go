@@ -54,20 +54,20 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, args []st
 	flags := flag.NewFlagSet("tick", flag.ContinueOnError)
 	count := flags.Int("count", 1, "number of ticks to run")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("parse tick flags: %w", err)
 	}
 
 	instance, err := app.New(
 		ctx, logger, configPath, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("start app: %w", err)
 	}
 	defer func() { err = errors.Join(err, instance.Close()) }()
 
 	for range *count {
 		if err := instance.RunOnce(ctx); err != nil {
-			return err
+			return fmt.Errorf("run tick: %w", err)
 		}
 	}
 	return nil
@@ -80,15 +80,18 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load config: %w", err)
 	}
 	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	return st.QueueVerbIntent(ctx, args[0], plan.VerbImport, time.Now())
+	if err := st.QueueVerbIntent(ctx, args[0], plan.VerbImport, time.Now()); err != nil {
+		return fmt.Errorf("queue import for %s: %w", args[0], err)
+	}
+	return nil
 }
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately
@@ -101,7 +104,7 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	// the body: a path-only `cc request POST /verb` cannot express that.
 	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("parse request flags: %w", err)
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
@@ -111,15 +114,15 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load config: %w", err)
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
 	defer func() { err = errors.Join(err, store.Close()) }()
 
@@ -133,7 +136,7 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	}
 	req, err := http.NewRequestWithContext(ctx, method, server.URL+path, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("build %s %s request: %w", method, path, err)
 	}
 	if *form != "" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -150,12 +153,12 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("send %s %s: %w", method, path, err)
 	}
 	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 
 	if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
-		return err
+		return fmt.Errorf("print %s %s response: %w", method, path, err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("%s %s: %s", method, path, resp.Status)

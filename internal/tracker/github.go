@@ -27,7 +27,11 @@ func newGithubSource(owner, repo string) *githubSource {
 }
 
 func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	return gh.Run(ctx, "", args...)
+	out, err := gh.Run(ctx, "", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query github tracker: %w", err)
+	}
+	return out, nil
 }
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }

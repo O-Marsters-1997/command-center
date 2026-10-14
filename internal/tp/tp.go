@@ -35,7 +35,10 @@ func (m RemoveMode) flag() (string, error) {
 
 // New cuts a worktree for branch off baseRef via `tp new`, run inside repoPath.
 func New(ctx context.Context, repoPath, branch, baseRef string) error {
-	return command.RunWithin(ctx, LongTimeout, repoPath, "tp", "new", branch, "--base", baseRef)
+	if err := command.RunWithin(ctx, LongTimeout, repoPath, "tp", "new", branch, "--base", baseRef); err != nil {
+		return fmt.Errorf("tp new %s: %w", branch, err)
+	}
+	return nil
 }
 
 // Remove tears down branch's worktree and deletes the branch via `tp remove`, run inside
@@ -43,7 +46,10 @@ func New(ctx context.Context, repoPath, branch, baseRef string) error {
 func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
 	flag, err := mode.flag()
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve remove mode for %s: %w", branch, err)
 	}
-	return command.Run(ctx, repoPath, "tp", "remove", flag, branch)
+	if err := command.Run(ctx, repoPath, "tp", "remove", flag, branch); err != nil {
+		return fmt.Errorf("tp remove %s: %w", branch, err)
+	}
+	return nil
 }

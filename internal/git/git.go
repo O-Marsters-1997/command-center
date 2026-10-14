@@ -331,7 +331,11 @@ func gitRun(ctx context.Context, repoPath string, args ...string) (stdout []byte
 }
 
 func git(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	return command.Output(ctx, repoPath, "git", args...)
+	out, err := command.Output(ctx, repoPath, "git", args...)
+	if err != nil {
+		return nil, fmt.Errorf("run git in %s: %w", repoPath, err)
+	}
+	return out, nil
 }
 
 func lines(out []byte) []string {

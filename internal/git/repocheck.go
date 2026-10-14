@@ -14,7 +14,7 @@ import (
 func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind plan.RefusalKind, reason string, err error) {
 	settings, err := gh.ReadRepoSettings(ctx, fullName)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("check repo %s on github: %w", fullName, err)
 	}
 	kind, reason = assertRepoSettings(fullName, settings)
 	return kind, reason, nil
