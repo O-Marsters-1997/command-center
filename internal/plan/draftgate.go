@@ -34,7 +34,7 @@ func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draf
 		case Merged:
 		case Closed:
 			closed = append(closed, g.URL)
-		default: // Open or Absent
+		case Open, Absent:
 			unresolved = append(unresolved, g.URL)
 		}
 	}

@@ -30,9 +30,9 @@ func (s PRState) String() string {
 		return "merged"
 	case Closed:
 		return "closed"
-	default:
-		return "absent"
+	case Absent:
 	}
+	return "absent"
 }
 
 type Ticket struct {
@@ -99,12 +99,12 @@ func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Un
 			Blocking:      []string{blocker.URL},
 			BlockerClosed: true,
 		}
-	default: // Absent
-		return Unlock{
-			Reason: Reason(fmt.Sprintf(
-				"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
-			Blocking: []string{blocker.URL},
-		}
+	case Absent:
+	}
+	return Unlock{
+		Reason: Reason(fmt.Sprintf(
+			"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
+		Blocking: []string{blocker.URL},
 	}
 }
 
@@ -128,7 +128,8 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 type State int
 
 const (
-	Blocked State = iota
+	StateUnknown State = iota
+	Blocked
 	Ready
 	Queued
 	Running
@@ -150,61 +151,7 @@ const (
 	VerificationFailed
 	WaitingOnProducerDeploy
 	AwaitingInput
-	stateCount
 )
-
-const StateCount = int(stateCount)
-
-func (s State) String() string {
-	switch s {
-	case Ready:
-		return "ready"
-	case Queued:
-		return "queued"
-	case Running:
-		return "running"
-	case Failed:
-		return "failed"
-	case CutFailed:
-		return "cut_failed"
-	case PushPending:
-		return "push_pending"
-	case Checking:
-		return "checking"
-	case NeedsYou:
-		return "needs_you"
-	case PushFailed:
-		return "push_failed"
-	case ReviewMe:
-		return "review_me"
-	case PRMerged:
-		return "merged"
-	case PRClosedUnmerged:
-		return "pr_closed_unmerged"
-	case BaseGone:
-		return "base_gone"
-	case Cancelled:
-		return "cancelled"
-	case BaseMoved:
-		return "base_moved"
-	case CIFailed:
-		return "ci_failed"
-	case RefreshConflicted:
-		return "refresh_conflicted"
-	case ConflictsWithMain:
-		return "conflicts_with_main"
-	case VerificationFailed:
-		return "verification_failed"
-	case WaitingOnProducerDeploy:
-		return "waiting_on_producer_deploy"
-	case AwaitingInput:
-		return "awaiting_input"
-	case Blocked:
-		return "blocked"
-	default:
-		return "blocked"
-	}
-}
 
 // RunFact is the latest run's liveness and disposition as the loop observed it this tick.
 // HasOutcome distinguishes "not yet disposed" from a genuine zero-value Outcome.
@@ -319,7 +266,7 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		return PushFailed, "push or pull request creation failed"
 	case run.RefreshRefused:
 		return NeedsYou, run.RefreshRefusedReason
-	case run.Verdict != nil && run.Verdict.Verdict != verdict.Checking:
+	case run.Verdict != nil && run.Verdict.Kind != verdict.Checking:
 		return stateOfVerdict(*run.Verdict), Reason(run.Verdict.Reason)
 	case run.PROpen:
 		if run.Verdict != nil {
@@ -336,7 +283,7 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 }
 
 func stateOfVerdict(r verdict.Result) State {
-	switch r.Verdict {
+	switch r.Kind {
 	case verdict.BaseMoved:
 		return BaseMoved
 	case verdict.WaitingOnProducerDeploy:
@@ -344,13 +291,13 @@ func stateOfVerdict(r verdict.Result) State {
 	case verdict.ReviewMe:
 		return ReviewMe
 	case verdict.NeedsYou:
-		if len(r.RedLeaves) > 0 {
-			return CIFailed
-		}
 		return NeedsYou
-	default:
+	case verdict.CIFailed:
+		return CIFailed
+	case verdict.Checking, verdict.KindUnknown:
 		return Checking
 	}
+	return Checking
 }
 
 func conflictedBaseReason(base string) Reason {

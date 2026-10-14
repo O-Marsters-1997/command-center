@@ -68,8 +68,8 @@ func TestStateDecisions(t *testing.T) {
 		},
 	}
 
-	if len(tests) != plan.StateCount {
-		t.Fatalf("table covers %d states, the enum has %d", len(tests), plan.StateCount)
+	if len(tests) != len(plan.AllStates()) {
+		t.Fatalf("table covers %d states, the enum has %d", len(tests), len(plan.AllStates()))
 	}
 
 	for _, tt := range tests {

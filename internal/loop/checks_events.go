@@ -43,7 +43,7 @@ func landedWord(s verdict.CheckState) string {
 		return "passed"
 	case verdict.Skipped:
 		return "skipped"
-	default:
-		return "failed"
+	case verdict.Pending, verdict.Failure:
 	}
+	return "failed"
 }

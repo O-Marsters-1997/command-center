@@ -26,8 +26,6 @@ linters:
   settings:
     lll:
       line-length: 120
-    exhaustive:
-      ignore-enum-members: \.stateCount$
     usetesting:
       context-background: true
       context-todo: true
@@ -98,12 +96,6 @@ linters:
         text: Error
         linters:
           - forbidigo
-      - path: ^internal/(agentlog/(parse|diff)|verdict/verdict|loop/checks_events|web/view/(logview|logline))\.go$
-        linters:
-          - exhaustive
-      - path: ^internal/plan/(plan|compose|draftgate)\.go$
-        linters:
-          - exhaustive
 
 formatters:
   enable:

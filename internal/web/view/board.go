@@ -397,8 +397,8 @@ func removalWarning(s plan.State, detail string) string {
 }
 
 func runVerdictLabel(run *plan.RunFact) string {
-	if run == nil {
+	if run == nil || run.Verdict == nil {
 		return ""
 	}
-	return run.Verdict.Label()
+	return run.Verdict.Kind.String()
 }

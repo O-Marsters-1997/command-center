@@ -54,11 +54,7 @@ func TestEndedRunsGlyphDoesNotPulse(t *testing.T) {
 func TestBoardRendersEveryGlyphWordAsAClass(t *testing.T) {
 	t.Parallel()
 
-	var states []plan.State
-	for s := range plan.StateCount {
-		states = append(states, plan.State(s))
-	}
-	body, err := web.RenderStatesBoard(states)
+	body, err := web.RenderStatesBoard(plan.AllStates())
 	if err != nil {
 		t.Fatal(err)
 	}

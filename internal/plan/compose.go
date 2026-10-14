@@ -40,9 +40,9 @@ func ComposeMessage(text string, after Outcome) string {
 		return fmt.Sprintf(
 			"The owner interrupted you with a message. Your last tool call may have been cut off, "+
 				"so check its effect before going on:\n\n%s", text)
-	default:
-		return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
+	case OutcomePush, OutcomeFailed, OutcomeCutFailed:
 	}
+	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }
 
 // Hash fingerprints a composed prompt: consent is bound to content, so a launch stores it at
