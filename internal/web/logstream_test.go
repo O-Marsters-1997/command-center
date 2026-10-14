@@ -370,7 +370,7 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	}
 }
 
-func TestPageCapsThePreAtAThousandLines(t *testing.T) {
+func TestPageLoadsTheSSEExtensionAndGlue(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -385,8 +385,7 @@ func TestPageCapsThePreAtAThousandLines(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<script src="/assets/sse.min.js"></script>`,
-		"htmx:sseMessage",
-		"1000",
+		`<script type="module" src="/assets/dist/glue.js"></script>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page is missing %q:\n%s", want, body)
