@@ -1,8 +1,10 @@
 -- name: QueueLaunchIntent :exec
 INSERT INTO intents (at, ticket_id, verb, payload) VALUES (sqlc.arg(at), sqlc.arg(ticket_id), 'launch', sqlc.arg(payload));
 
--- name: PendingLaunchIntents :many
-SELECT id, ticket_id, payload FROM intents WHERE verb = 'launch' AND consumed_at IS NULL ORDER BY id;
+-- name: ClaimLaunchIntents :many
+UPDATE intents SET consumed_at = sqlc.arg(at)
+WHERE verb = 'launch' AND consumed_at IS NULL
+RETURNING id, ticket_id, payload;
 
 -- name: InsertLaunch :one
 INSERT INTO launches (created_at, state) VALUES (sqlc.arg(created_at), 'active') RETURNING id;
@@ -11,9 +13,6 @@ INSERT INTO launches (created_at, state) VALUES (sqlc.arg(created_at), 'active')
 INSERT INTO launch_members (launch_id, ticket_id, prompt_hash)
 SELECT sqlc.arg(launch_id)::bigint, m.ticket_id, m.prompt_hash
 FROM jsonb_to_recordset(sqlc.arg(members)::jsonb) AS m(ticket_id text, prompt_hash text);
-
--- name: ConsumeLaunchIntents :exec
-UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id IN (SELECT jsonb_array_elements_text(sqlc.arg(ids)::jsonb)::bigint);
 
 -- name: InsertLaunchEvent :exec
 INSERT INTO events (at, ticket_id, kind, detail) VALUES (sqlc.arg(at), NULL, 'launch', sqlc.arg(detail));
@@ -34,7 +33,7 @@ SELECT COUNT(*) FROM launch_members WHERE launch_id IN (
     WHERE l.state = 'active' AND lm.ticket_id = sqlc.arg(ticket_id)
 );
 
--- name: CancelActiveLaunches :exec
+-- name: CancelActiveLaunches :execrows
 UPDATE launches SET state = 'cancelled' WHERE id IN (
     SELECT lm.launch_id FROM launch_members lm
     JOIN launches l ON l.id = lm.launch_id

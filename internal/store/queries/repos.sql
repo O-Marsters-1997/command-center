@@ -10,7 +10,7 @@ ON CONFLICT (name) DO UPDATE SET
     remote = EXCLUDED.remote, state = EXCLUDED.state,
     refusal_kind = EXCLUDED.refusal_kind, refusal = EXCLUDED.refusal;
 
--- name: SetRepoState :exec
+-- name: SetRepoState :execrows
 UPDATE repos SET state = sqlc.arg(state), refusal_kind = sqlc.arg(refusal_kind), refusal = sqlc.arg(refusal),
     settings_source = sqlc.arg(settings_source), settings_read_at = sqlc.arg(settings_read_at)
 WHERE name = sqlc.arg(name);

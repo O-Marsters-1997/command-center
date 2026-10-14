@@ -10,16 +10,16 @@ VALUES (
 SELECT session_id::text AS session_id FROM runs
 WHERE ticket_id = sqlc.arg(ticket_id) AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 
--- name: RecordSpawn :exec
+-- name: RecordSpawn :execrows
 UPDATE runs SET pgid = sqlc.arg(pgid), proc_started_at = sqlc.arg(proc_started_at), log_path = sqlc.arg(log_path)
 WHERE id = sqlc.arg(id);
 
--- name: RecordDisposition :exec
+-- name: RecordDisposition :execrows
 UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
     cost_usd = sqlc.arg(cost_usd)
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id) AND outcome IS NULL;
 
--- name: RecordQuestion :exec
+-- name: RecordQuestion :execrows
 UPDATE runs SET question = sqlc.arg(question) WHERE id = sqlc.arg(id);
 
 -- name: InsertCutFailedRun :one
@@ -51,8 +51,8 @@ WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 -- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
 
--- name: ConsumeVerbIntent :exec
-UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id = sqlc.arg(id);
+-- name: ConsumeVerbIntent :execrows
+UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id = sqlc.arg(id) AND consumed_at IS NULL;
 
 -- name: ActiveLaunchHashes :many
 SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm

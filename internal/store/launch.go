@@ -1,11 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -40,12 +42,12 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 // plus a launch_members row per intent, marking each consumed.
 func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
-		groups, order, err := pendingLaunchIntents(ctx, q)
+		nowUTC := now.UTC()
+		groups, order, err := claimLaunchIntents(ctx, q, nowUTC)
 		if err != nil {
 			return err
 		}
 
-		nowUTC := now.UTC()
 		for _, group := range order {
 			if err := insertLaunch(ctx, q, nowUTC, groups[group]); err != nil {
 				return fmt.Errorf("apply launch group %s: %w", group, err)
@@ -56,16 +58,18 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) error {
 }
 
 type pendingIntent struct {
-	id         int64
 	ticketID   string
 	promptHash string
 }
 
-func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pendingIntent, []string, error) {
-	rows, err := q.PendingLaunchIntents(ctx)
+func claimLaunchIntents(
+	ctx context.Context, q *ccdb.Queries, at time.Time,
+) (map[string][]pendingIntent, []string, error) {
+	rows, err := q.ClaimLaunchIntents(ctx, notNullTime(at))
 	if err != nil {
-		return nil, nil, fmt.Errorf("select launch intents: %w", err)
+		return nil, nil, fmt.Errorf("claim launch intents: %w", err)
 	}
+	slices.SortFunc(rows, func(a, b ccdb.ClaimLaunchIntentsRow) int { return cmp.Compare(a.ID, b.ID) })
 
 	groups := map[string][]pendingIntent{}
 	var order []string
@@ -78,7 +82,7 @@ func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pe
 			order = append(order, payload.Group)
 		}
 		groups[payload.Group] = append(groups[payload.Group],
-			pendingIntent{id: row.ID, ticketID: row.TicketID, promptHash: payload.PromptHash})
+			pendingIntent{ticketID: row.TicketID, promptHash: payload.PromptHash})
 	}
 	return groups, order, nil
 }
@@ -94,16 +98,10 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 		PromptHash string `json:"prompt_hash"`
 	}
 	rows := make([]memberRow, len(members))
-	ids := make([]int64, len(members))
 	for i, m := range members {
 		rows[i] = memberRow{TicketID: m.ticketID, PromptHash: m.promptHash}
-		ids[i] = m.id
 	}
 	encodedMembers, err := encodeJSON("launch members", rows)
-	if err != nil {
-		return err
-	}
-	encodedIDs, err := encodeJSON("launch intent ids", ids)
 	if err != nil {
 		return err
 	}
@@ -111,11 +109,6 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 		LaunchID: launchID, Members: encodedMembers,
 	}); err != nil {
 		return fmt.Errorf("insert %d launch members: %w", len(members), err)
-	}
-	if err := q.ConsumeLaunchIntents(ctx, ccdb.ConsumeLaunchIntentsParams{
-		ConsumedAt: notNullTime(at), Ids: encodedIDs,
-	}); err != nil {
-		return fmt.Errorf("consume %d launch intents: %w", len(members), err)
 	}
 
 	detail := fmt.Sprintf("launch %d authorised with %d member(s)", launchID, len(members))
@@ -163,7 +156,7 @@ func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (int, er
 		if err != nil {
 			return fmt.Errorf("count members of active launches for %s: %w", ticketID, err)
 		}
-		if err := q.CancelActiveLaunches(ctx, ticketID); err != nil {
+		if _, err := q.CancelActiveLaunches(ctx, ticketID); err != nil {
 			return fmt.Errorf("cancel launches for %s: %w", ticketID, err)
 		}
 		members = int(count)

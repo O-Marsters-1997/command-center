@@ -64,7 +64,7 @@ func (q *Queries) ListRepos(ctx context.Context) ([]ListReposRow, error) {
 	return items, nil
 }
 
-const setRepoState = `-- name: SetRepoState :exec
+const setRepoState = `-- name: SetRepoState :execrows
 UPDATE repos SET state = $1, refusal_kind = $2, refusal = $3,
     settings_source = $4, settings_read_at = $5
 WHERE name = $6
@@ -79,8 +79,8 @@ type SetRepoStateParams struct {
 	Name           string
 }
 
-func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) error {
-	_, err := q.db.ExecContext(ctx, setRepoState,
+func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRepoState,
 		arg.State,
 		arg.RefusalKind,
 		arg.Refusal,
@@ -88,7 +88,10 @@ func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) erro
 		arg.SettingsReadAt,
 		arg.Name,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertRepo = `-- name: UpsertRepo :exec

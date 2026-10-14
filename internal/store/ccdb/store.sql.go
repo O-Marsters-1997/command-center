@@ -482,15 +482,18 @@ func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
 	return err
 }
 
-const setBlockedBys = `-- name: SetBlockedBys :exec
+const setBlockedBys = `-- name: SetBlockedBys :execrows
 UPDATE tickets t SET blocked_by = u.blocked_by
 FROM jsonb_to_recordset($1::jsonb) AS u(url text, blocked_by jsonb)
 WHERE t.url = u.url
 `
 
-func (q *Queries) SetBlockedBys(ctx context.Context, updates json.RawMessage) error {
-	_, err := q.db.ExecContext(ctx, setBlockedBys, updates)
-	return err
+func (q *Queries) SetBlockedBys(ctx context.Context, updates json.RawMessage) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setBlockedBys, updates)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertTickets = `-- name: UpsertTickets :exec
@@ -511,7 +514,7 @@ func (q *Queries) UpsertTickets(ctx context.Context, tickets json.RawMessage) er
 	return err
 }
 
-const withdrawTicket = `-- name: WithdrawTicket :exec
+const withdrawTicket = `-- name: WithdrawTicket :execrows
 UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL
 `
 
@@ -520,12 +523,15 @@ type WithdrawTicketParams struct {
 	URL         string
 }
 
-func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) error {
-	_, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
-	return err
+func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const withdrawTickets = `-- name: WithdrawTickets :exec
+const withdrawTickets = `-- name: WithdrawTickets :execrows
 UPDATE tickets SET withdrawn_at = $1
 WHERE url IN (SELECT jsonb_array_elements_text($2::jsonb)) AND withdrawn_at IS NULL
 `
@@ -535,7 +541,10 @@ type WithdrawTicketsParams struct {
 	Urls        json.RawMessage
 }
 
-func (q *Queries) WithdrawTickets(ctx context.Context, arg WithdrawTicketsParams) error {
-	_, err := q.db.ExecContext(ctx, withdrawTickets, arg.WithdrawnAt, arg.Urls)
-	return err
+func (q *Queries) WithdrawTickets(ctx context.Context, arg WithdrawTicketsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawTickets, arg.WithdrawnAt, arg.Urls)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

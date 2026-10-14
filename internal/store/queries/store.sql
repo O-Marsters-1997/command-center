@@ -42,10 +42,10 @@ SELECT url, repo, branch, blocked_by FROM tickets WHERE feature = sqlc.arg(featu
 -- name: ListTicketBranches :many
 SELECT url, repo, branch FROM tickets WHERE url IN (SELECT jsonb_array_elements_text(sqlc.arg(urls)::jsonb));
 
--- name: WithdrawTicket :exec
+-- name: WithdrawTicket :execrows
 UPDATE tickets SET withdrawn_at = sqlc.arg(withdrawn_at) WHERE url = sqlc.arg(url) AND withdrawn_at IS NULL;
 
--- name: WithdrawTickets :exec
+-- name: WithdrawTickets :execrows
 UPDATE tickets SET withdrawn_at = sqlc.arg(withdrawn_at)
 WHERE url IN (SELECT jsonb_array_elements_text(sqlc.arg(urls)::jsonb)) AND withdrawn_at IS NULL;
 
@@ -55,7 +55,7 @@ SELECT url, repo, branch FROM tickets WHERE withdrawn_at IS NOT NULL;
 -- name: ListTicketsWithBlockers :many
 SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL;
 
--- name: SetBlockedBys :exec
+-- name: SetBlockedBys :execrows
 UPDATE tickets t SET blocked_by = u.blocked_by
 FROM jsonb_to_recordset(sqlc.arg(updates)::jsonb) AS u(url text, blocked_by jsonb)
 WHERE t.url = u.url;

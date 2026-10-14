@@ -46,8 +46,8 @@ func (q *Queries) ActiveLaunchHashes(ctx context.Context) ([]ActiveLaunchHashesR
 	return items, nil
 }
 
-const consumeVerbIntent = `-- name: ConsumeVerbIntent :exec
-UPDATE intents SET consumed_at = $1 WHERE id = $2
+const consumeVerbIntent = `-- name: ConsumeVerbIntent :execrows
+UPDATE intents SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL
 `
 
 type ConsumeVerbIntentParams struct {
@@ -55,9 +55,12 @@ type ConsumeVerbIntentParams struct {
 	ID         int64
 }
 
-func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentParams) error {
-	_, err := q.db.ExecContext(ctx, consumeVerbIntent, arg.ConsumedAt, arg.ID)
-	return err
+func (q *Queries) ConsumeVerbIntent(ctx context.Context, arg ConsumeVerbIntentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, consumeVerbIntent, arg.ConsumedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const insertCutFailedRun = `-- name: InsertCutFailedRun :one
@@ -408,10 +411,10 @@ func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbI
 	return err
 }
 
-const recordDisposition = `-- name: RecordDisposition :exec
+const recordDisposition = `-- name: RecordDisposition :execrows
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
     cost_usd = $4
-WHERE id = $5
+WHERE id = $5 AND outcome IS NULL
 `
 
 type RecordDispositionParams struct {
@@ -422,18 +425,21 @@ type RecordDispositionParams struct {
 	ID       int64
 }
 
-func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) error {
-	_, err := q.db.ExecContext(ctx, recordDisposition,
+func (q *Queries) RecordDisposition(ctx context.Context, arg RecordDispositionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordDisposition,
 		arg.Outcome,
 		arg.ExitCode,
 		arg.EndedAt,
 		arg.CostUsd,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const recordQuestion = `-- name: RecordQuestion :exec
+const recordQuestion = `-- name: RecordQuestion :execrows
 UPDATE runs SET question = $1 WHERE id = $2
 `
 
@@ -442,12 +448,15 @@ type RecordQuestionParams struct {
 	ID       int64
 }
 
-func (q *Queries) RecordQuestion(ctx context.Context, arg RecordQuestionParams) error {
-	_, err := q.db.ExecContext(ctx, recordQuestion, arg.Question, arg.ID)
-	return err
+func (q *Queries) RecordQuestion(ctx context.Context, arg RecordQuestionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordQuestion, arg.Question, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const recordSpawn = `-- name: RecordSpawn :exec
+const recordSpawn = `-- name: RecordSpawn :execrows
 UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3
 WHERE id = $4
 `
@@ -459,14 +468,17 @@ type RecordSpawnParams struct {
 	ID            int64
 }
 
-func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) error {
-	_, err := q.db.ExecContext(ctx, recordSpawn,
+func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordSpawn,
 		arg.Pgid,
 		arg.ProcStartedAt,
 		arg.LogPath,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const runIDsForTicket = `-- name: RunIDsForTicket :many

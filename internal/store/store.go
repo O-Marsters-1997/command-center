@@ -326,10 +326,14 @@ func (s *Store) ImportTickets(
 		if err != nil {
 			return err
 		}
-		if err = qtx.WithdrawTickets(ctx, ccdb.WithdrawTicketsParams{
+		withdrawn, err := qtx.WithdrawTickets(ctx, ccdb.WithdrawTicketsParams{
 			WithdrawnAt: notNullTime(now), Urls: encodedDropped,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("withdraw %d tickets: %w", len(dropped), err)
+		}
+		if len(dropped) > 0 && withdrawn == 0 {
+			return fmt.Errorf("withdraw %d tickets: %w", len(dropped), ErrNotFound)
 		}
 
 		withdrawnRows, err := qtx.ListWithdrawnTickets(ctx)
@@ -385,25 +389,33 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 	if err != nil {
 		return err
 	}
-	if err := qtx.SetBlockedBys(ctx, encoded); err != nil {
-		return fmt.Errorf("repair blocked_by of %d tickets: %w", len(updates), err)
-	}
-	return nil
+	n, err := qtx.SetBlockedBys(ctx, encoded)
+	return matchedRow(n, err, fmt.Sprintf("repair blocked_by of %d tickets", len(updates)))
 }
 
 // WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
 // their foreign key. When merged, it also prunes the URL from every other ticket's blocked_by.
 func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
-		err := q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url})
-		if err != nil {
-			return fmt.Errorf("withdraw ticket %s: %w", url, err)
+		n, err := q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url})
+		if err := matchedRow(n, err, "withdraw ticket "+url); err != nil {
+			return err
 		}
 		if merged {
 			return repairBlockedBy(ctx, q, map[string]bool{url: true})
 		}
 		return nil
 	})
+}
+
+func matchedRow(n int64, err error, what string) error {
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%s: %w", what, ErrNotFound)
+	}
+	return nil
 }
 
 func encodeBlockedBy(urls []string) ([]byte, error) {
