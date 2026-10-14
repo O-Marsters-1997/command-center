@@ -4,9 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -23,6 +21,7 @@ type followUpResult struct {
 	spawn     runner.SpawnConfig
 	sessionID string
 	row       storepkg.RunDetails
+	runsDir   string
 }
 
 func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
@@ -36,7 +35,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	agentRunID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1", Session: storepkg.RunSession{StartNew: tc.startSession},
 	})
@@ -99,6 +98,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		spawn:     fake.Spawns[0],
 		sessionID: sessionID,
 		row:       row,
+		runsDir:   ws.RunsDir,
 	}
 }
 
@@ -115,10 +115,7 @@ func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
 	if got.row.Message != "now fix the other test" {
 		t.Errorf("run message = %q, want the owner's raw text", got.row.Message)
 	}
-	if !strings.Contains(got.spawn.Prompt, "now fix the other test") ||
-		strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
-		t.Errorf("prompt = %q, want the message wrapper and not the fresh follow-up skill", got.spawn.Prompt)
-	}
+	assertPromptGolden(t, "testdata/prompt-follow-up-resume.golden.txt", got.spawn.Prompt, got.runsDir)
 }
 
 func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
@@ -134,9 +131,7 @@ func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
 	if got.row.Message != "now fix the other test" {
 		t.Errorf("run message = %q, want the owner's raw text kept on a fresh follow-up too", got.row.Message)
 	}
-	if !strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
-		t.Errorf("prompt = %q, want the fresh follow-up prompt", got.spawn.Prompt)
-	}
+	assertPromptGolden(t, "testdata/prompt-follow-up-fresh.golden.txt", got.spawn.Prompt, got.runsDir)
 }
 
 func TestFollowUpSpawnsFreshWhenTheRunHasNoSession(t *testing.T) {
@@ -146,9 +141,7 @@ func TestFollowUpSpawnsFreshWhenTheRunHasNoSession(t *testing.T) {
 	if got.spawn.Resume {
 		t.Error("spawn resumes although the earlier run had no session")
 	}
-	if !strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
-		t.Errorf("prompt = %q, want the fresh follow-up prompt", got.spawn.Prompt)
-	}
+	assertPromptGolden(t, "testdata/prompt-follow-up-fresh.golden.txt", got.spawn.Prompt, got.runsDir)
 }
 
 func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {

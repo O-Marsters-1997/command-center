@@ -34,6 +34,7 @@ func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written settings: %v", err)
 	}
+	assertGolden(t, "testdata/settings.golden.json", raw)
 
 	var settings struct {
 		Permissions struct {
@@ -57,7 +58,7 @@ func TestWriteAgentSystemPromptMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written system prompt: %v", err)
 	}
-	assertGolden(t, "testdata/system-prompt.golden.md", raw)
+	assertGolden(t, "testdata/system-prompt.golden.txt", raw)
 }
 
 func TestWriteAgentFilesIsIdempotent(t *testing.T) {

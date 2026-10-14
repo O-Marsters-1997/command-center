@@ -26,6 +26,7 @@ type steerFixture struct {
 	ticket    storepkg.Ticket
 	sessionID string
 	repoPath  string
+	runsDir   string
 	at        time.Time
 }
 
@@ -42,7 +43,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	runID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		Session: storepkg.RunSession{StartNew: true},
@@ -76,7 +77,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		rn = wrap(fake)
 	}
 	return &steerFixture{
-		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, at: at,
+		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, runsDir: ws.RunsDir, at: at,
 		loop: newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
 	}
 }
@@ -124,9 +125,7 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	if !spawn.Resume || spawn.SessionID != f.sessionID {
 		t.Errorf("spawn = resume %v session %q, want a resume of %q", spawn.Resume, spawn.SessionID, f.sessionID)
 	}
-	if !strings.Contains(spawn.Prompt, "use sqlite instead") || !strings.Contains(spawn.Prompt, "cut off") {
-		t.Errorf("prompt = %q, want the interrupt wrapper around the message", spawn.Prompt)
-	}
+	assertPromptGolden(t, "testdata/prompt-steer-interrupt.golden.txt", spawn.Prompt, f.runsDir)
 	if got := f.pendingFollowUps(t); got != 0 {
 		t.Errorf("pending follow-ups = %d, want the intent consumed", got)
 	}

@@ -133,5 +133,3 @@ func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")
 	}
 }
-
-const goldenPrompt = "testdata/prompt.golden.txt"

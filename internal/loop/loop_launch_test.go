@@ -80,8 +80,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runsDir := filepath.Dir(promptPath)
-	assertGolden(t, goldenPrompt, []byte(strings.ReplaceAll(string(written), runsDir, "<runs>")))
+	assertPromptGolden(t, "testdata/prompt-implement.golden.txt", string(written), filepath.Dir(promptPath))
 }
 
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
@@ -190,7 +189,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -260,25 +259,32 @@ const (
 	killedRunResultLine = `{"type":"result","total_cost_usd":0.42}` + "\n"
 )
 
-func TestLoopRecordsNoCostForAKilledRunWhoseLogNeverSettled(t *testing.T) {
+func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
 	t.Parallel()
-	got := disposeKilledRun(t, killedRunAssistantLine)
+	reading := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
+		`"five_hour":{"utilization":0.05,"resetsAt":1787665200}}}}` + "\n"
+	got, usage := disposeKilledRun(t, killedRunAssistantLine+reading+`{"type":"result","total_cost_usd":`)
 
 	if got[agentlog.FiveHour] != 0 || got[agentlog.SevenDay] != 0 {
 		t.Errorf("cost of an unsettled run = %v, want none recorded", got)
+	}
+	if got := usage[agentlog.FiveHour].Utilization; got != 0.05 {
+		t.Errorf("settled reading before partial result = %+v, want five_hour utilization 0.05", usage)
 	}
 }
 
 func TestLoopRecordsTheCostOfAKilledRunWhoseLogSettled(t *testing.T) {
 	t.Parallel()
-	got := disposeKilledRun(t, killedRunAssistantLine+killedRunResultLine)
+	got, _ := disposeKilledRun(t, killedRunAssistantLine+killedRunResultLine)
 
 	if got[agentlog.FiveHour] != 0.42 {
 		t.Errorf("five_hour cost = %v, want 0.42", got[agentlog.FiveHour])
 	}
 }
 
-func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 {
+func disposeKilledRun(t *testing.T, logBody string) (
+	map[agentlog.Window]float64, map[agentlog.Window]agentlog.Reading,
+) {
 	t.Helper()
 
 	root, repoPath := repoWithOrigin(t)
@@ -298,7 +304,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	logPath := filepath.Join(t.TempDir(), "1.jsonl")
 	if err := os.WriteFile(logPath, []byte(logBody), 0o600); err != nil {
 		t.Fatal(err)
@@ -333,7 +339,11 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cost
+	readings, err := store.LatestReadingsFull(t.Context())
+	if err != nil {
+		t.Fatalf("LatestReadingsFull: %v", err)
+	}
+	return cost, readings
 }
 
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
@@ -362,7 +372,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -419,7 +429,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -469,7 +479,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -524,9 +534,10 @@ func TestLoopSpendLimit5h(t *testing.T) {
 		utilizations []float64
 		wantSpawns   []int
 	}{
-		{"pauses at the limit", []float64{0.80}, []int{0}},
-		{"launches under the limit", []float64{0.50}, []int{1}},
-		{"resumes once a newer reading drops below the limit", []float64{0.85, 0.50}, []int{0, 1}},
+		{name: "pauses at the limit", utilizations: []float64{0.80}, wantSpawns: []int{0}},
+		{name: "launches under the limit", utilizations: []float64{0.50}, wantSpawns: []int{1}},
+		{name: "resumes once a newer reading drops below the limit",
+			utilizations: []float64{0.85, 0.50}, wantSpawns: []int{0, 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -570,7 +581,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)

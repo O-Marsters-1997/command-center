@@ -35,7 +35,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -66,7 +66,8 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 		t.Fatalf("summary = %+v, want asked", summary)
 	}
 	if !strings.HasPrefix(summary.Question, "Which database?\n") || len(summary.Question) != 4096 {
-		t.Errorf("question has %d bytes, starts %q, want 4096 bytes truncated", len(summary.Question), summary.Question[:16])
+		prefix := summary.Question[:min(len(summary.Question), 16)]
+		t.Errorf("question has %d bytes, starts %q, want 4096 bytes truncated", len(summary.Question), prefix)
 	}
 	if got := gittest.Run(t, repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
 		t.Errorf("origin carries cc-1 (%q), want nothing pushed", got)

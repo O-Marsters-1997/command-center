@@ -48,7 +48,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -37,13 +38,15 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var ticks atomic.Int32
 		proceed := make(chan struct{})
+		var closeProceed sync.Once
+		t.Cleanup(func() { closeProceed.Do(func() { close(proceed) }) })
 		observe := func(context.Context) (plan.Observation, error) {
 			if ticks.Add(1) == 2 {
 				<-proceed
 			}
 			return plan.Observation{}, nil
 		}
-		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
+		clock := newManualClock(testAt)
 		lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 		nudger := lp.Nudger()
 		stop := runLoop(t.Context(), t, lp)
@@ -62,7 +65,7 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 		for range 5 {
 			nudger.Nudge()
 		}
-		close(proceed)
+		closeProceed.Do(func() { close(proceed) })
 		synctest.Wait()
 		if got := ticks.Load(); got != 3 {
 			t.Errorf("ticks = %d, want exactly 3: five mid-tick nudges must coalesce into one tick, not queue one each", got)
@@ -89,11 +92,11 @@ func TestAVerbHandlersNudgeReachesTheLoopThroughItsNudger(t *testing.T) {
 			t.Fatalf("no tick %s", what)
 		}
 	}
-	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
+	clock := newManualClock(testAt)
 	lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	server := web.NewServer(web.Deps{Logger: discardLog, Store: store, Clock: clock, Nudger: lp.Nudger()})
 	stop := runLoop(t.Context(), t, lp)
-	defer stop()
+	t.Cleanup(stop)
 
 	waitForTick("after start")
 
@@ -118,7 +121,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 			ticks.Add(1)
 			return plan.Observation{}, nil
 		}
-		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
+		clock := newManualClock(testAt)
 		lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 		stop := runLoop(t.Context(), t, lp)
 

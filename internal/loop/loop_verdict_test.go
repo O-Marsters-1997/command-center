@@ -23,7 +23,7 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil },
 		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})

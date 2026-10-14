@@ -17,7 +17,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 
 	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
@@ -63,7 +63,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 
 	inFeature := "https://github.com/acme/alpha/issues/1"
 	outsider := "https://github.com/acme/beta/issues/2"
