@@ -8,10 +8,20 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
+type LineShape string
+
+const (
+	LineSay    LineShape = "say"
+	LineSkill  LineShape = "skill"
+	LineRecord LineShape = "record"
+	LineCall   LineShape = "call"
+)
+
 // LogLine is one line of the run log as logline.tmpl renders it: the agent's prose, a skill, or
 // one tool call alongside the result that answered it.
 type LogLine struct {
 	Kind    string
+	Shape   LineShape
 	Blocks  []ProseBlock
 	Verb    string
 	Arg     string
@@ -50,12 +60,12 @@ func LineOf(e agentlog.Event) LogLine {
 	case agentlog.Say:
 		return sayLine(e.Detail)
 	case agentlog.Skill:
-		return LogLine{Kind: e.Kind.String(), Verb: e.Tool, Arg: e.Detail}
+		return LogLine{Kind: e.Kind.String(), Shape: LineSkill, Verb: e.Tool, Arg: e.Detail}
 	case agentlog.Record:
 		return recordLine(e.Tool, e.Detail)
 	case agentlog.Commit:
 		result := "✓" + elapsedSuffix(e.Elapsed)
-		return LogLine{Kind: e.Kind.String(), Verb: "commit", Arg: e.Detail, Result: result, CallID: e.CallID}
+		return LogLine{Kind: e.Kind.String(), Shape: LineCall, Verb: "commit", Arg: e.Detail, Result: result, CallID: e.CallID}
 	case agentlog.Pass, agentlog.Fail:
 		return callPair{result: e, answered: true}.line()
 	case agentlog.Cmd:
@@ -66,24 +76,22 @@ func LineOf(e agentlog.Event) LogLine {
 }
 
 func recordLine(kind, detail string) LogLine {
+	line := LogLine{Kind: agentlog.Record.String(), Shape: LineRecord, Verb: kind, Arg: detail}
 	switch kind {
 	case "pr_opened":
-		number, href, _ := strings.Cut(detail, " https://")
-		if href == "" {
-			return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: detail}
+		line.Verb = "opened"
+		if number, href, _ := strings.Cut(detail, " https://"); href != "" {
+			line.Arg, line.Href = number, "https://"+href
 		}
-		return LogLine{Kind: agentlog.Record.String(), Verb: "opened", Arg: number, Href: "https://" + href}
 	case "checks_landed":
-		i := strings.LastIndexByte(detail, ' ')
-		if i < 0 {
-			return LogLine{Kind: agentlog.Record.String(), Verb: "check", Arg: detail}
+		line.Verb = "check"
+		if i := strings.LastIndexByte(detail, ' '); i >= 0 {
+			line.Verb, line.Arg = detail[i+1:], detail[:i]
 		}
-		return LogLine{Kind: agentlog.Record.String(), Verb: detail[i+1:], Arg: detail[:i]}
 	case "pr_merged":
-		return LogLine{Kind: agentlog.Record.String(), Verb: "merged", Arg: detail}
-	default:
-		return LogLine{Kind: agentlog.Record.String(), Verb: kind, Arg: detail}
+		line.Verb = "merged"
 	}
+	return line
 }
 
 type callPair struct {
@@ -132,7 +140,7 @@ func elapsedSuffix(d time.Duration) string {
 }
 
 func (p callPair) line() LogLine {
-	line := LogLine{Kind: p.kind(), Failed: p.failed(), Anchor: p.anchor, Verb: "Result", Arg: p.result.Detail}
+	line := LogLine{Kind: p.kind(), Shape: LineCall, Failed: p.failed(), Anchor: p.anchor, Verb: "Result", Arg: p.result.Detail}
 	if p.called {
 		line.Verb = verbOf(p.call.Tool)
 		line.Arg = p.call.Detail
@@ -287,7 +295,7 @@ func times(n int) string {
 }
 
 func sayLine(text string) LogLine {
-	return LogLine{Kind: agentlog.Say.String(), Blocks: proseBlocks(text)}
+	return LogLine{Kind: agentlog.Say.String(), Shape: LineSay, Blocks: proseBlocks(text)}
 }
 
 func proseBlocks(text string) []ProseBlock {
