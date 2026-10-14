@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/url"
 	"os"
@@ -16,7 +17,7 @@ import (
 )
 
 // LineRenderer turns one log line into its markup.
-type LineRenderer func(LogLine) (string, error)
+type LineRenderer func(LogLine) (template.HTML, error)
 
 // KindShown decides, for one of the four ?log= modes, whether an event's kind renders as a line.
 // Phase headers always render regardless of mode; this only gates the lines inside them.
@@ -48,27 +49,29 @@ type phaseView struct {
 }
 
 type logItem struct {
-	Kind  string    `json:"kind"`
-	Line  string    `json:"line,omitempty"`
-	Group callGroup `json:"group"`
+	Kind      string        `json:"kind"`
+	Line      template.HTML `json:"line,omitempty"`
+	Group     callGroup     `json:"group"`
+	Folded    bool          `json:"-"`
+	FirstFail bool          `json:"-"`
 }
 
 type callGroup struct {
-	Summary  string   `json:"summary"`
-	FailNote string   `json:"fail_note"`
-	Open     bool     `json:"open"`
-	Lines    []string `json:"lines"`
+	Summary  string          `json:"summary"`
+	FailNote string          `json:"fail_note"`
+	Open     bool            `json:"open"`
+	Lines    []template.HTML `json:"lines"`
 }
 
 type LogDetail struct {
-	Path       string      `json:"path"`
-	Streaming  bool        `json:"streaming"`
-	Lines      int         `json:"lines"`
-	PhaseCount int         `json:"phase_count"`
-	Phases     []phaseView `json:"phases"`
-	StreamPath string      `json:"stream_path"`
-	Worked     workedLine  `json:"worked"`
-	Final      string      `json:"final"`
+	Path       string        `json:"path"`
+	Streaming  bool          `json:"streaming"`
+	Lines      int           `json:"lines"`
+	PhaseCount int           `json:"phase_count"`
+	Phases     []phaseView   `json:"phases"`
+	StreamPath string        `json:"stream_path"`
+	Worked     workedLine    `json:"worked"`
+	Final      template.HTML `json:"final"`
 }
 
 type logSource struct {
@@ -292,10 +295,10 @@ func (b *phaseBuilder) flush() error {
 		if failed > 0 {
 			group.FailNote = fmt.Sprintf("%d failed", failed)
 		}
-		b.items = append(b.items, logItem{Kind: "calls", Group: group})
+		b.items = append(b.items, logItem{Kind: "calls", Group: group, Folded: true})
 	}
 	if hiddenAnchor {
-		b.items = append(b.items, logItem{Kind: "anchor"})
+		b.items = append(b.items, logItem{Kind: "anchor", FirstFail: true})
 	}
 	return nil
 }

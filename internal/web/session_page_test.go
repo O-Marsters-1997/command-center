@@ -299,7 +299,7 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?part=actions")
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1/actions")
 
 	for _, want := range []string{`value="remove-worktree" data-key="e"`, `data-key="o" target="_blank"`} {
 		if !strings.Contains(body, want) {
@@ -331,9 +331,48 @@ func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 		t.Errorf("queued verb shows no pending mark:\n%s", body)
 	}
 
-	poll := renderPath(t, srv, "/s/acme/web/1?part=actions")
+	poll := renderPath(t, srv, "/s/acme/web/1/actions")
 	if !strings.Contains(poll, `data-glyph="pending"`) || strings.Contains(poll, `class="toast"`) {
 		t.Errorf("polled actions should keep the pending mark and drop the toast:\n%s", poll)
+	}
+}
+
+func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
+	t.Parallel()
+	st, _ := sessionStore(t, plan.RunKindAgent, "p", true, true)
+	if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	srv := newServer(st, testNow)
+	confirm := `hx-confirm="kill on https://github.com/acme/web/issues/1 signals the process group of ` +
+		`its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 99"`
+	for _, tc := range []struct{ path, verbPath string }{
+		{"/tickets", "/verb?all=1"},
+		{"/f/checkout", "/verb?feature=checkout"},
+	} {
+		body := renderPath(t, srv, tc.path)
+		for _, want := range []string{
+			`<table id="board"`, `data-section="in-progress"`, `hx-post="` + tc.verbPath + `"`,
+			confirm, `name="verb" value="kill"`, `kill queued`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("GET %s lacks %q:\n%s", tc.path, want, body)
+			}
+		}
+	}
+	for _, path := range []string{"/s/acme/web/1", "/s/acme/web/1/actions"} {
+		body := renderPath(t, srv, path)
+		for _, want := range []string{
+			`id="session-actions"`, `hx-post="/verb"`, confirm,
+			`name="verb" value="kill" disabled>kill</button>`,
+			`<span class="pending-mark" data-glyph="pending">queued</span>`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("GET %s lacks %q:\n%s", path, want, body)
+			}
+		}
 	}
 }
 

@@ -5,16 +5,18 @@ import "github.com/O-Marsters-1997/command-center/internal/plan"
 // Section is one attention band of the board: the rows whose glyphs share a section key.
 type Section struct {
 	Key   SectionKey
+	Glyph plan.GlyphWord
+	Stat  string
 	Title string
 	Rows  []Row
 }
 
 var sectionOrder = []Section{
-	{Key: SectionNeedsYou, Title: "Needs you"},
-	{Key: SectionInProgress, Title: "In progress"},
-	{Key: SectionReady, Title: "Ready"},
-	{Key: SectionBlocked, Title: "Blocked"},
-	{Key: SectionDone, Title: "Done"},
+	{Key: SectionNeedsYou, Glyph: plan.GlyphAttention, Stat: "need you", Title: "Needs you"},
+	{Key: SectionInProgress, Glyph: plan.GlyphRunning, Stat: "in progress", Title: "In progress"},
+	{Key: SectionReady, Glyph: plan.GlyphReady, Stat: "ready", Title: "Ready"},
+	{Key: SectionBlocked, Glyph: plan.GlyphBlocked, Stat: "blocked", Title: "Blocked"},
+	{Key: SectionDone, Glyph: plan.GlyphDone, Stat: "merged", Title: "Done"},
 }
 
 func sectionKey(glyph plan.GlyphWord) SectionKey {
@@ -38,6 +40,9 @@ func sectionKey(glyph plan.GlyphWord) SectionKey {
 func Sectioned(rows []Row) []Section {
 	var out []Section
 	for _, s := range sectionOrder {
+		if s.Key == SectionReady {
+			s.Title = "Ready to launch"
+		}
 		for _, r := range rows {
 			if sectionKey(r.Glyph) == s.Key {
 				s.Rows = append(s.Rows, r)

@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -128,6 +129,8 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if f.project.Name != "" {
 		groups = filterGroupsByProject(groups, f.project.Repos)
 	}
+	chrome := f.chrome
+	chrome.titled(cmp.Or(params.Feature, f.project.Name, params.Repo, "Tickets"))
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
 	blocking := make(map[plan.TicketURL][]plan.TicketURL, len(scoped))
@@ -148,7 +151,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Launched:         launched,
 		TicketCount:      len(scoped),
 		WaveCount:        plan.WaveCount(blocking),
-		Chrome:           f.chrome,
+		Chrome:           chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
 		Tabs:             filterTabs(sections, params),
@@ -201,16 +204,22 @@ func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrom
 		Observe:      Age{Age: "never"},
 		ObserveStale: true,
 		Gauges:       deriveGauges(gauges, split),
-		Section:      "tickets",
+		PageTitle:    appTitle,
 		Keymap:       Keymap,
 		RepoScope:    params.Repo,
 		RepoCrumb:    params.Repo,
 		FeatureScope: params.Feature,
-		TicketsPath:  params.withScope(ticketsPath),
-		ReposPath:    params.withScope("/repos"),
-		LaunchPath:   params.withScope("/launch"),
-		InsightsPath: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
+		Launch:       NavItem{Path: params.withScope("/launch"), Key: keyLaunch},
+		Nav: []NavItem{
+			{Label: "All tickets", Path: params.withScope(ticketsPath), Key: keyTickets, Icon: "inbox", Badge: "0"},
+			{
+				Label: "Insights", Key: keyInsights, Icon: "chart",
+				Path: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
+			},
+			{Label: "Repos", Path: params.withScope("/repos"), Key: keyRepos, Icon: "repo"},
+		},
 	}
+	c.setCurrent(keyTickets)
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
 		c.SpendPaused = option.Some(SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h})
 	}

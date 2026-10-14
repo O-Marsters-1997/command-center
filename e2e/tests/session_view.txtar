@@ -20,7 +20,7 @@ stdout '#CC-1'
 stdout 'class="prompt-bubble"'
 stdout 'class="pill-tabs"'
 stdout 'id="session-actions"'
-stdout 'hx-get="/s/sandbox-org/single-task/CC-1\?part=actions"'
+stdout 'hx-get="/s/sandbox-org/single-task/CC-1/actions"'
 stdout 'class="stack-panel"'
 stdout 'action="/ticket"'
 

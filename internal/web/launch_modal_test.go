@@ -41,6 +41,7 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("HX-Request", "true")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Origin", srv.URL)
 	resp, err := srv.Client().Do(req)
@@ -92,6 +93,7 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("HX-Request", "true")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Origin", srv.URL)
 	resp, err := srv.Client().Do(req)
@@ -174,13 +176,17 @@ func TestHandleLaunchOpenAllowsAMissingOrigin(t *testing.T) {
 	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Post(srv.URL+"/launch/open", "application/x-www-form-urlencoded", strings.NewReader("feature=x"))
+	resp, err := noRedirect(srv).Post(
+		srv.URL+"/launch/open", "application/x-www-form-urlencoded", strings.NewReader("feature=x"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Location"); got != "/f/x/launch" {
+		t.Errorf("Location = %q, want /f/x/launch", got)
 	}
 }
 
@@ -342,7 +348,7 @@ func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T
 	}
 }
 
-func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
+func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -356,13 +362,22 @@ func TestHandleCandidatesDefaultsToJSONWithoutHtmx(t *testing.T) {
 	srv := httptest.NewServer(openServer(store, realClock{}, ""))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL + "/launch/candidates?feature=project%3Ax")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json without an HX-Request header", ct)
+	for _, header := range []string{"", "true"} {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+"/launch/candidates.json?feature=project%3Ax", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header != "" {
+			req.Header.Set("HX-Request", header)
+		}
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+			t.Errorf("HX-Request %q: Content-Type = %q, want application/json", header, ct)
+		}
+		_ = resp.Body.Close()
 	}
 }
 

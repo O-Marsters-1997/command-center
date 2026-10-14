@@ -64,12 +64,14 @@ type Row struct {
 	SpendPctWeek    float64        `json:"spend_pct_week"`
 	TicketOpen      bool           `json:"ticket_open"`
 
-	Checked     bool      `json:"checked"`
-	SessionPath string    `json:"session_path"`
-	TogglePath  string    `json:"toggle_path"`
-	TogglePush  string    `json:"toggle_push"`
-	VerbPath    string    `json:"verb_path"`
-	Log         LogDetail `json:"log"`
+	Checked     bool         `json:"checked"`
+	Launchable  bool         `json:"-"`
+	Buttons     []VerbButton `json:"-"`
+	SessionPath string       `json:"session_path"`
+	TogglePath  string       `json:"toggle_path"`
+	TogglePush  string       `json:"toggle_push"`
+	VerbPath    string       `json:"verb_path"`
+	Log         LogDetail    `json:"log"`
 }
 
 type Check struct {
@@ -126,6 +128,8 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		toggledTicket := params.toggleTicket(r.URL)
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
+		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
+		r.Buttons = r.VerbButtons()
 		if params.Sel == r.URL {
 			src := logSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
 			log, err := buildLogDetail(render, src, params)

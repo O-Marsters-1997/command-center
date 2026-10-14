@@ -90,7 +90,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 	postTrack(t, server, "acme/new", true)
 
-	stale := get(t, server, "/repos/banner?repo=acme/new&seen=cloning")
+	stale := getHX(t, server, "/repos/banner?repo=acme/new&seen=cloning")
 	if stale.Header().Get("HX-Refresh") != "" || !strings.Contains(stale.Body.String(), `hx-trigger="every 2s"`) {
 		t.Errorf("a cloning banner seen as cloning must poll without a refresh:\n%s", stale.Body)
 	}
@@ -103,7 +103,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	}
 	consumeTrack(t, st)
 
-	changed := get(t, server, "/repos/banner?repo=acme/new&seen=cloning")
+	changed := getHX(t, server, "/repos/banner?repo=acme/new&seen=cloning")
 	if changed.Header().Get("HX-Refresh") != "true" {
 		t.Errorf("a banner whose state moved from cloning must send HX-Refresh: true")
 	}
@@ -159,7 +159,7 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 		"acme/noclone":  "refused",
 		"acme/badtoml":  "refused",
 	} {
-		rec := get(t, server, "/repos/banner?repo="+repo)
+		rec := getHX(t, server, "/repos/banner?repo="+repo)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET banner %s: %d: %s", repo, rec.Code, rec.Body)
 		}
@@ -174,7 +174,7 @@ func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 	postTrack(t, server, "acme/new", true)
 
-	if rec := get(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != http.StatusOK {
+	if rec := getHX(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != http.StatusOK {
 		t.Errorf("a cloning banner = %d, want 200 so it keeps polling", rec.Code)
 	}
 
@@ -186,7 +186,7 @@ func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
 	}
 	consumeTrack(t, st)
 
-	if rec := get(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != 286 {
+	if rec := getHX(t, server, "/repos/banner?repo=acme/new&seen=cloning"); rec.Code != 286 {
 		t.Errorf("a ready banner = %d, want 286 to stop the poll", rec.Code)
 	}
 }

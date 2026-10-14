@@ -25,6 +25,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
+	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 )
 
 const maxAgents = 4
@@ -330,7 +331,9 @@ func (s *Sim) Close() error { return errors.Join(s.store.Close(), s.sandbox.Clos
 
 func (s *Sim) states() (map[string]string, error) {
 	rec := httptest.NewRecorder()
-	s.server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/board", nil))
+	req := httptest.NewRequest(http.MethodGet, "/board", nil)
+	req.Header.Set(hx.HeaderRequest, "true")
+	s.server.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		return nil, fmt.Errorf("GET /board: %s", rec.Body)
 	}

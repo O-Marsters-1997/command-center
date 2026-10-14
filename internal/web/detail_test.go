@@ -234,6 +234,6 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 
 func boardBody(t *testing.T, server *web.Server) string {
 	t.Helper()
-	rec := get(t, server, "/board")
+	rec := getHX(t, server, "/board")
 	return rec.Body.String()
 }

@@ -1,3 +1,7 @@
+{{define "nav"}}hx-get="{{.}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{end}}
+
+{{define "navItem"}}<a class="sidebar-item" href="{{.Path}}" data-key="{{.Key}}" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" .Icon}}<span>{{.Label}}</span>{{with .Badge}}<span class="sidebar-count{{if $.Warn}} sidebar-count-warn{{end}}">{{.}}</span>{{end}}</a>{{end}}
+
 {{define "flash"}}<p class="banner ribbon" data-glyph="failed">{{.}}</p>{{end}}
 
 {{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
@@ -23,97 +27,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
-<title>Command Centre</title>
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
+<title>{{.PageTitle}}</title>
 <link rel="stylesheet" href="/assets/app.css">
-<script>
-  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
-  // wording goes stale the moment it is sent and a swap is not what keeps it current.
-  function ago(ms) {
-    var s = Math.max(0, Math.round(ms / 1000));
-    if (s < 60) return s + "s ago";
-    var m = Math.floor(s / 60);
-    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
-    var h = Math.floor(m / 60);
-    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
-  }
-  setInterval(function () {
-    var now = Date.now();
-    document.querySelectorAll("time[datetime]").forEach(function (el) {
-      var at = Date.parse(el.dateTime);
-      if (!isNaN(at)) el.textContent = ago(now - at);
-    });
-  }, 1000);
-</script>
-<script>
-  function markCurrent() {
-    document.querySelectorAll(".sidebar-item").forEach(function (a) {
-      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
-      if (here) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-  }
-  function closeScopeMenu() {
-    function scopeOf(href) {
-      var q = new URL(href, location.origin).searchParams;
-      return q.get("project") ? "project=" + q.get("project") : q.get("repo") ? "repo=" + q.get("repo") : "";
-    }
-    var here = scopeOf(location.href);
-    document.querySelectorAll("details[data-scope-menu]").forEach(function (d) {
-      d.open = false;
-      d.querySelectorAll("a").forEach(function (a) {
-        var current = scopeOf(a.getAttribute("href")) === here;
-        if (current) d.querySelector("summary").innerHTML = a.innerHTML;
-        if (current) a.setAttribute("aria-current", "true");
-        else a.removeAttribute("aria-current");
-      });
-    });
-  }
-  document.addEventListener("htmx:pushedIntoHistory", closeScopeMenu);
-  document.addEventListener("htmx:historyRestore", closeScopeMenu);
-  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
-  document.addEventListener("htmx:historyRestore", markCurrent);
-</script>
-<script>
-  document.addEventListener("toggle", function (e) {
-    var key = e.target.dataset && e.target.dataset.railKey;
-    if (!key || e.target.hasAttribute("data-rail-forced")) return;
-    var open = document.cookie.split("; ").reduce(function (found, c) {
-      return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
-    }, []).filter(function (k) { return k && k !== key; });
-    if (e.target.open) open.push(key);
-    document.cookie = "rail-open=" + encodeURIComponent(open.join("|")) + "; path=/; max-age=31536000; samesite=lax";
-  }, true);
-  function tickStarted() {
-    var now = Date.now();
-    document.querySelectorAll("[data-started]").forEach(function (el) {
-      var s = Math.max(0, Math.round((now - Date.parse(el.dataset.started)) / 1000));
-      if (isNaN(s)) return;
-      var m = Math.floor(s / 60);
-      el.textContent = m < 60 ? m + "m" + (s % 60) + "s" : Math.floor(m / 60) + "h" + (m % 60) + "m";
-    });
-  }
-  setInterval(tickStarted, 1000);
-  document.addEventListener("htmx:afterSwap", tickStarted);
-</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script type="module" src="/assets/dist/keys.js"></script>
 <script type="module" src="/assets/dist/glue.js"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
-    document.querySelectorAll("#key-sheet kbd, .rail-search-wrap kbd").forEach(function (k) {
-      k.textContent = k.textContent.replace("⌘", "Ctrl ");
-    });
-  });
-</script>
-<script>
-  document.addEventListener("htmx:sseMessage", function (e) {
-    var pre = e.target;
-    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
-  });
-</script>
 </head>
 {{- end}}
 
@@ -125,14 +45,14 @@
 {{template "docHead" .}}
 <body>
 {{template "skipLink" .}}
-<div class="app">
+<div class="app" hx-select-oob="#sidebar-head,#sidebar-nav">
 {{template "sidebar" .}}
 <div class="pane">
 {{template "notices" .}}
 <div id="flash" aria-live="polite"></div>
-<main id="main"{{if .Home}} data-home{{end}}>
+<main id="main"{{if .Home}} data-home data-desktop-target="{{.Target}}"{{end}}>
 <header class="topbar">
-  <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
+  <a class="back" href="/" {{template "nav" "/"}}>&lsaquo; Back</a>
   <ol class="crumbs">
 {{- end}}
 
@@ -184,30 +104,29 @@
 
 {{define "sidebar" -}}
 <aside class="sidebar" id="sidebar" aria-label="sections">
-  <div class="sidebar-head">
-    <a class="sidebar-brand" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
-    <a class="btn btn-ghost btn-sm btn-icon" href="{{.LaunchPath}}" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>
+  <div class="sidebar-head" id="sidebar-head">
+    <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
+    {{with .Chrome.Launch}}<a class="btn btn-ghost btn-sm btn-icon" href="{{.Path}}" data-key="{{.Key}}" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .Path}}{{if .Current}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>{{end}}
   </div>
-  <nav class="sidebar-nav">
-    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span><span class="sidebar-count">{{.OpenTickets}}</span></a>
-    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span>{{with .RefusedRepos}}<span class="sidebar-count sidebar-count-warn">{{len .}} refused</span>{{end}}</a>
+  <nav class="sidebar-nav" id="sidebar-nav">
+    {{range .Nav}}{{template "navItem" .}}
+    {{end}}
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
     <nav class="flex flex-col gap-0.5" aria-label="scope">
-      <a class="rail-link" href="/tickets" data-key="g 0" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
-      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Current}} aria-current="true"{{end}}>{{if eq .Kind "project"}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
+      <a class="rail-link" href="/tickets" data-key="g 0" {{template "nav" "/tickets"}}{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
+      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if .Avatar}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
       {{end}}
     </nav>
   </details>
-  <div class="rail-search-wrap">
+  <form class="rail-search-wrap" role="search">
     <input id="rail-search" class="rail-search" data-key="mod+k" type="search" name="q" placeholder="Search or jump to…" aria-label="Search sessions" autocomplete="off" hx-get="/rail" hx-sync="#rail-body:replace" hx-trigger="input changed delay:150ms, search" hx-target="#rail-body" hx-swap="outerHTML">
     {{template "icon" "search"}}<kbd aria-hidden="true">⌘K</kbd>
-  </div>
+  </form>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <div class="sidebar-foot">
-    <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
+    <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" data-show-modal="key-sheet">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
   </div>
   {{template "keySheet" .}}
 </aside>

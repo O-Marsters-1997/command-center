@@ -90,6 +90,7 @@ func TestRailKeepsTheExpandedSetAndSelectionFromTheRequest(t *testing.T) {
 	st, _ := sessionStore(t, "agent", "", false, true)
 	server := newServer(st, testNow)
 	req := httptest.NewRequest(http.MethodGet, "/rail", nil)
+	req.Header.Set("HX-Request", "true")
 	req.Header.Set("HX-Current-URL", "http://cc/s/acme/web/1")
 	req.AddCookie(&http.Cookie{Name: "rail-open", Value: "feature:checkout"})
 	rec := httptest.NewRecorder()

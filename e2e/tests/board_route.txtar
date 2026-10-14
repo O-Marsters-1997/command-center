@@ -7,7 +7,7 @@ cc-fake-gh no-prs
 
 exec cc import project:two-tasks
 exec cc tick --count 1
-exec cc request GET /board?all=1
+exec cc request -hx GET /board?all=1
 
 stdout '^<table id="board"'
 stdout '>#CC-1</a>'

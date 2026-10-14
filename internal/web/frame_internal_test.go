@@ -125,7 +125,9 @@ func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
 	response := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
 		w := httptest.NewRecorder()
-		s.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/board", nil).WithContext(ctx))
+		req := httptest.NewRequest(http.MethodGet, "/board", nil).WithContext(ctx)
+		req.Header.Set("HX-Request", "true")
+		s.ServeHTTP(w, req)
 		response <- w
 	}()
 	timedOut := false

@@ -22,7 +22,7 @@ exec cc tick --count 1
 exec cc request GET /tickets
 stdout '>ready</span>'
 stdout '>blocked</span>'
-exec cc request GET /rail
+exec cc request -hx GET /rail
 stdout 'tick failed'
 stdout 'gh is unavailable'
 
@@ -30,7 +30,7 @@ stdout 'gh is unavailable'
 # banner closes rather than keep claiming they have not.
 cc-fake-gh no-prs
 exec cc tick --count 1
-exec cc request GET /rail
+exec cc request -hx GET /rail
 ! stdout 'tick failed'
 exec cc request GET /tickets
 stdout '>ready</span>'

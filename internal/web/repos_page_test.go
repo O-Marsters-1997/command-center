@@ -138,10 +138,10 @@ func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
 		},
 	))
 	searchDone := make(chan int, 1)
-	go func() { searchDone <- get(t, server, "/repos/search?q=api").Code }()
+	go func() { searchDone <- getHX(t, server, "/repos/search?q=api").Code }()
 	<-started
 	boardDone := make(chan int, 1)
-	go func() { boardDone <- get(t, server, "/board").Code }()
+	go func() { boardDone <- getHX(t, server, "/board").Code }()
 	select {
 	case status := <-boardDone:
 		if status != http.StatusOK {

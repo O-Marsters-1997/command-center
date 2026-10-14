@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 )
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) error {
@@ -75,8 +76,8 @@ func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *Server) respondRepoGroups(w http.ResponseWriter, r *http.Request) error {
-	if r.Header.Get("HX-Request") == "" {
-		http.Redirect(w, r, "/repos", http.StatusSeeOther)
+	if !hx.IsRequest(r) {
+		seeOther(w, r, "/repos")
 		return nil
 	}
 	return s.renderRepoGroups(w, r)

@@ -51,7 +51,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 		t.Errorf("page does not open a document:\n%s", body[:min(len(body), 200)])
 	}
 	for _, want := range []string{
-		"<title>Command Centre</title>",
+		"<title>Tickets · Command Centre</title>",
 		"</head>",
 		"<body>",
 		"</body>",
@@ -113,7 +113,7 @@ func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home>`) {
+	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home data-desktop-target=`) {
 		t.Errorf("the bare root is not marked as home:\n%s", body)
 	}
 	if body := renderPath(t, server, "/tickets"); !strings.Contains(body, `<main id="main">`) {

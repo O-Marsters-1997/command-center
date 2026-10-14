@@ -8,7 +8,7 @@
   <header class="session-head">
     <span class="badge" data-glyph="{{.Row.Glyph}}"><span class="glyph glyph-{{.Row.Glyph}}{{if .Row.Alive}} glyph-pulse{{end}}">{{.Row.State}}</span></span>
     <h1 class="session-ref">{{.Ref}}{{with .Row.Title}} {{.}}{{end}}</h1>
-    <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" hx-get="/f/{{. | pathEscape}}/graph" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">{{.}}</a>{{end}}</p>
+    <p class="session-meta text-muted">{{if .Row.Project}}{{template "mark" .Row.Mark}} {{end}}{{.Row.Repo}}{{with .Row.Feature}} · <a href="/f/{{. | pathEscape}}/graph" data-key="f" {{template "nav" (printf "/f/%s/graph" (. | pathEscape))}}>{{.}}</a>{{end}}</p>
     {{- with .Row.Worktree}}
     <p class="session-worktree text-muted"><code>{{.}}</code></p>
     {{- end}}
@@ -24,8 +24,8 @@
     {{- else}}<p class="prompt-gone text-muted">{{if .Row.LogPath}}The prompt was not kept.{{else}}No run has started yet.{{end}}</p>{{end}}
   </section>
   <nav class="pill-tabs" aria-label="log view">
-    <a class="pill-tab" href="{{.TranscriptPath}}" hx-get="{{.TranscriptPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
-    <a class="pill-tab" href="{{.RawPath}}" hx-get="{{.RawPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
+    <a class="pill-tab" href="{{.TranscriptPath}}" {{template "nav" .TranscriptPath}}{{if not .Raw}} aria-current="page"{{end}}>Transcript</a>
+    <a class="pill-tab" href="{{.RawPath}}" {{template "nav" .RawPath}}{{if .Raw}} aria-current="page"{{end}}>Raw log</a>
   </nav>
   {{- if .Raw}}
   {{if .RawText}}<pre class="raw-log">{{.RawText}}</pre>{{else}}<p class="text-muted">No log was kept for this run.</p>{{end}}
@@ -45,7 +45,7 @@
           <span class="phase-at">{{.At}}</span>
         </header>
         {{- range .Items}}
-        {{if or (eq .Kind "say") (eq .Kind "record") (eq .Kind "commit")}}{{raw .Line}}{{else if eq .Kind "calls"}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{raw .}}{{end}}</div></details>{{else}}<span id="first-fail"></span>{{end}}
+        {{if .Line}}{{.Line}}{{else if .Folded}}<details class="fold"{{if .Group.Open}} open{{end}}><summary>{{.Group.Summary}}{{with .Group.FailNote}} <span class="fold-fail">· {{.}}</span>{{end}}</summary><div class="fold-body">{{range .Group.Lines}}{{.}}{{end}}</div></details>{{else if .FirstFail}}<span id="first-fail"></span>{{end}}
         {{- end}}
       </section>
       {{- end}}
@@ -54,7 +54,7 @@
       {{- end}}
     </div>
     {{- with .Log.Final}}
-    <div class="run-final">{{raw .}}</div>
+    <div class="run-final">{{.}}</div>
     {{- end}}
     {{- with .Ask}}
     <div class="line line-ask"><span class="line-label">ask</span><span class="ask-text">{{.}}</span></div>
@@ -106,14 +106,15 @@
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
   {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}</div>{{end}}
-  <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
+  <div class="verbs{{if .Callout}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
-    {{- range .ActionVerbs}}
-    <form method="post" action="/verb" hx-post="/verb" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+    {{- range .Actions}}
+    <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with .Confirm}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
-      <button class="btn" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
-      {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+      <input type="hidden" name="return" value="{{$s.TranscriptPath}}">
+      <button class="btn" type="submit" name="verb" value="{{.Verb}}"{{with .Key}} data-key="{{.}}"{{end}}{{if .Pending}} disabled{{end}}>{{.Label}}</button>
+      {{- if .Pending}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
     </form>
     {{- end}}
     {{- with .PRURL}}<a class="btn" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
@@ -129,9 +130,10 @@
 {{- if .ResetComposer}}{{template "sessionComposer" .}}{{end}}{{end}}
 {{define "sessionComposer"}}<div id="session-composer"{{if .ResetComposer}} hx-swap-oob="true"{{end}}>
   {{- if .Row.FollowUpAvailable}}
-  <form class="composer" method="post" action="/verb" hx-post="/verb" hx-target="#session-actions" hx-swap="outerHTML">
+  <form class="composer" method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-target="#session-actions" hx-swap="outerHTML">
     <input type="hidden" name="ticket" value="{{.Row.URL}}">
     <input type="hidden" name="from" value="session">
+    <input type="hidden" name="return" value="{{.TranscriptPath}}">
     <input type="hidden" name="verb" value="follow-up">
     <textarea name="prompt" rows="2" data-key="enter"{{if .AwaitingInput}} autofocus{{end}} required placeholder="{{if .AwaitingInput}}Answer the agent's question…{{else if .Running}}Send the running agent a message…{{else}}Send this run a follow-up prompt…{{end}}" aria-label="{{if .AwaitingInput}}reply{{else}}follow-up prompt{{end}}"></textarea>
     <div class="composer-bar">

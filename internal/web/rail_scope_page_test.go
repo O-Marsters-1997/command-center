@@ -48,6 +48,7 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 
 	rail := func(currentURL string) string {
 		req := httptest.NewRequest(http.MethodGet, "/rail", nil)
+		req.Header.Set("HX-Request", "true")
 		req.Header.Set("HX-Current-URL", currentURL)
 		rec := httptest.NewRecorder()
 		server.ServeHTTP(rec, req)

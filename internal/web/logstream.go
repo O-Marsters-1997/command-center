@@ -161,7 +161,7 @@ func (s *Server) sendRecords(ctx context.Context, w io.Writer, f *logFollow) (in
 		if err != nil {
 			return fmt.Errorf("render record %d: %w", record.ID, err)
 		}
-		if err := writeEvent(w, f.Offset, rendered); err != nil {
+		if err := writeEvent(w, f.Offset, string(rendered)); err != nil {
 			return fmt.Errorf("write event: %w", err)
 		}
 		sent++
@@ -213,7 +213,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, follow *logFollow) (sent int, e
 			if err != nil {
 				return sent, fmt.Errorf("render log line: %w", err)
 			}
-			if err := writeEvent(w, follow.Offset, rendered); err != nil {
+			if err := writeEvent(w, follow.Offset, string(rendered)); err != nil {
 				return sent, fmt.Errorf("write event: %w", err)
 			}
 			sent++

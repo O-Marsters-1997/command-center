@@ -3,6 +3,7 @@ package view
 import (
 	"errors"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"slices"
@@ -50,7 +51,7 @@ func mustLogDetail(
 func TestBuildLogDetailRefusesALineThatFailsToRender(t *testing.T) {
 	t.Parallel()
 
-	failing := func(LogLine) (string, error) { return "", errors.New("render failed") }
+	failing := func(LogLine) (template.HTML, error) { return "", errors.New("render failed") }
 	src := logSource{Path: writeRunLog(t, testRunLog), TicketURL: "sandbox://x"}
 	_, err := buildLogDetail(failing, src, Params{Log: "all"})
 	if err == nil {
@@ -151,7 +152,7 @@ func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
 	if len(detail.Phases) != 1 || len(detail.Phases[0].Items) != 1 {
 		t.Fatalf("Phases = %+v, want one phase holding the one store line", detail.Phases)
 	}
-	if got, want := detail.Phases[0].Items[0].Line, "line-record merged PR #12 merged"; got != want {
+	if got, want := detail.Phases[0].Items[0].Line, template.HTML("line-record merged PR #12 merged"); got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
 	if detail.PhaseCount != 0 {
@@ -211,7 +212,7 @@ func TestBuildLogDetailAnchorsOnlyTheRunsFirstFailure(t *testing.T) {
 		t.Fatalf("%d lines carry the jump anchor, want exactly 1", got)
 	}
 	failing := detail.Phases[0].Items[0].Group
-	if !strings.Contains(failing.Lines[0], `id="first-fail"`) {
+	if !strings.Contains(string(failing.Lines[0]), `id="first-fail"`) {
 		t.Errorf("the run's first Fail does not carry the jump anchor: %s", failing.Lines[0])
 	}
 	if !failing.Open || failing.FailNote != "1 failed" {
@@ -250,7 +251,7 @@ func TestBuildLogDetailFoldsEachRunOfCallsIntoOneSummarisedGroup(t *testing.T) {
 	if group.Summary != "Read 2 files, searched once" || group.Open {
 		t.Errorf("group = %+v, want a closed 'Read 2 files, searched once'", group)
 	}
-	want := []string{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
+	want := []template.HTML{"line-file Read a.go 3 lines", "line-file Read b.go 1 line", "line-tool Search x 1 match"}
 	if !slices.Equal(group.Lines, want) {
 		t.Errorf("group lines = %q, want each call paired with its own result by id: %q", group.Lines, want)
 	}
@@ -463,12 +464,16 @@ func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
 		{"from the structured result", log, []string{"+3 -2", "+3 -0", "+3 -1"}},
 		{"from the inputs when there is no result", withoutResults, []string{"+1 -1", "+3 -0", "+5 -0"}},
 	} {
-		render := func(l LogLine) (string, error) { return fmt.Sprintf("+%d -%d", l.Added, l.Removed), nil }
+		render := func(l LogLine) (template.HTML, error) {
+			return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
+		}
 		detail := mustLogDetail(t, render, writeRunLog(t, tc.log), false, "sandbox://x", nil, Params{Log: "all"})
 
 		var got []string
 		for _, item := range detail.Phases[0].Items {
-			got = append(got, item.Group.Lines...)
+			for _, line := range item.Group.Lines {
+				got = append(got, string(line))
+			}
 		}
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: counts = %v, want %v", tc.name, got, tc.want)
@@ -505,7 +510,7 @@ func anchorCount(detail LogDetail) int {
 				n++
 			}
 			for _, line := range item.Group.Lines {
-				if strings.Contains(line, `id="first-fail"`) {
+				if strings.Contains(string(line), `id="first-fail"`) {
 					n++
 				}
 			}
@@ -514,7 +519,32 @@ func anchorCount(detail LogDetail) int {
 	return n
 }
 
-func testLine(l LogLine) (string, error) {
+func TestLineOfShapesEachEventKind(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		kind agentlog.Kind
+		want LineShape
+	}{
+		{agentlog.Say, LineSay},
+		{agentlog.Skill, LineSkill},
+		{agentlog.Record, LineRecord},
+		{agentlog.Commit, LineCall},
+		{agentlog.Cmd, LineCall},
+		{agentlog.Fail, LineCall},
+		{agentlog.Tool, LineCall},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind.String(), func(t *testing.T) {
+			t.Parallel()
+			if got := LineOf(agentlog.Event{Kind: tt.kind}).Shape; got != tt.want {
+				t.Errorf("LineOf(%s).Shape = %q, want %q", tt.kind, got, tt.want)
+			}
+		})
+	}
+}
+
+func testLine(l LogLine) (template.HTML, error) {
 	parts := []string{"line-" + l.Kind, l.Verb, l.Arg, l.Result}
 	line := strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " ")
 	if l.Kind == "say" {
@@ -523,5 +553,5 @@ func testLine(l LogLine) (string, error) {
 	if l.Anchor {
 		line += ` id="first-fail"`
 	}
-	return line, nil
+	return template.HTML(line), nil
 }

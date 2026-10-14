@@ -51,3 +51,33 @@ func TestSectionedOrdersByAttentionAndDropsEmptySections(t *testing.T) {
 		}
 	}
 }
+
+func TestSectionedPresentsTheBoardBands(t *testing.T) {
+	t.Parallel()
+	want := []struct {
+		glyph plan.GlyphWord
+		key   view.SectionKey
+		color plan.GlyphWord
+		stat  string
+		title string
+	}{
+		{plan.GlyphAttention, view.SectionNeedsYou, plan.GlyphAttention, "need you", "Needs you"},
+		{plan.GlyphRunning, view.SectionInProgress, plan.GlyphRunning, "in progress", "In progress"},
+		{plan.GlyphReady, view.SectionReady, plan.GlyphReady, "ready", "Ready to launch"},
+		{plan.GlyphBlocked, view.SectionBlocked, plan.GlyphBlocked, "blocked", "Blocked"},
+		{plan.GlyphDone, view.SectionDone, plan.GlyphDone, "merged", "Done"},
+	}
+	for _, tt := range want {
+		t.Run(string(tt.key), func(t *testing.T) {
+			t.Parallel()
+			got := view.Sectioned([]view.Row{{Glyph: tt.glyph}})
+			if len(got) != 1 {
+				t.Fatalf("Sectioned(%s) = %v, want one section", tt.glyph, got)
+			}
+			if got[0].Key != tt.key || got[0].Glyph != tt.color || got[0].Stat != tt.stat || got[0].Title != tt.title {
+				t.Errorf("Sectioned(%s) = %+v, want key=%s glyph=%s stat=%q title=%q",
+					tt.glyph, got[0], tt.key, tt.color, tt.stat, tt.title)
+			}
+		})
+	}
+}

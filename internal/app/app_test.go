@@ -25,6 +25,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/hx"
 )
 
 func TestNewRunsATickAndServesThePage(t *testing.T) {
@@ -56,6 +57,7 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	fetch := func(path string) string {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set(hx.HeaderRequest, "true")
 		rec := httptest.NewRecorder()
 		inst.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

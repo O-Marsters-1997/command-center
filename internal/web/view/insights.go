@@ -185,7 +185,8 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load chrome: %w", err)
 	}
-	chrome.Section = "insights"
+	chrome.setCurrent(keyInsights)
+	chrome.titled("Insights")
 	resp, err := r.Insights(ctx, now, q)
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load insights: %w", err)

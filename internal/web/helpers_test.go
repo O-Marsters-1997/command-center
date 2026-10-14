@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +90,25 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
+}
+
+func getHX(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func isFragmentRoute(path string) bool {
+	if strings.HasPrefix(path, "/s/") {
+		return strings.Contains(path, "/actions")
+	}
+	return slices.ContainsFunc(
+		[]string{"/rail", "/board", "/repos/search", "/repos/banner", "/launch/candidates?"},
+		func(route string) bool { return strings.HasPrefix(path, route) },
+	)
 }
 
 func track(t *testing.T, st *store.Store, repos ...store.Repo) *store.Store {

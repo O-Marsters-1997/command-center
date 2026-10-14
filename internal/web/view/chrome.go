@@ -20,7 +20,7 @@ type Chrome struct {
 	SpendPaused    option.Option[SpendPaused]
 	RefusedRepos   []RefusedRepo
 	OpenTickets    int
-	Section        string
+	PageTitle      string
 	Home           bool
 	Keymap         []KeyGroup
 	RepoScope      string
@@ -33,11 +33,45 @@ type Chrome struct {
 	ProjectQuery   string
 	ProjectInitial string
 	ScopeMenu      []ScopeChoice
-	TicketsPath    string
-	InsightsPath   string
-	ReposPath      string
-	LaunchPath     string
+	Launch         NavItem
+	Nav            []NavItem
 }
+
+const (
+	keyTickets  = "g t"
+	keyInsights = "g i"
+	keyRepos    = "g r"
+	keyLaunch   = "c"
+
+	appTitle = "Command Centre"
+)
+
+type NavItem struct {
+	Label   string
+	Path    string
+	Key     string
+	Icon    string
+	Badge   string
+	Warn    bool
+	Current bool
+}
+
+func (c *Chrome) setCurrent(key string) {
+	c.Launch.Current = c.Launch.Key == key
+	for i := range c.Nav {
+		c.Nav[i].Current = c.Nav[i].Key == key
+	}
+}
+
+func (c *Chrome) badge(key, text string, warn bool) {
+	for i := range c.Nav {
+		if c.Nav[i].Key == key {
+			c.Nav[i].Badge, c.Nav[i].Warn = text, warn
+		}
+	}
+}
+
+func (c *Chrome) titled(page string) { c.PageTitle = page + " · " + appTitle }
 
 func (c *Chrome) scopeToProject(p store.Project) {
 	c.ProjectScope, c.ProjectHue, c.ProjectQuery = p.Name, p.Hue, url.QueryEscape(p.Name)

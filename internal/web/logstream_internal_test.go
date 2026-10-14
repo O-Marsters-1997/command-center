@@ -61,7 +61,7 @@ func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 	}
 	fromStream := extractSSEData(t, buf.String())
 
-	if fromStream != fromServerRender {
+	if fromStream != string(fromServerRender) {
 		t.Errorf("streamed line = %q\nserver-rendered line = %q\nwant byte-identical", fromStream, fromServerRender)
 	}
 }
