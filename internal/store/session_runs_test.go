@@ -38,9 +38,6 @@ func TestSessionRunsForTicketReturnsTheLatestSessionInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := store.InsertSessionRunSkeleton(ctx, ticket, "review", "", "", storepkg.RunSession{}); err != nil {
-		t.Fatal(err)
-	}
 
 	got, err = store.SessionRunsForTicket(ctx, ticket)
 	if err != nil {

@@ -49,6 +49,8 @@ var allEventKinds = []EventKind{
 	EventMergeAbortFailed, EventFollowUpRefused, EventDraftReady, EventDraftReadyFailed, EventLaunch,
 }
 
+func AllEventKinds() []EventKind { return slices.Clone(allEventKinds) }
+
 func ParseEventKind(s string) (EventKind, error) {
 	if k := EventKind(s); slices.Contains(allEventKinds, k) {
 		return k, nil
