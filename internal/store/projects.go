@@ -8,22 +8,18 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
-
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 var (
-	ErrProjectExists  = errors.New("project already exists")
-	ErrInvalidProject = errors.New("invalid project")
-	ErrNotFound       = errors.New("not found")
+	ErrProjectExists  = errors.New("store: project already exists")
+	ErrInvalidProject = errors.New("store: invalid project")
+	ErrNotFound       = errors.New("store: not found")
 )
 
 const (
 	MinHue = 1
 	MaxHue = 3
-
-	uniqueViolation = "23505"
 )
 
 var ProjectNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$`)
@@ -73,7 +69,7 @@ func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos [
 
 	qtx := s.q.WithTx(tx)
 	id, err := qtx.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(hue), CreatedAt: at.UTC()})
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
+	if isUniqueViolation(err, "projects_name_key") {
 		return fmt.Errorf("create project %q: %w", name, ErrProjectExists)
 	}
 	if err != nil {
@@ -118,7 +114,7 @@ func (s *Store) EditProject(ctx context.Context, name, newName string, hue int) 
 		return fmt.Errorf("edit project %q to %q with hue %d: %w", name, newName, hue, ErrInvalidProject)
 	}
 	n, err := s.q.EditProject(ctx, ccdb.EditProjectParams{OldName: name, NewName: newName, Hue: int16(hue)})
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
+	if isUniqueViolation(err, "projects_name_key") {
 		return fmt.Errorf("edit project %q to %q: %w", name, newName, ErrProjectExists)
 	}
 	if err != nil {

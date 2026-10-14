@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
 	"github.com/pressly/goose/v3"
 
@@ -20,6 +21,11 @@ import (
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+func isUniqueViolation(err error, constraint string) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
 
 type Store struct {
 	db *sql.DB

@@ -172,15 +172,13 @@ func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (members
 	return int(count), nil
 }
 
-// FeatureFirstLaunch returns when the earliest launch holding a ticket of feature was created;
-// ok is false when none has launched.
-func (s *Store) FeatureFirstLaunch(ctx context.Context, feature string) (at time.Time, ok bool, err error) {
-	at, err = s.q.FeatureFirstLaunch(ctx, feature)
+func (s *Store) FeatureFirstLaunch(ctx context.Context, feature string) (time.Time, error) {
+	at, err := s.q.FeatureFirstLaunch(ctx, feature)
 	if errors.Is(err, sql.ErrNoRows) {
-		return time.Time{}, false, nil
+		return time.Time{}, fmt.Errorf("launch of feature %q: %w", feature, ErrNotFound)
 	}
 	if err != nil {
-		return time.Time{}, false, fmt.Errorf("select first launch of feature %q: %w", feature, err)
+		return time.Time{}, fmt.Errorf("select first launch of feature %q: %w", feature, err)
 	}
-	return at, true, nil
+	return at, nil
 }

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -339,11 +340,11 @@ func TestFeatureFirstLaunchIsTheEarliestLaunchOfTheFeature(t *testing.T) {
 		}
 	}
 
-	got, ok, err := store.FeatureFirstLaunch(ctx, "f")
-	if err != nil || !ok || !got.Equal(first) {
-		t.Errorf("FeatureFirstLaunch(f) = %v, %v, %v; want %v, true, nil", got, ok, err, first)
+	got, err := store.FeatureFirstLaunch(ctx, "f")
+	if err != nil || !got.Equal(first) {
+		t.Errorf("FeatureFirstLaunch(f) = %v, %v; want %v, nil", got, err, first)
 	}
-	if _, ok, err := store.FeatureFirstLaunch(ctx, "g"); err != nil || ok {
-		t.Errorf("FeatureFirstLaunch(g) ok = %v, err = %v; want false, nil", ok, err)
+	if _, err := store.FeatureFirstLaunch(ctx, "g"); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Errorf("FeatureFirstLaunch(g) = %v, want ErrNotFound", err)
 	}
 }
