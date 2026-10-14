@@ -8,6 +8,7 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -32,7 +33,9 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(
+		t.Context(), firstRunID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {
@@ -72,7 +75,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 	if summary.ID == firstRunID {
 		t.Error("re-run must create a second runs row, not reuse the first")
 	}
-	if summary.HasOutcome {
+	if summary.Outcome.IsSome() {
 		t.Error("the freshly spawned re-run must not already have an outcome")
 	}
 
@@ -107,7 +110,9 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), firstRunID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(
+		t.Context(), firstRunID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "re-run", at.Add(time.Second)); err != nil {

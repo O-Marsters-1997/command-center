@@ -97,7 +97,7 @@ func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, pr
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome)
+		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome.UnwrapOr(plan.OutcomeFailed))
 		spec.resumeSessionID = sessionID
 	}
 	if err := l.spawnRun(ctx, t, spec); err != nil {
@@ -222,7 +222,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 
 	pr := obs.PRs[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	merged := pr.State == plan.Merged
-	baseGone := e.Run != nil && e.Unlock.BlockerClosed
+	baseGone := e.Run.IsSome() && e.Unlock.BlockerClosed
 	if !merged && !baseGone {
 		return refuse("neither merged nor base gone")
 	}

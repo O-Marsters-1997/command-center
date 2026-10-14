@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -25,12 +26,11 @@ type LaunchMembership struct {
 // RunSummary is the latest run the board and the launch-eligibility check need per ticket.
 type RunSummary struct {
 	ID            int64
-	Pgid          *int
-	ProcStartedAt *time.Time
-	HasOutcome    bool
-	Outcome       Outcome
-	ExitCode      *int
-	EndedAt       *time.Time
+	Pgid          option.Option[int]
+	ProcStartedAt option.Option[time.Time]
+	Outcome       option.Option[Outcome]
+	ExitCode      option.Option[int]
+	EndedAt       option.Option[time.Time]
 	LogPath       string
 	BaselineSHA   string
 	PromptHash    string
@@ -81,15 +81,15 @@ type Input struct {
 }
 
 // Entry is one ticket's derived state: what the board shows and the verbs it may offer.
-// Run is nil until the ticket's first run; Elapsed is nil unless that run is alive.
+// Run is None until the ticket's first run; Elapsed is None unless that run is alive.
 type Entry struct {
 	Ticket         Ticket
 	Unlock         Unlock
 	State          State
 	Reason         Reason
-	Run            *RunFact
-	Pgid           *int
-	Elapsed        *time.Duration
+	Run            option.Option[RunFact]
+	Pgid           option.Option[int]
+	Elapsed        option.Option[time.Duration]
 	LogPath        string
 	ConflictedBase string
 	DraftReason    string
@@ -98,11 +98,11 @@ type Entry struct {
 	ReadyToUndraft bool
 	OpensAsDraft   bool
 	PromptHash     string
-	LastPush       *PushRow
+	LastPush       option.Option[PushRow]
 }
 
 func (e Entry) HoldsWorktree() bool {
-	return e.Run != nil && !e.Run.Alive && e.Run.HasOutcome && e.Run.Outcome == OutcomeAsked
+	return e.Run.IsSome() && !e.Run.Unwrap().Alive && e.Run.Unwrap().Outcome == option.Some(OutcomeAsked)
 }
 
 type Snapshot struct {
@@ -212,18 +212,18 @@ func (r Rules) Derive(in Input) Snapshot {
 			Unlock:            unlock,
 			Authorised:        authorised,
 			PromptHashMatches: authorised && membership.PromptHash == Hash(Compose(t)),
-			HasRun:            run != nil,
+			HasRun:            run.IsSome(),
 			ConflictedBase:    conflictedBase,
 		})
-		if pgid != nil && !run.HasOutcome {
+		if pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
 			snap.running++
 		}
 
 		pr := in.Obs.PRs[BranchKey(t.Repo, t.Branch)]
 		draftWhy, readyToUndraft := draftReason(pr, t, byURL, prs, run)
-		var lastPush *PushRow
+		lastPush := option.None[PushRow]()
 		if row, ok := in.Verdict.PushRows[t.URL]; ok {
-			lastPush = &row
+			lastPush = option.Some(row)
 		}
 		snap.byURL[t.URL] = len(snap.Entries)
 		snap.Entries = append(snap.Entries, Entry{
@@ -305,13 +305,13 @@ func branchNumber(branch string) (int, bool) {
 }
 
 func draftReason(
-	pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run *RunFact,
+	pr PR, t Ticket, byURL map[string]Ticket, prs map[string]PRState, run option.Option[RunFact],
 ) (reason string, ready bool) {
 	if !pr.IsDraft {
 		return "", false
 	}
 	gating := GatingBlockers(t, byURL)
-	reviewMe := run != nil && run.Verdict != nil && run.Verdict.Kind == verdict.ReviewMe
+	reviewMe := run.IsSome() && run.Unwrap().Verdict.IsSome() && run.Unwrap().Verdict.Unwrap().Kind == verdict.ReviewMe
 	draft, gateReason := DraftGate(gating, prs, reviewMe)
 	if !draft {
 		return "ready to un-draft; the last gh pr ready call has not taken effect yet", true
@@ -321,23 +321,22 @@ func draftReason(
 
 func (r Rules) runFor(
 	t Ticket, in Input, peer string,
-) (run *RunFact, pgid *int, elapsed *time.Duration, logPath string) {
+) (run option.Option[RunFact], pgid option.Option[int], elapsed option.Option[time.Duration], logPath string) {
 	summary, ok := in.Runs[t.URL]
 	if !ok {
-		return nil, nil, nil, ""
+		return option.None[RunFact](), option.None[int](), option.None[time.Duration](), ""
 	}
 
 	key := BranchKey(t.Repo, t.Branch)
-	fact := &RunFact{LogPath: summary.LogPath, Alive: in.Obs.Runs[t.URL].Alive}
+	fact := RunFact{LogPath: summary.LogPath, Alive: in.Obs.Runs[t.URL].Alive}
 	ownState := in.Obs.PRs[key].State
 	fact.PROpen = ownState == Open
 	fact.PRMerged = ownState == Merged
 	fact.PRClosedUnmerged = ownState == Closed
-	if summary.HasOutcome {
-		fact.HasOutcome = true
+	if summary.Outcome.IsSome() {
 		fact.Outcome = summary.Outcome
 		fact.Question = summary.Question
-		if summary.Outcome == OutcomePush {
+		if summary.Outcome.Unwrap() == OutcomePush {
 			pf := in.Pushes[t.URL]
 			fact.PushRefused = pf.Refused
 			fact.PushRefusedPath = pf.RefusedPath
@@ -354,26 +353,26 @@ func (r Rules) runFor(
 			}
 			fact.ConflictingPeer = peer
 			if fact.PROpen && !fact.PushRefused && !fact.PushFailed {
-				r.ApplyVerdict(fact, t, in.Obs, in.Verdict)
+				fact.Verdict = r.ApplyVerdict(t, in.Obs, in.Verdict)
 			}
 		}
 	}
 
-	if fact.Alive && summary.ProcStartedAt != nil {
-		d := in.Now.Sub(*summary.ProcStartedAt).Round(time.Second)
-		elapsed = &d
+	elapsed = option.None[time.Duration]()
+	if started := summary.ProcStartedAt; fact.Alive && started.IsSome() {
+		elapsed = option.Some(in.Now.Sub(started.Unwrap()).Round(time.Second))
 	}
-	return fact, summary.Pgid, elapsed, summary.LogPath
+	return option.Some(fact), summary.Pgid, elapsed, summary.LogPath
 }
 
-func (r Rules) ApplyVerdict(fact *RunFact, t Ticket, obs Observation, vf VerdictFacts) {
+func (r Rules) ApplyVerdict(t Ticket, obs Observation, vf VerdictFacts) option.Option[verdict.Result] {
 	predicate := r.Checks[t.Repo]
 	if predicate.IsZero() {
-		return
+		return option.None[verdict.Result]()
 	}
 	pushRow, pushed := vf.PushRows[t.URL]
 	if !pushed {
-		return
+		return option.None[verdict.Result]()
 	}
 
 	pr := obs.PRs[BranchKey(t.Repo, t.Branch)]
@@ -391,7 +390,7 @@ func (r Rules) ApplyVerdict(fact *RunFact, t Ticket, obs Observation, vf Verdict
 		CompatCheck:  r.CompatCheck[t.Repo],
 	})
 
-	fact.Verdict = &result
+	return option.Some(result)
 }
 
 func verdictChecks(checks map[string]CheckState) map[string]verdict.CheckState {

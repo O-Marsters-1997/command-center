@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -59,7 +60,7 @@ func sessionStoreInFeature(
 	}
 	if !alive {
 		exit := 0
-		if err := st.RecordDisposition(ctx, runID, outcome, &exit, testNow, nil); err != nil {
+		if err := st.RecordDisposition(ctx, runID, outcome, option.Some(exit), testNow, option.None[float64]()); err != nil {
 			t.Fatal(err)
 		}
 	}

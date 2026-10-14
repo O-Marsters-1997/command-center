@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -17,7 +18,7 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 
 	var candidates []plan.PushCandidate
 	for _, e := range snap.Entries {
-		if e.Run == nil || !e.Run.HasOutcome || e.Run.Outcome != plan.OutcomePush {
+		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
 			continue
 		}
 		tip, ok := obs.LocalTips[plan.BranchKey(e.Ticket.Repo, e.Ticket.Branch)]

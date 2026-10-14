@@ -11,18 +11,19 @@ import (
 // Mergify's queue takes main-based pull requests only, and both repos delete a merged branch.
 func (l *Loop) retargetMerged(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	for _, e := range snap.Entries {
-		t, row := e.Ticket, e.LastPush
-		if e.HoldsWorktree() {
+		t := e.Ticket
+		if e.HoldsWorktree() || e.LastPush.IsNone() {
 			continue
 		}
-		if row == nil || row.BaseBranch == "" || row.BaseBranch == plan.DefaultBaseBranch {
+		row := e.LastPush.Unwrap()
+		if row.BaseBranch == "" || row.BaseBranch == plan.DefaultBaseBranch {
 			continue
 		}
 		if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open ||
 			obs.PRs[plan.BranchKey(t.Repo, row.BaseBranch)].State != plan.Merged {
 			continue
 		}
-		if err := l.retargetOne(ctx, snap, obs, t, *row); err != nil {
+		if err := l.retargetOne(ctx, snap, obs, t, row); err != nil {
 			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}

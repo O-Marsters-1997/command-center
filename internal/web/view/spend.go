@@ -40,7 +40,7 @@ func (c *SpendCache) Spend(path string) (int, error) {
 		return 0, fmt.Errorf("measure spend of %s: %w", path, err)
 	}
 	tokens := tokensOf(metrics)
-	if metrics.Settled {
+	if metrics.CostUSD.IsSome() {
 		c.settled[path] = tokens
 	}
 	return tokens, nil

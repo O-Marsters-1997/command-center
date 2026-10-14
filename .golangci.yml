@@ -52,6 +52,7 @@ linters:
             - github.com/O-Marsters-1997/command-center/internal/plan
             - github.com/O-Marsters-1997/command-center/internal/spend
             - github.com/O-Marsters-1997/command-center/internal/verdict
+            - github.com/O-Marsters-1997/command-center/internal/option
           deny:
             - pkg: database/sql
               desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0013)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -51,13 +52,13 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	if !ok {
 		t.Fatal("no run recorded for sandbox://CC-1")
 	}
-	if summary.Pgid == nil || *summary.Pgid != 1 {
+	if summary.Pgid != option.Some(1) {
 		t.Errorf("pgid = %v, want 1", summary.Pgid)
 	}
 	if summary.BaselineSHA == "" {
 		t.Error("baseline_sha is empty")
 	}
-	if summary.HasOutcome {
+	if summary.Outcome.IsSome() {
 		t.Error("a freshly spawned run must not already have an outcome")
 	}
 }
@@ -106,10 +107,10 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.ImplementSpawns()))
 	}
 	summary := f.Latest(t)[f.Tickets[0].URL]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomeCutFailed {
+	if summary.Outcome != option.Some(plan.OutcomeCutFailed) {
 		t.Errorf("summary = %+v, want cut_failed", summary)
 	}
-	if summary.Pgid != nil {
+	if summary.Pgid.IsSome() {
 		t.Errorf("pgid = %v, want nil: a cut failure never claims a pgid", summary.Pgid)
 	}
 }
@@ -203,10 +204,10 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary := latest[ticket.URL]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
+	if summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Fatalf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
-	if summary.ExitCode == nil || *summary.ExitCode != 0 {
+	if summary.ExitCode != option.Some(0) {
 		t.Errorf("exit code = %v, want 0", summary.ExitCode)
 	}
 
@@ -234,7 +235,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary = latest[ticket.URL]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
+	if summary.Outcome != option.Some(plan.OutcomePush) {
 		t.Fatalf("summary = %+v, want push (one commit after its own baseline)", summary)
 	}
 }
@@ -307,7 +308,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary := latest[ticket.URL]; !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
+	if summary := latest[ticket.URL]; summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Errorf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
 	cost, err := store.CCCostUSD(t.Context(), at.Add(time.Hour))
@@ -418,7 +419,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary := latest[ticket.URL]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
+	if summary.Outcome != option.Some(plan.OutcomePush) {
 		t.Fatalf("summary = %+v, want push: origin/cc-1 is ahead of baseline though the worktree is gone", summary)
 	}
 }
@@ -478,10 +479,10 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary := latest[ticket.URL]
-	if !summary.HasOutcome {
+	if summary.Outcome.IsNone() {
 		t.Fatal("the killed run was not disposed of in the same tick")
 	}
-	if summary.ExitCode == nil || *summary.ExitCode != 143 {
+	if summary.ExitCode != option.Some(143) {
 		t.Errorf("exit code = %v, want 143", summary.ExitCode)
 	}
 }

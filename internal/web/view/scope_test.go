@@ -3,6 +3,7 @@ package view
 import (
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -21,23 +22,23 @@ func TestFilterGroupsByRepoAdmitsAGroupWholeOnEitherMember(t *testing.T) {
 	root := Row{URL: "root", Repo: "repo"}
 	child := Row{URL: "child", Repo: "services"}
 	groups := []Group{
-		{Root: &root, Children: []Row{child}},
+		{Root: option.Some(root), Children: []Row{child}},
 		{Children: []Row{{URL: "unrelated", Repo: "other"}}},
 	}
 
 	forRepo := filterGroupsByRepo(groups, "repo")
-	if len(forRepo) != 1 || forRepo[0].Root.URL != "root" || len(forRepo[0].Children) != 1 {
+	if len(forRepo) != 1 || forRepo[0].Root.Unwrap().URL != "root" || len(forRepo[0].Children) != 1 {
 		t.Fatalf("filterGroupsByRepo(groups, \"repo\") = %+v, want the cross-repo group whole", forRepo)
 	}
 
 	forServices := filterGroupsByRepo(groups, "services")
-	if len(forServices) != 1 || forServices[0].Root.URL != "root" {
+	if len(forServices) != 1 || forServices[0].Root.Unwrap().URL != "root" {
 		t.Fatalf("filterGroupsByRepo(groups, \"services\") = %+v, want the same group admitted from its other member",
 			forServices)
 	}
 
 	forOther := filterGroupsByRepo(groups, "other")
-	if len(forOther) != 1 || forOther[0].Root != nil || forOther[0].Children[0].URL != "unrelated" {
+	if len(forOther) != 1 || forOther[0].Root.IsSome() || forOther[0].Children[0].URL != "unrelated" {
 		t.Fatalf("filterGroupsByRepo(groups, \"other\") = %+v, want only the unrelated group", forOther)
 	}
 }
@@ -49,19 +50,19 @@ func TestFilterGroupsByProjectAdmitsAGroupWholeOnAnyMember(t *testing.T) {
 	api := Row{URL: "api", Repo: "acme/api"}
 	elsewhere := Row{URL: "elsewhere", Repo: "other/repo"}
 	groups := []Group{
-		{Root: &web, Children: []Row{elsewhere}},
-		{Root: &elsewhere, Children: []Row{api}},
-		{Root: &elsewhere, Children: []Row{{URL: "x", Repo: "other/repo"}}},
+		{Root: option.Some(web), Children: []Row{elsewhere}},
+		{Root: option.Some(elsewhere), Children: []Row{api}},
+		{Root: option.Some(elsewhere), Children: []Row{{URL: "x", Repo: "other/repo"}}},
 	}
 
 	got := filterGroupsByProject(groups, []string{"acme/web", "acme/api"})
 	if len(got) != 2 {
 		t.Fatalf("filterGroupsByProject(groups, acme) = %+v, want the two groups with an acme member", got)
 	}
-	if got[0].Root.URL != "web" || len(got[0].Children) != 1 || got[0].Children[0].URL != "elsewhere" {
+	if got[0].Root.Unwrap().URL != "web" || len(got[0].Children) != 1 || got[0].Children[0].URL != "elsewhere" {
 		t.Errorf("group rooted in acme = %+v, want it whole with its other-project child", got[0])
 	}
-	if got[1].Root.URL != "elsewhere" || got[1].Children[0].URL != "api" {
+	if got[1].Root.Unwrap().URL != "elsewhere" || got[1].Children[0].URL != "api" {
 		t.Errorf("group with an acme child = %+v, want it admitted whole", got[1])
 	}
 }
@@ -109,24 +110,24 @@ func TestFilterGroupsByFeatureAdmitsAGroupWholeOnEitherMember(t *testing.T) {
 	root := Row{URL: "root", Feature: "board-scope"}
 	child := Row{URL: "child", Feature: "sqlc-migration"}
 	groups := []Group{
-		{Root: &root, Children: []Row{child}},
+		{Root: option.Some(root), Children: []Row{child}},
 		{Children: []Row{{URL: "unrelated", Feature: "other"}}},
 	}
 
 	forBoardScope := filterGroupsByFeature(groups, "board-scope")
-	if len(forBoardScope) != 1 || forBoardScope[0].Root.URL != "root" || len(forBoardScope[0].Children) != 1 {
+	if len(forBoardScope) != 1 || forBoardScope[0].Root.Unwrap().URL != "root" || len(forBoardScope[0].Children) != 1 {
 		t.Fatalf("filterGroupsByFeature(groups, \"board-scope\") = %+v, want the cross-feature group whole",
 			forBoardScope)
 	}
 
 	forSqlcMigration := filterGroupsByFeature(groups, "sqlc-migration")
-	if len(forSqlcMigration) != 1 || forSqlcMigration[0].Root.URL != "root" {
+	if len(forSqlcMigration) != 1 || forSqlcMigration[0].Root.Unwrap().URL != "root" {
 		t.Fatalf("filterGroupsByFeature(groups, \"sqlc-migration\") = %+v, want the same group admitted from "+
 			"its other member", forSqlcMigration)
 	}
 
 	forOther := filterGroupsByFeature(groups, "other")
-	if len(forOther) != 1 || forOther[0].Root != nil || forOther[0].Children[0].URL != "unrelated" {
+	if len(forOther) != 1 || forOther[0].Root.IsSome() || forOther[0].Children[0].URL != "unrelated" {
 		t.Fatalf("filterGroupsByFeature(groups, \"other\") = %+v, want only the unrelated group", forOther)
 	}
 }
@@ -168,7 +169,7 @@ func TestRowsInFlattensRootAndChildren(t *testing.T) {
 
 	root := Row{URL: "root"}
 	groups := []Group{
-		{Root: &root, Children: []Row{{URL: "child"}}},
+		{Root: option.Some(root), Children: []Row{{URL: "child"}}},
 		{Children: []Row{{URL: "lone"}}},
 	}
 	got := rowsIn(groups)

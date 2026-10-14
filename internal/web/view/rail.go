@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -83,7 +84,7 @@ type RailHealth struct {
 	Live    int
 	Observe Age
 	Stale   bool
-	Error   *TickError
+	Error   option.Option[TickError]
 }
 
 type RailParams struct {
@@ -125,7 +126,7 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 	if err != nil {
 		return Rail{}, fmt.Errorf("load plan input: %w", err)
 	}
-	lastErr, failed, err := r.store.LastError(ctx)
+	lastErr, err := r.store.LastError(ctx)
 	if err != nil {
 		return Rail{}, fmt.Errorf("load last error: %w", err)
 	}
@@ -151,7 +152,7 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 		return Rail{}, fmt.Errorf("load project marks: %w", err)
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, Params{})
+	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, gauges, split, now, Params{})
 
 	rail := buildRail(rows, now, params)
 	rail.Gauges = chrome.Gauges

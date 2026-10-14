@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -23,17 +24,17 @@ type Board struct {
 	Tabs             []FilterTab
 	BoardPath        string
 	BoardPollSeconds int
-	Launched         *Age
+	Launched         option.Option[Age]
 	TicketCount      int
 	WaveCount        int
 	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
-	Launch *LaunchModal
+	Launch option.Option[LaunchModal]
 }
 
 func (b Board) Row(ticketURL string) (Row, bool) {
 	for _, g := range b.Groups {
-		if g.Root != nil && g.Root.URL == ticketURL {
-			return *g.Root, true
+		if g.Root.IsSome() && g.Root.Unwrap().URL == ticketURL {
+			return g.Root.Unwrap(), true
 		}
 		for _, child := range g.Children {
 			if child.URL == ticketURL {
@@ -107,7 +108,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if err != nil {
 		return Board{}, fmt.Errorf("load plan input: %w", err)
 	}
-	lastErr, failed, err := r.store.LastError(ctx)
+	lastErr, err := r.store.LastError(ctx)
 	if err != nil {
 		return Board{}, fmt.Errorf("load last error: %w", err)
 	}
@@ -148,7 +149,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if project.Name != "" {
 		groups = filterGroupsByProject(groups, project.Repos)
 	}
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
+	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, gauges, split, now, params)
 	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
 		return Board{}, fmt.Errorf("scope chrome: %w", err)
 	}
@@ -158,15 +159,14 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	for _, row := range scoped {
 		blocking[row.URL] = row.BlockedBy
 	}
-	var launched *Age
+	launched := option.None[Age]()
 	if params.Feature != "" {
 		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
 		if err != nil {
 			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 		if ok {
-			age := relative(now, at)
-			launched = &age
+			launched = option.Some(relative(now, at))
 		}
 	}
 	return Board{
@@ -201,7 +201,7 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, fmt.Errorf("load last observation: %w", err)
 	}
-	lastErr, failed, err := r.store.LastError(ctx)
+	lastErr, err := r.store.LastError(ctx)
 	if err != nil {
 		return Chrome{}, fmt.Errorf("load last error: %w", err)
 	}
@@ -213,7 +213,7 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, fmt.Errorf("gauge split: %w", err)
 	}
-	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
+	chrome := r.buildChrome(tickets, obs, observed, lastErr, gauges, split, now, params)
 	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
 		return Chrome{}, fmt.Errorf("scope chrome: %w", err)
 	}
@@ -283,7 +283,7 @@ func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
 }
 
 func (r *Reader) buildChrome(
-	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr store.TickError, failed bool,
+	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr option.Option[store.TickError],
 	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time, params Params,
 ) Chrome {
 	c := Chrome{
@@ -303,14 +303,14 @@ func (r *Reader) buildChrome(
 		InsightsPath: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
 	}
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
-		c.SpendPaused = &SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h}
+		c.SpendPaused = option.Some(SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h})
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)
 		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
-	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
-		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
+	if lastErr.IsSome() && (!observed || lastErr.Unwrap().At.After(obs.ObservedAt)) {
+		c.LastError = option.Some(TickError{Age: relative(now, lastErr.Unwrap().At), Message: lastErr.Unwrap().Message})
 	}
 	if params.Repo != "" {
 		c.RepoCrumbPath = RepoPath(params.Repo)

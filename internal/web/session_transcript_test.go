@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -48,7 +49,9 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 			t.Fatal(err)
 		}
 		exit := 0
-		if err := st.RecordDisposition(ctx, runID, plan.OutcomePush, &exit, testNow, nil); err != nil {
+		if err := st.RecordDisposition(
+			ctx, runID, plan.OutcomePush, option.Some(exit), testNow, option.None[float64](),
+		); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -420,9 +421,9 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		if run, ok := latest[intent.TicketID]; ok && run.Pgid != nil && !run.HasOutcome {
-			if err := l.runner.Cancel(*run.Pgid); err != nil {
-				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
+		if run, ok := latest[intent.TicketID]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
+			if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
+				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
 			}
 		}
 		return nil
@@ -445,12 +446,12 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	for _, intent := range intents {
 		run, ok := latest[intent.TicketID]
 		steerable := run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp
-		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid == nil || run.HasOutcome {
+		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid.IsNone() || run.Outcome.IsSome() {
 			continue
 		}
 		cancelled[intent.TicketID] = true
-		if err := l.runner.Cancel(*run.Pgid); err != nil {
-			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, *run.Pgid, err)
+		if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
+			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
 		}
 	}
 	return nil
@@ -496,15 +497,15 @@ func (l *Loop) disposeRun(
 		return fmt.Errorf("outcome: %w", err)
 	}
 
-	var exitCode *int
+	exitCode := option.None[int]()
 	if code, ok := l.runner.Reap(run.Pgid); ok {
-		exitCode = &code
+		exitCode = option.Some(code)
 	}
-	var metrics *agentlog.RunMetrics
+	cost := option.None[float64]()
 	if m, ok := parseLog(l.logger, run.LogPath, "run metrics", agentlog.ParseMetrics); ok {
-		metrics = &m
+		cost = m.CostUSD
 	}
-	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), metrics); err != nil {
+	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), cost); err != nil {
 		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
 	}
 	readings, _ := parseLog(l.logger, run.LogPath, "run readings", agentlog.ParseReadings)
@@ -780,7 +781,7 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	result, err := l.runner.Spawn(ctx, spawnCfg)
 	if err != nil {
 		if dispositionErr := l.store.RecordDisposition(
-			ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil,
+			ctx, runID, plan.Disposition(0), option.None[int](), l.clock.Now(), option.None[float64](),
 		); dispositionErr != nil {
 			return errors.Join(
 				fmt.Errorf("spawn run %d: %w", runID, err),

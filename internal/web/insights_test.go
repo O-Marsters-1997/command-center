@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -30,8 +30,9 @@ func disposeInsightsRun(
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	metrics := &agentlog.RunMetrics{CostUSD: &costUSD, Settled: true}
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, metrics); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomePush, option.None[int](), endedAt, option.Some(costUSD),
+	); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 }

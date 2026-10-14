@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -60,7 +61,9 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range children {
@@ -239,7 +242,9 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomeFailed, option.Some(exitCode), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 

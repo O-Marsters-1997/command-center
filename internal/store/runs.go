@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
@@ -74,18 +74,22 @@ func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedA
 }
 
 func (s *Store) RecordDisposition(
-	ctx context.Context, runID int64, outcome plan.Outcome, exitCode *int, endedAt time.Time,
-	metrics *agentlog.RunMetrics,
+	ctx context.Context, runID int64, outcome plan.Outcome, exitCode option.Option[int],
+	endedAt time.Time, cost option.Option[float64],
 ) error {
 	var exitCodeParam sql.NullInt64
-	if exitCode != nil {
-		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
+	if exitCode.IsSome() {
+		exitCodeParam = sql.NullInt64{Int64: int64(exitCode.Unwrap()), Valid: true}
+	}
+	var costParam sql.NullFloat64
+	if cost.IsSome() {
+		costParam = sql.NullFloat64{Float64: cost.Unwrap(), Valid: true}
 	}
 	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(outcome.String()),
 		ExitCode: exitCodeParam,
 		EndedAt:  notNullTime(endedAt.UTC()),
-		CostUsd:  costUSD(metrics),
+		CostUsd:  costParam,
 		ID:       runID,
 	})
 	if err != nil {
@@ -100,13 +104,6 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 		return fmt.Errorf("record question for run %d: %w", runID, err)
 	}
 	return nil
-}
-
-func costUSD(metrics *agentlog.RunMetrics) sql.NullFloat64 {
-	if metrics == nil || metrics.CostUSD == nil {
-		return sql.NullFloat64{}
-	}
-	return sql.NullFloat64{Float64: *metrics.CostUSD, Valid: true}
 }
 
 // InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.
@@ -172,26 +169,23 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 		}
 		summary := plan.RunSummary{ID: row.ID, Kind: kind}
 		if row.Pgid.Valid {
-			v := int(row.Pgid.Int64)
-			summary.Pgid = &v
+			summary.Pgid = option.Some(int(row.Pgid.Int64))
 		}
 		if row.ProcStartedAt.Valid {
-			summary.ProcStartedAt = &row.ProcStartedAt.Time
+			summary.ProcStartedAt = option.Some(row.ProcStartedAt.Time)
 		}
 		if row.EndedAt.Valid {
-			summary.EndedAt = &row.EndedAt.Time
+			summary.EndedAt = option.Some(row.EndedAt.Time)
 		}
 		if row.ExitCode.Valid {
-			v := int(row.ExitCode.Int64)
-			summary.ExitCode = &v
+			summary.ExitCode = option.Some(int(row.ExitCode.Int64))
 		}
 		if row.Outcome.Valid {
 			outcome, err := plan.ParseOutcome(row.Outcome.String)
 			if err != nil {
 				return nil, fmt.Errorf("read outcome of run %d: %w", row.ID, err)
 			}
-			summary.HasOutcome = true
-			summary.Outcome = outcome
+			summary.Outcome = option.Some(outcome)
 		}
 		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
 		summary.PromptHash = row.PromptHash.String

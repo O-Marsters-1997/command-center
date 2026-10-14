@@ -9,9 +9,9 @@
     <a href="{{.Path}}">{{.Name}}</a> is refused{{with .Reason}}: {{.}}{{end}}
   </p>
   {{- end}}
-  {{- with .SpendPaused}}
+  {{- if .SpendPaused.IsSome}}
   <p class="banner ribbon" data-glyph="pending" role="status">
-    spawning paused: five-hour usage is {{.Pct}}%, at or above the spend_limit_5h of {{.Limit}}%.
+    spawning paused: five-hour usage is {{.SpendPaused.Unwrap.Pct}}%, at or above the spend_limit_5h of {{.SpendPaused.Unwrap.Limit}}%.
   </p>
   {{- end}}
 </div>

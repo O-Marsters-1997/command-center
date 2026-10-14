@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -113,8 +114,8 @@ func (r Row) DetailID() string {
 // Group is one blocker and the rows waiting on it. A row with no blocker is its own group with a
 // nil Root.
 type Group struct {
-	Root     *Row  `json:"root"`
-	Children []Row `json:"children"`
+	Root     option.Option[Row] `json:"root"`
+	Children []Row              `json:"children"`
 }
 
 func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) error {
@@ -151,8 +152,8 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
 		pr := in.Obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
 		var redLeaves []string
-		if e.Run != nil && e.Run.Verdict != nil {
-			redLeaves = e.Run.Verdict.RedLeaves
+		if e.Run.IsSome() && e.Run.Unwrap().Verdict.IsSome() {
+			redLeaves = e.Run.Unwrap().Verdict.Unwrap().RedLeaves
 		}
 		question := ""
 		if e.State == plan.AwaitingInput {
@@ -160,12 +161,12 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		}
 		var pgid, elapsed string
 		var elapsedSeconds int
-		if e.Pgid != nil {
-			pgid = strconv.Itoa(*e.Pgid)
+		if e.Pgid.IsSome() {
+			pgid = strconv.Itoa(e.Pgid.Unwrap())
 		}
-		if e.Elapsed != nil {
-			elapsed = e.Elapsed.String()
-			elapsedSeconds = int(e.Elapsed.Seconds())
+		if e.Elapsed.IsSome() {
+			elapsed = e.Elapsed.Unwrap().String()
+			elapsedSeconds = int(e.Elapsed.Unwrap().Seconds())
 		}
 		rows = append(rows, Row{
 			URL:            t.URL,
@@ -288,7 +289,7 @@ func groupRows(rows []Row) []Group {
 			return cmp.Compare(a.URL, b.URL)
 		})
 		rootRow := byURL[root]
-		groups = append(groups, Group{Root: &rootRow, Children: children})
+		groups = append(groups, Group{Root: option.Some(rootRow), Children: children})
 	}
 
 	var ungrouped []Row
@@ -332,7 +333,7 @@ func filterGroupsByRepo(groups []Group, repo string) []Group {
 func filterGroupsByProject(groups []Group, repos []string) []Group {
 	inProject := func(r Row) bool { return slices.Contains(repos, r.Repo) }
 	return slices.DeleteFunc(slices.Clone(groups), func(g Group) bool {
-		return (g.Root == nil || !inProject(*g.Root)) && !slices.ContainsFunc(g.Children, inProject)
+		return (g.Root.IsNone() || !inProject(g.Root.Unwrap())) && !slices.ContainsFunc(g.Children, inProject)
 	})
 }
 
@@ -354,7 +355,7 @@ func filterGroups(groups []Group, scope string, scopeOf func(Row) string) []Grou
 }
 
 func groupInScope(g Group, scope string, scopeOf func(Row) string) bool {
-	if g.Root != nil && scopeOf(*g.Root) == scope {
+	if g.Root.IsSome() && scopeOf(g.Root.Unwrap()) == scope {
 		return true
 	}
 	return slices.ContainsFunc(g.Children, func(c Row) bool { return scopeOf(c) == scope })
@@ -363,8 +364,8 @@ func groupInScope(g Group, scope string, scopeOf func(Row) string) bool {
 func rowsIn(groups []Group) []Row {
 	rows := make([]Row, 0, len(groups))
 	for _, g := range groups {
-		if g.Root != nil {
-			rows = append(rows, *g.Root)
+		if g.Root.IsSome() {
+			rows = append(rows, g.Root.Unwrap())
 		}
 		rows = append(rows, g.Children...)
 	}
@@ -396,9 +397,9 @@ func removalWarning(s plan.State, detail string) string {
 	return "worktree removal refused: " + detail
 }
 
-func runVerdictLabel(run *plan.RunFact) string {
-	if run == nil || run.Verdict == nil {
+func runVerdictLabel(run option.Option[plan.RunFact]) string {
+	if run.IsNone() || run.Unwrap().Verdict.IsNone() {
 		return ""
 	}
-	return run.Verdict.Kind.String()
+	return run.Unwrap().Verdict.Unwrap().Kind.String()
 }

@@ -192,12 +192,12 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 		t.Fatal("RunOnce = nil, want the refresh failure")
 	}
 
-	tickErr, found, err := store.LastError(t.Context())
-	if err != nil || !found {
-		t.Fatalf("LastError: found=%v err=%v", found, err)
+	tickErr, err := store.LastError(t.Context())
+	if err != nil || tickErr.IsNone() {
+		t.Fatalf("LastError: last=%v err=%v", tickErr, err)
 	}
-	if want := "refresh: repo/child: "; !strings.HasPrefix(tickErr.Message, want) {
-		t.Errorf("tick error = %q, want prefix %q", tickErr.Message, want)
+	if want := "refresh: repo/child: "; !strings.HasPrefix(tickErr.Unwrap().Message, want) {
+		t.Errorf("tick error = %q, want prefix %q", tickErr.Unwrap().Message, want)
 	}
 }
 
