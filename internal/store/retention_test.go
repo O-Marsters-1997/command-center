@@ -42,29 +42,39 @@ func TestPruneHistoryDeletesOnlyExpiredRows(t *testing.T) {
 	ago := func(d time.Duration) string { return "'" + now.Add(-d).Format(time.RFC3339) + "'" }
 	day := 24 * time.Hour
 
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}}); err != nil {
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
+	const (
+		consumedIntent = "INSERT INTO intents (at, ticket_id, verb, consumed_at) VALUES "
+		openIntent     = "INSERT INTO intents (at, ticket_id, verb) VALUES "
+		reading        = `INSERT INTO utilization_readings (at, "window", utilization, resets_at) VALUES `
+		interval       = `INSERT INTO utilization_intervals ("window", start_at, end_at, ` +
+			`utilization_start, utilization_end, weight_usd) VALUES `
+		run  = "INSERT INTO runs (ticket_id, kind, ended_at) VALUES "
+		push = "INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at) VALUES "
+	)
 	execAll(t, db,
-		"INSERT INTO intents (at, ticket_id, verb, consumed_at) VALUES ("+ago(60*day)+", 'sandbox://CC-1', 'launch', "+ago(31*day)+")",
-		"INSERT INTO intents (at, ticket_id, verb, consumed_at) VALUES ("+ago(60*day)+", 'sandbox://CC-1', 'launch', "+ago(29*day)+")",
-		"INSERT INTO intents (at, ticket_id, verb) VALUES ("+ago(60*day)+", 'sandbox://CC-1', 'launch')",
+		consumedIntent+"("+ago(60*day)+", 'sandbox://CC-1', 'launch', "+ago(31*day)+")",
+		consumedIntent+"("+ago(60*day)+", 'sandbox://CC-1', 'launch', "+ago(29*day)+")",
+		openIntent+"("+ago(60*day)+", 'sandbox://CC-1', 'launch')",
 
 		"INSERT INTO events (at, kind) VALUES ("+ago(31*day)+", 'tick_error')",
 		"INSERT INTO events (at, kind) VALUES ("+ago(29*day)+", 'tick_error')",
 		"INSERT INTO events (at, kind) VALUES ("+ago(400*day)+", 'pr_merged')",
 
-		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(200*day)+", 'five_hour', 0.1, "+ago(199*day)+")",
-		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(91*day)+", 'five_hour', 0.2, "+ago(90*day)+")",
-		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(89*day)+", 'five_hour', 0.3, "+ago(88*day)+")",
-		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(100*day)+", 'seven_day', 0.4, "+ago(99*day)+")",
-		"INSERT INTO utilization_readings (at, \"window\", utilization, resets_at) VALUES ("+ago(150*day)+", 'seven_day', 0.5, "+ago(149*day)+")",
+		reading+"("+ago(200*day)+", 'five_hour', 0.1, "+ago(199*day)+")",
+		reading+"("+ago(91*day)+", 'five_hour', 0.2, "+ago(90*day)+")",
+		reading+"("+ago(89*day)+", 'five_hour', 0.3, "+ago(88*day)+")",
+		reading+"("+ago(100*day)+", 'seven_day', 0.4, "+ago(99*day)+")",
+		reading+"("+ago(150*day)+", 'seven_day', 0.5, "+ago(149*day)+")",
 
-		"INSERT INTO utilization_intervals (\"window\", start_at, end_at, utilization_start, utilization_end, weight_usd) VALUES ('five_hour', "+ago(16*day)+", "+ago(15*day)+", 0, 0.1, 1)",
-		"INSERT INTO utilization_intervals (\"window\", start_at, end_at, utilization_start, utilization_end, weight_usd) VALUES ('five_hour', "+ago(14*day-time.Hour)+", "+ago(13*day)+", 0, 0.1, 1)",
+		interval+"('five_hour', "+ago(16*day)+", "+ago(15*day)+", 0, 0.1, 1)",
+		interval+"('five_hour', "+ago(14*day-time.Hour)+", "+ago(13*day)+", 0, 0.1, 1)",
 
-		"INSERT INTO runs (ticket_id, kind, ended_at) VALUES ('sandbox://CC-1', 'agent', "+ago(500*day)+")",
-		"INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at) VALUES ('sandbox://CC-1', 'a', 'main', 'b', "+ago(500*day)+")",
+		run+"('sandbox://CC-1', 'agent', "+ago(500*day)+")",
+		push+"('sandbox://CC-1', 'a', 'main', 'b', "+ago(500*day)+")",
 	)
 
 	if err := store.PruneHistory(t.Context(), now); err != nil {
@@ -79,8 +89,14 @@ func TestPruneHistoryDeletesOnlyExpiredRows(t *testing.T) {
 		{"consumed intents keep the recent and the unconsumed", "SELECT count(*) FROM intents", 2},
 		{"tick errors keep the recent", "SELECT count(*) FROM events WHERE kind = 'tick_error'", 1},
 		{"other event kinds survive", "SELECT count(*) FROM events WHERE kind = 'pr_merged'", 1},
-		{"five_hour readings keep the recent and drop the old", "SELECT count(*) FROM utilization_readings WHERE \"window\" = 'five_hour'", 1},
-		{"a window's only reading survives past the limit", "SELECT count(*) FROM utilization_readings WHERE \"window\" = 'seven_day'", 1},
+		{
+			"five_hour readings keep the recent and drop the old",
+			`SELECT count(*) FROM utilization_readings WHERE "window" = 'five_hour'`, 1,
+		},
+		{
+			"a window's only reading survives past the limit",
+			`SELECT count(*) FROM utilization_readings WHERE "window" = 'seven_day'`, 1,
+		},
 		{"intervals keep those ending within 14 days", "SELECT count(*) FROM utilization_intervals", 1},
 		{"runs survive", "SELECT count(*) FROM runs", 1},
 		{"pushes survive", "SELECT count(*) FROM pushes", 1},
