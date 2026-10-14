@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 func fakeTp(t *testing.T, exitCode int) (argsPath string) {
@@ -49,7 +50,7 @@ func TestTpInvocations(t *testing.T) {
 			name: "Remove merged",
 			call: func(t *testing.T, repoPath string) error {
 				t.Helper()
-				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
+				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged)
 			},
 			wantArgv: "remove --merged cc-1-first",
 		},
@@ -57,7 +58,7 @@ func TestTpInvocations(t *testing.T) {
 			name: "Remove forced",
 			call: func(t *testing.T, repoPath string) error {
 				t.Helper()
-				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
+				return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveForced)
 			},
 			wantArgv: "remove --force cc-1-first",
 		},
@@ -106,11 +107,11 @@ func TestTpFailureNamesTheBranch(t *testing.T) {
 		}},
 		{"Remove", func(t *testing.T, repoPath string) error {
 			t.Helper()
-			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveMerged)
+			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveMerged)
 		}},
 		{"Remove forced", func(t *testing.T, repoPath string) error {
 			t.Helper()
-			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", git.RemoveForced)
+			return (git.CLI{}).Remove(t.Context(), repoPath, "cc-1-first", tp.RemoveForced)
 		}},
 	}
 

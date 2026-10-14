@@ -1,12 +1,8 @@
 package gh
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 )
 
 // RepoSummary is one repository the gh identity can push to.
@@ -17,9 +13,43 @@ type RepoSummary struct {
 	Archived      bool
 }
 
+type RepoSettings struct {
+	AllowMergeCommit bool   `json:"allow_merge_commit"`
+	AllowRebaseMerge bool   `json:"allow_rebase_merge"`
+	DefaultBranch    string `json:"default_branch"`
+}
+
+func ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error) {
+	out, err := Run(ctx, "", "api", "repos/"+fullName,
+		"--jq", "{allow_merge_commit, allow_rebase_merge, default_branch}")
+	if err != nil {
+		return RepoSettings{}, fmt.Errorf("repo settings for %s: %w", fullName, err)
+	}
+	settings, err := Decode[RepoSettings](out)
+	if err != nil {
+		return RepoSettings{}, fmt.Errorf("repo settings for %s: %w", fullName, err)
+	}
+	return settings, nil
+}
+
+func RepoRemote(ctx context.Context, fullName string) (string, error) {
+	out, err := Run(ctx, "", "api", "repos/"+fullName, "--jq", "{ssh_url}")
+	if err != nil {
+		return "", fmt.Errorf("remote of %s: %w", fullName, err)
+	}
+	repo, err := Decode[rawRepo](out)
+	if err != nil {
+		return "", fmt.Errorf("remote of %s: %w", fullName, err)
+	}
+	if repo.SSHURL == "" {
+		return "", fmt.Errorf("remote of %s: GitHub returned no ssh_url", fullName)
+	}
+	return repo.SSHURL, nil
+}
+
 // PushableRepos lists the unarchived repositories the gh identity can push to.
 func PushableRepos(ctx context.Context) ([]RepoSummary, error) {
-	out, err := run(ctx, "", "api", "--paginate",
+	out, err := Run(ctx, "", "api", "--paginate",
 		"user/repos?affiliation=owner,collaborator,organization_member&per_page=100")
 	if err != nil {
 		return nil, err
@@ -41,26 +71,19 @@ type rawRepo struct {
 	} `json:"permissions"`
 }
 
-// decodePushable reads the concatenated JSON arrays that gh api --paginate prints, one per page.
 func decodePushable(raw []byte) ([]RepoSummary, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	var repos []RepoSummary
-	for {
-		var page []rawRepo
-		err := dec.Decode(&page)
-		if errors.Is(err, io.EOF) {
-			return repos, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range page {
-			if !r.Permissions.Push || r.Archived {
-				continue
-			}
-			repos = append(repos, RepoSummary{
-				FullName: r.FullName, SSHURL: r.SSHURL, DefaultBranch: r.DefaultBranch,
-			})
-		}
+	pages, err := DecodeStream[rawRepo](raw)
+	if err != nil {
+		return nil, err
 	}
+	var repos []RepoSummary
+	for _, r := range pages {
+		if !r.Permissions.Push || r.Archived {
+			continue
+		}
+		repos = append(repos, RepoSummary{
+			FullName: r.FullName, SSHURL: r.SSHURL, DefaultBranch: r.DefaultBranch,
+		})
+	}
+	return repos, nil
 }
