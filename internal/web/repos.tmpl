@@ -27,7 +27,7 @@
     <details class="text-base font-normal">
       <summary>edit</summary>
       <form method="post" action="/projects/{{.Scope.Value}}" hx-post="/projects/{{.Scope.Value}}"
-        hx-target="#repo-results" hx-swap="innerHTML" class="flex items-center gap-2">
+        hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML" class="flex items-center gap-2">
         <input type="text" name="name" required maxlength="40" value="{{.Scope.Value}}"
           autocomplete="off" aria-label="project name">
         {{range .Hues}}
@@ -38,7 +38,7 @@
       </form>
     </details>
     <form method="post" action="/projects/{{.Scope.Value}}/delete" hx-post="/projects/{{.Scope.Value}}/delete"
-      hx-target="#repo-results" hx-swap="innerHTML" hx-confirm="Delete project {{.Scope.Value}}? Its repos stay tracked and become loose.">
+      hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML" hx-confirm="Delete project {{.Scope.Value}}? Its repos stay tracked and become loose.">
       <button type="submit" class="btn btn-sm btn-danger">Delete</button>
     </form>
   </h2>
@@ -49,11 +49,12 @@
       <a class="font-mono font-medium" href="{{.Path}}">{{.FullName}}</a>
       <ul class="checks" aria-label="checks">{{range .Steps}}<li><span class="glyph glyph-{{.Glyph}}"><span class="sr-only">{{.Label}}: {{.Glyph}}</span></span></li>{{end}}</ul>
       <form method="post" action="/repos/{{.FullName}}/project" hx-post="/repos/{{.FullName}}/project"
-        hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
+        hx-disabled-elt="find button" hx-trigger="change" hx-target="#repo-results" hx-swap="innerHTML">
         <select name="project" aria-label="project of {{.FullName}}" class="select">
           <option value="">No project</option>
           {{range $g.Projects}}<option value="{{.}}"{{if eq . $row.Project}} selected{{end}}>{{.}}</option>{{end}}
         </select>
+        <noscript><button type="submit" class="btn btn-sm">Save</button></noscript>
       </form>
     </div>
     {{end}}
@@ -67,7 +68,7 @@
 {{define "newProject" -}}
 <details class="mb-4 max-w-3xl">
   <summary>New project</summary>
-  <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
+  <form method="post" action="/projects" hx-post="/projects" hx-disabled-elt="find button" hx-target="#repo-results" hx-swap="innerHTML"
     hx-on::after-request="if (event.detail.successful) this.reset()" class="flex flex-col gap-2 mt-2">
     <input type="text" name="name" required maxlength="40" placeholder="project name"
       autocomplete="off" aria-label="project name">
@@ -106,9 +107,9 @@
 <p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file.</p>
 {{template "importRefusal" .LastImportError}}
 <form method="get" action="/repos" role="search">
-<input type="search" name="q" value="{{.Query}}" placeholder="Track a repo: search owner/name" autocomplete="off" aria-label="search repos"
-  class="block w-full"
-  hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
+  <input type="search" name="q" value="{{.Query}}" placeholder="Track a repo: search owner/name" autocomplete="off"
+    aria-label="search repos" class="block w-full"
+    hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">
 </form>
 <p class="text-muted text-xs mt-1 mb-3">Search runs as this box's gh identity.</p>
 {{template "newProject" .NewProject}}

@@ -8,7 +8,7 @@
     {{end -}}
   </ul>
   {{if .CanTrack -}}
-  <form class="mt-1" hx-post="/repos/track" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
+  <form class="mt-1" hx-post="/repos/track" hx-disabled-elt="find button" hx-target="#repo-banner" hx-swap="outerHTML" method="post" action="/repos/track">
     <input type="hidden" name="repo" value="{{.Repo}}">
     <button type="submit" class="btn btn-primary">{{.TrackLabel}}</button>
   </form>

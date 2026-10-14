@@ -48,8 +48,7 @@ func renderStates(name string, states []plan.State) (string, error) {
 func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
 	line := view.LineOf(e)
 	line.Anchor = anchor
-	html, err := renderLogLine(line)
-	return template.HTML(html), err
+	return renderLogLine(line)
 }
 
 func ReadTestdata(name string) string { return mustReadTestdata(name) }
