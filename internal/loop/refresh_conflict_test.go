@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -21,9 +22,9 @@ import (
 func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
-	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Commit(t, f.childWorktree, "shared.txt", "the child's line\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
 		BaseBranch: "parent", At: at,
@@ -32,9 +33,9 @@ func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f 
 		t.Fatal(err)
 	}
 
-	commitFile(t, f.parentWorktree, "shared.txt", "the parent's line\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent")
-	return strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	gittest.Commit(t, f.parentWorktree, "shared.txt", "the parent's line\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
+	return gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 }
 
 // conflictFixture wires a stacked pair whose refresh merge conflicts, over an observe phase that
@@ -54,7 +55,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	store := openStore(t)
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
 	aliveRuns := map[string]bool{}
 	observe := func(ctx context.Context) (plan.Observation, error) {
@@ -104,6 +105,7 @@ func (c conflictFixture) midMerge(t *testing.T) bool {
 }
 
 func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConflicted(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -125,6 +127,7 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 }
 
 func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -159,6 +162,7 @@ func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testin
 }
 
 func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -193,6 +197,7 @@ func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *t
 }
 
 func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
@@ -219,15 +224,16 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 }
 
 func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
-	parentTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	parentTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 
 	c.tick(t)
 	c.tick(t)
 
-	commitFile(t, c.f.childWorktree, "shared.txt", "both lines, reconciled\n")
+	gittest.Commit(t, c.f.childWorktree, "shared.txt", "both lines, reconciled\n")
 	if c.midMerge(t) {
 		t.Fatal("committing the resolution left MERGE_HEAD behind")
 	}
@@ -248,10 +254,11 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 }
 
 func TestAGitFailureDuringRefreshThatIsNotAConflictIsATickError(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	c := newConflictFixture(t, root, repoPath, at)
-	runGit(t, "-C", repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
+	gittest.Run(t, repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
 
 	err := c.loop.RunOnce(t.Context())
 	if err == nil {

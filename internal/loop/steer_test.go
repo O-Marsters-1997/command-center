@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -32,9 +33,9 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	t.Helper()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -107,6 +108,7 @@ func (f *steerFixture) pendingFollowUps(t *testing.T) int {
 }
 
 func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTick(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
 
@@ -136,12 +138,13 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	if len(ids) != 2 {
 		t.Fatalf("runs = %v, want the interrupted run and its resume", ids)
 	}
-	if got := runGitOutput(t, "-C", f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); strings.TrimSpace(got) != "" {
+	if got := gittest.Run(t, f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
 		t.Errorf("origin carries cc-1 (%q), want a continued run with commits not pushed", got)
 	}
 }
 
 func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
 
@@ -164,6 +167,7 @@ func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
 }
 
 func TestARunThatSurvivesTheCancelKeepsTheFollowUpPending(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, func(fake *runner.Fake) runner.Runner { return stubbornRunner{fake} })
 	f.send(t, "use sqlite instead")
 
@@ -188,6 +192,7 @@ func TestARunThatSurvivesTheCancelKeepsTheFollowUpPending(t *testing.T) {
 }
 
 func TestTwoMessagesBeforeATickEachProduceTheirOwnResumeInOrder(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "first message")
 	f.send(t, "second message")

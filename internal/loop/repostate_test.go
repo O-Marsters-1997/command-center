@@ -43,6 +43,7 @@ func upsertRepoAs(t *testing.T, st *storepkg.Store, name string, state plan.Repo
 }
 
 func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
+	t.Parallel()
 	st := openStore(t)
 	upsertRepoAs(t, st, "acme/good", plan.RepoCloning)
 	upsertRepoAs(t, st, "acme/merges", plan.RepoCloning)
@@ -77,6 +78,7 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 }
 
 func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *testing.T) {
+	t.Parallel()
 	st := openStore(t)
 	upsertRepoAs(t, st, "acme/offline", plan.RepoCloning)
 	upsertRepoAs(t, st, "acme/good", plan.RepoCloning)
@@ -176,8 +178,8 @@ func TestValidateRepoRefusesARepoWhoseSettingsFileDoesNotParse(t *testing.T) {
 }
 
 func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	pathWithGitAndTpOnly(t)
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	st := openStore(t)
 	trackRepo(t, st, "repo", root+"/remote.git")
@@ -185,8 +187,10 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 	if err := st.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	forge := &recordingForge{}
+	observer := loop.NewObserver(st, forge, cfg)
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 	tick := func() storepkg.Repo {
 		t.Helper()
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -218,13 +222,15 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 }
 
 func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t *testing.T) {
+	t.Parallel()
 	root, _ := repoWithOrigin(t)
-	pathWithGitAndTpOnly(t)
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	st := openStore(t)
 	upsertRepoAs(t, st, "repo", plan.RepoRefused)
-	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	forge := &recordingForge{}
+	observer := loop.NewObserver(st, forge, cfg)
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -237,8 +243,8 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 }
 
 func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
+	t.Parallel()
 	root, _ := repoWithOrigin(t)
-	pathWithGitAndTpOnly(t)
 	if err := os.MkdirAll(config.CheckoutPath(root, "acme/broken"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +257,7 @@ func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
 	if err := st.SaveObservation(t.Context(), previous); err != nil {
 		t.Fatal(err)
 	}
-	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
+	observer := loop.NewObserver(st, &recordingForge{}, cfg)
 
 	obs, err := observer(t.Context())
 	if err != nil {

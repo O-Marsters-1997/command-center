@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -14,8 +16,8 @@ import (
 )
 
 func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
 	store := openStore(t)
@@ -53,7 +55,7 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake, loop.WithForge(&recordingForge{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -93,11 +95,10 @@ func TestReRunSpawnsASecondRunInTheSameWorktreeWithoutCutting(t *testing.T) {
 }
 
 func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	installFakeTp(t, false)
-	installFakeGh(t, false)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
+	gittest.Run(t, repoPath, "worktree", "remove", "--force", worktreePath)
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -132,7 +133,8 @@ func TestReRunOnAGoneWorktreeCutsAFreshOneAndSpawns(t *testing.T) {
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Second)), cfg, ws, fake,
+		loop.WithForge(&recordingForge{}), loop.WithWorktrees(&recordingWorktrees{}))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

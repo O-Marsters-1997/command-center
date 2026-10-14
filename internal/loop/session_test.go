@@ -103,6 +103,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 }
 
 func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
+	t.Parallel()
 	got := followUpAfterAgentRun(t, followUpCase{startSession: true, writeTranscript: true})
 
 	if !got.spawn.Resume || got.spawn.SessionID != got.sessionID {
@@ -121,6 +122,7 @@ func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
 }
 
 func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
+	t.Parallel()
 	got := followUpAfterAgentRun(t, followUpCase{startSession: true})
 
 	if got.spawn.Resume {
@@ -138,6 +140,7 @@ func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
 }
 
 func TestFollowUpSpawnsFreshWhenTheRunHasNoSession(t *testing.T) {
+	t.Parallel()
 	got := followUpAfterAgentRun(t, followUpCase{})
 
 	if got.spawn.Resume {
@@ -149,6 +152,7 @@ func TestFollowUpSpawnsFreshWhenTheRunHasNoSession(t *testing.T) {
 }
 
 func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t)
 	f.AuthoriseAll(t)
 
