@@ -12,7 +12,11 @@ import (
 )
 
 func Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	return command.Output(ctx, dir, "gh", args...)
+	out, err := command.Output(ctx, dir, "gh", args...)
+	if err != nil {
+		return nil, fmt.Errorf("run gh: %w", err)
+	}
+	return out, nil
 }
 
 func Decode[T any](raw []byte) (T, error) {

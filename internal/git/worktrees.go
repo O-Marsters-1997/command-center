@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
@@ -17,9 +18,15 @@ type Worktrees interface {
 type CLI struct{}
 
 func (CLI) New(ctx context.Context, repoPath, branch, baseRef string) error {
-	return tp.New(ctx, repoPath, branch, baseRef)
+	if err := tp.New(ctx, repoPath, branch, baseRef); err != nil {
+		return fmt.Errorf("create worktree %s: %w", branch, err)
+	}
+	return nil
 }
 
 func (CLI) Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error {
-	return tp.Remove(ctx, repoPath, branch, mode)
+	if err := tp.Remove(ctx, repoPath, branch, mode); err != nil {
+		return fmt.Errorf("remove worktree %s: %w", branch, err)
+	}
+	return nil
 }
