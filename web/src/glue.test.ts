@@ -3,7 +3,6 @@ import {
   ago,
   elapsed,
   failureText,
-  isCurrentPath,
   maxLiveLines,
   modifierLabel,
   railOpenCookie,
@@ -39,13 +38,6 @@ test("railOpenCookie adds and removes a key", () => {
   expect(railOpenCookie(base, "x", false)).toStartWith("rail-open=y; path=/");
   expect(railOpenCookie(base, "y", true)).toStartWith("rail-open=x%7Cy;");
   expect(railOpenCookie("", "k", true)).toStartWith("rail-open=k;");
-});
-
-test("isCurrentPath matches home exactly and others by prefix", () => {
-  expect(isCurrentPath("/", "/")).toBe(true);
-  expect(isCurrentPath("/", "/tickets")).toBe(false);
-  expect(isCurrentPath("/tickets", "/tickets/x")).toBe(true);
-  expect(isCurrentPath("/insights", "/tickets")).toBe(false);
 });
 
 test("scopeOf prefers project over repo", () => {

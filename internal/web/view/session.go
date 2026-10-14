@@ -114,8 +114,8 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 
 	self := SessionPath(ticketURL)
 	chrome := board.Chrome
-	chrome.Section = "tickets"
 	chrome.Home = false
+	chrome.titled(row.Ticket())
 	prURL := ""
 	if row.PRNumber > 0 {
 		prURL = "https://github.com/" + row.Repo + "/pull/" + strconv.Itoa(row.PRNumber)

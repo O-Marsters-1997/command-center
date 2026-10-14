@@ -50,6 +50,8 @@ type RepoGroup struct {
 	Count int
 	Rows  []RepoRow
 
+	Editable bool
+
 	Projects []string
 	Hues     []int
 }
@@ -134,7 +136,8 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	if err != nil {
 		return ReposPage{}, err
 	}
-	chrome.Section = "repos"
+	chrome.setCurrent(keyRepos)
+	chrome.titled("Repos")
 	groups, form, err := r.repoGroups(ctx)
 	if err != nil {
 		return ReposPage{}, err
@@ -177,7 +180,10 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 			i := slices.IndexFunc(projects, func(p store.Project) bool { return p.Name == scope.Value })
 			members = projects[i].Repos
 		}
-		group := RepoGroup{Scope: scope, Count: len(members), Projects: projectNames, Hues: hues()}
+		group := RepoGroup{
+			Scope: scope, Count: len(members), Projects: projectNames, Hues: hues(),
+			Editable: scope.Kind == ScopeProject,
+		}
 		for _, name := range members {
 			group.Rows = append(group.Rows, trackedRow(byName[name]))
 		}
@@ -234,7 +240,8 @@ func (r *Reader) RepoPage(
 	if err != nil {
 		return RepoPage{}, err
 	}
-	chrome.Section = "repos"
+	chrome.setCurrent(keyRepos)
+	chrome.titled(scope)
 	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 	if page.Banner, err = r.Banner(ctx, scope); err != nil {
