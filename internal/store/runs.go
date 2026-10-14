@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -210,11 +211,15 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 
 // QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
 func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, payload string, at time.Time) error {
-	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode %s intent payload for %s: %w", verb, ticketID, err)
+	}
+	err = s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       at.UTC(),
 		TicketID: ticketID,
 		Verb:     verb,
-		Payload:  notNull(payload),
+		Payload:  encoded,
 	})
 	if err != nil {
 		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
@@ -231,7 +236,11 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 
 	var intents []VerbIntent
 	for _, row := range rows {
-		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: row.Payload.String})
+		var payload string
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("decode %s intent payload for %s: %w", verb, row.TicketID, err)
+		}
+		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: payload})
 	}
 	return intents, nil
 }

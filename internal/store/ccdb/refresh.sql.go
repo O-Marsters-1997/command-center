@@ -35,7 +35,7 @@ type LatestRefreshOutcomesParams struct {
 type LatestRefreshOutcomesRow struct {
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) LatestRefreshOutcomes(ctx context.Context, arg LatestRefreshOutcomesParams) ([]LatestRefreshOutcomesRow, error) {

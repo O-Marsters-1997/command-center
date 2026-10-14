@@ -99,7 +99,7 @@ func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error)
 		}
 		switch row.Kind {
 		case EventPushRefused:
-			facts[row.TicketID.String] = plan.PushFact{Refused: true, RefusedPath: row.Detail.String}
+			facts[row.TicketID.String] = plan.PushFact{Refused: true, RefusedPath: row.Detail}
 		case EventPushFailed:
 			facts[row.TicketID.String] = plan.PushFact{Failed: true}
 		}

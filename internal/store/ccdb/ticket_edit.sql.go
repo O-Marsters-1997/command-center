@@ -7,7 +7,6 @@ package ccdb
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"time"
 )
@@ -34,7 +33,7 @@ SELECT id, ticket_id, payload FROM intents WHERE verb = 'edit_ticket' AND consum
 type PendingEditTicketIntentsRow struct {
 	ID       int64
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) PendingEditTicketIntents(ctx context.Context) ([]PendingEditTicketIntentsRow, error) {
@@ -67,7 +66,7 @@ INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'edit_ticket'
 type QueueEditTicketIntentParams struct {
 	At       time.Time
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) QueueEditTicketIntent(ctx context.Context, arg QueueEditTicketIntentParams) error {

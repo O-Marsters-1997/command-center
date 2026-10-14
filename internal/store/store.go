@@ -118,7 +118,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
 				Body:      t.Body,
 				Status:    t.Status,
 				Feature:   t.Feature,
-				SyncedAt:  t.SyncedAt,
+				SyncedAt:  sql.NullTime{Time: t.SyncedAt.UTC(), Valid: !t.SyncedAt.IsZero()},
 			})
 			if err != nil {
 				return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
@@ -166,7 +166,7 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			Body:     row.Body,
 			Status:   row.Status,
 			Feature:  row.Feature,
-			SyncedAt: row.SyncedAt,
+			SyncedAt: row.SyncedAt.Time,
 		}
 		blockedBy, err := decodeBlockedBy(row.BlockedBy)
 		if err != nil {
@@ -198,7 +198,7 @@ func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
 ) error {
 	return s.inTx(ctx, func(qtx *ccdb.Queries) (err error) {
-		syncedAt := now.UTC().Format(time.RFC3339)
+		syncedAt := notNullTime(now.UTC())
 		returned := make(map[string]bool, len(tickets))
 		for _, t := range tickets {
 			var existing string
@@ -494,7 +494,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 		At:       e.At.UTC(),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
 		Kind:     e.Kind,
-		Detail:   notNull(e.Detail),
+		Detail:   e.Detail,
 	})
 	if err != nil {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
@@ -522,7 +522,7 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	var events []Event
 	for _, row := range rows {
 		e := Event{At: row.At, Kind: row.Kind}
-		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
+		e.TicketURL, e.Detail = row.TicketID.String, row.Detail
 		events = append(events, e)
 	}
 	return events, nil
@@ -540,7 +540,7 @@ func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID
 	var events []Event
 	for _, row := range rows {
 		events = append(events, Event{
-			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail.String,
+			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail,
 		})
 	}
 	return events, nil
@@ -551,7 +551,7 @@ func (s *Store) putMeta(ctx context.Context, key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("encode %s: %w", key, err)
 	}
-	if err := s.q.PutMeta(ctx, ccdb.PutMetaParams{Key: key, Value: string(encoded)}); err != nil {
+	if err := s.q.PutMeta(ctx, ccdb.PutMetaParams{Key: key, Value: encoded}); err != nil {
 		return fmt.Errorf("write %s: %w", key, err)
 	}
 	return nil
@@ -569,7 +569,7 @@ func getMeta(ctx context.Context, q *ccdb.Queries, key string, into any) (bool, 
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", key, err)
 	}
-	if err := json.Unmarshal([]byte(encoded), into); err != nil {
+	if err := json.Unmarshal(encoded, into); err != nil {
 		return false, fmt.Errorf("decode %s: %w", key, err)
 	}
 	return true, nil

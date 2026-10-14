@@ -110,7 +110,7 @@ type PushFactsParams struct {
 type PushFactsRow struct {
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) PushFacts(ctx context.Context, arg PushFactsParams) ([]PushFactsRow, error) {

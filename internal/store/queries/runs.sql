@@ -42,7 +42,7 @@ INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3);
 INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, $3, $4);
 
 -- name: PendingVerbIntents :many
-SELECT id, ticket_id, payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id;
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
