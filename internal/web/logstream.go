@@ -48,7 +48,10 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Cache-Control", "no-cache")
 	flusher := http.NewResponseController(w)
 
-	err = s.followLog(ctx, w, flusher, ticketURL, path, ended, offset, afterRecord, mode)
+	follow := logFollow{
+		TicketURL: ticketURL, Path: path, Ended: ended, Offset: offset, AfterRecord: afterRecord, Mode: mode,
+	}
+	err = s.followLog(ctx, w, flusher, follow)
 	switch {
 	case err == nil, errors.Is(err, errClientGone), errors.Is(err, context.Canceled):
 		return nil
@@ -64,17 +67,23 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
-func (s *Server) followLog(
-	ctx context.Context, w io.Writer, flusher *http.ResponseController,
-	ticketURL, path string, ended bool, offset, afterRecord int64, mode view.LogFilter,
-) error {
+type logFollow struct {
+	TicketURL   string
+	Path        string
+	Ended       bool
+	Offset      int64
+	AfterRecord int64
+	Mode        view.LogFilter
+}
+
+func (s *Server) followLog(ctx context.Context, w io.Writer, flusher *http.ResponseController, f logFollow) error {
 	var tail agentlog.Tail
 	for {
-		sent, err := sendLines(w, &tail, path, &offset, mode)
+		sent, err := sendLines(w, &tail, &f)
 		if err != nil {
 			return fmt.Errorf("send lines: %w", err)
 		}
-		records, err := s.sendRecords(ctx, w, ticketURL, &afterRecord, offset, mode)
+		records, err := s.sendRecords(ctx, w, &f)
 		if err != nil {
 			return fmt.Errorf("send records: %w", err)
 		}
@@ -82,7 +91,7 @@ func (s *Server) followLog(
 		if err := flushStream(flusher); err != nil {
 			return fmt.Errorf("flush stream: %w", err)
 		}
-		if ended && sent == 0 {
+		if f.Ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
 			// reconnects for ever; sse-close on the <pre> retires the EventSource on this.
 			return writeEnd(w, flusher)
@@ -92,7 +101,7 @@ func (s *Server) followLog(
 			return fmt.Errorf("follow run log: %w", ctx.Err())
 		case <-time.After(logPollInterval):
 		}
-		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
+		if f.Path, f.Ended, err = s.store.LatestRunLog(ctx, f.TicketURL); err != nil {
 			return fmt.Errorf("load latest run log: %w", err)
 		}
 	}
@@ -128,25 +137,23 @@ func flushStream(flusher *http.ResponseController) error {
 	return fmt.Errorf("%w: %w", errClientGone, err)
 }
 
-func (s *Server) sendRecords(
-	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode view.LogFilter,
-) (int, error) {
-	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
+func (s *Server) sendRecords(ctx context.Context, w io.Writer, f *logFollow) (int, error) {
+	records, err := s.store.TicketEventsAfter(ctx, f.TicketURL, f.AfterRecord)
 	if err != nil {
 		return 0, fmt.Errorf("load ticket events after: %w", err)
 	}
 	sent := 0
 	for _, record := range records {
-		*afterID = record.ID
+		f.AfterRecord = record.ID
 		event := view.RecordOf(record)
-		if !view.RecordShown(record) || !view.EventShown(mode, event) {
+		if !view.RecordShown(record) || !view.EventShown(f.Mode, event) {
 			continue
 		}
 		rendered, err := renderLogLine(view.LineOf(event))
 		if err != nil {
 			return sent, fmt.Errorf("render record %d: %w", record.ID, err)
 		}
-		if err := writeEvent(w, offset, rendered); err != nil {
+		if err := writeEvent(w, f.Offset, rendered); err != nil {
 			return sent, fmt.Errorf("write event: %w", err)
 		}
 		sent++
@@ -154,9 +161,8 @@ func (s *Server) sendRecords(
 	return sent, nil
 }
 
-func sendLines(
-	w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode view.LogFilter,
-) (sent int, err error) {
+func sendLines(w io.Writer, tail *agentlog.Tail, follow *logFollow) (sent int, err error) {
+	path, mode := follow.Path, follow.Mode
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -170,7 +176,7 @@ func sendLines(
 		}
 	}()
 
-	if _, err := f.Seek(*offset, io.SeekStart); err != nil {
+	if _, err := f.Seek(follow.Offset, io.SeekStart); err != nil {
 		return 0, fmt.Errorf("seek log %s: %w", path, err)
 	}
 	reader := bufio.NewReader(f)
@@ -182,7 +188,7 @@ func sendLines(
 		if err != nil {
 			return sent, fmt.Errorf("read log %s: %w", path, err)
 		}
-		*offset += int64(len(line))
+		follow.Offset += int64(len(line))
 
 		for _, event := range tail.Read([]byte(strings.TrimRight(line, "\r\n"))) {
 			if !view.EventShown(mode, event) {
@@ -195,7 +201,7 @@ func sendLines(
 			if err != nil {
 				return sent, fmt.Errorf("render log line: %w", err)
 			}
-			if err := writeEvent(w, *offset, rendered); err != nil {
+			if err := writeEvent(w, follow.Offset, rendered); err != nil {
 				return sent, fmt.Errorf("write event: %w", err)
 			}
 			sent++

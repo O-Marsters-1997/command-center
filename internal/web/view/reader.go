@@ -149,8 +149,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if project.Name != "" {
 		groups = filterGroupsByProject(groups, project.Repos)
 	}
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
+	input := chromeInput{
+		tickets: tickets, obs: in.Obs, observed: in.Observed, lastErr: lastErr, gauges: gauges, split: split,
+	}
+	chrome := r.buildChrome(input, now, params)
+	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
+	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
 		return Board{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	scoped := rowsIn(groups)
@@ -213,20 +217,25 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, fmt.Errorf("gauge split: %w", err)
 	}
-	chrome := r.buildChrome(tickets, obs, observed, lastErr, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
+	input := chromeInput{
+		tickets: tickets, obs: obs, observed: observed, lastErr: lastErr, gauges: gauges, split: split,
+	}
+	chrome := r.buildChrome(input, now, params)
+	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
+	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
 		return Chrome{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	return chrome, nil
 }
 
-func (r *Reader) scopeChrome(
-	ctx context.Context,
-	c *Chrome,
-	tickets []store.Ticket,
-	project store.Project,
-	repo string,
-) error {
+type chromeScope struct {
+	tickets []store.Ticket
+	project store.Project
+	repo    string
+}
+
+func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, scope chromeScope) error {
+	tickets, project, repo := scope.tickets, scope.project, scope.repo
 	c.scopeToProject(project)
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
@@ -282,10 +291,17 @@ func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
 	return refused, nil
 }
 
-func (r *Reader) buildChrome(
-	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr option.Option[store.TickError],
-	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time, params Params,
-) Chrome {
+type chromeInput struct {
+	tickets  []store.Ticket
+	obs      plan.Observation
+	observed bool
+	lastErr  option.Option[store.TickError]
+	gauges   map[agentlog.Window]store.Gauge
+	split    map[agentlog.Window]windowSplit
+}
+
+func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrome {
+	tickets, obs, observed, lastErr, gauges, split := in.tickets, in.obs, in.observed, in.lastErr, in.gauges, in.split
 	c := Chrome{
 		Workspace:    workspaceName(r.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),

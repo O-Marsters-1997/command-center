@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 const sessionTicket = "https://github.com/acme/web/issues/1"
@@ -133,6 +134,36 @@ func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/9")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestSessionPageWithANonNumericTicketIs404(t *testing.T) {
+	t.Parallel()
+	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/nine")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestSessionRefRoundTripsThroughItsPath(t *testing.T) {
+	t.Parallel()
+	ref, err := view.ParseSessionRef(sessionTicket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
+	if ref != want {
+		t.Errorf("ParseSessionRef(%q) = %+v, want %+v", sessionTicket, ref, want)
+	}
+	if got := ref.Path(); got != "/s/acme/web/1" {
+		t.Errorf("Path() = %q, want /s/acme/web/1", got)
+	}
+}
+
+func TestParseSessionRefRefusesATooShortURL(t *testing.T) {
+	t.Parallel()
+	if _, err := view.ParseSessionRef("web/issues/1"); err == nil {
+		t.Error("ParseSessionRef(short URL) error = nil, want an error")
 	}
 }
 

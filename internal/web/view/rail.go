@@ -152,7 +152,9 @@ func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Ra
 		return Rail{}, fmt.Errorf("load project marks: %w", err)
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, gauges, split, now, Params{})
+	chrome := r.buildChrome(chromeInput{
+		tickets: tickets, obs: in.Obs, observed: in.Observed, lastErr: lastErr, gauges: gauges, split: split,
+	}, now, Params{})
 
 	rail := buildRail(rows, now, params)
 	rail.Gauges = chrome.Gauges

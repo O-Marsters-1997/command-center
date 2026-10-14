@@ -39,7 +39,8 @@ func mustLogDetail(
 ) LogDetail {
 	t.Helper()
 
-	detail, err := buildLogDetail(render, path, streaming, ticketURL, records, params)
+	src := logSource{Path: path, Streaming: streaming, TicketURL: ticketURL, Records: records}
+	detail, err := buildLogDetail(render, src, params)
 	if err != nil {
 		t.Fatalf("buildLogDetail: %v", err)
 	}
@@ -50,7 +51,8 @@ func TestBuildLogDetailRefusesALineThatFailsToRender(t *testing.T) {
 	t.Parallel()
 
 	failing := func(LogLine) (string, error) { return "", errors.New("render failed") }
-	_, err := buildLogDetail(failing, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
+	src := logSource{Path: writeRunLog(t, testRunLog), TicketURL: "sandbox://x"}
+	_, err := buildLogDetail(failing, src, Params{Log: "all"})
 	if err == nil {
 		t.Error("buildLogDetail error = nil, want the render failure")
 	}

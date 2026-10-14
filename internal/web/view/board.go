@@ -127,7 +127,8 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
 		if params.Sel == r.URL {
-			log, err := buildLogDetail(render, r.LogPath, r.Alive, r.URL, records, params)
+			src := logSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
+			log, err := buildLogDetail(render, src, params)
 			if err != nil {
 				return fmt.Errorf("build log for %s: %w", r.URL, err)
 			}

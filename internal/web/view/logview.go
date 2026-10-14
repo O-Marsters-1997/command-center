@@ -71,9 +71,15 @@ type LogDetail struct {
 	Final      string      `json:"final"`
 }
 
-func buildLogDetail(
-	render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
-) (LogDetail, error) {
+type logSource struct {
+	Path      string
+	Streaming bool
+	TicketURL string
+	Records   []store.Event
+}
+
+func buildLogDetail(render LineRenderer, src logSource, params Params) (LogDetail, error) {
+	path, streaming, ticketURL, records := src.Path, src.Streaming, src.TicketURL, src.Records
 	detail := LogDetail{Path: path, Streaming: streaming}
 	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })
 
