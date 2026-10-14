@@ -42,9 +42,6 @@ const (
 	keyRepos    = "g r"
 	keyLaunch   = "c"
 
-	navTickets = 0
-	navRepos   = 2
-
 	appTitle = "Command Centre"
 )
 
@@ -62,6 +59,14 @@ func (c *Chrome) setCurrent(key string) {
 	c.Launch.Current = c.Launch.Key == key
 	for i := range c.Nav {
 		c.Nav[i].Current = c.Nav[i].Key == key
+	}
+}
+
+func (c *Chrome) badge(key, text string, warn bool) {
+	for i := range c.Nav {
+		if c.Nav[i].Key == key {
+			c.Nav[i].Badge, c.Nav[i].Warn = text, warn
+		}
 	}
 }
 

@@ -259,9 +259,9 @@ func (r *Reader) scopeChrome(
 			c.OpenTickets++
 		}
 	}
-	c.Nav[navTickets].Badge = strconv.Itoa(c.OpenTickets)
+	c.badge(keyTickets, strconv.Itoa(c.OpenTickets), false)
 	if n := len(c.RefusedRepos); n > 0 {
-		c.Nav[navRepos].Badge, c.Nav[navRepos].Warn = strconv.Itoa(n)+" refused", true
+		c.badge(keyRepos, strconv.Itoa(n)+" refused", true)
 	}
 	return nil
 }
