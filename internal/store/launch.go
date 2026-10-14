@@ -60,7 +60,9 @@ type pendingIntent struct {
 	promptHash string
 }
 
-func claimLaunchIntents(ctx context.Context, q *ccdb.Queries, at time.Time) (map[string][]pendingIntent, []string, error) {
+func claimLaunchIntents(
+	ctx context.Context, q *ccdb.Queries, at time.Time,
+) (map[string][]pendingIntent, []string, error) {
 	rows, err := q.ClaimLaunchIntents(ctx, notNullTime(at))
 	if err != nil {
 		return nil, nil, fmt.Errorf("claim launch intents: %w", err)
