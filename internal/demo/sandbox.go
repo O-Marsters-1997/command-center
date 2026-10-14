@@ -44,7 +44,7 @@ func NewSandbox(ctx context.Context, repos []Repo) (_ *Sandbox, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("create sandbox root: %w", err)
 	}
-	dsn, dropDB, err := cctest.Create()
+	dsn, dropDB, err := cctest.Create(ctx)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("create sandbox database: %w", err), os.RemoveAll(root))
 	}

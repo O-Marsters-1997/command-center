@@ -136,7 +136,7 @@ func appConfig(t *testing.T) string {
 
 func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	t.Helper()
-	db, err := store.OpenStore(t.Context(), dsn)
+	db, err := store.OpenStore(dsn, store.MaxOpenConns(4))
 	if err != nil {
 		t.Fatal(err)
 	}

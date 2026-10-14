@@ -79,8 +79,11 @@ lives in pure `.ts` under `bun test`.
 ## Tests
 
 - `go-idiomatic`'s Testing section is the authority on how a test is written.
-- Store and loop tests need Docker: `internal/cctest` starts Postgres through testcontainers, or
-  uses `CC_TEST_DATABASE_URL`.
+- `internal/cctest` reuses one `cc-cctest-v1` container across test binaries and worktrees, with
+  a database per test cloned from a migration-hashed template. It sweeps disconnected test databases
+  older than five minutes and its container stops after five idle minutes. Set `CC_TEST_DATABASE_URL`
+  to use an existing Postgres server instead of Docker; run `just test-db-down` to remove the
+  container explicitly.
 - `e2e/` drives the real `cc` binary against a fake `gh` and `tp`, under the `e2e` build tag.
 
 ## Boundaries: never hand-edit

@@ -18,16 +18,7 @@ import (
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.OpenStore(t.Context(), cctest.DSN(t))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("close store: %v", err)
-		}
-	})
-	return st
+	return cctest.Store(t)
 }
 
 type frozenClock struct{ at time.Time }

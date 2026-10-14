@@ -82,7 +82,7 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	st, err := store.OpenStore(ctx, cfg.DatabaseURL)
+	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
@@ -123,7 +123,7 @@ func request(
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
-	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
