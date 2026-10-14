@@ -127,6 +127,35 @@ func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
 	}
 }
 
+func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server := openServer(openStore(t), fixedClock(testNow), "", web.WithPushableSource(
+		func(context.Context) ([]gh.RepoSummary, error) {
+			close(started)
+			<-release
+			return pushable, nil
+		},
+	))
+	searchDone := make(chan int, 1)
+	go func() { searchDone <- get(t, server, "/repos/search?q=api").Code }()
+	<-started
+	boardDone := make(chan int, 1)
+	go func() { boardDone <- get(t, server, "/board").Code }()
+	select {
+	case status := <-boardDone:
+		if status != http.StatusOK {
+			t.Errorf("GET /board during pushable fetch = %d, want 200", status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("GET /board blocked behind pushable fetch")
+	}
+	close(release)
+	if status := <-searchDone; status != http.StatusOK {
+		t.Errorf("GET /repos/search = %d, want 200", status)
+	}
+}
+
 func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 	t.Parallel()
 

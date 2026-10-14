@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -86,6 +88,7 @@ const pushableTTL = time.Minute
 // makes one gh call.
 type pushableCache struct {
 	mu      sync.Mutex
+	flight  singleflight.Group
 	list    func(context.Context) ([]gh.RepoSummary, error)
 	repos   []gh.RepoSummary
 	fetched time.Time
@@ -93,16 +96,33 @@ type pushableCache struct {
 
 func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummary, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if !c.fetched.IsZero() && now.Sub(c.fetched) < pushableTTL {
-		return c.repos, nil
+		repos := c.repos
+		c.mu.Unlock()
+		return repos, nil
 	}
-	repos, err := c.list(ctx)
+	c.mu.Unlock()
+	value, err, _ := c.flight.Do("pushable", func() (any, error) {
+		c.mu.Lock()
+		if !c.fetched.IsZero() && now.Sub(c.fetched) < pushableTTL {
+			repos := c.repos
+			c.mu.Unlock()
+			return repos, nil
+		}
+		c.mu.Unlock()
+		repos, err := c.list(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list pushable repos: %w", err)
+		}
+		c.mu.Lock()
+		c.repos, c.fetched = repos, now
+		c.mu.Unlock()
+		return repos, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("list pushable repos: %w", err)
+		return nil, fmt.Errorf("fetch pushable repos: %w", err)
 	}
-	c.repos, c.fetched = repos, now
-	return repos, nil
+	return value.([]gh.RepoSummary), nil
 }
 
 func NewServer(d Deps, opts ...Option) *Server {
@@ -365,9 +385,13 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
 }
 
 func writeJSON(w http.ResponseWriter, v any) error {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(v); err != nil {
 		return fmt.Errorf("encode json: %w", err)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := buf.WriteTo(w); err != nil {
+		return fmt.Errorf("write json: %w", err)
 	}
 	return nil
 }

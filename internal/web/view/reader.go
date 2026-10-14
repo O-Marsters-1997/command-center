@@ -61,6 +61,8 @@ func IsInvalid(err error) bool {
 // intent.
 type Reader struct {
 	store            *store.Store
+	frameStore       frameStore
+	derive           func(plan.Input) plan.Snapshot
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -73,6 +75,10 @@ func NewReader(
 ) *Reader {
 	return &Reader{
 		store: st, dataDir: dataDir, renderLine: renderLine,
+		frameStore: st,
+		derive: func(in plan.Input) plan.Snapshot {
+			return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
+		},
 		boardPollSeconds: boardPollSeconds,
 		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
@@ -91,51 +97,20 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 // Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
 // a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {
-		return Board{}, fmt.Errorf("load tickets: %w", err)
+		return Board{}, fmt.Errorf("load frame: %w", err)
 	}
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Board{}, fmt.Errorf("load repo scope: %w", err)
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Board{}, fmt.Errorf("load project scope: %w", err)
-	}
-	params.Project = project.Name
-	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return Board{}, fmt.Errorf("load plan input: %w", err)
-	}
-	lastErr, err := r.store.LastError(ctx)
-	if err != nil {
-		return Board{}, fmt.Errorf("load last error: %w", err)
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Board{}, fmt.Errorf("load latest readings: %w", err)
-	}
-
-	in.Now = now
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Board{}, fmt.Errorf("gauge split: %w", err)
-	}
+	params = f.params
 	ticketSpend, err := r.store.BoardTicketSpend(ctx, params.Repo, params.Feature)
 	if err != nil {
 		return Board{}, fmt.Errorf("load board ticket spend: %w", err)
 	}
-
-	projects, err := r.projectMarks(ctx)
-	if err != nil {
-		return Board{}, fmt.Errorf("load project marks: %w", err)
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
+	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
 	if err := applySpend(rows, r.spend); err != nil {
 		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
-	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
+	applyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
 		if records, err = r.store.TicketEventsAfter(ctx, params.Sel, 0); err != nil {
@@ -146,16 +121,8 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		return Board{}, fmt.Errorf("apply view state: %w", err)
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
-	if project.Name != "" {
-		groups = filterGroupsByProject(groups, project.Repos)
-	}
-	input := chromeInput{
-		tickets: tickets, obs: in.Obs, observed: in.Observed, lastErr: lastErr, gauges: gauges, split: split,
-	}
-	chrome := r.buildChrome(input, now, params)
-	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
-	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
-		return Board{}, fmt.Errorf("scope chrome: %w", err)
+	if f.project.Name != "" {
+		groups = filterGroupsByProject(groups, f.project.Repos)
 	}
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
@@ -177,7 +144,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 		Launched:         launched,
 		TicketCount:      len(scoped),
 		WaveCount:        plan.WaveCount(blocking),
-		Chrome:           chrome,
+		Chrome:           f.chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
 		Tabs:             filterTabs(sections, params),
@@ -187,108 +154,30 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 }
 
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {
-		return Chrome{}, fmt.Errorf("load tickets: %w", err)
+		return Chrome{}, fmt.Errorf("load frame: %w", err)
 	}
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Chrome{}, fmt.Errorf("load repo scope: %w", err)
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Chrome{}, fmt.Errorf("load project scope: %w", err)
-	}
-	params.Project = project.Name
-	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
-
-	obs, observed, err := r.store.LastObservation(ctx)
-	if err != nil {
-		return Chrome{}, fmt.Errorf("load last observation: %w", err)
-	}
-	lastErr, err := r.store.LastError(ctx)
-	if err != nil {
-		return Chrome{}, fmt.Errorf("load last error: %w", err)
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Chrome{}, fmt.Errorf("load latest readings: %w", err)
-	}
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Chrome{}, fmt.Errorf("gauge split: %w", err)
-	}
-	input := chromeInput{
-		tickets: tickets, obs: obs, observed: observed, lastErr: lastErr, gauges: gauges, split: split,
-	}
-	chrome := r.buildChrome(input, now, params)
-	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
-	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
-		return Chrome{}, fmt.Errorf("scope chrome: %w", err)
-	}
-	return chrome, nil
+	return f.chrome, nil
 }
-
-type chromeScope struct {
-	tickets []store.Ticket
-	project store.Project
-	repo    string
-}
-
-func (r *Reader) scopeChrome(ctx context.Context, c *Chrome, scope chromeScope) error {
-	tickets, project, repo := scope.tickets, scope.project, scope.repo
-	c.scopeToProject(project)
-	projects, err := r.store.Projects(ctx)
-	if err != nil {
-		return fmt.Errorf("load projects: %w", err)
-	}
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return fmt.Errorf("load repos: %w", err)
-	}
-	c.ScopeMenu = scopeChoices(ScopeList(projects, repos), project.Name, repo)
-	if c.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
-		return fmt.Errorf("load refused repos: %w", err)
-	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return fmt.Errorf("load plan input: %w", err)
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil)
-	rows = scopeRailRows(rows, RailParams{Project: project.Name, Repo: repo, projectRepos: project.Repos})
-	for _, row := range rows {
-		if row.Glyph != plan.GlyphDone {
-			c.OpenTickets++
-		}
-	}
-	return nil
-}
-
-func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load repos: %w", err)
-	}
+func projectMarks(repos []store.Repo) map[string]ProjectMark {
 	marks := make(map[string]ProjectMark, len(repos))
 	for _, repo := range repos {
 		if repo.Project != "" {
 			marks[repo.Name] = ProjectMark{Name: repo.Project, Hue: repo.Hue}
 		}
 	}
-	return marks, nil
+	return marks
 }
 
-func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load repos: %w", err)
-	}
+func refusedRepos(repos []store.Repo) []RefusedRepo {
 	var refused []RefusedRepo
 	for _, repo := range repos {
 		if repo.Phase == plan.RepoRefused {
 			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: RepoPath(repo.Name)})
 		}
 	}
-	return refused, nil
+	return refused
 }
 
 type chromeInput struct {

@@ -1,6 +1,7 @@
 package loop_test
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -18,8 +19,21 @@ func newLoop(
 	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
 	rn runner.Runner, opts ...loop.Option,
 ) *loop.Loop {
+	completeObserve := func(ctx context.Context) (plan.Observation, error) {
+		obs, err := observe(ctx)
+		if err != nil {
+			return obs, err
+		}
+		if obs.LocalTips == nil {
+			obs.LocalTips = map[plan.BranchRef]plan.SHA{}
+		}
+		if obs.Runs == nil {
+			obs.Runs = map[plan.TicketURL]plan.RunObservation{}
+		}
+		return obs, nil
+	}
 	return loop.New(loop.Deps{
-		Logger: discardLog, Store: st, Clock: clock, Runner: rn, Observe: observe, Config: cfg, Workspace: ws,
+		Logger: discardLog, Store: st, Clock: clock, Runner: rn, Observe: completeObserve, Config: cfg, Workspace: ws,
 	}, opts...)
 }
 

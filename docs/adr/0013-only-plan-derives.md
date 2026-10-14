@@ -19,8 +19,10 @@ whether a row's state offers a verb.
   as `RepoPhase`. The store converts its columns to them at the boundary, through `Parse…`.
 - `plan` imports only the stdlib-only leaves `spend`, `verdict` and `option`, enforced by depguard.
   A fact that may be absent is an `option.Option[T]`, never a `*T`.
-- The web derives per render. Nothing is cached between requests, so a page never shows a label the
-  stored facts no longer support.
+- The web derives once per render from one frame of store reads. It caches no derived state between
+  requests, so a page never shows a label the stored facts no longer support. External reads such as
+  pushable repository listings and settled log metrics may be cached; neither cache holds its mutex
+  during I/O.
 - `POST /verb` reads the snapshot and answers 409 with the row's state when it does not offer the verb.
 - The gates are tested through `Derive` as table tests, not layered under it.
 
