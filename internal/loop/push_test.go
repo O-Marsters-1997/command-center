@@ -150,7 +150,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -168,7 +168,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := facts[ticket.URL]
+	f := facts[plan.TicketURL(ticket.URL)]
 	if !f.Refused || f.RefusedPath != ".github/workflows/x.yml" {
 		t.Errorf("push facts = %+v, want refused naming .github/workflows/x.yml", f)
 	}
@@ -209,7 +209,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -239,7 +239,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] == "" {
+	if tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Error("no pushes row recorded")
 	}
 
@@ -268,8 +268,8 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -290,7 +290,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] == "" {
+	if tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Error("no pushes row recorded despite adopting the existing PR")
 	}
 }
@@ -311,7 +311,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -331,14 +331,14 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[ticket.URL].Failed {
+	if !facts[plan.TicketURL(ticket.URL)].Failed {
 		t.Fatal("push facts must record the failure")
 	}
 	tips, err := store.LastPushedTips(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] != "" {
+	if tips[plan.TicketURL(ticket.URL)] != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
@@ -364,7 +364,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if got := countLines(t, ghLog); got != 2 {
 		t.Fatalf("gh invocations after retry-push = %d, want 2", got)
 	}
-	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[ticket.URL] == "" {
+	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Errorf("pushes row missing after a successful retry-push (err=%v)", err)
 	}
 
@@ -412,7 +412,7 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
 	runGit(t, "-C", repoPath, "branch", "-D", "cc-1")
 
-	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -451,7 +451,7 @@ func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
 	if restacked[""] {
 		t.Errorf("restacked = %+v, want no entry for a NULL-ticket event", restacked)
 	}
-	if !restacked[ticket.URL] {
+	if !restacked[plan.TicketURL(ticket.URL)] {
 		t.Errorf("restacked = %+v, want %s present", restacked, ticket.URL)
 	}
 }
@@ -483,7 +483,7 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	if _, ok := facts[""]; ok {
 		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
 	}
-	if got := facts[ticket.URL]; !got.Refused || got.RefusedPath != "policy hit" {
+	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.RefusedPath != "policy hit" {
 		t.Errorf("facts[%s] = %+v, want Refused with path %q", ticket.URL, got, "policy hit")
 	}
 }

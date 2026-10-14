@@ -15,15 +15,16 @@ import (
 )
 
 func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	requested := map[string]bool{}
+	requested := map[plan.TicketURL]bool{}
 	err := l.eachIntent(ctx, plan.VerbRefresh, func(intent store.VerbIntent) error {
-		requested[intent.TicketID] = true
-		e, ok := snap.Entry(intent.TicketID)
+		url := plan.TicketURL(intent.TicketID)
+		requested[url] = true
+		e, ok := snap.Entry(url)
 		if !ok {
 			return nil
 		}
 		row := e.LastPush.UnwrapOr(plan.PushRow{})
-		if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, true); err != nil {
+		if err := l.refreshOne(ctx, snap, obs, refreshJob{ticket: e.Ticket, row: row, requested: true}); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil
@@ -35,7 +36,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 }
 
 func (l *Loop) autoRefresh(
-	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[string]bool,
+	ctx context.Context, snap plan.Snapshot, obs plan.Observation, requested map[plan.TicketURL]bool,
 ) error {
 	outcomes, err := l.store.LatestRefreshOutcomes(ctx)
 	if err != nil {
@@ -50,7 +51,7 @@ func (l *Loop) autoRefresh(
 		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
 			continue
 		}
-		if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
+		if obs.PRs[t.Ref()].State != plan.Open {
 			continue
 		}
 		if e.LastPush.IsNone() {
@@ -63,23 +64,23 @@ func (l *Loop) autoRefresh(
 		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, obs) {
 			continue
 		}
-		if err := l.refreshOne(ctx, snap, obs, t, pushRow, false); err != nil {
+		if err := l.refreshOne(ctx, snap, obs, refreshJob{ticket: t, row: pushRow}); err != nil {
 			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}
 	return nil
 }
 
-func conflictDetail(branchTip, baseTip string, mergeErr error) string {
+func conflictDetail(branchTip, baseTip plan.SHA, mergeErr error) string {
 	return fmt.Sprintf("%s %s %s", branchTip, baseTip, mergeErr)
 }
 
-func parseConflictDetail(detail string) (branchTip, baseTip string, ok bool) {
+func parseConflictDetail(detail string) (branchTip, baseTip plan.SHA, ok bool) {
 	fields := strings.SplitN(detail, " ", 3)
 	if len(fields) < 3 {
 		return "", "", false
 	}
-	return fields[0], fields[1], true
+	return plan.SHA(fields[0]), plan.SHA(fields[1]), true
 }
 
 func supersededConflict(o store.RefreshOutcome, t plan.Ticket, row plan.PushRow, obs plan.Observation) bool {
@@ -90,24 +91,30 @@ func supersededConflict(o store.RefreshOutcome, t plan.Ticket, row plan.PushRow,
 	if !ok {
 		return false
 	}
-	return obs.BranchTips[plan.BranchKey(t.Repo, t.Branch)] != branchTip ||
-		obs.BranchTips[plan.BranchKey(t.Repo, row.BaseBranch)] != baseTip
+	return obs.BranchTips[t.Ref()] != branchTip ||
+		obs.BranchTips[plan.BranchRef{Repo: t.Repo, Branch: row.BaseBranch}] != baseTip
 }
 
 func baseMoved(row plan.PushRow, obs plan.Observation, repo string) bool {
-	return row.BaseBranch != "" && obs.BranchTips[plan.BranchKey(repo, row.BaseBranch)] != row.BaseSHAAtPush
+	return row.BaseBranch != "" &&
+		obs.BranchTips[plan.BranchRef{Repo: repo, Branch: row.BaseBranch}] != row.BaseSHAAtPush
 }
 
-func (l *Loop) refreshOne(
-	ctx context.Context, snap plan.Snapshot, obs plan.Observation, ticket plan.Ticket, row plan.PushRow,
-	requested bool,
-) error {
+type refreshJob struct {
+	ticket    plan.Ticket
+	row       plan.PushRow
+	requested bool
+}
+
+func (l *Loop) refreshOne(ctx context.Context, snap plan.Snapshot, obs plan.Observation, job refreshJob) error {
+	ticket, row, requested := job.ticket, job.row, job.requested
+	url := string(ticket.URL)
 	branch := ticket.Branch
 	refuse := func(detail string) error {
 		if !requested {
 			return nil
 		}
-		return l.event(ctx, ticket.URL, store.EventRefreshRefused, detail)
+		return l.event(ctx, url, store.EventRefreshRefused, detail)
 	}
 
 	entry, _ := snap.Entry(ticket.URL)
@@ -118,49 +125,50 @@ func (l *Loop) refreshOne(
 	if refusal != "" {
 		return refuse(refusal)
 	}
-	if obs.MidMerge[plan.BranchKey(ticket.Repo, branch)] {
+	if obs.MidMerge[ticket.Ref()] {
 		return refuse(fmt.Sprintf("%s is left mid-merge; abort or commit it first", worktreePath))
 	}
 
 	if err := git.MergeFFOnly(ctx, worktreePath, "origin/"+branch); err != nil {
-		return l.event(ctx, ticket.URL, store.EventRefreshRefused, err.Error())
+		return l.event(ctx, url, store.EventRefreshRefused, err.Error())
 	}
 
 	unlock := entry.Unlock
 	if !unlock.Unlocked {
 		return refuse(string(unlock.Reason))
 	}
-	restacked, detail, err := advanceOnto(ctx, worktreePath, ticket.Repo, unlock.BaseBranch, row, obs)
+	adv := advance{worktreePath: worktreePath, repo: ticket.Repo, base: unlock.BaseBranch, row: row}
+	restacked, detail, err := advanceOnto(ctx, adv, obs)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return fmt.Errorf("advance %s: %w", ticket.URL, ctxErr)
+			return fmt.Errorf("advance %s: %w", url, ctxErr)
 		}
 		conflicted, midErr := git.MidMerge(ctx, worktreePath)
 		if midErr != nil {
 			return fmt.Errorf("check %s for a conflict: %w", worktreePath, errors.Join(err, midErr))
 		}
 		if !conflicted {
-			return fmt.Errorf("advance %s: %w", ticket.URL, err)
+			return fmt.Errorf("advance %s: %w", url, err)
 		}
 		if restacked {
-			if err := l.event(ctx, ticket.URL, store.EventRestacked, detail+", conflicted"); err != nil {
-				return fmt.Errorf("record restack of %s: %w", ticket.URL, err)
+			if err := l.event(ctx, url, store.EventRestacked, detail+", conflicted"); err != nil {
+				return fmt.Errorf("record restack of %s: %w", url, err)
 			}
 		}
-		baseTip := obs.BranchTips[plan.BranchKey(ticket.Repo, unlock.BaseBranch)]
-		return l.event(ctx, ticket.URL, store.EventRefreshConflicted,
-			conflictDetail(obs.BranchTips[plan.BranchKey(ticket.Repo, branch)], baseTip, err))
+		baseTip := obs.BranchTips[plan.BranchRef{Repo: ticket.Repo, Branch: unlock.BaseBranch}]
+		return l.event(ctx, url, store.EventRefreshConflicted,
+			conflictDetail(obs.BranchTips[ticket.Ref()], baseTip, err))
 	}
 
 	kind := store.EventRefreshed
 	if restacked {
 		kind = store.EventRestacked
 	}
-	if err := l.event(ctx, ticket.URL, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
-		return fmt.Errorf("record %s of %s: %w", kind, ticket.URL, err)
+	if err := l.event(ctx, url, kind, fmt.Sprintf("merged origin/%s then %s", branch, detail)); err != nil {
+		return fmt.Errorf("record %s of %s: %w", kind, url, err)
 	}
 	if err := l.verifyOne(ctx, ticket, worktreePath, obs.Settings[ticket.Repo].VerifyCommand); err != nil {
-		return fmt.Errorf("verify %s: %w", ticket.URL, err)
+		return fmt.Errorf("verify %s: %w", url, err)
 	}
 	return nil
 }
@@ -182,14 +190,18 @@ func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath s
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}
-	return l.event(ctx, ticket.URL, store.EventVerificationFailed, detail)
+	return l.event(ctx, string(ticket.URL), store.EventVerificationFailed, detail)
 }
 
-func advanceOnto(
-	ctx context.Context, worktreePath, repo, base string, row plan.PushRow, obs plan.Observation,
-) (bool, string, error) {
-	ref := "origin/" + base
-	boundary := restackBoundary(repo, row, obs)
+type advance struct {
+	worktreePath, repo, base string
+	row                      plan.PushRow
+}
+
+func advanceOnto(ctx context.Context, adv advance, obs plan.Observation) (bool, string, error) {
+	worktreePath := adv.worktreePath
+	ref := "origin/" + adv.base
+	boundary := string(restackBoundary(adv.repo, adv.row, obs))
 	if boundary == "" {
 		return false, ref, wrapGit("merge "+ref, git.Merge(ctx, worktreePath, ref))
 	}
@@ -211,11 +223,11 @@ func wrapGit(step string, err error) error {
 	return fmt.Errorf("%s: %w", step, err)
 }
 
-func restackBoundary(repo string, row plan.PushRow, obs plan.Observation) string {
+func restackBoundary(repo string, row plan.PushRow, obs plan.Observation) plan.SHA {
 	if row.BaseBranch == "" {
 		return ""
 	}
-	if pr := obs.PRs[plan.BranchKey(repo, row.BaseBranch)]; pr.State == plan.Merged && pr.HeadOid != "" {
+	if pr := obs.PRs[plan.BranchRef{Repo: repo, Branch: row.BaseBranch}]; pr.State == plan.Merged && pr.HeadOid != "" {
 		return pr.HeadOid
 	}
 	return row.BaseSHAAtPush

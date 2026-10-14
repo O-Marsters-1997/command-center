@@ -112,10 +112,10 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	t := &tick{now: l.clock.Now(), obs: obs}
 	t.obs.ObservedAt = t.now
 	if t.obs.LocalTips == nil {
-		t.obs.LocalTips = map[string]string{}
+		t.obs.LocalTips = map[plan.BranchRef]plan.SHA{}
 	}
 	if t.obs.Runs == nil {
-		t.obs.Runs = map[string]plan.RunObservation{}
+		t.obs.Runs = map[plan.TicketURL]plan.RunObservation{}
 	}
 	if err := l.absorb(ctx, t); err != nil {
 		return l.failTick(ctx, err)
@@ -421,7 +421,7 @@ func (l *Loop) applyKillIntents(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
-		if run, ok := latest[intent.TicketID]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
+		if run, ok := latest[plan.TicketURL(intent.TicketID)]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
 			if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
 				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
 			}
@@ -442,14 +442,15 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("latest runs: %w", err)
 	}
-	cancelled := map[string]bool{}
+	cancelled := map[plan.TicketURL]bool{}
 	for _, intent := range intents {
-		run, ok := latest[intent.TicketID]
+		url := plan.TicketURL(intent.TicketID)
+		run, ok := latest[url]
 		steerable := run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp
-		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid.IsNone() || run.Outcome.IsSome() {
+		if cancelled[url] || !ok || !steerable || run.Pgid.IsNone() || run.Outcome.IsSome() {
 			continue
 		}
-		cancelled[intent.TicketID] = true
+		cancelled[url] = true
 		if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
 			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
 		}
@@ -478,11 +479,12 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 		if err != nil {
 			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
 		}
-		obs.Runs[run.TicketID] = plan.RunObservation{Alive: alive}
+		url := plan.TicketURL(run.TicketID)
+		obs.Runs[url] = plan.RunObservation{Alive: alive}
 		if alive {
 			continue
 		}
-		if err := l.disposeRun(ctx, run, byTicket[run.TicketID], obs); err != nil {
+		if err := l.disposeRun(ctx, run, byTicket[url], obs); err != nil {
 			return fmt.Errorf("dispose run %d of %s: %w", run.ID, run.TicketID, err)
 		}
 	}
@@ -542,7 +544,7 @@ func (l *Loop) outcomeFor(
 	}
 	commits := 0
 	if run.BaselineSHA != "" {
-		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, run.BaselineSHA)
+		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, plan.SHA(run.BaselineSHA))
 		if err != nil {
 			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
 		}
@@ -560,7 +562,7 @@ func (l *Loop) followUpQueued(ctx context.Context, ticketURL string) (bool, erro
 
 const maxQuestionBytes = 4096
 
-func (l *Loop) questionPath(runID int64) string {
+func (l *Loop) questionPath(runID plan.RunID) string {
 	return filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.question", runID))
 }
 
@@ -568,7 +570,7 @@ func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
 	if run.Kind != plan.RunKindAgent && run.Kind != plan.RunKindFollowUp {
 		return "", nil
 	}
-	data, err := os.ReadFile(l.questionPath(run.ID))
+	data, err := os.ReadFile(l.questionPath(plan.RunID(run.ID)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
 	}
@@ -601,21 +603,21 @@ func parseLog[T any](logger *slog.Logger, logPath, what string, parse func(strin
 }
 
 func (l *Loop) commitsSinceBaseline(
-	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA string,
+	ctx context.Context, ticket store.Ticket, obs plan.Observation, baselineSHA plan.SHA,
 ) (int, error) {
-	if worktreePath := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]; worktreePath != "" {
-		commits, err := git.CommitsSince(ctx, worktreePath, baselineSHA, "HEAD")
+	if worktreePath := obs.Worktrees[ticket.Ref()]; worktreePath != "" {
+		commits, err := git.CommitsSince(ctx, worktreePath, string(baselineSHA), "HEAD")
 		if err != nil {
 			return 0, fmt.Errorf("count commits in %s: %w", worktreePath, err)
 		}
 		return commits, nil
 	}
-	tip, ok := obs.BranchTips[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	tip, ok := obs.BranchTips[ticket.Ref()]
 	if !ok {
 		return 0, nil
 	}
 	repoPath := l.checkout(ticket.Repo)
-	commits, err := git.CommitsSince(ctx, repoPath, baselineSHA, tip)
+	commits, err := git.CommitsSince(ctx, repoPath, string(baselineSHA), string(tip))
 	if err != nil {
 		return 0, fmt.Errorf("count commits on %s/%s: %w", ticket.Repo, ticket.Branch, err)
 	}
@@ -635,8 +637,8 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) 
 	byTicket := ticketsByURL(tickets)
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
-		ticket := byTicket[ticketURL]
-		if err := l.cutAndSpawn(ctx, t, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
+		cut := cutSpec{ticket: byTicket[ticketURL], baseBranch: entry.Unlock.BaseBranch, promptHash: entry.PromptHash}
+		if err := l.cutAndSpawn(ctx, t, cut); err != nil {
 			return fmt.Errorf("%s: %w", ticketURL, err)
 		}
 	}
@@ -648,9 +650,9 @@ func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("list tickets: %w", err)
 	}
-	urls := make([]string, len(tickets))
+	urls := make([]plan.TicketURL, len(tickets))
 	for i, t := range tickets {
-		urls[i] = t.URL
+		urls[i] = plan.TicketURL(t.URL)
 	}
 	if err := l.store.IncrementCheckingTicks(ctx, urls); err != nil {
 		return fmt.Errorf("increment checking ticks: %w", err)
@@ -658,17 +660,21 @@ func (l *Loop) tickCheckingWaits(ctx context.Context) error {
 	return nil
 }
 
-func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
-	byURL := make(map[string]store.Ticket, len(tickets))
+func ticketsByURL(tickets []store.Ticket) map[plan.TicketURL]store.Ticket {
+	byURL := make(map[plan.TicketURL]store.Ticket, len(tickets))
 	for _, t := range tickets {
-		byURL[t.URL] = t
+		byURL[plan.TicketURL(t.URL)] = t
 	}
 	return byURL
 }
 
-func (l *Loop) cutAndSpawn(
-	ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string,
-) error {
+type cutSpec struct {
+	ticket                 store.Ticket
+	baseBranch, promptHash string
+}
+
+func (l *Loop) cutAndSpawn(ctx context.Context, t *tick, cut cutSpec) error {
+	ticket, baseBranch, promptHash := cut.ticket, cut.baseBranch, cut.promptHash
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 
@@ -717,7 +723,7 @@ type spawnSpec struct {
 	ticket                           store.Ticket
 	worktree, baseline, hash, prompt string
 	kind                             plan.RunKind
-	promptFor                        func(runID int64) string
+	promptFor                        func(runID plan.RunID) string
 	resumeSessionID, message         string
 }
 
@@ -742,11 +748,11 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 
 	promptFor := spec.promptFor
 	if promptFor == nil && (spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp) {
-		promptFor = func(runID int64) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
+		promptFor = func(runID plan.RunID) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
 	}
 	prompt := spec.prompt
 	if promptFor != nil {
-		prompt = promptFor(runID)
+		prompt = promptFor(plan.RunID(runID))
 	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
@@ -794,6 +800,6 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
 		return fmt.Errorf("record spawn of run %d: %w", runID, err)
 	}
-	t.spawned = append(t.spawned, ticket.URL)
+	t.spawned = append(t.spawned, plan.TicketURL(ticket.URL))
 	return l.event(ctx, ticket.URL, store.EventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
 }

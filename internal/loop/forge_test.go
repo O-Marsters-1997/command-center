@@ -98,7 +98,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
 		t.Fatal(err)
 	}
-	authoriseTicket(t, store, issue.URL, plan.Hash(plan.Compose(plan.Ticket{URL: issue.URL})), at)
+	authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)
 
 	tick := func() {
 		t.Helper()

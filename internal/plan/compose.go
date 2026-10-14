@@ -9,7 +9,7 @@ import (
 // Compose renders the prompt a launch authorises. The implement instruction always leads,
 // since a slash command has to open the prompt.
 func Compose(t Ticket) string {
-	prompt := "/implement " + t.URL
+	prompt := "/implement " + string(t.URL)
 	if t.WorkedExampleBranch != "" {
 		prompt += fmt.Sprintf(
 			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",

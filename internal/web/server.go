@@ -493,13 +493,13 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
-	rows, err := snap.Preview(requested)
+	rows, err := snap.Preview(plan.TicketURLs(requested))
 	if err != nil {
 		return withStatus(http.StatusBadRequest, err)
 	}
 	hashes := make(map[string]string, len(rows))
 	for _, row := range rows {
-		ticketURL := row.Ticket.URL
+		ticketURL := string(row.Ticket.URL)
 		if want, ok := previewed[ticketURL]; ok && want != row.PromptHash {
 			return errorf(http.StatusConflict, "ticket %s was previewed at hash %s and now composes to %s",
 				ticketURL, want, row.PromptHash)
@@ -546,11 +546,11 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load snapshot: %w", err)
 	}
-	entry, ok := snap.Entry(ticketURL)
+	entry, ok := snap.Entry(plan.TicketURL(ticketURL))
 	if !ok {
 		return errorf(http.StatusBadRequest, "unknown ticket %q", ticketURL)
 	}
-	if !snap.Offers(ticketURL, verb) {
+	if !snap.Offers(plan.TicketURL(ticketURL), verb) {
 		return errorf(http.StatusConflict, "%s is %s and does not offer %s: %s",
 			ticketURL, entry.State, verb, entry.Reason)
 	}
@@ -616,7 +616,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return fmt.Errorf("load last observation: %w", err)
 		}
-		if worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]; ok {
+		if worktreePath, ok := obs.Worktrees[ticket.Ref()]; ok {
 			return errorf(http.StatusConflict, "branch %s already has a worktree at %s, remove it before changing branch",
 				ticket.Branch, worktreePath)
 		}

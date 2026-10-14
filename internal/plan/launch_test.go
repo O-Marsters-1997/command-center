@@ -19,7 +19,7 @@ func TestLaunchPlan(t *testing.T) {
 		currentlyRunning int
 		maxAgents        int
 		spendPaused      bool
-		want             []string
+		want             []plan.TicketURL
 	}{
 		{
 			name: "an unlocked authorised hash-matching candidate with no prior run launches",
@@ -27,7 +27,7 @@ func TestLaunchPlan(t *testing.T) {
 				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
 			},
 			maxAgents: 1,
-			want:      []string{"sandbox://CC-1"},
+			want:      []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
 			name: "eligible candidates launch in input order",
@@ -36,7 +36,7 @@ func TestLaunchPlan(t *testing.T) {
 				{URL: "sandbox://CC-1", Unlock: unlocked, Authorised: true, PromptHashMatches: true},
 			},
 			maxAgents: 2,
-			want:      []string{"sandbox://CC-2", "sandbox://CC-1"},
+			want:      []plan.TicketURL{"sandbox://CC-2", "sandbox://CC-1"},
 		},
 		{
 			name: "a locked candidate is excluded",
@@ -79,7 +79,7 @@ func TestLaunchPlan(t *testing.T) {
 			},
 			currentlyRunning: 1,
 			maxAgents:        2,
-			want:             []string{"sandbox://CC-1"},
+			want:             []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
 			name: "a candidate whose base already carries a conflict is excluded",

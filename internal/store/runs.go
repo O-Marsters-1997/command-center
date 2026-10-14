@@ -155,19 +155,19 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 }
 
 // LatestRunsByTicket returns each ticket's most recent run (highest id).
-func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSummary, error) {
+func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan.RunSummary, error) {
 	rows, err := s.q.LatestRunsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}
 
-	summaries := map[string]plan.RunSummary{}
+	summaries := map[plan.TicketURL]plan.RunSummary{}
 	for _, row := range rows {
 		kind, err := plan.ParseRunKind(row.Kind)
 		if err != nil {
 			return nil, fmt.Errorf("read runs.kind of run %d: %w", row.ID, err)
 		}
-		summary := plan.RunSummary{ID: row.ID, Kind: kind}
+		summary := plan.RunSummary{ID: plan.RunID(row.ID), Kind: kind}
 		if row.Pgid.Valid {
 			summary.Pgid = option.Some(int(row.Pgid.Int64))
 		}
@@ -187,10 +187,10 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 			}
 			summary.Outcome = option.Some(outcome)
 		}
-		summary.BaselineSHA, summary.LogPath = row.BaselineSHA.String, row.LogPath.String
+		summary.BaselineSHA, summary.LogPath = plan.SHA(row.BaselineSHA.String), row.LogPath.String
 		summary.PromptHash = row.PromptHash.String
 		summary.Question = row.Question.String
-		summaries[row.TicketID] = summary
+		summaries[plan.TicketURL(row.TicketID)] = summary
 	}
 	return summaries, nil
 }
@@ -246,19 +246,20 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 }
 
 // PendingIntentsByTicket returns every unconsumed intent, keyed by ticket, most recent last.
-func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]plan.Verb, error) {
+func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[plan.TicketURL][]plan.Verb, error) {
 	rows, err := s.q.PendingIntentsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select pending intents: %w", err)
 	}
 
-	byTicket := map[string][]plan.Verb{}
+	byTicket := map[plan.TicketURL][]plan.Verb{}
 	for _, row := range rows {
 		verb, err := plan.ParseVerb(row.Verb)
 		if err != nil {
 			return nil, fmt.Errorf("read intents.verb for %s: %w", row.TicketID, err)
 		}
-		byTicket[row.TicketID] = append(byTicket[row.TicketID], verb)
+		url := plan.TicketURL(row.TicketID)
+		byTicket[url] = append(byTicket[url], verb)
 	}
 	return byTicket, nil
 }

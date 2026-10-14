@@ -15,23 +15,23 @@ func TestUnlocked(t *testing.T) {
 		URL:       "sandbox://CC-2",
 		Repo:      "cc-sandbox",
 		Branch:    "cc-2-second",
-		BlockedBy: []string{"sandbox://CC-1"},
+		BlockedBy: []plan.TicketURL{"sandbox://CC-1"},
 	}
 	secondBlocker := plan.Ticket{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"}
 	fanIn := plan.Ticket{
 		URL:       "sandbox://CC-4",
 		Repo:      "cc-sandbox",
 		Branch:    "cc-4-fourth",
-		BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-3"},
+		BlockedBy: []plan.TicketURL{"sandbox://CC-1", "sandbox://CC-3"},
 	}
 	crossRepoBlocker := plan.Ticket{URL: "sandbox://PLA-9", Repo: "other-repo", Branch: "pla-9"}
 	withCrossRepoEdge := plan.Ticket{
 		URL:       "sandbox://CC-5",
 		Repo:      "cc-sandbox",
 		Branch:    "cc-5-fifth",
-		BlockedBy: []string{"sandbox://CC-1", "sandbox://PLA-9"},
+		BlockedBy: []plan.TicketURL{"sandbox://CC-1", "sandbox://PLA-9"},
 	}
-	byURL := map[string]plan.Ticket{
+	byURL := map[plan.TicketURL]plan.Ticket{
 		root.URL:              root,
 		dependent.URL:         dependent,
 		secondBlocker.URL:     secondBlocker,
@@ -47,7 +47,7 @@ func TestUnlocked(t *testing.T) {
 		stacking     bool
 		wantUnlocked bool
 		wantBase     string
-		wantBlocking []string
+		wantBlocking []plan.TicketURL
 		reasonNames  string
 	}{
 		{
@@ -62,7 +62,7 @@ func TestUnlocked(t *testing.T) {
 			ticket:       dependent,
 			prs:          map[string]plan.PRState{},
 			wantUnlocked: false,
-			wantBlocking: []string{"sandbox://CC-1"},
+			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
 			reasonNames:  "sandbox://CC-1",
 		},
 		{
@@ -70,7 +70,7 @@ func TestUnlocked(t *testing.T) {
 			ticket:       dependent,
 			prs:          map[string]plan.PRState{"cc-1-first": plan.Closed},
 			wantUnlocked: false,
-			wantBlocking: []string{"sandbox://CC-1"},
+			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
 			reasonNames:  "sandbox://CC-1",
 		},
 		{
@@ -110,7 +110,7 @@ func TestUnlocked(t *testing.T) {
 			ticket:       fanIn,
 			prs:          map[string]plan.PRState{"cc-1-first": plan.Open, "cc-3-third": plan.Merged},
 			wantUnlocked: false,
-			wantBlocking: []string{"sandbox://CC-1"},
+			wantBlocking: []plan.TicketURL{"sandbox://CC-1"},
 			reasonNames:  "sandbox://CC-1",
 		},
 		{
@@ -162,11 +162,11 @@ func TestUnlocked(t *testing.T) {
 	}
 }
 
-func equalUnordered(got, want []string) bool {
+func equalUnordered(got, want []plan.TicketURL) bool {
 	if len(got) != len(want) {
 		return false
 	}
-	seen := make(map[string]bool, len(got))
+	seen := make(map[plan.TicketURL]bool, len(got))
 	for _, g := range got {
 		seen[g] = true
 	}
@@ -184,9 +184,9 @@ func TestUnlockedBlockerClosedFlag(t *testing.T) {
 	root := plan.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	dependent := plan.Ticket{
 		URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second",
-		BlockedBy: []string{"sandbox://CC-1"},
+		BlockedBy: []plan.TicketURL{"sandbox://CC-1"},
 	}
-	byURL := map[string]plan.Ticket{root.URL: root, dependent.URL: dependent}
+	byURL := map[plan.TicketURL]plan.Ticket{root.URL: root, dependent.URL: dependent}
 
 	tests := []struct {
 		name string
@@ -214,8 +214,8 @@ func TestUnlockedBlockerClosedFlag(t *testing.T) {
 func TestUnlockedUnknownBlockerStaysBlocked(t *testing.T) {
 	t.Parallel()
 
-	ticket := plan.Ticket{URL: "sandbox://CC-9", BlockedBy: []string{"sandbox://GHOST"}}
-	got := plan.Unlocked(ticket, map[string]plan.Ticket{}, map[string]plan.PRState{}, false)
+	ticket := plan.Ticket{URL: "sandbox://CC-9", BlockedBy: []plan.TicketURL{"sandbox://GHOST"}}
+	got := plan.Unlocked(ticket, map[plan.TicketURL]plan.Ticket{}, map[string]plan.PRState{}, false)
 	if got.Unlocked {
 		t.Error("a blocker with no ticket row unlocked the row; fail closed")
 	}

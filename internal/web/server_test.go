@@ -58,7 +58,7 @@ func seededRunning(t *testing.T) *storepkg.Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obs.Runs = map[string]plan.RunObservation{"sandbox://CC-1": {Alive: true}}
+	obs.Runs = map[plan.TicketURL]plan.RunObservation{"sandbox://CC-1": {Alive: true}}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,8 @@ func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 
 	obs := plan.Observation{
 		ObservedAt: observedAt,
-		PRs:        map[string]plan.PR{},
-		Worktrees:  map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/repos/cc-sandbox-cc-1-first"},
+		PRs:        map[plan.BranchRef]plan.PR{},
+		Worktrees:  map[plan.BranchRef]string{branchRef("cc-sandbox", "cc-1-first"): "/repos/cc-sandbox-cc-1-first"},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
@@ -174,16 +174,18 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{
-			plan.BranchKey("repo", "parent"): "/repos/parent", plan.BranchKey("repo", "child"): "/repos/child",
+		Worktrees: map[plan.BranchRef]string{
+			branchRef("repo", "parent"): "/repos/parent", branchRef("repo", "child"): "/repos/child",
 		},
-		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, web.MainTipKey("repo"): "main-tip"},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "parent"): {
+		BranchTips: map[plan.BranchRef]plan.SHA{
+			branchRef("repo", "parent"): plan.SHA(parentTip), web.MainTipKey("repo"): "main-tip",
+		},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "parent"): {
 				Number: 1, State: plan.Open, HeadOid: parentTip,
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},
-			plan.BranchKey("repo", "child"): {
+			branchRef("repo", "child"): {
 				Number: 2, State: plan.Open, HeadOid: childTip,
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 			},
@@ -225,9 +227,9 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		BranchTips: map[string]string{web.MainTipKey("repo"): "main-tip"},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "ci"): {
+		BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "ci"): {
 				Number: 1, State: plan.Open, HeadOid: tip,
 				Checks: map[string]plan.CheckState{
 					"CI":     {Status: "COMPLETED", Conclusion: "FAILURE", DetailsURL: "https://github.com/o/r/actions/runs/1"},
@@ -290,10 +292,10 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	}
 
 	obs := plan.Observation{
-		Worktrees:  map[string]string{plan.BranchKey("repo", "cc-1"): "/repos/cc-1"},
-		BranchTips: map[string]string{web.MainTipKey("repo"): "main-tip"},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "cc-1"): {
+		Worktrees:  map[plan.BranchRef]string{branchRef("repo", "cc-1"): "/repos/cc-1"},
+		BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "cc-1"): {
 				Number: 1, State: plan.Open, HeadOid: tip,
 				Checks: map[string]plan.CheckState{
 					"GraphQL production compatibility": {Status: "COMPLETED", Conclusion: "FAILURE"},
@@ -441,7 +443,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -492,7 +494,7 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	obs := plan.Observation{ObservedAt: now, Runs: map[string]plan.RunObservation{ticket.URL: {Alive: true}}}
+	obs := plan.Observation{ObservedAt: now, Runs: map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +534,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -558,7 +560,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
+	want := plan.Hash(plan.Compose(plan.Ticket{URL: plan.TicketURL(ticket.URL)}))
 	if got := hashes[ticket.URL]; got != want {
 		t.Errorf("stored prompt_hash = %q, want %q", got, want)
 	}
@@ -688,7 +690,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -809,9 +811,9 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 			t.Fatal(err)
 		}
 		obs := plan.Observation{
-			BranchTips: map[string]string{web.MainTipKey("repo"): "main-tip"},
-			PRs: map[string]plan.PR{
-				plan.BranchKey("repo", "ci"): {
+			BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+			PRs: map[plan.BranchRef]plan.PR{
+				branchRef("repo", "ci"): {
 					Number: 1, State: plan.Open, HeadOid: "ci-tip",
 					Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 				},

@@ -22,7 +22,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 		t.Fatal(err)
 	}
 	if observedAt != nil {
-		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[string]plan.PR{}}
+		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[plan.BranchRef]plan.PR{}}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
@@ -292,8 +292,8 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]plan.RunObservation{dependent.URL: {Alive: true}},
-		PRs:        map[string]plan.PR{"cc-1": {State: plan.Closed}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(dependent.URL): {Alive: true}},
+		PRs:        map[plan.BranchRef]plan.PR{{Branch: "cc-1"}: {State: plan.Closed}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

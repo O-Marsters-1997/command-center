@@ -73,19 +73,19 @@ func TestWaveCount(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		blocking map[string][]string
+		blocking map[plan.TicketURL][]plan.TicketURL
 		want     int
 	}{
-		{name: "no tickets", blocking: map[string][]string{}, want: 0},
-		{name: "independent tickets share one wave", blocking: map[string][]string{"a": nil, "b": nil}, want: 1},
+		{name: "no tickets", blocking: map[plan.TicketURL][]plan.TicketURL{}, want: 0},
+		{name: "independent tickets share one wave", blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": nil}, want: 1},
 		{
 			name:     "a chain is one wave per link",
-			blocking: map[string][]string{"a": nil, "b": {"a"}, "c": {"b"}},
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": nil, "b": {"a"}, "c": {"b"}},
 			want:     3,
 		},
 		{
 			name:     "a blocker outside the set is ignored",
-			blocking: map[string][]string{"a": {"elsewhere"}},
+			blocking: map[plan.TicketURL][]plan.TicketURL{"a": {"elsewhere"}},
 			want:     1,
 		},
 	}

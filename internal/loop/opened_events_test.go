@@ -43,8 +43,8 @@ func TestRecordOpenedEventsAppendsOnceWhenAPRAppears(t *testing.T) {
 		t.Fatalf("pr_opened events before any PR = %+v, want none", got)
 	}
 
-	observed = plan.Observation{PRs: map[string]plan.PR{
-		plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
+	observed = plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+		branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
 	}}
 	got := runOnce()
 	if len(got) != 1 {
@@ -71,8 +71,8 @@ func TestRecordOpenedEventsIgnoresAPRAlreadyInThePreviousObservation(t *testing.
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
-	observed := plan.Observation{PRs: map[string]plan.PR{
-		plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
+	observed := plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+		branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
 	}}
 	if err := store.SaveObservation(ctx, observed); err != nil {
 		t.Fatalf("SaveObservation: %v", err)

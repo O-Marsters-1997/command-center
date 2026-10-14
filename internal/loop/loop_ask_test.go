@@ -43,7 +43,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
 	fake.CanReap[999] = true
@@ -56,7 +56,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary := latest[ticket.URL]
+	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomeAsked) {
 		t.Fatalf("summary = %+v, want asked", summary)
 	}

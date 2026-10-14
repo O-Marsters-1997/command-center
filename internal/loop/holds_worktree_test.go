@@ -106,8 +106,8 @@ func TestRemoveWorktreeRefusesAnAwaitingInputTicket(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	dispositionAs(t, f.store, f.ticket.URL, plan.OutcomeAsked, f.at.Add(time.Second))
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {

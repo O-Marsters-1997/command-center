@@ -96,7 +96,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
@@ -115,7 +115,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	return followUpResult{
 		spawn:     fake.Spawns[0],
 		sessionID: sessionID,
-		row:       readSessionRow(t, dsn, latest[ticket.URL].ID),
+		row:       readSessionRow(t, dsn, int64(latest[plan.TicketURL(ticket.URL)].ID)),
 	}
 }
 

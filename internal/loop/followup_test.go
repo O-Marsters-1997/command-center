@@ -32,7 +32,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -70,7 +70,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, ok := latest[ticket.URL]
+	summary, ok := latest[plan.TicketURL(ticket.URL)]
 	if !ok {
 		t.Fatal("no run recorded after follow-up")
 	}
@@ -111,7 +111,7 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()

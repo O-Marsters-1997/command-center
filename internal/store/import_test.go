@@ -181,7 +181,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 
 	// The blocker's pull request merges.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := plan.Observation{PRs: map[string]plan.PR{plan.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
+	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 
 	// The merge fact lands afterwards.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := plan.Observation{PRs: map[string]plan.PR{plan.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
+	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 	}
 
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := plan.Observation{PRs: map[string]plan.PR{plan.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
+	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +449,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 	}
 
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
-	obs := plan.Observation{PRs: map[string]plan.PR{plan.BranchKey("alpha", blockerBranch): {State: plan.Merged}}}
+	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

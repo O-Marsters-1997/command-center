@@ -1,7 +1,7 @@
 package plan
 
 type LaunchCandidate struct {
-	URL               string
+	URL               TicketURL
 	Unlock            Unlock
 	Authorised        bool
 	PromptHashMatches bool
@@ -16,7 +16,7 @@ func (c LaunchCandidate) eligible() bool {
 // LaunchPlan selects the ticket URLs to cut and spawn: every eligible candidate in input order,
 // capped at maxAgents minus currentlyRunning. spendPaused stops every new spawn and leaves live
 // runs alone.
-func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []string {
+func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []TicketURL {
 	if spendPaused {
 		return nil
 	}
@@ -25,7 +25,7 @@ func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, s
 		return nil
 	}
 
-	var selected []string
+	var selected []TicketURL
 	for _, c := range candidates {
 		if len(selected) >= free {
 			break

@@ -37,12 +37,14 @@ func (s PRState) String() string {
 }
 
 type Ticket struct {
-	URL                 string
+	URL                 TicketURL
 	Repo                string
 	Branch              string
-	BlockedBy           []string
+	BlockedBy           []TicketURL
 	WorkedExampleBranch string
 }
+
+func (t Ticket) Ref() BranchRef { return BranchRef{Repo: t.Repo, Branch: t.Branch} }
 
 type Reason string
 
@@ -52,7 +54,7 @@ type Unlock struct {
 	Unlocked      bool
 	BaseBranch    string
 	Reason        Reason
-	Blocking      []string
+	Blocking      []TicketURL
 	BlockerClosed bool
 }
 
@@ -61,7 +63,7 @@ const DefaultBaseBranch = "main"
 
 // Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only: a
 // cross-repo blocker feeds the draft gate, never unlock or the base.
-func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stacking bool) Unlock {
+func Unlocked(t Ticket, byURL map[TicketURL]Ticket, prs map[string]PRState, stacking bool) Unlock {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
@@ -97,7 +99,7 @@ func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Un
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
 				"blocked by %s: %s's pull request was closed without merging", blocker.URL, blocker.Branch)),
-			Blocking:      []string{blocker.URL},
+			Blocking:      []TicketURL{blocker.URL},
 			BlockerClosed: true,
 		}
 	case Absent:
@@ -105,12 +107,12 @@ func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Un
 	return Unlock{
 		Reason: Reason(fmt.Sprintf(
 			"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
-		Blocking: []string{blocker.URL},
+		Blocking: []TicketURL{blocker.URL},
 	}
 }
 
 func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
-	var unresolved []string
+	var unresolved []TicketURL
 	for _, blocker := range blockers {
 		if prs[blocker.Branch] != Merged {
 			unresolved = append(unresolved, blocker.URL)
@@ -120,7 +122,7 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 		return Unlock{Unlocked: true, BaseBranch: DefaultBaseBranch, Reason: "every blocker has merged"}
 	}
 	return Unlock{
-		Reason:   Reason(fmt.Sprintf("blocked by %s, not yet merged", strings.Join(unresolved, ", "))),
+		Reason:   Reason(fmt.Sprintf("blocked by %s, not yet merged", joinURLs(unresolved))),
 		Blocking: unresolved,
 	}
 }
@@ -274,7 +276,7 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		}
 		return Checking, "pull request open, no verdict yet"
 	case !unlock.Unlocked && len(unlock.Blocking) > 0:
-		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", strings.Join(unlock.Blocking, ", ")))
+		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", joinURLs(unlock.Blocking)))
 	case !unlock.Unlocked:
 		return PushPending, Reason("push held: " + string(unlock.Reason))
 	default:
@@ -310,9 +312,9 @@ func conflictingPeerReason(peer string) Reason {
 		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))
 }
 
-func waitingOnBlockers(blocking []string) Reason {
+func waitingOnBlockers(blocking []TicketURL) Reason {
 	if len(blocking) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s's PR", blocking[0]))
 	}
-	return Reason(fmt.Sprintf("waiting on %d blockers' PRs: %s", len(blocking), strings.Join(blocking, ", ")))
+	return Reason(fmt.Sprintf("waiting on %d blockers' PRs: %s", len(blocking), joinURLs(blocking)))
 }

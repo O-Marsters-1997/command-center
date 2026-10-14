@@ -34,12 +34,13 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 	changed := false
 	for _, t := range tickets {
-		summary, ok := latest[t.URL]
+		url := plan.TicketURL(t.URL)
+		summary, ok := latest[url]
 		if !ok || summary.Outcome != option.Some(plan.OutcomePush) {
 			continue
 		}
-		pf := pushFacts[t.URL]
-		if pf.Refused || pf.Failed || obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
+		pf := pushFacts[url]
+		if pf.Refused || pf.Failed || obs.PRs[t.Ref()].State != plan.Open {
 			continue
 		}
 

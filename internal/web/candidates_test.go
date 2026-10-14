@@ -78,7 +78,7 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,9 +136,11 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, web.MainTipKey("repo"): "main-tip"},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "parent"): {
+		BranchTips: map[plan.BranchRef]plan.SHA{
+			branchRef("repo", "parent"): plan.SHA(parentTip), web.MainTipKey("repo"): "main-tip",
+		},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "parent"): {
 				Number: 1, State: plan.Open, HeadOid: parentTip,
 				Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "FAILURE"}},
 			},
@@ -207,7 +209,7 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -250,7 +252,7 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -284,7 +286,7 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[string]plan.PR{}}); err != nil {
+	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 

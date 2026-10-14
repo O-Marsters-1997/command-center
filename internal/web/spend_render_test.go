@@ -34,7 +34,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 	if err := store.RecordSpawn(ctx, runID, 4242, at, logPath); err != nil {
 		t.Fatal(err)
 	}
-	obs := plan.Observation{ObservedAt: at, Runs: map[string]plan.RunObservation{ticket.URL: {Alive: alive}}}
+	obs := plan.Observation{ObservedAt: at, Runs: map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: alive}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

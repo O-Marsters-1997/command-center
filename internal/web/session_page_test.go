@@ -64,7 +64,7 @@ func sessionStoreInFeature(
 			t.Fatal(err)
 		}
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[string]plan.RunObservation{sessionTicket: {Alive: alive}}}
+	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}}}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -251,8 +251,8 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Runs:       map[string]plan.RunObservation{sessionTicket: {Alive: false}},
-		PRs:        map[string]plan.PR{plan.BranchKey("acme/web", "cc-1"): pr},
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): pr},
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)

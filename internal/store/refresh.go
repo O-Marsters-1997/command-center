@@ -10,12 +10,12 @@ import (
 
 // RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL.
 // A refusal or verification failure gates the automatic retry; the refresh verb ignores it.
-func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, error) {
+func (s *Store) RefreshFacts(ctx context.Context) (map[plan.TicketURL]plan.RefreshFact, error) {
 	outcomes, err := s.LatestRefreshOutcomes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read latest refresh outcomes: %w", err)
 	}
-	facts := make(map[string]plan.RefreshFact, len(outcomes))
+	facts := make(map[plan.TicketURL]plan.RefreshFact, len(outcomes))
 	for ticketID, o := range outcomes {
 		if o.Kind == EventRefreshRefused {
 			facts[ticketID] = plan.RefreshFact{Refused: true, Reason: o.Detail}
@@ -35,7 +35,7 @@ type RefreshOutcome struct {
 
 // LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last
 // recorded push, keyed by ticket URL.
-func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOutcome, error) {
+func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
 	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
 		Kind:   string(EventRefreshRefused),
 		Kind_2: string(EventRefreshConflicted),
@@ -47,7 +47,7 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOu
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}
 
-	outcomes := map[string]RefreshOutcome{}
+	outcomes := map[plan.TicketURL]RefreshOutcome{}
 	for _, row := range rows {
 		if !row.TicketID.Valid {
 			continue
@@ -56,7 +56,7 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOu
 		if err != nil {
 			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
-		outcomes[row.TicketID.String] = RefreshOutcome{Kind: kind, Detail: row.Detail.String}
+		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail.String}
 	}
 	return outcomes, nil
 }

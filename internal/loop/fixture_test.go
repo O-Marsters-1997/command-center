@@ -98,7 +98,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 func (f *loopFixture) AuthoriseAll(t *testing.T) {
 	t.Helper()
 	for _, ticket := range f.Tickets {
-		authoriseTicket(t, f.Store, ticket.URL, plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL})), testAt)
+		authoriseTicket(t, f.Store, ticket.URL, composeHash(ticket.URL), testAt)
 	}
 }
 
@@ -115,7 +115,15 @@ func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return latest
+	byURL := make(map[string]plan.RunSummary, len(latest))
+	for url, summary := range latest {
+		byURL[string(url)] = summary
+	}
+	return byURL
+}
+
+func composeHash(ticketURL string) string {
+	return plan.Hash(plan.Compose(plan.Ticket{URL: plan.TicketURL(ticketURL)}))
 }
 
 func (f *loopFixture) ImplementSpawns() []runner.SpawnConfig {

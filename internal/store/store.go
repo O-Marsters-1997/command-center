@@ -260,7 +260,7 @@ func (s *Store) ImportTickets(
 	}
 	mergedWithdrawn := make(map[string]bool)
 	for _, row := range withdrawnRows {
-		if obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged {
+		if obs.PRs[plan.BranchRef{Repo: row.Repo, Branch: row.Branch}].State == plan.Merged {
 			mergedWithdrawn[row.URL] = true
 		}
 	}
@@ -378,8 +378,8 @@ const (
 
 // CheckingTicks returns each ticket's count of successful ticks since it last had anything to
 // resolve into a CI verdict. verdict.Input.Now derives from this, never wall clock.
-func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
-	ticks := map[string]int{}
+func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
+	ticks := map[plan.TicketURL]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
 		return nil, fmt.Errorf("read %s meta: %w", metaCheckingTicks, err)
 	}
@@ -387,7 +387,7 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 }
 
 // IncrementCheckingTicks bumps every named ticket's counter by one per successful tick.
-func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
+func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
 		return fmt.Errorf("read checking ticks: %w", err)
@@ -402,7 +402,7 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string)
 }
 
 // ResetCheckingTicks zeroes one ticket's counter on every fresh push.
-func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
+func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
 		return fmt.Errorf("read checking ticks: %w", err)

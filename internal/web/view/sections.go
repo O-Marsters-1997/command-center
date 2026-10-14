@@ -104,11 +104,11 @@ func nameDependencies(rows []Row, tickets []plan.Ticket) {
 	}
 	for i := range rows {
 		r := &rows[i]
-		for _, waiter := range unlocks[r.URL] {
-			if _, onBoard := glyphByURL[waiter]; !onBoard {
+		for _, waiter := range unlocks[plan.TicketURL(r.URL)] {
+			if _, onBoard := glyphByURL[string(waiter)]; !onBoard {
 				continue
 			}
-			r.Unlocks = append(r.Unlocks, ticketRef(waiter))
+			r.Unlocks = append(r.Unlocks, ticketRef(string(waiter)))
 		}
 		if r.Glyph != plan.GlyphBlocked {
 			continue

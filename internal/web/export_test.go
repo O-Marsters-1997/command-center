@@ -57,4 +57,4 @@ func WriteRunLog(t *testing.T, body string) string {
 	return writeRunLog(t, body)
 }
 
-func MainTipKey(repo string) string { return plan.BranchKey(repo, "main") }
+func MainTipKey(repo string) plan.BranchRef { return plan.BranchRef{Repo: repo, Branch: "main"} }
