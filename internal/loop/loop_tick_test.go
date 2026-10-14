@@ -94,3 +94,30 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 		t.Errorf("gh invocations = %d, want 1 (pr create)", got)
 	}
 }
+
+func TestATickPrunesTickErrorsPastRetention(t *testing.T) {
+	f := newLoopFixture(t)
+	stale := storepkg.Event{At: testAt.Add(-31 * 24 * time.Hour), Kind: storepkg.EventTickError, Detail: "old"}
+	recent := storepkg.Event{At: testAt.Add(-time.Hour), Kind: storepkg.EventTickError, Detail: "new"}
+	for _, e := range []storepkg.Event{stale, recent} {
+		if err := f.Store.AppendEvent(t.Context(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	f.Tick(t)
+
+	events, err := f.Store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var details []string
+	for _, e := range events {
+		if e.Kind == storepkg.EventTickError {
+			details = append(details, e.Detail)
+		}
+	}
+	if len(details) != 1 || details[0] != "new" {
+		t.Errorf("tick_error details after a tick = %v, want [new]", details)
+	}
+}

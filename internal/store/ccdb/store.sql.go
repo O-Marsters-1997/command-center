@@ -139,6 +139,44 @@ func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) erro
 	return err
 }
 
+const pruneConsumedIntents = `-- name: PruneConsumedIntents :execrows
+DELETE FROM intents WHERE id IN (
+    SELECT i.id FROM intents i WHERE i.consumed_at < $1 LIMIT $2
+)
+`
+
+type PruneConsumedIntentsParams struct {
+	Before sql.NullTime
+	Batch  int32
+}
+
+func (q *Queries) PruneConsumedIntents(ctx context.Context, arg PruneConsumedIntentsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneConsumedIntents, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneTickErrors = `-- name: PruneTickErrors :execrows
+DELETE FROM events WHERE id IN (
+    SELECT e.id FROM events e WHERE e.kind = 'tick_error' AND e.at < $1 LIMIT $2
+)
+`
+
+type PruneTickErrorsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneTickErrors(ctx context.Context, arg PruneTickErrorsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneTickErrors, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const putMeta = `-- name: PutMeta :exec
 INSERT INTO meta (key, value) VALUES ($1, $2)
 ON CONFLICT (key) DO UPDATE SET value = excluded.value

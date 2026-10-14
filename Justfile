@@ -23,12 +23,6 @@ migrate-status:
 migrate-up:
     {{goose}} "{{db_url}}" up
 
-migrate-down:
-    {{goose}} "{{db_url}}" down
-
-migrate-redo:
-    {{goose}} "{{db_url}}" redo
-
 migrate-create name:
     go run github.com/pressly/goose/v3/cmd/goose@v3.27.3 -dir internal/store/migrations create {{name}} sql
 
