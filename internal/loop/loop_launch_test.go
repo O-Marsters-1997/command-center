@@ -120,11 +120,11 @@ func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 		name      string
 		opts      []fixtureOption
 		failSpawn bool
-		kind      string
+		kind      storepkg.EventKind
 		cause     string
 	}{
-		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: "cut_failed", cause: "forced failure"},
-		{name: "spawn", failSpawn: true, kind: "spawn_failed", cause: "spawn failed"},
+		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: storepkg.EventCutFailed, cause: "forced failure"},
+		{name: "spawn", failSpawn: true, kind: storepkg.EventSpawnFailed, cause: "spawn failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

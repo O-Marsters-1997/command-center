@@ -37,7 +37,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	mode := view.NormalizeLogFilter(r.URL.Query().Get("log"))
+	mode := view.ParseLogFilter(r.URL.Query().Get("log"))
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) followLog(
 	ctx context.Context, w io.Writer, flusher *http.ResponseController,
-	ticketURL, path string, ended bool, offset, afterRecord int64, mode string,
+	ticketURL, path string, ended bool, offset, afterRecord int64, mode view.LogFilter,
 ) error {
 	var tail agentlog.Tail
 	for {
@@ -127,7 +127,7 @@ func flushStream(flusher *http.ResponseController) error {
 }
 
 func (s *Server) sendRecords(
-	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode string,
+	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode view.LogFilter,
 ) (int, error) {
 	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
 	if err != nil {
@@ -152,7 +152,9 @@ func (s *Server) sendRecords(
 	return sent, nil
 }
 
-func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) (sent int, err error) {
+func sendLines(
+	w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode view.LogFilter,
+) (sent int, err error) {
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 0, nil
@@ -186,7 +188,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mod
 			}
 			logLine := view.LineOf(event)
 			isCommand := event.Kind == agentlog.Cmd || event.Kind == agentlog.Commit
-			logLine.Replace = isCommand && event.Done && event.CallID != "" && mode != "fails"
+			logLine.Replace = isCommand && event.Done && event.CallID != "" && mode != view.LogFails
 			rendered, err := renderLogLine(logLine)
 			if err != nil {
 				return sent, fmt.Errorf("render log line: %w", err)

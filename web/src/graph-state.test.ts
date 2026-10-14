@@ -7,7 +7,7 @@ function row(url: string, over: Partial<Row> = {}): Row {
   return {
     url,
     title: "t",
-    state: "Ready",
+    state: "ready",
     glyph: "ready",
     unattended: false,
     alive: false,
@@ -28,11 +28,11 @@ describe("applyPoll", () => {
     applyPoll(setNodes, poll(row("o/r/1")));
     const before = nodes[0];
 
-    applyPoll(setNodes, poll(row("o/r/1", { glyph: "running", state: "Running", title: "new" })));
+    applyPoll(setNodes, poll(row("o/r/1", { glyph: "running", state: "running", title: "new" })));
 
     expect(nodes[0]).toBe(before);
     expect(nodes[0].glyph).toBe("running");
-    expect(nodes[0].state).toBe("Running");
+    expect(nodes[0].state).toBe("running");
     expect(nodes[0].title).toBe("new");
   });
 

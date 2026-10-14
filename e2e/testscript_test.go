@@ -20,6 +20,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -224,7 +225,7 @@ func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
 			ts.Check(os.Symlink(filepath.Join(ts.Getenv("WORK"), name), checkout))
 		}
 		ts.Check(st.UpsertRepo(context.Background(), store.Repo{
-			Name: fullName, Remote: remote, State: store.RepoCloning, TrackedAt: time.Now(),
+			Name: fullName, Remote: remote, Phase: plan.RepoCloning, TrackedAt: time.Now(),
 		}))
 	}
 }

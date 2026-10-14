@@ -14,7 +14,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -95,7 +94,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithNoGhBinary(t *testing.T) {
 	lp.SetForge(forge)
 	lp.SetTrackerSource(resolve)
 
-	if err := store.QueueVerbIntent(t.Context(), "project:x", storepkg.ImportVerb, at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
 		t.Fatal(err)
 	}
 	authoriseTicket(t, store, issue.URL, plan.Hash(plan.Compose(plan.Ticket{URL: issue.URL})), at)

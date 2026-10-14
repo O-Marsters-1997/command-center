@@ -48,9 +48,9 @@ var templates = template.Must(template.New("").
 // pageView's copies of these fields.
 type rowSlot struct {
 	view.Row
-	LaunchVerb   string
-	CancelVerb   string
-	FollowUpVerb string
+	LaunchVerb   plan.Verb
+	CancelVerb   plan.Verb
+	FollowUpVerb plan.Verb
 	Scope        string
 	FeatureScope string
 }
@@ -385,7 +385,7 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 	ctx := r.Context()
 
 	if feature := r.FormValue("feature"); feature != "" {
-		if err := s.store.QueueVerbIntent(ctx, feature, store.ImportVerb, s.clock.Now()); err != nil {
+		if err := s.store.QueueVerbIntent(ctx, feature, plan.VerbImport, s.clock.Now()); err != nil {
 			return err
 		}
 		s.nudge()
@@ -493,13 +493,14 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	verb := r.FormValue("verb")
+	rawVerb := r.FormValue("verb")
 	ticketURL := r.FormValue("ticket")
-	if verb == "" || ticketURL == "" {
+	if rawVerb == "" || ticketURL == "" {
 		return errorf(http.StatusBadRequest, "verb and ticket are both required")
 	}
-	if !plan.IsRowVerb(verb) {
-		return errorf(http.StatusBadRequest, "unsupported verb %q", verb)
+	verb, err := plan.ParseVerb(rawVerb)
+	if err != nil || !verb.IsRowVerb() {
+		return errorf(http.StatusBadRequest, "unsupported verb %q", rawVerb)
 	}
 
 	var prompt string
@@ -625,7 +626,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var offered []string
-	if known && repo.State == store.RepoReady {
+	if known && repo.Phase == plan.RepoReady {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
 			return err
@@ -646,8 +647,14 @@ func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if seen := r.URL.Query().Get("seen"); seen != "" && seen != banner.State {
-		w.Header().Set("HX-Refresh", "true")
+	if rawSeen := r.URL.Query().Get("seen"); rawSeen != "" {
+		seen, err := view.ParseBannerState(rawSeen)
+		if err != nil {
+			return errorf(http.StatusBadRequest, "unsupported seen state %q", rawSeen)
+		}
+		if seen != banner.State {
+			w.Header().Set("HX-Refresh", "true")
+		}
 	}
 	if r.URL.Query().Get("seen") != "" && !banner.Polling() {
 		return renderHTMLStatus(w, 286, "repoBanner", banner)
@@ -718,7 +725,7 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
 	feature := r.PathValue("feature")
-	if err := s.store.QueueVerbIntent(r.Context(), feature, store.ImportVerb, s.clock.Now()); err != nil {
+	if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
 		return err
 	}
 	s.nudge()

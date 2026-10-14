@@ -23,18 +23,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-const (
-	runKindAgent    = "agent"
-	runKindFollowUp = "follow_up"
-)
-
-const (
-	eventRunLaunched = "run_launched"
-	eventRunDisposed = "run_disposed"
-	eventCutFailed   = "cut_failed"
-	eventSpawnFailed = "spawn_failed"
-)
-
 const AgentModel = "claude-sonnet-5-5"
 
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
@@ -74,13 +62,13 @@ func NewLoop(
 
 func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
 
-func (l *Loop) event(ctx context.Context, ticketURL, kind, detail string) error {
+func (l *Loop) event(ctx context.Context, ticketURL string, kind store.EventKind, detail string) error {
 	return l.store.AppendEvent(ctx, store.Event{At: l.clock.Now(), TicketURL: ticketURL, Kind: kind, Detail: detail})
 }
 
 var errIntentPending = errors.New("intent stays pending")
 
-func (l *Loop) eachIntent(ctx context.Context, verb string, fn func(store.VerbIntent) error) error {
+func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.VerbIntent) error) error {
 	intents, err := l.store.PendingVerbIntents(ctx, verb)
 	if err != nil {
 		return err
@@ -268,14 +256,14 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 	}
 	for _, repo := range repos {
 		current := plan.RepoStatus{
-			Name: repo.Name, State: string(repo.State), RefusalKind: repo.RefusalKind, Refusal: repo.Refusal,
+			Name: repo.Name, Phase: repo.Phase, RefusalKind: repo.RefusalKind, Refusal: repo.Refusal,
 		}
 		next := plan.NextRepoStatus(current, obs)
 		source, read := obs.SettingsSources[repo.Name]
 		if next == current && (!read || source == repo.SettingsSource) {
 			continue
 		}
-		repo.State, repo.RefusalKind, repo.Refusal = store.RepoState(next.State), next.RefusalKind, next.Refusal
+		repo.Phase, repo.RefusalKind, repo.Refusal = next.Phase, next.RefusalKind, next.Refusal
 		if read {
 			repo.SettingsSource, repo.SettingsReadAt = source, l.clock.Now()
 		}
@@ -301,7 +289,7 @@ func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) err
 		parts = append(parts, fmt.Sprintf("observe %s: %s", repo, reason))
 	}
 	for _, repo := range repos {
-		if repo.State == store.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
+		if repo.Phase == plan.RepoRefused && repo.RefusalKind != plan.RefusalSettingsParse {
 			parts = append(parts, fmt.Sprintf("%s refused (%s): %s", repo.Name, repo.RefusalKind, repo.Refusal))
 		}
 	}
@@ -321,7 +309,7 @@ func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[stri
 	}
 	skipped := map[string]bool{}
 	for _, repo := range repos {
-		if repo.State != store.RepoReady {
+		if repo.Phase != plan.RepoReady {
 			skipped[repo.Name] = true
 		}
 	}
@@ -351,7 +339,7 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) applyImportIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, store.ImportVerb, func(intent store.VerbIntent) error {
+	return l.eachIntent(ctx, plan.VerbImport, func(intent store.VerbIntent) error {
 		return l.importFeature(ctx, intent.TicketID)
 	})
 }
@@ -451,7 +439,7 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	cancelled := map[string]bool{}
 	for _, intent := range intents {
 		run, ok := latest[intent.TicketID]
-		steerable := run.Kind == runKindAgent || run.Kind == runKindFollowUp
+		steerable := run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp
 		if cancelled[intent.TicketID] || !ok || !steerable || run.Pgid == nil || run.HasOutcome {
 			continue
 		}
@@ -518,13 +506,13 @@ func (l *Loop) disposeRun(
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {
 		return fmt.Errorf("record readings for run %d: %w", run.ID, err)
 	}
-	return l.event(ctx, ticket.URL, eventRunDisposed, outcome.String())
+	return l.event(ctx, ticket.URL, store.EventRunDisposed, outcome.String())
 }
 
 func (l *Loop) outcomeFor(
 	ctx context.Context, run store.PendingRun, ticket store.Ticket, obs plan.Observation,
 ) (plan.Outcome, error) {
-	if run.Kind == runKindAgent || run.Kind == runKindFollowUp {
+	if run.Kind == plan.RunKindAgent || run.Kind == plan.RunKindFollowUp {
 		queued, err := l.followUpQueued(ctx, run.TicketID)
 		if err != nil {
 			return 0, err
@@ -565,7 +553,7 @@ func (l *Loop) questionPath(runID int64) string {
 }
 
 func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
-	if run.Kind != runKindAgent && run.Kind != runKindFollowUp {
+	if run.Kind != plan.RunKindAgent && run.Kind != plan.RunKindFollowUp {
 		return "", nil
 	}
 	data, err := os.ReadFile(l.questionPath(run.ID))
@@ -665,7 +653,7 @@ func (l *Loop) cutAndSpawn(
 		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
 			return insertErr
 		}
-		return l.event(ctx, ticket.URL, eventCutFailed, err.Error())
+		return l.event(ctx, ticket.URL, store.EventCutFailed, err.Error())
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, branch)
@@ -684,7 +672,7 @@ func (l *Loop) cutAndSpawn(
 
 	return l.spawnRun(ctx, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: runKindAgent, prompt: agentPrompt(ticket),
+		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
 	})
 }
 
@@ -697,17 +685,18 @@ func agentPrompt(ticket store.Ticket) string {
 }
 
 type spawnSpec struct {
-	ticket                                 store.Ticket
-	worktree, baseline, hash, kind, prompt string
-	promptFor                              func(runID int64) string
-	resumeSessionID, message               string
+	ticket                           store.Ticket
+	worktree, baseline, hash, prompt string
+	kind                             plan.RunKind
+	promptFor                        func(runID int64) string
+	resumeSessionID, message         string
 }
 
 func (spec spawnSpec) session() store.RunSession {
 	switch {
 	case spec.resumeSessionID != "":
 		return store.RunSession{JoinID: spec.resumeSessionID, Message: spec.message}
-	case spec.kind == runKindAgent || spec.kind == runKindFollowUp:
+	case spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp:
 		return store.RunSession{StartNew: true, Message: spec.message}
 	default:
 		return store.RunSession{}
@@ -727,7 +716,7 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 	}
 
 	promptFor := spec.promptFor
-	if promptFor == nil && (spec.kind == runKindAgent || spec.kind == runKindFollowUp) {
+	if promptFor == nil && (spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp) {
 		promptFor = func(runID int64) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
 	}
 	prompt := spec.prompt
@@ -761,7 +750,7 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 		Resume:       spec.resumeSessionID != "",
 		LogFile:      logFile,
 	}
-	if spec.kind == runKindAgent {
+	if spec.kind == plan.RunKindAgent {
 		spawnCfg.SystemPromptPath = l.ws.SystemPromptPath
 	}
 	result, err := l.runner.Spawn(ctx, spawnCfg)
@@ -771,12 +760,12 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 		); dispositionErr != nil {
 			return dispositionErr
 		}
-		return l.event(ctx, ticket.URL, eventSpawnFailed, err.Error())
+		return l.event(ctx, ticket.URL, store.EventSpawnFailed, err.Error())
 	}
 
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
 		return err
 	}
 	l.spawned = append(l.spawned, ticket.URL)
-	return l.event(ctx, ticket.URL, eventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
+	return l.event(ctx, ticket.URL, store.EventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
 }

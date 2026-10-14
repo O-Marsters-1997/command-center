@@ -104,7 +104,7 @@ func failedEvent(e agentlog.Event) bool { return e.Kind == agentlog.Fail || cmdF
 
 func (p callPair) failed() bool { return p.answered && failedEvent(p.result) }
 
-func (p callPair) shown(mode string) bool {
+func (p callPair) shown(mode LogFilter) bool {
 	return (p.called && EventShown(mode, p.call)) || (p.answered && EventShown(mode, p.result))
 }
 

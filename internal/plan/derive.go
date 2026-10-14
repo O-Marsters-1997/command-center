@@ -34,7 +34,7 @@ type RunSummary struct {
 	LogPath       string
 	BaselineSHA   string
 	PromptHash    string
-	Kind          string
+	Kind          RunKind
 	Question      string
 }
 
@@ -75,7 +75,7 @@ type Input struct {
 	Pushes       map[string]PushFact
 	Refreshes    map[string]RefreshFact
 	Verdict      VerdictFacts
-	PendingVerbs map[string][]string
+	PendingVerbs map[string][]Verb
 	Removals     map[string]string
 	FiveHour     float64
 }
@@ -156,7 +156,7 @@ func (s Snapshot) Entry(url string) (Entry, bool) {
 	return s.Entries[i], true
 }
 
-func (s Snapshot) Offers(url, verb string) bool {
+func (s Snapshot) Offers(url string, verb Verb) bool {
 	e, ok := s.Entry(url)
 	return ok && slices.Contains(Verbs(e.State), verb)
 }

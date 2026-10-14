@@ -83,7 +83,7 @@ func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, 
 	}
 }
 
-func countEvents(events []storepkg.Event, kind string) int {
+func countEvents(events []storepkg.Event, kind storepkg.EventKind) int {
 	n := 0
 	for _, e := range events {
 		if e.Kind == kind {
@@ -93,7 +93,7 @@ func countEvents(events []storepkg.Event, kind string) int {
 	return n
 }
 
-func hasEvent(events []storepkg.Event, kind, detailSubstring string) bool {
+func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring string) bool {
 	for _, e := range events {
 		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
 			return true

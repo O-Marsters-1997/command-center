@@ -24,44 +24,44 @@ type Row struct {
 	ProjectHue int    `json:"project_hue"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
-	Title           string   `json:"title"`
-	State           string   `json:"state"`
-	Reason          string   `json:"reason"`
-	Question        string   `json:"question"`
-	Glyph           string   `json:"glyph"`
-	Unattended      bool     `json:"unattended"`
-	Alive           bool     `json:"alive"`
-	Verbs           []string `json:"verbs"`
-	Branch          string   `json:"branch"`
-	BlockedBy       []string `json:"blocked_by"`
-	PendingVerbs    []string `json:"pending_verbs"`
-	Base            string   `json:"base"`
-	BaseVerdict     string   `json:"base_verdict"`
-	StackDepth      int      `json:"stack_depth"`
-	MergeOrder      int      `json:"merge_order"`
-	Warning         string   `json:"warning"`
-	Blocking        []string `json:"blocking"`
-	After           []string `json:"after"`
-	Unlocks         []string `json:"unlocks"`
-	Worktree        string   `json:"worktree"`
-	PRNumber        int      `json:"pr_number"`
-	PRState         string   `json:"pr_state"`
-	Pgid            string   `json:"pgid"`
-	Elapsed         string   `json:"elapsed"`
-	ElapsedSeconds  int      `json:"elapsed_seconds"`
-	ElapsedPercent  int      `json:"elapsed_percent"`
-	LogPath         string   `json:"log_path"`
-	CancelCount     int      `json:"cancel_count"`
-	SpendTokens     int      `json:"spend_tokens"`
-	BaselineSHA     string   `json:"baseline_sha"`
-	Checks          []Check  `json:"checks"`
-	RedChecks       []Check  `json:"red_checks"`
-	Draft           bool     `json:"draft"`
-	DraftReason     string   `json:"draft_reason"`
-	AgentPctWeek    float64  `json:"agent_pct_week"`
-	FollowUpPctWeek float64  `json:"follow_up_pct_week"`
-	SpendPctWeek    float64  `json:"spend_pct_week"`
-	TicketOpen      bool     `json:"ticket_open"`
+	Title           string         `json:"title"`
+	State           string         `json:"state"`
+	Reason          string         `json:"reason"`
+	Question        string         `json:"question"`
+	Glyph           plan.GlyphWord `json:"glyph"`
+	Unattended      bool           `json:"unattended"`
+	Alive           bool           `json:"alive"`
+	Verbs           []plan.Verb    `json:"verbs"`
+	Branch          string         `json:"branch"`
+	BlockedBy       []string       `json:"blocked_by"`
+	PendingVerbs    []plan.Verb    `json:"pending_verbs"`
+	Base            string         `json:"base"`
+	BaseVerdict     string         `json:"base_verdict"`
+	StackDepth      int            `json:"stack_depth"`
+	MergeOrder      int            `json:"merge_order"`
+	Warning         string         `json:"warning"`
+	Blocking        []string       `json:"blocking"`
+	After           []string       `json:"after"`
+	Unlocks         []string       `json:"unlocks"`
+	Worktree        string         `json:"worktree"`
+	PRNumber        int            `json:"pr_number"`
+	PRState         string         `json:"pr_state"`
+	Pgid            string         `json:"pgid"`
+	Elapsed         string         `json:"elapsed"`
+	ElapsedSeconds  int            `json:"elapsed_seconds"`
+	ElapsedPercent  int            `json:"elapsed_percent"`
+	LogPath         string         `json:"log_path"`
+	CancelCount     int            `json:"cancel_count"`
+	SpendTokens     int            `json:"spend_tokens"`
+	BaselineSHA     string         `json:"baseline_sha"`
+	Checks          []Check        `json:"checks"`
+	RedChecks       []Check        `json:"red_checks"`
+	Draft           bool           `json:"draft"`
+	DraftReason     string         `json:"draft_reason"`
+	AgentPctWeek    float64        `json:"agent_pct_week"`
+	FollowUpPctWeek float64        `json:"follow_up_pct_week"`
+	SpendPctWeek    float64        `json:"spend_pct_week"`
+	TicketOpen      bool           `json:"ticket_open"`
 
 	Checked     bool      `json:"checked"`
 	SessionPath string    `json:"session_path"`
@@ -177,7 +177,7 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
 			Question:       question,
-			Glyph:          plan.Glyph(e.State),
+			Glyph:          e.State.Glyph(),
 			Unattended:     e.State.Unattended(),
 			Alive:          in.Obs.Runs[t.URL].Alive,
 			Verbs:          plan.Verbs(e.State),

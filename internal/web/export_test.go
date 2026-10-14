@@ -30,7 +30,7 @@ func renderStates(name string, states []plan.State) (string, error) {
 		r := view.Row{
 			URL:        "sandbox://" + state.String(),
 			State:      state.String(),
-			Glyph:      plan.Glyph(state),
+			Glyph:      state.Glyph(),
 			Unattended: state.Unattended(),
 			Verbs:      plan.Verbs(state),
 		}

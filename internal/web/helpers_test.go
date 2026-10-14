@@ -75,7 +75,7 @@ func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 func track(t *testing.T, st *store.Store, repos ...store.Repo) *store.Store {
 	t.Helper()
 	for _, repo := range repos {
-		repo.State, repo.TrackedAt = store.RepoReady, testNow
+		repo.Phase, repo.TrackedAt = plan.RepoReady, testNow
 		if err := st.UpsertRepo(t.Context(), repo); err != nil {
 			t.Fatal(err)
 		}

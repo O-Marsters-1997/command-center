@@ -8,22 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
-)
-
-type RepoState string
-
-const (
-	RepoCloning RepoState = "cloning"
-	RepoReady   RepoState = "ready"
-	RepoRefused RepoState = "refused"
 )
 
 type Repo struct {
 	Name           string
 	Remote         string
-	State          RepoState
-	RefusalKind    string
+	Phase          plan.RepoPhase
+	RefusalKind    plan.RefusalKind
 	Refusal        string
 	SettingsSource string
 	SettingsReadAt time.Time
@@ -39,9 +32,20 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 	}
 	repos := make([]Repo, 0, len(rows))
 	for _, row := range rows {
+		phase, err := plan.ParseRepoPhase(row.State)
+		if err != nil {
+			return nil, fmt.Errorf("read repos.state of %s: %w", row.Name, err)
+		}
+		refusalKind := plan.RefusalUnknown
+		if row.RefusalKind.Valid {
+			refusalKind, err = plan.ParseRefusalKind(row.RefusalKind.String)
+			if err != nil {
+				return nil, fmt.Errorf("read repos.refusal_kind of %s: %w", row.Name, err)
+			}
+		}
 		repos = append(repos, Repo{
-			Name: row.Name, Remote: row.Remote, State: RepoState(row.State),
-			RefusalKind: row.RefusalKind.String, Refusal: row.Refusal.String,
+			Name: row.Name, Remote: row.Remote, Phase: phase,
+			RefusalKind: refusalKind, Refusal: row.Refusal.String,
 			SettingsSource: row.SettingsSource.String, SettingsReadAt: row.SettingsReadAt.Time,
 			TrackedAt: row.TrackedAt, Project: row.Project.String, Hue: int(row.ProjectHue.Int16),
 		})
@@ -55,8 +59,8 @@ func (s *Store) UpsertRepo(ctx context.Context, r Repo) error {
 
 func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 	err := q.UpsertRepo(ctx, ccdb.UpsertRepoParams{
-		Name: r.Name, Remote: r.Remote, State: string(r.State),
-		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
+		Name: r.Name, Remote: r.Remote, State: string(r.Phase),
+		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
 		TrackedAt: r.TrackedAt.UTC(),
 	})
 	if err != nil {
@@ -68,13 +72,13 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 // SetRepoState writes r's state, refusal and settings read onto the row named r.Name.
 func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 	err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
-		Name: r.Name, State: string(r.State),
-		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
+		Name: r.Name, State: string(r.Phase),
+		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
 		SettingsSource: nullIfEmpty(r.SettingsSource),
 		SettingsReadAt: sql.NullTime{Time: r.SettingsReadAt.UTC(), Valid: !r.SettingsReadAt.IsZero()},
 	})
 	if err != nil {
-		return fmt.Errorf("set repo %s state %s: %w", r.Name, r.State, err)
+		return fmt.Errorf("set repo %s phase %s: %w", r.Name, r.Phase, err)
 	}
 	return nil
 }
@@ -86,12 +90,12 @@ func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time)
 	if err != nil || pending {
 		return false, err
 	}
-	return true, s.QueueVerbIntent(ctx, repo, TrackVerb, at)
+	return true, s.QueueVerbIntent(ctx, repo, plan.VerbTrack, at)
 }
 
 // TrackPending reports whether a Track for repo, ignoring case, has been queued and not yet applied.
 func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
-	intents, err := s.PendingVerbIntents(ctx, TrackVerb)
+	intents, err := s.PendingVerbIntents(ctx, plan.VerbTrack)
 	if err != nil {
 		return false, err
 	}

@@ -73,8 +73,8 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
 		t.Fatalf("child's state = %q, want verification_failed", state)
 	}
-	for _, verb := range []string{plan.VerbRetryPush, plan.VerbReRun} {
-		if !strings.Contains(page, `value="`+verb+`"`) {
+	for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
+		if !strings.Contains(page, `value="`+string(verb)+`"`) {
 			t.Errorf("page does not offer %s:\n%s", verb, page)
 		}
 	}

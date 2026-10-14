@@ -115,7 +115,7 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
 		t.Fatalf("child's state = %q, want refresh_conflicted", state)
 	}
-	if !strings.Contains(page, `value="`+plan.VerbAbort+`"`) {
+	if !strings.Contains(page, `value="`+string(plan.VerbAbort)+`"`) {
 		t.Errorf("page offers no abort button:\n%s", page)
 	}
 }
@@ -162,7 +162,7 @@ func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *t
 	c.tick(t)
 	c.tick(t)
 
-	for _, verb := range []string{plan.VerbAbort, plan.VerbRefresh} {
+	for _, verb := range []plan.Verb{plan.VerbAbort, plan.VerbRefresh} {
 		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}

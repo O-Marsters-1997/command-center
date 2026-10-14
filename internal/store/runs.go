@@ -14,7 +14,9 @@ import (
 
 // InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
 // land in a later RecordSpawn.
-func (s *Store) InsertRunSkeleton(ctx context.Context, ticketID, kind, baselineSHA, promptHash string) (int64, error) {
+func (s *Store) InsertRunSkeleton(
+	ctx context.Context, ticketID string, kind plan.RunKind, baselineSHA, promptHash string,
+) (int64, error) {
 	id, _, err := s.InsertSessionRunSkeleton(ctx, ticketID, kind, baselineSHA, promptHash, RunSession{})
 	return id, err
 }
@@ -26,11 +28,11 @@ type RunSession struct {
 }
 
 func (s *Store) InsertSessionRunSkeleton(
-	ctx context.Context, ticketID, kind, baselineSHA, promptHash string, session RunSession,
+	ctx context.Context, ticketID string, kind plan.RunKind, baselineSHA, promptHash string, session RunSession,
 ) (runID int64, sessionID string, err error) {
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    notNull(ticketID),
-		Kind:        kind,
+		Kind:        string(kind),
 		BaselineSHA: notNull(baselineSHA),
 		PromptHash:  notNull(promptHash),
 		NewSession:  session.StartNew,
@@ -122,7 +124,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 type PendingRun struct {
 	ID            int64
 	TicketID      string
-	Kind          string
+	Kind          plan.RunKind
 	Pgid          int
 	ProcStartedAt time.Time
 	BaselineSHA   string
@@ -138,8 +140,12 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 
 	var pending []PendingRun
 	for _, row := range rows {
+		kind, err := plan.ParseRunKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read runs.kind of run %d: %w", row.ID, err)
+		}
 		p := PendingRun{
-			ID: row.ID, TicketID: row.TicketID.String, Kind: row.Kind, Pgid: int(row.Pgid.Int64),
+			ID: row.ID, TicketID: row.TicketID.String, Kind: kind, Pgid: int(row.Pgid.Int64),
 			ProcStartedAt: row.ProcStartedAt.Time,
 		}
 		p.BaselineSHA, p.LogPath = row.BaselineSHA.String, row.LogPath.String
@@ -157,7 +163,11 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSumm
 
 	summaries := map[string]plan.RunSummary{}
 	for _, row := range rows {
-		summary := plan.RunSummary{ID: row.ID, Kind: row.Kind}
+		kind, err := plan.ParseRunKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read runs.kind of run %d: %w", row.ID, err)
+		}
+		summary := plan.RunSummary{ID: row.ID, Kind: kind}
 		if row.Pgid.Valid {
 			v := int(row.Pgid.Int64)
 			summary.Pgid = &v
@@ -196,11 +206,11 @@ type VerbIntent struct {
 }
 
 // QueueVerbIntent records one requested verb against a ticket.
-func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at time.Time) error {
+func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.Verb, at time.Time) error {
 	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:       at.UTC(),
 		TicketID: ticketID,
-		Verb:     verb,
+		Verb:     string(verb),
 	})
 	if err != nil {
 		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
@@ -209,11 +219,13 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 }
 
 // QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
-func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, payload string, at time.Time) error {
+func (s *Store) QueueVerbIntentWithPayload(
+	ctx context.Context, ticketID string, verb plan.Verb, payload string, at time.Time,
+) error {
 	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       at.UTC(),
 		TicketID: ticketID,
-		Verb:     verb,
+		Verb:     string(verb),
 		Payload:  notNull(payload),
 	})
 	if err != nil {
@@ -223,8 +235,8 @@ func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, 
 }
 
 // PendingVerbIntents returns every unconsumed intent for verb, oldest first.
-func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbIntent, error) {
-	rows, err := s.q.PendingVerbIntents(ctx, verb)
+func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbIntent, error) {
+	rows, err := s.q.PendingVerbIntents(ctx, string(verb))
 	if err != nil {
 		return nil, fmt.Errorf("select %s intents: %w", verb, err)
 	}
@@ -237,15 +249,19 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 }
 
 // PendingIntentsByTicket returns every unconsumed intent, keyed by ticket, most recent last.
-func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string, error) {
+func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]plan.Verb, error) {
 	rows, err := s.q.PendingIntentsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select pending intents: %w", err)
 	}
 
-	byTicket := map[string][]string{}
+	byTicket := map[string][]plan.Verb{}
 	for _, row := range rows {
-		byTicket[row.TicketID] = append(byTicket[row.TicketID], row.Verb)
+		verb, err := plan.ParseVerb(row.Verb)
+		if err != nil {
+			return nil, fmt.Errorf("read intents.verb for %s: %w", row.TicketID, err)
+		}
+		byTicket[row.TicketID] = append(byTicket[row.TicketID], verb)
 	}
 	return byTicket, nil
 }

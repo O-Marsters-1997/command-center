@@ -116,7 +116,7 @@ func appConfig(t *testing.T) string {
 	t.Setenv("CC_DATABASE_URL", dsn)
 	seed(t, dsn, func(db *store.Store) error {
 		repo := store.Repo{
-			Name: sandboxRepo, Remote: filepath.Join(root, "remote.git"), State: store.RepoReady, TrackedAt: time.Now(),
+			Name: sandboxRepo, Remote: filepath.Join(root, "remote.git"), Phase: plan.RepoReady, TrackedAt: time.Now(),
 		}
 		if err := db.UpsertRepo(t.Context(), repo); err != nil {
 			return err

@@ -11,7 +11,7 @@ import (
 type StackLink struct {
 	Ref   string
 	Title string
-	Glyph string
+	Glyph plan.GlyphWord
 	State string
 	Path  string
 }

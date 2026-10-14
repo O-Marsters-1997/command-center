@@ -16,14 +16,6 @@ import (
 
 const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
 
-const (
-	eventWorktreeRemoved  = "worktree_removed"
-	eventLaunchCancelled  = "launch_cancelled"
-	eventMergeAborted     = "merge_aborted"
-	eventMergeAbortFailed = "merge_abort_failed"
-	eventFollowUpRefused  = "follow_up_refused"
-)
-
 func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
 	return l.eachIntent(ctx, plan.VerbAbort, func(intent store.VerbIntent) error {
 		e, ok := snap.Entry(intent.TicketID)
@@ -37,14 +29,14 @@ func (l *Loop) applyAbortIntents(ctx context.Context, snap plan.Snapshot, obs pl
 func (l *Loop) abortOne(ctx context.Context, ticket plan.Ticket, obs plan.Observation) error {
 	worktreePath, refusal := idleWorktreeFor(ticket, obs)
 	if refusal != "" {
-		return l.event(ctx, ticket.URL, eventMergeAbortFailed, refusal)
+		return l.event(ctx, ticket.URL, store.EventMergeAbortFailed, refusal)
 	}
 	if err := git.MergeAbort(ctx, worktreePath); err != nil {
-		return l.event(ctx, ticket.URL, eventMergeAbortFailed, err.Error())
+		return l.event(ctx, ticket.URL, store.EventMergeAbortFailed, err.Error())
 	}
 
 	delete(obs.MidMerge, plan.BranchKey(ticket.Repo, ticket.Branch))
-	return l.event(ctx, ticket.URL, eventMergeAborted, "")
+	return l.event(ctx, ticket.URL, store.EventMergeAborted, "")
 }
 
 func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, refusal string) {
@@ -74,7 +66,7 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 	}
 	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
 	if refusal != "" {
-		return l.event(ctx, ticket.URL, eventFollowUpRefused, refusal)
+		return l.event(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, l.checkout(ticket.Repo), ticket.Branch)
@@ -83,7 +75,7 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 	}
 	spec := spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA,
-		kind: runKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
+		kind: plan.RunKindFollowUp, prompt: plan.ComposeFollowUp(promptText), message: promptText,
 	}
 
 	sessionID, err := l.resumableSession(ctx, ticket.URL)
@@ -134,7 +126,8 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return l.event(ctx, intent.TicketID, eventLaunchCancelled, fmt.Sprintf("launch cancelled, %d member(s)", members))
+		detail := fmt.Sprintf("launch cancelled, %d member(s)", members)
+		return l.event(ctx, intent.TicketID, store.EventLaunchCancelled, detail)
 	})
 }
 
@@ -171,7 +164,7 @@ func (l *Loop) reRunOne(
 	}
 	return l.spawnRun(ctx, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
-		kind: runKindAgent, prompt: agentPrompt(ticket),
+		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
 	})
 }
 
@@ -253,7 +246,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	if mode == git.RemoveForced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
-	if err := l.event(ctx, ticket.URL, eventWorktreeRemoved, detail); err != nil {
+	if err := l.event(ctx, ticket.URL, store.EventWorktreeRemoved, detail); err != nil {
 		return err
 	}
 	return l.store.WithdrawTicket(ctx, ticket.URL, l.clock.Now(), merged)

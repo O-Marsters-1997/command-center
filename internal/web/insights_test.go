@@ -22,7 +22,7 @@ func insightsTicket(t *testing.T, store *storepkg.Store, url, repo, feature stri
 }
 
 func disposeInsightsRun(
-	t *testing.T, store *storepkg.Store, ticketURL, kind string, endedAt time.Time, costUSD float64,
+	t *testing.T, store *storepkg.Store, ticketURL string, kind plan.RunKind, endedAt time.Time, costUSD float64,
 ) {
 	t.Helper()
 	ctx := t.Context()

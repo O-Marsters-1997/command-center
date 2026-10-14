@@ -52,7 +52,7 @@ func TestTrackQueuesOneIntentAndRunsNoGitOrGh(t *testing.T) {
 			t.Errorf("POST /repos/track = %d, want 200 reading cloning:\n%s", rec.Code, rec.Body)
 		}
 	}
-	intents, err := st.PendingVerbIntents(t.Context(), storepkg.TrackVerb)
+	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
 	if err != nil || len(intents) != 1 || intents[0].TicketID != "acme/new" {
 		t.Errorf("pending track intents = %+v (err %v), want exactly acme/new", intents, err)
 	}
@@ -96,7 +96,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	}
 
 	repo := storepkg.Repo{
-		Name: "acme/new", Remote: "git@github.com:acme/new.git", State: storepkg.RepoReady, TrackedAt: testNow,
+		Name: "acme/new", Remote: "git@github.com:acme/new.git", Phase: plan.RepoReady, TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 
 func consumeTrack(t *testing.T, st *storepkg.Store) {
 	t.Helper()
-	intents, err := st.PendingVerbIntents(t.Context(), storepkg.TrackVerb)
+	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,28 +123,28 @@ func consumeTrack(t *testing.T, st *storepkg.Store) {
 }
 
 func TestBannerNamesTheRepoState(t *testing.T) {
-	repo := func(name string, state storepkg.RepoState, kind, reason, source string) storepkg.Repo {
+	repo := func(name string, phase plan.RepoPhase, kind plan.RefusalKind, reason, source string) storepkg.Repo {
 		return storepkg.Repo{
-			Name: name, Remote: "git@github.com:" + name + ".git", State: state, RefusalKind: kind, Refusal: reason,
+			Name: name, Remote: "git@github.com:" + name + ".git", Phase: phase, RefusalKind: kind, Refusal: reason,
 			SettingsSource: source, TrackedAt: testNow,
 		}
 	}
 	st := openStore(t)
 	for _, r := range []storepkg.Repo{
-		repo("acme/cloning", storepkg.RepoCloning, "", "", ""),
-		repo("acme/file", storepkg.RepoReady, "", "", "origin/main"),
-		repo("acme/defaults", storepkg.RepoReady, "", "", "defaults"),
-		repo("acme/merges", storepkg.RepoRefused, plan.RefusalMergeSettings, "repo acme/merges allows merge commits", ""),
-		repo("acme/master", storepkg.RepoRefused, plan.RefusalDefaultBranch, "default branch is `master`, not `main`", ""),
-		repo("acme/noclone", storepkg.RepoRefused, plan.RefusalClone, "clone failed", ""),
-		repo("acme/badtoml", storepkg.RepoRefused, plan.RefusalSettingsParse, "toml: line 3", ""),
+		repo("acme/cloning", plan.RepoCloning, "", "", ""),
+		repo("acme/file", plan.RepoReady, "", "", "origin/main"),
+		repo("acme/defaults", plan.RepoReady, "", "", "defaults"),
+		repo("acme/merges", plan.RepoRefused, plan.RefusalMergeSettings, "repo acme/merges allows merge commits", ""),
+		repo("acme/master", plan.RepoRefused, plan.RefusalDefaultBranch, "default branch is `master`, not `main`", ""),
+		repo("acme/noclone", plan.RepoRefused, plan.RefusalClone, "clone failed", ""),
+		repo("acme/badtoml", plan.RepoRefused, plan.RefusalSettingsParse, "toml: line 3", ""),
 	} {
 		if err := st.UpsertRepo(t.Context(), r); err != nil {
 			t.Fatal(err)
 		}
 	}
 	server := openServer(st, fixedClock(testNow), "")
-	if err := st.QueueVerbIntent(t.Context(), "acme/queued", storepkg.TrackVerb, testNow); err != nil {
+	if err := st.QueueVerbIntent(t.Context(), "acme/queued", plan.VerbTrack, testNow); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +179,7 @@ func TestBannerAnswers286OnceTheStateIsTerminal(t *testing.T) {
 	}
 
 	repo := storepkg.Repo{
-		Name: "acme/new", Remote: "git@github.com:acme/new.git", State: storepkg.RepoReady, TrackedAt: testNow,
+		Name: "acme/new", Remote: "git@github.com:acme/new.git", Phase: plan.RepoReady, TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
 		t.Fatal(err)

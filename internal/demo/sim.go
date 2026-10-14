@@ -21,6 +21,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -201,7 +202,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 		authorised: map[string]bool{}, board: map[string]string{},
 	}
 	for _, feature := range features(issues) {
-		if err := st.QueueVerbIntent(ctx, feature, store.ImportVerb, clock.Now()); err != nil {
+		if err := st.QueueVerbIntent(ctx, feature, plan.VerbImport, clock.Now()); err != nil {
 			return nil, err
 		}
 	}

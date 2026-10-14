@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -21,7 +22,7 @@ func SandboxValidate(ctx context.Context, dataDir string, repo store.Repo, now t
 			return repo, fmt.Errorf("repo %s: git config %s: %w: %s", repo.Name, key, err, out)
 		}
 	}
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoReady, "", ""
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, plan.RefusalUnknown, ""
 	repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 	return repo, nil
 }

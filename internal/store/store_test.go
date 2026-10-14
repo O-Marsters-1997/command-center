@@ -252,10 +252,13 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	for _, e := range []storepkg.Event{
-		{At: at, TicketURL: "sandbox://CC-1", Kind: "first"},
-		{At: at, TicketURL: "sandbox://CC-2", Kind: "other"},
-		{At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: "second", Detail: "late write, old time"},
-		{At: at, Kind: "fleet_event"},
+		{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
+		{At: at, TicketURL: "sandbox://CC-2", Kind: storepkg.EventPushFailed},
+		{
+			At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshed,
+			Detail: "late write, old time",
+		},
+		{At: at, Kind: storepkg.EventTickError},
 	} {
 		if err := store.AppendEvent(ctx, e); err != nil {
 			t.Fatal(err)
@@ -266,7 +269,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
-	if len(all) != 2 || all[0].Kind != "first" || all[1].Kind != "second" {
+	if len(all) != 2 || all[0].Kind != storepkg.EventPushed || all[1].Kind != storepkg.EventRefreshed {
 		t.Fatalf("TicketEventsAfter(CC-1, 0) = %+v, want first then second", all)
 	}
 	if all[1].Detail != "late write, old time" || !all[1].At.Equal(at.Add(-time.Hour)) {
@@ -277,7 +280,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
-	if len(newer) != 1 || newer[0].Kind != "second" {
+	if len(newer) != 1 || newer[0].Kind != storepkg.EventRefreshed {
 		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
 	}
 }
@@ -293,10 +296,11 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 	}
 
 	at := time.Now()
-	if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticket.URL, Kind: "ticket_event"}); err != nil {
+	ticketEvent := storepkg.Event{At: at, TicketURL: ticket.URL, Kind: storepkg.EventPushed}
+	if err := store.AppendEvent(ctx, ticketEvent); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: "fleet_event"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: storepkg.EventTickError}); err != nil {
 		t.Fatal(err)
 	}
 

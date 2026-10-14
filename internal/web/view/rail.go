@@ -39,9 +39,9 @@ type RailItem struct {
 	Feature  string
 	Project  ProjectMark
 	Context  string
-	Glyph    string
+	Glyph    plan.GlyphWord
 	Reason   string
-	Verb     string
+	Verb     plan.Verb
 	Reply    bool
 	Path     string
 	Selected bool
@@ -236,6 +236,8 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 				f.Blocked++
 			case plan.GlyphDone:
 				f.Merged++
+			case plan.GlyphUnknown, plan.GlyphFailed, plan.GlyphAttention, plan.GlyphRunning,
+				plan.GlyphPending, plan.GlyphChecking:
 			}
 			if group, folded := plan.RailGroup(r.Glyph); group == plan.GroupInFlight && !folded {
 				f.Live = append(f.Live, item(r))
@@ -309,7 +311,7 @@ func railFeatureKey(r Row) (key, name string) {
 	return "feature:" + r.Feature, r.Feature
 }
 
-func glyphRank(glyph string) int {
+func glyphRank(glyph plan.GlyphWord) int {
 	if glyph == plan.GlyphFailed {
 		return 0
 	}

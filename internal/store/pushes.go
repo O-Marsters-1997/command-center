@@ -29,7 +29,7 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 // recorded a push of it, the only licence the push step has to lease-force.
 // The comparison is >= because a retarget stamps its push and restack with one clock reading.
 func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.q.RestackedSinceLastPush(ctx, EventRestacked)
+	rows, err := s.q.RestackedSinceLastPush(ctx, string(EventRestacked))
 	if err != nil {
 		return nil, fmt.Errorf("select restacked tickets: %w", err)
 	}
@@ -77,17 +77,12 @@ func (s *Store) LatestPushes(ctx context.Context) (map[string]plan.PushRow, erro
 	return pushes, nil
 }
 
-// Event kinds a push writes and PushFacts reads back.
-const (
-	EventPushRefused = "push_refused"
-	EventPushFailed  = "push_failed"
-	EventPushed      = "pushed"
-)
-
 // PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL.
 // A failure blocks the automatic retry; a refusal never does.
 func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error) {
-	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: EventPushRefused, Kind_2: EventPushFailed})
+	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{
+		Kind: string(EventPushRefused), Kind_2: string(EventPushFailed),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("select push facts: %w", err)
 	}
@@ -97,10 +92,14 @@ func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error)
 		if !row.TicketID.Valid {
 			continue
 		}
-		switch row.Kind {
-		case EventPushRefused:
+		kind, err := ParseEventKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
+		}
+		if kind == EventPushRefused {
 			facts[row.TicketID.String] = plan.PushFact{Refused: true, RefusedPath: row.Detail.String}
-		case EventPushFailed:
+		}
+		if kind == EventPushFailed {
 			facts[row.TicketID.String] = plan.PushFact{Failed: true}
 		}
 	}

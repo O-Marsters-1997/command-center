@@ -19,7 +19,7 @@ type repoSettings struct {
 // CheckRepoOnGitHub reads fullName's merge settings and default branch from GitHub by name, so it
 // runs before any clone. A repo it accepts answers an empty kind; a refusal answers a
 // plan.Refusal* kind and the reason to show. A gh failure is an error, never a pass.
-func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind, reason string, err error) {
+func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind plan.RefusalKind, reason string, err error) {
 	out, err := command.Output(ctx, "", "gh", "api", "repos/"+fullName,
 		"--jq", "{allow_merge_commit, allow_rebase_merge, default_branch}")
 	if err != nil {
@@ -28,7 +28,7 @@ func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind, reason strin
 	return assertRepoSettings(fullName, out)
 }
 
-func assertRepoSettings(fullName string, raw []byte) (kind, reason string, err error) {
+func assertRepoSettings(fullName string, raw []byte) (kind plan.RefusalKind, reason string, err error) {
 	var settings repoSettings
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		return "", "", fmt.Errorf("decode repo settings for %s: %w", fullName, err)

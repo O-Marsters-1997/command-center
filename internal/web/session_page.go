@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -22,7 +23,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 	return renderHTML(w, "session.tmpl", page)
 }
 
-func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL, verb string) error {
+func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb) error {
 	self := view.SessionPath(ticketURL)
 	if self == "" {
 		return errorf(http.StatusBadRequest, "%q has no session page", ticketURL)
@@ -36,7 +37,7 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 	if err != nil {
 		return err
 	}
-	page.Toast = "Queued " + verb
-	page.ResetComposer = verb == "follow-up"
+	page.Toast = "Queued " + string(verb)
+	page.ResetComposer = verb == plan.VerbFollowUp
 	return renderHTML(w, "sessionActions", page)
 }

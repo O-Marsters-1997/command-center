@@ -19,6 +19,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
@@ -87,7 +88,7 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	return st.QueueVerbIntent(ctx, args[0], store.ImportVerb, time.Now())
+	return st.QueueVerbIntent(ctx, args[0], plan.VerbImport, time.Now())
 }
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately

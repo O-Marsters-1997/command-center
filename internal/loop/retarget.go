@@ -5,11 +5,7 @@ import (
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-)
-
-const (
-	eventRetargeted     = "retargeted"
-	eventRetargetFailed = "retarget_failed"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // Mergify's queue takes main-based pull requests only, and both repos delete a merged branch.
@@ -38,7 +34,7 @@ func (l *Loop) retargetOne(
 ) error {
 	repoPath := l.checkout(t.Repo)
 	if err := l.forge.Edit(ctx, repoPath, t.Branch, plan.DefaultBaseBranch); err != nil {
-		return l.event(ctx, t.URL, eventRetargetFailed, err.Error())
+		return l.event(ctx, t.URL, store.EventRetargetFailed, err.Error())
 	}
 
 	err := l.store.RecordPush(ctx, t.URL, row.PushedTip, plan.DefaultBaseBranch, row.BaseSHAAtPush, l.clock.Now())
@@ -46,7 +42,7 @@ func (l *Loop) retargetOne(
 		return err
 	}
 	detail := fmt.Sprintf("re-pointed %s from %s at %s, which merged", t.Branch, row.BaseBranch, plan.DefaultBaseBranch)
-	if err := l.event(ctx, t.URL, eventRetargeted, detail); err != nil {
+	if err := l.event(ctx, t.URL, store.EventRetargeted, detail); err != nil {
 		return err
 	}
 	return l.refreshOne(ctx, snap, obs, t, row, false)

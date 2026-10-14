@@ -73,7 +73,7 @@ func TestEventShownCmdByMode(t *testing.T) {
 	running := agentlog.Event{Kind: agentlog.Cmd}
 
 	tests := []struct {
-		mode  string
+		mode  LogFilter
 		event agentlog.Event
 		want  bool
 	}{

@@ -50,7 +50,7 @@ func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
 func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
 
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
-func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
+func (s Session) PendingVerb(verb plan.Verb) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
 
 type Turn struct {
 	You string
@@ -214,8 +214,8 @@ func rawLog(raw bool, logPath string) (string, error) {
 
 // ActionVerbs is the state's verbs minus launch, which has its own modal, and follow-up, which
 // is the composer.
-func (s Session) ActionVerbs() []string {
-	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v string) bool {
+func (s Session) ActionVerbs() []plan.Verb {
+	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v plan.Verb) bool {
 		return v == plan.VerbLaunch || v == plan.VerbFollowUp
 	})
 }

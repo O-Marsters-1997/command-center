@@ -1,17 +1,5 @@
 package plan
 
-// The eight glyph words, the only colour key the surface knows.
-const (
-	GlyphFailed    = "failed"
-	GlyphAttention = "attention"
-	GlyphRunning   = "running"
-	GlyphPending   = "pending"
-	GlyphChecking  = "checking"
-	GlyphReady     = "ready"
-	GlyphBlocked   = "blocked"
-	GlyphDone      = "done"
-)
-
 // Rail groups, in the order the session rail lists them.
 const (
 	GroupNeedsYou = "needs-you"
@@ -20,7 +8,7 @@ const (
 )
 
 // Glyph is the state's status glyph: one of the eight Glyph words, never a utility class.
-func Glyph(s State) string {
+func (s State) Glyph() GlyphWord {
 	switch s {
 	case Failed, CutFailed, PushFailed, CIFailed, ConflictsWithMain, RefreshConflicted,
 		BaseGone, VerificationFailed, PRClosedUnmerged:
@@ -46,7 +34,7 @@ func Glyph(s State) string {
 
 // RailGroup places a glyph word in a rail group. folded marks the in-flight glyphs the rail
 // collapses behind a count.
-func RailGroup(glyph string) (group string, folded bool) {
+func RailGroup(glyph GlyphWord) (group string, folded bool) {
 	switch glyph {
 	case GlyphFailed, GlyphAttention:
 		return GroupNeedsYou, false
@@ -54,6 +42,8 @@ func RailGroup(glyph string) (group string, folded bool) {
 		return GroupSettled, false
 	case GlyphReady, GlyphBlocked:
 		return GroupInFlight, true
+	case GlyphUnknown, GlyphRunning, GlyphPending, GlyphChecking:
+		return GroupInFlight, false
 	default:
 		return GroupInFlight, false
 	}
