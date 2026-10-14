@@ -149,8 +149,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if project.Name != "" {
 		groups = filterGroupsByProject(groups, project.Repos)
 	}
-	chrome := r.buildChrome(chromeInput{tickets, in.Obs, in.Observed, lastErr, gauges, split}, now, params)
-	if err := r.scopeChrome(ctx, &chrome, chromeScope{tickets, project, params.Repo}); err != nil {
+	input := chromeInput{
+		tickets: tickets, obs: in.Obs, observed: in.Observed, lastErr: lastErr, gauges: gauges, split: split,
+	}
+	chrome := r.buildChrome(input, now, params)
+	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
+	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
 		return Board{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	scoped := rowsIn(groups)
@@ -213,8 +217,12 @@ func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chro
 	if err != nil {
 		return Chrome{}, fmt.Errorf("gauge split: %w", err)
 	}
-	chrome := r.buildChrome(chromeInput{tickets, obs, observed, lastErr, gauges, split}, now, params)
-	if err := r.scopeChrome(ctx, &chrome, chromeScope{tickets, project, params.Repo}); err != nil {
+	input := chromeInput{
+		tickets: tickets, obs: obs, observed: observed, lastErr: lastErr, gauges: gauges, split: split,
+	}
+	chrome := r.buildChrome(input, now, params)
+	scope := chromeScope{tickets: tickets, project: project, repo: params.Repo}
+	if err := r.scopeChrome(ctx, &chrome, scope); err != nil {
 		return Chrome{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	return chrome, nil

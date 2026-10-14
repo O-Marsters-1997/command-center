@@ -11,7 +11,7 @@ import (
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 	n, err := strconv.Atoi(r.PathValue("n"))
-	if err != nil {
+	if err != nil || n < 1 || strconv.Itoa(n) != r.PathValue("n") {
 		return withStatus(http.StatusNotFound, view.ErrSessionNotFound)
 	}
 	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: n}

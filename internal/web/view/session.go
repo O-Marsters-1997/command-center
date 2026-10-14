@@ -104,10 +104,9 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 	if err != nil {
 		return SessionPage{}, fmt.Errorf("load tickets: %w", err)
 	}
-	suffix := "/" + ref.Owner + "/" + ref.Name + "/issues/" + strconv.Itoa(ref.N)
 	ticketURL := ""
 	for _, t := range tickets {
-		if strings.HasSuffix(t.URL, suffix) {
+		if found, err := ParseSessionRef(plan.TicketURL(t.URL)); err == nil && found == ref {
 			ticketURL = t.URL
 			break
 		}
@@ -136,7 +135,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw
 		}
 	}
 
-	self := SessionPath(ticketURL)
+	self := ref.Path()
 	chrome := board.Chrome
 	chrome.Section = "tickets"
 	chrome.Home = false
