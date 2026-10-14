@@ -149,7 +149,7 @@ func (s *Server) sendRecords(
 		if err != nil {
 			return fmt.Errorf("render record %d: %w", record.ID, err)
 		}
-		if err := writeEvent(w, offset, rendered); err != nil {
+		if err := writeEvent(w, offset, string(rendered)); err != nil {
 			return err
 		}
 		sent++
@@ -197,7 +197,7 @@ func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mod
 			if err != nil {
 				return sent, fmt.Errorf("render log line: %w", err)
 			}
-			if err := writeEvent(w, *offset, rendered); err != nil {
+			if err := writeEvent(w, *offset, string(rendered)); err != nil {
 				return sent, err
 			}
 			sent++

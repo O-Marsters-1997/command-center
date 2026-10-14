@@ -38,7 +38,6 @@ var templates = template.Must(template.New("").
 		"slot":         newRowSlot,
 		"confirmation": confirmation,
 		"percent":      view.PercentOf,
-		"raw":          func(s string) template.HTML { return template.HTML(s) },
 		"pathEscape":   url.PathEscape,
 		"queryEscape":  url.QueryEscape,
 	}).
