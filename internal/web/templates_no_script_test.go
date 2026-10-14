@@ -11,7 +11,7 @@ import (
 var (
 	scriptTag     = regexp.MustCompile(`(?i)<script\b[^>]*>`)
 	scriptSrc     = regexp.MustCompile(`(?i)\bsrc=`)
-	inlineHandler = regexp.MustCompile(`(?i)\son[a-z]+\s*=`)
+	inlineHandler = regexp.MustCompile(`(?i)<[a-z][^>]*\son[a-z]+\s*=`)
 	hxOn          = regexp.MustCompile(`(?i)\bhx-on`)
 )
 

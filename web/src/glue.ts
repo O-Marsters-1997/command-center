@@ -90,7 +90,7 @@ function closeScopeMenu(): void {
   const here = scopeOf(location.href, location.origin);
   for (const d of document.querySelectorAll<HTMLDetailsElement>("details[data-scope-menu]")) {
     d.open = false;
-    for (const a of d.querySelectorAll("a")) {
+    for (const a of d.querySelectorAll("a[href]")) {
       const current = scopeOf(a.getAttribute("href") ?? "", location.origin) === here;
       if (current) {
         const summary = d.querySelector("summary");
@@ -103,8 +103,13 @@ function closeScopeMenu(): void {
   }
 }
 
+const hopChecked = new WeakSet<Element>();
+
 function hop(): void {
-  const target = document.getElementById("main")?.dataset.desktopTarget;
+  const main = document.getElementById("main");
+  if (!main || hopChecked.has(main)) return;
+  hopChecked.add(main);
+  const target = main.dataset.desktopTarget;
   if (target && shouldHop(target, matchMedia(wideViewport).matches)) location.replace(target);
 }
 
@@ -127,12 +132,16 @@ function initGlue(): void {
   });
   document.addEventListener("htmx:sendError", () => show(failureText("sendError")));
 
-  document.addEventListener("htmx:beforeRequest", (e) => eventElement(e)?.setAttribute("aria-busy", "true"));
+  document.addEventListener("htmx:beforeRequest", (e) => {
+    const el = eventElement(e);
+    if (el instanceof HTMLFormElement) el.setAttribute("aria-busy", "true");
+  });
   document.addEventListener("htmx:afterRequest", (e) => {
     const el = eventElement(e);
-    el?.removeAttribute("aria-busy");
+    if (!(el instanceof HTMLFormElement)) return;
+    el.removeAttribute("aria-busy");
     const detail = (e as CustomEvent<{ successful?: boolean }>).detail;
-    if (detail?.successful && el instanceof HTMLFormElement && el.hasAttribute("data-reset-on-success")) el.reset();
+    if (detail?.successful && el.hasAttribute("data-reset-on-success")) el.reset();
   });
 
   document.addEventListener("click", (e) => {
