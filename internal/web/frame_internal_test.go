@@ -5,11 +5,18 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
+
+type boardTestClock struct{}
+
+func (boardTestClock) Now() time.Time { return time.Now() }
 
 func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -76,5 +83,78 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 	}
 	if repos, err := cache.get(t.Context(), now); err != nil || len(repos) != 1 || repos[0].FullName != "first" {
 		t.Errorf("cached get() = %v, %v, want first repo", repos, err)
+	}
+}
+
+func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
+	st, err := store.OpenStore(cctest.DSN(t))
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := st.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	s := NewServer(Deps{Logger: slog.New(slog.DiscardHandler), Store: st, Clock: boardTestClock{}},
+		WithPushableSource(func(ctx context.Context) ([]gh.RepoSummary, error) {
+			close(started)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			return []gh.RepoSummary{{FullName: "first"}}, nil
+		}))
+	fetchDone := make(chan error, 1)
+	go func() {
+		_, err := s.pushable.get(ctx, time.Now())
+		fetchDone <- err
+	}()
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatalf("pushable fetch did not start: %v", ctx.Err())
+	}
+
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/board", nil).WithContext(ctx))
+		response <- w
+	}()
+	timedOut := false
+	select {
+	case w := <-response:
+		if got := w.Code; got != http.StatusOK {
+			t.Errorf("GET /board during pushable fetch = %d, want 200", got)
+		}
+		if !strings.Contains(w.Body.String(), `id="board"`) {
+			t.Error("GET /board during pushable fetch body has no board")
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("GET /board did not complete while pushable fetch was blocked")
+		timedOut = true
+	}
+	close(release)
+	select {
+	case err := <-fetchDone:
+		if err != nil {
+			t.Errorf("pushable fetch = %v, want nil", err)
+		}
+	case <-ctx.Done():
+		t.Errorf("pushable fetch did not finish: %v", ctx.Err())
+	}
+	if timedOut {
+		select {
+		case <-response:
+		case <-ctx.Done():
+			t.Errorf("GET /board did not finish after fetch release: %v", ctx.Err())
+		}
 	}
 }
