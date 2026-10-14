@@ -57,14 +57,26 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 			t.Fatal(err)
 		}
 	}
-	outcome := option.None[plan.Outcome]()
-	if !opts.Alive {
-		outcome = option.Some(opts.Outcome)
-	}
-	storetest.Run(t, st, storetest.RunOpts{
-		TicketURL: sessionTicket, Kind: opts.Kind, Pgid: 99, StartedAt: testNow,
-		LogPath: logPath, Outcome: outcome, EndedAt: testNow,
+	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: sessionTicket, Kind: opts.Kind, BaselineSHA: "base", PromptHash: "hash",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !opts.Alive {
+		exitCode := 0
+		if err := st.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(exitCode),
+			Cost: option.None[float64](), EndedAt: testNow,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: opts.Alive}},

@@ -22,10 +22,18 @@ import (
 
 func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
-	return storetest.Run(t, store, storetest.RunOpts{
-		TicketURL: ticketURL, Kind: plan.RunKindAgent, Pgid: 4242,
-		StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", BaselineSHA: "basesha", PromptHash: "hash-1",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return runID
 }
 
 func seededRunning(t *testing.T) *storepkg.Store {
@@ -532,10 +540,17 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	ctx := t.Context()
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
-	storetest.Run(t, store, storetest.RunOpts{
-		TicketURL: ticket.URL, Kind: plan.RunKindAgent, Pgid: 4242,
-		StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	obs := plan.Observation{
 		ObservedAt: now,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
