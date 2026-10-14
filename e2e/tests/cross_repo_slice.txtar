@@ -20,9 +20,6 @@ exec cc request POST '/launch?ticket=https://github.com/sandbox-org/repo/issues/
 # Both cut and spawn on this tick.
 exec cc tick --count 1
 
-# A fresh instance -- nothing in memory from the one that spawned them -- ticks again before
-# either agent has had time to commit (commits_slow.sh sleeps a full second first, for exactly
-# this reason). Neither run relaunches.
 exec cc tick --count 1
 exec cc request GET /tickets
 stdout -count=2 '>running</span>'
@@ -31,8 +28,8 @@ stdout -count=2 'run_launched'
 grep -count=1 'commits_slow.sh .*services-cc-40-x' $WORK/agent.log
 grep -count=1 'commits_slow.sh .*repo-cc-1-x' $WORK/agent.log
 
-# Real wall time for both agents to finish committing.
-exec sleep 2.5
+exec touch $WORK/agent-release
+cc-wait agent-done.log 'commits_slow.sh' 2
 exec cc tick --count 1
 
 # Both push. The producer has no gating edge, so its pull request opens normally; the consumer's
@@ -46,7 +43,6 @@ grep -count=1 'pr create --base main --fill --label keep-open --draft' $WORK/gh.
 # DraftGate entirely could still pass the rest of this script.
 cc-fake-gh-head cross-repo-blocker-open-checks-green cc-1-x
 exec cc tick --count 1
-exec sleep 2.5
 exec cc tick --count 1
 exec cc request GET /tickets
 stdout '>review_me</span>'

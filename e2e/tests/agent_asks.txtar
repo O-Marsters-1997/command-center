@@ -6,9 +6,8 @@ exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait agent-done.log 'asks.sh session-id'
 exec cc tick --count 1
 
 exec cc request GET /tickets
@@ -28,7 +27,7 @@ stdout 'aria-label="Reply"'
 
 exec cc request -form 'verb=follow-up&ticket=https://github.com/sandbox-org/single-task/issues/CC-1&prompt=Postgres' POST /verb
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait agent-done.log 'asks.sh resume'
 
 grep -count=1 '(?m)^asks.sh session-id [0-9a-f-]{36}$' $WORK/agent.log
 grep -count=1 '(?m)^asks.sh resume [0-9a-f-]{36}$' $WORK/agent.log
