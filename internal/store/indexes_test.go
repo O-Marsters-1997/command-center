@@ -35,6 +35,8 @@ func TestMigrationsLeaveEveryHotIndexValid(t *testing.T) {
 	}
 	for _, name := range want {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			var valid bool
 			err := db.QueryRowContext(t.Context(), `
 				SELECT i.indisvalid
