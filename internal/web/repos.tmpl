@@ -68,7 +68,7 @@
 <details class="mb-4 max-w-3xl">
   <summary>New project</summary>
   <form method="post" action="/projects" hx-post="/projects" hx-target="#repo-results" hx-swap="innerHTML"
-    hx-on::after-request="if (event.detail.successful) this.reset()" class="flex flex-col gap-2 mt-2">
+    data-reset-on-success class="flex flex-col gap-2 mt-2">
     <input type="text" name="name" required maxlength="40" placeholder="project name"
       autocomplete="off" aria-label="project name">
     <fieldset class="flex items-center gap-3">

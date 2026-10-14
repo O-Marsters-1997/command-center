@@ -23,97 +23,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"422","swap":true,"error":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}'>
 <title>Command Centre</title>
 <link rel="stylesheet" href="/assets/app.css">
-<script>
-  // Every <time datetime> is rendered once with the instant it counts from, so the server's own
-  // wording goes stale the moment it is sent and a swap is not what keeps it current.
-  function ago(ms) {
-    var s = Math.max(0, Math.round(ms / 1000));
-    if (s < 60) return s + "s ago";
-    var m = Math.floor(s / 60);
-    if (m < 60) return m + "m" + (s % 60 ? (s % 60) + "s" : "") + " ago";
-    var h = Math.floor(m / 60);
-    return h + "h" + (m % 60 ? (m % 60) + "m" : "") + " ago";
-  }
-  setInterval(function () {
-    var now = Date.now();
-    document.querySelectorAll("time[datetime]").forEach(function (el) {
-      var at = Date.parse(el.dateTime);
-      if (!isNaN(at)) el.textContent = ago(now - at);
-    });
-  }, 1000);
-</script>
-<script>
-  function markCurrent() {
-    document.querySelectorAll(".sidebar-item").forEach(function (a) {
-      var here = a.pathname === "/" ? location.pathname === "/" : location.pathname.indexOf(a.pathname) === 0;
-      if (here) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-  }
-  function closeScopeMenu() {
-    function scopeOf(href) {
-      var q = new URL(href, location.origin).searchParams;
-      return q.get("project") ? "project=" + q.get("project") : q.get("repo") ? "repo=" + q.get("repo") : "";
-    }
-    var here = scopeOf(location.href);
-    document.querySelectorAll("details[data-scope-menu]").forEach(function (d) {
-      d.open = false;
-      d.querySelectorAll("a").forEach(function (a) {
-        var current = scopeOf(a.getAttribute("href")) === here;
-        if (current) d.querySelector("summary").innerHTML = a.innerHTML;
-        if (current) a.setAttribute("aria-current", "true");
-        else a.removeAttribute("aria-current");
-      });
-    });
-  }
-  document.addEventListener("htmx:pushedIntoHistory", closeScopeMenu);
-  document.addEventListener("htmx:historyRestore", closeScopeMenu);
-  document.addEventListener("htmx:pushedIntoHistory", markCurrent);
-  document.addEventListener("htmx:historyRestore", markCurrent);
-</script>
-<script>
-  document.addEventListener("toggle", function (e) {
-    var key = e.target.dataset && e.target.dataset.railKey;
-    if (!key || e.target.hasAttribute("data-rail-forced")) return;
-    var open = document.cookie.split("; ").reduce(function (found, c) {
-      return c.indexOf("rail-open=") === 0 ? decodeURIComponent(c.slice(10)).split("|") : found;
-    }, []).filter(function (k) { return k && k !== key; });
-    if (e.target.open) open.push(key);
-    document.cookie = "rail-open=" + encodeURIComponent(open.join("|")) + "; path=/; max-age=31536000; samesite=lax";
-  }, true);
-  function tickStarted() {
-    var now = Date.now();
-    document.querySelectorAll("[data-started]").forEach(function (el) {
-      var s = Math.max(0, Math.round((now - Date.parse(el.dataset.started)) / 1000));
-      if (isNaN(s)) return;
-      var m = Math.floor(s / 60);
-      el.textContent = m < 60 ? m + "m" + (s % 60) + "s" : Math.floor(m / 60) + "h" + (m % 60) + "m";
-    });
-  }
-  setInterval(tickStarted, 1000);
-  document.addEventListener("htmx:afterSwap", tickStarted);
-</script>
 <script src="/assets/htmx.min.js"></script>
 <script src="/assets/sse.min.js"></script>
 <script type="module" src="/assets/dist/keys.js"></script>
 <script type="module" src="/assets/dist/glue.js"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (/Mac|iPhone|iPad/.test(navigator.platform)) return;
-    document.querySelectorAll("#key-sheet kbd, .rail-search-wrap kbd").forEach(function (k) {
-      k.textContent = k.textContent.replace("⌘", "Ctrl ");
-    });
-  });
-</script>
-<script>
-  document.addEventListener("htmx:sseMessage", function (e) {
-    var pre = e.target;
-    while (pre.childElementCount > 1000) pre.firstElementChild.remove();
-  });
-</script>
 </head>
 {{- end}}
 
@@ -130,7 +46,7 @@
 <div class="pane">
 {{template "notices" .}}
 <div id="flash" aria-live="polite"></div>
-<main id="main"{{if .Home}} data-home{{end}}>
+<main id="main"{{if .Home}} data-home data-desktop-target="{{.Target}}"{{end}}>
 <header class="topbar">
   <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
   <ol class="crumbs">
@@ -207,7 +123,7 @@
   </div>
   <div class="rail-slot" id="rail"><div id="rail-body" hx-get="/rail" hx-trigger="load" hx-swap="outerHTML"></div></div>
   <div class="sidebar-foot">
-    <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" onclick="var d=document.getElementById('key-sheet');if(!d.open)d.showModal()">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
+    <button type="button" class="sidebar-item shortcuts-button w-full border-0 bg-transparent text-left" data-key="?" data-show-modal="key-sheet">{{template "icon" "keys"}}<span>Shortcuts</span><kbd>?</kbd></button>
   </div>
   {{template "keySheet" .}}
 </aside>
