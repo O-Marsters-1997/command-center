@@ -15,7 +15,6 @@ import (
 // InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
 // land in a later RecordSpawn.
 func (s *Store) InsertRunSkeleton(ctx context.Context, r RunSkeleton) (int64, error) {
-	r.Session = RunSession{}
 	id, _, err := s.InsertSessionRunSkeleton(ctx, r)
 	if err != nil {
 		return 0, fmt.Errorf("insert run skeleton for %s: %w", r.Ticket, err)
@@ -29,7 +28,9 @@ type RunSession struct {
 	Message  string
 }
 
-func (s *Store) InsertSessionRunSkeleton(ctx context.Context, r RunSkeleton) (runID int64, sessionID string, err error) {
+func (s *Store) InsertSessionRunSkeleton(
+	ctx context.Context, r RunSkeleton,
+) (runID int64, sessionID string, err error) {
 	row, err := s.q.InsertRunSkeleton(ctx, ccdb.InsertRunSkeletonParams{
 		TicketID:    notNull(r.Ticket),
 		Kind:        string(r.Kind),

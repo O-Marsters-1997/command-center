@@ -60,7 +60,8 @@ func TestSessionRunsForTicketIsEmptyWhenTheLatestRunHasNoSession(t *testing.T) {
 	seedOneTicket(t, store)
 	const ticket = "sandbox://CC-1"
 
-	if _, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{Ticket: ticket, Kind: "agent", PromptHash: "hash"}); err != nil {
+	skeleton := storepkg.RunSkeleton{Ticket: ticket, Kind: "agent", PromptHash: "hash"}
+	if _, err := store.InsertRunSkeleton(ctx, skeleton); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.SessionRunsForTicket(ctx, ticket)

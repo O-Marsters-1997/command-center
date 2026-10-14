@@ -80,7 +80,8 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 	}
 	if feature != "" {
 		var intended []ticketBlockedBy
-		intended, err = featureTicketsWithOverride(ctx, qtx, feature, blockedByOverride{URL: ticketURL, BlockedBy: blockedBy})
+		override := blockedByOverride{URL: ticketURL, BlockedBy: blockedBy}
+		intended, err = featureTicketsWithOverride(ctx, qtx, feature, override)
 		if err != nil {
 			return fmt.Errorf("read feature tickets for %s: %w", ticketURL, err)
 		}

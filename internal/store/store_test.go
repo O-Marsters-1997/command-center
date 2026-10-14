@@ -193,7 +193,8 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
+	runID, err := store.InsertRunSkeleton(
+		ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

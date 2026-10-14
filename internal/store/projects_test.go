@@ -41,7 +41,8 @@ func TestCreateProjectReadsBackWithSortedRepos(t *testing.T) {
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web", "acme/api", "acme/loose")
 
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}); err != nil {
+	acme := storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}
+	if err := store.CreateProject(ctx, acme); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
@@ -65,7 +66,8 @@ func TestCreateProjectRefusesACaseOnlyDuplicate(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web", "acme/api")
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web"}, At: trackedAt}); err != nil {
+	acme := storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web"}, At: trackedAt}
+	if err := store.CreateProject(ctx, acme); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,11 +88,13 @@ func TestCreateProjectMovesARepoOutOfItsProject(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web", "acme/api")
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "old", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}); err != nil {
+	old := storepkg.NewProject{Name: "old", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}
+	if err := store.CreateProject(ctx, old); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "new", Hue: 3, Repos: []string{"acme/web"}, At: trackedAt}); err != nil {
+	replacement := storepkg.NewProject{Name: "new", Hue: 3, Repos: []string{"acme/web"}, At: trackedAt}
+	if err := store.CreateProject(ctx, replacement); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
@@ -129,7 +133,8 @@ func TestCreateProjectWithAnUnknownRepoCreatesNothing(t *testing.T) {
 	t.Parallel()
 	store := openStore(t)
 
-	err := store.CreateProject(t.Context(), storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/ghost"}, At: trackedAt})
+	ghost := storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/ghost"}, At: trackedAt}
+	err := store.CreateProject(t.Context(), ghost)
 
 	if !errors.Is(err, storepkg.ErrNotFound) {
 		t.Fatalf("CreateProject = %v, want ErrNotFound", err)
@@ -182,7 +187,8 @@ func TestEditProjectRenamesAndRehuesKeepingRepos(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web", "acme/api")
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}); err != nil {
+	acme := storepkg.NewProject{Name: "acme", Hue: 1, Repos: []string{"acme/web", "acme/api"}, At: trackedAt}
+	if err := store.CreateProject(ctx, acme); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,7 +241,8 @@ func TestDeleteProjectLeavesItsReposLoose(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	trackRepos(t, store, "acme/web")
-	if err := store.CreateProject(ctx, storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web"}, At: trackedAt}); err != nil {
+	acme := storepkg.NewProject{Name: "acme", Hue: 2, Repos: []string{"acme/web"}, At: trackedAt}
+	if err := store.CreateProject(ctx, acme); err != nil {
 		t.Fatal(err)
 	}
 

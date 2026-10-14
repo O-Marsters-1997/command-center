@@ -27,7 +27,8 @@ func dispositionAs(t *testing.T, store *storepkg.Store, ticketURL string, outcom
 	}
 	exitCode := 0
 	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
-		RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exitCode), Cost: option.None[float64](), EndedAt: at,
+		RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
 		t.Fatal(err)
 	}
