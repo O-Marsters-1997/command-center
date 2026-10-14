@@ -1,6 +1,9 @@
 package agentlog
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // RequestUsage is one transcript's token spend, split by pricing category and tagged with the
 // model and the time it happened, so Weight can price it and a caller can bucket it by interval.
@@ -48,7 +51,7 @@ func ParseTranscriptUsage(logPath string) ([]RequestUsage, error) {
 		}
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse transcript usage: %w", err)
 	}
 
 	if settled != nil {

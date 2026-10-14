@@ -58,7 +58,7 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 		}
 	})
 	if err != nil {
-		return RunMetrics{}, err
+		return RunMetrics{}, fmt.Errorf("parse run metrics: %w", err)
 	}
 
 	if decoded == 0 {
