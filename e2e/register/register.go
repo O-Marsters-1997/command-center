@@ -78,7 +78,7 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 		return fmt.Errorf("usage: cc import <feature>")
 	}
 
-	cfg, err := config.LoadConfig(configPath, env)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -114,7 +114,7 @@ func request(
 	}
 	method, path := rest[0], rest[1]
 
-	cfg, err := config.LoadConfig(configPath, env)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

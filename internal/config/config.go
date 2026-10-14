@@ -2,32 +2,22 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"slices"
-	"strconv"
-
-	"github.com/BurntSushi/toml"
 )
 
-// Config is the user-edited TOML file named by --config.
 type Config struct {
-	// DataDir holds the resolved data directory after LoadConfig, not the raw config key.
-	DataDir string `toml:"data_dir"`
-	// DatabaseURL holds the resolved connection string after LoadConfig, not the raw config key.
-	DatabaseURL string `toml:"database_url"`
-	// ClaudeProjectsDir holds the resolved directory after LoadConfig, not the raw config key.
-	ClaudeProjectsDir string   `toml:"claude_projects_dir"`
-	MaxAgents         int      `toml:"max_agents"`
-	Port              int      `toml:"port"`
-	AgentCommand      []string `toml:"agent_command"`
-	MaxTurns          int      `toml:"max_turns"`
+	DataDir           string
+	DatabaseURL       string
+	ClaudeProjectsDir string
+	MaxAgents         int
+	Port              int
+	AgentCommand      []string
+	MaxTurns          int
 	// SpendLimit5h is the percent of the account's five-hour window at or above which nothing new
 	// spawns; 0 means unset.
-	SpendLimit5h int `toml:"spend_limit_5h"`
-	// BoardPollSeconds is how often the board refreshes itself; absent, LoadConfig defaults it to 5.
-	BoardPollSeconds int `toml:"board_poll_seconds"`
+	SpendLimit5h     int
+	BoardPollSeconds int
 }
 
 const (
@@ -46,77 +36,16 @@ var defaultAgentCommand = []string{
 	"{session}",
 }
 
-// LoadConfig decodes the config file and resolves the data directory, database and agent command.
-func LoadConfig(path string, env Env) (Config, error) {
-	cfg := Config{
-		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: DefaultBoardPollSeconds,
-		AgentCommand: slices.Clone(defaultAgentCommand),
-	}
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
-		return Config{}, fmt.Errorf("read config %s: %w", path, err)
-	}
-
-	if cfg.BoardPollSeconds < 1 {
-		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
-	}
-
-	dataDir, err := ResolveDataDir(cfg.DataDir, env)
+func Load(path string, env Env) (Config, error) {
+	f, err := decodeFile(path)
 	if err != nil {
-		return Config{}, fmt.Errorf("resolve data dir: %w", err)
+		return Config{}, err
 	}
-	cfg.DataDir = dataDir
-	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL, env)
-	claudeProjectsDir, err := ResolveClaudeProjectsDir(cfg.ClaudeProjectsDir, env)
+	cfg, err := resolve(f, env)
 	if err != nil {
-		return Config{}, fmt.Errorf("resolve claude projects dir: %w", err)
-	}
-	cfg.ClaudeProjectsDir = claudeProjectsDir
-	if err := applyAgentCommandEnv(&cfg, env); err != nil {
-		return Config{}, fmt.Errorf("apply agent command env: %w", err)
-	}
-	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
-		return Config{}, fmt.Errorf("check agent command: %w", err)
-	}
-	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
-		cfg.AgentCommand = withMaxTurns(cfg.AgentCommand, cfg.MaxTurns)
+		return Config{}, fmt.Errorf("config %s: %w", path, err)
 	}
 	return cfg, nil
-}
-
-func withMaxTurns(argv []string, turns int) []string {
-	return append(slices.Clone(argv), "--max-turns", strconv.Itoa(turns))
-}
-
-const agentCommandEnv = "CC_AGENT_COMMAND"
-
-func applyAgentCommandEnv(cfg *Config, env Env) error {
-	raw := env.AgentCommand
-	if raw == "" {
-		return nil
-	}
-	var argv []string
-	if err := json.Unmarshal([]byte(raw), &argv); err != nil {
-		return fmt.Errorf("%s is not a JSON array of strings: %w", agentCommandEnv, err)
-	}
-	if len(argv) == 0 {
-		return fmt.Errorf("%s is an empty array", agentCommandEnv)
-	}
-	cfg.AgentCommand = argv
-	return nil
-}
-
-var requiredAgentCommandParts = []string{"--permission-mode", "{system_prompt}", "{model}"}
-
-func requireAgentCommandParts(argv []string) error {
-	if len(argv) == 0 {
-		return nil
-	}
-	for _, part := range requiredAgentCommandParts {
-		if !slices.Contains(argv, part) {
-			return fmt.Errorf("agent_command %q lacks %s, which every run needs", argv, part)
-		}
-	}
-	return nil
 }
 
 // CheckoutPath is where the app keeps the working copy of the repo named owner/name.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -114,11 +113,30 @@ func validatePredicate(p verdict.Predicate, root bool) error {
 }
 
 func lineOfKey(body string, key toml.Key) int {
-	pattern := regexp.MustCompile(`(^|[\s\[.])` + regexp.QuoteMeta(key[len(key)-1]) + `(\s*=|\s*\]|\.)`)
+	name := key[len(key)-1]
 	for i, line := range strings.Split(body, "\n") {
-		if pattern.MatchString(strings.TrimSpace(line)) {
+		if namesKey(strings.TrimSpace(line), name) {
 			return i + 1
 		}
 	}
 	return 0
+}
+
+func namesKey(line, name string) bool {
+	for offset := 0; ; {
+		at := strings.Index(line[offset:], name)
+		if at < 0 {
+			return false
+		}
+		start := offset + at
+		end := start + len(name)
+		offset = start + 1
+		if start > 0 && !strings.ContainsRune("[. \t", rune(line[start-1])) {
+			continue
+		}
+		rest := strings.TrimLeft(line[end:], " \t")
+		if strings.HasPrefix(rest, "=") || strings.HasPrefix(rest, "]") || strings.HasPrefix(line[end:], ".") {
+			return true
+		}
+	}
 }
