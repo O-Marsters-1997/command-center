@@ -46,7 +46,7 @@ func New(ctx context.Context, repoPath, branch, baseRef string) error {
 func Remove(ctx context.Context, repoPath, branch string, mode RemoveMode) error {
 	flag, err := mode.flag()
 	if err != nil {
-		return fmt.Errorf("tp remove %s: %w", branch, err)
+		return fmt.Errorf("resolve remove mode for %s: %w", branch, err)
 	}
 	if err := command.Run(ctx, repoPath, "tp", "remove", flag, branch); err != nil {
 		return fmt.Errorf("tp remove %s: %w", branch, err)

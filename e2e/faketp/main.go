@@ -224,8 +224,8 @@ func appendLine(path, line string) (err error) {
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
 
-	if _, err := fmt.Fprintln(f, line); err != nil {
-		return fmt.Errorf("append to %s: %w", path, err)
+	if _, writeErr := fmt.Fprintln(f, line); writeErr != nil {
+		return fmt.Errorf("append to %s: %w", path, writeErr)
 	}
 	return nil
 }
