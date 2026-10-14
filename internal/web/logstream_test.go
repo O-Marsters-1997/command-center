@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -36,11 +37,15 @@ func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, now, logPath); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: logPath,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return store, runID
@@ -79,7 +84,10 @@ func renderedToolLine(t *testing.T, text string) string {
 func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 	t.Helper()
 
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, nil, at, nil); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -332,10 +340,10 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	run := runs[logTicket]
-	if run.HasOutcome || run.EndedAt != nil {
-		t.Errorf("a disconnected reader disposed of the run: outcome=%v ended=%v", run.HasOutcome, run.EndedAt)
+	if run.Outcome.IsSome() || run.EndedAt.IsSome() {
+		t.Errorf("a disconnected reader disposed of the run: outcome=%v ended=%v", run.Outcome, run.EndedAt)
 	}
-	if run.Pgid == nil || *run.Pgid != 4242 {
+	if run.Pgid != option.Some(4242) {
 		t.Errorf("a disconnected reader changed the pgid: %v", run.Pgid)
 	}
 }

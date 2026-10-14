@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
@@ -37,7 +36,7 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	}
 	repos, err := s.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select repos: %w", err)
 	}
 	projects := make([]Project, 0, len(rows))
 	index := make(map[string]int, len(rows))
@@ -53,21 +52,22 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	return projects, nil
 }
 
-func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos []string, at time.Time) error {
-	if !ProjectNamePattern.MatchString(name) || hue < MinHue || hue > MaxHue {
-		return fmt.Errorf("create project %q with hue %d: %w", name, hue, ErrInvalidProject)
+func (s *Store) CreateProject(ctx context.Context, p NewProject) error {
+	name := p.Name
+	if !ProjectNamePattern.MatchString(name) || p.Hue < MinHue || p.Hue > MaxHue {
+		return fmt.Errorf("create project %q with hue %d: %w", name, p.Hue, ErrInvalidProject)
 	}
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
-		id, err := q.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(hue), CreatedAt: at.UTC()})
+		id, err := q.CreateProject(ctx, ccdb.CreateProjectParams{Name: name, Hue: int16(p.Hue), CreatedAt: p.At.UTC()})
 		if isUniqueViolation(err, "projects_name_key") {
 			return fmt.Errorf("create project %q: %w", name, ErrProjectExists)
 		}
 		if err != nil {
 			return fmt.Errorf("create project %q: %w", name, err)
 		}
-		for _, repo := range repos {
+		for _, repo := range p.Repos {
 			if err := setRepoProjectID(ctx, q, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
-				return err
+				return fmt.Errorf("assign repo %s to project %q: %w", repo, name, err)
 			}
 		}
 		return nil
@@ -86,7 +86,10 @@ func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error 
 		}
 		id = sql.NullInt64{Int64: projectID, Valid: true}
 	}
-	return setRepoProjectID(ctx, s.q, repo, id)
+	if err := setRepoProjectID(ctx, s.q, repo, id); err != nil {
+		return fmt.Errorf("set project of repo %s: %w", repo, err)
+	}
+	return nil
 }
 
 func setRepoProjectID(ctx context.Context, q *ccdb.Queries, repo string, id sql.NullInt64) error {

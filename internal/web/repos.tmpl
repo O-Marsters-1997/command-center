@@ -90,11 +90,9 @@
 {{- end}}
 
 {{define "importRefusal" -}}
-{{with .}}
 <p class="banner ribbon mb-2" data-glyph="failed" role="status">
   import of {{.Feature}} refused {{.Age}}. {{.Message}}
 </p>
-{{end}}
 {{- end}}
 
 {{template "shellStart" .}}
@@ -104,7 +102,7 @@
 <div class="page-narrow">
 <h1>Repos</h1>
 <p class="page-purpose">Agents only launch in repos that pass four checks: clone, squash-only merges, a main default branch and a valid settings file.</p>
-{{template "importRefusal" .LastImportError}}
+{{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
 <input type="search" name="q" placeholder="Track a repo: search owner/name" autocomplete="off" aria-label="search repos"
   class="block w-full"
   hx-get="/repos/search" hx-trigger="input changed delay:300ms" hx-target="#repo-results" hx-swap="innerHTML">

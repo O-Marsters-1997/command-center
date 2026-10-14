@@ -21,6 +21,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -138,9 +139,9 @@ type Sim struct {
 }
 
 func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err error) {
-	sb, err := NewSandbox(sc.Repos)
+	sb, err := NewSandbox(ctx, sc.Repos)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create sandbox: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -150,7 +151,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 
 	issues, err := buildIssues(sc, sb)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build issues: %w", err)
 	}
 	clock := NewSimClock(simStart)
 	forge := NewForge(clock, sb, issues)
@@ -159,11 +160,11 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 
 	ws, err := workspaceIn(sb)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create workspace: %w", err)
 	}
 	st, err := store.OpenStore(ctx, sb.DSN)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -175,25 +176,29 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	for _, repo := range sb.Repos(clock.Now()) {
 		checkout := config.CheckoutPath(cfg.DataDir, repo.Name)
 		if err := ccgit.EnsureCheckout(ctx, repo.Name, repo.Remote, checkout); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ensure checkout of %s: %w", repo.Name, err)
 		}
 		for _, kv := range [][2]string{{"user.name", authorName}, {"user.email", authorEmail}} {
-			if _, err := git(checkout, "config", kv[0], kv[1]); err != nil {
-				return nil, err
+			if _, err := git(ctx, checkout, "config", kv[0], kv[1]); err != nil {
+				return nil, fmt.Errorf("set %s in %s: %w", kv[0], repo.Name, err)
 			}
 		}
 		if err := st.UpsertRepo(ctx, repo); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("track repo %s: %w", repo.Name, err)
 		}
 	}
 
-	lp := loop.NewLoop(logger, st, loop.NewObserver(st, forge, cfg), clock, cfg, ws, agent)
-	lp.SetForge(forge)
-	lp.SetWorktrees(Worktrees{})
-	lp.SetTrackerSource(resolve)
-	server := web.NewServer(logger, st, clock, ws.DataDir)
-	server.SetTrackerSource(resolve)
-	server.SetBoardPollSeconds(1)
+	lp := loop.New(
+		loop.Deps{
+			Logger: logger, Store: st, Clock: clock, Runner: agent, Observe: loop.NewObserver(st, forge, cfg),
+			Config: cfg, Workspace: ws,
+		},
+		loop.WithForge(forge), loop.WithWorktrees(Worktrees{}), loop.WithTrackerSource(resolve),
+	)
+	server := web.NewServer(
+		web.Deps{Logger: logger, Store: st, Clock: clock, DataDir: ws.DataDir},
+		web.WithTrackerSource(resolve), web.WithBoardPollSeconds(1),
+	)
 
 	s := &Sim{
 		scenario: sc, clock: clock, sandbox: sb, forge: forge, agent: agent, store: st,
@@ -201,8 +206,8 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 		authorised: map[string]bool{}, board: map[string]string{},
 	}
 	for _, feature := range features(issues) {
-		if err := st.QueueVerbIntent(ctx, feature, store.ImportVerb, clock.Now()); err != nil {
-			return nil, err
+		if err := st.QueueVerbIntent(ctx, feature, plan.VerbImport, clock.Now()); err != nil {
+			return nil, fmt.Errorf("queue import of %s: %w", feature, err)
 		}
 	}
 	return s, nil
@@ -228,39 +233,42 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 		SystemPromptPath: filepath.Join(state, "system-prompt.md"),
 	}
 	if err := os.MkdirAll(ws.RunsDir, 0o750); err != nil {
-		return ws, err
+		return ws, fmt.Errorf("create runs dir: %w", err)
 	}
 	if err := os.MkdirAll(state, 0o750); err != nil {
-		return ws, err
+		return ws, fmt.Errorf("create state dir: %w", err)
 	}
-	return ws, loop.WriteAgentFiles(ws)
+	if err := loop.WriteAgentFiles(ws); err != nil {
+		return ws, fmt.Errorf("write agent files: %w", err)
+	}
+	return ws, nil
 }
 
 // Tick plays one loop tick: the world moves, the loop runs, then the sim reads every board state
 // and presses launch for tickets that reached ready.
 func (s *Sim) Tick(ctx context.Context) error {
-	if err := s.landMain(); err != nil {
-		return err
+	if err := s.landMain(ctx); err != nil {
+		return fmt.Errorf("land main: %w", err)
 	}
-	if err := s.forge.Advance(); err != nil {
-		return err
+	if err := s.forge.Advance(ctx); err != nil {
+		return fmt.Errorf("advance forge: %w", err)
 	}
-	if err := s.agent.Step(); err != nil {
-		return err
+	if err := s.agent.Step(ctx); err != nil {
+		return fmt.Errorf("step agent: %w", err)
 	}
 	if err := s.loop.RunOnce(ctx); err != nil {
-		return err
+		return fmt.Errorf("run loop once: %w", err)
 	}
 	states, err := s.states()
 	if err != nil {
-		return err
+		return fmt.Errorf("read board states: %w", err)
 	}
 	s.board = states
 	if err := s.resolveConflicts(ctx, states); err != nil {
-		return err
+		return fmt.Errorf("resolve conflicts: %w", err)
 	}
 	if err := s.launchReady(states); err != nil {
-		return err
+		return fmt.Errorf("launch ready tickets: %w", err)
 	}
 	s.clock.Advance(store.TickPeriod)
 	return nil
@@ -271,7 +279,7 @@ func (s *Sim) Tick(ctx context.Context) error {
 func Serve(ctx context.Context, logger *slog.Logger, sc Scenario, speed float64, addr string) error {
 	sim, err := NewSim(ctx, logger, sc)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sim: %w", err)
 	}
 	defer func() {
 		if err := sim.Close(); err != nil {
@@ -308,7 +316,7 @@ func (s *Sim) run(ctx context.Context, speed float64) error {
 	wait := time.Duration(float64(store.TickPeriod) / speed)
 	for ctx.Err() == nil {
 		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
-			return err
+			return fmt.Errorf("tick: %w", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -350,20 +358,20 @@ func (s *Sim) resolveConflicts(ctx context.Context, states map[string]string) er
 		checkout := config.CheckoutPath(s.sandbox.root, i.Repo)
 		worktrees, err := ccgit.WorktreePaths(ctx, checkout)
 		if err != nil {
-			return err
+			return fmt.Errorf("list worktrees of %s: %w", i.Repo, err)
 		}
 		dir, ok := worktrees[i.branch]
 		if !ok {
 			return fmt.Errorf("no worktree for conflicted branch %s", i.branch)
 		}
-		if _, err := git(dir, "checkout", "--ours", "--", "."); err != nil {
-			return err
+		if _, err := git(ctx, dir, "checkout", "--ours", "--", "."); err != nil {
+			return fmt.Errorf("take ours for %s: %w", i.branch, err)
 		}
-		if _, err := git(dir, "add", "-A"); err != nil {
-			return err
+		if _, err := git(ctx, dir, "add", "-A"); err != nil {
+			return fmt.Errorf("stage resolution for %s: %w", i.branch, err)
 		}
-		if _, err := git(dir, "commit", "-q", "--no-edit"); err != nil {
-			return err
+		if _, err := git(ctx, dir, "commit", "-q", "--no-edit"); err != nil {
+			return fmt.Errorf("commit resolution for %s: %w", i.branch, err)
 		}
 	}
 	return nil
@@ -391,15 +399,15 @@ func (s *Sim) launchReady(states map[string]string) error {
 	return nil
 }
 
-func (s *Sim) landMain() error {
+func (s *Sim) landMain(ctx context.Context) error {
 	elapsed := s.clock.Now().Sub(simStart)
 	for ; s.landed < len(s.scenario.Main); s.landed++ {
 		m := s.scenario.Main[s.landed]
 		if m.At > elapsed {
 			return nil
 		}
-		if err := s.sandbox.LandOnMain(m.Repo, m.Files); err != nil {
-			return err
+		if err := s.sandbox.LandOnMain(ctx, m.Repo, m.Files); err != nil {
+			return fmt.Errorf("land on main of %s: %w", m.Repo, err)
 		}
 	}
 	return nil

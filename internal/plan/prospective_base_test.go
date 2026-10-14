@@ -11,7 +11,7 @@ func TestProspectiveBase(t *testing.T) {
 
 	blocker := plan.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	crossRepoBlocker := plan.Ticket{URL: "sandbox://PLA-9", Repo: "other-repo", Branch: "pla-9"}
-	byURL := map[string]plan.Ticket{blocker.URL: blocker, crossRepoBlocker.URL: crossRepoBlocker}
+	byURL := map[plan.TicketURL]plan.Ticket{blocker.URL: blocker, crossRepoBlocker.URL: crossRepoBlocker}
 
 	tests := []struct {
 		name     string
@@ -28,7 +28,7 @@ func TestProspectiveBase(t *testing.T) {
 		{
 			name: "one same-repo blocker with stacking on bases on the blocker's branch",
 			ticket: plan.Ticket{
-				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []string{"sandbox://CC-1"},
+				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []plan.TicketURL{"sandbox://CC-1"},
 			},
 			stacking: true,
 			want:     "cc-1-first",
@@ -36,7 +36,7 @@ func TestProspectiveBase(t *testing.T) {
 		{
 			name: "one same-repo blocker with stacking off bases on main",
 			ticket: plan.Ticket{
-				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []string{"sandbox://CC-1"},
+				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []plan.TicketURL{"sandbox://CC-1"},
 			},
 			stacking: false,
 			want:     "main",
@@ -44,7 +44,7 @@ func TestProspectiveBase(t *testing.T) {
 		{
 			name: "a cross-repo blocker never becomes the base",
 			ticket: plan.Ticket{
-				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []string{"sandbox://PLA-9"},
+				URL: "sandbox://CC-2", Repo: "cc-sandbox", BlockedBy: []plan.TicketURL{"sandbox://PLA-9"},
 			},
 			stacking: true,
 			want:     "main",

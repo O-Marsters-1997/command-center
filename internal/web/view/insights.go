@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 const insightsDefaultRangeDays = 30
@@ -63,12 +64,7 @@ func insightsTimezone(loc *time.Location) string {
 	return "UTC"
 }
 
-// systemTimezoneName resolves the OS's configured zone to an IANA name: TZ overrides time.Local,
-// else /etc/localtime is a symlink into the zoneinfo tree.
 func systemTimezoneName() string {
-	if tz := os.Getenv("TZ"); tz != "" {
-		return tz
-	}
 	target, err := os.Readlink("/etc/localtime")
 	if err != nil {
 		return ""
@@ -187,12 +183,12 @@ func buildSpendSplit(points []insightsPointJSON) SpendSplit {
 func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) (InsightsPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(q))
 	if err != nil {
-		return InsightsPage{}, err
+		return InsightsPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.Section = "insights"
 	resp, err := r.Insights(ctx, now, q)
 	if err != nil {
-		return InsightsPage{}, err
+		return InsightsPage{}, fmt.Errorf("load insights: %w", err)
 	}
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
@@ -207,19 +203,25 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 	tz := insightsTimezone(now.Location())
 	until := civilDate(now)
 	since := parseSinceOrDefault(q.Get("since"), until)
-	repo, feature := q.Get("repo"), q.Get("feature")
-
-	merged, err := r.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
+	loc, err := time.LoadLocation(tz)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load timezone %s: %w", tz, err)
 	}
-	wasteUSD, err := r.store.WithdrawnTicketWaste(ctx, repo, feature, tz, since, until)
+	spendQuery := store.SpendQuery{
+		Repo: q.Get("repo"), Feature: q.Get("feature"), Loc: loc, Since: since, Until: until,
+	}
+
+	merged, err := r.store.MergedTicketSpend(ctx, spendQuery)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load merged ticket spend: %w", err)
+	}
+	wasteUSD, err := r.store.WithdrawnTicketWaste(ctx, spendQuery)
+	if err != nil {
+		return InsightsResponse{}, fmt.Errorf("load withdrawn ticket waste: %w", err)
 	}
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load fit factors: %w", err)
 	}
 	factor := fits[agentlog.SevenDay].Factor
 

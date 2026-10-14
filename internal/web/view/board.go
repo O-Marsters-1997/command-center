@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -24,44 +25,44 @@ type Row struct {
 	ProjectHue int    `json:"project_hue"`
 	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
 	// `gh issue list`'s own 100-row limit.
-	Title           string   `json:"title"`
-	State           string   `json:"state"`
-	Reason          string   `json:"reason"`
-	Question        string   `json:"question"`
-	Glyph           string   `json:"glyph"`
-	Unattended      bool     `json:"unattended"`
-	Alive           bool     `json:"alive"`
-	Verbs           []string `json:"verbs"`
-	Branch          string   `json:"branch"`
-	BlockedBy       []string `json:"blocked_by"`
-	PendingVerbs    []string `json:"pending_verbs"`
-	Base            string   `json:"base"`
-	BaseVerdict     string   `json:"base_verdict"`
-	StackDepth      int      `json:"stack_depth"`
-	MergeOrder      int      `json:"merge_order"`
-	Warning         string   `json:"warning"`
-	Blocking        []string `json:"blocking"`
-	After           []string `json:"after"`
-	Unlocks         []string `json:"unlocks"`
-	Worktree        string   `json:"worktree"`
-	PRNumber        int      `json:"pr_number"`
-	PRState         string   `json:"pr_state"`
-	Pgid            string   `json:"pgid"`
-	Elapsed         string   `json:"elapsed"`
-	ElapsedSeconds  int      `json:"elapsed_seconds"`
-	ElapsedPercent  int      `json:"elapsed_percent"`
-	LogPath         string   `json:"log_path"`
-	CancelCount     int      `json:"cancel_count"`
-	SpendTokens     int      `json:"spend_tokens"`
-	BaselineSHA     string   `json:"baseline_sha"`
-	Checks          []Check  `json:"checks"`
-	RedChecks       []Check  `json:"red_checks"`
-	Draft           bool     `json:"draft"`
-	DraftReason     string   `json:"draft_reason"`
-	AgentPctWeek    float64  `json:"agent_pct_week"`
-	FollowUpPctWeek float64  `json:"follow_up_pct_week"`
-	SpendPctWeek    float64  `json:"spend_pct_week"`
-	TicketOpen      bool     `json:"ticket_open"`
+	Title           string         `json:"title"`
+	State           string         `json:"state"`
+	Reason          string         `json:"reason"`
+	Question        string         `json:"question"`
+	Glyph           plan.GlyphWord `json:"glyph"`
+	Unattended      bool           `json:"unattended"`
+	Alive           bool           `json:"alive"`
+	Verbs           []plan.Verb    `json:"verbs"`
+	Branch          string         `json:"branch"`
+	BlockedBy       []string       `json:"blocked_by"`
+	PendingVerbs    []plan.Verb    `json:"pending_verbs"`
+	Base            string         `json:"base"`
+	BaseVerdict     string         `json:"base_verdict"`
+	StackDepth      int            `json:"stack_depth"`
+	MergeOrder      int            `json:"merge_order"`
+	Warning         string         `json:"warning"`
+	Blocking        []string       `json:"blocking"`
+	After           []string       `json:"after"`
+	Unlocks         []string       `json:"unlocks"`
+	Worktree        string         `json:"worktree"`
+	PRNumber        int            `json:"pr_number"`
+	PRState         string         `json:"pr_state"`
+	Pgid            string         `json:"pgid"`
+	Elapsed         string         `json:"elapsed"`
+	ElapsedSeconds  int            `json:"elapsed_seconds"`
+	ElapsedPercent  int            `json:"elapsed_percent"`
+	LogPath         string         `json:"log_path"`
+	CancelCount     int            `json:"cancel_count"`
+	SpendTokens     int            `json:"spend_tokens"`
+	BaselineSHA     string         `json:"baseline_sha"`
+	Checks          []Check        `json:"checks"`
+	RedChecks       []Check        `json:"red_checks"`
+	Draft           bool           `json:"draft"`
+	DraftReason     string         `json:"draft_reason"`
+	AgentPctWeek    float64        `json:"agent_pct_week"`
+	FollowUpPctWeek float64        `json:"follow_up_pct_week"`
+	SpendPctWeek    float64        `json:"spend_pct_week"`
+	TicketOpen      bool           `json:"ticket_open"`
 
 	Checked     bool      `json:"checked"`
 	SessionPath string    `json:"session_path"`
@@ -113,8 +114,8 @@ func (r Row) DetailID() string {
 // Group is one blocker and the rows waiting on it. A row with no blocker is its own group with a
 // nil Root.
 type Group struct {
-	Root     *Row  `json:"root"`
-	Children []Row `json:"children"`
+	Root     option.Option[Row] `json:"root"`
+	Children []Row              `json:"children"`
 }
 
 func applyViewState(rows []Row, params Params, records []store.Event, render LineRenderer) error {
@@ -126,7 +127,8 @@ func applyViewState(rows []Row, params Params, records []store.Event, render Lin
 		r.TogglePath, r.TogglePush = toggledTicket.boardPath(), toggledTicket.pagePath()
 		r.VerbPath = params.verbPath()
 		if params.Sel == r.URL {
-			log, err := buildLogDetail(render, r.LogPath, r.Alive, r.URL, records, params)
+			src := logSource{Path: r.LogPath, Streaming: r.Alive, TicketURL: r.URL, Records: records}
+			log, err := buildLogDetail(render, src, params)
 			if err != nil {
 				return fmt.Errorf("build log for %s: %w", r.URL, err)
 			}
@@ -141,18 +143,19 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 	verdictLabelByBranch := make(map[string]string, len(tickets))
 	baseByBranch := make(map[string]string, len(tickets))
 	for _, t := range tickets {
-		e, ok := snap.Entry(t.URL)
+		url := plan.TicketURL(t.URL)
+		e, ok := snap.Entry(url)
 		if !ok {
 			continue
 		}
-		membership := in.Memberships[t.URL]
-		latestRun := in.Runs[t.URL]
+		membership := in.Memberships[url]
+		latestRun := in.Runs[url]
 		verdictLabelByBranch[t.Branch] = runVerdictLabel(e.Run)
 		baseByBranch[t.Branch] = e.Unlock.BaseBranch
-		pr := in.Obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
+		pr := in.Obs.PRs[t.Ref()]
 		var redLeaves []string
-		if e.Run != nil && e.Run.Verdict != nil {
-			redLeaves = e.Run.Verdict.RedLeaves
+		if e.Run.IsSome() && e.Run.Unwrap().Verdict.IsSome() {
+			redLeaves = e.Run.Unwrap().Verdict.Unwrap().RedLeaves
 		}
 		question := ""
 		if e.State == plan.AwaitingInput {
@@ -160,12 +163,12 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 		}
 		var pgid, elapsed string
 		var elapsedSeconds int
-		if e.Pgid != nil {
-			pgid = strconv.Itoa(*e.Pgid)
+		if e.Pgid.IsSome() {
+			pgid = strconv.Itoa(e.Pgid.Unwrap())
 		}
-		if e.Elapsed != nil {
-			elapsed = e.Elapsed.String()
-			elapsedSeconds = int(e.Elapsed.Seconds())
+		if e.Elapsed.IsSome() {
+			elapsed = e.Elapsed.Unwrap().String()
+			elapsedSeconds = int(e.Elapsed.Unwrap().Seconds())
 		}
 		rows = append(rows, Row{
 			URL:            t.URL,
@@ -173,19 +176,19 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			Feature:        t.Feature,
 			Project:        projects[t.Repo].Name,
 			ProjectHue:     projects[t.Repo].Hue,
-			Title:          in.Obs.Titles[t.URL],
+			Title:          in.Obs.Titles[url],
 			State:          e.State.String(),
 			Reason:         string(e.Reason),
 			Question:       question,
-			Glyph:          plan.Glyph(e.State),
+			Glyph:          e.State.Glyph(),
 			Unattended:     e.State.Unattended(),
-			Alive:          in.Obs.Runs[t.URL].Alive,
+			Alive:          in.Obs.Runs[url].Alive,
 			Verbs:          plan.Verbs(e.State),
-			PendingVerbs:   in.PendingVerbs[t.URL],
+			PendingVerbs:   in.PendingVerbs[url],
 			Branch:         t.Branch,
 			BlockedBy:      t.BlockedBy,
 			Base:           e.Unlock.BaseBranch,
-			Worktree:       in.Obs.Worktrees[plan.BranchKey(t.Repo, t.Branch)],
+			Worktree:       in.Obs.Worktrees[t.Ref()],
 			PRNumber:       pr.Number,
 			PRState:        pr.State.String(),
 			Pgid:           pgid,
@@ -193,11 +196,11 @@ func deriveRows(tickets []store.Ticket, in plan.Input, snap plan.Snapshot, proje
 			ElapsedSeconds: elapsedSeconds,
 			LogPath:        e.LogPath,
 			CancelCount:    membership.Members,
-			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[t.URL])),
-			BaselineSHA:    latestRun.BaselineSHA,
+			Warning:        cmp.Or(readyToMergeWarning(pr), removalWarning(e.State, in.Removals[url])),
+			BaselineSHA:    string(latestRun.BaselineSHA),
 			Checks:         sortedChecks(pr.Checks),
 			RedChecks:      redChecksFor(redLeaves, pr.Checks),
-			Blocking:       e.Unlock.Blocking,
+			Blocking:       urlStrings(e.Unlock.Blocking),
 			Draft:          pr.IsDraft,
 			DraftReason:    e.DraftReason,
 		})
@@ -252,6 +255,14 @@ func redChecksFor(redLeaves []string, checks map[string]plan.CheckState) []Check
 	return out
 }
 
+func urlStrings(urls []plan.TicketURL) []string {
+	out := make([]string, len(urls))
+	for i, u := range urls {
+		out[i] = string(u)
+	}
+	return out
+}
+
 func groupRows(rows []Row) []Group {
 	byURL := make(map[string]Row, len(rows))
 	childrenByRoot := make(map[string][]Row, len(rows))
@@ -288,7 +299,7 @@ func groupRows(rows []Row) []Group {
 			return cmp.Compare(a.URL, b.URL)
 		})
 		rootRow := byURL[root]
-		groups = append(groups, Group{Root: &rootRow, Children: children})
+		groups = append(groups, Group{Root: option.Some(rootRow), Children: children})
 	}
 
 	var ungrouped []Row
@@ -332,7 +343,7 @@ func filterGroupsByRepo(groups []Group, repo string) []Group {
 func filterGroupsByProject(groups []Group, repos []string) []Group {
 	inProject := func(r Row) bool { return slices.Contains(repos, r.Repo) }
 	return slices.DeleteFunc(slices.Clone(groups), func(g Group) bool {
-		return (g.Root == nil || !inProject(*g.Root)) && !slices.ContainsFunc(g.Children, inProject)
+		return (g.Root.IsNone() || !inProject(g.Root.Unwrap())) && !slices.ContainsFunc(g.Children, inProject)
 	})
 }
 
@@ -354,7 +365,7 @@ func filterGroups(groups []Group, scope string, scopeOf func(Row) string) []Grou
 }
 
 func groupInScope(g Group, scope string, scopeOf func(Row) string) bool {
-	if g.Root != nil && scopeOf(*g.Root) == scope {
+	if g.Root.IsSome() && scopeOf(g.Root.Unwrap()) == scope {
 		return true
 	}
 	return slices.ContainsFunc(g.Children, func(c Row) bool { return scopeOf(c) == scope })
@@ -363,8 +374,8 @@ func groupInScope(g Group, scope string, scopeOf func(Row) string) bool {
 func rowsIn(groups []Group) []Row {
 	rows := make([]Row, 0, len(groups))
 	for _, g := range groups {
-		if g.Root != nil {
-			rows = append(rows, *g.Root)
+		if g.Root.IsSome() {
+			rows = append(rows, g.Root.Unwrap())
 		}
 		rows = append(rows, g.Children...)
 	}
@@ -396,9 +407,9 @@ func removalWarning(s plan.State, detail string) string {
 	return "worktree removal refused: " + detail
 }
 
-func runVerdictLabel(run *plan.RunFact) string {
-	if run == nil {
+func runVerdictLabel(run option.Option[plan.RunFact]) string {
+	if run.IsNone() || run.Unwrap().Verdict.IsNone() {
 		return ""
 	}
-	return run.Verdict.Label()
+	return run.Unwrap().Verdict.Unwrap().Kind.String()
 }

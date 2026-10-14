@@ -29,25 +29,29 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	at := testNow
-	prs := map[string]plan.PR{}
+	prs := map[plan.BranchRef]plan.PR{}
 	dispositionAsPushed(t, store, "sandbox://ROOT", at)
-	if err := store.RecordPush(ctx, "sandbox://ROOT", "root-tip", "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://ROOT", Tip: "root-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	prs[plan.BranchKey("repo", "root")] = plan.PR{Number: 1, State: plan.Open, HeadOid: "root-tip"}
+	prs[branchRef("repo", "root")] = plan.PR{Number: 1, State: plan.Open, HeadOid: "root-tip"}
 
 	for _, c := range children {
 		branch := strings.ToLower(c)
 		ticket := "sandbox://" + c
 		dispositionAsPushed(t, store, ticket, at)
-		if err := store.RecordPush(ctx, ticket, branch+"-tip", "root", "root-tip", at); err != nil {
+		if err := store.RecordPush(ctx, storepkg.Push{
+			Ticket: plan.TicketURL(ticket), Tip: plan.SHA(branch + "-tip"), BaseBranch: "root", BaseSHA: "root-tip", At: at,
+		}); err != nil {
 			t.Fatal(err)
 		}
-		prs[plan.BranchKey("repo", branch)] = plan.PR{Number: 2, State: plan.Open, HeadOid: branch + "-tip"}
+		prs[branchRef("repo", branch)] = plan.PR{Number: 2, State: plan.Open, HeadOid: plan.SHA(branch + "-tip")}
 	}
 
 	if err := store.SaveObservation(ctx, plan.Observation{
-		BranchTips: map[string]string{plan.BranchKey("repo", "root"): "root-tip"},
+		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "root"): "root-tip"},
 		PRs:        prs,
 		Settings:   map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}); err != nil {
@@ -85,20 +89,24 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	dispositionAsPushed(t, store, "sandbox://CHILD", at)
-	if err := store.RecordPush(ctx, "sandbox://PARENT", "parent-tip", "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://PARENT", Tip: "parent-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, "sandbox://CHILD", "child-tip", "parent", "parent-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: "sandbox://CHILD", Tip: "child-tip", BaseBranch: "parent", BaseSHA: "parent-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	obs := plan.Observation{
-		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): "parent-tip"},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "parent"): {
+		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "parent"): "parent-tip"},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "parent"): {
 				Number: 1, State: plan.Open, HeadOid: "parent-tip", BaseRef: "main", Labels: []string{"ready-to-merge"},
 			},
-			plan.BranchKey("repo", "child"): {
+			branchRef("repo", "child"): {
 				Number: 2, State: plan.Open, HeadOid: "child-tip", BaseRef: "parent", Labels: []string{"ready-to-merge"},
 			},
 		},
@@ -133,7 +141,9 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 
 	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
-	if err := store.RecordPush(ctx, ticket.URL, "merged-tip", "main", "main-tip", at); err != nil {
+	if err := store.RecordPush(ctx, storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: "merged-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AppendEvent(ctx, storepkg.Event{
@@ -143,7 +153,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		PRs: map[string]plan.PR{plan.BranchKey("repo", "merged"): {Number: 1, State: plan.Merged, HeadOid: "merged-tip"}},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("repo", "merged"): {Number: 1, State: plan.Merged, HeadOid: "merged-tip"}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

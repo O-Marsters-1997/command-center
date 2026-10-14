@@ -1,4 +1,4 @@
-# cc-config prepends `port = 0`, so this file must not set it.
+# cc-config sets a free `port`, so this file must not set it.
 # {{agents}} is substituted by cc-config with the repo's testdata/agents directory.
 #
 # One root plus four dependents, stacking on and max_agents comfortably above the surplus, so

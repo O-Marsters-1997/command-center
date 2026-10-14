@@ -19,28 +19,29 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
-func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string) error {
+func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
 	if len(args) == 0 {
 		return nil
 	}
 	rest := args[1:]
 	switch args[0] {
 	case "tick":
-		return func(ctx context.Context, logger *slog.Logger, configPath string) error {
-			return tick(ctx, logger, configPath, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return tick(ctx, logger, configPath, env, rest)
 		}
 	case "request":
-		return func(ctx context.Context, logger *slog.Logger, configPath string) error {
-			return request(ctx, logger, configPath, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return request(ctx, logger, configPath, env, rest)
 		}
 	case "import":
-		return func(ctx context.Context, _ *slog.Logger, configPath string) error {
-			return importFeature(ctx, configPath, rest)
+		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
+			return importFeature(ctx, configPath, env, rest)
 		}
 	default:
 		return nil
@@ -49,58 +50,63 @@ func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, config
 
 // tick takes the flock and runs the loop exactly --count times with no sleeping, so a script
 // asserts against a known number of ticks rather than against the wall clock.
-func tick(ctx context.Context, logger *slog.Logger, configPath string, args []string) (err error) {
+func tick(ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string) (err error) {
 	flags := flag.NewFlagSet("tick", flag.ContinueOnError)
 	count := flags.Int("count", 1, "number of ticks to run")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("parse tick flags: %w", err)
 	}
 
 	instance, err := app.New(
-		ctx, logger, configPath, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
+		ctx, logger, configPath, env, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("start app: %w", err)
 	}
 	defer func() { err = errors.Join(err, instance.Close()) }()
 
 	for range *count {
 		if err := instance.RunOnce(ctx); err != nil {
-			return err
+			return fmt.Errorf("run tick: %w", err)
 		}
 	}
 	return nil
 }
 
-func importFeature(ctx context.Context, configPath string, args []string) (err error) {
+func importFeature(ctx context.Context, configPath string, env config.Env, args []string) (err error) {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: cc import <feature>")
 	}
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
-		return err
+		return fmt.Errorf("load config: %w", err)
 	}
 	st, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	return st.QueueVerbIntent(ctx, args[0], store.ImportVerb, time.Now())
+	if err := st.QueueVerbIntent(ctx, args[0], plan.VerbImport, time.Now()); err != nil {
+		return fmt.Errorf("queue import for %s: %w", args[0], err)
+	}
+	return nil
 }
 
 // request prints the page a real HTTP client gets back from the real handler. It deliberately
 // does not take the flock: a script reads while `cc tick` or a daemon holds it. POST /launch's
 // write is one blind INSERT the server serialises; a future verb doing more would revisit inv. 9.
-func request(ctx context.Context, logger *slog.Logger, configPath string, args []string) (err error) {
+func request(
+	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string,
+) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
 	// -form is how a script drives a route the way the page's own forms do, with the fields in
 	// the body: a path-only `cc request POST /verb` cannot express that.
 	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("parse request flags: %w", err)
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
@@ -108,22 +114,24 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	}
 	method, path := rest[0], rest[1]
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
-		return err
+		return fmt.Errorf("load config: %w", err)
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve workspace: %w", err)
 	}
 	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(web.NewServer(logger, store, loop.RealClock{}, ws.DataDir))
+	server := httptest.NewServer(web.NewServer(web.Deps{
+		Logger: logger, Store: store, Clock: loop.RealClock{}, DataDir: ws.DataDir,
+	}))
 	defer server.Close()
 
 	var body io.Reader
@@ -132,7 +140,7 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	}
 	req, err := http.NewRequestWithContext(ctx, method, server.URL+path, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("build %s %s request: %w", method, path, err)
 	}
 	if *form != "" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -149,12 +157,12 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("send %s %s: %w", method, path, err)
 	}
 	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 
 	if _, err := io.Copy(os.Stdout, resp.Body); err != nil {
-		return err
+		return fmt.Errorf("print %s %s response: %w", method, path, err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("%s %s: %s", method, path, resp.Status)

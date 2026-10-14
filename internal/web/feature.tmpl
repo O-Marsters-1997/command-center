@@ -9,5 +9,5 @@
 </nav>
 {{template "featureHead" .}}
 {{template "boardForm" .}}
-<div id="launch-modal">{{with .Launch}}{{template "launchDialog" .}}{{end}}</div>
+<div id="launch-modal">{{if .Launch.IsSome}}{{template "launchDialog" .Launch.Unwrap}}{{end}}</div>
 {{template "shellEnd" .}}

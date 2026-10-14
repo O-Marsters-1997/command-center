@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"time"
 
@@ -45,11 +46,11 @@ type candidateInputs struct {
 func (r *Reader) loadCandidateInputs(ctx context.Context, now time.Time) (candidateInputs, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return candidateInputs{}, err
+		return candidateInputs{}, fmt.Errorf("load tickets: %w", err)
 	}
 	snap, err := r.Snapshot(ctx, now)
 	if err != nil {
-		return candidateInputs{}, err
+		return candidateInputs{}, fmt.Errorf("load snapshot: %w", err)
 	}
 	return candidateInputs{tickets: tickets, snap: snap}, nil
 }
@@ -60,7 +61,7 @@ func (r *Reader) loadCandidateInputs(ctx context.Context, now time.Time) (candid
 func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([]Candidate, error) {
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load candidate inputs: %w", err)
 	}
 	requested, err := candidateSelection(q, in.tickets)
 	if err != nil {
@@ -74,9 +75,9 @@ func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([
 }
 
 func previewCandidates(requested []string, in candidateInputs) ([]Candidate, error) {
-	rows, err := in.snap.Preview(requested)
+	rows, err := in.snap.Preview(plan.TicketURLs(requested))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("preview: %w", err)
 	}
 	stored := make(map[string]store.Ticket, len(in.tickets))
 	for _, t := range in.tickets {
@@ -84,7 +85,7 @@ func previewCandidates(requested []string, in candidateInputs) ([]Candidate, err
 	}
 	candidates := make([]Candidate, 0, len(rows))
 	for _, row := range rows {
-		t := stored[row.Ticket.URL]
+		t := stored[string(row.Ticket.URL)]
 		candidates = append(candidates, Candidate{
 			URL: t.URL, Ref: ticketRef(t.URL), Title: t.Title, Repo: t.Repo, Feature: t.Feature,
 			Label: row.Label.String(), Reason: string(row.Reason),
@@ -118,9 +119,9 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
 	view := LaunchModal{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
-	intents, err := r.store.PendingVerbIntents(ctx, store.ImportVerb)
+	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbImport)
 	if err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("load pending verb intents: %w", err)
 	}
 	for _, intent := range intents {
 		if intent.TicketID == feature {
@@ -131,21 +132,21 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("load candidate inputs: %w", err)
 	}
 	requested, err := candidateSelection(url.Values{"feature": {feature}}, in.tickets)
 	if err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("load candidate selection: %w", err)
 	}
 	candidates, err := previewCandidates(requested, in)
 	if err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("preview candidates: %w", err)
 	}
 
 	if len(candidates) == 0 {
 		lastErr, failed, err := r.store.LastImportError(ctx)
 		if err != nil {
-			return LaunchModal{}, err
+			return LaunchModal{}, fmt.Errorf("load last import error: %w", err)
 		}
 		if failed && lastErr.Feature == feature {
 			view.Refused = lastErr.Message
@@ -160,10 +161,10 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 func (r *Reader) TicketModal(ctx context.Context, now time.Time, requested []string) (LaunchModal, error) {
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("load candidate inputs: %w", err)
 	}
 	if _, err := previewCandidates(requested, in); err != nil {
-		return LaunchModal{}, err
+		return LaunchModal{}, fmt.Errorf("preview candidates: %w", err)
 	}
 	return LaunchModal{TicketQuery: candidateQuery(requested)}, nil
 }

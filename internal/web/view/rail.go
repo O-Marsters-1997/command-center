@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -39,9 +40,9 @@ type RailItem struct {
 	Feature  string
 	Project  ProjectMark
 	Context  string
-	Glyph    string
+	Glyph    plan.GlyphWord
 	Reason   string
-	Verb     string
+	Verb     plan.Verb
 	Reply    bool
 	Path     string
 	Selected bool
@@ -83,7 +84,7 @@ type RailHealth struct {
 	Live    int
 	Observe Age
 	Stale   bool
-	Error   *TickError
+	Error   option.Option[TickError]
 }
 
 type RailParams struct {
@@ -117,48 +118,23 @@ func RailSelection(currentURL string) string {
 }
 
 func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Rail, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, Params{Repo: params.Repo, Project: params.Project})
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load frame: %w", err)
 	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return Rail{}, err
-	}
-	lastErr, failed, err := r.store.LastError(ctx)
-	if err != nil {
-		return Rail{}, err
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Rail{}, err
-	}
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Rail{}, err
-	}
-	in.Now = now
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Rail{}, err
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Rail{}, err
-	}
-	params.Project, params.projectRepos = project.Name, project.Repos
-	projects, err := r.projectMarks(ctx)
-	if err != nil {
-		return Rail{}, err
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, Params{})
+	return railFromFrame(f, params), nil
+}
 
-	rail := buildRail(rows, now, params)
-	rail.Gauges = chrome.Gauges
+func railFromFrame(f frame, params RailParams) Rail {
+	params.Repo = f.params.Repo
+	params.Project, params.projectRepos = f.project.Name, f.project.Repos
+	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
+	rail := buildRail(rows, f.now, params)
+	rail.Gauges = f.chrome.Gauges
 	rail.Health = RailHealth{
-		Live: chrome.LiveAgents, Observe: chrome.Observe, Stale: chrome.ObserveStale, Error: chrome.LastError,
+		Live: f.chrome.LiveAgents, Observe: f.chrome.Observe, Stale: f.chrome.ObserveStale, Error: f.chrome.LastError,
 	}
-	return rail, nil
+	return rail
 }
 
 func scopeRailRows(rows []Row, params RailParams) []Row {
@@ -236,6 +212,8 @@ func buildRail(rows []Row, now time.Time, params RailParams) Rail {
 				f.Blocked++
 			case plan.GlyphDone:
 				f.Merged++
+			case plan.GlyphUnknown, plan.GlyphFailed, plan.GlyphAttention, plan.GlyphRunning,
+				plan.GlyphPending, plan.GlyphChecking:
 			}
 			if group, folded := plan.RailGroup(r.Glyph); group == plan.GroupInFlight && !folded {
 				f.Live = append(f.Live, item(r))
@@ -309,7 +287,7 @@ func railFeatureKey(r Row) (key, name string) {
 	return "feature:" + r.Feature, r.Feature
 }
 
-func glyphRank(glyph string) int {
+func glyphRank(glyph plan.GlyphWord) int {
 	if glyph == plan.GlyphFailed {
 		return 0
 	}

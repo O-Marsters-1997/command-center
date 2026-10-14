@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -22,16 +22,20 @@ func insightsTicket(t *testing.T, store *storepkg.Store, url, repo, feature stri
 }
 
 func disposeInsightsRun(
-	t *testing.T, store *storepkg.Store, ticketURL, kind string, endedAt time.Time, costUSD float64,
+	t *testing.T, store *storepkg.Store, ticketURL string, kind plan.RunKind, endedAt time.Time, costUSD float64,
 ) {
 	t.Helper()
 	ctx := t.Context()
-	runID, err := store.InsertRunSkeleton(ctx, ticketURL, kind, "deadbeef", "hash-"+ticketURL)
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: kind, BaselineSHA: "deadbeef", PromptHash: "hash-" + ticketURL,
+	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	metrics := &agentlog.RunMetrics{CostUSD: &costUSD, Settled: true}
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, metrics); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
+		Cost: option.Some(costUSD), EndedAt: endedAt,
+	}); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 }
@@ -61,9 +65,9 @@ func TestMergedTicketSpendSumsAllRunKinds(t *testing.T) {
 	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", before, 0.10)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
-	points, err := store.MergedTicketSpend(
-		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
-	)
+	points, err := store.MergedTicketSpend(ctx, storepkg.SpendQuery{
+		Loc: time.UTC, Since: civilDay(t, 2026, 6, 10), Until: civilDay(t, 2026, 6, 10),
+	})
 	if err != nil {
 		t.Fatalf("MergedTicketSpend: %v", err)
 	}
@@ -90,9 +94,9 @@ func TestMergedTicketSpendExcludesRunsDisposedAfterMerge(t *testing.T) {
 	disposeInsightsRun(t, store, "sandbox://CC-1", "follow_up", mergedAt.Add(time.Hour), 5.00)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
 
-	points, err := store.MergedTicketSpend(
-		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
-	)
+	points, err := store.MergedTicketSpend(ctx, storepkg.SpendQuery{
+		Loc: time.UTC, Since: civilDay(t, 2026, 6, 10), Until: civilDay(t, 2026, 6, 10),
+	})
 	if err != nil {
 		t.Fatalf("MergedTicketSpend: %v", err)
 	}
@@ -113,9 +117,9 @@ func TestMergedTicketSpendExcludesUnmergedTickets(t *testing.T) {
 		t.Fatalf("WithdrawTicket: %v", err)
 	}
 
-	points, err := store.MergedTicketSpend(
-		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
-	)
+	points, err := store.MergedTicketSpend(ctx, storepkg.SpendQuery{
+		Loc: time.UTC, Since: civilDay(t, 2026, 6, 10), Until: civilDay(t, 2026, 6, 10),
+	})
 	if err != nil {
 		t.Fatalf("MergedTicketSpend: %v", err)
 	}
@@ -219,7 +223,9 @@ func TestWithdrawnTicketWasteSumsOnlyUnmergedWithdrawals(t *testing.T) {
 		t.Fatalf("WithdrawTicket CC-2: %v", err)
 	}
 
-	waste, err := store.WithdrawnTicketWaste(ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10))
+	waste, err := store.WithdrawnTicketWaste(ctx, storepkg.SpendQuery{
+		Loc: time.UTC, Since: civilDay(t, 2026, 6, 10), Until: civilDay(t, 2026, 6, 10),
+	})
 	if err != nil {
 		t.Fatalf("WithdrawnTicketWaste: %v", err)
 	}
@@ -227,9 +233,9 @@ func TestWithdrawnTicketWasteSumsOnlyUnmergedWithdrawals(t *testing.T) {
 		t.Errorf("waste = %v, want 2.00 (only CC-1, the unmerged withdrawal)", waste)
 	}
 
-	points, err := store.MergedTicketSpend(
-		ctx, "", "", "UTC", civilDay(t, 2026, 6, 10), civilDay(t, 2026, 6, 10),
-	)
+	points, err := store.MergedTicketSpend(ctx, storepkg.SpendQuery{
+		Loc: time.UTC, Since: civilDay(t, 2026, 6, 10), Until: civilDay(t, 2026, 6, 10),
+	})
 	if err != nil {
 		t.Fatalf("MergedTicketSpend: %v", err)
 	}
@@ -254,6 +260,22 @@ func fetchInsights(t *testing.T, server *web.Server, query string) (*http.Respon
 		t.Fatalf("decode /insights.json: %v", err)
 	}
 	return resp, body
+}
+
+func TestInsightsNamesTheLocationTheServerWasGiven(t *testing.T) {
+	t.Parallel()
+
+	paris, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newServer(openStore(t), testNow, web.WithLocation(paris))
+
+	_, body := fetchInsights(t, server, "")
+
+	if body.Timezone != "Europe/Paris" {
+		t.Errorf("timezone = %q, want Europe/Paris", body.Timezone)
+	}
 }
 
 type insightsJSON struct {

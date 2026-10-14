@@ -9,27 +9,29 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 const sessionTicket = "https://github.com/acme/web/issues/1"
 
-func sessionStore(t *testing.T, kind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
+func sessionStore(t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
 	t.Helper()
 	return sessionStoreEnding(t, kind, prompt, keepPrompt, alive, plan.OutcomePush)
 }
 
 func sessionStoreEnding(
-	t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+	t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
 	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
 }
 
 func sessionStoreInFeature(
-	t *testing.T, feature, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+	t *testing.T, feature string, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
 	ctx := t.Context()
@@ -38,7 +40,9 @@ func sessionStoreInFeature(
 	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := st.InsertRunSkeleton(ctx, sessionTicket, kind, "base", "hash")
+	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,16 +58,24 @@ func sessionStoreInFeature(
 			t.Fatal(err)
 		}
 	}
-	if err := st.RecordSpawn(ctx, runID, 99, testNow, logPath); err != nil {
+	if err := st.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if !alive {
 		exit := 0
-		if err := st.RecordDisposition(ctx, runID, outcome, &exit, testNow, nil); err != nil {
+		if err := st.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exit),
+			Cost: option.None[float64](), EndedAt: testNow,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[string]plan.RunObservation{sessionTicket: {Alive: alive}}}
+	obs := plan.Observation{
+		ObservedAt: testNow,
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}},
+	}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +84,7 @@ func sessionStoreInFeature(
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"agent", "follow-up"} {
+	for _, kind := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
 		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
 		st, _ := sessionStore(t, kind, prompt, true, true)
 		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
@@ -125,6 +137,36 @@ func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	}
 }
 
+func TestSessionPageWithANonNumericTicketIs404(t *testing.T) {
+	t.Parallel()
+	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/nine")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestSessionRefRoundTripsThroughItsPath(t *testing.T) {
+	t.Parallel()
+	ref, err := view.ParseSessionRef(sessionTicket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
+	if ref != want {
+		t.Errorf("ParseSessionRef(%q) = %+v, want %+v", sessionTicket, ref, want)
+	}
+	if got := ref.Path(); got != "/s/acme/web/1" {
+		t.Errorf("Path() = %q, want /s/acme/web/1", got)
+	}
+}
+
+func TestParseSessionRefRefusesATooShortURL(t *testing.T) {
+	t.Parallel()
+	if _, err := view.ParseSessionRef("web/issues/1"); err == nil {
+		t.Error("ParseSessionRef(short URL) error = nil, want an error")
+	}
+}
+
 func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -170,7 +212,7 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 	for _, want := range []string{
 		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
 		`class="composer"`, `value="follow-up"`, "Send the running agent a message",
-		`class="composer-chip"`, loop.AgentModel,
+		`class="composer-chip"`, config.AgentModel,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("running session lacks %q:\n%s", want, body)
@@ -192,9 +234,9 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	t.Parallel()
 	running, _ := sessionStore(t, "agent", "p", true, true)
-	if err := running.QueueVerbIntentWithPayload(
-		t.Context(), sessionTicket, plan.VerbFollowUp, "use sqlite instead", testNow,
-	); err != nil {
+	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -250,8 +292,8 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Runs:       map[string]plan.RunObservation{sessionTicket: {Alive: false}},
-		PRs:        map[string]plan.PR{plan.BranchKey("acme/web", "cc-1"): pr},
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: false}},
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): pr},
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatal(err)

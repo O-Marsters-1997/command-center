@@ -31,10 +31,10 @@ func repoByName(t *testing.T, st *storepkg.Store, name string) storepkg.Repo {
 	return storepkg.Repo{}
 }
 
-func upsertRepoAs(t *testing.T, st *storepkg.Store, name string, state storepkg.RepoState) {
+func upsertRepoAs(t *testing.T, st *storepkg.Store, name string, state plan.RepoPhase) {
 	t.Helper()
-	repo := storepkg.Repo{Name: name, Remote: "git@github.com:" + name + ".git", State: state, TrackedAt: testAt}
-	if state == storepkg.RepoRefused {
+	repo := storepkg.Repo{Name: name, Remote: "git@github.com:" + name + ".git", Phase: state, TrackedAt: testAt}
+	if state == plan.RepoRefused {
 		repo.RefusalKind, repo.Refusal = plan.RefusalMergeSettings, "allows merge commits"
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
@@ -44,61 +44,61 @@ func upsertRepoAs(t *testing.T, st *storepkg.Store, name string, state storepkg.
 
 func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 	st := openStore(t)
-	upsertRepoAs(t, st, "acme/good", storepkg.RepoCloning)
-	upsertRepoAs(t, st, "acme/merges", storepkg.RepoCloning)
+	upsertRepoAs(t, st, "acme/good", plan.RepoCloning)
+	upsertRepoAs(t, st, "acme/merges", plan.RepoCloning)
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
 		if repo.Name == "acme/merges" {
-			repo.State, repo.RefusalKind, repo.Refusal = storepkg.RepoRefused, plan.RefusalMergeSettings, "allows merge commits"
+			repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, plan.RefusalMergeSettings, "allows merge commits"
 			return repo, nil
 		}
-		repo.State, repo.SettingsSource, repo.SettingsReadAt = storepkg.RepoReady, "defaults", now
+		repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "defaults", now
 		return repo, nil
-	})
+	}
+	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	good := repoByName(t, st, "acme/good")
-	if good.State != storepkg.RepoReady || good.SettingsSource != "defaults" || !good.SettingsReadAt.Equal(testAt) {
+	if good.Phase != plan.RepoReady || good.SettingsSource != "defaults" || !good.SettingsReadAt.Equal(testAt) {
 		t.Errorf("acme/good = %+v, want ready with its settings read recorded", good)
 	}
 	merges := repoByName(t, st, "acme/merges")
-	if merges.State != storepkg.RepoRefused || merges.RefusalKind != plan.RefusalMergeSettings {
+	if merges.Phase != plan.RepoRefused || merges.RefusalKind != plan.RefusalMergeSettings {
 		t.Errorf("acme/merges = %+v, want refused(merge_settings)", merges)
 	}
-	lastErr, found, err := st.LastError(t.Context())
-	if err != nil || !found || !strings.Contains(lastErr.Message, "acme/merges") {
-		t.Errorf("last error = %+v (found %v, err %v), want one naming acme/merges", lastErr, found, err)
+	lastErr, err := st.LastError(t.Context())
+	if err != nil || lastErr.IsNone() || !strings.Contains(lastErr.Unwrap().Message, "acme/merges") {
+		t.Errorf("last error = %v (err %v), want one naming acme/merges", lastErr, err)
 	}
 }
 
 func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *testing.T) {
 	st := openStore(t)
-	upsertRepoAs(t, st, "acme/offline", storepkg.RepoCloning)
-	upsertRepoAs(t, st, "acme/good", storepkg.RepoCloning)
+	upsertRepoAs(t, st, "acme/offline", plan.RepoCloning)
+	upsertRepoAs(t, st, "acme/good", plan.RepoCloning)
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, _ time.Time) (storepkg.Repo, error) {
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, _ time.Time) (storepkg.Repo, error) {
 		if repo.Name == "acme/offline" {
 			return repo, os.ErrDeadlineExceeded
 		}
-		repo.State = storepkg.RepoReady
+		repo.Phase = plan.RepoReady
 		return repo, nil
-	})
+	}
+	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := repoByName(t, st, "acme/offline").State; got != storepkg.RepoCloning {
+	if got := repoByName(t, st, "acme/offline").Phase; got != plan.RepoCloning {
 		t.Errorf("acme/offline state = %s, want cloning", got)
 	}
-	if got := repoByName(t, st, "acme/good").State; got != storepkg.RepoReady {
+	if got := repoByName(t, st, "acme/good").Phase; got != plan.RepoReady {
 		t.Errorf("acme/good state = %s, want ready", got)
 	}
 }
@@ -123,7 +123,7 @@ func pathWithFakeGh(t *testing.T, apiJSON string) {
 func TestValidateRepoRefusesAMasterDefaultBeforeCloningIt(t *testing.T) {
 	pathWithFakeGh(t, `{"allow_merge_commit":false,"allow_rebase_merge":false,"default_branch":"master"}`)
 	dataDir := t.TempDir()
-	repo := storepkg.Repo{Name: "acme/old", Remote: "/nowhere/remote.git", State: storepkg.RepoCloning}
+	repo := storepkg.Repo{Name: "acme/old", Remote: "/nowhere/remote.git", Phase: plan.RepoCloning}
 
 	got, err := loop.ValidateRepo(t.Context(), dataDir, repo, testAt)
 	if err != nil {
@@ -131,7 +131,7 @@ func TestValidateRepoRefusesAMasterDefaultBeforeCloningIt(t *testing.T) {
 	}
 
 	wantReason := "default branch is `master`, not `main`; rename it on GitHub, then Track again."
-	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalDefaultBranch || got.Refusal != wantReason {
+	if got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalDefaultBranch || got.Refusal != wantReason {
 		t.Errorf("ValidateRepo = %+v, want refused(default_branch) with %q", got, wantReason)
 	}
 	if _, err := os.Stat(config.CheckoutPath(dataDir, repo.Name)); !os.IsNotExist(err) {
@@ -143,14 +143,14 @@ func TestValidateRepoClonesAcceptedReposAndReadsTheirSettings(t *testing.T) {
 	root, _ := repoWithOrigin(t)
 	pathWithFakeGh(t, `{"allow_merge_commit":false,"allow_rebase_merge":false,"default_branch":"main"}`)
 	dataDir := t.TempDir()
-	repo := storepkg.Repo{Name: "acme/cc", Remote: filepath.Join(root, "remote.git"), State: storepkg.RepoCloning}
+	repo := storepkg.Repo{Name: "acme/cc", Remote: filepath.Join(root, "remote.git"), Phase: plan.RepoCloning}
 
 	got, err := loop.ValidateRepo(t.Context(), dataDir, repo, testAt)
 	if err != nil {
 		t.Fatalf("ValidateRepo: %v", err)
 	}
 
-	if got.State != storepkg.RepoReady || got.SettingsSource != string(config.SourceDefaults) ||
+	if got.Phase != plan.RepoReady || got.SettingsSource != string(config.SourceDefaults) ||
 		!got.SettingsReadAt.Equal(testAt) {
 		t.Errorf("ValidateRepo = %+v, want ready, read from defaults at %v", got, testAt)
 	}
@@ -163,14 +163,14 @@ func TestValidateRepoRefusesARepoWhoseSettingsFileDoesNotParse(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	pushSettingsFile(t, repoPath, "stackin = true\n")
 	pathWithFakeGh(t, `{"allow_merge_commit":false,"allow_rebase_merge":false,"default_branch":"main"}`)
-	repo := storepkg.Repo{Name: "acme/cc", Remote: filepath.Join(root, "remote.git"), State: storepkg.RepoCloning}
+	repo := storepkg.Repo{Name: "acme/cc", Remote: filepath.Join(root, "remote.git"), Phase: plan.RepoCloning}
 
 	got, err := loop.ValidateRepo(t.Context(), t.TempDir(), repo, testAt)
 	if err != nil {
 		t.Fatalf("ValidateRepo: %v", err)
 	}
 
-	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalSettingsParse {
+	if got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalSettingsParse {
 		t.Errorf("ValidateRepo = %+v, want refused(settings_parse)", got)
 	}
 }
@@ -186,7 +186,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 		t.Fatal(err)
 	}
 	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := loop.NewLoop(discardLog, st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
 	tick := func() storepkg.Repo {
 		t.Helper()
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -195,13 +195,13 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 		return repoByName(t, st, "repo")
 	}
 
-	if got := tick(); got.State != storepkg.RepoReady || got.SettingsSource != string(config.SourceDefaults) {
+	if got := tick(); got.Phase != plan.RepoReady || got.SettingsSource != string(config.SourceDefaults) {
 		t.Fatalf("repo after a clean tick = %+v, want ready read from defaults", got)
 	}
 
 	pushSettingsFile(t, repoPath, "stackin = true\n")
 	got := tick()
-	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalSettingsParse ||
+	if got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalSettingsParse ||
 		!strings.Contains(got.Refusal, "stackin") {
 		t.Fatalf("repo after the file broke = %+v, want refused(settings_parse) naming the key", got)
 	}
@@ -212,7 +212,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 
 	pushSettingsFile(t, repoPath, "stacking = true\n")
 	healed := tick()
-	if healed.State != storepkg.RepoReady || healed.Refusal != "" || healed.SettingsSource != string(config.SourceFile) {
+	if healed.Phase != plan.RepoReady || healed.Refusal != "" || healed.SettingsSource != string(config.SourceFile) {
 		t.Errorf("repo after the file was fixed = %+v, want ready again read from origin/main", healed)
 	}
 }
@@ -222,16 +222,16 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 	pathWithGitAndTpOnly(t)
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	st := openStore(t)
-	upsertRepoAs(t, st, "repo", storepkg.RepoRefused)
+	upsertRepoAs(t, st, "repo", plan.RepoRefused)
 	observer := loop.NewObserver(st, &fakeForge{t: t, remote: root + "/remote.git"}, cfg)
-	lp := loop.NewLoop(discardLog, st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	got := repoByName(t, st, "repo")
-	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalMergeSettings {
+	if got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalMergeSettings {
 		t.Errorf("repo = %+v, want it still refused(merge_settings)", got)
 	}
 }
@@ -245,9 +245,9 @@ func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
 	cfg, _ := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	st := openStore(t)
 	trackRepo(t, st, "repo", root+"/remote.git")
-	upsertRepoAs(t, st, "acme/broken", storepkg.RepoReady)
-	brokenPR := plan.BranchKey("acme/broken", "cc-1")
-	previous := plan.Observation{PRs: map[string]plan.PR{brokenPR: {Number: 7, State: plan.Open}}}
+	upsertRepoAs(t, st, "acme/broken", plan.RepoReady)
+	brokenPR := branchRef("acme/broken", "cc-1")
+	previous := plan.Observation{PRs: map[plan.BranchRef]plan.PR{brokenPR: {Number: 7, State: plan.Open}}}
 	if err := st.SaveObservation(t.Context(), previous); err != nil {
 		t.Fatal(err)
 	}

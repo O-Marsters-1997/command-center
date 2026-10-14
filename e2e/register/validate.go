@@ -3,10 +3,11 @@ package register
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -16,12 +17,11 @@ import (
 func SandboxValidate(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error) {
 	checkout := config.CheckoutPath(dataDir, repo.Name)
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
-		cmd := exec.CommandContext(ctx, "git", "-C", checkout, "config", key, "true")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return repo, fmt.Errorf("repo %s: git config %s: %w: %s", repo.Name, key, err, out)
+		if err := command.Run(ctx, checkout, "git", "config", key, "true"); err != nil {
+			return repo, fmt.Errorf("repo %s: git config %s: %w", repo.Name, key, err)
 		}
 	}
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoReady, "", ""
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, plan.RefusalUnknown, ""
 	repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 	return repo, nil
 }

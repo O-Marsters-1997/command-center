@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -14,7 +15,7 @@ func EachTicketEvent(
 	for {
 		page, err := st.TicketEventsAfter(ctx, ticketURL, afterID, eventPageSize)
 		if err != nil {
-			return err
+			return fmt.Errorf("read ticket events for %s: %w", ticketURL, err)
 		}
 		for _, e := range page {
 			if err := fn(e); err != nil {

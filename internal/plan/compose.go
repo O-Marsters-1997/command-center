@@ -9,7 +9,7 @@ import (
 // Compose renders the prompt a launch authorises. The implement instruction always leads,
 // since a slash command has to open the prompt.
 func Compose(t Ticket) string {
-	prompt := "/implement " + t.URL
+	prompt := "/implement " + string(t.URL)
 	if t.WorkedExampleBranch != "" {
 		prompt += fmt.Sprintf(
 			"\n\n## Worked example: %[1]s\n\nRead the diff:\n\n    git diff %[2]s...%[1]s",
@@ -40,9 +40,9 @@ func ComposeMessage(text string, after Outcome) string {
 		return fmt.Sprintf(
 			"The owner interrupted you with a message. Your last tool call may have been cut off, "+
 				"so check its effect before going on:\n\n%s", text)
-	default:
-		return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
+	case OutcomePush, OutcomeFailed, OutcomeCutFailed:
 	}
+	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }
 
 // Hash fingerprints a composed prompt: consent is bound to content, so a launch stores it at

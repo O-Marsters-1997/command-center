@@ -11,20 +11,24 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/store"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 // conflictingAdvance has both branches add the same path with different contents, so refresh's
 // step-3 merge can only conflict, and re-records the child's push against the pre-advance base.
-func conflictingAdvance(t *testing.T, repoPath string, store *store.Store, f stackedFixture, at time.Time) string {
+func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
 	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,7 +43,7 @@ type conflictFixture struct {
 	f      stackedFixture
 	loop   *loop.Loop
 	server *web.Server
-	store  *store.Store
+	store  *storepkg.Store
 	// aliveRuns is the liveness every tick's observation reports.
 	aliveRuns map[string]bool
 }
@@ -56,10 +60,10 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		obs := baseObservation(f, parentTip1)
 		for ticketURL, alive := range aliveRuns {
-			obs.Runs[ticketURL] = plan.RunObservation{Alive: alive}
+			obs.Runs[plan.TicketURL(ticketURL)] = plan.RunObservation{Alive: alive}
 		}
-		obs.PRs[plan.BranchKey("repo", "child")] = plan.PR{
-			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: childTip,
+		obs.PRs[branchRef("repo", "child")] = plan.PR{
+			Number: 2, HeadRef: "child", State: plan.Open, HeadOid: plan.SHA(childTip),
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		}
 		obs.Settings["repo"] = config.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}
@@ -67,7 +71,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
+		obs.MidMerge[branchRef("repo", "child")] = mid
 		return obs, nil
 	}
 
@@ -77,7 +81,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	return conflictFixture{
 		f:         f,
 		aliveRuns: aliveRuns,
-		loop:      loop.NewLoop(discardLog, store, observe, clock, cfg, ws, runner.ProcessRunner{}),
+		loop:      newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{}),
 		server:    openServer(store, clock, ""),
 		store:     store,
 	}
@@ -115,7 +119,7 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
 		t.Fatalf("child's state = %q, want refresh_conflicted", state)
 	}
-	if !strings.Contains(page, `value="`+plan.VerbAbort+`"`) {
+	if !strings.Contains(page, `value="`+string(plan.VerbAbort)+`"`) {
 		t.Errorf("page offers no abort button:\n%s", page)
 	}
 }
@@ -162,7 +166,7 @@ func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *t
 	c.tick(t)
 	c.tick(t)
 
-	for _, verb := range []string{plan.VerbAbort, plan.VerbRefresh} {
+	for _, verb := range []plan.Verb{plan.VerbAbort, plan.VerbRefresh} {
 		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +241,7 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[c.f.child.URL].BaseSHAAtPush; got != parentTip1 {
+	if got := pushes[plan.TicketURL(c.f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s: the push step delivers the "+
 			"hand-resolved merge", got, parentTip1)
 	}

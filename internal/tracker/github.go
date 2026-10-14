@@ -1,16 +1,12 @@
 package tracker
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
-	"github.com/O-Marsters-1997/command-center/internal/command"
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
 const listLimit = 100
@@ -28,6 +24,14 @@ type githubSource struct {
 
 func newGithubSource(owner, repo string) *githubSource {
 	return &githubSource{owner: owner, repo: repo, run: runGH}
+}
+
+func runGH(ctx context.Context, args ...string) ([]byte, error) {
+	out, err := gh.Run(ctx, "", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query github tracker: %w", err)
+	}
+	return out, nil
 }
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
@@ -77,18 +81,14 @@ func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, err
 	return decodeBlockedBy(out)
 }
 
-func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	return command.Output(ctx, "", "gh", args...)
-}
-
 type rawLabel struct {
 	Name string `json:"name"`
 }
 
 func decodeFeatures(raw []byte) ([]Feature, error) {
-	var decoded []rawLabel
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal label list: %w", err)
+	decoded, err := gh.Decode[[]rawLabel](raw)
+	if err != nil {
+		return nil, fmt.Errorf("label list: %w", err)
 	}
 	features := make([]Feature, 0, len(decoded))
 	for _, label := range decoded {
@@ -111,9 +111,9 @@ type rawIssue struct {
 }
 
 func decodeIssues(raw []byte) ([]rawIssue, error) {
-	var decoded []rawIssue
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal issue list: %w", err)
+	decoded, err := gh.Decode[[]rawIssue](raw)
+	if err != nil {
+		return nil, fmt.Errorf("issue list: %w", err)
 	}
 	if len(decoded) >= listLimit {
 		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
@@ -136,22 +136,16 @@ type rawDependency struct {
 }
 
 func decodeBlockedBy(raw []byte) ([]string, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	urls := []string{}
-	for pages := 0; ; pages++ {
-		var page []rawDependency
-		err := dec.Decode(&page)
-		if errors.Is(err, io.EOF) && pages > 0 {
-			return urls, nil
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
-		}
-		for _, dep := range page {
-			if dep.State == "closed" {
-				continue
-			}
-			urls = append(urls, dep.HTMLURL)
-		}
+	deps, err := gh.DecodeStream[rawDependency](raw)
+	if err != nil {
+		return nil, fmt.Errorf("blocked_by: %w", err)
 	}
+	urls := []string{}
+	for _, dep := range deps {
+		if dep.State == "closed" {
+			continue
+		}
+		urls = append(urls, dep.HTMLURL)
+	}
+	return urls, nil
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -14,18 +15,18 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	repo := storepkg.Repo{
-		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", State: storepkg.RepoCloning, TrackedAt: trackedAt,
+		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", Phase: plan.RepoCloning, TrackedAt: trackedAt,
 	}
 	if err := store.UpsertRepo(ctx, repo); err != nil {
 		t.Fatal(err)
 	}
 
 	refused := repo
-	refused.State = storepkg.RepoRefused
+	refused.Phase = plan.RepoRefused
 	if err := store.SetRepoState(ctx, refused); err == nil {
 		t.Error("SetRepoState(refused, no refusal) = nil, want the check constraint to refuse it")
 	}
-	refused.RefusalKind, refused.Refusal = "merge", "merge commits allowed"
+	refused.RefusalKind, refused.Refusal = plan.RefusalMergeSettings, "merge commits allowed"
 	if err := store.SetRepoState(ctx, refused); err != nil {
 		t.Fatalf("SetRepoState: %v", err)
 	}
@@ -34,7 +35,7 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo.State, repo.RefusalKind, repo.Refusal = storepkg.RepoRefused, "merge", "merge commits allowed"
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, plan.RefusalMergeSettings, "merge commits allowed"
 	assertRepos(t, repos, repo)
 }
 
@@ -43,13 +44,13 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 	store := openStore(t)
 	ctx := t.Context()
 	repo := storepkg.Repo{
-		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", State: storepkg.RepoCloning, TrackedAt: trackedAt,
+		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", Phase: plan.RepoCloning, TrackedAt: trackedAt,
 	}
 	if err := store.UpsertRepo(ctx, repo); err != nil {
 		t.Fatal(err)
 	}
 
-	repo.State, repo.SettingsSource, repo.SettingsReadAt = storepkg.RepoReady, "origin/main", trackedAt.Add(time.Hour)
+	repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "origin/main", trackedAt.Add(time.Hour)
 	if err := store.SetRepoState(ctx, repo); err != nil {
 		t.Fatalf("SetRepoState: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || repos[0].State != storepkg.RepoReady || repos[0].SettingsSource != "origin/main" ||
+	if len(repos) != 1 || repos[0].Phase != plan.RepoReady || repos[0].SettingsSource != "origin/main" ||
 		!repos[0].SettingsReadAt.Equal(repo.SettingsReadAt) {
 		t.Errorf("Repos() = %+v, want one ready repo read from origin/main at %v", repos, repo.SettingsReadAt)
 	}

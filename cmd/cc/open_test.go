@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/config"
 )
 
 func TestOpenWritesThroughInjectedWriters(t *testing.T) {
@@ -30,7 +32,8 @@ func TestOpenWritesThroughInjectedWriters(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := open(t.Context(), configPath, &stdout, &stderr); err != nil {
+	env := config.Env{Home: t.TempDir()}
+	if err := open(t.Context(), configPath, env, &stdout, &stderr); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 

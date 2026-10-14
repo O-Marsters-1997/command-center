@@ -8,31 +8,29 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-const eventPRMerged = "pr_merged"
-
 func (l *Loop) recordMergedEvents(ctx context.Context, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list tickets: %w", err)
 	}
 
 	for _, t := range tickets {
-		pr := obs.PRs[plan.BranchKey(t.Repo, t.Branch)]
+		pr := obs.PRs[t.Ref()]
 		if pr.State != plan.Merged {
 			continue
 		}
-		exists, err := l.store.HasEvent(ctx, t.URL, eventPRMerged)
+		exists, err := l.store.HasEvent(ctx, t.URL, store.EventPRMerged)
 		if err != nil {
-			return err
+			return fmt.Errorf("check pr_merged event for %s: %w", t.URL, err)
 		}
 		if exists {
 			continue
 		}
 		if err := l.store.AppendEvent(ctx, store.Event{
-			At: pr.MergedAt, TicketURL: t.URL, Kind: eventPRMerged,
+			At: pr.MergedAt, TicketURL: t.URL, Kind: store.EventPRMerged,
 			Detail: fmt.Sprintf("PR #%d merged", pr.Number),
 		}); err != nil {
-			return err
+			return fmt.Errorf("record pr_merged for %s: %w", t.URL, err)
 		}
 	}
 	return nil

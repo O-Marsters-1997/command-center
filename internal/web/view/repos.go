@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -40,7 +42,7 @@ type ReposPage struct {
 	Chrome
 	Groups          []RepoGroup
 	NewProject      NewProjectForm
-	LastImportError *ImportError
+	LastImportError option.Option[ImportError]
 }
 
 type RepoGroup struct {
@@ -74,7 +76,7 @@ type RepoPage struct {
 	Ready           bool
 	Banner          Banner
 	Features        []FeatureRow
-	LastImportError *ImportError
+	LastImportError option.Option[ImportError]
 	Tickets         Board
 }
 
@@ -90,33 +92,11 @@ func trackedRow(r store.Repo) RepoRow {
 	}
 }
 
-func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
-	if scope == "" {
-		return "", nil
-	}
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return "", err
-	}
-	return normalizeRepoScope(scope, repos), nil
-}
-
-func (r *Reader) projectScope(ctx context.Context, scope string) (store.Project, error) {
-	if scope == "" {
-		return store.Project{}, nil
-	}
-	projects, err := r.store.Projects(ctx)
-	if err != nil {
-		return store.Project{}, err
-	}
-	return normalizeProjectScope(scope, projects), nil
-}
-
 // KnownRepo finds the tracked repo whose owner/name is scope, ignoring case.
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return store.Repo{}, false, err
+		return store.Repo{}, false, fmt.Errorf("load repos: %w", err)
 	}
 	for _, repo := range repos {
 		if scope != "" && strings.EqualFold(repo.Name, scope) {
@@ -128,36 +108,42 @@ func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool,
 
 // Repos shapes the unscoped page: the tracked repos.
 func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
-	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
+	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
-		return ReposPage{}, err
+		return ReposPage{}, fmt.Errorf("load frame: %w", err)
 	}
+	chrome := f.chrome
 	chrome.Section = "repos"
-	groups, form, err := r.repoGroups(ctx)
-	if err != nil {
-		return ReposPage{}, err
-	}
+	groups, form := repoGroups(f.repos, f.projectList)
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
-		return ReposPage{}, err
+		return ReposPage{}, fmt.Errorf("import error: %w", err)
 	}
 	return ReposPage{Chrome: chrome, Groups: groups, NewProject: form, LastImportError: importErr}, nil
 }
 
 func (r *Reader) RepoGroups(ctx context.Context) ([]RepoGroup, error) {
 	groups, _, err := r.repoGroups(ctx)
-	return groups, err
+	if err != nil {
+		return nil, fmt.Errorf("load repo groups: %w", err)
+	}
+	return groups, nil
 }
 
 func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, err
+		return nil, NewProjectForm{}, fmt.Errorf("load repos: %w", err)
 	}
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, err
+		return nil, NewProjectForm{}, fmt.Errorf("load projects: %w", err)
 	}
+	groups, form := repoGroups(repos, projects)
+	return groups, form, nil
+}
+
+func repoGroups(repos []store.Repo, projects []store.Project) ([]RepoGroup, NewProjectForm) {
 	byName := make(map[string]store.Repo, len(repos))
 	names := make([]string, 0, len(repos))
 	for _, repo := range repos {
@@ -182,7 +168,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 		groups = append(groups, group)
 	}
 	form := NewProjectForm{DefaultHue: leastUsedHue(projects), Hues: hues(), Repos: names}
-	return groups, form, nil
+	return groups, form
 }
 
 // SearchRepos merges the pushable repos whose name contains query with the tracked repos that
@@ -190,7 +176,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
 	tracked, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load repos: %w", err)
 	}
 	q := strings.ToLower(strings.TrimSpace(query))
 	rows := make([]RepoRow, 0, len(tracked))
@@ -223,29 +209,37 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 	})
 }
 
+type RepoPageRequest struct {
+	Scope    string
+	Offered  []string
+	Selected []string
+}
+
 // RepoPage shapes the scoped page. offered is the repo's own tracker's features; a feature
 // imported with tickets in other repos names them.
-func (r *Reader) RepoPage(
-	ctx context.Context, now time.Time, scope string, offered, selected []string,
-) (RepoPage, error) {
+func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageRequest) (RepoPage, error) {
+	scope, offered, selected := req.Scope, req.Offered, req.Selected
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.Section = "repos"
 	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 	if page.Banner, err = r.Banner(ctx, scope); err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load banner: %w", err)
 	}
 
 	repo, known, err := r.KnownRepo(ctx, scope)
-	if err != nil || !known {
-		return page, err
+	if err != nil {
+		return page, fmt.Errorf("load known repo: %w", err)
+	}
+	if !known {
+		return page, nil
 	}
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load tickets: %w", err)
 	}
 	imported := make(map[string]bool)
 	others := make(map[string][]string)
@@ -269,25 +263,30 @@ func (r *Reader) RepoPage(
 	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
 	page.Remote = repo.Remote
 	page.Known = true
-	page.Ready = repo.State == store.RepoReady
+	page.Ready = repo.Phase == plan.RepoReady
 	for _, f := range offered {
 		page.Features = append(page.Features, FeatureRow{Feature: f, Imported: imported[f], OtherRepos: others[f]})
 	}
 	page.LastImportError, err = r.importError(ctx, now)
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("import error: %w", err)
 	}
 	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}, "ticket": selected}))
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load board: %w", err)
 	}
 	return page, nil
 }
 
-func (r *Reader) importError(ctx context.Context, now time.Time) (*ImportError, error) {
+func (r *Reader) importError(ctx context.Context, now time.Time) (option.Option[ImportError], error) {
 	lastErr, failed, err := r.store.LastImportError(ctx)
-	if err != nil || !failed {
-		return nil, err
+	if err != nil {
+		return option.None[ImportError](), fmt.Errorf("load last import error: %w", err)
 	}
-	return &ImportError{Age: relative(now, lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message}, nil
+	if !failed {
+		return option.None[ImportError](), nil
+	}
+	return option.Some(ImportError{
+		Age: relative(now, lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+	}), nil
 }

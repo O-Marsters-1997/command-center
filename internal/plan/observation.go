@@ -15,9 +15,9 @@ type CheckState struct {
 type PR struct {
 	Number      int                   `json:"number"`
 	HeadRef     string                `json:"head_ref"`
-	HeadOid     string                `json:"head_oid"`
+	HeadOid     SHA                   `json:"head_oid"`
 	BaseRef     string                `json:"base_ref"`
-	BaseOid     string                `json:"base_oid"`
+	BaseOid     SHA                   `json:"base_oid"`
 	AuthorLogin string                `json:"author_login"`
 	IsDraft     bool                  `json:"is_draft"`
 	State       PRState               `json:"state"`
@@ -31,19 +31,19 @@ type RunObservation struct {
 }
 
 // Observation is everything one tick read from the world, persisted so the page renders after
-// a restart. It holds facts, never state labels. Branch-keyed maps are keyed repo + "//" + branch.
+// a restart. It holds facts, never state labels.
 type Observation struct {
-	ObservedAt        time.Time                  `json:"observed_at"`
-	PRs               map[string]PR              `json:"prs"`
-	Worktrees         map[string]string          `json:"worktrees"`
-	Runs              map[string]RunObservation  `json:"runs"`
-	MergifyHash       map[string]string          `json:"mergify_hash"`
-	BranchTips        map[string]string          `json:"branch_tips"`
-	LocalTips         map[string]string          `json:"local_tips"`
-	Titles            map[string]string          `json:"titles"`
-	MidMerge          map[string]bool            `json:"mid_merge"`
-	ConflictsWithBase map[string]bool            `json:"conflicts_with_base"`
-	ConflictsWithPeer map[string]map[string]bool `json:"conflicts_with_peer"`
+	ObservedAt        time.Time                        `json:"observed_at"`
+	PRs               map[BranchRef]PR                 `json:"prs"`
+	Worktrees         map[BranchRef]string             `json:"worktrees"`
+	Runs              map[TicketURL]RunObservation     `json:"runs"`
+	MergifyHash       map[string]string                `json:"mergify_hash"`
+	BranchTips        map[BranchRef]SHA                `json:"branch_tips"`
+	LocalTips         map[BranchRef]SHA                `json:"local_tips"`
+	Titles            map[TicketURL]string             `json:"titles"`
+	MidMerge          map[BranchRef]bool               `json:"mid_merge"`
+	ConflictsWithBase map[BranchRef]bool               `json:"conflicts_with_base"`
+	ConflictsWithPeer map[BranchRef]map[BranchRef]bool `json:"conflicts_with_peer"`
 	// Settings is each repo's .command-centre.toml as origin/main held it this tick, keyed by repo
 	// name. A repo whose file would not read is in SettingsErrors instead.
 	Settings       map[string]RepoSettings `json:"settings"`
@@ -53,4 +53,20 @@ type Observation struct {
 	// RepoErrors is each repo this tick could not observe, keyed by repo name. Its other entries
 	// carry the last tick's values.
 	RepoErrors map[string]string `json:"repo_errors"`
+}
+
+func NewObservation(at time.Time) Observation {
+	return Observation{
+		ObservedAt: at,
+		PRs:        map[BranchRef]PR{}, Worktrees: map[BranchRef]string{}, Runs: map[TicketURL]RunObservation{},
+		MergifyHash: map[string]string{}, BranchTips: map[BranchRef]SHA{}, LocalTips: map[BranchRef]SHA{},
+		Titles: map[TicketURL]string{}, MidMerge: map[BranchRef]bool{},
+		ConflictsWithBase: map[BranchRef]bool{}, ConflictsWithPeer: map[BranchRef]map[BranchRef]bool{},
+		Settings: map[string]RepoSettings{}, SettingsErrors: map[string]string{},
+		SettingsSources: map[string]string{}, RepoErrors: map[string]string{},
+	}
+}
+
+func (o *Observation) MarkAlive(url TicketURL) {
+	o.Runs[url] = RunObservation{Alive: true}
 }

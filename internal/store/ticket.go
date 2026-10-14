@@ -22,8 +22,14 @@ type Ticket struct {
 	SyncedAt  time.Time
 }
 
+func (t Ticket) Ref() plan.BranchRef { return plan.BranchRef{Repo: t.Repo, Branch: t.Branch} }
+
 func (t Ticket) Plan() plan.Ticket {
-	return plan.Ticket{URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: t.BlockedBy}
+	blockedBy := make([]plan.TicketURL, len(t.BlockedBy))
+	for i, url := range t.BlockedBy {
+		blockedBy[i] = plan.TicketURL(url)
+	}
+	return plan.Ticket{URL: plan.TicketURL(t.URL), Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy}
 }
 
 // ImportedTicket is one tracker.Ticket with the tracked repo it came from.
@@ -42,17 +48,3 @@ type TickError struct {
 // TickPeriod is the sleep after the loop's work; ticks never overlap. A verdict's checking
 // time is counted in these.
 const TickPeriod = 15 * time.Second
-
-// ImportVerb is the intent verb whose ticket id is a feature label.
-const ImportVerb = "import"
-
-// TrackVerb is the intent verb whose ticket id is a repo's owner/name.
-const TrackVerb = "track"
-
-// Event kinds both the loop writes and a Store read decodes.
-const (
-	EventImportRefused         = "import_refused"
-	EventRemoveWorktreeRefused = "remove_worktree_refused"
-	EventVerdictTransition     = "verdict_transition"
-	EventTickError             = "tick_error"
-)

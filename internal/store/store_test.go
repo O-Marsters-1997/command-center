@@ -3,7 +3,6 @@ package store_test
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -16,6 +15,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -276,21 +276,29 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	}
 
 	at := time.Now()
-	if err := store.QueueLaunchIntent(ctx, ticket.URL, "hash-1", "group-a", at); err != nil {
+	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
+		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(
+		ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 111, at, "runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, ticket.URL, "deadbeef", "main", "cafebabe", at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: "deadbeef", BaseSHA: "cafebabe", BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(ctx, push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -318,7 +326,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] != "deadbeef" {
+	if tips[plan.TicketURL(ticket.URL)] != "deadbeef" {
 		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
 	}
 
@@ -326,7 +334,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := memberships[ticket.URL]; !ok {
+	if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
 		t.Errorf("memberships = %+v, want the launch membership to survive withdrawal", memberships)
 	}
 }
@@ -345,10 +353,13 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	for _, e := range []storepkg.Event{
-		{At: at, TicketURL: "sandbox://CC-1", Kind: "first"},
-		{At: at, TicketURL: "sandbox://CC-2", Kind: "other"},
-		{At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: "second", Detail: "late write, old time"},
-		{At: at, Kind: "fleet_event"},
+		{At: at, TicketURL: "sandbox://CC-1", Kind: storepkg.EventPushed},
+		{At: at, TicketURL: "sandbox://CC-2", Kind: storepkg.EventPushFailed},
+		{
+			At: at.Add(-time.Hour), TicketURL: "sandbox://CC-1", Kind: storepkg.EventRefreshed,
+			Detail: "late write, old time",
+		},
+		{At: at, Kind: storepkg.EventTickError},
 	} {
 		if err := store.AppendEvent(ctx, e); err != nil {
 			t.Fatal(err)
@@ -359,7 +370,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
-	if len(all) != 2 || all[0].Kind != "first" || all[1].Kind != "second" {
+	if len(all) != 2 || all[0].Kind != storepkg.EventPushed || all[1].Kind != storepkg.EventRefreshed {
 		t.Fatalf("TicketEventsAfter(CC-1, 0) = %+v, want first then second", all)
 	}
 	if all[1].Detail != "late write, old time" || !all[1].At.Equal(at.Add(-time.Hour)) {
@@ -370,7 +381,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
-	if len(newer) != 1 || newer[0].Kind != "second" {
+	if len(newer) != 1 || newer[0].Kind != storepkg.EventRefreshed {
 		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
 	}
 }
@@ -387,16 +398,20 @@ func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	const total, pageSize = 7, 3
-	var want []string
+	var want []storepkg.EventKind
+	kinds := []storepkg.EventKind{
+		storepkg.EventPushRefused, storepkg.EventPushFailed, storepkg.EventPushed,
+		storepkg.EventRefreshed, storepkg.EventRestacked, storepkg.EventTickError, storepkg.EventPRMerged,
+	}
 	for i := range total {
-		kind := fmt.Sprintf("event_%d", i)
+		kind := kinds[i]
 		want = append(want, kind)
 		if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticketURL, Kind: kind}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	var got []string
+	var got []storepkg.EventKind
 	var afterID int64
 	for pages := 0; ; pages++ {
 		page, err := store.TicketEventsAfter(ctx, ticketURL, afterID, pageSize)
@@ -430,10 +445,11 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 	}
 
 	at := time.Now()
-	if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticket.URL, Kind: "ticket_event"}); err != nil {
+	ticketEvent := storepkg.Event{At: at, TicketURL: ticket.URL, Kind: storepkg.EventPushed}
+	if err := store.AppendEvent(ctx, ticketEvent); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: "fleet_event"}); err != nil {
+	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: storepkg.EventTickError}); err != nil {
 		t.Fatal(err)
 	}
 

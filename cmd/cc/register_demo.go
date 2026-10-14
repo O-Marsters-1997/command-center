@@ -11,17 +11,18 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/demo"
 )
 
-func init() { demoSubcmd = lookupDemo }
-
-func lookupDemo(args []string) command {
+func demoSubcmd(args []string) command {
 	if len(args) == 0 || args[0] != "demo" {
 		return nil
 	}
 	rest := args[1:]
-	return func(ctx context.Context, logger *slog.Logger, _ string) error { return runDemo(ctx, logger, rest) }
+	return func(ctx context.Context, logger *slog.Logger, _ string, _ config.Env) error {
+		return runDemo(ctx, logger, rest)
+	}
 }
 
 func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
@@ -31,7 +32,7 @@ func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 	speed := flags.Float64("speed", 1, "sim seconds per real second")
 	port := flags.Int("port", 7777, "port to serve the board on")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("parse demo flags: %w", err)
 	}
 	if flags.NArg() > 0 || *tickets < 1 || !(*speed > 0 && *speed <= 1000) {
 		return fmt.Errorf("usage: cc demo [--seed N] [--tickets N] [--speed X] [--port N]")
@@ -39,5 +40,8 @@ func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(*port))
 	logger.Info("serving demo", "seed", *seed, "addr", "http://"+addr)
-	return demo.Serve(ctx, logger, demo.Generate(*seed, *tickets), *speed, addr)
+	if err := demo.Serve(ctx, logger, demo.Generate(*seed, *tickets), *speed, addr); err != nil {
+		return fmt.Errorf("serve demo: %w", err)
+	}
+	return nil
 }

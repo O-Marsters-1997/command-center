@@ -16,20 +16,22 @@ func trackLoop(t *testing.T, st *storepkg.Store, validations *[]string) *loop.Lo
 	t.Helper()
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetRemoteSource(func(_ context.Context, name string) (string, error) {
+	remoteOf := func(_ context.Context, name string) (string, error) {
 		if name == "acme/missing" {
 			return "", errors.New("gh: Not Found")
 		}
 		return "git@github.com:" + name + ".git", nil
-	})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
+	}
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
 		*validations = append(*validations, repo.Name)
-		repo.State, repo.RefusalKind, repo.Refusal = storepkg.RepoReady, "", ""
+		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, "", ""
 		repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 		return repo, nil
-	})
-	return lp
+	}
+	return newLoop(
+		st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+		loop.WithRemoteSource(remoteOf), loop.WithValidator(validate),
+	)
 }
 
 func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
@@ -50,7 +52,7 @@ func TestATrackIntentAddsTheRepoAndValidatesItInTheSameTick(t *testing.T) {
 	}
 
 	got := repoByName(t, st, "acme/new")
-	if got.State != storepkg.RepoReady || got.Remote != "git@github.com:acme/new.git" || got.SettingsSource != "defaults" {
+	if got.Phase != plan.RepoReady || got.Remote != "git@github.com:acme/new.git" || got.SettingsSource != "defaults" {
 		t.Errorf("acme/new = %+v, want ready with the remote gh gave", got)
 	}
 	if pending, err := st.TrackPending(t.Context(), "acme/new"); err != nil || pending {
@@ -60,8 +62,8 @@ func TestATrackIntentAddsTheRepoAndValidatesItInTheSameTick(t *testing.T) {
 
 func TestTrackOnARefusedRepoValidatesItAgainAndOnAReadyRepoDoesNothing(t *testing.T) {
 	st := openStore(t)
-	upsertRepoAs(t, st, "acme/refused", storepkg.RepoRefused)
-	upsertRepoAs(t, st, "acme/ready", storepkg.RepoReady)
+	upsertRepoAs(t, st, "acme/refused", plan.RepoRefused)
+	upsertRepoAs(t, st, "acme/ready", plan.RepoReady)
 	var validations []string
 	lp := trackLoop(t, st, &validations)
 	queueTrack(t, st, "acme/refused")
@@ -74,7 +76,7 @@ func TestTrackOnARefusedRepoValidatesItAgainAndOnAReadyRepoDoesNothing(t *testin
 	if len(validations) != 1 || validations[0] != "acme/refused" {
 		t.Errorf("validated %v, want only acme/refused", validations)
 	}
-	if got := repoByName(t, st, "acme/refused"); got.State != storepkg.RepoReady || got.RefusalKind != "" {
+	if got := repoByName(t, st, "acme/refused"); got.Phase != plan.RepoReady || got.RefusalKind != "" {
 		t.Errorf("acme/refused = %+v, want ready with the refusal cleared", got)
 	}
 }
@@ -90,7 +92,7 @@ func TestTrackOfARepoGitHubDoesNotKnowRefusesItForTrackAgain(t *testing.T) {
 	}
 
 	got := repoByName(t, st, "acme/missing")
-	if got.State != storepkg.RepoRefused || got.RefusalKind != plan.RefusalClone || len(validations) != 0 {
+	if got.Phase != plan.RepoRefused || got.RefusalKind != plan.RefusalClone || len(validations) != 0 {
 		t.Errorf("acme/missing = %+v (validated %v), want refused(clone) and never validated", got, validations)
 	}
 }

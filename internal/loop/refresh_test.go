@@ -78,10 +78,18 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	dispositionAsPushed(t, store, parent.URL, at)
 	dispositionAsPushed(t, store, child.URL, at)
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
-	if err := store.RecordPush(ctx, parent.URL, parentTip0, "main", mainSHA, at); err != nil {
+	parentPush := storepkg.Push{
+		Ticket: plan.TicketURL(parent.URL), Tip: plan.SHA(parentTip0), BaseSHA: plan.SHA(mainSHA),
+		BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(ctx, parentPush); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordPush(ctx, child.URL, childTip0, "parent", parentTip0, at); err != nil {
+	childPush := storepkg.Push{
+		Ticket: plan.TicketURL(child.URL), Tip: plan.SHA(childTip0), BaseSHA: plan.SHA(parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(ctx, childPush); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,17 +111,19 @@ func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 
 func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 	return plan.Observation{
-		Worktrees: map[string]string{
-			plan.BranchKey("repo", "parent"): f.parentWorktree, plan.BranchKey("repo", "child"): f.childWorktree,
+		Worktrees: map[plan.BranchRef]string{
+			branchRef("repo", "parent"): f.parentWorktree, branchRef("repo", "child"): f.childWorktree,
 		},
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
-			plan.BranchKey("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
+			branchRef("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
 		},
-		BranchTips: map[string]string{plan.BranchKey("repo", "parent"): parentTip, loop.MainTipKey("repo"): f.mainSHA},
-		Runs:       map[string]plan.RunObservation{},
-		MidMerge:   map[string]bool{},
-		Settings:   map[string]config.RepoSettings{"repo": {Stacking: true}},
+		BranchTips: map[plan.BranchRef]plan.SHA{
+			branchRef("repo", "parent"): plan.SHA(parentTip), loop.MainTipKey("repo"): plan.SHA(f.mainSHA),
+		},
+		Runs:     map[plan.TicketURL]plan.RunObservation{},
+		MidMerge: map[plan.BranchRef]bool{},
+		Settings: map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 }
 
@@ -129,7 +139,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -164,8 +174,44 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.URL].BaseSHAAtPush; got != parentTip1 {
+	if got := pushes[plan.TicketURL(f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
+	}
+}
+
+func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *testing.T) {
+	root, repoPath := repoWithOrigin(t)
+	store := openStore(t)
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+	f := newStackedFixture(t, repoPath, store, at)
+	parentTip1 := advanceParent(t, repoPath, f)
+	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	unresolvable := strings.Repeat("0", 39) + "1"
+	pushedAt := at.Add(time.Second)
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(unresolvable),
+		BaseBranch: "parent", At: pushedAt,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
+		t.Fatal(err)
+	}
+
+	obs := baseObservation(f, parentTip1)
+	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
+	cfg, ws := stackedConfigAndWorkspace(t, root)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+
+	if err := lp.RunOnce(t.Context()); err == nil {
+		t.Fatal("RunOnce = nil, want the refresh failure")
+	}
+
+	tickErr, err := store.LastError(t.Context())
+	if err != nil || tickErr.IsNone() {
+		t.Fatalf("LastError: last=%v err=%v", tickErr, err)
+	}
+	if want := "refresh: repo/child: "; !strings.HasPrefix(tickErr.Unwrap().Message, want) {
+		t.Errorf("tick error = %q, want prefix %q", tickErr.Unwrap().Message, want)
 	}
 }
 
@@ -183,11 +229,11 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
 
 	obs := baseObservation(f, f.parentTip0)
-	obs.BranchTips[loop.MainTipKey("repo")] = mainTip1
+	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -200,7 +246,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.parent.URL].BaseSHAAtPush; got != mainTip1 {
+	if got := pushes[plan.TicketURL(f.parent.URL)].BaseSHAAtPush; string(got) != mainTip1 {
 		t.Errorf("parent's recorded base sha = %s, want the advanced main tip %s", got, mainTip1)
 	}
 }
@@ -215,11 +261,11 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.Runs[f.child.URL] = plan.RunObservation{Alive: true}
+	obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -246,7 +292,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	obs.Runs[f.child.URL] = plan.RunObservation{Alive: true}
+	obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Second)); err != nil {
@@ -254,7 +300,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -286,7 +332,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -299,7 +345,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[f.child.URL].Refused {
+	if !facts[plan.TicketURL(f.child.URL)].Refused {
 		t.Fatalf("refresh facts = %+v, want %s refused", facts, f.child.URL)
 	}
 
@@ -379,7 +425,7 @@ func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	if _, ok := facts[""]; ok {
 		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
 	}
-	if got := facts[ticket.URL]; !got.Refused || got.Reason != "conflict" {
+	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.Reason != "conflict" {
 		t.Errorf("facts[%s] = %+v, want Refused with reason %q", ticket.URL, got, "conflict")
 	}
 }
@@ -404,20 +450,20 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(strings.TrimSpace(
 		runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"),
-	)
+	))
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
+		obs.MidMerge[branchRef("repo", "child")] = mid
 		return obs, nil
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -443,7 +489,8 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
 	// same as advanceMain's (retarget_test.go).
 	runGit(t, "-C", repoPath, "fetch", "-q", "origin", "child")
-	obs.BranchTips[plan.BranchKey("repo", "child")] = strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	cloneHead := strings.TrimSpace(runGitOutput(t, "-C", clone, "rev-parse", "HEAD"))
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -472,18 +519,18 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(childTip0)
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
+		obs.MidMerge[branchRef("repo", "child")] = mid
 		return obs, nil
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -507,7 +554,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	}
 
 	parentTip2 := advanceParentPastTheConflict(t, repoPath, f)
-	obs.BranchTips[plan.BranchKey("repo", "parent")] = parentTip2
+	obs.BranchTips[branchRef("repo", "parent")] = plan.SHA(parentTip2)
 
 	if err := lp.RunOnce(t.Context()); err != nil { // the base moved past the failed attempt
 		t.Fatalf("retry RunOnce: %v", err)
@@ -536,18 +583,18 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
 
 	obs := baseObservation(f, parentTip1)
-	obs.BranchTips[plan.BranchKey("repo", "child")] = childTip0
+	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(childTip0)
 	observe := func(ctx context.Context) (plan.Observation, error) {
 		mid, err := git.MidMerge(ctx, f.childWorktree)
 		if err != nil {
 			return plan.Observation{}, err
 		}
-		obs.MidMerge[plan.BranchKey("repo", "child")] = mid
+		obs.MidMerge[branchRef("repo", "child")] = mid
 		return obs, nil
 	}
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -590,11 +637,11 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	parentTip1 := advanceParent(t, repoPath, f)
 
 	obs := baseObservation(f, parentTip1)
-	delete(obs.PRs, plan.BranchKey("repo", "parent"))
+	delete(obs.PRs, branchRef("repo", "parent"))
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("automatic RunOnce: %v", err)

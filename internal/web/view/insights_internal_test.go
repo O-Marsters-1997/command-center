@@ -6,18 +6,12 @@ import (
 	"time"
 )
 
-func TestSystemTimezoneNamePrefersTZEnv(t *testing.T) {
-	t.Setenv("TZ", "Europe/Paris")
-	if got := systemTimezoneName(); got != "Europe/Paris" {
-		t.Errorf("systemTimezoneName() = %q, want Europe/Paris", got)
-	}
-}
+func TestSystemTimezoneNameReadsEtcLocaltime(t *testing.T) {
+	t.Parallel()
 
-func TestSystemTimezoneNameFallsBackToEtcLocaltime(t *testing.T) {
 	if _, err := os.Readlink("/etc/localtime"); err != nil {
 		t.Skip("no /etc/localtime symlink on this platform")
 	}
-	t.Setenv("TZ", "")
 	if got := systemTimezoneName(); got == "" {
 		t.Error(`systemTimezoneName() = "", want a name resolved from /etc/localtime`)
 	}
@@ -37,9 +31,14 @@ func TestInsightsTimezoneUsesTheLocationsOwnNameWhenItHasOne(t *testing.T) {
 }
 
 func TestInsightsTimezoneResolvesTimeLocalFromTheOSRatherThanUTC(t *testing.T) {
-	t.Setenv("TZ", "Europe/Paris")
-	if got := insightsTimezone(time.Local); got != "Europe/Paris" {
-		t.Errorf("insightsTimezone(time.Local) = %q, want Europe/Paris", got)
+	t.Parallel()
+
+	want := systemTimezoneName()
+	if want == "" {
+		want = "UTC"
+	}
+	if got := insightsTimezone(time.Local); got != want {
+		t.Errorf("insightsTimezone(time.Local) = %q, want %q", got, want)
 	}
 }
 
@@ -48,7 +47,6 @@ func TestCivilDateKeepsTheWallClockDateAtUTCMidnight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TZ", "")
 	got := civilDate(time.Date(2026, 6, 15, 23, 30, 0, 0, paris))
 	want := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
 	if !got.Equal(want) {

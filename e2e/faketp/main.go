@@ -220,10 +220,12 @@ func printf(w io.Writer, format string, args ...any) {
 func appendLine(path, line string) (err error) {
 	f, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if openErr != nil {
-		return openErr
+		return fmt.Errorf("open %s: %w", path, openErr)
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
 
-	_, err = fmt.Fprintln(f, line)
-	return err
+	if _, writeErr := fmt.Fprintln(f, line); writeErr != nil {
+		return fmt.Errorf("append to %s: %w", path, writeErr)
+	}
+	return nil
 }

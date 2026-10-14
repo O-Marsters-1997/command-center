@@ -22,18 +22,18 @@ type launchPayload struct {
 }
 
 // QueueLaunchIntent records one ticket's authorisation to launch.
-func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, group string, at time.Time) error {
-	payload, err := json.Marshal(launchPayload{PromptHash: promptHash, Group: group})
+func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
+	payload, err := json.Marshal(launchPayload{PromptHash: l.PromptHash, Group: l.Group})
 	if err != nil {
-		return fmt.Errorf("encode launch intent payload for %s: %w", ticketID, err)
+		return fmt.Errorf("encode launch intent payload for %s: %w", l.Ticket, err)
 	}
 	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
-		At:       at.UTC(),
-		TicketID: ticketID,
+		At:       l.At.UTC(),
+		TicketID: l.Ticket,
 		Payload:  payload,
 	})
 	if err != nil {
-		return fmt.Errorf("queue launch intent for %s: %w", ticketID, err)
+		return fmt.Errorf("queue launch intent for %s: %w", l.Ticket, err)
 	}
 	return nil
 }
@@ -120,20 +120,20 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 
 // LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
 // Cancelled entry for a ticket whose launch was cancelled and not relaunched.
-func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
+func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.LaunchMembership, error) {
 	rows, err := s.q.ListLaunchMemberships(ctx, maxLaunchMemberships)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}
 
-	memberships := map[string]plan.LaunchMembership{}
-	cancelled := map[string]bool{}
+	memberships := map[plan.TicketURL]plan.LaunchMembership{}
+	cancelled := map[plan.TicketURL]bool{}
 	for _, row := range rows {
 		if row.State == "cancelled" {
-			cancelled[row.TicketID] = true
+			cancelled[plan.TicketURL(row.TicketID)] = true
 			continue
 		}
-		memberships[row.TicketID] = plan.LaunchMembership{
+		memberships[plan.TicketURL(row.TicketID)] = plan.LaunchMembership{
 			LaunchID:   row.LaunchID,
 			Members:    int(row.Members),
 			PromptHash: row.PromptHash,

@@ -10,7 +10,6 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -26,20 +25,20 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "fix the flaky assertion in TestThing", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "fix the flaky assertion in TestThing", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -71,7 +70,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, ok := latest[ticket.URL]
+	summary, ok := latest[plan.TicketURL(ticket.URL)]
 	if !ok {
 		t.Fatal("no run recorded after follow-up")
 	}
@@ -106,18 +105,18 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "do the thing", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "do the thing", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

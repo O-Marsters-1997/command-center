@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -12,13 +13,13 @@ import (
 func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	pushRows, err := s.LatestPushes(ctx)
 	if err != nil {
-		return plan.VerdictFacts{}, err
+		return plan.VerdictFacts{}, fmt.Errorf("read latest pushes: %w", err)
 	}
 	checkingTicks, err := s.CheckingTicks(ctx)
 	if err != nil {
-		return plan.VerdictFacts{}, err
+		return plan.VerdictFacts{}, fmt.Errorf("read checking ticks: %w", err)
 	}
-	checkingFor := make(map[string]time.Duration, len(checkingTicks))
+	checkingFor := make(map[plan.TicketURL]time.Duration, len(checkingTicks))
 	for url, ticks := range checkingTicks {
 		checkingFor[url] = time.Duration(ticks) * TickPeriod
 	}
@@ -30,44 +31,44 @@ func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	tickets, err := s.Tickets(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read tickets: %w", err)
 	}
 	obs, observed, err := s.LastObservation(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read last observation: %w", err)
 	}
 	memberships, err := s.LaunchMemberships(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read launch memberships: %w", err)
 	}
 	runs, err := s.LatestRunsByTicket(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read latest runs: %w", err)
 	}
 	pushes, err := s.PushFacts(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read push facts: %w", err)
 	}
 	refreshes, err := s.RefreshFacts(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read refresh facts: %w", err)
 	}
 	pendingVerbs, err := s.PendingIntentsByTicket(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read pending intents: %w", err)
 	}
 	removals, err := s.RemovalRefusals(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read removal refusals: %w", err)
 	}
 	verdictFacts, err := s.VerdictFacts(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read verdict facts: %w", err)
 	}
 
 	gauges, err := s.LatestReadings(ctx)
 	if err != nil {
-		return plan.Input{}, err
+		return plan.Input{}, fmt.Errorf("read latest readings: %w", err)
 	}
 
 	planTickets := make([]plan.Ticket, len(tickets))

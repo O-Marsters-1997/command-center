@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -22,12 +23,14 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 	dir := t.TempDir()
 	session := storepkg.RunSession{StartNew: true}
 	for i, message := range messages {
-		kind := "follow_up"
+		kind := plan.RunKindFollowUp
 		if i == 0 {
-			kind = "agent"
+			kind = plan.RunKindAgent
 		}
 		session.Message = message
-		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, sessionTicket, kind, "base", "hash", session)
+		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash", Session: session,
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,15 +47,20 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 				t.Fatal(err)
 			}
 		}
-		if err := st.RecordSpawn(ctx, runID, 99, testNow, logPath); err != nil {
+		if err := st.RecordSpawn(ctx, storepkg.Spawn{
+			RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
+		}); err != nil {
 			t.Fatal(err)
 		}
 		exit := 0
-		if err := st.RecordDisposition(ctx, runID, plan.OutcomePush, &exit, testNow, nil); err != nil {
+		if err := st.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exit),
+			Cost: option.None[float64](), EndedAt: testNow,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	obs := plan.Observation{ObservedAt: testNow, Runs: map[string]plan.RunObservation{sessionTicket: {}}}
+	obs := plan.Observation{ObservedAt: testNow, Runs: map[plan.TicketURL]plan.RunObservation{sessionTicket: {}}}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
 	}

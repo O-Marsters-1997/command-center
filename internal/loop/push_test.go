@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -70,20 +70,26 @@ func commitFile(t *testing.T, worktreePath, relPath, contents string) {
 // already covers that).
 func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
-	runID, err := store.InsertRunSkeleton(t.Context(), ticketURL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomePush, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func countEvents(events []storepkg.Event, kind string) int {
+func countEvents(events []storepkg.Event, kind storepkg.EventKind) int {
 	n := 0
 	for _, e := range events {
 		if e.Kind == kind {
@@ -93,7 +99,7 @@ func countEvents(events []storepkg.Event, kind string) int {
 	return n
 }
 
-func hasEvent(events []storepkg.Event, kind, detailSubstring string) bool {
+func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring string) bool {
 	for _, e := range events {
 		if e.Kind == kind && strings.Contains(e.Detail, detailSubstring) {
 			return true
@@ -148,12 +154,12 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -166,7 +172,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := facts[ticket.URL]
+	f := facts[plan.TicketURL(ticket.URL)]
 	if !f.Refused || f.RefusedPath != ".github/workflows/x.yml" {
 		t.Errorf("push facts = %+v, want refused naming .github/workflows/x.yml", f)
 	}
@@ -207,12 +213,12 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -237,7 +243,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] == "" {
+	if tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Error("no pushes row recorded")
 	}
 
@@ -266,13 +272,13 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -288,7 +294,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] == "" {
+	if tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Error("no pushes row recorded despite adopting the existing PR")
 	}
 }
@@ -309,12 +315,12 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -329,14 +335,14 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[ticket.URL].Failed {
+	if !facts[plan.TicketURL(ticket.URL)].Failed {
 		t.Fatal("push facts must record the failure")
 	}
 	tips, err := store.LastPushedTips(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tips[ticket.URL] != "" {
+	if tips[plan.TicketURL(ticket.URL)] != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
@@ -362,7 +368,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if got := countLines(t, ghLog); got != 2 {
 		t.Fatalf("gh invocations after retry-push = %d, want 2", got)
 	}
-	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[ticket.URL] == "" {
+	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[plan.TicketURL(ticket.URL)] == "" {
 		t.Errorf("pushes row missing after a successful retry-push (err=%v)", err)
 	}
 
@@ -402,7 +408,10 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
 	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
 	tip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	if err := store.RecordPush(t.Context(), ticket.URL, tip, "main", tip, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(ticket.URL), Tip: plan.SHA(tip), BaseSHA: plan.SHA(tip), BaseBranch: "main", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -410,11 +419,11 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
 	runGit(t, "-C", repoPath, "branch", "-D", "cc-1")
 
-	obs := plan.Observation{Worktrees: map[string]string{}, PRs: map[string]plan.PR{}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce must not fail once a pushed ticket's branch has been removed: %v", err)
 	}
@@ -449,7 +458,7 @@ func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
 	if restacked[""] {
 		t.Errorf("restacked = %+v, want no entry for a NULL-ticket event", restacked)
 	}
-	if !restacked[ticket.URL] {
+	if !restacked[plan.TicketURL(ticket.URL)] {
 		t.Errorf("restacked = %+v, want %s present", restacked, ticket.URL)
 	}
 }
@@ -481,7 +490,7 @@ func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
 	if _, ok := facts[""]; ok {
 		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
 	}
-	if got := facts[ticket.URL]; !got.Refused || got.RefusedPath != "policy hit" {
+	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.RefusedPath != "policy hit" {
 		t.Errorf("facts[%s] = %+v, want Refused with path %q", ticket.URL, got, "policy hit")
 	}
 }

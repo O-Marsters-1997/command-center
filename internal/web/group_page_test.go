@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -52,19 +53,27 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 	}
 
 	at := testNow
-	runID, err := store.InsertRunSkeleton(ctx, "sandbox://ROOT", "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://ROOT", Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range children {
-		if err := store.QueueLaunchIntent(ctx, c, "hash-1", "group-a", at); err != nil {
+		launch := storepkg.LaunchRequest{Ticket: c, PromptHash: "hash-1", Group: "group-a", At: at}
+		if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -231,21 +240,28 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 	}
 
 	at := testNow
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 111, at, "/state/runs/1.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	exitCode := 1
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(ctx, storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
 	obs := plan.Observation{
 		ObservedAt: at,
-		PRs:        map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {Number: 262, State: plan.Merged}},
+		PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 262, State: plan.Merged}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

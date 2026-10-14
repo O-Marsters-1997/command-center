@@ -44,14 +44,14 @@ func closeUnderBlockedBy(
 		for _, blocker := range t.BlockedBy {
 			blockerFeature, err := ticketFeature(blocker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read feature of blocker %s: %w", blocker, err)
 			}
 			if blockerFeature == feature {
 				continue
 			}
 			isMerged, err := merged(blocker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read merged state of blocker %s: %w", blocker, err)
 			}
 			if isMerged {
 				continue
@@ -93,15 +93,20 @@ func closureLookups(
 	}
 	merged := make(map[string]bool, len(branchRows))
 	for _, row := range branchRows {
-		merged[row.URL] = obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged
+		merged[row.URL] = obs.PRs[plan.BranchRef{Repo: row.Repo, Branch: row.Branch}].State == plan.Merged
 	}
 	featureOf := func(url string) (string, error) { return features[url], nil }
 	isMerged := func(url string) (bool, error) { return merged[url], nil }
 	return featureOf, isMerged, nil
 }
 
+type blockedByOverride struct {
+	URL       string
+	BlockedBy []string
+}
+
 func featureTicketsWithOverride(
-	ctx context.Context, qtx *ccdb.Queries, feature, overrideURL string, override []string,
+	ctx context.Context, qtx *ccdb.Queries, feature string, edit blockedByOverride,
 ) ([]ticketBlockedBy, error) {
 	rows, err := qtx.ListTicketsInFeature(ctx, feature)
 	if err != nil {
@@ -109,8 +114,8 @@ func featureTicketsWithOverride(
 	}
 	tickets := make([]ticketBlockedBy, 0, len(rows))
 	for _, row := range rows {
-		blockedBy := override
-		if row.URL != overrideURL {
+		blockedBy := edit.BlockedBy
+		if row.URL != edit.URL {
 			// json.Unmarshal reuses a destination slice's capacity, so decoding into override
 			// would overwrite the edit under validation.
 			decoded, err := decodeBlockedBy(row.BlockedBy)

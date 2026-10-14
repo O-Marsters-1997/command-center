@@ -6,30 +6,35 @@ import (
 	"path/filepath"
 
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 type Worktrees struct{}
 
-func (Worktrees) New(_ context.Context, repoPath, branch, baseRef string) error {
+func (Worktrees) New(ctx context.Context, repoPath, branch, baseRef string) error {
 	path := filepath.Join(filepath.Dir(repoPath), "wt-"+branch)
-	_, err := git(repoPath, "worktree", "add", "-q", "-b", branch, path, baseRef)
-	return err
+	if _, err := git(ctx, repoPath, "worktree", "add", "-q", "-b", branch, path, baseRef); err != nil {
+		return fmt.Errorf("add worktree for %s: %w", branch, err)
+	}
+	return nil
 }
 
-func (Worktrees) Remove(ctx context.Context, repoPath, branch string, _ ccgit.RemoveMode) error {
+func (Worktrees) Remove(ctx context.Context, repoPath, branch string, _ tp.RemoveMode) error {
 	worktrees, err := ccgit.WorktreePaths(ctx, repoPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("list worktrees of %s: %w", repoPath, err)
 	}
 	path, ok := worktrees[branch]
 	if !ok {
 		return fmt.Errorf("no worktree for branch %s", branch)
 	}
-	if _, err := git(repoPath, "worktree", "remove", "--force", path); err != nil {
-		return err
+	if _, err := git(ctx, repoPath, "worktree", "remove", "--force", path); err != nil {
+		return fmt.Errorf("remove worktree for %s: %w", branch, err)
 	}
-	_, err = git(repoPath, "branch", "-q", "-D", branch)
-	return err
+	if _, err = git(ctx, repoPath, "branch", "-q", "-D", branch); err != nil {
+		return fmt.Errorf("delete branch %s: %w", branch, err)
+	}
+	return nil
 }
 
 var _ ccgit.Worktrees = Worktrees{}

@@ -49,7 +49,7 @@ SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
 WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
-SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
+SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id;
 
 -- name: ConsumeVerbIntent :execrows
 UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id = sqlc.arg(id) AND consumed_at IS NULL;

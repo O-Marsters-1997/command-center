@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 // oneMillionInputTokensLine is one $6.40 (at the calibrated sonnet rate) assistant request, for a
@@ -110,12 +112,16 @@ func TestCCCostUSDSumsWithinEachWindowsOwnTrailingSpan(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 	recordRun := func(endedAt time.Time, costUSD float64) {
 		t.Helper()
-		runID, err := store.InsertRunSkeleton(ctx, "sandbox://CC-1", "agent", "deadbeef", fmt.Sprintf("hash-%v", endedAt))
+		runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+			Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: fmt.Sprintf("hash-%v", endedAt),
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		metrics := &agentlog.RunMetrics{CostUSD: &costUSD, Settled: true}
-		if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, nil, endedAt, metrics); err != nil {
+		if err := store.RecordDisposition(ctx, storepkg.Disposition{
+			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
+			Cost: option.Some(costUSD), EndedAt: endedAt,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -9,7 +9,6 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -30,16 +29,16 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, tickets[0].URL, at)
-	authoriseTicket(t, store, tickets[1].URL, plan.Hash(plan.Compose(plan.Ticket{URL: tickets[1].URL})), at)
+	authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), at)
 	if err := store.QueueVerbIntent(t.Context(), tickets[0].URL, "re-run", at); err != nil {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -51,7 +50,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ran := latest[tickets[1].URL]; ran {
+	if _, ran := latest[plan.TicketURL(tickets[1].URL)]; ran {
 		t.Error("sandbox://CC-2 launched past max_agents")
 	}
 }
@@ -70,19 +69,24 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", baseline, "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(t.Context(), runID, 4242, at, filepath.Join(t.TempDir(), "1.jsonl")); err != nil {
+	spawn := storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: filepath.Join(t.TempDir(), "1.jsonl"),
+	}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 
-	obs := plan.Observation{Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}}
+	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

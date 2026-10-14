@@ -27,18 +27,22 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, ticket.URL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, startedAt, logPath); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: logPath,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]plan.RunObservation{ticket.URL: {Alive: true}},
-		Worktrees:  map[string]string{plan.BranchKey("repo", "cc-76"): "/repos/repo-cc-76"},
-		PRs: map[string]plan.PR{plan.BranchKey("repo", "cc-76"): {
+		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
+		Worktrees:  map[plan.BranchRef]string{branchRef("repo", "cc-76"): "/repos/repo-cc-76"},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("repo", "cc-76"): {
 			Number: 76, State: plan.Open, HeadRef: "cc-76",
 			Checks: map[string]plan.CheckState{
 				"unit":  {Status: "COMPLETED", Conclusion: "SUCCESS"},
@@ -216,12 +220,13 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	server := newServer(seededStore(t, now), now)
+	store := seededStore(t, now)
+	server := newServer(store, now)
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
 		t.Errorf("default board does not poll every 5s:\n%s", got)
 	}
 
-	server.SetBoardPollSeconds(1)
+	server = newServer(store, now, web.WithBoardPollSeconds(1))
 	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 1s"`) {
 		t.Errorf("board does not poll every 1s:\n%s", got)
 	}

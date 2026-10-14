@@ -1,6 +1,9 @@
 package plan
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Outcome is a dead run's disposition, recorded on runs.outcome as data, never inferred from
 // missing events.
@@ -31,8 +34,12 @@ func (o Outcome) String() string {
 	}
 }
 
+var allOutcomes = []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued}
+
+func AllOutcomes() []Outcome { return slices.Clone(allOutcomes) }
+
 func ParseOutcome(s string) (Outcome, error) {
-	for _, o := range []Outcome{OutcomePush, OutcomeFailed, OutcomeCutFailed, OutcomeAsked, OutcomeContinued} {
+	for _, o := range allOutcomes {
 		if o.String() == s {
 			return o, nil
 		}

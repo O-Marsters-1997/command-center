@@ -4,32 +4,33 @@ import "github.com/O-Marsters-1997/command-center/internal/plan"
 
 // Section is one attention band of the board: the rows whose glyphs share a section key.
 type Section struct {
-	Key   string
+	Key   SectionKey
 	Title string
 	Rows  []Row
 }
 
 var sectionOrder = []Section{
-	{Key: "needs-you", Title: "Needs you"},
-	{Key: "in-progress", Title: "In progress"},
-	{Key: "ready", Title: "Ready"},
-	{Key: "blocked", Title: "Blocked"},
-	{Key: "done", Title: "Done"},
+	{Key: SectionNeedsYou, Title: "Needs you"},
+	{Key: SectionInProgress, Title: "In progress"},
+	{Key: SectionReady, Title: "Ready"},
+	{Key: SectionBlocked, Title: "Blocked"},
+	{Key: SectionDone, Title: "Done"},
 }
 
-func sectionKey(glyph string) string {
+func sectionKey(glyph plan.GlyphWord) SectionKey {
 	switch glyph {
 	case plan.GlyphFailed, plan.GlyphAttention:
-		return "needs-you"
+		return SectionNeedsYou
 	case plan.GlyphRunning, plan.GlyphPending, plan.GlyphChecking:
-		return "in-progress"
+		return SectionInProgress
 	case plan.GlyphReady:
-		return "ready"
+		return SectionReady
 	case plan.GlyphBlocked:
-		return "blocked"
-	default:
-		return "done"
+		return SectionBlocked
+	case plan.GlyphDone, plan.GlyphUnknown:
+		return SectionDone
 	}
+	return SectionDone
 }
 
 // Sectioned buckets rows into the fixed attention order, keeping each row's relative order and
@@ -52,15 +53,15 @@ func Sectioned(rows []Row) []Section {
 // FilterTab is one pill of the all-tickets page: a section key (or "all"), its link and whether it
 // is the filter in force.
 type FilterTab struct {
-	Key     string
+	Key     SectionKey
 	Title   string
 	Path    string
 	Count   int
 	Current bool
 }
 
-func filterSections(sections []Section, filter string) []Section {
-	if filter == "" {
+func filterSections(sections []Section, filter SectionKey) []Section {
+	if filter == SectionUnknown {
 		return sections
 	}
 	var out []Section
@@ -75,13 +76,14 @@ func filterSections(sections []Section, filter string) []Section {
 func filterTabs(sections []Section, params Params) []FilterTab {
 	filter := params.Filter
 	total := 0
-	counts := make(map[string]int, len(sections))
+	counts := make(map[SectionKey]int, len(sections))
 	for _, s := range sections {
 		counts[s.Key] = len(s.Rows)
 		total += len(s.Rows)
 	}
 	tabs := []FilterTab{{
-		Key: "all", Title: "All", Path: params.withScope(ticketsPath), Count: total, Current: filter == "",
+		Key: SectionUnknown, Title: "All", Path: params.withScope(ticketsPath), Count: total,
+		Current: filter == SectionUnknown,
 	}}
 	for _, s := range sectionOrder {
 		tabs = append(tabs, FilterTab{
@@ -96,17 +98,17 @@ func filterTabs(sections []Section, params Params) []FilterTab {
 // (every ticket waiting on it) as ticket refs.
 func nameDependencies(rows []Row, tickets []plan.Ticket) {
 	unlocks := plan.Unlocks(tickets)
-	glyphByURL := make(map[string]string, len(rows))
+	glyphByURL := make(map[string]plan.GlyphWord, len(rows))
 	for _, r := range rows {
 		glyphByURL[r.URL] = r.Glyph
 	}
 	for i := range rows {
 		r := &rows[i]
-		for _, waiter := range unlocks[r.URL] {
-			if _, onBoard := glyphByURL[waiter]; !onBoard {
+		for _, waiter := range unlocks[plan.TicketURL(r.URL)] {
+			if _, onBoard := glyphByURL[string(waiter)]; !onBoard {
 				continue
 			}
-			r.Unlocks = append(r.Unlocks, ticketRef(waiter))
+			r.Unlocks = append(r.Unlocks, ticketRef(string(waiter)))
 		}
 		if r.Glyph != plan.GlyphBlocked {
 			continue

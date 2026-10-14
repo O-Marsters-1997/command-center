@@ -1,6 +1,7 @@
 package loop_test
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -13,6 +14,28 @@ import (
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func newLoop(
+	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
+	rn runner.Runner, opts ...loop.Option,
+) *loop.Loop {
+	completeObserve := func(ctx context.Context) (plan.Observation, error) {
+		obs, err := observe(ctx)
+		if err != nil {
+			return obs, err
+		}
+		if obs.LocalTips == nil {
+			obs.LocalTips = map[plan.BranchRef]plan.SHA{}
+		}
+		if obs.Runs == nil {
+			obs.Runs = map[plan.TicketURL]plan.RunObservation{}
+		}
+		return obs, nil
+	}
+	return loop.New(loop.Deps{
+		Logger: discardLog, Store: st, Clock: clock, Runner: rn, Observe: completeObserve, Config: cfg, Workspace: ws,
+	}, opts...)
+}
 
 type loopFixture struct {
 	Store   *storepkg.Store
@@ -77,7 +100,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	fake := runner.NewFake()
 	return &loopFixture{
 		Store:   store,
-		Loop:    loop.NewLoop(discardLog, store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
+		Loop:    newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
 		Fake:    fake,
 		Cfg:     cfg,
 		WS:      ws,
@@ -89,7 +112,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 func (f *loopFixture) AuthoriseAll(t *testing.T) {
 	t.Helper()
 	for _, ticket := range f.Tickets {
-		authoriseTicket(t, f.Store, ticket.URL, plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL})), testAt)
+		authoriseTicket(t, f.Store, ticket.URL, composeHash(ticket.URL), testAt)
 	}
 }
 
@@ -106,7 +129,15 @@ func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return latest
+	byURL := make(map[string]plan.RunSummary, len(latest))
+	for url, summary := range latest {
+		byURL[string(url)] = summary
+	}
+	return byURL
+}
+
+func composeHash(ticketURL string) string {
+	return plan.Hash(plan.Compose(plan.Ticket{URL: plan.TicketURL(ticketURL)}))
 }
 
 func (f *loopFixture) ImplementSpawns() []runner.SpawnConfig {

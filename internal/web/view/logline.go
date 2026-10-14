@@ -60,9 +60,9 @@ func LineOf(e agentlog.Event) LogLine {
 		return callPair{result: e, answered: true}.line()
 	case agentlog.Cmd:
 		return cmdPair(e, false).line()
-	default:
-		return callPair{call: e, called: true}.line()
+	case agentlog.File, agentlog.Tool:
 	}
+	return callPair{call: e, called: true}.line()
 }
 
 func recordLine(kind, detail string) LogLine {
@@ -104,7 +104,7 @@ func failedEvent(e agentlog.Event) bool { return e.Kind == agentlog.Fail || cmdF
 
 func (p callPair) failed() bool { return p.answered && failedEvent(p.result) }
 
-func (p callPair) shown(mode string) bool {
+func (p callPair) shown(mode LogFilter) bool {
 	return (p.called && EventShown(mode, p.call)) || (p.answered && EventShown(mode, p.result))
 }
 
@@ -187,9 +187,9 @@ func (p callPair) resultWord() string {
 		return ""
 	case running:
 		return "ok"
-	default:
-		return "done"
+	case other:
 	}
+	return "done"
 }
 
 type toolCategory int
@@ -223,9 +223,9 @@ func verbOf(tool string) string {
 		return "Search"
 	case running:
 		return "Ran"
-	default:
-		return tool
+	case other, reading, editing:
 	}
+	return tool
 }
 
 type toolMix [running + 1]int

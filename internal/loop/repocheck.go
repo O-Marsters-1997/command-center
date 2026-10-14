@@ -27,9 +27,9 @@ type RemoteFunc func(ctx context.Context, fullName string) (string, error)
 func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error) {
 	kind, reason, err := git.CheckRepoOnGitHub(ctx, repo.Name)
 	if err != nil {
-		return repo, err
+		return repo, fmt.Errorf("check %s on github: %w", repo.Name, err)
 	}
-	if kind != "" {
+	if kind != plan.RefusalUnknown {
 		return refuse(repo, kind, reason), nil
 	}
 
@@ -42,13 +42,13 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 		return refuse(repo, plan.RefusalSettingsParse, err.Error()), nil
 	}
 
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoReady, "", ""
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, plan.RefusalUnknown, ""
 	repo.SettingsSource, repo.SettingsReadAt = string(source), now
 	return repo, nil
 }
 
-func refuse(repo store.Repo, kind, reason string) store.Repo {
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoRefused, kind, reason
+func refuse(repo store.Repo, kind plan.RefusalKind, reason string) store.Repo {
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, kind, reason
 	return repo
 }
 
@@ -57,11 +57,11 @@ func refuse(repo store.Repo, kind, reason string) store.Repo {
 func (l *Loop) validateCloningRepos(ctx context.Context) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("list repos: %w", err)
 	}
 	var failures []error
 	for _, repo := range repos {
-		if repo.State != store.RepoCloning {
+		if repo.Phase != plan.RepoCloning {
 			continue
 		}
 		settled, err := l.validate(ctx, l.cfg.DataDir, repo, l.clock.Now())
@@ -70,7 +70,7 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 			continue
 		}
 		if err := l.store.SetRepoState(ctx, settled); err != nil {
-			return err
+			return fmt.Errorf("set state of %s: %w", repo.Name, err)
 		}
 	}
 	if len(failures) == 0 {
@@ -80,28 +80,31 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 }
 
 func (l *Loop) recordTickError(ctx context.Context, message string) error {
-	last, found, err := l.store.LastError(ctx)
+	last, err := l.store.LastError(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("last tick error: %w", err)
 	}
-	if found && last.Message == message {
+	if last.IsSome() && last.Unwrap().Message == message {
 		return nil
 	}
-	return l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message})
+	if err := l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message}); err != nil {
+		return fmt.Errorf("record tick error: %w", err)
+	}
+	return nil
 }
 
 // applyTrackIntents puts each tracked repo into cloning, so the validation that follows in the
 // same tick settles it. A ready repo is left alone; a refused one is validated afresh. A repo
 // whose remote GitHub will not give is refused for Track again.
 func (l *Loop) applyTrackIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, store.TrackVerb, func(intent store.VerbIntent) error {
+	return l.eachIntent(ctx, plan.VerbTrack, func(intent store.VerbIntent) error {
 		repos, err := l.store.Repos(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("list repos: %w", err)
 		}
 		repo := store.Repo{Name: intent.TicketID, TrackedAt: l.clock.Now()}
 		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
-			if repos[i].State == store.RepoReady {
+			if repos[i].Phase == plan.RepoReady {
 				return nil
 			}
 			repo = repos[i]
@@ -109,11 +112,17 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 		if repo.Remote == "" {
 			remote, err := l.remoteOf(ctx, repo.Name)
 			if err != nil {
-				return l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error()))
+				if upsertErr := l.store.UpsertRepo(ctx, refuse(repo, plan.RefusalClone, err.Error())); upsertErr != nil {
+					return fmt.Errorf("refuse %s: %w", repo.Name, upsertErr)
+				}
+				return nil
 			}
 			repo.Remote = remote
 		}
-		repo.State, repo.RefusalKind, repo.Refusal = store.RepoCloning, "", ""
-		return l.store.UpsertRepo(ctx, repo)
+		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoCloning, plan.RefusalUnknown, ""
+		if err := l.store.UpsertRepo(ctx, repo); err != nil {
+			return fmt.Errorf("start cloning %s: %w", repo.Name, err)
+		}
+		return nil
 	})
 }

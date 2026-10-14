@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -30,18 +31,20 @@ func (s PRState) String() string {
 		return "merged"
 	case Closed:
 		return "closed"
-	default:
-		return "absent"
+	case Absent:
 	}
+	return "absent"
 }
 
 type Ticket struct {
-	URL                 string
+	URL                 TicketURL
 	Repo                string
 	Branch              string
-	BlockedBy           []string
+	BlockedBy           []TicketURL
 	WorkedExampleBranch string
 }
+
+func (t Ticket) Ref() BranchRef { return BranchRef{Repo: t.Repo, Branch: t.Branch} }
 
 type Reason string
 
@@ -51,7 +54,7 @@ type Unlock struct {
 	Unlocked      bool
 	BaseBranch    string
 	Reason        Reason
-	Blocking      []string
+	Blocking      []TicketURL
 	BlockerClosed bool
 }
 
@@ -60,7 +63,7 @@ const DefaultBaseBranch = "main"
 
 // Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only: a
 // cross-repo blocker feeds the draft gate, never unlock or the base.
-func Unlocked(t Ticket, byURL map[string]Ticket, prs map[string]PRState, stacking bool) Unlock {
+func Unlocked(t Ticket, byURL map[TicketURL]Ticket, prs map[string]PRState, stacking bool) Unlock {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
@@ -96,20 +99,20 @@ func unlockedOnBlocker(blocker Ticket, prs map[string]PRState, stacking bool) Un
 		return Unlock{
 			Reason: Reason(fmt.Sprintf(
 				"blocked by %s: %s's pull request was closed without merging", blocker.URL, blocker.Branch)),
-			Blocking:      []string{blocker.URL},
+			Blocking:      []TicketURL{blocker.URL},
 			BlockerClosed: true,
 		}
-	default: // Absent
-		return Unlock{
-			Reason: Reason(fmt.Sprintf(
-				"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
-			Blocking: []string{blocker.URL},
-		}
+	case Absent:
+	}
+	return Unlock{
+		Reason: Reason(fmt.Sprintf(
+			"blocked by %s: %s has no open or merged pull request", blocker.URL, blocker.Branch)),
+		Blocking: []TicketURL{blocker.URL},
 	}
 }
 
 func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
-	var unresolved []string
+	var unresolved []TicketURL
 	for _, blocker := range blockers {
 		if prs[blocker.Branch] != Merged {
 			unresolved = append(unresolved, blocker.URL)
@@ -119,7 +122,7 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 		return Unlock{Unlocked: true, BaseBranch: DefaultBaseBranch, Reason: "every blocker has merged"}
 	}
 	return Unlock{
-		Reason:   Reason(fmt.Sprintf("blocked by %s, not yet merged", strings.Join(unresolved, ", "))),
+		Reason:   Reason(fmt.Sprintf("blocked by %s, not yet merged", joinURLs(unresolved))),
 		Blocking: unresolved,
 	}
 }
@@ -128,7 +131,8 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 type State int
 
 const (
-	Blocked State = iota
+	StateUnknown State = iota
+	Blocked
 	Ready
 	Queued
 	Running
@@ -150,68 +154,12 @@ const (
 	VerificationFailed
 	WaitingOnProducerDeploy
 	AwaitingInput
-	stateCount
 )
 
-const StateCount = int(stateCount)
-
-func (s State) String() string {
-	switch s {
-	case Ready:
-		return "ready"
-	case Queued:
-		return "queued"
-	case Running:
-		return "running"
-	case Failed:
-		return "failed"
-	case CutFailed:
-		return "cut_failed"
-	case PushPending:
-		return "push_pending"
-	case Checking:
-		return "checking"
-	case NeedsYou:
-		return "needs_you"
-	case PushFailed:
-		return "push_failed"
-	case ReviewMe:
-		return "review_me"
-	case PRMerged:
-		return "merged"
-	case PRClosedUnmerged:
-		return "pr_closed_unmerged"
-	case BaseGone:
-		return "base_gone"
-	case Cancelled:
-		return "cancelled"
-	case BaseMoved:
-		return "base_moved"
-	case CIFailed:
-		return "ci_failed"
-	case RefreshConflicted:
-		return "refresh_conflicted"
-	case ConflictsWithMain:
-		return "conflicts_with_main"
-	case VerificationFailed:
-		return "verification_failed"
-	case WaitingOnProducerDeploy:
-		return "waiting_on_producer_deploy"
-	case AwaitingInput:
-		return "awaiting_input"
-	case Blocked:
-		return "blocked"
-	default:
-		return "blocked"
-	}
-}
-
 // RunFact is the latest run's liveness and disposition as the loop observed it this tick.
-// HasOutcome distinguishes "not yet disposed" from a genuine zero-value Outcome.
 type RunFact struct {
 	Alive                    bool
-	Outcome                  Outcome
-	HasOutcome               bool
+	Outcome                  option.Option[Outcome]
 	LogPath                  string
 	PushRefused              bool
 	PushRefusedPath          string
@@ -219,7 +167,7 @@ type RunFact struct {
 	PROpen                   bool
 	PRMerged                 bool
 	PRClosedUnmerged         bool
-	Verdict                  *verdict.Result
+	Verdict                  option.Option[verdict.Result]
 	RefreshRefused           bool
 	RefreshRefusedReason     Reason
 	MidMerge                 bool
@@ -231,11 +179,11 @@ type RunFact struct {
 	Question                 string
 }
 
-// Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
+// Facts is everything Status derives from. LatestRun is None until a ticket's first launch.
 type Facts struct {
 	Unlock          Unlock
 	Authorised      bool
-	LatestRun       *RunFact
+	LatestRun       option.Option[RunFact]
 	CancelledMember bool
 	ConflictedBase  string
 }
@@ -244,10 +192,10 @@ type Facts struct {
 // disposition outrank the unlocked and authorised facts that mattered only before its first
 // launch.
 func Status(f Facts) (State, Reason) {
-	if f.LatestRun != nil && f.Unlock.BlockerClosed {
+	if f.LatestRun.IsSome() && f.Unlock.BlockerClosed {
 		return BaseGone, f.Unlock.Reason
 	}
-	if f.LatestRun != nil && f.LatestRun.PRMerged {
+	if f.LatestRun.IsSome() && f.LatestRun.Unwrap().PRMerged {
 		return PRMerged, "pull request merged"
 	}
 	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock); ok {
@@ -269,19 +217,20 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
-	if run == nil {
+func statusFromRun(latest option.Option[RunFact], unlock Unlock) (State, Reason, bool) {
+	if latest.IsNone() {
 		return 0, "", false
 	}
+	run := latest.Unwrap()
 	if run.Alive {
 		return Running, "agent running", true
 	}
-	if !run.HasOutcome {
+	if run.Outcome.IsNone() {
 		return 0, "", false
 	}
-	switch run.Outcome {
+	switch run.Outcome.Unwrap() {
 	case OutcomePush:
-		state, reason := statusFromPush(*run, unlock)
+		state, reason := statusFromPush(run, unlock)
 		return state, reason, true
 	case OutcomeAsked:
 		return AwaitingInput, firstLine(run.Question), true
@@ -319,15 +268,15 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		return PushFailed, "push or pull request creation failed"
 	case run.RefreshRefused:
 		return NeedsYou, run.RefreshRefusedReason
-	case run.Verdict != nil && run.Verdict.Verdict != verdict.Checking:
-		return stateOfVerdict(*run.Verdict), Reason(run.Verdict.Reason)
+	case run.Verdict.IsSome() && run.Verdict.Unwrap().Kind != verdict.Checking:
+		return stateOfVerdict(run.Verdict.Unwrap()), Reason(run.Verdict.Unwrap().Reason)
 	case run.PROpen:
-		if run.Verdict != nil {
-			return Checking, Reason(run.Verdict.Reason)
+		if run.Verdict.IsSome() {
+			return Checking, Reason(run.Verdict.Unwrap().Reason)
 		}
 		return Checking, "pull request open, no verdict yet"
 	case !unlock.Unlocked && len(unlock.Blocking) > 0:
-		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", strings.Join(unlock.Blocking, ", ")))
+		return PushPending, Reason(fmt.Sprintf("push held: waiting on %s", joinURLs(unlock.Blocking)))
 	case !unlock.Unlocked:
 		return PushPending, Reason("push held: " + string(unlock.Reason))
 	default:
@@ -336,7 +285,7 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 }
 
 func stateOfVerdict(r verdict.Result) State {
-	switch r.Verdict {
+	switch r.Kind {
 	case verdict.BaseMoved:
 		return BaseMoved
 	case verdict.WaitingOnProducerDeploy:
@@ -344,13 +293,13 @@ func stateOfVerdict(r verdict.Result) State {
 	case verdict.ReviewMe:
 		return ReviewMe
 	case verdict.NeedsYou:
-		if len(r.RedLeaves) > 0 {
-			return CIFailed
-		}
 		return NeedsYou
-	default:
+	case verdict.CIFailed:
+		return CIFailed
+	case verdict.Checking, verdict.KindUnknown:
 		return Checking
 	}
+	return Checking
 }
 
 func conflictedBaseReason(base string) Reason {
@@ -363,9 +312,9 @@ func conflictingPeerReason(peer string) Reason {
 		"%s is a lower-ref open peer this branch conflicts with: only one of a conflicting pair proceeds at a time", peer))
 }
 
-func waitingOnBlockers(blocking []string) Reason {
+func waitingOnBlockers(blocking []TicketURL) Reason {
 	if len(blocking) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s's PR", blocking[0]))
 	}
-	return Reason(fmt.Sprintf("waiting on %d blockers' PRs: %s", len(blocking), strings.Join(blocking, ", ")))
+	return Reason(fmt.Sprintf("waiting on %d blockers' PRs: %s", len(blocking), joinURLs(blocking)))
 }

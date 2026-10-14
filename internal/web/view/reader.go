@@ -3,12 +3,13 @@ package view
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -23,17 +24,17 @@ type Board struct {
 	Tabs             []FilterTab
 	BoardPath        string
 	BoardPollSeconds int
-	Launched         *Age
+	Launched         option.Option[Age]
 	TicketCount      int
 	WaveCount        int
 	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
-	Launch *LaunchModal
+	Launch option.Option[LaunchModal]
 }
 
 func (b Board) Row(ticketURL string) (Row, bool) {
 	for _, g := range b.Groups {
-		if g.Root != nil && g.Root.URL == ticketURL {
-			return *g.Root, true
+		if g.Root.IsSome() && g.Root.Unwrap().URL == ticketURL {
+			return g.Root.Unwrap(), true
 		}
 		for _, child := range g.Children {
 			if child.URL == ticketURL {
@@ -60,6 +61,8 @@ func IsInvalid(err error) bool {
 // intent.
 type Reader struct {
 	store            *store.Store
+	frameStore       frameStore
+	derive           func(plan.Input) plan.Snapshot
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -67,22 +70,25 @@ type Reader struct {
 	renderLine       LineRenderer
 }
 
-func NewReader(st *store.Store, dataDir string, renderLine LineRenderer) *Reader {
+func NewReader(
+	st *store.Store, dataDir string, renderLine LineRenderer, boardPollSeconds, spendLimit5h int,
+) *Reader {
 	return &Reader{
 		store: st, dataDir: dataDir, renderLine: renderLine,
-		boardPollSeconds: config.DefaultBoardPollSeconds,
+		frameStore: st,
+		derive: func(in plan.Input) plan.Snapshot {
+			return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
+		},
+		boardPollSeconds: boardPollSeconds,
+		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
 	}
 }
 
-func (r *Reader) SetBoardPollSeconds(seconds int) { r.boardPollSeconds = seconds }
-
-func (r *Reader) SetSpendLimit5h(pct int) { r.spendLimit5h = pct }
-
 func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, error) {
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
-		return plan.Snapshot{}, err
+		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = now
 	return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil
@@ -91,51 +97,20 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 // Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
 // a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load frame: %w", err)
 	}
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Board{}, err
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Board{}, err
-	}
-	params.Project = project.Name
-	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return Board{}, err
-	}
-	lastErr, failed, err := r.store.LastError(ctx)
-	if err != nil {
-		return Board{}, err
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Board{}, err
-	}
-
-	in.Now = now
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Board{}, err
-	}
+	params = f.params
 	ticketSpend, err := r.store.BoardTicketSpend(ctx, params.Repo, params.Feature)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load board ticket spend: %w", err)
 	}
-
-	projects, err := r.projectMarks(ctx)
-	if err != nil {
-		return Board{}, err
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
+	rows := deriveRows(f.tickets, f.in, f.snap, f.projects)
 	if err := applySpend(rows, r.spend); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
-	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
+	applyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
 		err = EachTicketEvent(ctx, r.store, params.Sel, 0, func(e store.Event) error {
@@ -143,42 +118,37 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 			return nil
 		})
 		if err != nil {
-			return Board{}, err
+			return Board{}, fmt.Errorf("load ticket events after: %w", err)
 		}
 	}
 	if err := applyViewState(rows, params, records, r.renderLine); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("apply view state: %w", err)
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
-	if project.Name != "" {
-		groups = filterGroupsByProject(groups, project.Repos)
-	}
-	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
-		return Board{}, err
+	if f.project.Name != "" {
+		groups = filterGroupsByProject(groups, f.project.Repos)
 	}
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
-	blocking := make(map[string][]string, len(scoped))
+	blocking := make(map[plan.TicketURL][]plan.TicketURL, len(scoped))
 	for _, row := range scoped {
-		blocking[row.URL] = row.BlockedBy
+		blocking[plan.TicketURL(row.URL)] = plan.TicketURLs(row.BlockedBy)
 	}
-	var launched *Age
+	launched := option.None[Age]()
 	if params.Feature != "" {
 		at, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
 		switch {
 		case err == nil:
-			age := relative(now, at)
-			launched = &age
+			launched = option.Some(relative(now, at))
 		case !errors.Is(err, store.ErrNotFound):
-			return Board{}, err
+			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 	}
 	return Board{
 		Launched:         launched,
 		TicketCount:      len(scoped),
 		WaveCount:        plan.WaveCount(blocking),
-		Chrome:           chrome,
+		Chrome:           f.chrome,
 		Groups:           groups,
 		Sections:         filterSections(sections, params.Filter),
 		Tabs:             filterTabs(sections, params),
@@ -188,109 +158,43 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 }
 
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
-	tickets, err := r.store.Tickets(ctx)
+	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load frame: %w", err)
 	}
-	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Chrome{}, err
-	}
-	project, err := r.projectScope(ctx, params.Project)
-	if err != nil {
-		return Chrome{}, err
-	}
-	params.Project = project.Name
-	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
-
-	obs, observed, err := r.store.LastObservation(ctx)
-	if err != nil {
-		return Chrome{}, err
-	}
-	lastErr, failed, err := r.store.LastError(ctx)
-	if err != nil {
-		return Chrome{}, err
-	}
-	gauges, err := r.store.LatestReadings(ctx)
-	if err != nil {
-		return Chrome{}, err
-	}
-	split, err := r.gaugeSplit(ctx, now)
-	if err != nil {
-		return Chrome{}, err
-	}
-	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
-	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
-		return Chrome{}, err
-	}
-	return chrome, nil
+	return f.chrome, nil
 }
-
-func (r *Reader) scopeChrome(
-	ctx context.Context,
-	c *Chrome,
-	tickets []store.Ticket,
-	project store.Project,
-	repo string,
-) error {
-	c.scopeToProject(project)
-	projects, err := r.store.Projects(ctx)
-	if err != nil {
-		return err
-	}
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return err
-	}
-	c.ScopeMenu = scopeChoices(ScopeList(projects, repos), project.Name, repo)
-	if c.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
-		return err
-	}
-	in, err := r.store.PlanInput(ctx)
-	if err != nil {
-		return err
-	}
-	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil)
-	rows = scopeRailRows(rows, RailParams{Project: project.Name, Repo: repo, projectRepos: project.Repos})
-	for _, row := range rows {
-		if row.Glyph != plan.GlyphDone {
-			c.OpenTickets++
-		}
-	}
-	return nil
-}
-
-func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return nil, err
-	}
+func projectMarks(repos []store.Repo) map[string]ProjectMark {
 	marks := make(map[string]ProjectMark, len(repos))
 	for _, repo := range repos {
 		if repo.Project != "" {
 			marks[repo.Name] = ProjectMark{Name: repo.Project, Hue: repo.Hue}
 		}
 	}
-	return marks, nil
+	return marks
 }
 
-func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
-	repos, err := r.store.Repos(ctx)
-	if err != nil {
-		return nil, err
-	}
+func refusedRepos(repos []store.Repo) []RefusedRepo {
 	var refused []RefusedRepo
 	for _, repo := range repos {
-		if repo.State == store.RepoRefused {
+		if repo.Phase == plan.RepoRefused {
 			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: RepoPath(repo.Name)})
 		}
 	}
-	return refused, nil
+	return refused
 }
 
-func (r *Reader) buildChrome(
-	tickets []store.Ticket, obs plan.Observation, observed bool, lastErr store.TickError, failed bool,
-	gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit, now time.Time, params Params,
-) Chrome {
+type chromeInput struct {
+	tickets  []store.Ticket
+	obs      plan.Observation
+	observed bool
+	lastErr  option.Option[store.TickError]
+	gauges   map[agentlog.Window]store.Gauge
+	split    map[agentlog.Window]windowSplit
+}
+
+func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrome {
+	tickets, obs, observed, lastErr, gauges, split := in.tickets, in.obs, in.observed, in.lastErr, in.gauges, in.split
 	c := Chrome{
 		Workspace:    workspaceName(r.dataDir),
 		LiveAgents:   liveAgents(tickets, obs),
@@ -308,14 +212,14 @@ func (r *Reader) buildChrome(
 		InsightsPath: withQuery("/insights", Params{Feature: params.Feature, Project: params.Project}.query()),
 	}
 	if fiveHour := gauges[agentlog.FiveHour].Utilization; spend.Paused(fiveHour, r.spendLimit5h) {
-		c.SpendPaused = &SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h}
+		c.SpendPaused = option.Some(SpendPaused{Pct: spend.Pct(fiveHour), Limit: r.spendLimit5h})
 	}
 	if observed {
 		c.Observe = relative(now, obs.ObservedAt)
 		c.ObserveStale = now.Sub(obs.ObservedAt) >= observeStaleAfter
 	}
-	if failed && (!observed || lastErr.At.After(obs.ObservedAt)) {
-		c.LastError = &TickError{Age: relative(now, lastErr.At), Message: lastErr.Message}
+	if lastErr.IsSome() && (!observed || lastErr.Unwrap().At.After(obs.ObservedAt)) {
+		c.LastError = option.Some(TickError{Age: relative(now, lastErr.Unwrap().At), Message: lastErr.Unwrap().Message})
 	}
 	if params.Repo != "" {
 		c.RepoCrumbPath = RepoPath(params.Repo)
@@ -329,11 +233,11 @@ func (r *Reader) buildChrome(
 func (r *Reader) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Window]windowSplit, error) {
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load fit factors: %w", err)
 	}
 	ccCost, err := r.store.CCCostUSD(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load cc cost usd: %w", err)
 	}
 	split := make(map[agentlog.Window]windowSplit, len(fits))
 	for window, fit := range fits {
@@ -352,7 +256,7 @@ func relative(now, then time.Time) Age {
 func liveAgents(tickets []store.Ticket, obs plan.Observation) int {
 	live := 0
 	for _, t := range tickets {
-		if obs.Runs[t.URL].Alive {
+		if obs.Runs[plan.TicketURL(t.URL)].Alive {
 			live++
 		}
 	}
