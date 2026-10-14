@@ -131,7 +131,7 @@ func (f *Forge) Advance(ctx context.Context) error {
 		if pr.issue.Result == resultConflict && !pr.collided && !now.Before(pr.openedAt.Add(pr.issue.MergeAfter/2)) {
 			pr.collided = true
 			if err := f.collide(ctx, pr); err != nil {
-				return err
+				return fmt.Errorf("collide pull request %d: %w", pr.number, err)
 			}
 			continue
 		}
@@ -143,7 +143,7 @@ func (f *Forge) Advance(ctx context.Context) error {
 			continue
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("squash merge %s: %w", pr.issue.branch, err)
 		}
 		pr.state = gh.Merged
 		pr.mergedAt = now
@@ -156,13 +156,16 @@ func (f *Forge) collide(ctx context.Context, pr *pullRequest) error {
 	for _, name := range pr.issue.Files {
 		files[name] = "package main // landed on main\n"
 	}
-	return f.sb.LandOnMain(ctx, pr.issue.Repo, files)
+	if err := f.sb.LandOnMain(ctx, pr.issue.Repo, files); err != nil {
+		return fmt.Errorf("land on main in %s: %w", pr.issue.Repo, err)
+	}
+	return nil
 }
 
 func (f *Forge) List(ctx context.Context, repoPath string, tracked []string) (gh.Snapshot, error) {
 	repo, err := f.sb.repoFor(ctx, repoPath)
 	if err != nil {
-		return gh.Snapshot{}, err
+		return gh.Snapshot{}, fmt.Errorf("find repo for %s: %w", repoPath, err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -175,7 +178,7 @@ func (f *Forge) List(ctx context.Context, repoPath string, tracked []string) (gh
 		}
 		headOid, err := git(ctx, repo.origin, "rev-parse", "refs/heads/"+branch)
 		if err != nil {
-			return gh.Snapshot{}, err
+			return gh.Snapshot{}, fmt.Errorf("resolve head of %s: %w", branch, err)
 		}
 		if pr.headOid != "" && pr.headOid != headOid {
 			pr.startRun(now)
@@ -193,7 +196,7 @@ func (f *Forge) List(ctx context.Context, repoPath string, tracked []string) (gh
 func (f *Forge) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
 	repo, err := f.sb.repoFor(ctx, repoPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find repo for %s: %w", repoPath, err)
 	}
 	titles := map[string]string{}
 	for _, i := range f.issues {
@@ -207,11 +210,11 @@ func (f *Forge) IssueTitles(ctx context.Context, repoPath string) (map[string]st
 func (f *Forge) Create(ctx context.Context, worktreePath, base, _ string, draft bool) error {
 	repo, err := f.sb.repoFor(ctx, worktreePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("find repo for %s: %w", worktreePath, err)
 	}
 	branch, err := git(ctx, worktreePath, "branch", "--show-current")
 	if err != nil {
-		return err
+		return fmt.Errorf("read current branch of %s: %w", worktreePath, err)
 	}
 	is, ok := f.issueFor(repo, branch)
 	if !ok {
@@ -219,7 +222,7 @@ func (f *Forge) Create(ctx context.Context, worktreePath, base, _ string, draft 
 	}
 	headOid, err := git(ctx, repo.origin, "rev-parse", "refs/heads/"+branch)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve head of %s: %w", branch, err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -246,7 +249,7 @@ func (f *Forge) Edit(ctx context.Context, repoPath, branch, base string) error {
 func (f *Forge) update(ctx context.Context, repoPath, branch string, change func(*pullRequest)) error {
 	repo, err := f.sb.repoFor(ctx, repoPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("find repo for %s: %w", repoPath, err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -242,3 +242,13 @@ func TestNewStartsWithNoTrackedRepos(t *testing.T) {
 		t.Errorf("RunOnce with no repos = %v, want nil", err)
 	}
 }
+
+func TestNewNamesTheStepThatFailed(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent.toml")
+
+	_, err := app.New(t.Context(), slog.New(slog.DiscardHandler), missing, config.Env{})
+
+	if err == nil || !strings.Contains(err.Error(), "load config") {
+		t.Fatalf("New error = %v, want it to name load config", err)
+	}
+}

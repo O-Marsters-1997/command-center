@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -49,9 +50,12 @@ func run(ctx context.Context, logger *slog.Logger, configPath string, env config
 
 	instance, err := app.New(ctx, logger, configPath, env, appOptions()...)
 	if err != nil {
-		return err
+		return fmt.Errorf("start app: %w", err)
 	}
 	defer func() { err = errors.Join(err, instance.Close()) }()
 
-	return instance.Run(ctx)
+	if err := instance.Run(ctx); err != nil {
+		return fmt.Errorf("run app: %w", err)
+	}
+	return nil
 }

@@ -71,7 +71,7 @@ func New(
 
 	cfg, err := config.LoadConfig(configPath, env)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 	var webOpts []web.Option
 	if loc, err := time.LoadLocation(env.TZ); env.TZ != "" && err == nil {
@@ -79,11 +79,11 @@ func New(
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
 	lock, err := Lock(ws.LockPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lock workspace: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -93,7 +93,7 @@ func New(
 
 	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -102,7 +102,7 @@ func New(
 	}()
 
 	if err := loop.WriteAgentFiles(ws); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write agent files: %w", err)
 	}
 
 	observe := settings.observe
@@ -136,7 +136,12 @@ func New(
 	}, nil
 }
 
-func (a *App) RunOnce(ctx context.Context) error { return a.loop.RunOnce(ctx) }
+func (a *App) RunOnce(ctx context.Context) error {
+	if err := a.loop.RunOnce(ctx); err != nil {
+		return fmt.Errorf("run loop once: %w", err)
+	}
+	return nil
+}
 
 func (a *App) Handler() http.Handler { return a.server }
 
@@ -159,7 +164,10 @@ func (a *App) Run(ctx context.Context) error {
 
 	g.Go(func() error {
 		defer stop()
-		return a.loop.Run(ctx)
+		if err := a.loop.Run(ctx); err != nil {
+			return fmt.Errorf("run loop: %w", err)
+		}
+		return nil
 	})
 	g.Go(func() error {
 		defer stop()
@@ -173,10 +181,16 @@ func (a *App) Run(ctx context.Context) error {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdown)
+		if err := srv.Shutdown(shutdown); err != nil {
+			return fmt.Errorf("shut down server: %w", err)
+		}
+		return nil
 	})
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("run app: %w", err)
+	}
+	return nil
 }
 
 func (a *App) Close() error { return errors.Join(a.store.Close(), a.lock.Close()) }

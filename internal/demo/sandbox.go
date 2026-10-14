@@ -42,11 +42,11 @@ type sandboxRepo struct {
 func NewSandbox(ctx context.Context, repos []Repo) (_ *Sandbox, err error) {
 	root, err := os.MkdirTemp("", "cc-demo-")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create sandbox root: %w", err)
 	}
 	dsn, dropDB, err := cctest.Create()
 	if err != nil {
-		return nil, errors.Join(err, os.RemoveAll(root))
+		return nil, errors.Join(fmt.Errorf("create sandbox database: %w", err), os.RemoveAll(root))
 	}
 	sb := &Sandbox{root: root, DSN: dsn, dropDB: dropDB, byOrigin: map[string]*sandboxRepo{}}
 	defer func() {
@@ -58,7 +58,7 @@ func NewSandbox(ctx context.Context, repos []Repo) (_ *Sandbox, err error) {
 	for _, r := range repos {
 		repo, err := sb.addRepo(ctx, r)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("add sandbox repo %s: %w", r.Name, err)
 		}
 		sb.repos = append(sb.repos, repo)
 		sb.byOrigin[repo.origin] = repo
@@ -77,16 +77,16 @@ func (s *Sandbox) addRepo(ctx context.Context, r Repo) (*sandboxRepo, error) {
 		merger:       filepath.Join(s.root, "mergers", name),
 	}
 	if err := os.MkdirAll(repo.origin, 0o750); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create origin dir: %w", err)
 	}
 	if _, err := git(ctx, repo.origin, "init", "-q", "--bare", "-b", "main"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("init origin: %w", err)
 	}
 	if _, err := git(ctx, s.root, "clone", "-q", repo.origin, repo.merger); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("clone merger: %w", err)
 	}
 	if _, err := git(ctx, repo.merger, "checkout", "-q", "-b", "main"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("checkout main in merger: %w", err)
 	}
 	seed := maps.Clone(r.Files)
 	if seed == nil {
@@ -94,10 +94,10 @@ func (s *Sandbox) addRepo(ctx context.Context, r Repo) (*sandboxRepo, error) {
 	}
 	seed[config.SettingsFile] = settingsBody(r)
 	if err := commitAll(ctx, repo.merger, "seed "+path.Base(r.Name), seed); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("seed merger: %w", err)
 	}
 	if _, err := git(ctx, repo.merger, "push", "-q", "origin", "main"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("push seed: %w", err)
 	}
 	return repo, nil
 }
@@ -121,7 +121,7 @@ func (r *sandboxRepo) syncMain(ctx context.Context) error {
 		{"reset", "-q", "--hard", "origin/main"},
 	} {
 		if _, err := git(ctx, r.merger, args...); err != nil {
-			return err
+			return fmt.Errorf("sync main with git %s: %w", args[0], err)
 		}
 	}
 	return nil
@@ -129,7 +129,7 @@ func (r *sandboxRepo) syncMain(ctx context.Context) error {
 
 func (r *sandboxRepo) squashMerge(ctx context.Context, branch, message string) error {
 	if err := r.syncMain(ctx); err != nil {
-		return err
+		return fmt.Errorf("sync main before merging %s: %w", branch, err)
 	}
 	if _, err := git(ctx, r.merger, "merge", "-q", "--squash", "origin/"+branch); err != nil {
 		_, resetErr := git(ctx, r.merger, "reset", "-q", "--hard")
@@ -137,7 +137,7 @@ func (r *sandboxRepo) squashMerge(ctx context.Context, branch, message string) e
 	}
 	for _, args := range [][]string{{"commit", "-q", "-m", message}, {"push", "-q", "origin", "main"}} {
 		if _, err := git(ctx, r.merger, args...); err != nil {
-			return err
+			return fmt.Errorf("git %s while merging %s: %w", args[0], branch, err)
 		}
 	}
 	return nil
@@ -152,13 +152,15 @@ func (s *Sandbox) LandOnMain(ctx context.Context, repoName string, files map[str
 	}
 	repo := s.repos[idx]
 	if err := repo.syncMain(ctx); err != nil {
-		return err
+		return fmt.Errorf("sync main of %s: %w", repoName, err)
 	}
 	if err := commitAll(ctx, repo.merger, "land on main", files); err != nil {
-		return err
+		return fmt.Errorf("commit to main of %s: %w", repoName, err)
 	}
-	_, err := git(ctx, repo.merger, "push", "-q", "origin", "main")
-	return err
+	if _, err := git(ctx, repo.merger, "push", "-q", "origin", "main"); err != nil {
+		return fmt.Errorf("push main of %s: %w", repoName, err)
+	}
+	return nil
 }
 
 func (s *Sandbox) Repos(trackedAt time.Time) []store.Repo {
@@ -176,7 +178,7 @@ func (s *Sandbox) Close() error { return errors.Join(s.dropDB(), os.RemoveAll(s.
 func (s *Sandbox) repoFor(ctx context.Context, gitDir string) (*sandboxRepo, error) {
 	origin, err := git(ctx, gitDir, "remote", "get-url", "origin")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read origin of %s: %w", gitDir, err)
 	}
 	repo, ok := s.byOrigin[origin]
 	if !ok {
@@ -197,7 +199,7 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	}, args...)
 	out, err := command.Output(ctx, dir, "git", full...)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("git %s in %s: %w", args[0], dir, err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -206,10 +208,10 @@ func writeFiles(dir string, files map[string]string) error {
 	for name, contents := range files {
 		full := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
-			return err
+			return fmt.Errorf("create dir for %s: %w", name, err)
 		}
 		if err := os.WriteFile(full, []byte(contents), 0o600); err != nil {
-			return err
+			return fmt.Errorf("write %s: %w", name, err)
 		}
 	}
 	return nil
@@ -217,11 +219,13 @@ func writeFiles(dir string, files map[string]string) error {
 
 func commitAll(ctx context.Context, dir, message string, files map[string]string) error {
 	if err := writeFiles(dir, files); err != nil {
-		return err
+		return fmt.Errorf("write files to %s: %w", dir, err)
 	}
 	if _, err := git(ctx, dir, "add", "-A"); err != nil {
-		return err
+		return fmt.Errorf("stage files: %w", err)
 	}
-	_, err := git(ctx, dir, "commit", "-q", "--allow-empty", "-m", message)
-	return err
+	if _, err := git(ctx, dir, "commit", "-q", "--allow-empty", "-m", message); err != nil {
+		return fmt.Errorf("commit %q: %w", message, err)
+	}
+	return nil
 }

@@ -62,20 +62,20 @@ func LoadConfig(path string, env Env) (Config, error) {
 
 	dataDir, err := ResolveDataDir(cfg.DataDir, env)
 	if err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("resolve data dir: %w", err)
 	}
 	cfg.DataDir = dataDir
 	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL, env)
 	claudeProjectsDir, err := ResolveClaudeProjectsDir(cfg.ClaudeProjectsDir, env)
 	if err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("resolve claude projects dir: %w", err)
 	}
 	cfg.ClaudeProjectsDir = claudeProjectsDir
 	if err := applyAgentCommandEnv(&cfg, env); err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("apply agent command env: %w", err)
 	}
 	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("check agent command: %w", err)
 	}
 	if cfg.MaxTurns > 0 && len(cfg.AgentCommand) > 0 {
 		cfg.AgentCommand = withMaxTurns(cfg.AgentCommand, cfg.MaxTurns)

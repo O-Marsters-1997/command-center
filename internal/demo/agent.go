@@ -54,7 +54,7 @@ func NewAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
 func (a *Agent) Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.SpawnResult, error) {
 	branch, err := git(ctx, cfg.WorktreePath, "branch", "--show-current")
 	if err != nil {
-		return runner.SpawnResult{}, err
+		return runner.SpawnResult{}, fmt.Errorf("read current branch of %s: %w", cfg.WorktreePath, err)
 	}
 	ownerIdx := slices.IndexFunc(a.issues, func(i issue) bool { return i.branch == branch })
 	if ownerIdx < 0 {
@@ -78,7 +78,7 @@ func (a *Agent) Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.Spawn
 	}
 	a.runs[a.nextPid] = run
 	if err := run.write(map[string]any{"type": "system", "subtype": "init", "session_id": branch}); err != nil {
-		return runner.SpawnResult{}, err
+		return runner.SpawnResult{}, fmt.Errorf("write init line for %s: %w", branch, err)
 	}
 	return runner.SpawnResult{Pid: a.nextPid}, nil
 }
@@ -95,13 +95,13 @@ func (a *Agent) Step(ctx context.Context) error {
 			continue
 		}
 		if err := a.turn(run); err != nil {
-			return err
+			return fmt.Errorf("play turn for %s: %w", run.issue.branch, err)
 		}
 		if now.Before(run.started.Add(run.issue.AgentAfter)) {
 			continue
 		}
 		if err := run.finish(ctx, now); err != nil {
-			return err
+			return fmt.Errorf("finish run for %s: %w", run.issue.branch, err)
 		}
 	}
 	return nil
@@ -129,7 +129,7 @@ func (r *agentRun) finish(ctx context.Context, now time.Time) error {
 		return r.write(map[string]any{"type": "result", "subtype": "error_during_execution", "is_error": true})
 	}
 	if err := r.commitWork(ctx); err != nil {
-		return err
+		return fmt.Errorf("commit work: %w", err)
 	}
 	r.finished = true
 	return r.write(map[string]any{
@@ -155,11 +155,11 @@ func (r *agentRun) commitWork(ctx context.Context) error {
 func (r *agentRun) write(line map[string]any) error {
 	encoded, err := json.Marshal(line)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode log line: %w", err)
 	}
 	f, err := os.OpenFile(r.logPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
-		return err
+		return fmt.Errorf("open log %s: %w", r.logPath, err)
 	}
 	_, werr := f.Write(append(encoded, '\n'))
 	return errors.Join(werr, f.Close())
