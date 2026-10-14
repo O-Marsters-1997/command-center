@@ -8,47 +8,51 @@ VALUES (
 
 -- name: LatestSessionID :one
 SELECT session_id::text AS session_id FROM runs
-WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
+WHERE ticket_id = sqlc.arg(ticket_id) AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 
 -- name: RecordSpawn :execrows
-UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
+UPDATE runs SET pgid = sqlc.arg(pgid), proc_started_at = sqlc.arg(proc_started_at), log_path = sqlc.arg(log_path)
+WHERE id = sqlc.arg(id);
 
 -- name: RecordDisposition :execrows
-UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3, cost_usd = $4
-WHERE id = $5 AND outcome IS NULL;
+UPDATE runs SET outcome = sqlc.arg(outcome), exit_code = sqlc.arg(exit_code), ended_at = sqlc.arg(ended_at),
+    cost_usd = sqlc.arg(cost_usd)
+WHERE id = sqlc.arg(id) AND outcome IS NULL;
 
 -- name: RecordQuestion :execrows
-UPDATE runs SET question = $1 WHERE id = $2;
+UPDATE runs SET question = sqlc.arg(question) WHERE id = sqlc.arg(id);
 
 -- name: InsertCutFailedRun :one
 INSERT INTO runs (ticket_id, kind, prompt_hash, outcome, ended_at)
-VALUES ($1, 'agent', $2, $3, $4) RETURNING id;
+VALUES (sqlc.arg(ticket_id), 'agent', sqlc.arg(prompt_hash), sqlc.arg(outcome), sqlc.arg(ended_at)) RETURNING id;
 
 -- name: PendingRunsAwaitingDisposition :many
 SELECT id, ticket_id, kind, pgid, proc_started_at, baseline_sha, log_path FROM runs
 WHERE pgid IS NOT NULL AND outcome IS NULL;
 
--- name: LatestRunsByTicket :many
-SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind, r.question
-FROM runs r
-JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
-  ON latest.ticket_id = r.ticket_id AND latest.id = r.id;
+-- name: ListLatestRunsByTicket :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
+       outcome, exit_code, ended_at, prompt_hash, kind, question
+FROM runs
+WHERE ticket_id IS NOT NULL
+ORDER BY ticket_id, id DESC;
 
 -- name: QueueVerbIntent :exec
-INSERT INTO intents (at, ticket_id, verb) VALUES ($1, $2, $3);
+INSERT INTO intents (at, ticket_id, verb) VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb));
 
 -- name: QueueVerbIntentWithPayload :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, $3, $4);
+INSERT INTO intents (at, ticket_id, verb, payload)
+VALUES (sqlc.arg(at), sqlc.arg(ticket_id), sqlc.arg(verb), sqlc.arg(payload));
 
 -- name: PendingVerbIntents :many
-SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id;
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
+WHERE verb = sqlc.arg(verb) AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
 
 -- name: ConsumeVerbIntent :execrows
-UPDATE intents SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL;
+UPDATE intents SET consumed_at = sqlc.arg(consumed_at) WHERE id = sqlc.arg(id) AND consumed_at IS NULL;
 
 -- name: ActiveLaunchHashes :many
 SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm
@@ -56,7 +60,7 @@ JOIN launches l ON l.id = lm.launch_id
 WHERE l.state = 'active';
 
 -- name: RunIDsForTicket :many
-SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id;
+SELECT id FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id;
 
 -- name: LatestSessionRuns :many
 SELECT runs.id,
@@ -72,4 +76,4 @@ WHERE runs.ticket_id = sqlc.arg(ticket_id) AND runs.kind IN ('agent', 'follow_up
 ORDER BY runs.id;
 
 -- name: LatestRunLog :one
-SELECT log_path, ended_at FROM runs WHERE ticket_id = $1 ORDER BY id DESC LIMIT 1;
+SELECT log_path, ended_at FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id DESC LIMIT 1;

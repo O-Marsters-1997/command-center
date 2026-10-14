@@ -142,7 +142,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 
 // LatestRunsByTicket returns each ticket's most recent run (highest id).
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSummary, error) {
-	rows, err := s.q.LatestRunsByTicket(ctx)
+	rows, err := s.q.ListLatestRunsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}

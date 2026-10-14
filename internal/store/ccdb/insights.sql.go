@@ -7,6 +7,7 @@ package ccdb
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -21,14 +22,14 @@ FROM tickets t
 LEFT JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
     AND (m.merged_at IS NULL OR r.ended_at < m.merged_at)
-WHERE ($1::text = '' OR t.repo = $1)
-  AND ($2::text = '' OR t.feature = $2)
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
 GROUP BY t.url, m.merged_at
 `
 
 type BoardTicketSpendParams struct {
-	Repo    string
-	Feature string
+	Repo    sql.NullString
+	Feature sql.NullString
 }
 
 type BoardTicketSpendRow struct {
@@ -79,16 +80,16 @@ SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
-WHERE ($1::text = '' OR t.repo = $1)
-  AND ($2::text = '' OR t.feature = $2)
+WHERE ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
   AND (m.merged_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
 GROUP BY t.url, t.title, t.feature, m.merged_at
 ORDER BY m.merged_at
 `
 
 type MergedTicketSpendParams struct {
-	Repo     string
-	Feature  string
+	Repo     sql.NullString
+	Feature  sql.NullString
 	Timezone string
 	Since    time.Time
 	Until    time.Time
@@ -145,14 +146,14 @@ FROM tickets t
 JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
 WHERE t.withdrawn_at IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
-  AND ($1::text = '' OR t.repo = $1)
-  AND ($2::text = '' OR t.feature = $2)
+  AND ($1::text IS NULL OR t.repo = $1)
+  AND ($2::text IS NULL OR t.feature = $2)
   AND (t.withdrawn_at AT TIME ZONE $3::text)::date BETWEEN $4::date AND $5::date
 `
 
 type WithdrawnTicketWasteParams struct {
-	Repo     string
-	Feature  string
+	Repo     sql.NullString
+	Feature  sql.NullString
 	Timezone string
 	Since    time.Time
 	Until    time.Time

@@ -46,21 +46,21 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[string]bool, er
 
 // LastPushedTips returns each ticket's most recently recorded pushed_tip.
 func (s *Store) LastPushedTips(ctx context.Context) (map[string]string, error) {
-	rows, err := s.q.LastPushedTips(ctx)
+	pushes, err := s.LatestPushes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("select last pushed tips: %w", err)
+		return nil, err
 	}
 
-	tips := map[string]string{}
-	for _, row := range rows {
-		tips[row.TicketID] = row.PushedTip
+	tips := make(map[string]string, len(pushes))
+	for ticketID, push := range pushes {
+		tips[ticketID] = push.PushedTip
 	}
 	return tips, nil
 }
 
 // LatestPushes returns each ticket's latest recorded push, keyed by ticket URL.
 func (s *Store) LatestPushes(ctx context.Context) (map[string]plan.PushRow, error) {
-	rows, err := s.q.LatestPushes(ctx)
+	rows, err := s.q.ListLatestPushes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest pushes: %w", err)
 	}
@@ -87,7 +87,11 @@ const (
 // PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL.
 // A failure blocks the automatic retry; a refusal never does.
 func (s *Store) PushFacts(ctx context.Context) (map[string]plan.PushFact, error) {
-	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{Kind: EventPushRefused, Kind_2: EventPushFailed})
+	kinds, err := encodeJSON("push fact kinds", []string{EventPushRefused, EventPushFailed})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListPushFacts(ctx, kinds)
 	if err != nil {
 		return nil, fmt.Errorf("select push facts: %w", err)
 	}

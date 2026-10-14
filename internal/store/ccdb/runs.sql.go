@@ -142,65 +142,6 @@ func (q *Queries) LatestRunLog(ctx context.Context, ticketID sql.NullString) (La
 	return i, err
 }
 
-const latestRunsByTicket = `-- name: LatestRunsByTicket :many
-SELECT r.id, r.ticket_id::text AS ticket_id, r.pgid, r.proc_started_at, r.baseline_sha, r.log_path,
-       r.outcome, r.exit_code, r.ended_at, r.prompt_hash, r.kind, r.question
-FROM runs r
-JOIN (SELECT ticket_id, MAX(id) AS id FROM runs WHERE ticket_id IS NOT NULL GROUP BY ticket_id) latest
-  ON latest.ticket_id = r.ticket_id AND latest.id = r.id
-`
-
-type LatestRunsByTicketRow struct {
-	ID            int64
-	TicketID      string
-	Pgid          sql.NullInt64
-	ProcStartedAt sql.NullTime
-	BaselineSHA   sql.NullString
-	LogPath       sql.NullString
-	Outcome       sql.NullString
-	ExitCode      sql.NullInt64
-	EndedAt       sql.NullTime
-	PromptHash    sql.NullString
-	Kind          string
-	Question      sql.NullString
-}
-
-func (q *Queries) LatestRunsByTicket(ctx context.Context) ([]LatestRunsByTicketRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestRunsByTicket)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []LatestRunsByTicketRow
-	for rows.Next() {
-		var i LatestRunsByTicketRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.TicketID,
-			&i.Pgid,
-			&i.ProcStartedAt,
-			&i.BaselineSHA,
-			&i.LogPath,
-			&i.Outcome,
-			&i.ExitCode,
-			&i.EndedAt,
-			&i.PromptHash,
-			&i.Kind,
-			&i.Question,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const latestSessionID = `-- name: LatestSessionID :one
 SELECT session_id::text AS session_id FROM runs
 WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1
@@ -247,6 +188,65 @@ func (q *Queries) LatestSessionRuns(ctx context.Context, ticketID sql.NullString
 			&i.ID,
 			&i.LogPath,
 			&i.Message,
+			&i.Question,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestRunsByTicket = `-- name: ListLatestRunsByTicket :many
+SELECT DISTINCT ON (ticket_id) id, ticket_id::text AS ticket_id, pgid, proc_started_at, baseline_sha, log_path,
+       outcome, exit_code, ended_at, prompt_hash, kind, question
+FROM runs
+WHERE ticket_id IS NOT NULL
+ORDER BY ticket_id, id DESC
+`
+
+type ListLatestRunsByTicketRow struct {
+	ID            int64
+	TicketID      string
+	Pgid          sql.NullInt64
+	ProcStartedAt sql.NullTime
+	BaselineSHA   sql.NullString
+	LogPath       sql.NullString
+	Outcome       sql.NullString
+	ExitCode      sql.NullInt64
+	EndedAt       sql.NullTime
+	PromptHash    sql.NullString
+	Kind          string
+	Question      sql.NullString
+}
+
+func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsByTicketRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestRunsByTicket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestRunsByTicketRow
+	for rows.Next() {
+		var i ListLatestRunsByTicketRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Pgid,
+			&i.ProcStartedAt,
+			&i.BaselineSHA,
+			&i.LogPath,
+			&i.Outcome,
+			&i.ExitCode,
+			&i.EndedAt,
+			&i.PromptHash,
+			&i.Kind,
 			&i.Question,
 		); err != nil {
 			return nil, err
@@ -341,7 +341,8 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 }
 
 const pendingVerbIntents = `-- name: PendingVerbIntents :many
-SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents
+WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
 `
 
 type PendingVerbIntentsRow struct {
@@ -389,7 +390,8 @@ func (q *Queries) QueueVerbIntent(ctx context.Context, arg QueueVerbIntentParams
 }
 
 const queueVerbIntentWithPayload = `-- name: QueueVerbIntentWithPayload :exec
-INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, $3, $4)
+INSERT INTO intents (at, ticket_id, verb, payload)
+VALUES ($1, $2, $3, $4)
 `
 
 type QueueVerbIntentWithPayloadParams struct {
@@ -410,7 +412,8 @@ func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbI
 }
 
 const recordDisposition = `-- name: RecordDisposition :execrows
-UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3, cost_usd = $4
+UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3,
+    cost_usd = $4
 WHERE id = $5 AND outcome IS NULL
 `
 
@@ -454,7 +457,8 @@ func (q *Queries) RecordQuestion(ctx context.Context, arg RecordQuestionParams) 
 }
 
 const recordSpawn = `-- name: RecordSpawn :execrows
-UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4
+UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3
+WHERE id = $4
 `
 
 type RecordSpawnParams struct {

@@ -8,51 +8,36 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 )
 
-const latestRefreshOutcomes = `-- name: LatestRefreshOutcomes :many
-SELECT e.ticket_id, e.kind, e.detail
+const listLatestRefreshOutcomes = `-- name: ListLatestRefreshOutcomes :many
+SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
 FROM events e
-JOIN (
-    SELECT e2.ticket_id, MAX(e2.id) AS id
-    FROM events e2
-    LEFT JOIN (
-        SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
-    ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN ($1, $2, $3, $4, $5) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
-    GROUP BY e2.ticket_id
-) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id
+LEFT JOIN (
+    SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
+) p ON p.ticket_id = e.ticket_id
+WHERE e.ticket_id IS NOT NULL
+  AND e.kind IN (SELECT jsonb_array_elements_text($1::jsonb))
+  AND (p.pushed_at IS NULL OR e.at > p.pushed_at)
+ORDER BY e.ticket_id, e.id DESC
 `
 
-type LatestRefreshOutcomesParams struct {
-	Kind   string
-	Kind_2 string
-	Kind_3 string
-	Kind_4 string
-	Kind_5 string
-}
-
-type LatestRefreshOutcomesRow struct {
+type ListLatestRefreshOutcomesRow struct {
 	TicketID sql.NullString
 	Kind     string
 	Detail   string
 }
 
-func (q *Queries) LatestRefreshOutcomes(ctx context.Context, arg LatestRefreshOutcomesParams) ([]LatestRefreshOutcomesRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestRefreshOutcomes,
-		arg.Kind,
-		arg.Kind_2,
-		arg.Kind_3,
-		arg.Kind_4,
-		arg.Kind_5,
-	)
+func (q *Queries) ListLatestRefreshOutcomes(ctx context.Context, kinds json.RawMessage) ([]ListLatestRefreshOutcomesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestRefreshOutcomes, kinds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LatestRefreshOutcomesRow
+	var items []ListLatestRefreshOutcomesRow
 	for rows.Next() {
-		var i LatestRefreshOutcomesRow
+		var i ListLatestRefreshOutcomesRow
 		if err := rows.Scan(&i.TicketID, &i.Kind, &i.Detail); err != nil {
 			return nil, err
 		}

@@ -120,30 +120,33 @@ func (q *Queries) InsertLaunchEvent(ctx context.Context, arg InsertLaunchEventPa
 	return err
 }
 
-const insertLaunchMember = `-- name: InsertLaunchMember :exec
-INSERT INTO launch_members (launch_id, ticket_id, prompt_hash) VALUES ($1, $2, $3)
+const insertLaunchMembers = `-- name: InsertLaunchMembers :exec
+INSERT INTO launch_members (launch_id, ticket_id, prompt_hash)
+SELECT $1::bigint, m.ticket_id, m.prompt_hash
+FROM jsonb_to_recordset($2::jsonb) AS m(ticket_id text, prompt_hash text)
 `
 
-type InsertLaunchMemberParams struct {
-	LaunchID   int64
-	TicketID   string
-	PromptHash string
+type InsertLaunchMembersParams struct {
+	LaunchID int64
+	Members  json.RawMessage
 }
 
-func (q *Queries) InsertLaunchMember(ctx context.Context, arg InsertLaunchMemberParams) error {
-	_, err := q.db.ExecContext(ctx, insertLaunchMember, arg.LaunchID, arg.TicketID, arg.PromptHash)
+func (q *Queries) InsertLaunchMembers(ctx context.Context, arg InsertLaunchMembersParams) error {
+	_, err := q.db.ExecContext(ctx, insertLaunchMembers, arg.LaunchID, arg.Members)
 	return err
 }
 
-const launchMemberships = `-- name: LaunchMemberships :many
+const listLaunchMemberships = `-- name: ListLaunchMemberships :many
 SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
        COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 FROM launch_members lm
 JOIN launches l ON l.id = lm.launch_id
 WHERE l.state IN ('active', 'cancelled')
+ORDER BY (l.state = 'active') DESC, lm.launch_id DESC, lm.ticket_id
+LIMIT $1
 `
 
-type LaunchMembershipsRow struct {
+type ListLaunchMembershipsRow struct {
 	TicketID   string
 	LaunchID   int64
 	State      string
@@ -151,15 +154,15 @@ type LaunchMembershipsRow struct {
 	Members    int64
 }
 
-func (q *Queries) LaunchMemberships(ctx context.Context) ([]LaunchMembershipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, launchMemberships)
+func (q *Queries) ListLaunchMemberships(ctx context.Context, maxRows int32) ([]ListLaunchMembershipsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLaunchMemberships, maxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LaunchMembershipsRow
+	var items []ListLaunchMembershipsRow
 	for rows.Next() {
-		var i LaunchMembershipsRow
+		var i ListLaunchMembershipsRow
 		if err := rows.Scan(
 			&i.TicketID,
 			&i.LaunchID,

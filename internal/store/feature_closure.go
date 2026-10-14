@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -64,33 +62,48 @@ func closeUnderBlockedBy(
 	return nil, nil
 }
 
-func ticketFeatureLookup(ctx context.Context, qtx *ccdb.Queries) func(url string) (string, error) {
-	return func(url string) (string, error) {
-		feature, err := qtx.TicketFeatureAny(ctx, url)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("read feature for %s: %w", url, err)
+func closureLookups(
+	ctx context.Context, qtx *ccdb.Queries, tickets []ticketBlockedBy, obs plan.Observation,
+) (func(url string) (string, error), func(url string) (bool, error), error) {
+	seen := map[string]bool{}
+	blockers := []string{}
+	for _, t := range tickets {
+		for _, blocker := range t.BlockedBy {
+			if !seen[blocker] {
+				seen[blocker] = true
+				blockers = append(blockers, blocker)
+			}
 		}
-		return feature, nil
 	}
-}
-
-func blockerMergedLookup(ctx context.Context, qtx *ccdb.Queries, obs plan.Observation) func(url string) (bool, error) {
-	return func(url string) (bool, error) {
-		branch, err := qtx.TicketBranch(ctx, url)
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("read branch for %s: %w", url, err)
-		}
-		return obs.PRs[plan.BranchKey(branch.Repo, branch.Branch)].State == plan.Merged, nil
+	urls, err := encodeJSON("blocker urls", blockers)
+	if err != nil {
+		return nil, nil, err
 	}
+	featureRows, err := qtx.ListTicketFeatures(ctx, urls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read blocker features: %w", err)
+	}
+	branchRows, err := qtx.ListTicketBranches(ctx, urls)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read blocker branches: %w", err)
+	}
+	features := make(map[string]string, len(featureRows))
+	for _, row := range featureRows {
+		features[row.URL] = row.Feature
+	}
+	merged := make(map[string]bool, len(branchRows))
+	for _, row := range branchRows {
+		merged[row.URL] = obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged
+	}
+	featureOf := func(url string) (string, error) { return features[url], nil }
+	isMerged := func(url string) (bool, error) { return merged[url], nil }
+	return featureOf, isMerged, nil
 }
 
 func featureTicketsWithOverride(
 	ctx context.Context, qtx *ccdb.Queries, feature, overrideURL string, override []string,
 ) ([]ticketBlockedBy, error) {
-	rows, err := qtx.TicketsInFeature(ctx, feature)
+	rows, err := qtx.ListTicketsInFeature(ctx, feature)
 	if err != nil {
 		return nil, fmt.Errorf("list existing tickets for %s: %w", feature, err)
 	}

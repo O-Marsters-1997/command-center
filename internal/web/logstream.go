@@ -138,27 +138,24 @@ func flushStream(flusher *http.ResponseController) error {
 func (s *Server) sendRecords(
 	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode string,
 ) (int, error) {
-	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
-	if err != nil {
-		return 0, err
-	}
 	sent := 0
-	for _, record := range records {
+	err := view.EachTicketEvent(ctx, s.store, ticketURL, *afterID, func(record store.Event) error {
 		*afterID = record.ID
 		event := view.RecordOf(record)
 		if !view.RecordShown(record) || !view.EventShown(mode, event) {
-			continue
+			return nil
 		}
 		rendered, err := renderLogLine(view.LineOf(event))
 		if err != nil {
-			return sent, fmt.Errorf("render record %d: %w", record.ID, err)
+			return fmt.Errorf("render record %d: %w", record.ID, err)
 		}
 		if err := writeEvent(w, offset, rendered); err != nil {
-			return sent, err
+			return err
 		}
 		sent++
-	}
-	return sent, nil
+		return nil
+	})
+	return sent, err
 }
 
 func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) (sent int, err error) {
