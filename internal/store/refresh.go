@@ -58,7 +58,7 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOu
 		if !row.TicketID.Valid {
 			continue
 		}
-		outcomes[row.TicketID.String] = RefreshOutcome{Kind: row.Kind, Detail: row.Detail.String}
+		outcomes[row.TicketID.String] = RefreshOutcome{Kind: row.Kind, Detail: row.Detail}
 	}
 	return outcomes, nil
 }

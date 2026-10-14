@@ -27,7 +27,7 @@ func (s *Store) QueueEditTicketIntent(
 	err = s.q.QueueEditTicketIntent(ctx, ccdb.QueueEditTicketIntentParams{
 		At:       at.UTC(),
 		TicketID: ticketURL,
-		Payload:  notNull(string(payload)),
+		Payload:  payload,
 	})
 	if err != nil {
 		return fmt.Errorf("queue edit ticket intent for %s: %w", ticketURL, err)
@@ -52,7 +52,7 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 	intents := make([]EditTicketIntent, 0, len(rows))
 	for _, row := range rows {
 		var payload editTicketPayload
-		if err := json.Unmarshal([]byte(row.Payload.String), &payload); err != nil {
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("decode edit ticket intent payload for %s: %w", row.TicketID, err)
 		}
 		intents = append(intents, EditTicketIntent{

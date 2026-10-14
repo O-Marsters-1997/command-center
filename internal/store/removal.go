@@ -18,7 +18,7 @@ func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) 
 		if !row.TicketID.Valid {
 			continue
 		}
-		refusals[row.TicketID.String] = row.Detail.String
+		refusals[row.TicketID.String] = row.Detail
 	}
 	return refusals, nil
 }

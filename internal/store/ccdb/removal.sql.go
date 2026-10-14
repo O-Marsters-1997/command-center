@@ -20,7 +20,7 @@ JOIN (
 
 type LatestRemovalRefusalsRow struct {
 	TicketID sql.NullString
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) LatestRemovalRefusals(ctx context.Context, kind string) ([]LatestRemovalRefusalsRow, error) {

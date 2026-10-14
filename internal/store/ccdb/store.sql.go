@@ -20,7 +20,7 @@ type AppendEventParams struct {
 	At       time.Time
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error {
@@ -41,7 +41,7 @@ type EventsRow struct {
 	At       time.Time
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
@@ -76,9 +76,9 @@ const getMeta = `-- name: GetMeta :one
 SELECT value FROM meta WHERE key = $1
 `
 
-func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
+func (q *Queries) GetMeta(ctx context.Context, key string) (json.RawMessage, error) {
 	row := q.db.QueryRowContext(ctx, getMeta, key)
-	var value string
+	var value json.RawMessage
 	err := row.Scan(&value)
 	return value, err
 }
@@ -118,7 +118,7 @@ type ImportTicketParams struct {
 	Title     string
 	Body      string
 	Status    string
-	SyncedAt  string
+	SyncedAt  sql.NullTime
 	Branch    string
 	BlockedBy json.RawMessage
 }
@@ -184,7 +184,7 @@ ON CONFLICT (key) DO UPDATE SET value = excluded.value
 
 type PutMetaParams struct {
 	Key   string
-	Value string
+	Value json.RawMessage
 }
 
 func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
@@ -299,7 +299,7 @@ type TicketsRow struct {
 	Body      string
 	Status    string
 	Feature   string
-	SyncedAt  string
+	SyncedAt  sql.NullTime
 }
 
 func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
@@ -426,7 +426,7 @@ type UpsertTicketParams struct {
 	Body      string
 	Status    string
 	Feature   string
-	SyncedAt  string
+	SyncedAt  sql.NullTime
 }
 
 func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) error {

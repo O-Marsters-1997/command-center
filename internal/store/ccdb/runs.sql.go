@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -337,13 +338,13 @@ func (q *Queries) PendingRunsAwaitingDisposition(ctx context.Context) ([]Pending
 }
 
 const pendingVerbIntents = `-- name: PendingVerbIntents :many
-SELECT id, ticket_id, payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
+SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id
 `
 
 type PendingVerbIntentsRow struct {
 	ID       int64
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) PendingVerbIntents(ctx context.Context, verb string) ([]PendingVerbIntentsRow, error) {
@@ -392,7 +393,7 @@ type QueueVerbIntentWithPayloadParams struct {
 	At       time.Time
 	TicketID string
 	Verb     string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) QueueVerbIntentWithPayload(ctx context.Context, arg QueueVerbIntentWithPayloadParams) error {

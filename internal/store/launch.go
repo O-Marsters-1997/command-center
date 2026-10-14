@@ -26,7 +26,7 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, ticketID, promptHash, gro
 	err = s.q.QueueLaunchIntent(ctx, ccdb.QueueLaunchIntentParams{
 		At:       at.UTC(),
 		TicketID: ticketID,
-		Payload:  notNull(string(payload)),
+		Payload:  payload,
 	})
 	if err != nil {
 		return fmt.Errorf("queue launch intent for %s: %w", ticketID, err)
@@ -69,7 +69,7 @@ func pendingLaunchIntents(ctx context.Context, q *ccdb.Queries) (map[string][]pe
 	var order []string
 	for _, row := range rows {
 		var payload launchPayload
-		if err := json.Unmarshal([]byte(row.Payload.String), &payload); err != nil {
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, nil, fmt.Errorf("decode launch intent payload for %s: %w", row.TicketID, err)
 		}
 		if _, seen := groups[payload.Group]; !seen {
@@ -101,7 +101,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	}
 
 	detail := fmt.Sprintf("launch %d authorised with %d member(s)", launchID, len(members))
-	if err := q.InsertLaunchEvent(ctx, ccdb.InsertLaunchEventParams{At: at, Detail: notNull(detail)}); err != nil {
+	if err := q.InsertLaunchEvent(ctx, ccdb.InsertLaunchEventParams{At: at, Detail: detail}); err != nil {
 		return fmt.Errorf("append launch event: %w", err)
 	}
 	return nil

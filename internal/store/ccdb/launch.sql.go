@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -87,7 +88,7 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'launch', $2)
 
 type InsertLaunchEventParams struct {
 	At     time.Time
-	Detail sql.NullString
+	Detail string
 }
 
 func (q *Queries) InsertLaunchEvent(ctx context.Context, arg InsertLaunchEventParams) error {
@@ -162,7 +163,7 @@ SELECT id, ticket_id, payload FROM intents WHERE verb = 'launch' AND consumed_at
 type PendingLaunchIntentsRow struct {
 	ID       int64
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) PendingLaunchIntents(ctx context.Context) ([]PendingLaunchIntentsRow, error) {
@@ -195,7 +196,7 @@ INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
 type QueueLaunchIntentParams struct {
 	At       time.Time
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) QueueLaunchIntent(ctx context.Context, arg QueueLaunchIntentParams) error {

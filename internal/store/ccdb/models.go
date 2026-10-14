@@ -15,7 +15,7 @@ type Event struct {
 	At       time.Time
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 type Intent struct {
@@ -23,7 +23,7 @@ type Intent struct {
 	At         time.Time
 	TicketID   string
 	Verb       string
-	Payload    sql.NullString
+	Payload    json.RawMessage
 	ConsumedAt sql.NullTime
 }
 
@@ -41,7 +41,7 @@ type LaunchMember struct {
 
 type Meta struct {
 	Key   string
-	Value string
+	Value json.RawMessage
 }
 
 type Project struct {
@@ -101,7 +101,7 @@ type Ticket struct {
 	Body        string
 	Status      string
 	Feature     string
-	SyncedAt    string
+	SyncedAt    sql.NullTime
 	WithdrawnAt sql.NullTime
 }
 
