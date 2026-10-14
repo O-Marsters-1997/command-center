@@ -3,6 +3,7 @@ package store_test
 import (
 	"database/sql"
 	"errors"
+	"io/fs"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -54,7 +55,7 @@ func gooseVersion(t *testing.T, dsn string) int64 {
 
 func latestMigration(t *testing.T) int64 {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join("migrations", "*.sql"))
+	paths, err := fs.Glob(storepkg.Migrations(), "migrations/*.sql")
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("list migrations: %v (found %d)", err, len(paths))
 	}

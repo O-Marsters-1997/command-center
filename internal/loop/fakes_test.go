@@ -17,20 +17,6 @@ func openStore(t *testing.T) *storepkg.Store {
 	return cctest.Store(t)
 }
 
-func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
-	t.Helper()
-	store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("close store: %v", err)
-		}
-	})
-	return store
-}
-
 // installFakeTp puts a script named tp on PATH that delegates to real git worktree add, so
 // internal/git.CLI.New is genuinely exercised. exitCode non-zero simulates `tp new` failing
 // (an unresolvable base), matching faketp's own $CC_TP_FAIL behaviour.
