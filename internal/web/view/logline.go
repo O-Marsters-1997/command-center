@@ -65,7 +65,9 @@ func LineOf(e agentlog.Event) LogLine {
 		return recordLine(e.Tool, e.Detail)
 	case agentlog.Commit:
 		result := "✓" + elapsedSuffix(e.Elapsed)
-		return LogLine{Kind: e.Kind.String(), Shape: LineCall, Verb: "commit", Arg: e.Detail, Result: result, CallID: e.CallID}
+		return LogLine{
+			Kind: e.Kind.String(), Shape: LineCall, Verb: "commit", Arg: e.Detail, Result: result, CallID: e.CallID,
+		}
 	case agentlog.Pass, agentlog.Fail:
 		return callPair{result: e, answered: true}.line()
 	case agentlog.Cmd:
@@ -140,7 +142,9 @@ func elapsedSuffix(d time.Duration) string {
 }
 
 func (p callPair) line() LogLine {
-	line := LogLine{Kind: p.kind(), Shape: LineCall, Failed: p.failed(), Anchor: p.anchor, Verb: "Result", Arg: p.result.Detail}
+	line := LogLine{
+		Kind: p.kind(), Shape: LineCall, Failed: p.failed(), Anchor: p.anchor, Verb: "Result", Arg: p.result.Detail,
+	}
 	if p.called {
 		line.Verb = verbOf(p.call.Tool)
 		line.Arg = p.call.Detail
