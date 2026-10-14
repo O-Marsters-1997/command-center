@@ -48,7 +48,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 			continue
 		}
 		current := fact.Verdict.Kind.String()
-		if lastVerdicts[t.URL] == current {
+		if current == "" || lastVerdicts[t.URL] == current {
 			continue
 		}
 
