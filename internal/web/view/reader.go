@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"time"
@@ -80,7 +81,7 @@ func NewReader(
 func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, error) {
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
-		return plan.Snapshot{}, err
+		return plan.Snapshot{}, fmt.Errorf("load plan input: %w", err)
 	}
 	in.Now = now
 	return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil
@@ -91,57 +92,57 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load tickets: %w", err)
 	}
 	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load repo scope: %w", err)
 	}
 	project, err := r.projectScope(ctx, params.Project)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load project scope: %w", err)
 	}
 	params.Project = project.Name
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load plan input: %w", err)
 	}
 	lastErr, failed, err := r.store.LastError(ctx)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load last error: %w", err)
 	}
 	gauges, err := r.store.LatestReadings(ctx)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load latest readings: %w", err)
 	}
 
 	in.Now = now
 	split, err := r.gaugeSplit(ctx, now)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("gauge split: %w", err)
 	}
 	ticketSpend, err := r.store.BoardTicketSpend(ctx, params.Repo, params.Feature)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load board ticket spend: %w", err)
 	}
 
 	projects, err := r.projectMarks(ctx)
 	if err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("load project marks: %w", err)
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
 	if err := applySpend(rows, r.spend); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("apply spend: %w", err)
 	}
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
 		if records, err = r.store.TicketEventsAfter(ctx, params.Sel, 0); err != nil {
-			return Board{}, err
+			return Board{}, fmt.Errorf("load ticket events after: %w", err)
 		}
 	}
 	if err := applyViewState(rows, params, records, r.renderLine); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("apply view state: %w", err)
 	}
 	groups := filterGroupsByFeature(filterGroupsByRepo(groupRows(rows), params.Repo), params.Feature)
 	if project.Name != "" {
@@ -149,7 +150,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, params)
 	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
-		return Board{}, err
+		return Board{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	scoped := rowsIn(groups)
 	sections := Sectioned(scoped)
@@ -161,7 +162,7 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	if params.Feature != "" {
 		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
 		if err != nil {
-			return Board{}, err
+			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 		if ok {
 			age := relative(now, at)
@@ -184,37 +185,37 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 func (r *Reader) Chrome(ctx context.Context, now time.Time, params Params) (Chrome, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load tickets: %w", err)
 	}
 	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load repo scope: %w", err)
 	}
 	project, err := r.projectScope(ctx, params.Project)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load project scope: %w", err)
 	}
 	params.Project = project.Name
 	params.Feature = normalizeFeatureScope(params.Feature, distinctFeatures(tickets))
 
 	obs, observed, err := r.store.LastObservation(ctx)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load last observation: %w", err)
 	}
 	lastErr, failed, err := r.store.LastError(ctx)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load last error: %w", err)
 	}
 	gauges, err := r.store.LatestReadings(ctx)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("load latest readings: %w", err)
 	}
 	split, err := r.gaugeSplit(ctx, now)
 	if err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("gauge split: %w", err)
 	}
 	chrome := r.buildChrome(tickets, obs, observed, lastErr, failed, gauges, split, now, params)
 	if err := r.scopeChrome(ctx, &chrome, tickets, project, params.Repo); err != nil {
-		return Chrome{}, err
+		return Chrome{}, fmt.Errorf("scope chrome: %w", err)
 	}
 	return chrome, nil
 }
@@ -229,19 +230,19 @@ func (r *Reader) scopeChrome(
 	c.scopeToProject(project)
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("load projects: %w", err)
 	}
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("load repos: %w", err)
 	}
 	c.ScopeMenu = scopeChoices(ScopeList(projects, repos), project.Name, repo)
 	if c.RefusedRepos, err = r.refusedRepos(ctx); err != nil {
-		return err
+		return fmt.Errorf("load refused repos: %w", err)
 	}
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("load plan input: %w", err)
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil)
 	rows = scopeRailRows(rows, RailParams{Project: project.Name, Repo: repo, projectRepos: project.Repos})
@@ -256,7 +257,7 @@ func (r *Reader) scopeChrome(
 func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load repos: %w", err)
 	}
 	marks := make(map[string]ProjectMark, len(repos))
 	for _, repo := range repos {
@@ -270,7 +271,7 @@ func (r *Reader) projectMarks(ctx context.Context) (map[string]ProjectMark, erro
 func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load repos: %w", err)
 	}
 	var refused []RefusedRepo
 	for _, repo := range repos {
@@ -323,11 +324,11 @@ func (r *Reader) buildChrome(
 func (r *Reader) gaugeSplit(ctx context.Context, now time.Time) (map[agentlog.Window]windowSplit, error) {
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load fit factors: %w", err)
 	}
 	ccCost, err := r.store.CCCostUSD(ctx, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load cc cost usd: %w", err)
 	}
 	split := make(map[agentlog.Window]windowSplit, len(fits))
 	for window, fit := range fits {

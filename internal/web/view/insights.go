@@ -182,12 +182,12 @@ func buildSpendSplit(points []insightsPointJSON) SpendSplit {
 func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) (InsightsPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(q))
 	if err != nil {
-		return InsightsPage{}, err
+		return InsightsPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.Section = "insights"
 	resp, err := r.Insights(ctx, now, q)
 	if err != nil {
-		return InsightsPage{}, err
+		return InsightsPage{}, fmt.Errorf("load insights: %w", err)
 	}
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
@@ -206,15 +206,15 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 
 	merged, err := r.store.MergedTicketSpend(ctx, repo, feature, tz, since, until)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load merged ticket spend: %w", err)
 	}
 	wasteUSD, err := r.store.WithdrawnTicketWaste(ctx, repo, feature, tz, since, until)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load withdrawn ticket waste: %w", err)
 	}
 	fits, err := r.store.FitFactors(ctx, now)
 	if err != nil {
-		return InsightsResponse{}, err
+		return InsightsResponse{}, fmt.Errorf("load fit factors: %w", err)
 	}
 	factor := fits[agentlog.SevenDay].Factor
 

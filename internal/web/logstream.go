@@ -26,7 +26,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	ticketURL := r.PathValue("ticket")
 	offset, err := queryOffset(r, "from")
 	if err != nil {
-		return err
+		return fmt.Errorf("load query offset: %w", err)
 	}
 	// A reconnecting browser sends the offset of the last event it swapped, which outranks the
 	// offset the fragment was rendered with (WHATWG HTML § server-sent events).
@@ -35,13 +35,13 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 	afterRecord, err := queryOffset(r, "records")
 	if err != nil {
-		return err
+		return fmt.Errorf("load query offset: %w", err)
 	}
 	mode := view.ParseLogFilter(r.URL.Query().Get("log"))
 
 	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("load latest run log: %w", err)
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -72,15 +72,15 @@ func (s *Server) followLog(
 	for {
 		sent, err := sendLines(w, &tail, path, &offset, mode)
 		if err != nil {
-			return err
+			return fmt.Errorf("send lines: %w", err)
 		}
 		records, err := s.sendRecords(ctx, w, ticketURL, &afterRecord, offset, mode)
 		if err != nil {
-			return err
+			return fmt.Errorf("send records: %w", err)
 		}
 		sent += records
 		if err := flushStream(flusher); err != nil {
-			return err
+			return fmt.Errorf("flush stream: %w", err)
 		}
 		if ended && sent == 0 {
 			// Without a sentinel the browser treats the close as a dropped connection and
@@ -93,7 +93,7 @@ func (s *Server) followLog(
 		case <-time.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
-			return err
+			return fmt.Errorf("load latest run log: %w", err)
 		}
 	}
 }
@@ -131,7 +131,7 @@ func (s *Server) sendRecords(
 ) (int, error) {
 	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("load ticket events after: %w", err)
 	}
 	sent := 0
 	for _, record := range records {
@@ -145,7 +145,7 @@ func (s *Server) sendRecords(
 			return sent, fmt.Errorf("render record %d: %w", record.ID, err)
 		}
 		if err := writeEvent(w, offset, rendered); err != nil {
-			return sent, err
+			return sent, fmt.Errorf("write event: %w", err)
 		}
 		sent++
 	}
@@ -194,7 +194,7 @@ func sendLines(
 				return sent, fmt.Errorf("render log line: %w", err)
 			}
 			if err := writeEvent(w, *offset, rendered); err != nil {
-				return sent, err
+				return sent, fmt.Errorf("write event: %w", err)
 			}
 			sent++
 		}
