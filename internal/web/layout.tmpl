@@ -1,3 +1,5 @@
+{{define "nav"}}hx-get="{{.}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{end}}
+
 {{define "flash"}}<p class="banner ribbon" data-glyph="failed">{{.}}</p>{{end}}
 
 {{define "age"}}{{if .Stamp}}<time datetime="{{.Stamp}}">{{.Age}}</time>{{else}}{{.Age}}{{end}}{{end}}
@@ -132,7 +134,7 @@
 <div id="flash" aria-live="polite"></div>
 <main id="main"{{if .Home}} data-home{{end}}>
 <header class="topbar">
-  <a class="back" href="/" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">&lsaquo; Back</a>
+  <a class="back" href="/" {{template "nav" "/"}}>&lsaquo; Back</a>
   <ol class="crumbs">
 {{- end}}
 
@@ -185,19 +187,19 @@
 {{define "sidebar" -}}
 <aside class="sidebar" id="sidebar" aria-label="sections">
   <div class="sidebar-head">
-    <a class="sidebar-brand" href="/" data-key="g h" hx-get="/" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
-    <a class="btn btn-ghost btn-sm btn-icon" href="{{.LaunchPath}}" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" hx-get="{{.LaunchPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>
+    <a class="sidebar-brand" href="/" data-key="g h" {{template "nav" "/"}}><span class="sidebar-mark" aria-hidden="true">{{template "icon" "term"}}</span><b>{{with .Workspace}}{{.}}{{else}}Command Centre{{end}}</b></a>
+    <a class="btn btn-ghost btn-sm btn-icon" href="{{.LaunchPath}}" data-key="c" aria-label="Launch a feature" title="Launch a feature  C" {{template "nav" .LaunchPath}}{{if eq .Section "launch"}} aria-current="page"{{end}}>{{template "icon" "plus"}}</a>
   </div>
   <nav class="sidebar-nav">
-    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" hx-get="{{.TicketsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span><span class="sidebar-count">{{.OpenTickets}}</span></a>
-    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" hx-get="{{.InsightsPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
-    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" hx-get="{{.ReposPath}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span>{{with .RefusedRepos}}<span class="sidebar-count sidebar-count-warn">{{len .}} refused</span>{{end}}</a>
+    <a class="sidebar-item" href="{{.TicketsPath}}" data-key="g t" {{template "nav" .TicketsPath}}{{if eq .Section "tickets"}} aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>All tickets</span><span class="sidebar-count">{{.OpenTickets}}</span></a>
+    <a class="sidebar-item" href="{{.InsightsPath}}" data-key="g i" {{template "nav" .InsightsPath}}{{if eq .Section "insights"}} aria-current="page"{{end}}>{{template "icon" "chart"}}<span>Insights</span></a>
+    <a class="sidebar-item" href="{{.ReposPath}}" data-key="g r" {{template "nav" .ReposPath}}{{if eq .Section "repos"}} aria-current="page"{{end}}>{{template "icon" "repo"}}<span>Repos</span>{{with .RefusedRepos}}<span class="sidebar-count sidebar-count-warn">{{len .}} refused</span>{{end}}</a>
   </nav>
   <details class="scope-menu mx-2" data-scope-menu>
     <summary class="flex min-h-7 cursor-pointer items-center gap-2 px-2">{{if .ProjectScope}}<span class="avatar" data-hue="{{.ProjectHue}}" aria-hidden="true">{{.ProjectInitial}}</span> {{.ProjectScope}}{{else if .RepoScope}}{{.RepoScope}}{{else}}All projects · {{.LiveAgents}} running{{end}}</summary>
     <nav class="flex flex-col gap-0.5" aria-label="scope">
-      <a class="rail-link" href="/tickets" data-key="g 0" hx-get="/tickets" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
-      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} hx-get="{{.Path}}" hx-select="#main" hx-target="#main" hx-swap="outerHTML" hx-push-url="true"{{if .Current}} aria-current="true"{{end}}>{{if eq .Kind "project"}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
+      <a class="rail-link" href="/tickets" data-key="g 0" {{template "nav" "/tickets"}}{{if not (or .ProjectScope .RepoScope)}} aria-current="true"{{end}}>All projects</a>
+      {{range .ScopeMenu}}<a class="rail-link" href="{{.Path}}"{{with .Key}} data-key="{{.}}"{{end}} {{template "nav" .Path}}{{if .Current}} aria-current="true"{{end}}>{{if eq .Kind "project"}}<span class="avatar" data-hue="{{.Hue}}" aria-hidden="true">{{.Initial}}</span> {{end}}{{.Label}}</a>
       {{end}}
     </nav>
   </details>

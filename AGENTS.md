@@ -52,7 +52,8 @@ The stack is unusual and the wrong assumption is expensive.
   ([ADR 15](docs/adr/0015-pages-are-routes-beside-a-polling-rail.md)). Do not remove or rename an
   `hx-` attribute, `#main`, or the rail's scroll container. `id="board"` stays as the swap target of the
   board's poll and verb forms, and the board sections by attention
-  ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)).
+  ([ADR 14](docs/adr/0014-glyph-is-the-only-colour-key.md)). A link that swaps `#main` takes its attributes
+  from the `nav` partial in `layout.tmpl`; the TS copy of that bundle is in `web/src/graph.tsx`, so change both together.
 - **Two Solid islands**, `web/src/graph.tsx` and `web/src/launch-modal.tsx`, opt out of shadow DOM
   ([ADR 1](docs/adr/0001-one-global-stylesheet.md)), so their classes are page-global. They share
   `web/src/layout.ts`; neither imports the other. Load the `solid-islands` skill before editing
