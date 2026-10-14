@@ -73,6 +73,12 @@ var (
 	allRefusalKinds = []RefusalKind{RefusalMergeSettings, RefusalDefaultBranch, RefusalClone, RefusalSettingsParse}
 )
 
+func AllVerbs() []Verb { return slices.Clone(allVerbs) }
+
+func AllRunKinds() []RunKind { return slices.Clone(allRunKinds) }
+
+func AllRefusalKinds() []RefusalKind { return slices.Clone(allRefusalKinds) }
+
 func ParseVerb(s string) (Verb, error) { return parseMember("verb", s, allVerbs) }
 
 func ParseRunKind(s string) (RunKind, error) { return parseMember("run kind", s, allRunKinds) }
