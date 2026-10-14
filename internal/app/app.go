@@ -187,10 +187,7 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("run app: %w", err)
-	}
-	return nil
+	return g.Wait()
 }
 
 func (a *App) Close() error { return errors.Join(a.store.Close(), a.lock.Close()) }

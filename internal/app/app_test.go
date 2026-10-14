@@ -248,7 +248,7 @@ func TestNewNamesTheStepThatFailed(t *testing.T) {
 
 	_, err := app.New(t.Context(), slog.New(slog.DiscardHandler), missing, config.Env{})
 
-	if err == nil || !strings.Contains(err.Error(), "load config") {
-		t.Fatalf("New error = %v, want it to name load config", err)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("New(missing config) = %v, want it to wrap os.ErrNotExist", err)
 	}
 }

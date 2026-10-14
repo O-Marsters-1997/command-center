@@ -107,7 +107,7 @@ func validatePredicate(p verdict.Predicate, root bool) error {
 	}
 	for _, child := range children {
 		if err := validatePredicate(child, false); err != nil {
-			return fmt.Errorf("nested predicate: %w", err)
+			return err
 		}
 	}
 	return nil
