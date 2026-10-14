@@ -37,21 +37,25 @@ func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 }
 
 func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
-	t.Parallel()
-
 	var calls atomic.Int32
 	server := reposServer(t, &calls)
 
-	for _, path := range []string{"/repos", "/repos/search", "/repos/search?q="} {
-		body := renderPath(t, server, path)
-		for _, want := range []string{"acme/alpha", "acme/beta"} {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s missing known repo %s:\n%s", path, want, body)
+	for _, tt := range []struct{ name, path string }{
+		{name: "repos", path: "/repos"},
+		{name: "empty search", path: "/repos/search"},
+		{name: "empty query", path: "/repos/search?q="},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := renderPath(t, server, tt.path)
+			for _, want := range []string{"acme/alpha", "acme/beta"} {
+				if !strings.Contains(body, want) {
+					t.Errorf("GET %s missing known repo %s:\n%s", tt.path, want, body)
+				}
 			}
-		}
-		if strings.Contains(body, "acme/api") || strings.Contains(body, "not tracked") {
-			t.Errorf("GET %s listed a repo the app does not know:\n%s", path, body)
-		}
+			if strings.Contains(body, "acme/api") || strings.Contains(body, "not tracked") {
+				t.Errorf("GET %s listed a repo the app does not know:\n%s", tt.path, body)
+			}
+		})
 	}
 	if got := calls.Load(); got != 0 {
 		t.Errorf("empty queries made %d gh calls, want 0", got)
@@ -138,10 +142,16 @@ func TestBoardRendersWhilePushableFetchIsBlocked(t *testing.T) {
 		},
 	))
 	searchDone := make(chan int, 1)
-	go func() { searchDone <- getHX(t, server, "/repos/search?q=api").Code }()
+	go func() {
+		response := do(t, server, http.MethodGet, "/repos/search?q=api", req{Header: http.Header{"Hx-Request": {"true"}}})
+		searchDone <- response.Code
+	}()
 	<-started
 	boardDone := make(chan int, 1)
-	go func() { boardDone <- getHX(t, server, "/board").Code }()
+	go func() {
+		response := do(t, server, http.MethodGet, "/board", req{Header: http.Header{"Hx-Request": {"true"}}})
+		boardDone <- response.Code
+	}()
 	select {
 	case status := <-boardDone:
 		if status != http.StatusOK {
@@ -176,8 +186,7 @@ func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 
 type steppingClock struct{ at time.Time }
 
-func (c *steppingClock) Now() time.Time                       { return c.at }
-func (*steppingClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+func (c *steppingClock) Now() time.Time { return c.at }
 
 func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	t.Parallel()
@@ -259,8 +268,6 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 }
 
 func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
-	t.Parallel()
-
 	st := track(t, openStore(t), alphaRepo)
 	refused := storepkg.Repo{
 		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", Phase: plan.RepoRefused,
@@ -271,14 +278,20 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 	}
 	server := openServer(st, fixedClock(testNow), "")
 
-	for _, path := range []string{"/tickets", "/repos/acme/beta", "/repos"} {
-		rec := get(t, server, path)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("GET %s: status = %d", path, rec.Code)
-		}
-		if !strings.Contains(rec.Body.String(), `<a href="/repos/acme/beta">acme/beta</a> is refused`) {
-			t.Errorf("GET %s missing refused-repo link:\n%s", path, rec.Body)
-		}
+	for _, tt := range []struct{ name, path string }{
+		{name: "tickets", path: "/tickets"},
+		{name: "refused repo", path: "/repos/acme/beta"},
+		{name: "repos", path: "/repos"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := do(t, server, http.MethodGet, tt.path, req{})
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: status = %d", tt.path, rec.Code)
+			}
+			if !strings.Contains(rec.Body, `<a href="/repos/acme/beta">acme/beta</a> is refused`) {
+				t.Errorf("GET %s missing refused-repo link:\n%s", tt.path, rec.Body)
+			}
+		})
 	}
 }
 
@@ -289,7 +302,7 @@ func TestRepoPageRejectsANameThatIsNotOwnerSlashName(t *testing.T) {
 	server := reposServer(t, &calls)
 
 	path := "/repos/acme/a%20b"
-	if rec := get(t, server, path); rec.Code != http.StatusNotFound {
+	if rec := do(t, server, http.MethodGet, path, req{}); rec.Code != http.StatusNotFound {
 		t.Errorf("GET %s = %d, want 404", path, rec.Code)
 	}
 }

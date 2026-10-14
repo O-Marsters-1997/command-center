@@ -3,7 +3,6 @@ package view
 import (
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -30,32 +29,34 @@ func TestFilterRailNarrowsEachSection(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		name     string
 		query    string
 		needsYou []string
 		live     map[string][]string
 		settled  []string
 	}{
 		{
+			name:     "all",
 			query:    "",
 			needsYou: []string{"#12"},
 			live:     map[string][]string{"billing": {"#2", "#3"}, "checkout": {"#40"}},
 			settled:  []string{"#5"},
 		},
-		{query: "#12", needsYou: []string{"#12"}, live: map[string][]string{}},
-		{query: "12", needsYou: []string{"#12"}, live: map[string][]string{}},
-		{query: "INVOICE", needsYou: []string{"#12"}, live: map[string][]string{}},
-		{query: "web", live: map[string][]string{"checkout": {"#40"}}},
-		{query: "billing", needsYou: []string{"#12"}, live: map[string][]string{"billing": {"#2", "#3"}}},
-		{query: "refund", live: map[string][]string{"billing": {"#3"}}},
-		{query: "billing refund", live: map[string][]string{"billing": {"#3"}}},
-		{query: "refund cart", live: map[string][]string{}},
-		{query: "old", live: map[string][]string{}, settled: []string{"#5"}},
+		{name: "issue reference", query: "#12", needsYou: []string{"#12"}, live: map[string][]string{}},
+		{name: "issue number", query: "12", needsYou: []string{"#12"}, live: map[string][]string{}},
+		{name: "case insensitive", query: "INVOICE", needsYou: []string{"#12"}, live: map[string][]string{}},
+		{name: "repo", query: "web", live: map[string][]string{"checkout": {"#40"}}},
+		{name: "feature", query: "billing", needsYou: []string{"#12"}, live: map[string][]string{"billing": {"#2", "#3"}}},
+		{name: "title", query: "refund", live: map[string][]string{"billing": {"#3"}}},
+		{name: "multiple terms", query: "billing refund", live: map[string][]string{"billing": {"#3"}}},
+		{name: "no match", query: "refund cart", live: map[string][]string{}},
+		{name: "settled", query: "old", live: map[string][]string{}, settled: []string{"#5"}},
 	}
 	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			rail := buildRail(searchRows(), time.Now(), RailParams{Query: tt.query})
+			rail := buildRail(searchRows(), testNow, RailParams{Query: tt.query})
 
 			if got := refs(rail.NeedsYou); !slices.Equal(got, tt.needsYou) {
 				t.Errorf("NeedsYou = %v, want %v", got, tt.needsYou)
@@ -83,8 +84,8 @@ func TestFilterRailForcesSurvivorsOpenOnlyUnderAQuery(t *testing.T) {
 	t.Parallel()
 
 	rows := searchRows()
-	plain := buildRail(rows, time.Now(), RailParams{})
-	searched := buildRail(rows, time.Now(), RailParams{Query: "billing"})
+	plain := buildRail(rows, testNow, RailParams{})
+	searched := buildRail(rows, testNow, RailParams{Query: "billing"})
 
 	if plain.Query != "" || plain.Features[0].Open || plain.Settled.Open {
 		t.Errorf("rail without a query forced something open: %+v", plain)
@@ -97,10 +98,10 @@ func TestFilterRailForcesSurvivorsOpenOnlyUnderAQuery(t *testing.T) {
 func TestRailNoMatch(t *testing.T) {
 	t.Parallel()
 
-	if rail := buildRail(searchRows(), time.Now(), RailParams{Query: "zzz"}); !rail.NoMatch() {
+	if rail := buildRail(searchRows(), testNow, RailParams{Query: "zzz"}); !rail.NoMatch() {
 		t.Errorf("NoMatch() = false for a query nothing matches, rail %+v", rail)
 	}
-	if rail := buildRail(searchRows(), time.Now(), RailParams{}); rail.NoMatch() {
+	if rail := buildRail(searchRows(), testNow, RailParams{}); rail.NoMatch() {
 		t.Error("NoMatch() = true without a query")
 	}
 }

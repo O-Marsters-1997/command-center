@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
@@ -23,9 +23,7 @@ func railStore(t *testing.T, withWorktree bool) *storepkg.Store {
 		},
 		{URL: "sandbox://CC-3", Repo: "repo", Branch: "three", Feature: "project:billing"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	dispositionAsPushed(t, st, "sandbox://CC-1", testNow)
 	runID, err := st.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: "sandbox://CC-3", Kind: "agent", PromptHash: "hash-3",
@@ -87,16 +85,15 @@ func TestRailDropsASettledTicketOnceItsWorktreeIsGone(t *testing.T) {
 func TestRailKeepsTheExpandedSetAndSelectionFromTheRequest(t *testing.T) {
 	t.Parallel()
 
-	st, _ := sessionStore(t, "agent", "", false, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Alive: true})
 	server := newServer(st, testNow)
-	req := httptest.NewRequest(http.MethodGet, "/rail", nil)
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("HX-Current-URL", "http://cc/s/acme/web/1")
-	req.AddCookie(&http.Cookie{Name: "rail-open", Value: "feature:checkout"})
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
+	got := do(t, server, http.MethodGet, "/rail", req{Header: http.Header{
+		"Hx-Request":     {"true"},
+		"Hx-Current-Url": {"http://cc/s/acme/web/1"},
+		"Cookie":         {"rail-open=feature:checkout"},
+	}})
 
-	body := rec.Body.String()
+	body := got.Body
 	if !strings.Contains(body, `data-rail-key="feature:checkout" open`) {
 		t.Errorf("checkout was open in the cookie but rendered closed:\n%s", body)
 	}

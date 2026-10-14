@@ -3,7 +3,7 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,22 +47,15 @@ func mergeInsightsTicket(t *testing.T, store *storepkg.Store, ticketURL string, 
 	}
 }
 
-func fetchInsights(t *testing.T, server *web.Server, query string) (*http.Response, insightsJSON) {
+func fetchInsights(t *testing.T, server *web.Server, query string) (resp, insightsJSON) {
 	t.Helper()
-	srv := httptest.NewServer(server)
-	t.Cleanup(srv.Close)
-
-	resp, err := http.Get(srv.URL + "/insights.json?" + query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = resp.Body.Close() })
+	response := do(t, server, http.MethodGet, "/insights.json?"+query, req{})
 
 	var body insightsJSON
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(strings.NewReader(response.Body)).Decode(&body); err != nil {
 		t.Fatalf("decode /insights.json: %v", err)
 	}
-	return resp, body
+	return response, body
 }
 
 func TestInsightsNamesTheLocationTheServerWasGiven(t *testing.T) {
@@ -108,8 +101,8 @@ func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 	server := newServer(store, now)
 	resp, body := fetchInsights(t, server, "")
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
 	}
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", ct)

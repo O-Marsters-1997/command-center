@@ -1,10 +1,8 @@
 package web_test
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -31,19 +30,16 @@ func logStreamPath(from int64) string {
 func runStore(t *testing.T, logPath string, now time.Time) (*storepkg.Store, int64) {
 	t.Helper()
 
-	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: logTicket, Repo: "repo", Branch: "cc-77"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+	storetest.Tickets(t, store, ticket)
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: logPath,
 	}); err != nil {
 		t.Fatal(err)
@@ -103,15 +99,15 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	endRun(t, store, runID, now)
 	server := newServer(store, now)
 
-	rec := get(t, server, logStreamPath(0))
+	rec := do(t, server, http.MethodGet, logStreamPath(0), req{})
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
-	if got := rec.Header().Get("Content-Type"); got != "text/event-stream" {
+	if got := rec.Header.Get("Content-Type"); got != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", got)
 	}
-	body := rec.Body.String()
+	body := rec.Body
 	firstOffset := int64(len(first) + 1)
 	for _, want := range []string{
 		fmt.Sprintf("id: %d\ndata: %s\n\n", firstOffset, renderedToolLine(t, "first")),
@@ -135,11 +131,10 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	endRun(t, store, runID, now)
 	server := newServer(store, now)
 
-	rec := httptest.NewRecorder()
 	from := int64(len(alreadyRead) + 1)
-	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, logStreamPath(from), nil))
+	rec := do(t, server, http.MethodGet, logStreamPath(from), req{})
 
-	body := rec.Body.String()
+	body := rec.Body
 	if strings.Contains(body, "already read") {
 		t.Errorf("stream resent a line the fragment already rendered:\n%q", body)
 	}
@@ -154,12 +149,12 @@ func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, logStreamPath(0))
+	rec := do(t, server, http.MethodGet, logStreamPath(0), req{})
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
-	if body := rec.Body.String(); body != "event: end\ndata:\n\n" {
+	if body := rec.Body; body != "event: end\ndata:\n\n" {
 		t.Errorf("stream for a ticket with no run is not an empty one that retires itself: %q", body)
 	}
 }
@@ -172,9 +167,9 @@ func TestLogStreamSendsAnErrorFrameWhenTheLogCannotBeRead(t *testing.T) {
 	endRun(t, store, runID, now)
 	server := newServer(store, now)
 
-	rec := get(t, server, logStreamPath(0))
+	rec := do(t, server, http.MethodGet, logStreamPath(0), req{})
 
-	if body := rec.Body.String(); !strings.Contains(body, "event: error\ndata: ") {
+	if body := rec.Body; !strings.Contains(body, "event: error\ndata: ") {
 		t.Errorf("stream = %q, want an error frame", body)
 	}
 }
@@ -185,7 +180,7 @@ func TestLogStreamRefusesAMalformedOffset(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, fmt.Sprintf("/ticket/%s/log?from=abc", url.PathEscape(logTicket)))
+	rec := do(t, server, http.MethodGet, fmt.Sprintf("/ticket/%s/log?from=abc", url.PathEscape(logTicket)), req{})
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
@@ -202,9 +197,9 @@ func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	endRun(t, store, runID, now)
 	server := newServer(store, now)
 
-	rec := get(t, server, logStreamPath(0))
+	rec := do(t, server, http.MethodGet, logStreamPath(0), req{})
 
-	if body := rec.Body.String(); !strings.HasSuffix(body, "event: end\ndata:\n\n") {
+	if body := rec.Body; !strings.HasSuffix(body, "event: end\ndata:\n\n") {
 		t.Errorf("the stream does not end on the sentinel sse-close listens for:\n%q", body)
 	}
 }
@@ -220,12 +215,11 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	endRun(t, store, runID, now)
 	server := newServer(store, now)
 
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil)
-	req.Header.Set("Last-Event-ID", strconv.Itoa(len(swappedAlready)+1))
-	server.ServeHTTP(rec, req)
+	rec := do(t, server, http.MethodGet, logStreamPath(0), req{Header: http.Header{
+		"Last-Event-Id": {strconv.Itoa(len(swappedAlready) + 1)},
+	}})
 
-	body := rec.Body.String()
+	body := rec.Body
 	if strings.Contains(body, "swapped already") {
 		t.Errorf("a reconnect resent a line the browser had already swapped:\n%q", body)
 	}
@@ -241,74 +235,47 @@ func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	appendLines(t, logPath, jsonToolLine("before"))
 	store, runID := runStore(t, logPath, now)
-	httpServer := httptest.NewServer(newServer(store, now))
-	defer httpServer.Close()
-
-	resp, err := httpServer.Client().Get(httpServer.URL + logStreamPath(0))
-	if err != nil {
-		t.Fatal(err)
+	flushed := 0
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := w.(*httptest.ResponseRecorder)
+		newServer(store, now).ServeHTTP(flushObserver{ResponseWriter: w, onFlush: func() {
+			flushed++
+			switch flushed {
+			case 1:
+				if body := rec.Body.String(); !strings.Contains(body, "before") || strings.Contains(body, "after") {
+					t.Errorf("first flush = %q, want only the initial event", body)
+				}
+				appendLines(t, logPath, jsonToolLine("after"))
+			case 2:
+				if body := rec.Body.String(); !strings.Contains(body, "after") || strings.Contains(body, "event: end") {
+					t.Errorf("second flush = %q, want the appended event before closure", body)
+				}
+				endRun(t, store, runID, now)
+			}
+		}}, r.WithContext(ctx))
+	})
+	got := do(t, h, http.MethodGet, logStreamPath(0), req{})
+	if got.Code != http.StatusOK || !strings.Contains(got.Body, "before") || !strings.Contains(got.Body, "after") {
+		t.Errorf("stream = %d %q, want both lines", got.Code, got.Body)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	events := bufio.NewReader(resp.Body)
-
-	if got := readEvent(t, events); !strings.Contains(got, "before") {
-		t.Fatalf("first event = %q, want the line already in the file", got)
+	if first, second := strings.Index(got.Body, "before"), strings.Index(got.Body, "after"); first < 0 || second < first {
+		t.Errorf("stream lines arrived out of order: %q", got.Body)
 	}
-	appendLines(t, logPath, jsonToolLine("after"))
-	if got := readEvent(t, events); !strings.Contains(got, "after") {
-		t.Fatalf("second event = %q, want the line appended while connected", got)
-	}
-
-	endRun(t, store, runID, now)
-	closed := make(chan error, 1)
-	go func() { _, err := io.ReadAll(events); closed <- err }()
-	select {
-	case err := <-closed:
-		if err != nil {
-			t.Fatalf("reading the closed stream: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the stream did not close when the run ended")
+	if !strings.Contains(got.Body, "event: end") {
+		t.Errorf("stream did not close after run ended: %q", got.Body)
 	}
 }
 
-func readEvent(t *testing.T, r *bufio.Reader) string {
-	t.Helper()
+type flushObserver struct {
+	http.ResponseWriter
+	onFlush func()
+}
 
-	type result struct {
-		event string
-		err   error
-	}
-	got := make(chan result, 1)
-	go func() {
-		var event strings.Builder
-		for {
-			line, err := r.ReadString('\n')
-			if err != nil {
-				got <- result{err: err}
-				return
-			}
-			if strings.TrimSpace(line) == "" {
-				if event.Len() > 0 {
-					got <- result{event: event.String()}
-					return
-				}
-				continue
-			}
-			event.WriteString(line)
-		}
-	}()
-
-	select {
-	case res := <-got:
-		if res.err != nil {
-			t.Fatalf("reading the stream: %v", res.err)
-		}
-		return res.event
-	case <-time.After(5 * time.Second):
-		t.Fatal("no event arrived from the stream within 5s")
-		return ""
-	}
+func (w flushObserver) Flush() {
+	w.ResponseWriter.(http.Flusher).Flush()
+	w.onFlush()
 }
 
 func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
@@ -316,23 +283,25 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 
 	now := testNow
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
-	appendLines(t, logPath, "still running")
+	appendLines(t, logPath, jsonToolLine("still running"))
 	store, _ := runStore(t, logPath, now)
 	server := newServer(store, now)
 
-	ctx, cancel := context.WithCancel(t.Context())
-	req := httptest.NewRequest(http.MethodGet, logStreamPath(0), nil).WithContext(ctx)
-	returned := make(chan struct{})
-	go func() {
-		server.ServeHTTP(httptest.NewRecorder(), req)
-		close(returned)
-	}()
-
-	cancel()
-	select {
-	case <-returned:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the handler did not return when the client went away")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	flushed := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.ServeHTTP(flushObserver{ResponseWriter: w, onFlush: func() {
+			flushed = true
+			if !strings.Contains(w.(*httptest.ResponseRecorder).Body.String(), "still running") {
+				t.Error("client disconnected before the first stream event was flushed")
+			}
+			cancel()
+		}}, r.WithContext(ctx))
+	})
+	do(t, h, http.MethodGet, logStreamPath(0), req{})
+	if !flushed {
+		t.Error("stream returned without a flush from which the client could disconnect")
 	}
 
 	runs, err := store.LatestRunsByTicket(t.Context())
@@ -360,8 +329,8 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := get(t, server, sessionPagePath(ticket))
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, sessionPagePath(ticket), req{})
+	body := rec.Body
 
 	stream := fmt.Sprintf("/ticket/%s/log?from=%d&amp;records=0", url.PathEscape(ticket), info.Size())
 	for _, want := range []string{
@@ -384,13 +353,13 @@ func TestPageLoadsTheSSEExtensionAndGlue(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	asset := get(t, server, "/assets/sse.min.js")
+	asset := do(t, server, http.MethodGet, "/assets/sse.min.js", req{})
 	if asset.Code != http.StatusOK {
 		t.Fatalf("GET /assets/sse.min.js = %d, want 200", asset.Code)
 	}
 
-	rec := get(t, server, "/tickets")
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
+	body := rec.Body
 	for _, want := range []string{
 		`<script src="/assets/sse.min.js"></script>`,
 		`<script type="module" src="/assets/dist/glue.js"></script>`,

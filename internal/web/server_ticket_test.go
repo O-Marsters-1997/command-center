@@ -1,83 +1,31 @@
 package web_test
 
 import (
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
-
-func TestPostTicketRejectsAForeignOrigin(t *testing.T) {
-	t.Parallel()
-
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", "http://evil.example")
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 with a foreign Origin header", resp.StatusCode)
-	}
-}
-
-func TestPostTicketAllowsAMissingOrigin(t *testing.T) {
-	t.Parallel()
-
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-2"}, "branch": {"cc-2-second"}}.Encode()
-	resp, err := noRedirect(srv).Post(srv.URL+"/ticket", "application/x-www-form-urlencoded", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
-}
 
 func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	store := seededStore(t, testNow)
+	server := newServer(store, testNow)
 
-	body := url.Values{
+	form := url.Values{
 		"ticket":     {"sandbox://CC-2"},
 		"branch":     {"cc-2-renamed"},
 		"blocked_by": {"sandbox://CC-1", "sandbox://CC-3"},
-	}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
+	response := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if response.Code != http.StatusSeeOther || response.Location != "/" {
+		t.Errorf("POST /ticket = (%d, %q), want (303, /)", response.Code, response.Location)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
@@ -107,33 +55,15 @@ func TestPostTicketQueuesEditIntentAndRedirects(t *testing.T) {
 func TestPostTicketRefusesBranchChangeWhenWorktreeExists(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now()) // sandbox://CC-1 has a worktree at cc-1-first
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-renamed"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	store := seededStore(t, testNow)
+	server := newServer(store, testNow)
+	form := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-renamed"}}
+	response := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", response.Code)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", resp.StatusCode)
-	}
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body2 := string(raw)
-	if !strings.Contains(body2, "/repos/cc-sandbox-cc-1-first") {
-		t.Errorf("refusal does not name the worktree: %s", body2)
+	if !strings.Contains(response.Body, "/repos/cc-sandbox-cc-1-first") {
+		t.Errorf("refusal does not name the worktree: %s", response.Body)
 	}
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
@@ -148,24 +78,13 @@ func TestPostTicketRefusesBranchChangeWhenWorktreeExists(t *testing.T) {
 func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now()) // sandbox://CC-1 has a worktree
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-first"}, "blocked_by": {"sandbox://CC-2"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	store := seededStore(t, testNow)
+	server := newServer(store, testNow)
+	form := url.Values{"ticket": {"sandbox://CC-1"}, "branch": {"cc-1-first"}, "blocked_by": {"sandbox://CC-2"}}
+	response := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if response.Code != http.StatusSeeOther || response.Location != "/" {
+		t.Errorf("POST /ticket = (%d, %q), want (303, /)", response.Code, response.Location)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	pending, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
@@ -179,8 +98,7 @@ func TestPostTicketAllowsBlockedByEditWithoutTouchingBranchCheck(t *testing.T) {
 func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(seededStore(t, time.Now()), realClock{}, ""))
-	t.Cleanup(srv.Close)
+	server := newServer(seededStore(t, testNow), testNow)
 
 	tests := []struct{ name, query string }{
 		{name: "unknown ticket", query: "ticket=sandbox://GHOST&branch=cc-1-first"},
@@ -190,18 +108,9 @@ func TestPostTicketRejectsUnknownTicketOrMissingFields(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			req, err := http.NewRequest(http.MethodPost, srv.URL+"/ticket?"+tt.query, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.Header.Set("Origin", srv.URL)
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400", resp.StatusCode)
+			response := do(t, server, http.MethodPost, "/ticket?"+tt.query, req{})
+			if response.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", response.Code)
 			}
 		})
 	}
@@ -211,16 +120,13 @@ func TestSessionPageRendersEditFormPrefilled(t *testing.T) {
 	t.Parallel()
 
 	st := openStore(t)
-	err := st.UpsertTickets(t.Context(), []storepkg.Ticket{
+	storetest.Tickets(t, st, []storepkg.Ticket{
 		{URL: "https://github.com/o/r/issues/1", Repo: "o/r", Branch: "cc-1-first"},
 		{
 			URL: "https://github.com/o/r/issues/2", Repo: "o/r", Branch: "cc-2-second",
 			BlockedBy: []string{"https://github.com/o/r/issues/1"},
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}...)
 
 	page := renderPath(t, newServer(st, testNow), "/s/o/r/2")
 

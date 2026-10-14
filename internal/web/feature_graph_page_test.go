@@ -27,7 +27,7 @@ func TestFeatureGraphPageMarksTheGraphTabCurrentAndScopesItsData(t *testing.T) {
 func TestFeatureGraphPageUnknownFeatureIs404(t *testing.T) {
 	t.Parallel()
 
-	if rec := get(t, threeFeatureServer(t), "/f/bogus/graph"); rec.Code != http.StatusNotFound {
+	if rec := do(t, threeFeatureServer(t), http.MethodGet, "/f/bogus/graph", req{}); rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus/graph: status = %d, want 404", rec.Code)
 	}
 }

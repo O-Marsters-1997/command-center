@@ -22,12 +22,12 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec := get(t, server, "/tickets")
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("GET /tickets on a closed store: status = %d, want 500", rec.Code)
 	}
-	if got := rec.Body.String(); got != "internal error\n" {
+	if got := rec.Body; got != "internal error\n" {
 		t.Errorf("500 body = %q, want only \"internal error\"", got)
 	}
 	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "closed") {
@@ -37,33 +37,38 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 
 func TestRefusedVerbOnHTMXIsAFlashFragment(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	srv := newServer(st, testNow)
 
-	rec := sessionVerb(t, srv, url.Values{"verb": {"bogus-verb"}, "ticket": {sessionTicket}}, true)
+	rec := do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"bogus-verb"}, "ticket": {sessionTicket}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("refused verb: status = %d, want 422", rec.Code)
 	}
-	if got := rec.Header().Get("HX-Retarget"); got != "#flash" {
+	if got := rec.Header.Get("HX-Retarget"); got != "#flash" {
 		t.Errorf("HX-Retarget = %q, want #flash", got)
 	}
-	if got := rec.Header().Get("HX-Reselect"); got != "p.banner" {
+	if got := rec.Header.Get("HX-Reselect"); got != "p.banner" {
 		t.Errorf("HX-Reselect = %q, want p.banner so a link's hx-select cannot empty the flash", got)
 	}
-	if got := rec.Header().Get("HX-Reswap"); got != "innerHTML" {
+	if got := rec.Header.Get("HX-Reswap"); got != "innerHTML" {
 		t.Errorf("HX-Reswap = %q, want innerHTML", got)
 	}
-	if !strings.Contains(rec.Body.String(), `unsupported verb &#34;bogus-verb&#34;`) {
+	if !strings.Contains(rec.Body, `unsupported verb &#34;bogus-verb&#34;`) {
 		t.Errorf("flash does not carry the refusal: %q", rec.Body)
 	}
 }
 
 func TestRefusedVerbWithoutHTMXKeepsItsStatus(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 
-	rec := sessionVerb(t, newServer(st, testNow), url.Values{"verb": {"bogus-verb"}, "ticket": {sessionTicket}}, false)
+	rec := do(t, newServer(st, testNow), http.MethodPost, "/verb", req{
+		Form: url.Values{"verb": {"bogus-verb"}, "ticket": {sessionTicket}},
+	})
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("refused verb without htmx: status = %d, want 400", rec.Code)

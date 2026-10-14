@@ -2,12 +2,12 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
@@ -20,9 +20,7 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 		{URL: alpha, Repo: "acme/alpha", Branch: "a-1"},
 		{URL: solo, Repo: "acme/solo", Branch: "s-4"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	if err := st.CreateProject(t.Context(), storepkg.NewProject{
 		Name: "acme", Hue: 1, Repos: []string{"acme/alpha"}, At: testNow,
 	}); err != nil {
@@ -47,12 +45,10 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 	server := newServer(st, testNow)
 
 	rail := func(currentURL string) string {
-		req := httptest.NewRequest(http.MethodGet, "/rail", nil)
-		req.Header.Set("HX-Request", "true")
-		req.Header.Set("HX-Current-URL", currentURL)
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, req)
-		return rec.Body.String()
+		return do(t, server, http.MethodGet, "/rail", req{Header: http.Header{
+			"Hx-Request":     {"true"},
+			"Hx-Current-Url": {currentURL},
+		}}).Body
 	}
 
 	scoped := rail("http://cc/tickets?project=acme")

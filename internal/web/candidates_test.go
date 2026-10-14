@@ -3,12 +3,11 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -29,23 +28,18 @@ type jsonCandidate struct {
 	BlockedBy   []string `json:"blocked_by"`
 }
 
-func fetchCandidates(t *testing.T, srv *httptest.Server, query string) []jsonCandidate {
+func fetchCandidates(t *testing.T, server http.Handler, query string) []jsonCandidate {
 	t.Helper()
 
-	resp, err := http.Get(srv.URL + "/launch/candidates.json?" + query)
-	if err != nil {
-		t.Fatal(err)
+	response := do(t, server, http.MethodGet, "/launch/candidates.json?"+query, req{})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+	if ct := response.Header.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 	var candidates []jsonCandidate
-	if err := json.NewDecoder(resp.Body).Decode(&candidates); err != nil {
+	if err := json.Unmarshal([]byte(response.Body), &candidates); err != nil {
 		t.Fatalf("decode /launch/candidates.json: %v", err)
 	}
 	return candidates
@@ -74,17 +68,13 @@ func TestCandidatesLabelsReasonsBasesAndBlockedByForARequestedSlice(t *testing.T
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", BlockedBy: []string{"sandbox://CC-4"}},
 		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4-fourth"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
+	query := "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
+	candidates := fetchCandidates(t, newServer(store, testNow), query)
 
 	cc1 := candidateFor(t, candidates, "sandbox://CC-1")
 	if cc1.Label != "now" || cc1.Base != "origin/main" {
@@ -123,18 +113,14 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
 	const parentTip = "parent-tip"
-	if err := store.RecordPush(ctx, storepkg.Push{
-		Ticket: "sandbox://PARENT", Tip: parentTip, BaseBranch: "main", BaseSHA: "main-tip", At: at,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Pushed(t, store, storetest.PushedOpts{
+		URL: "sandbox://PARENT", Tip: parentTip, Base: "main", BaseTip: "main-tip", At: at,
+	})
 
 	obs := plan.Observation{
 		BranchTips: map[plan.BranchRef]plan.SHA{
@@ -153,10 +139,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 	}
 
 	repos := named("repo")
-	srv := httptest.NewServer(openServer(track(t, store, repos...), fixedClock(at), ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, "ticket=sandbox://CHILD")
+	candidates := fetchCandidates(t, newServer(track(t, store, repos...), at), "ticket=sandbox://CHILD")
 
 	child := candidateFor(t, candidates, "sandbox://CHILD")
 	if child.Label != "now" || child.Base != "origin/parent" || child.BaseVerdict != "ci_failed" {
@@ -169,12 +152,10 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Now()
+	storetest.Tickets(t, store, storepkg.Ticket{
+		URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
+	})
+	at := testNow
 	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
 	}); err != nil {
@@ -184,10 +165,7 @@ func TestCandidatesShowsAnAlreadyAuthorisedMemberAsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, "feature=project%3Ax")
+	candidates := fetchCandidates(t, newServer(store, testNow), "feature=project%3Ax")
 
 	cc1 := candidateFor(t, candidates, "sandbox://CC-1")
 	if cc1.Label != "refused" || !strings.Contains(cc1.Reason, "already authorised in launch") {
@@ -209,17 +187,12 @@ func TestCandidatesRefusesEveryDependentOfAMidStackBlockerOutsideTheSlice(t *tes
 		{URL: "sandbox://CC-6", Repo: "cc-sandbox", Branch: "cc-6", BlockedBy: []string{"sandbox://CC-4"}},
 		{URL: "sandbox://CC-7", Repo: "cc-sandbox", Branch: "cc-7", BlockedBy: []string{"sandbox://CC-5"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv,
+	candidates := fetchCandidates(t, newServer(store, testNow),
 		"ticket=sandbox://CC-3&ticket=sandbox://CC-4&ticket=sandbox://CC-5&ticket=sandbox://CC-6&ticket=sandbox://CC-7")
 
 	for _, ticketURL := range []string{"sandbox://CC-3", "sandbox://CC-4"} {
@@ -252,17 +225,13 @@ func TestCandidatesSpanningTwoFeaturesIsLaunchableWithAnOutOfSliceBlockerRefused
 		},
 		{URL: "sandbox://CC-4", Repo: "cc-sandbox", Branch: "cc-4", Feature: "project:x"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3")
+	query := "ticket=sandbox://CC-1&ticket=sandbox://CC-2&ticket=sandbox://CC-3"
+	candidates := fetchCandidates(t, newServer(store, testNow), query)
 
 	if cc1 := candidateFor(t, candidates, "sandbox://CC-1"); cc1.Label != "now" {
 		t.Errorf("CC-1 (project:x) Label = %q, want now", cc1.Label)
@@ -286,17 +255,12 @@ func TestCandidatesByFeatureReturnsEveryStoredTicketInIt(t *testing.T) {
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "widgets"},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third", Feature: "gadgets"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	if err := store.SaveObservation(ctx, plan.Observation{PRs: map[plan.BranchRef]plan.PR{}}); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	candidates := fetchCandidates(t, srv, "feature=widgets")
+	candidates := fetchCandidates(t, newServer(store, testNow), "feature=widgets")
 
 	if len(candidates) != 2 {
 		t.Fatalf("candidates = %d, want 2: %+v", len(candidates), candidates)

@@ -2,15 +2,14 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -19,13 +18,13 @@ import (
 func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
-	rec := get(t, server, "/tickets")
+	server := newServer(seededStore(t, testNow), testNow)
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 
-	body := rec.Body.String()
+	body := rec.Body
 	wants := []string{
 		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
 		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"`,
@@ -52,9 +51,7 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 		{URL: "sandbox://B", Repo: "repo", Branch: "b"},
 		{URL: "sandbox://C", Repo: "repo", Branch: "c"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	now := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: now}); err != nil {
 		t.Fatal(err)
@@ -62,8 +59,8 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	server := openServer(track(t, store, named("repo")...), fixedClock(now), "")
 
 	target := "/tickets?" + url.Values{"ticket": {"sandbox://A", "sandbox://B"}}.Encode()
-	rec := get(t, server, target)
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, target, req{})
+	body := rec.Body
 
 	for _, want := range []string{
 		`value="sandbox://A" checked`,
@@ -124,27 +121,17 @@ var wantRowVerbs = map[plan.State][]plan.Verb{
 func TestLaunchAcceptsRepeatedFormEncodedTickets(t *testing.T) {
 	t.Parallel()
 
-	store := seededStore(t, time.Now())
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	store := seededStore(t, testNow)
+	server := newServer(store, testNow)
+	response := do(t, server, http.MethodPost, "/launch", req{
+		Form: url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}},
+	})
+	if response.Code != http.StatusSeeOther || response.Location != "/" {
+		t.Errorf("POST /launch = (%d, %q), want (303, /)", response.Code, response.Location)
 	}
-	req.Header.Set("Origin", srv.URL)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := noRedirect(srv).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	assertSeeOtherHome(t, resp)
 
 	ctx := t.Context()
-	if err := store.ApplyLaunchIntents(ctx, time.Now()); err != nil {
+	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
 		t.Fatal(err)
 	}
 	memberships, err := store.LaunchMemberships(ctx)

@@ -3,30 +3,26 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func threeRepoStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
-	ctx := t.Context()
 	store := openStore(t)
 	tickets := []storepkg.Ticket{
 		{URL: "sandbox://ROOT", Repo: "repo", Branch: "root"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
 		{URL: "sandbox://LONE", Repo: "other", Branch: "lone"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	at := testNow
-	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+	storetest.Tickets(t, store, tickets...)
+	if err := store.SaveObservation(t.Context(), plan.Observation{ObservedAt: testNow}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -73,9 +69,7 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 		{URL: "sandbox://MINE", Repo: "O-Marsters-1997/command-center", Branch: "mine"},
 		{URL: "sandbox://THEIRS", Repo: "acme/other", Branch: "theirs"},
 	}
-	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	tracked := track(t, store, named("O-Marsters-1997/command-center", "acme/other")...)
 	server := openServer(tracked, fixedClock(testNow), "")
 
@@ -99,18 +93,14 @@ func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 func threeFeatureStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 
-	ctx := t.Context()
 	store := openStore(t)
 	tickets := []storepkg.Ticket{
 		{URL: "sandbox://ROOT", Feature: "board-scope", Branch: "root"},
 		{URL: "sandbox://CHILD", Feature: "board-scope", Branch: "child", BlockedBy: []string{"sandbox://ROOT"}},
 		{URL: "sandbox://LONE", Feature: "sqlc-migration", Branch: "lone"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-	at := testNow
-	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
+	storetest.Tickets(t, store, tickets...)
+	if err := store.SaveObservation(t.Context(), plan.Observation{ObservedAt: testNow}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -151,7 +141,7 @@ func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 func TestFeatureScopeUnknownIs404(t *testing.T) {
 	t.Parallel()
 
-	if rec := get(t, threeFeatureServer(t), "/f/bogus"); rec.Code != http.StatusNotFound {
+	if rec := do(t, threeFeatureServer(t), http.MethodGet, "/f/bogus", req{}); rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus = %d, want 404", rec.Code)
 	}
 }
@@ -166,9 +156,7 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 		{URL: "sandbox://WRONG-REPO", Repo: "other", Feature: "board-scope", Branch: "wrong-repo"},
 		{URL: "sandbox://WRONG-FEATURE", Repo: "repo", Feature: "sqlc-migration", Branch: "wrong-feature"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
@@ -239,9 +227,9 @@ func TestGraphJSONRespectsTheRepoScope(t *testing.T) {
 	t.Parallel()
 
 	server := threeRepoServer(t)
-	rec := fetchGraphPath(t, server, "/graph.json?repo=repo")
+	rec := do(t, server, http.MethodGet, "/graph.json?repo=repo", req{})
 	var groups []scopeJSONGroup
-	if err := json.Unmarshal(rec.Body.Bytes(), &groups); err != nil {
+	if err := json.Unmarshal([]byte(rec.Body), &groups); err != nil {
 		t.Fatalf("decode /graph.json?repo=repo: %v\n%s", err, rec.Body)
 	}
 	urls := scopeJSONURLs(t, groups)
@@ -257,12 +245,6 @@ func TestGraphJSONRespectsTheRepoScope(t *testing.T) {
 			t.Errorf("/graph.json?repo=repo = %v, want it to include %s", urls, want)
 		}
 	}
-}
-
-func fetchGraphPath(t *testing.T, server *web.Server, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	rec := get(t, server, path)
-	return rec
 }
 
 func TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths(t *testing.T) {

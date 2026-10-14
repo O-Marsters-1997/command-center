@@ -3,7 +3,6 @@ package web_test
 import (
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -24,9 +24,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
@@ -84,8 +82,7 @@ func TestTheDeletedDetailRouteIs404(t *testing.T) {
 		"/ticket/" + url.PathEscape("sandbox://CC-1") + "/detail",
 		"/task/" + url.PathEscape("sandbox://CC-1") + "/detail",
 	} {
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		rec := do(t, server, http.MethodGet, target, req{})
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", target, rec.Code)
 		}
@@ -98,16 +95,16 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/assets/htmx.min.js")
+	rec := do(t, server, http.MethodGet, "/assets/htmx.min.js", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/htmx.min.js = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "htmx") {
+	if !strings.Contains(rec.Body, "htmx") {
 		t.Error("/assets/htmx.min.js does not serve htmx")
 	}
 
-	page := get(t, server, "/tickets")
-	body := page.Body.String()
+	page := do(t, server, http.MethodGet, "/tickets", req{})
+	body := page.Body
 	if !strings.Contains(body, `<script src="/assets/htmx.min.js"></script>`) {
 		t.Errorf("page does not load htmx from the binary:\n%s", body)
 	}
@@ -122,8 +119,8 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/tickets")
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
+	body := rec.Body
 
 	if strings.Contains(body, "http-equiv=\"refresh\"") {
 		t.Error("the meta refresh is still on the page")
@@ -200,8 +197,8 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := get(t, server, sessionPagePath(ticket))
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, sessionPagePath(ticket), req{})
+	body := rec.Body
 
 	for _, dropped := range []string{"deadbeef-session", "pondering-deeply"} {
 		if strings.Contains(body, dropped) {
@@ -234,6 +231,6 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 
 func boardBody(t *testing.T, server *web.Server) string {
 	t.Helper()
-	rec := getHX(t, server, "/board")
-	return rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/board", req{Header: http.Header{"Hx-Request": {"true"}}})
+	return rec.Body
 }

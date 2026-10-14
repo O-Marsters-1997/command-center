@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -24,9 +25,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	prs := map[plan.BranchRef]plan.PR{}
@@ -82,9 +81,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
@@ -135,9 +132,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://MERGED", Repo: "repo", Branch: "merged"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 
 	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)

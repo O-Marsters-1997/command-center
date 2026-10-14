@@ -3,11 +3,8 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"testing"
-
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 type jsonRow struct {
@@ -32,28 +29,22 @@ func boardPillText(t *testing.T, page, ticketURL string) string {
 	return glyph[1]
 }
 
-func fetchGraph(t *testing.T, server *web.Server) *httptest.ResponseRecorder {
-	t.Helper()
-	rec := get(t, server, "/graph.json")
-	return rec
-}
-
 func TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver(t *testing.T) {
 	t.Parallel()
 
 	server := seededServer(t)
 	board := renderBoard(t, server)
-	rec := fetchGraph(t, server)
+	rec := do(t, server, http.MethodGet, "/graph.json", req{})
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /graph.json: status = %d: %s", rec.Code, rec.Body)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+	if ct := rec.Header.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 
 	var groups []jsonGroup
-	if err := json.Unmarshal(rec.Body.Bytes(), &groups); err != nil {
+	if err := json.Unmarshal([]byte(rec.Body), &groups); err != nil {
 		t.Fatalf("decode /graph.json: %v\n%s", err, rec.Body)
 	}
 	if len(groups) != 1 {

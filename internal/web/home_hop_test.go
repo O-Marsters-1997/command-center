@@ -20,7 +20,7 @@ func TestHomeCarriesTheTicketsPageAsItsDesktopTarget(t *testing.T) {
 func TestHomeCarriesASessionThatNeedsTheUserAsItsDesktopTarget(t *testing.T) {
 	t.Parallel()
 
-	st, _ := sessionStoreEnding(t, "agent", "", false, false, plan.OutcomeFailed)
+	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Outcome: plan.OutcomeFailed})
 
 	body := renderPath(t, newServer(st, testNow), "/")
 

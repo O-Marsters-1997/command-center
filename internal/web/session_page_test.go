@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,39 +12,39 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 const sessionTicket = "https://github.com/acme/web/issues/1"
 
-func sessionStore(t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
-	t.Helper()
-	return sessionStoreEnding(t, kind, prompt, keepPrompt, alive, plan.OutcomePush)
+type sessionRunOpts struct {
+	Feature    string
+	Kind       plan.RunKind
+	Prompt     string
+	KeepPrompt bool
+	Alive      bool
+	Outcome    plan.Outcome
 }
 
-func sessionStoreEnding(
-	t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
-) (*storepkg.Store, string) {
+func sessionStore(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
 	t.Helper()
-	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
+	opts.Outcome = plan.OutcomePush
+	return sessionStoreEnding(t, opts)
 }
 
-func sessionStoreInFeature(
-	t *testing.T, feature string, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
-) (*storepkg.Store, string) {
+func sessionStoreEnding(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
+	t.Helper()
+	opts.Feature = "checkout"
+	return sessionStoreInFeature(t, opts)
+}
+
+func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
 	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
-	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: feature}
-	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: opts.Feature}
+	storetest.Tickets(t, st, ticket)
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "1.jsonl")
 	line := `{"type":"assistant","timestamp":"2026-08-20T12:00:01Z",` +
@@ -53,20 +52,26 @@ func sessionStoreInFeature(
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if keepPrompt {
-		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(prompt), 0o600); err != nil {
+	if opts.KeepPrompt {
+		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(opts.Prompt), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: sessionTicket, Kind: opts.Kind, BaselineSHA: "base", PromptHash: "hash",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := st.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !alive {
-		exit := 0
+	if !opts.Alive {
+		exitCode := 0
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
-			RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exit),
+			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(exitCode),
 			Cost: option.None[float64](), EndedAt: testNow,
 		}); err != nil {
 			t.Fatal(err)
@@ -74,7 +79,7 @@ func sessionStoreInFeature(
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: opts.Alive}},
 	}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
@@ -83,27 +88,34 @@ func sessionStoreInFeature(
 }
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
-	t.Parallel()
-	for _, kind := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
-		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
-		st, _ := sessionStore(t, kind, prompt, true, true)
-		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
+	for _, tt := range []struct {
+		name string
+		kind plan.RunKind
+	}{
+		{name: "agent", kind: plan.RunKindAgent},
+		{name: "follow-up", kind: plan.RunKindFollowUp},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
+			st, _ := sessionStore(t, sessionRunOpts{Kind: tt.kind, Prompt: prompt, KeepPrompt: true, Alive: true})
+			body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
-		for _, want := range []string{
-			`data-glyph="running"`, "#1", "acme/web", "checkout", `<main id="main"`, `class="back"`,
-			`<pre class="prompt-text">Implement &lt;b&gt;#1&lt;/b&gt;` + "\n  &amp; keep   spacing\n</pre>",
-			`sse-connect="/ticket/`, `id="session-actions"`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("%s run: page lacks %q:\n%s", kind, want, body)
+			for _, want := range []string{
+				`data-glyph="running"`, "#1", "acme/web", "checkout", `<main id="main"`, `class="back"`,
+				`<pre class="prompt-text">Implement &lt;b&gt;#1&lt;/b&gt;` + "\n  &amp; keep   spacing\n</pre>",
+				`sse-connect="/ticket/`, `id="session-actions"`,
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("%s run: page lacks %q:\n%s", tt.kind, want, body)
+				}
 			}
-		}
+		})
 	}
 }
 
 func TestSessionPageSaysWhenPromptWasPruned(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "", false, false)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 	if !strings.Contains(body, "The prompt was not kept.") || strings.Contains(body, `class="prompt-text"`) {
 		t.Errorf("pruned prompt not announced:\n%s", body)
@@ -112,7 +124,7 @@ func TestSessionPageSaysWhenPromptWasPruned(t *testing.T) {
 
 func TestSessionRawTabServesTheJSONL(t *testing.T) {
 	t.Parallel()
-	st, line := sessionStore(t, "agent", "p", true, false)
+	st, line := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?log=raw")
 	escaped := strings.TrimSpace(strings.ReplaceAll(line, `"`, "&#34;"))
 	if !strings.Contains(body, `<pre class="raw-log">`) || !strings.Contains(body, escaped) {
@@ -131,7 +143,7 @@ func TestSessionPageShowsTheWorktreeToShellInto(t *testing.T) {
 
 func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	t.Parallel()
-	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/9")
+	rec := do(t, newServer(openStore(t), testNow), http.MethodGet, "/s/acme/web/9", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -139,7 +151,7 @@ func TestSessionPageUnknownTicketIs404(t *testing.T) {
 
 func TestSessionPageWithANonNumericTicketIs404(t *testing.T) {
 	t.Parallel()
-	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/nine")
+	rec := do(t, newServer(openStore(t), testNow), http.MethodGet, "/s/acme/web/nine", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -170,7 +182,7 @@ func TestParseSessionRefRefusesATooShortURL(t *testing.T) {
 func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	st, _ := sessionStore(t, "agent", "", false, false)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
 	logPath, _, err := st.LatestRunLog(ctx, sessionTicket)
 	if err != nil {
 		t.Fatal(err)
@@ -193,21 +205,9 @@ func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	}
 }
 
-func sessionVerb(t *testing.T, srv http.Handler, form url.Values, htmx bool) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/verb", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if htmx {
-		req.Header.Set("HX-Request", "true")
-	}
-	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	return rec
-}
-
 func TestSessionComposerFollowsTheState(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
 	for _, want := range []string{
 		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
@@ -219,7 +219,9 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 		}
 	}
 
-	idle, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	idle, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	body = renderPath(t, newServer(idle, testNow), "/s/acme/web/1")
 	for _, want := range []string{`class="composer"`, `value="follow-up"`, `value="re-run"`} {
 		if !strings.Contains(body, want) {
@@ -233,7 +235,7 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 
 func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
 	}); err != nil {
@@ -250,8 +252,10 @@ func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 
 func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
-	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+	failed, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	tests := []struct {
 		name    string
 		store   *storepkg.Store
@@ -259,13 +263,14 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 		absent  []string
 	}{
 		{
-			"failed", failed,
-			[]string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
-			[]string{`data-key="o"`, `data-key="e"`},
+			name: "failed", store: failed,
+			present: []string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
+			absent:  []string{`data-key="o"`, `data-key="e"`},
 		},
 		{
-			"running", running, []string{`<textarea name="prompt" rows="2" data-key="enter"`},
-			[]string{`data-key="r"`, `data-key="o"`, `data-key="e"`},
+			name: "running", store: running,
+			present: []string{`<textarea name="prompt" rows="2" data-key="enter"`},
+			absent:  []string{`data-key="r"`, `data-key="o"`, `data-key="e"`},
 		},
 	}
 	for _, tt := range tests {
@@ -288,7 +293,7 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 
 func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomePush)
+	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomePush})
 	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
 	obs := plan.Observation{
 		ObservedAt: testNow,
@@ -310,7 +315,9 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 
 func TestRailVerbButtonsCarryNoKey(t *testing.T) {
 	t.Parallel()
-	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	failed, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	body := renderPath(t, newServer(failed, testNow), "/rail")
 	if !strings.Contains(body, `name="verb"`) || strings.Contains(body, `data-key="r"`) {
 		t.Errorf("rail verb buttons carry a verb key:\n%s", body)
@@ -319,11 +326,14 @@ func TestRailVerbButtonsCarryNoKey(t *testing.T) {
 
 func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	srv := newServer(st, testNow)
 
-	rec := sessionVerb(t, srv, url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
-	body := rec.Body.String()
+	rec := do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	body := rec.Body
 	if rec.Code != http.StatusOK || !strings.Contains(body, `role="status">Queued kill`) {
 		t.Fatalf("status %d, want a Queued kill toast:\n%s", rec.Code, body)
 	}
@@ -338,8 +348,7 @@ func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 }
 
 func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
-	t.Parallel()
-	st, _ := sessionStore(t, plan.RunKindAgent, "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 	if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
 	}); err != nil {
@@ -348,19 +357,21 @@ func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
 	srv := newServer(st, testNow)
 	confirm := `hx-confirm="kill on https://github.com/acme/web/issues/1 signals the process group of ` +
 		`its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 99"`
-	for _, tc := range []struct{ path, verbPath string }{
-		{"/tickets", "/verb?all=1"},
-		{"/f/checkout", "/verb?feature=checkout"},
+	for _, tc := range []struct{ name, path, verbPath string }{
+		{name: "tickets", path: "/tickets", verbPath: "/verb?all=1"},
+		{name: "feature", path: "/f/checkout", verbPath: "/verb?feature=checkout"},
 	} {
-		body := renderPath(t, srv, tc.path)
-		for _, want := range []string{
-			`<table id="board"`, `data-section="in-progress"`, `hx-post="` + tc.verbPath + `"`,
-			confirm, `name="verb" value="kill"`, `kill queued`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s lacks %q:\n%s", tc.path, want, body)
+		t.Run(tc.name, func(t *testing.T) {
+			body := renderPath(t, srv, tc.path)
+			for _, want := range []string{
+				`<table id="board"`, `data-section="in-progress"`, `hx-post="` + tc.verbPath + `"`,
+				confirm, `name="verb" value="kill"`, `kill queued`,
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("GET %s lacks %q:\n%s", tc.path, want, body)
+				}
 			}
-		}
+		})
 	}
 	for _, path := range []string{"/s/acme/web/1", "/s/acme/web/1/actions"} {
 		body := renderPath(t, srv, path)
@@ -378,25 +389,31 @@ func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
 
 func TestSessionVerbWithoutHTMXRedirectsBack(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	form := url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}
-	rec := sessionVerb(t, newServer(st, testNow), form, false)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/s/acme/web/1" {
-		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Header().Get("Location"))
+	rec := do(t, newServer(st, testNow), http.MethodPost, "/verb", req{Form: form})
+	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/1" {
+		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Location)
 	}
 }
 
 func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	st, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	srv := newServer(st, testNow)
-	rec := sessionVerb(t, srv, url.Values{
-		"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"},
-	}, true)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Queued follow-up") {
-		t.Fatalf("status %d:\n%s", rec.Code, rec.Body.String())
+	rec := do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body, "Queued follow-up") {
+		t.Fatalf("status %d:\n%s", rec.Code, rec.Body)
 	}
-	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
+	rec = do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("blank follow-up status = %d, want 422", rec.Code)
 	}
@@ -404,8 +421,10 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 
 func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
 	t.Parallel()
-	withFeature, _ := sessionStore(t, "agent", "p", true, true)
-	noFeature, _ := sessionStoreInFeature(t, "", "agent", "p", true, true, plan.OutcomePush)
+	withFeature, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+	noFeature, _ := sessionStoreInFeature(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true, Outcome: plan.OutcomePush,
+	})
 
 	body := renderPath(t, newServer(withFeature, testNow), "/s/acme/web/1")
 	if want := `href="/f/checkout/graph" data-key="f"`; !strings.Contains(body, want) {
@@ -419,7 +438,7 @@ func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
 
 func TestSessionComposerIsOutsideEveryPolledElement(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
 	if !strings.Contains(body, "<textarea") {

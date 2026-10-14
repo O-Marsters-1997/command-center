@@ -15,7 +15,9 @@ import (
 
 type boardTestClock struct{}
 
-func (boardTestClock) Now() time.Time { return time.Now() }
+var frameTestNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func (boardTestClock) Now() time.Time { return frameTestNow }
 
 func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -57,7 +59,7 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 		<-release
 		return []gh.RepoSummary{{FullName: "first"}}, nil
 	}}
-	now := time.Now()
+	now := frameTestNow
 	done := make(chan error, 1)
 	go func() {
 		_, err := cache.get(t.Context(), now)
@@ -104,7 +106,7 @@ func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
 		}))
 	fetchDone := make(chan error, 1)
 	go func() {
-		_, err := s.pushable.get(ctx, time.Now())
+		_, err := s.pushable.get(ctx, frameTestNow)
 		fetchDone <- err
 	}()
 	select {

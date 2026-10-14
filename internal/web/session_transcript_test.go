@@ -10,6 +10,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
@@ -17,9 +18,7 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 	ctx := t.Context()
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}
-	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, ticket)
 	dir := t.TempDir()
 	session := storepkg.RunSession{StartNew: true}
 	for i, message := range messages {

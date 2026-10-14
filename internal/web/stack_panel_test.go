@@ -2,13 +2,13 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func stackStore(t *testing.T) *storepkg.Store {
@@ -22,9 +22,7 @@ func stackStore(t *testing.T) *storepkg.Store {
 		{URL: base + "3", Repo: "acme/web", Branch: "cc-3", Feature: "checkout", BlockedBy: []string{base + "2"}},
 		{URL: base + "4", Repo: "acme/web", Branch: "cc-4", Feature: "checkout", BlockedBy: []string{base + "2"}},
 	}
-	if err := st.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	if err := st.SaveObservation(ctx, plan.Observation{ObservedAt: testNow}); err != nil {
 		t.Fatal(err)
 	}
@@ -59,12 +57,9 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 		"return":     {"/s/acme/web/3"},
 		"blocked_by": {"https://github.com/acme/web/issues/1", ""},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/ticket", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/s/acme/web/3" {
-		t.Fatalf("status = %d, location = %q", rec.Code, rec.Header().Get("Location"))
+	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/3" {
+		t.Fatalf("status = %d, location = %q", rec.Code, rec.Location)
 	}
 	if err := st.EditTicket(t.Context(), "https://github.com/acme/web/issues/3", "cc-3",
 		[]string{"https://github.com/acme/web/issues/1"}); err != nil {
@@ -105,11 +100,8 @@ func TestTicketEditIgnoresAnOffSiteReturn(t *testing.T) {
 	form := url.Values{
 		"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/ticket", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	if got := rec.Header().Get("Location"); got != "/" {
+	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if got := rec.Location; got != "/" {
 		t.Errorf("location = %q, want /", got)
 	}
 }

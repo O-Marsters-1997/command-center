@@ -20,12 +20,12 @@ func TestRunningRowGlyphPulses(t *testing.T) {
 	store := runningRowStore(t, ticket, startedAt, now)
 
 	server := newServer(store, now)
-	rec := get(t, server, "/tickets")
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
 
-	body := rec.Body.String()
+	body := rec.Body
 	if !strings.Contains(body, `class="glyph glyph-running glyph-pulse"`) {
 		t.Errorf("running row's glyph is not a pulsing running glyph:\n%s", body)
 	}
@@ -37,8 +37,8 @@ func TestEndedRunsGlyphDoesNotPulse(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/tickets")
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
+	body := rec.Body
 
 	if strings.Contains(body, "glyph-pulse") {
 		t.Errorf("no run is alive, but a glyph still pulses:\n%s", body)

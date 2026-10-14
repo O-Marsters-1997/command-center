@@ -9,6 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 type renderedRow struct {
@@ -48,9 +49,7 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
@@ -153,9 +152,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 			BlockedBy: []string{"sandbox://CC-1", "sandbox://CC-2"},
 		},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
@@ -186,9 +183,7 @@ func TestBoardListsAChainOfBlockersOnceEach(t *testing.T) {
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{"sandbox://CC-1"}},
 		{URL: "sandbox://CC-3", Repo: "repo", Branch: "cc-3", BlockedBy: []string{"sandbox://CC-2"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
@@ -214,9 +209,7 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 		{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"},
 		{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
 		t.Fatal(err)
@@ -235,9 +228,7 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 
 	at := testNow
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
