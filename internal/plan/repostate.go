@@ -1,19 +1,9 @@
 package plan
 
-// The kinds a refused repo carries.
-const (
-	RefusalMergeSettings = "merge_settings"
-	RefusalDefaultBranch = "default_branch"
-	RefusalClone         = "clone"
-	RefusalSettingsParse = "settings_parse"
-)
-
-// RepoStatus is the part of a tracked repo the observation can move: its state and why it is
-// refused. State is "cloning", "ready" or "refused".
 type RepoStatus struct {
 	Name        string
-	State       string
-	RefusalKind string
+	Phase       RepoPhase
+	RefusalKind RefusalKind
 	Refusal     string
 }
 
@@ -22,16 +12,16 @@ type RepoStatus struct {
 // Every other refusal waits for Track, and a repo with no read this tick stays as it was.
 func NextRepoStatus(current RepoStatus, obs Observation) RepoStatus {
 	switch {
-	case current.State == "cloning":
+	case current.Phase == RepoCloning:
 		return current
-	case current.State == "refused" && current.RefusalKind != RefusalSettingsParse:
+	case current.Phase == RepoRefused && current.RefusalKind != RefusalSettingsParse:
 		return current
 	}
 	if reason, bad := obs.SettingsErrors[current.Name]; bad {
-		return RepoStatus{Name: current.Name, State: "refused", RefusalKind: RefusalSettingsParse, Refusal: reason}
+		return RepoStatus{Name: current.Name, Phase: RepoRefused, RefusalKind: RefusalSettingsParse, Refusal: reason}
 	}
-	if _, clean := obs.Settings[current.Name]; clean && current.State == "refused" {
-		return RepoStatus{Name: current.Name, State: "ready"}
+	if _, clean := obs.Settings[current.Name]; clean && current.Phase == RepoRefused {
+		return RepoStatus{Name: current.Name, Phase: RepoReady}
 	}
 	return current
 }

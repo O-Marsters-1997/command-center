@@ -32,5 +32,8 @@ func LoadRequests(dir string) ([]RequestUsage, error) {
 		requests = append(requests, found...)
 		return nil
 	})
-	return requests, err
+	if err != nil {
+		return requests, fmt.Errorf("load transcript requests: %w", err)
+	}
+	return requests, nil
 }

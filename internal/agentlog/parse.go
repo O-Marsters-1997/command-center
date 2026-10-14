@@ -156,7 +156,10 @@ func Parse(r io.Reader) (Run, error) {
 	})
 	ledger.settle(run.Phases)
 	run.Start = base
-	return run, err
+	if err != nil {
+		return run, fmt.Errorf("read agent log: %w", err)
+	}
+	return run, nil
 }
 
 // ParseLine reads one log line into its events, none for a line no reader wants: a system line,
@@ -240,8 +243,10 @@ type contentBlock struct {
 
 func decode(line []byte) (logLine, error) {
 	var parsed logLine
-	err := json.Unmarshal(line, &parsed)
-	return parsed, err
+	if err := json.Unmarshal(line, &parsed); err != nil {
+		return parsed, fmt.Errorf("decode agent log line: %w", err)
+	}
+	return parsed, nil
 }
 
 func forEachLine(logPath string, fn func(logLine, time.Time)) (err error) {
@@ -280,7 +285,7 @@ func eachLine(r io.Reader, fn func([]byte)) error {
 			return nil
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("read log line: %w", err)
 		}
 		fn(line)
 	}
@@ -333,7 +338,7 @@ func (t *Tail) feed(l logLine) []Event {
 				events[i] = l.cmdDone(call, e.CallID)
 				delete(t.cmdCalls, e.CallID)
 			}
-		default:
+		case Skill, File, Tool, Say, Record, Commit:
 		}
 	}
 	return t.keep(events)

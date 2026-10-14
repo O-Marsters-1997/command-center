@@ -14,7 +14,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -62,23 +61,29 @@ func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
 
-func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Option) (app *App, err error) {
+func New(
+	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, opts ...Option,
+) (app *App, err error) {
 	settings := options{clock: loop.RealClock{}}
 	for _, opt := range opts {
 		opt(&settings)
 	}
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.Load(configPath, env)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load config: %w", err)
+	}
+	var webOpts []web.Option
+	if loc, err := time.LoadLocation(env.TZ); env.TZ != "" && err == nil {
+		webOpts = append(webOpts, web.WithLocation(loc))
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve workspace: %w", err)
 	}
 	lock, err := Lock(ws.LockPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lock workspace: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -88,7 +93,7 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 
 	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -97,7 +102,7 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 	}()
 
 	if err := loop.WriteAgentFiles(ws); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write agent files: %w", err)
 	}
 
 	observe := settings.observe
@@ -105,19 +110,21 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 		observe = loop.NewObserver(store, gh.CLI{}, cfg)
 	}
 
-	lp := loop.NewLoop(logger, store, observe, settings.clock, cfg, ws, runner.ProcessRunner{})
-	lp.SetForge(gh.CLI{})
-	lp.SetWorktrees(git.CLI{})
+	var loopOpts []loop.Option
 	if settings.validate != nil {
-		lp.SetValidator(settings.validate)
+		loopOpts = append(loopOpts, loop.WithValidator(settings.validate))
 	}
 	if settings.remoteOf != nil {
-		lp.SetRemoteSource(settings.remoteOf)
+		loopOpts = append(loopOpts, loop.WithRemoteSource(settings.remoteOf))
 	}
-	server := web.NewServer(logger, store, settings.clock, ws.DataDir)
-	server.SetNudge(lp.Nudge)
-	server.SetSpendLimit5h(cfg.SpendLimit5h)
-	server.SetBoardPollSeconds(cfg.BoardPollSeconds)
+	lp := loop.New(loop.Deps{
+		Logger: logger, Store: store, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
+		Config: cfg, Workspace: ws,
+	}, loopOpts...)
+	webOpts = append(webOpts, web.WithSpendLimit5h(cfg.SpendLimit5h), web.WithBoardPollSeconds(cfg.BoardPollSeconds))
+	server := web.NewServer(web.Deps{
+		Logger: logger, Store: store, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
+	}, webOpts...)
 
 	return &App{
 		cfg:    cfg,
@@ -129,7 +136,12 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 	}, nil
 }
 
-func (a *App) RunOnce(ctx context.Context) error { return a.loop.RunOnce(ctx) }
+func (a *App) RunOnce(ctx context.Context) error {
+	if err := a.loop.RunOnce(ctx); err != nil {
+		return fmt.Errorf("run loop once: %w", err)
+	}
+	return nil
+}
 
 func (a *App) Handler() http.Handler { return a.server }
 
@@ -152,7 +164,10 @@ func (a *App) Run(ctx context.Context) error {
 
 	g.Go(func() error {
 		defer stop()
-		return a.loop.Run(ctx)
+		if err := a.loop.Run(ctx); err != nil {
+			return fmt.Errorf("run loop: %w", err)
+		}
+		return nil
 	})
 	g.Go(func() error {
 		defer stop()
@@ -166,10 +181,16 @@ func (a *App) Run(ctx context.Context) error {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdown)
+		if err := srv.Shutdown(shutdown); err != nil {
+			return fmt.Errorf("shut down server: %w", err)
+		}
+		return nil
 	})
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("run services: %w", err)
+	}
+	return nil
 }
 
 func (a *App) Close() error { return errors.Join(a.store.Close(), a.lock.Close()) }

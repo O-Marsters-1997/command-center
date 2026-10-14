@@ -34,8 +34,6 @@ One binary, `cmd/cc`, wired together in `internal/app`.
   marker `SELECT 'irreversible: <why>'::int;` inside `-- +goose StatementBegin`/`StatementEnd`.
 - `internal/web`: handlers and `html/template` pages. It derives per render through `plan` and
   caches nothing.
-- `gh`, `tracker` and `git` each decode the gh CLI's JSON; a change to gh output handling checks
-  all three.
 
 ## Frontend
 

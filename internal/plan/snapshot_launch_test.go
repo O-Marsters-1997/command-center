@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -23,16 +24,16 @@ func TestSnapshotLaunch(t *testing.T) {
 		name  string
 		rules plan.Rules
 		in    plan.Input
-		want  []string
+		want  []plan.TicketURL
 	}{
 		{
 			name:  "an authorised, unlocked ticket with no run launches",
 			rules: plan.Rules{MaxAgents: 2},
 			in: plan.Input{
 				Tickets:     []plan.Ticket{first},
-				Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first)},
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first)},
 			},
-			want: []string{first.URL},
+			want: []plan.TicketURL{first.URL},
 		},
 		{
 			name:  "a ticket outside every launch never launches",
@@ -44,7 +45,7 @@ func TestSnapshotLaunch(t *testing.T) {
 			rules: plan.Rules{MaxAgents: 2},
 			in: plan.Input{
 				Tickets: []plan.Ticket{first},
-				Memberships: map[string]plan.LaunchMembership{
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{
 					first.URL: {LaunchID: 1, Members: 1, PromptHash: "stale"},
 				},
 			},
@@ -54,8 +55,8 @@ func TestSnapshotLaunch(t *testing.T) {
 			rules: plan.Rules{MaxAgents: 2},
 			in: plan.Input{
 				Tickets:     []plan.Ticket{first},
-				Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first)},
-				Runs:        map[string]plan.RunSummary{first.URL: {ID: 1, HasOutcome: true}},
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first)},
+				Runs:        map[plan.TicketURL]plan.RunSummary{first.URL: {ID: 1, Outcome: option.Some(plan.OutcomePush)}},
 			},
 		},
 		{
@@ -63,19 +64,19 @@ func TestSnapshotLaunch(t *testing.T) {
 			rules: plan.Rules{MaxAgents: 2},
 			in: plan.Input{
 				Tickets: []plan.Ticket{first, second, third},
-				Memberships: map[string]plan.LaunchMembership{
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{
 					second.URL: authorised(second), third.URL: authorised(third),
 				},
-				Runs: map[string]plan.RunSummary{first.URL: {ID: 1, Pgid: &live}},
+				Runs: map[plan.TicketURL]plan.RunSummary{first.URL: {ID: 1, Pgid: option.Some(live)}},
 			},
-			want: []string{second.URL},
+			want: []plan.TicketURL{second.URL},
 		},
 		{
 			name:  "the five-hour reading at the limit pauses every launch",
 			rules: plan.Rules{MaxAgents: 2, SpendLimit5h: 80},
 			in: plan.Input{
 				Tickets:     []plan.Ticket{first},
-				Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first)},
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first)},
 				FiveHour:    0.8,
 			},
 		},
@@ -84,10 +85,10 @@ func TestSnapshotLaunch(t *testing.T) {
 			rules: plan.Rules{MaxAgents: 2, SpendLimit5h: 80},
 			in: plan.Input{
 				Tickets:     []plan.Ticket{first},
-				Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first)},
+				Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first)},
 				FiveHour:    0.5,
 			},
-			want: []string{first.URL},
+			want: []plan.TicketURL{first.URL},
 		},
 	}
 	for _, tt := range tests {
@@ -110,15 +111,15 @@ func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
 	row := plan.PushRow{PushedTip: "abc", BaseBranch: "main"}
 	snap := derive(plan.Rules{}, plan.Input{
 		Tickets:     []plan.Ticket{root},
-		Memberships: map[string]plan.LaunchMembership{root.URL: member},
-		Verdict:     plan.VerdictFacts{PushRows: map[string]plan.PushRow{root.URL: row}},
+		Memberships: map[plan.TicketURL]plan.LaunchMembership{root.URL: member},
+		Verdict:     plan.VerdictFacts{PushRows: map[plan.TicketURL]plan.PushRow{root.URL: row}},
 	})
 
 	got := entry(t, snap, root.URL)
 	if got.PromptHash != member.PromptHash {
 		t.Errorf("PromptHash = %q, want %q", got.PromptHash, member.PromptHash)
 	}
-	if got.LastPush == nil || *got.LastPush != row {
+	if got.LastPush != option.Some(row) {
 		t.Errorf("LastPush = %v, want %v", got.LastPush, row)
 	}
 }
@@ -130,11 +131,11 @@ func TestSnapshotLaunchAfterCountsAgentsStartedThisTick(t *testing.T) {
 	second := ticket("2", "cc-2-second")
 	in := plan.Input{
 		Tickets:     []plan.Ticket{first, second},
-		Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first), second.URL: authorised(second)},
+		Memberships: map[plan.TicketURL]plan.LaunchMembership{first.URL: authorised(first), second.URL: authorised(second)},
 	}
 	snap := plan.Rules{MaxAgents: 1}.Derive(in)
 
-	if got := snap.LaunchAfter(0); !slices.Equal(got, []string{first.URL}) {
+	if got := snap.LaunchAfter(0); !slices.Equal(got, []plan.TicketURL{first.URL}) {
 		t.Errorf("LaunchAfter(0) = %v, want the first ticket", got)
 	}
 	if got := snap.LaunchAfter(1); len(got) != 0 {

@@ -1,13 +1,10 @@
 package plan
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // GatingBlockers returns t's blockers in another repo: edges Unlocked skips entirely but
 // DraftGate needs.
-func GatingBlockers(t Ticket, byURL map[string]Ticket) []Ticket {
+func GatingBlockers(t Ticket, byURL map[TicketURL]Ticket) []Ticket {
 	var gating []Ticket
 	for _, blockerURL := range t.BlockedBy {
 		blocker, ok := byURL[blockerURL]
@@ -20,7 +17,7 @@ func GatingBlockers(t Ticket, byURL map[string]Ticket) []Ticket {
 
 // OpensAsDraft decides whether a ticket's pull request is created as a draft: any ticket with a
 // gating edge. DraftGate decides the steady state afterwards.
-func OpensAsDraft(t Ticket, byURL map[string]Ticket) bool {
+func OpensAsDraft(t Ticket, byURL map[TicketURL]Ticket) bool {
 	return len(GatingBlockers(t, byURL)) > 0
 }
 
@@ -28,13 +25,13 @@ func OpensAsDraft(t Ticket, byURL map[string]Ticket) bool {
 // unmerged, or its own verdict not green. It never asks to re-draft, as GitHub has no such
 // affordance.
 func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draft bool, reason Reason) {
-	var closed, unresolved []string
+	var closed, unresolved []TicketURL
 	for _, g := range gating {
 		switch prs[g.Branch] {
 		case Merged:
 		case Closed:
 			closed = append(closed, g.URL)
-		default: // Open or Absent
+		case Open, Absent:
 			unresolved = append(unresolved, g.URL)
 		}
 	}
@@ -51,17 +48,17 @@ func DraftGate(gating []Ticket, prs map[string]PRState, verdictGreen bool) (draf
 	return false, "every gating blocker has merged and its own checks are green"
 }
 
-func unresolvedGateReason(tickets []string) Reason {
+func unresolvedGateReason(tickets []TicketURL) Reason {
 	if len(tickets) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s", tickets[0]))
 	}
-	return Reason(fmt.Sprintf("waiting on %d blockers: %s", len(tickets), strings.Join(tickets, ", ")))
+	return Reason(fmt.Sprintf("waiting on %d blockers: %s", len(tickets), joinURLs(tickets)))
 }
 
-func closedGateReason(tickets []string) Reason {
+func closedGateReason(tickets []TicketURL) Reason {
 	if len(tickets) == 1 {
 		return Reason(fmt.Sprintf("waiting on %s: its pull request was closed without merging", tickets[0]))
 	}
 	return Reason(fmt.Sprintf("waiting on %d blockers whose pull requests closed without merging: %s",
-		len(tickets), strings.Join(tickets, ", ")))
+		len(tickets), joinURLs(tickets)))
 }

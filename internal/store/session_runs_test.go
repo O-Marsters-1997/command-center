@@ -20,25 +20,25 @@ func TestSessionRunsForTicketReturnsTheLatestSessionInOrder(t *testing.T) {
 		t.Fatalf("SessionRunsForTicket with no runs = %v, %v, want none", got, err)
 	}
 
-	_, oldSession, err := store.InsertSessionRunSkeleton(
-		ctx, ticket, "agent", "", "hash", storepkg.RunSession{StartNew: true})
+	_, oldSession, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	launchID, session, err := store.InsertSessionRunSkeleton(
-		ctx, ticket, "agent", "", "hash", storepkg.RunSession{StartNew: true})
+	launchID, session, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if session == oldSession {
 		t.Fatal("a second launch reused the first session")
 	}
-	firstID, _, err := store.InsertSessionRunSkeleton(
-		ctx, ticket, "follow_up", "", "", storepkg.RunSession{JoinID: session, Message: "go on"})
+	firstID, _, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: session, Message: "go on"},
+	})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := store.InsertSessionRunSkeleton(ctx, ticket, "review", "", "", storepkg.RunSession{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,7 +60,8 @@ func TestSessionRunsForTicketIsEmptyWhenTheLatestRunHasNoSession(t *testing.T) {
 	seedOneTicket(t, store)
 	const ticket = "sandbox://CC-1"
 
-	if _, err := store.InsertRunSkeleton(ctx, ticket, "agent", "", "hash"); err != nil {
+	skeleton := storepkg.RunSkeleton{Ticket: ticket, Kind: "agent", PromptHash: "hash"}
+	if _, err := store.InsertRunSkeleton(ctx, skeleton); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.SessionRunsForTicket(ctx, ticket)

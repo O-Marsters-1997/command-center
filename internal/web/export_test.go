@@ -2,7 +2,6 @@ package web
 
 import (
 	"html/template"
-	"net/http"
 	"strings"
 	"testing"
 
@@ -30,7 +29,7 @@ func renderStates(name string, states []plan.State) (string, error) {
 		r := view.Row{
 			URL:        "sandbox://" + state.String(),
 			State:      state.String(),
-			Glyph:      plan.Glyph(state),
+			Glyph:      state.Glyph(),
 			Unattended: state.Unattended(),
 			Verbs:      plan.Verbs(state),
 		}
@@ -57,8 +56,4 @@ func WriteRunLog(t *testing.T, body string) string {
 	return writeRunLog(t, body)
 }
 
-func (s *Server) RegisterTestRoute(pattern string, h http.HandlerFunc) {
-	s.rawMux.HandleFunc(pattern, h)
-}
-
-func MainTipKey(repo string) string { return plan.BranchKey(repo, "main") }
+func MainTipKey(repo string) plan.BranchRef { return plan.BranchRef{Repo: repo, Branch: "main"} }

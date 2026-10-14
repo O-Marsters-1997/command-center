@@ -19,9 +19,9 @@ func (op DiffOp) String() string {
 		return "add"
 	case Remove:
 		return "del"
-	default:
-		return "ctx"
+	case Keep:
 	}
+	return "ctx"
 }
 
 type DiffLine struct {

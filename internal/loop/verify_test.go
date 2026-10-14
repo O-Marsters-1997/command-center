@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -40,7 +39,7 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 	verifyScript := writeVerifyScript(t, "#!/bin/sh\necho 'undefined: dup' >&2\nexit 1\n")
 	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{verifyScript}}
 	clock := fixedClock(at.Add(time.Minute))
-	lp := loop.NewLoop(discardLog, store, observe, clock, cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -73,8 +72,8 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
 		t.Fatalf("child's state = %q, want verification_failed", state)
 	}
-	for _, verb := range []string{plan.VerbRetryPush, plan.VerbReRun} {
-		if !strings.Contains(page, `value="`+verb+`"`) {
+	for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
+		if !strings.Contains(page, `value="`+string(verb)+`"`) {
 			t.Errorf("page does not offer %s:\n%s", verb, page)
 		}
 	}
@@ -92,7 +91,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root) // VerifyCommand left unset
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -128,7 +127,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{script}}
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -161,7 +160,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	failing := writeVerifyScript(t, "#!/bin/sh\nexit 1\n")
 	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{failing}}
 	clock := fixedClock(at.Add(time.Minute))
-	lp := loop.NewLoop(discardLog, store, observe, clock, cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
@@ -170,7 +169,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !facts[f.child.URL].VerificationFailed {
+	if !facts[plan.TicketURL(f.child.URL)].VerificationFailed {
 		t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
 	}
 
@@ -199,7 +198,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if factsAfter[f.child.URL].VerificationFailed {
+	if factsAfter[plan.TicketURL(f.child.URL)].VerificationFailed {
 		t.Errorf("refresh facts = %+v, want the latch cleared by the push", factsAfter)
 	}
 }
@@ -228,14 +227,14 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 		runGitOutput(t, "-C", filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent"))
 
 	obs := baseObservation(f, f.parentTip0)
-	obs.BranchTips["repo//main"] = mainTip1
+	obs.BranchTips[branchRef("repo", "main")] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	vet := []string{mustLookPath(t, "go"), "vet", "./..."}
 	obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: vet}
 	clock := fixedClock(at.Add(time.Minute))
-	lp := loop.NewLoop(discardLog, store, observe, clock, cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, clock, cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

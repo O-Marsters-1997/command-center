@@ -15,7 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
-	"github.com/O-Marsters-1997/command-center/internal/store"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -30,11 +30,11 @@ func mergeParentIntoMain(t *testing.T, repoPath string) {
 
 func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
 	obs := baseObservation(f, "")
-	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged}
-	obs.PRs[plan.BranchKey("repo", "child")] = plan.PR{
+	obs.PRs[branchRef("repo", "parent")] = plan.PR{Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged}
+	obs.PRs[branchRef("repo", "child")] = plan.PR{
 		Number: 2, HeadRef: "child", BaseRef: childBaseRef, State: plan.Open,
 	}
-	delete(obs.BranchTips, plan.BranchKey("repo", "parent"))
+	delete(obs.BranchTips, branchRef("repo", "parent"))
 	return obs
 }
 
@@ -56,7 +56,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			obs := mergedObservation(f, childBaseRef)
 			observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 			cfg, ws := stackedConfigAndWorkspace(t, root)
-			lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+			lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 			if err := lp.RunOnce(t.Context()); err != nil {
 				t.Fatalf("RunOnce: %v", err)
 			}
@@ -69,15 +69,15 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			row := pushes[f.child.URL]
+			row := pushes[plan.TicketURL(f.child.URL)]
 			if row.BaseBranch != "main" {
 				t.Errorf("child's recorded base = %q, want main", row.BaseBranch)
 			}
-			if row.PushedTip != childTip {
+			if string(row.PushedTip) != childTip {
 				t.Errorf("child's recorded pushed tip = %q, want %q unchanged: nothing was pushed",
 					row.PushedTip, childTip)
 			}
-			if row.BaseSHAAtPush != mainSHA {
+			if string(row.BaseSHAAtPush) != mainSHA {
 				t.Errorf("child's recorded base sha = %q, want origin/main's tip %q", row.BaseSHAAtPush, mainSHA)
 			}
 
@@ -110,11 +110,11 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 
 	firstTick := at.Add(time.Minute)
-	if err := loop.NewLoop(discardLog, store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}).
+	if err := newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("first RunOnce: %v", err)
 	}
-	if err := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{}).
+	if err := newLoop(store, observe, fixedClock(at.Add(time.Hour)), cfg, ws, runner.ProcessRunner{}).
 		RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.URL].PushedAt; !got.Equal(firstTick) {
+	if got := pushes[plan.TicketURL(f.child.URL)].PushedAt; !got.Equal(firstTick) {
 		t.Errorf("child's latest push row is stamped %s, want the first tick's %s: an unchanged base "+
 			"must not append a second row", got, firstTick)
 	}
@@ -144,7 +144,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	obs := mergedObservation(f, "main")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := pushes[f.child.URL].BaseBranch; got != "parent" {
+	if got := pushes[plan.TicketURL(f.child.URL)].BaseBranch; got != "parent" {
 		t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
 	}
 
@@ -226,15 +226,15 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 	t.Parallel()
 
 	const parentTip, childTip = "parent-tip", "child-tip"
-	tickets := []store.Ticket{
+	tickets := []storepkg.Ticket{
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
-	prs := map[string]plan.PR{
-		plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Merged, BaseRef: "main"},
-		plan.BranchKey("repo", "child"): {
+	prs := map[plan.BranchRef]plan.PR{
+		branchRef("repo", "parent"): {Number: 1, State: plan.Merged, BaseRef: "main"},
+		branchRef("repo", "child"): {
 			Number: 2, State: plan.Open, HeadOid: childTip, BaseRef: "main",
 			Checks: map[string]plan.CheckState{"CI": {Status: "COMPLETED", Conclusion: "SUCCESS"}},
 		},
@@ -248,17 +248,23 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			t.Fatal(err)
 		}
 		dispositionAsPushed(t, store, "sandbox://CHILD", at)
-		if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "parent", parentTip, at); err != nil {
+		push := storepkg.Push{
+			Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: parentTip, BaseBranch: "parent", At: at,
+		}
+		if err := store.RecordPush(ctx, push); err != nil {
 			t.Fatal(err)
 		}
 		if retargeted {
-			if err := store.RecordPush(ctx, "sandbox://CHILD", childTip, "main", "main-tip", at); err != nil {
+			repointed := storepkg.Push{
+				Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: "main-tip", BaseBranch: "main", At: at,
+			}
+			if err := store.RecordPush(ctx, repointed); err != nil {
 				t.Fatal(err)
 			}
 		}
 		obs := plan.Observation{
-			Worktrees:  map[string]string{plan.BranchKey("repo", "child"): "/repos/child"},
-			BranchTips: map[string]string{loop.MainTipKey("repo"): observedMainTip},
+			Worktrees:  map[plan.BranchRef]string{branchRef("repo", "child"): "/repos/child"},
+			BranchTips: map[plan.BranchRef]plan.SHA{loop.MainTipKey("repo"): plan.SHA(observedMainTip)},
 			PRs:        prs,
 			Settings:   map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 		}
@@ -317,7 +323,11 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -327,10 +337,10 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
+	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -397,13 +407,13 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
-		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
+	obs.PRs[branchRef("repo", "parent")] = plan.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
+	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -464,7 +474,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	obs := baseObservation(f, newParentTip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -500,7 +510,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	obs := baseObservation(f, f.parentTip0)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -529,7 +539,11 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -539,13 +553,13 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	mainSHA := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "origin/main"))
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
-		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
+	obs.PRs[branchRef("repo", "parent")] = plan.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
+	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("restack RunOnce: %v", err)
 	}
@@ -561,7 +575,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !restacked[f.child.URL] {
+	if !restacked[plan.TicketURL(f.child.URL)] {
 		t.Fatalf("RestackedSinceLastPush = %v, want the child: the app's own rebase --onto rewrote "+
 			"this branch, and a conflict interrupts that rather than handing it to anyone else", restacked)
 	}
@@ -595,7 +609,11 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	commitFile(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
 	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
 	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
-	if err := store.RecordPush(t.Context(), f.child.URL, childTip, "parent", f.parentTip0, at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
+		BaseBranch: "parent", At: at,
+	}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -611,14 +629,14 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	}
 
 	obs := mergedObservation(f, "parent")
-	obs.PRs[plan.BranchKey("repo", "parent")] = plan.PR{
-		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: f.parentTip0,
+	obs.PRs[branchRef("repo", "parent")] = plan.PR{
+		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = mainSHA
-	obs.MidMerge[plan.BranchKey("repo", "child")] = true
+	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
+	obs.MidMerge[branchRef("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
@@ -634,7 +652,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
 	// it was: still built on the parent's own commit, still needing main.
 	runGit(t, "-C", f.childWorktree, "rebase", "--abort")
-	obs.MidMerge[plan.BranchKey("repo", "child")] = false
+	obs.MidMerge[branchRef("repo", "child")] = false
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)

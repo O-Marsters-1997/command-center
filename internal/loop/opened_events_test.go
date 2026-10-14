@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -23,7 +22,7 @@ func TestRecordOpenedEventsAppendsOnceWhenAPRAppears(t *testing.T) {
 	}
 
 	observed := plan.Observation{}
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)), config.Config{}, config.Workspace{},
 		runner.ProcessRunner{})
@@ -44,8 +43,8 @@ func TestRecordOpenedEventsAppendsOnceWhenAPRAppears(t *testing.T) {
 		t.Fatalf("pr_opened events before any PR = %+v, want none", got)
 	}
 
-	observed = plan.Observation{PRs: map[string]plan.PR{
-		plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
+	observed = plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+		branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
 	}}
 	got := runOnce()
 	if len(got) != 1 {
@@ -72,14 +71,14 @@ func TestRecordOpenedEventsIgnoresAPRAlreadyInThePreviousObservation(t *testing.
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
-	observed := plan.Observation{PRs: map[string]plan.PR{
-		plan.BranchKey(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
+	observed := plan.Observation{PRs: map[plan.BranchRef]plan.PR{
+		branchRef(ticket.Repo, ticket.Branch): {Number: 41, State: plan.Open},
 	}}
 	if err := store.SaveObservation(ctx, observed); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {

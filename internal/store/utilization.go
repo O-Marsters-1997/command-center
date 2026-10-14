@@ -43,7 +43,7 @@ type Gauge struct {
 func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, error) {
 	readings, err := s.LatestReadingsFull(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read latest readings: %w", err)
 	}
 	gauges := make(map[agentlog.Window]Gauge, len(readings))
 	for window, r := range readings {

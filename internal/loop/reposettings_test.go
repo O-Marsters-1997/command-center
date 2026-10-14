@@ -64,14 +64,14 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees:      map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath},
-		PRs:            map[string]plan.PR{},
+		Worktrees:      map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath},
+		PRs:            map[plan.BranchRef]plan.PR{},
 		SettingsErrors: map[string]string{"repo": "line 2: unknown key \"stackin\""},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -79,10 +79,12 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	if remoteHasBranch(t, root, "cc-1") {
 		t.Error("cc-1 was pushed although its repo's settings could not be read")
 	}
-	lastErr, found, err := store.LastError(t.Context())
-	named := strings.Contains(lastErr.Message, "repo") && strings.Contains(lastErr.Message, "stackin")
-	if err != nil || !found || !named {
-		t.Errorf("last error = %+v (found %v, err %v), want one naming the repo and the bad key", lastErr, found, err)
+	lastErr, err := store.LastError(t.Context())
+	if err != nil || lastErr.IsNone() {
+		t.Fatalf("last error = %v (err %v), want one naming the repo and the bad key", lastErr, err)
+	}
+	if msg := lastErr.Unwrap().Message; !strings.Contains(msg, "repo") || !strings.Contains(msg, "stackin") {
+		t.Errorf("last error = %q, want one naming the repo and the bad key", msg)
 	}
 }
 
@@ -102,13 +104,13 @@ func TestAPushTouchingTheSettingsFileIsRefusedWhateverTheRepoDenies(t *testing.T
 	dispositionAsPushed(t, store, ticket.URL, at)
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 		Settings: map[string]config.RepoSettings{"repo": {}},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

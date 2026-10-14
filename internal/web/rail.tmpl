@@ -73,8 +73,8 @@
     <span class="rail-gauge"><span>{{.Label}}</span><span class="meter"><span class="meter-fill" style="width: {{.Pct}}%"></span></span><span class="rail-pct">{{.Pct}}%</span></span>
     {{- end}}
     {{- with .Health}}
-    {{- if .Error}}
-    <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Age}}: {{.Error.Message}}</p>
+    {{- if .Error.IsSome}}
+    <p class="rail-health banner ribbon" data-glyph="failed" role="status">tick failed {{template "age" .Error.Unwrap.Age}}: {{.Error.Unwrap.Message}}</p>
     {{- else}}
     <p class="rail-health">{{.Live}} live · {{if .Stale}}last good observe:{{else}}observed{{end}} {{template "age" .Observe}}</p>
     {{- end}}

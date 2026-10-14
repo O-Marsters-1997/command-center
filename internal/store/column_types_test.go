@@ -55,7 +55,7 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 		($1, 'https://x/1', 'follow-up', 'fix "the" flaky test'),
 		($1, 'https://x/1', 'edit_ticket', '{"branch":"nb","blocked_by":["https://x/2"]}'),
 		($1, 'https://x/1', 'launch', '{"prompt_hash":"h","group":"g"}')`, at)
-	mustExec(ctx, t, db, `INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'legacy', NULL)`, at)
+	mustExec(ctx, t, db, `INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'pushed', NULL)`, at)
 	mustExec(ctx, t, db, `INSERT INTO meta (key, value) VALUES ('checking_ticks', '{"https://x/1":2}')`)
 
 	store := openStoreAt(t, dsn)
@@ -131,7 +131,9 @@ func TestFollowUpIntentPayloadRoundTripsAsJSON(t *testing.T) {
 	store := openStore(t)
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	prompt := "line one\nline \"two\""
-	if err := store.QueueVerbIntentWithPayload(ctx, "https://x/1", plan.VerbFollowUp, prompt, at); err != nil {
+	if err := store.QueueVerbIntentWithPayload(ctx, storepkg.VerbRequest{
+		Ticket: "https://x/1", Verb: plan.VerbFollowUp, Payload: prompt, At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.PendingVerbIntents(ctx, plan.VerbFollowUp)

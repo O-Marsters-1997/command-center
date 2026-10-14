@@ -8,6 +8,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -112,7 +113,7 @@ func pushSettingsFile(t *testing.T, repoPath, body string) {
 
 func trackRepo(t *testing.T, store *storepkg.Store, name, remote string) {
 	t.Helper()
-	repo := storepkg.Repo{Name: name, Remote: remote, State: storepkg.RepoReady, TrackedAt: testAt}
+	repo := storepkg.Repo{Name: name, Remote: remote, Phase: plan.RepoReady, TrackedAt: testAt}
 	if err := store.UpsertRepo(t.Context(), repo); err != nil {
 		t.Fatal(err)
 	}

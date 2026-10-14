@@ -29,12 +29,10 @@ func mustReadTestdata(name string) string {
 	return string(body)
 }
 
-func mustSendLines(
-	t *testing.T, w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string,
-) int {
+func mustSendLines(t *testing.T, w io.Writer, tail *agentlog.Tail, follow *logFollow) int {
 	t.Helper()
 
-	sent, err := sendLines(w, tail, path, offset, mode)
+	sent, err := sendLines(w, tail, follow)
 	if err != nil {
 		t.Fatalf("sendLines: %v", err)
 	}
@@ -58,8 +56,7 @@ func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	offset := int64(0)
-	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
+	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, &logFollow{Path: path, Mode: view.LogAll}); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	fromStream := extractSSEData(t, buf.String())
@@ -84,8 +81,7 @@ func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 	path := writeRunLog(t, mustReadTestdata("run.jsonl"))
 
 	var buf strings.Builder
-	offset := int64(0)
-	sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "fails")
+	sent := mustSendLines(t, &buf, &agentlog.Tail{}, &logFollow{Path: path, Mode: view.LogFails})
 
 	if sent != 1 {
 		t.Fatalf("sendLines(mode=fails) sent %d events, want 1 (just the run's one Fail)", sent)
@@ -103,8 +99,7 @@ func TestSendLinesCarriesAMultiLineOutputAsOneDataLinePerLine(t *testing.T) {
 	path := writeRunLog(t, line)
 
 	var buf strings.Builder
-	offset := int64(0)
-	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
+	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, &logFollow{Path: path, Mode: view.LogAll}); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	frame := buf.String()

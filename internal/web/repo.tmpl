@@ -10,7 +10,7 @@
 </div>
 {{template "repoBanner" .Banner}}
 {{if .Ready}}
-{{template "importRefusal" .LastImportError}}
+{{if .LastImportError.IsSome}}{{template "importRefusal" .LastImportError.Unwrap}}{{end}}
 <section class="module" aria-labelledby="features-h">
 <h2 id="features-h">Features</h2>
 <table class="w-full">

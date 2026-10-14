@@ -21,12 +21,11 @@ linters:
     - tparallel # t.Parallel() used consistently between a test and its subtests
     - usetesting # t.Context(), t.TempDir(), t.Setenv() over manual equivalents
     - forbidigo # bans reflect.DeepEqual and time.Sleep in tests
+    - wrapcheck # errors from other packages are wrapped with context
     - depguard # plan stays pure, only store reaches ccdb, no testify
   settings:
     lll:
       line-length: 120
-    exhaustive:
-      ignore-enum-members: \.stateCount$
     usetesting:
       context-background: true
       context-todo: true
@@ -53,6 +52,7 @@ linters:
             - github.com/O-Marsters-1997/command-center/internal/plan
             - github.com/O-Marsters-1997/command-center/internal/spend
             - github.com/O-Marsters-1997/command-center/internal/verdict
+            - github.com/O-Marsters-1997/command-center/internal/option
           deny:
             - pkg: database/sql
               desc: plan imports nothing impure; the store hands it a plan.Input (ADR 0013)
@@ -72,6 +72,12 @@ linters:
               desc: compare with == and slices.Equal, and match errors with errors.Is/As
   exclusions:
     rules:
+      - path: ^internal/store/ccdb/
+        linters:
+          - wrapcheck
+      - path: _test\.go
+        linters:
+          - wrapcheck
       - path-except: _test\.go
         text: reflect\.DeepEqual|time\.Sleep|Error\b
         linters:
@@ -80,7 +86,7 @@ linters:
         text: time\.Now
         linters:
           - forbidigo
-      - path: ^(cmd/cc/main\.go|internal/loop/clock\.go)$
+      - path: ^internal/loop/clock\.go$
         linters:
           - forbidigo
       - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/)
@@ -91,12 +97,6 @@ linters:
         text: Error
         linters:
           - forbidigo
-      - path: ^internal/(agentlog/(parse|diff)|verdict/verdict|loop/checks_events|web/view/(logview|logline))\.go$
-        linters:
-          - exhaustive
-      - path: ^internal/plan/(plan|compose|draftgate)\.go$
-        linters:
-          - exhaustive
 
 formatters:
   enable:

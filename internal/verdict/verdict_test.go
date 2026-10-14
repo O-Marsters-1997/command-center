@@ -91,7 +91,7 @@ func TestEvaluateSupportApp(t *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(verdict.Input) verdict.Input
-		want   verdict.Verdict
+		want   verdict.Kind
 	}{
 		{
 			name:   "all green derives review me",
@@ -106,7 +106,7 @@ func TestEvaluateSupportApp(t *testing.T) {
 				in.Checks = checks
 				return in
 			},
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 		{
 			name: "a green rollup at a different head SHA is not green",
@@ -140,8 +140,8 @@ func TestEvaluateSupportApp(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(supportAppPredicate(), tt.mutate(base))
-			if got.Verdict != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			if got.Kind != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
@@ -153,7 +153,7 @@ func TestEvaluateServices(t *testing.T) {
 	tests := []struct {
 		name string
 		in   verdict.Input
-		want verdict.Verdict
+		want verdict.Kind
 	}{
 		{
 			name: "the skipped-Deploy arm resolves without a matching Deploy SST or PR Stage check-run",
@@ -216,7 +216,7 @@ func TestEvaluateServices(t *testing.T) {
 					PushedAt: pushedAt, Now: now, AuthorLogin: "a-real-human",
 				}
 			}(),
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 		{
 			name: "a green result is suppressed while the mergify hash is stale",
@@ -236,8 +236,8 @@ func TestEvaluateServices(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(servicesPredicate(), tt.in)
-			if got.Verdict != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			if got.Kind != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
@@ -253,13 +253,13 @@ func TestEvaluateGrammar(t *testing.T) {
 		name string
 		p    verdict.Predicate
 		in   verdict.Input
-		want verdict.Verdict
+		want verdict.Kind
 	}{
 		{
 			name: "not inverts a green leaf to red",
 			p:    verdict.Predicate{Not: &verdict.Predicate{Success: "X"}},
 			in:   base,
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 		{
 			name: "not inverts a red leaf to green",
@@ -273,7 +273,7 @@ func TestEvaluateGrammar(t *testing.T) {
 			name: "a skipped leaf whose check actually succeeded is needs you, not review me",
 			p:    verdict.Predicate{Skipped: "X"},
 			in:   base,
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 	}
 
@@ -282,8 +282,8 @@ func TestEvaluateGrammar(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(tt.p, tt.in)
-			if got.Verdict != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			if got.Kind != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
@@ -310,12 +310,12 @@ func TestBoundedWaitOnlyCountsSuccessfulTicks(t *testing.T) {
 	}
 
 	in.Now = pushedAt
-	if got := verdict.Evaluate(p, in).Verdict; got != verdict.Checking {
+	if got := verdict.Evaluate(p, in).Kind; got != verdict.Checking {
 		t.Fatalf("verdict = %v after zero successful ticks, want checking", got)
 	}
 
 	in.Now = pushedAt.Add(verdict.BoundedWait)
-	if got := verdict.Evaluate(p, in).Verdict; got != verdict.NeedsYou {
+	if got := verdict.Evaluate(p, in).Kind; got != verdict.NeedsYou {
 		t.Fatalf("verdict = %v once the wait elapses over successful ticks, want needs_you", got)
 	}
 }
@@ -367,8 +367,12 @@ func TestEvaluateNamesTheRedLeaves(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(tt.p, tt.in)
-			if got.Verdict != verdict.NeedsYou {
-				t.Fatalf("verdict = %v, want needs_you", got.Verdict)
+			wantKind := verdict.CIFailed
+			if len(tt.want) == 0 {
+				wantKind = verdict.NeedsYou
+			}
+			if got.Kind != wantKind {
+				t.Fatalf("verdict = %v, want %v", got.Kind, wantKind)
 			}
 			if !slices.Equal(got.RedLeaves, tt.want) {
 				t.Errorf("RedLeaves = %v, want %v", got.RedLeaves, tt.want)
@@ -399,7 +403,7 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 	tests := []struct {
 		name string
 		in   verdict.Input
-		want verdict.Verdict
+		want verdict.Kind
 	}{
 		{
 			name: "the compat check red alone derives waiting on producer deploy",
@@ -421,7 +425,7 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 				}
 				return in
 			}(),
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 		{
 			name: "the compat check red while another required check is pending derives checking",
@@ -442,7 +446,7 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 				}
 				return in
 			}(),
-			want: verdict.NeedsYou,
+			want: verdict.CIFailed,
 		},
 	}
 
@@ -451,8 +455,8 @@ func TestEvaluateWaitingOnProducerDeploy(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(compatPredicate(), tt.in)
-			if got.Verdict != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			if got.Kind != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
 			}
 		})
 	}
@@ -471,9 +475,9 @@ func TestWaitingOnProducerDeploySurvivesTheBoundedWait(t *testing.T) {
 	}
 
 	got := verdict.Evaluate(compatPredicate(), in)
-	if got.Verdict != verdict.WaitingOnProducerDeploy {
+	if got.Kind != verdict.WaitingOnProducerDeploy {
 		t.Fatalf("verdict = %v (%s) ten bounded waits after the resolved red, want waiting_on_producer_deploy",
-			got.Verdict, got.Reason)
+			got.Kind, got.Reason)
 	}
 }
 
@@ -488,7 +492,7 @@ func TestEvaluateBaseMoved(t *testing.T) {
 	tests := []struct {
 		name string
 		in   verdict.Input
-		want verdict.Verdict
+		want verdict.Kind
 	}{
 		{
 			name: "a stacked base whose tip moved is base moved even with every check green",
@@ -524,8 +528,8 @@ func TestEvaluateBaseMoved(t *testing.T) {
 			t.Parallel()
 
 			got := verdict.Evaluate(supportAppPredicate(), tt.in)
-			if got.Verdict != tt.want {
-				t.Errorf("verdict = %v (%s), want %v", got.Verdict, got.Reason, tt.want)
+			if got.Kind != tt.want {
+				t.Errorf("verdict = %v (%s), want %v", got.Kind, got.Reason, tt.want)
 			}
 		})
 	}

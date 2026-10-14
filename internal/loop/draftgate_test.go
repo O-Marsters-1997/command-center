@@ -76,7 +76,8 @@ func newDraftGateFixture(t *testing.T) draftGateFixture {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 	const tip = "cc-1-tip"
-	if err := store.RecordPush(t.Context(), consumer.URL, tip, "main", "main-tip", at); err != nil {
+	push := storepkg.Push{Ticket: plan.TicketURL(consumer.URL), Tip: tip, BaseSHA: "main-tip", BaseBranch: "main", At: at}
+	if err := store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,13 +94,13 @@ func draftConsumerPR(
 	blockerState plan.PRState, consumerChecks map[string]plan.CheckState, tip string,
 ) plan.Observation {
 	return plan.Observation{
-		PRs: map[string]plan.PR{
-			plan.BranchKey("repo", "cc-1"): {
-				Number: 1, State: plan.Open, IsDraft: true, HeadOid: tip, Checks: consumerChecks,
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("repo", "cc-1"): {
+				Number: 1, State: plan.Open, IsDraft: true, HeadOid: plan.SHA(tip), Checks: consumerChecks,
 			},
-			plan.BranchKey("services", "pla-40"): {State: blockerState},
+			branchRef("services", "pla-40"): {State: blockerState},
 		},
-		BranchTips: map[string]string{loop.MainTipKey("repo"): "main-tip"},
+		BranchTips: map[plan.BranchRef]plan.SHA{loop.MainTipKey("repo"): "main-tip"},
 		Settings:   map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{Success: "CI"}}},
 	}
 }
@@ -122,7 +123,7 @@ func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Open, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -138,7 +139,7 @@ func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -154,7 +155,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Open, ciCheck("FAILURE"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
@@ -182,8 +183,8 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	}
 
 	// GitHub now reports the PR as ready, as a real observe would from here on.
-	obs.PRs[plan.BranchKey("repo", "cc-1")] = plan.PR{
-		Number: 1, State: plan.Open, IsDraft: false, HeadOid: f.tip, Checks: ciCheck("SUCCESS"),
+	obs.PRs[branchRef("repo", "cc-1")] = plan.PR{
+		Number: 1, State: plan.Open, IsDraft: false, HeadOid: plan.SHA(f.tip), Checks: ciCheck("SUCCESS"),
 	}
 	for i := range 9 {
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -201,7 +202,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	for i := range 5 {
 		if err := lp.RunOnce(t.Context()); err != nil {
@@ -226,7 +227,7 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 
 	obs := draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), f.tip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(f.at), f.cfg, f.ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("tick 1: %v", err)
@@ -276,8 +277,8 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "parent"): "/repos/parent"},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "parent"): "/repos/parent"},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
 		Settings:  map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
@@ -314,13 +315,12 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, consumer.URL, at)
 
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
-	}
+	obs := plan.NewObservation(at)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -349,13 +349,12 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	dispositionAsPushed(t, store, ticket.URL, at)
 
-	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
-	}
+	obs := plan.NewObservation(at)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

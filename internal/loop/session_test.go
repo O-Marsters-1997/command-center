@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -61,18 +61,23 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	agentRunID, sessionID, err := store.InsertSessionRunSkeleton(
-		t.Context(), ticket.URL, "agent", "", "hash-1", storepkg.RunSession{StartNew: tc.startSession})
+	agentRunID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1", Session: storepkg.RunSession{StartNew: tc.startSession},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tc.startSession && sessionID == "" {
 		t.Fatal("a new session run came back without a session id")
 	}
-	if err := store.RecordSpawn(t.Context(), agentRunID, 999, at, "/state/runs/1.jsonl"); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(agentRunID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordDisposition(t.Context(), agentRunID, plan.OutcomeFailed, nil, at, nil); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(agentRunID), Outcome: plan.OutcomeFailed, ExitCode: option.None[int](),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,17 +93,17 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		}
 	}
 
-	if err := store.QueueVerbIntentWithPayload(
-		t.Context(), ticket.URL, plan.VerbFollowUp, "now fix the other test", at,
-	); err != nil {
+	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): worktreePath}, PRs: map[string]plan.PR{},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -113,7 +118,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	return followUpResult{
 		spawn:     fake.Spawns[0],
 		sessionID: sessionID,
-		row:       readSessionRow(t, dsn, latest[ticket.URL].ID),
+		row:       readSessionRow(t, dsn, int64(latest[plan.TicketURL(ticket.URL)].ID)),
 	}
 }
 

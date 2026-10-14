@@ -8,22 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
-)
-
-type RepoState string
-
-const (
-	RepoCloning RepoState = "cloning"
-	RepoReady   RepoState = "ready"
-	RepoRefused RepoState = "refused"
 )
 
 type Repo struct {
 	Name           string
 	Remote         string
-	State          RepoState
-	RefusalKind    string
+	Phase          plan.RepoPhase
+	RefusalKind    plan.RefusalKind
 	Refusal        string
 	SettingsSource string
 	SettingsReadAt time.Time
@@ -39,9 +32,20 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 	}
 	repos := make([]Repo, 0, len(rows))
 	for _, row := range rows {
+		phase, err := plan.ParseRepoPhase(row.State)
+		if err != nil {
+			return nil, fmt.Errorf("read repos.state of %s: %w", row.Name, err)
+		}
+		refusalKind := plan.RefusalUnknown
+		if row.RefusalKind.Valid {
+			refusalKind, err = plan.ParseRefusalKind(row.RefusalKind.String)
+			if err != nil {
+				return nil, fmt.Errorf("read repos.refusal_kind of %s: %w", row.Name, err)
+			}
+		}
 		repos = append(repos, Repo{
-			Name: row.Name, Remote: row.Remote, State: RepoState(row.State),
-			RefusalKind: row.RefusalKind.String, Refusal: row.Refusal.String,
+			Name: row.Name, Remote: row.Remote, Phase: phase,
+			RefusalKind: refusalKind, Refusal: row.Refusal.String,
 			SettingsSource: row.SettingsSource.String, SettingsReadAt: row.SettingsReadAt.Time,
 			TrackedAt: row.TrackedAt, Project: row.Project.String, Hue: int(row.ProjectHue.Int16),
 		})
@@ -50,13 +54,16 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 }
 
 func (s *Store) UpsertRepo(ctx context.Context, r Repo) error {
-	return upsertRepo(ctx, s.q, r)
+	if err := upsertRepo(ctx, s.q, r); err != nil {
+		return fmt.Errorf("upsert repo %s: %w", r.Name, err)
+	}
+	return nil
 }
 
 func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 	err := q.UpsertRepo(ctx, ccdb.UpsertRepoParams{
-		Name: r.Name, Remote: r.Remote, State: string(r.State),
-		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
+		Name: r.Name, Remote: r.Remote, State: string(r.Phase),
+		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
 		TrackedAt: r.TrackedAt.UTC(),
 	})
 	if err != nil {
@@ -68,29 +75,35 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 // SetRepoState writes r's state, refusal and settings read onto the row named r.Name.
 func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 	n, err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
-		Name: r.Name, State: string(r.State),
-		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
+		Name: r.Name, State: string(r.Phase),
+		RefusalKind: nullIfEmpty(string(r.RefusalKind)), Refusal: nullIfEmpty(r.Refusal),
 		SettingsSource: nullIfEmpty(r.SettingsSource),
 		SettingsReadAt: sql.NullTime{Time: r.SettingsReadAt.UTC(), Valid: !r.SettingsReadAt.IsZero()},
 	})
-	return matchedRow(n, err, fmt.Sprintf("set repo %s state %s", r.Name, r.State))
+	return matchedRow(n, err, fmt.Sprintf("set repo %s phase %s", r.Name, r.Phase))
 }
 
 // QueueTrackIntent queues a Track for repo unless one is already pending, and reports whether it
 // queued.
 func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time) (bool, error) {
 	pending, err := s.TrackPending(ctx, repo)
-	if err != nil || pending {
-		return false, err
+	if err != nil {
+		return false, fmt.Errorf("check pending track for %s: %w", repo, err)
 	}
-	return true, s.QueueVerbIntent(ctx, repo, TrackVerb, at)
+	if pending {
+		return false, nil
+	}
+	if err := s.QueueVerbIntent(ctx, repo, plan.VerbTrack, at); err != nil {
+		return false, fmt.Errorf("queue track for %s: %w", repo, err)
+	}
+	return true, nil
 }
 
 // TrackPending reports whether a Track for repo, ignoring case, has been queued and not yet applied.
 func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
-	intents, err := s.PendingVerbIntents(ctx, TrackVerb)
+	intents, err := s.PendingVerbIntents(ctx, plan.VerbTrack)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("select pending track intents: %w", err)
 	}
 	return slices.ContainsFunc(intents, func(i VerbIntent) bool { return strings.EqualFold(i.TicketID, repo) }), nil
 }

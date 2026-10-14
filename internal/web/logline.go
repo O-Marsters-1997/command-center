@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"html/template"
 	"strings"
 
@@ -11,7 +12,7 @@ func renderLogLine(line view.LogLine) (template.HTML, error) {
 	line.Verb, line.Arg = flatten(line.Verb), flatten(line.Arg)
 	var buf strings.Builder
 	if err := templates.ExecuteTemplate(&buf, "logline", line); err != nil {
-		return "", err
+		return "", fmt.Errorf("render log line: %w", err)
 	}
 	return template.HTML(buf.String()), nil
 }

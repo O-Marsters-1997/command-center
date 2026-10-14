@@ -58,15 +58,15 @@ func denyMatch(pattern, path string) bool {
 }
 
 type PushCandidate struct {
-	URL           string
-	LocalTip      string
-	LastPushedTip string
+	URL           TicketURL
+	LocalTip      SHA
+	LastPushedTip SHA
 }
 
 // PushPlan selects every ticket whose local tip has moved past its last recorded push. A branch
 // already at its last pushed tip is not re-attempted.
-func PushPlan(candidates []PushCandidate) []string {
-	var selected []string
+func PushPlan(candidates []PushCandidate) []TicketURL {
+	var selected []TicketURL
 	for _, c := range candidates {
 		if c.LocalTip != "" && c.LocalTip != c.LastPushedTip {
 			selected = append(selected, c.URL)

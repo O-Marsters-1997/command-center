@@ -21,21 +21,21 @@ type LineRenderer func(LogLine) (template.HTML, error)
 
 // KindShown decides, for one of the four ?log= modes, whether an event's kind renders as a line.
 // Phase headers always render regardless of mode; this only gates the lines inside them.
-func KindShown(mode string, k agentlog.Kind) bool {
+func KindShown(mode LogFilter, k agentlog.Kind) bool {
 	switch mode {
-	case "skills":
+	case LogSkills:
 		return k == agentlog.Skill
-	case "tools":
+	case LogTools:
 		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd || k == agentlog.Commit
-	case "fails":
+	case LogFails:
 		return k == agentlog.Fail
-	default:
-		return true
+	case LogFilterUnknown, LogAll:
 	}
+	return true
 }
 
-func EventShown(mode string, e agentlog.Event) bool {
-	if e.Kind == agentlog.Cmd && mode == "fails" {
+func EventShown(mode LogFilter, e agentlog.Event) bool {
+	if e.Kind == agentlog.Cmd && mode == LogFails {
 		return cmdFailed(e)
 	}
 	return KindShown(mode, e.Kind)
@@ -74,15 +74,21 @@ type LogDetail struct {
 	Final      template.HTML `json:"final"`
 }
 
-func buildLogDetail(
-	render LineRenderer, path string, streaming bool, ticketURL string, records []store.Event, params Params,
-) (LogDetail, error) {
+type logSource struct {
+	Path      string
+	Streaming bool
+	TicketURL string
+	Records   []store.Event
+}
+
+func buildLogDetail(render LineRenderer, src logSource, params Params) (LogDetail, error) {
+	path, streaming, ticketURL, records := src.Path, src.Streaming, src.TicketURL, src.Records
 	detail := LogDetail{Path: path, Streaming: streaming}
 	records = slices.DeleteFunc(slices.Clone(records), func(e store.Event) bool { return !RecordShown(e) })
 
 	whole, resumeAt, err := wholeLines(path)
 	if err != nil {
-		return LogDetail{}, err
+		return LogDetail{}, fmt.Errorf("load whole lines: %w", err)
 	}
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
 	if whole == nil && len(records) == 0 {
@@ -97,14 +103,14 @@ func buildLogDetail(
 	}
 	final := takeFinalAnswer(&run)
 	stats := measure(run)
-	mode := NormalizeLogFilter(params.Log)
+	mode := params.Log
 
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
 	detail.Worked = stats.worked()
 	mergeRecords(&run, records)
 	if detail.Phases, err = renderPhases(render, run.Phases, mode); err != nil {
-		return LogDetail{}, err
+		return LogDetail{}, fmt.Errorf("render phases: %w", err)
 	}
 	if final != "" {
 		if detail.Final, err = render(sayLine(final)); err != nil {
@@ -115,11 +121,11 @@ func buildLogDetail(
 }
 
 func RecordShown(e store.Event) bool {
-	return e.Kind == "pr_merged" || e.Kind == "pr_opened" || e.Kind == "checks_landed"
+	return e.Kind == store.EventPRMerged || e.Kind == store.EventPROpened || e.Kind == store.EventChecksLanded
 }
 
 func RecordOf(e store.Event) agentlog.Event {
-	return agentlog.Event{Kind: agentlog.Record, Tool: e.Kind, Detail: e.Detail}
+	return agentlog.Event{Kind: agentlog.Record, Tool: string(e.Kind), Detail: e.Detail}
 }
 
 func lastRecordID(records []store.Event) int64 {
@@ -184,21 +190,21 @@ func takeFinalAnswer(run *agentlog.Run) string {
 	return final
 }
 
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) ([]phaseView, error) {
+func renderPhases(render LineRenderer, phases []agentlog.Phase, mode LogFilter) ([]phaseView, error) {
 	firstFail := firstFailureIndex(phases)
-	openGroups := mode == "tools" || mode == "fails"
+	openGroups := mode == LogTools || mode == LogFails
 	idx := 0
 	var views []phaseView
 	for _, phase := range phases {
 		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
 			if err := b.add(event, idx == firstFail); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("add event: %w", err)
 			}
 			idx++
 		}
 		if err := b.flush(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("flush: %w", err)
 		}
 		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
@@ -207,7 +213,7 @@ func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) ([]
 
 type phaseBuilder struct {
 	render     LineRenderer
-	mode       string
+	mode       LogFilter
 	openGroups bool
 	items      []logItem
 	pending    []callPair
@@ -217,7 +223,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 	switch event.Kind {
 	case agentlog.Say:
 		if err := b.flush(); err != nil {
-			return err
+			return fmt.Errorf("flush: %w", err)
 		}
 		if !KindShown(b.mode, event.Kind) {
 			return nil
@@ -229,7 +235,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 		b.items = append(b.items, logItem{Kind: "say", Line: line})
 	case agentlog.Record, agentlog.Commit:
 		if err := b.flush(); err != nil {
-			return err
+			return fmt.Errorf("flush: %w", err)
 		}
 		if !KindShown(b.mode, event.Kind) {
 			return nil
@@ -243,7 +249,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 		b.answer(event, anchor)
 	case agentlog.Cmd:
 		b.pending = append(b.pending, cmdPair(event, anchor))
-	default:
+	case agentlog.Skill, agentlog.File, agentlog.Tool:
 		b.pending = append(b.pending, callPair{call: event, called: true})
 	}
 	return nil
@@ -317,10 +323,10 @@ func formatOffset(d time.Duration) string {
 	return fmt.Sprintf("+%02d:%02d", m, s)
 }
 
-func logStreamPath(ticketURL string, from, afterRecord int64, mode string) string {
+func logStreamPath(ticketURL string, from, afterRecord int64, mode LogFilter) string {
 	path := fmt.Sprintf("/ticket/%s/log?from=%d&records=%d", url.PathEscape(ticketURL), from, afterRecord)
-	if mode != "" && mode != "all" {
-		path += "&log=" + url.QueryEscape(mode)
+	if mode != LogFilterUnknown && mode != LogAll {
+		path += "&log=" + url.QueryEscape(string(mode))
 	}
 	return path
 }

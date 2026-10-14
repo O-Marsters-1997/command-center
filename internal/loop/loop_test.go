@@ -75,12 +75,12 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{
-			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
+		PRs: map[plan.BranchRef]plan.PR{
+			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
 		},
-		Worktrees: map[string]string{plan.BranchKey("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
+		Worktrees: map[plan.BranchRef]string{branchRef("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
 	}
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
@@ -94,7 +94,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	if !got.ObservedAt.Equal(at) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
-	if got.PRs[plan.BranchKey("cc-sandbox", "cc-1-first")].State != plan.Open {
+	if got.PRs[branchRef("cc-sandbox", "cc-1-first")].State != plan.Open {
 		t.Errorf("prs = %+v", got.PRs)
 	}
 }
@@ -109,14 +109,13 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", at); err != nil {
+	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at}
+	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(
-		discardLog, store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-	)
+	lp := newLoop(store, stub, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -144,9 +143,9 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 	}
 
 	observed := plan.Observation{
-		PRs: map[string]plan.PR{plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
+		PRs: map[plan.BranchRef]plan.PR{branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
 	}
-	ok := loop.NewLoop(discardLog, store,
+	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(good), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := ok.RunOnce(ctx); err != nil {
@@ -155,12 +154,13 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 
 	// Queued after the only successful tick, so the failing tick below is the only one that
 	// could apply it — and inv. 10 says a failed observe must apply no transition at all.
-	if err := store.QueueLaunchIntent(ctx, "sandbox://CC-1", "hash-1", "group-a", bad); err != nil {
+	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: bad}
+	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 
 	boom := errors.New("gh pr list: exit status 1")
-	failing := loop.NewLoop(discardLog, store, func(context.Context) (plan.Observation, error) {
+	failing := newLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
 	}, fixedClock(bad), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
@@ -193,10 +193,11 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Errorf("prs = %+v, want the previous observation intact", after.PRs)
 	}
 
-	tickErr, found, err := store.LastError(ctx)
-	if err != nil || !found {
-		t.Fatalf("LastError: found=%v err=%v", found, err)
+	last, err := store.LastError(ctx)
+	if err != nil || last.IsNone() {
+		t.Fatalf("LastError: last=%v err=%v", last, err)
 	}
+	tickErr := last.Unwrap()
 	if !tickErr.At.Equal(bad) {
 		t.Errorf("error at = %s, want %s", tickErr.At, bad)
 	}

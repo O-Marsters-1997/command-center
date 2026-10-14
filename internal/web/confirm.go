@@ -13,7 +13,7 @@ type destruction struct {
 	risk      func(view.Row) string
 }
 
-var destructiveVerbs = map[string]destruction{
+var destructiveVerbs = map[plan.Verb]destruction{
 	plan.VerbKill: {
 		effect:    "signals the process group of its live agent run, stopping it where it is",
 		riskLabel: "pgid",
@@ -26,7 +26,7 @@ var destructiveVerbs = map[string]destruction{
 	},
 }
 
-func confirmation(verb string, row view.Row) string {
+func confirmation(verb plan.Verb, row view.Row) string {
 	d, ok := destructiveVerbs[verb]
 	if !ok {
 		return ""

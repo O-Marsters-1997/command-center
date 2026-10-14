@@ -31,11 +31,11 @@ type LaunchFeature struct {
 func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker, error) {
 	chrome, err := r.Chrome(ctx, now, Params{})
 	if err != nil {
-		return LaunchPicker{}, err
+		return LaunchPicker{}, fmt.Errorf("load chrome: %w", err)
 	}
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {
-		return LaunchPicker{}, err
+		return LaunchPicker{}, fmt.Errorf("load candidate inputs: %w", err)
 	}
 	byFeature := map[string][]string{}
 	for _, t := range in.tickets {

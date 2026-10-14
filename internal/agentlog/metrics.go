@@ -4,15 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
 var ErrNoParseableLines = errors.New("no parseable lines")
 
-// RunMetrics is what every dialect must produce. A field a dialect cannot supply is nil or zero
-// with Settled false, never a guess.
+// RunMetrics is what every dialect must produce. A field a dialect cannot supply is None or zero,
+// never a guess.
 type RunMetrics struct {
-	CostUSD *float64
-	Settled bool
+	CostUSD option.Option[float64]
 	// Requests is one deduplicated request_id per element, in the order each first appeared.
 	Requests []Request
 }
@@ -58,7 +59,7 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 		}
 	})
 	if err != nil {
-		return RunMetrics{}, err
+		return RunMetrics{}, fmt.Errorf("parse run metrics: %w", err)
 	}
 
 	if decoded == 0 {
@@ -66,8 +67,9 @@ func ParseMetrics(logPath string) (RunMetrics, error) {
 	}
 
 	if result != nil {
-		metrics.Settled = true
-		metrics.CostUSD = result.CostUSD
+		if result.CostUSD != nil {
+			metrics.CostUSD = option.Some(*result.CostUSD)
+		}
 	}
 
 	return metrics, nil

@@ -263,7 +263,7 @@ func (q *Queries) ListLatestRunsByTicket(ctx context.Context) ([]ListLatestRunsB
 }
 
 const pendingIntentsByTicket = `-- name: PendingIntentsByTicket :many
-SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id
+SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id
 `
 
 type PendingIntentsByTicketRow struct {

@@ -40,7 +40,8 @@ func mustLogDetail(
 ) LogDetail {
 	t.Helper()
 
-	detail, err := buildLogDetail(render, path, streaming, ticketURL, records, params)
+	src := logSource{Path: path, Streaming: streaming, TicketURL: ticketURL, Records: records}
+	detail, err := buildLogDetail(render, src, params)
 	if err != nil {
 		t.Fatalf("buildLogDetail: %v", err)
 	}
@@ -51,7 +52,8 @@ func TestBuildLogDetailRefusesALineThatFailsToRender(t *testing.T) {
 	t.Parallel()
 
 	failing := func(LogLine) (template.HTML, error) { return "", errors.New("render failed") }
-	_, err := buildLogDetail(failing, writeRunLog(t, testRunLog), false, "sandbox://x", nil, Params{Log: "all"})
+	src := logSource{Path: writeRunLog(t, testRunLog), TicketURL: "sandbox://x"}
+	_, err := buildLogDetail(failing, src, Params{Log: "all"})
 	if err == nil {
 		t.Error("buildLogDetail error = nil, want the render failure")
 	}
@@ -107,7 +109,7 @@ func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) 
 		t.Errorf("StreamPath = %q, want it to resume after record 7", detail.StreamPath)
 	}
 
-	for _, mode := range []string{"skills", "tools", "fails"} {
+	for _, mode := range []LogFilter{LogSkills, LogTools, LogFails} {
 		hidden := mustLogDetail(t, testLine, path, false, "sandbox://x", records, Params{Log: mode})
 		for _, phase := range hidden.Phases {
 			for _, item := range phase.Items {
@@ -179,7 +181,7 @@ func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
 
 	path := writeRunLog(t, testRunLog)
 	for _, tc := range []struct {
-		mode      string
+		mode      LogFilter
 		wantLines [2]int
 	}{
 		{"all", [2]int{1, 1}},
@@ -187,7 +189,7 @@ func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
 		{"tools", [2]int{1, 1}},
 		{"fails", [2]int{1, 0}},
 	} {
-		t.Run(tc.mode, func(t *testing.T) {
+		t.Run(string(tc.mode), func(t *testing.T) {
 			t.Parallel()
 
 			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: tc.mode})
@@ -222,8 +224,8 @@ func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
 	t.Parallel()
 
 	path := writeRunLog(t, testRunLog)
-	for _, mode := range []string{"skills", "tools"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, mode := range []LogFilter{LogSkills, LogTools} {
+		t.Run(string(mode), func(t *testing.T) {
 			t.Parallel()
 
 			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: mode})
@@ -314,7 +316,7 @@ func TestKindShownByMode(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		mode string
+		mode LogFilter
 		kind agentlog.Kind
 		want bool
 	}{
@@ -336,7 +338,7 @@ func TestKindShownByMode(t *testing.T) {
 		{"tools", agentlog.Say, false},
 		{"fails", agentlog.Say, false},
 	} {
-		t.Run(tc.mode+"/"+tc.kind.String(), func(t *testing.T) {
+		t.Run(string(tc.mode)+"/"+tc.kind.String(), func(t *testing.T) {
 			t.Parallel()
 
 			if got := KindShown(tc.mode, tc.kind); got != tc.want {

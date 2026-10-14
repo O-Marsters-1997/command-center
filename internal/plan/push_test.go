@@ -58,12 +58,12 @@ func TestPushPlan(t *testing.T) {
 	tests := []struct {
 		name       string
 		candidates []plan.PushCandidate
-		want       []string
+		want       []plan.TicketURL
 	}{
 		{
 			name:       "never pushed and has a tip is selected",
 			candidates: []plan.PushCandidate{{URL: "sandbox://CC-1", LocalTip: "abc"}},
-			want:       []string{"sandbox://CC-1"},
+			want:       []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
 			name: "tip unchanged since the last push is not re-selected",
@@ -77,7 +77,7 @@ func TestPushPlan(t *testing.T) {
 			candidates: []plan.PushCandidate{
 				{URL: "sandbox://CC-1", LocalTip: "def", LastPushedTip: "abc"},
 			},
-			want: []string{"sandbox://CC-1"},
+			want: []plan.TicketURL{"sandbox://CC-1"},
 		},
 		{
 			name:       "no local tip yet is never selected",

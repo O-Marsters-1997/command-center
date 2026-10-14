@@ -17,6 +17,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -97,7 +98,12 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close database: %w", err)
+	}
+	return nil
+}
 
 // UpsertTickets writes a ticket row directly, every column at once, keyed on url.
 // Tests use it to seed an exact row; production imports through ImportTickets.
@@ -342,7 +348,7 @@ func (s *Store) ImportTickets(
 		}
 		mergedWithdrawn := make(map[string]bool)
 		for _, row := range withdrawnRows {
-			if obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged {
+			if obs.PRs[plan.BranchRef{Repo: row.Repo, Branch: row.Branch}].State == plan.Merged {
 				mergedWithdrawn[row.URL] = true
 			}
 		}
@@ -419,13 +425,17 @@ func matchedRow(n int64, err error, what string) error {
 }
 
 func encodeBlockedBy(urls []string) ([]byte, error) {
-	return json.Marshal(nonNil(urls))
+	blob, err := json.Marshal(nonNil(urls))
+	if err != nil {
+		return nil, fmt.Errorf("marshal blocked_by: %w", err)
+	}
+	return blob, nil
 }
 
 func decodeBlockedBy(raw []byte) ([]string, error) {
 	var urls []string
 	if err := json.Unmarshal(raw, &urls); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
 	}
 	return urls, nil
 }
@@ -455,55 +465,67 @@ const (
 
 // CheckingTicks returns each ticket's count of successful ticks since it last had anything to
 // resolve into a CI verdict. verdict.Input.Now derives from this, never wall clock.
-func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
-	ticks := map[string]int{}
+func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
+	ticks := map[plan.TicketURL]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s meta: %w", metaCheckingTicks, err)
 	}
 	return ticks, nil
 }
 
 // IncrementCheckingTicks bumps every named ticket's counter by one per successful tick.
-func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
+func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read checking ticks: %w", err)
 	}
 	for _, url := range ticketURLs {
 		ticks[url]++
 	}
-	return s.putMeta(ctx, metaCheckingTicks, ticks)
+	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
+	}
+	return nil
 }
 
 // ResetCheckingTicks zeroes one ticket's counter on every fresh push.
-func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
+func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read checking ticks: %w", err)
 	}
 	if _, ok := ticks[ticketID]; !ok {
 		return nil
 	}
 	delete(ticks, ticketID)
-	return s.putMeta(ctx, metaCheckingTicks, ticks)
+	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
+	}
+	return nil
 }
 
 // LastVerdicts returns each ticket's most recently recorded CI verdict label, keyed by ticket URL.
 func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s meta: %w", metaLastVerdicts, err)
 	}
 	return verdicts, nil
 }
 
 func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
-	return s.putMeta(ctx, metaLastVerdicts, verdicts)
+	if err := s.putMeta(ctx, metaLastVerdicts, verdicts); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaLastVerdicts, err)
+	}
+	return nil
 }
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it.
 func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
-	return s.putMeta(ctx, metaObservation, obs)
+	if err := s.putMeta(ctx, metaObservation, obs); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaObservation, err)
+	}
+	return nil
 }
 
 func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, error) {
@@ -513,21 +535,33 @@ func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, er
 func lastObservation(ctx context.Context, q *ccdb.Queries) (plan.Observation, bool, error) {
 	var obs plan.Observation
 	found, err := getMeta(ctx, q, metaObservation, &obs)
-	return obs, found, err
+	if err != nil {
+		return obs, found, fmt.Errorf("read %s meta: %w", metaObservation, err)
+	}
+	return obs, found, nil
 }
 
 func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	if err := s.putMeta(ctx, metaLastError, tickErr); err != nil {
-		return err
+		return fmt.Errorf("write %s meta: %w", metaLastError, err)
 	}
-	return s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message})
+	if err := s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message}); err != nil {
+		return fmt.Errorf("append tick error event: %w", err)
+	}
+	return nil
 }
 
 // LastError returns the last tick failure. A later success does not clear it.
-func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
+func (s *Store) LastError(ctx context.Context) (option.Option[TickError], error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
-	return tickErr, found, err
+	if err != nil {
+		return option.None[TickError](), fmt.Errorf("read %s meta: %w", metaLastError, err)
+	}
+	if !found {
+		return option.None[TickError](), nil
+	}
+	return option.Some(tickErr), nil
 }
 
 // ImportError is the last feature-conflict import refusal.
@@ -546,18 +580,25 @@ type importRefusal interface {
 func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal importRefusal, now time.Time) error {
 	importErr := ImportError{At: now, Feature: feature, Message: refusal.Error()}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
-		return err
+		return fmt.Errorf("write %s meta: %w", metaImportError, err)
 	}
-	return s.AppendEvent(ctx, Event{
+	err := s.AppendEvent(ctx, Event{
 		At: now, TicketURL: refusal.refusedTicket(), Kind: EventImportRefused, Detail: refusal.Error(),
 	})
+	if err != nil {
+		return fmt.Errorf("append import refusal event: %w", err)
+	}
+	return nil
 }
 
 // LastImportError returns the last import refusal; a later success does not clear it.
 func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) {
 	var importErr ImportError
 	found, err := s.getMeta(ctx, metaImportError, &importErr)
-	return importErr, found, err
+	if err != nil {
+		return importErr, found, fmt.Errorf("read %s meta: %w", metaImportError, err)
+	}
+	return importErr, found, nil
 }
 
 // Event is one append-only audit row.
@@ -565,7 +606,7 @@ type Event struct {
 	ID        int64
 	At        time.Time
 	TicketURL string
-	Kind      string
+	Kind      EventKind
 	Detail    string
 }
 
@@ -573,7 +614,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	err := s.q.AppendEvent(ctx, ccdb.AppendEventParams{
 		At:       e.At.UTC(),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
-		Kind:     e.Kind,
+		Kind:     string(e.Kind),
 		Detail:   e.Detail,
 	})
 	if err != nil {
@@ -582,10 +623,10 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	return nil
 }
 
-func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, error) {
+func (s *Store) HasEvent(ctx context.Context, ticketURL string, kind EventKind) (bool, error) {
 	found, err := s.q.HasEvent(ctx, ccdb.HasEventParams{
 		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
-		Kind:     kind,
+		Kind:     string(kind),
 	})
 	if err != nil {
 		return false, fmt.Errorf("has event %s for %s: %w", kind, ticketURL, err)
@@ -603,7 +644,11 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 
 	var events []Event
 	for _, row := range rows {
-		e := Event{At: row.At, Kind: row.Kind}
+		kind, err := ParseEventKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read events.kind of %s: %w", row.TicketID.String, err)
+		}
+		e := Event{At: row.At, Kind: kind}
 		e.TicketURL, e.Detail = row.TicketID.String, row.Detail
 		events = append(events, e)
 	}
@@ -622,8 +667,12 @@ func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID
 
 	var events []Event
 	for _, row := range rows {
+		kind, err := ParseEventKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read events.kind of event %d: %w", row.ID, err)
+		}
 		events = append(events, Event{
-			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail,
+			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: kind, Detail: row.Detail,
 		})
 	}
 	return events, nil

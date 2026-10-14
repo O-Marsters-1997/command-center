@@ -70,7 +70,7 @@ command is spelled `exec`:
 | Command | What |
 |---|---|
 | `cc-init-repo` | Creates `$WORK/repo` with one commit and `$WORK/remote.git` as its origin. Observe starts with `git fetch origin --prune`, so without a remote every script fails before its assertion. |
-| `cc-config <name>` | Installs `testdata/config/<name>.toml` at cc's default path, prepending `port = 0` and substituting `{{agents}}` with the repo's `testdata/agents` directory. No script ever passes `--config`. |
+| `cc-config <name>` | Installs `testdata/config/<name>.toml` at cc's default path, prepending a free `port` and substituting `{{agents}}` with the repo's `testdata/agents` directory. No script ever passes `--config`. |
 | `cc-fake-gh <name>` | Stages `testdata/gh/<name>.json` as the fake gh's fixture. Read at exec time, so a script can restage it between ticks. |
 | `cc-fake-gh-head <name> <branch>` | The same, with `{{head}}` replaced by that branch's current tip. This is how a verdict fixture points `headRefOid` at a SHA the script cannot know in advance. |
 | `cc-daemon` | Starts a real `cc` in the background and returns only once it logs `serving http://`, meaning it holds the flock. Polling rather than sleeping is what keeps the second-instance assertion off a race. |

@@ -8,30 +8,20 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-var logFilters = []string{"all", "skills", "tools", "fails"}
-
-// NormalizeLogFilter maps anything but the four named modes onto "all".
-func NormalizeLogFilter(mode string) string {
-	if slices.Contains(logFilters, mode) {
-		return mode
-	}
-	return "all"
-}
-
 type Params struct {
 	Sel     string
 	Tickets []string
-	Log     string
+	Log     LogFilter
 	Repo    string
 	Project string
 	Feature string
-	Filter  string
+	Filter  SectionKey
 	All     bool
 }
 
 func ParseParams(q url.Values) Params {
 	v := Params{
-		Tickets: q["ticket"], Log: NormalizeLogFilter(q.Get("log")),
+		Tickets: q["ticket"], Log: ParseLogFilter(q.Get("log")),
 		Repo: q.Get("repo"), Project: q.Get("project"), Feature: q.Get("feature"),
 		Filter: normalizeFilter(q.Get("filter")), All: q.Get("all") == "1",
 	}
@@ -41,13 +31,12 @@ func ParseParams(q url.Values) Params {
 	return v
 }
 
-func normalizeFilter(filter string) string {
-	for _, s := range sectionOrder {
-		if s.Key == filter {
-			return filter
-		}
+func normalizeFilter(filter string) SectionKey {
+	key, err := ParseSectionKey(filter)
+	if err != nil {
+		return SectionUnknown
 	}
-	return ""
+	return key
 }
 
 func normalizeRepoScope(repo string, tracked []store.Repo) string {
@@ -78,14 +67,14 @@ func (v Params) query() string {
 	if v.All {
 		q.Set("all", "1")
 	}
-	if v.Filter != "" {
-		q.Set("filter", v.Filter)
+	if v.Filter != SectionUnknown {
+		q.Set("filter", string(v.Filter))
 	}
 	if v.Feature != "" {
 		q.Set("feature", v.Feature)
 	}
-	if v.Log != "" && v.Log != "all" {
-		q.Set("log", v.Log)
+	if v.Log != LogFilterUnknown && v.Log != LogAll {
+		q.Set("log", string(v.Log))
 	}
 	if v.Repo != "" {
 		q.Set("repo", v.Repo)

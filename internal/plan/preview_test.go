@@ -13,7 +13,7 @@ func TestPreview(t *testing.T) {
 	tests := []struct {
 		name           string
 		unlock         plan.Unlock
-		slice          map[string]bool
+		slice          map[plan.TicketURL]bool
 		activeLaunchID int64
 		conflictedBase string
 		wantLabel      plan.PreviewLabel
@@ -22,27 +22,27 @@ func TestPreview(t *testing.T) {
 		{
 			name:      "an unlocked row starts now",
 			unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-			slice:     map[string]bool{},
+			slice:     map[plan.TicketURL]bool{},
 			wantLabel: plan.Now,
 		},
 		{
 			name:        "every blocker present in the slice starts on unlock",
-			unlock:      plan.Unlock{Blocking: []string{"sandbox://CC-1"}, Reason: "blocked by sandbox://CC-1"},
-			slice:       map[string]bool{"sandbox://CC-1": true, "sandbox://CC-2": true},
+			unlock:      plan.Unlock{Blocking: []plan.TicketURL{"sandbox://CC-1"}, Reason: "blocked by sandbox://CC-1"},
+			slice:       map[plan.TicketURL]bool{"sandbox://CC-1": true, "sandbox://CC-2": true},
 			wantLabel:   plan.OnUnlock,
 			reasonNames: "sandbox://CC-1",
 		},
 		{
 			name:        "a blocker outside the slice is refused, naming that blocker",
-			unlock:      plan.Unlock{Blocking: []string{"sandbox://CC-9"}, Reason: "blocked by sandbox://CC-9"},
-			slice:       map[string]bool{"sandbox://CC-2": true},
+			unlock:      plan.Unlock{Blocking: []plan.TicketURL{"sandbox://CC-9"}, Reason: "blocked by sandbox://CC-9"},
+			slice:       map[plan.TicketURL]bool{"sandbox://CC-2": true},
 			wantLabel:   plan.Refused,
 			reasonNames: "sandbox://CC-9",
 		},
 		{
 			name:           "a ticket already in an active launch is refused, naming that launch",
 			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-			slice:          map[string]bool{},
+			slice:          map[plan.TicketURL]bool{},
 			activeLaunchID: 3,
 			wantLabel:      plan.Refused,
 			reasonNames:    "launch 3",
@@ -50,7 +50,7 @@ func TestPreview(t *testing.T) {
 		{
 			name:           "a row whose base already carries a conflict is refused, naming that base",
 			unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first", Reason: "every blocker has a pull request"},
-			slice:          map[string]bool{},
+			slice:          map[plan.TicketURL]bool{},
 			conflictedBase: "cc-1-first",
 			wantLabel:      plan.Refused,
 			reasonNames:    "cc-1-first",
@@ -76,8 +76,8 @@ func TestPreviewRefusedNamesNoOpenOrMergedPullRequest(t *testing.T) {
 	t.Parallel()
 
 	_, reason := plan.Preview(
-		plan.Unlock{Blocking: []string{"sandbox://CC-9"}},
-		map[string]bool{}, 0, "",
+		plan.Unlock{Blocking: []plan.TicketURL{"sandbox://CC-9"}},
+		map[plan.TicketURL]bool{}, 0, "",
 	)
 	if !strings.Contains(string(reason), "no open or merged pull request") {
 		t.Errorf("reason %q does not say the blocker has no open or merged pull request", reason)

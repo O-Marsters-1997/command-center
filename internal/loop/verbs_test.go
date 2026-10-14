@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -85,12 +85,15 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	runID, err := store.InsertRunSkeleton(t.Context(), ticket.URL, "agent", "", "hash-1")
+	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	logPath := filepath.Join("runs", fmt.Sprintf("%d.jsonl", runID))
-	if err := store.RecordSpawn(t.Context(), runID, 111, at, logPath); err != nil {
+	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: logPath}
+	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
 	}
 	// Disposed as failed, deliberately: remove-worktree's own gate (merged, or base_gone) never
@@ -98,7 +101,10 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	// pushPushable step race to reconcile it too -- exactly the interference a focused verb
 	// test must not have to account for.
 	exitCode := 0
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomeFailed, &exitCode, at, nil); err != nil {
+	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
+		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
+		Cost: option.None[float64](), EndedAt: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,15 +143,15 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
 	return lp.RunOnce(t.Context())
 }
 
 func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -196,8 +202,8 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -218,8 +224,8 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := plan.Observation{
-		Worktrees: map[string]string{},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -265,8 +271,8 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-2"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Closed}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-2"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Closed}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -307,8 +313,8 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	installFakeGhFailingIssueClose(t)
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
@@ -337,14 +343,17 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-	if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
+	push := storepkg.Push{
+		Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main", At: f.at,
+	}
+	if err := f.store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 
 	obs := plan.Observation{
-		Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-		PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged}},
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
 	}
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -381,7 +390,10 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newRemoveWorktreeFixture(t, "cc-1")
 			head := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-			if err := f.store.RecordPush(t.Context(), f.ticket.URL, "stale", "main", "basesha", f.at); err != nil {
+			stale := storepkg.Push{
+				Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
+			}
+			if err := f.store.RecordPush(t.Context(), stale); err != nil {
 				t.Fatal(err)
 			}
 			runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
@@ -390,8 +402,8 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 			}
 
 			obs := plan.Observation{
-				Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-				PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: plan.Merged, HeadOid: head}},
+				Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+				PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged, HeadOid: plan.SHA(head)}},
 			}
 			if err := f.requestRemoveWorktree(t, obs); err != nil {
 				t.Fatalf("RunOnce: %v", err)
@@ -440,7 +452,11 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			setup: func(t *testing.T, f removeWorktreeFixture) {
 				t.Helper()
 				tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
-				if err := f.store.RecordPush(t.Context(), f.ticket.URL, tip, "main", "basesha", f.at); err != nil {
+				push := storepkg.Push{
+					Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main",
+					At: f.at,
+				}
+				if err := f.store.RecordPush(t.Context(), push); err != nil {
 					t.Fatal(err)
 				}
 				runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
@@ -457,8 +473,8 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			f := newRemoveWorktreeFixture(t, "cc-1")
 			tt.setup(t, f)
 			obs := plan.Observation{
-				Worktrees: map[string]string{plan.BranchKey("repo", "cc-1"): f.worktreePath},
-				PRs:       map[string]plan.PR{plan.BranchKey("repo", "cc-1"): {State: tt.pr}},
+				Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+				PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: tt.pr}},
 			}
 
 			if err := f.requestRemoveWorktree(t, obs); err != nil {

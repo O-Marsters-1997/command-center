@@ -19,8 +19,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Server {
-	return web.NewServer(slog.New(slog.DiscardHandler), st, clock, dataDir)
+func openServer(st *storepkg.Store, clock loop.Clock, dataDir string, opts ...web.Option) *web.Server {
+	deps := web.Deps{Logger: slog.New(slog.DiscardHandler), Store: st, Clock: clock, DataDir: dataDir}
+	return web.NewServer(deps, opts...)
 }
 
 func renderPage(t *testing.T, server *web.Server) string {
@@ -93,8 +94,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	f := newLoopFixture(t,
 		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
 	for _, ticket := range f.Tickets {
-		hash := plan.Hash(plan.Compose(plan.Ticket{URL: ticket.URL}))
-		if err := f.Store.QueueLaunchIntent(t.Context(), ticket.URL, hash, "group-a", testAt); err != nil {
+		hash := composeHash(ticket.URL)
+		launch := storepkg.LaunchRequest{Ticket: ticket.URL, PromptHash: hash, Group: "group-a", At: testAt}
+		if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -107,14 +109,14 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 
 	var runningTicket string
 	for ticketURL, summary := range f.Latest(t) {
-		if summary.Pgid != nil {
+		if summary.Pgid.IsSome() {
 			runningTicket = ticketURL
 		}
 	}
 	if runningTicket == "" {
 		t.Fatal("no ticket recorded a run after tick 1")
 	}
-	runningPgid := *f.Latest(t)[runningTicket].Pgid
+	runningPgid := f.Latest(t)[runningTicket].Pgid.Unwrap()
 
 	var queuedSibling string
 	for _, ticket := range f.Tickets {
@@ -144,11 +146,11 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ticket := range f.Tickets {
-		if !memberships[ticket.URL].Cancelled {
+		if !memberships[plan.TicketURL(ticket.URL)].Cancelled {
 			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticket.URL)
 		}
 	}
-	if f.Latest(t)[runningTicket].HasOutcome {
+	if f.Latest(t)[runningTicket].Outcome.IsSome() {
 		t.Error("the running member was disposed; cancel must not touch a live run")
 	}
 
@@ -173,7 +175,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
 	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
-	authoriseTicket(t, f.Store, hidden.URL, plan.Hash(plan.Compose(plan.Ticket{URL: hidden.URL})), testAt)
+	authoriseTicket(t, f.Store, hidden.URL, composeHash(hidden.URL), testAt)
 	f.Tick(t)
 
 	if len(f.ImplementSpawns()) != 1 {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -27,14 +26,13 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.QueueEditTicketIntent(ctx, "sandbox://CC-2", "cc-2-renamed",
-		[]string{"sandbox://CC-1"}, at); err != nil {
+	if err := store.QueueEditTicketIntent(ctx, storepkg.EditRequest{
+		Ticket: "sandbox://CC-2", Branch: "cc-2-renamed", BlockedBy: []string{"sandbox://CC-1"}, At: at,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(
-		discardLog, store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-	)
+	lp := newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -76,11 +74,11 @@ func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	if err := store.QueueEditTicketIntent(ctx, url, "cc-1-custom-branch", nil, at.Add(time.Minute)); err != nil {
+	edit := storepkg.EditRequest{Ticket: url, Branch: "cc-1-custom-branch", At: at.Add(time.Minute)}
+	if err := store.QueueEditTicketIntent(ctx, edit); err != nil {
 		t.Fatal(err)
 	}
-	lp := loop.NewLoop(
-		discardLog,
+	lp := newLoop(
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {
@@ -136,13 +134,14 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 		t.Fatalf("seed outsider ImportTickets: %v", err)
 	}
 
-	err := store.QueueEditTicketIntent(ctx, inFeature, "cc-1-add-x", []string{outsider}, at.Add(time.Minute))
+	err := store.QueueEditTicketIntent(ctx, storepkg.EditRequest{
+		Ticket: inFeature, Branch: "cc-1-add-x", BlockedBy: []string{outsider}, At: at.Add(time.Minute),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	lp := loop.NewLoop(
-		discardLog,
+	lp := newLoop(
 		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
 	)
 	if err := lp.RunOnce(ctx); err != nil {

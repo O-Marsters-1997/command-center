@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -21,7 +21,7 @@ import (
 var ErrSessionNotFound = errors.New("no such session")
 
 // Session is the page for one ticket's latest run.
-type Session struct {
+type SessionPage struct {
 	Chrome
 	Row            Row
 	Stack          Stack
@@ -41,16 +41,18 @@ type Session struct {
 	Model           string
 }
 
-func (s Session) Empty() bool {
+func (s SessionPage) Empty() bool {
 	return !slices.ContainsFunc(s.Turns, func(t Turn) bool { return len(t.Log.Phases) > 0 })
 }
 
-func (s Session) Running() bool { return s.Row.State == plan.Running.String() }
+func (s SessionPage) Running() bool { return s.Row.State == plan.Running.String() }
 
-func (s Session) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
+func (s SessionPage) AwaitingInput() bool { return s.Row.State == plan.AwaitingInput.String() }
 
 // PendingVerb reports whether a verb is queued and not yet consumed by the loop.
-func (s Session) PendingVerb(verb string) bool { return slices.Contains(s.Row.PendingVerbs, verb) }
+func (s SessionPage) PendingVerb(verb plan.Verb) bool {
+	return slices.Contains(s.Row.PendingVerbs, verb)
+}
 
 type Turn struct {
 	You string
@@ -64,46 +66,63 @@ type Prompt struct {
 	Kept bool
 }
 
+type SessionRef struct {
+	Owner string
+	Name  string
+	N     string
+}
+
+func ParseSessionRef(ticketURL plan.TicketURL) (SessionRef, error) {
+	parts := strings.Split(strings.TrimSuffix(string(ticketURL), "/"), "/")
+	if len(parts) < 5 || parts[len(parts)-2] != "issues" {
+		return SessionRef{}, fmt.Errorf("parse session ref %q: not an owner/name/issues/n URL", ticketURL)
+	}
+	return SessionRef{Owner: parts[len(parts)-4], Name: parts[len(parts)-3], N: parts[len(parts)-1]}, nil
+}
+
+func (r SessionRef) Path() string {
+	return "/s/" + r.Owner + "/" + r.Name + "/" + r.N
+}
+
 // SessionPath is the route for a ticket URL's session page, or "" when the URL is not a
 // {owner}/{name}/issues/{n} GitHub URL.
 func SessionPath(ticketURL string) string {
-	parts := strings.Split(strings.TrimSuffix(ticketURL, "/"), "/")
-	if len(parts) < 5 || parts[len(parts)-2] != "issues" {
+	ref, err := ParseSessionRef(plan.TicketURL(ticketURL))
+	if err != nil {
 		return ""
 	}
-	return "/s/" + parts[len(parts)-4] + "/" + parts[len(parts)-3] + "/" + parts[len(parts)-1]
+	return ref.Path()
 }
 
 // Session derives the session page for /s/{owner}/{name}/{n}.
-func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n string, raw bool) (Session, error) {
+func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("load tickets: %w", err)
 	}
-	suffix := "/" + owner + "/" + name + "/issues/" + n
 	ticketURL := ""
 	for _, t := range tickets {
-		if strings.HasSuffix(t.URL, suffix) {
+		if found, err := ParseSessionRef(plan.TicketURL(t.URL)); err == nil && found == ref {
 			ticketURL = t.URL
 			break
 		}
 	}
 	if ticketURL == "" {
-		return Session{}, ErrSessionNotFound
+		return SessionPage{}, ErrSessionNotFound
 	}
 
 	board, err := r.Board(ctx, now, Params{Sel: ticketURL, Log: "all"})
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("load board: %w", err)
 	}
 	row, ok := board.Row(ticketURL)
 	if !ok {
-		return Session{}, ErrSessionNotFound
+		return SessionPage{}, ErrSessionNotFound
 	}
 
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("load pending verb intents: %w", err)
 	}
 	var pendingMessages []string
 	for _, intent := range intents {
@@ -112,7 +131,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		}
 	}
 
-	self := SessionPath(ticketURL)
+	self := ref.Path()
 	chrome := board.Chrome
 	chrome.Home = false
 	chrome.titled(row.Ticket())
@@ -122,12 +141,12 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	runs, err := r.store.SessionRunsForTicket(ctx, ticketURL)
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("load session runs for ticket: %w", err)
 	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
 		if turns, err = r.turns(row, runs); err != nil {
-			return Session{}, err
+			return SessionPage{}, fmt.Errorf("build turns: %w", err)
 		}
 	}
 	promptLog := row.LogPath
@@ -136,13 +155,13 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	prompt, err := readPrompt(promptLog)
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("read prompt: %w", err)
 	}
 	rawText, err := rawLog(raw, row.LogPath)
 	if err != nil {
-		return Session{}, err
+		return SessionPage{}, fmt.Errorf("load raw log: %w", err)
 	}
-	return Session{
+	return SessionPage{
 		Turns:          turns,
 		ActionsPath:    self + "/actions",
 		PRURL:          prURL,
@@ -157,7 +176,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		RawPath:        self + "?log=raw",
 
 		PendingMessages: pendingMessages,
-		Model:           loop.AgentModel,
+		Model:           config.AgentModel,
 	}, nil
 }
 
@@ -170,7 +189,7 @@ func (r *Reader) turns(row Row, runs []store.SessionRun) ([]Turn, error) {
 		turns[i].Log = row.Log
 		turns[i].Ask = run.Question
 		if i != len(runs)-1 || run.LogPath != row.LogPath {
-			log, err := buildLogDetail(r.renderLine, run.LogPath, false, row.URL, nil, Params{Log: "all"})
+			log, err := buildLogDetail(r.renderLine, logSource{Path: run.LogPath, TicketURL: row.URL}, Params{Log: "all"})
 			if err != nil {
 				return nil, fmt.Errorf("build log of run %d: %w", run.ID, err)
 			}
@@ -214,8 +233,8 @@ func rawLog(raw bool, logPath string) (string, error) {
 
 // ActionVerbs is the state's verbs minus launch, which has its own modal, and follow-up, which
 // is the composer.
-func (s Session) ActionVerbs() []string {
-	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v string) bool {
+func (s SessionPage) ActionVerbs() []plan.Verb {
+	return slices.DeleteFunc(slices.Clone(s.Row.Verbs), func(v plan.Verb) bool {
 		return v == plan.VerbLaunch || v == plan.VerbFollowUp
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func TestRailRendersTheLatestStoredReading(t *testing.T) {
@@ -75,8 +76,7 @@ func TestNoticeNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := newServer(store, observedAt.Add(45*time.Second))
-	server.SetSpendLimit5h(80)
+	server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
 	board := renderPath(t, server, "/tickets")
 
 	if !strings.Contains(board, "spawning paused: five-hour usage is 82%, at or above the spend_limit_5h of 80%.") {
@@ -97,8 +97,7 @@ func TestNoticeStaysSilentBelowSpendLimit5h(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := newServer(store, observedAt.Add(45*time.Second))
-	server.SetSpendLimit5h(80)
+	server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
 	board := renderPath(t, server, "/tickets")
 
 	if strings.Contains(board, "spawning paused") {

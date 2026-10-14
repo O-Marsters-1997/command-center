@@ -22,7 +22,7 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 		t.Fatal(err)
 	}
 	if observedAt != nil {
-		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[string]plan.PR{}}
+		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[plan.BranchRef]plan.PR{}}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
@@ -283,17 +283,21 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{blocker, dependent}); err != nil {
 		t.Fatal(err)
 	}
-	runID, err := store.InsertRunSkeleton(ctx, dependent.URL, "agent", "basesha1234", "hash-1")
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordSpawn(ctx, runID, 4242, now, "/logs/run.jsonl"); err != nil {
+	if err := store.RecordSpawn(ctx, storepkg.Spawn{
+		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: "/logs/run.jsonl",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
-		Runs:       map[string]plan.RunObservation{dependent.URL: {Alive: true}},
-		PRs:        map[string]plan.PR{"cc-1": {State: plan.Closed}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(dependent.URL): {Alive: true}},
+		PRs:        map[plan.BranchRef]plan.PR{{Branch: "cc-1"}: {State: plan.Closed}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)

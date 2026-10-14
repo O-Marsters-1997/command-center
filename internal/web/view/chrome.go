@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -14,9 +15,9 @@ type Chrome struct {
 	LiveAgents     int
 	Observe        Age
 	ObserveStale   bool
-	LastError      *TickError
+	LastError      option.Option[TickError]
 	Gauges         []Gauge
-	SpendPaused    *SpendPaused
+	SpendPaused    option.Option[SpendPaused]
 	RefusedRepos   []RefusedRepo
 	OpenTickets    int
 	PageTitle      string

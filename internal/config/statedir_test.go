@@ -44,15 +44,13 @@ func TestResolveWorkspaceLaysOutTheDataDir(t *testing.T) {
 }
 
 func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Parallel()
 
-	fromEnv := t.TempDir()
-	t.Setenv("CC_DATA_DIR", fromEnv)
+	home := t.TempDir()
+	env := config.Env{Home: home, UserConfigDir: filepath.Join(home, ".config"), DataDir: t.TempDir()}
 
 	fromKey := t.TempDir()
-	got, err := config.ResolveDataDir(fromKey)
+	got, err := config.ResolveDataDir(fromKey, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,33 +58,58 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 		t.Errorf("data dir = %q, want the config key %q", got, fromKey)
 	}
 
-	got, err = config.ResolveDataDir("")
+	got, err = config.ResolveDataDir("", env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != fromEnv {
-		t.Errorf("data dir = %q, want CC_DATA_DIR %q", got, fromEnv)
+	if got != env.DataDir {
+		t.Errorf("data dir = %q, want CC_DATA_DIR %q", got, env.DataDir)
 	}
 
-	t.Setenv("CC_DATA_DIR", "")
-	got, err = config.ResolveDataDir("")
+	env.DataDir = ""
+	got, err = config.ResolveDataDir("", env)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := filepath.Join(base, "command-centre"); got != want {
+	if want := filepath.Join(env.UserConfigDir, "command-centre"); got != want {
 		t.Errorf("data dir = %q, want the default %q", got, want)
 	}
 }
 
-func TestResolveDataDirExpandsHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+func TestEnvFromReadsTheNamedVariables(t *testing.T) {
+	t.Parallel()
 
-	got, err := config.ResolveDataDir("~/cc-data")
+	vars := map[string]string{
+		"HOME": "/home/olly", "XDG_CONFIG_HOME": "/xdg", "CC_DATA_DIR": "/data",
+		"CC_DATABASE_URL": "postgres://x", "CC_AGENT_COMMAND": `["a"]`, "TZ": "Europe/Paris",
+	}
+	got, err := config.EnvFrom(func(key string) string { return vars[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := config.Env{
+		DataDir: "/data", DatabaseURL: "postgres://x", AgentCommand: `["a"]`,
+		Home: "/home/olly", UserConfigDir: "/xdg", TZ: "Europe/Paris",
+	}
+	if got != want {
+		t.Errorf("EnvFrom() = %+v, want %+v", got, want)
+	}
+}
+
+func TestEnvFromRefusesAMissingHome(t *testing.T) {
+	t.Parallel()
+
+	if _, err := config.EnvFrom(func(string) string { return "" }); err == nil {
+		t.Error("EnvFrom with no HOME succeeded, want an error")
+	}
+}
+
+func TestResolveDataDirExpandsHome(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+
+	got, err := config.ResolveDataDir("~/cc-data", config.Env{Home: home})
 	if err != nil {
 		t.Fatal(err)
 	}
