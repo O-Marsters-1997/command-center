@@ -11,7 +11,6 @@ exec cc import project:two-tasks
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/two-tasks/issues/CC-1&ticket=https://github.com/sandbox-org/two-tasks/issues/CC-2'
 exec cc tick --count 1
-exec sleep 0.5
 
 # Tick: the authorisation intent becomes one launches row with both members, the root is
 # unlocked (no blockers) and authorised so it cuts and spawns, and the dependent -- which has no
@@ -23,9 +22,7 @@ stdout -count=1 'run_launched'
 exec cc request GET /tickets
 stdout 'waiting on https://github.com/sandbox-org/two-tasks/issues/CC-1'
 
-# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
-# liveness check reads it -- this is real OS process liveness, not a controllable fake.
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 
 # Tick: the root's dead run disposes with commits, pushes and opens its PR. The dependent still
 # reads the pre-push snapshot this same tick, so it has not unlocked yet.
@@ -45,7 +42,7 @@ exec cc request GET /events
 stdout -count=2 'run_launched'
 grep -count=2 'new cc-' $WORK/tp.log
 
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-2-x'
 
 # Tick: the dependent's dead run disposes with commits, pushes and opens its own PR.
 exec cc tick --count 1

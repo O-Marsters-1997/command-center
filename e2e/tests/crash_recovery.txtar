@@ -16,13 +16,9 @@ exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
-exec sleep 0.5
 
-# This instance cuts and spawns, then exits. sleeps.sh writes its worktree files immediately but
-# needs real wall time to get there -- ready is written last, so its presence means pgid is
-# already complete.
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait repo-cc-1-x/ready
 exists $WORK/repo-cc-1-x/ready
 
 # A fresh instance, with nothing in memory from the one that spawned it, finds the run alive.

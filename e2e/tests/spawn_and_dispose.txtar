@@ -19,12 +19,9 @@ exec cc import project:spawn
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-1'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
 
-# The fake agent (a few fast git commands) needs real wall time to exit before the next tick's
-# liveness check reads it -- this is real OS process liveness, not a controllable fake.
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 
 # Tick: CC-1's dead run disposes with commits, so the same tick pushes it and opens its PR. The
 # page still renders that tick's pre-push snapshot, so it reads push_pending, not checking.
@@ -38,9 +35,8 @@ stdout 'agent finished with commits, waiting to push'
 cc-config spawn-empty
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/spawn/issues/CC-2'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait agent-done.log 'empty.sh repo-cc-2-x'
 
 # Tick: no commits after CC-2's own baseline is failed, decided by the commit count and never by
 # a missing event (inv. 7) -- and a failed run is not a push candidate, so cc-2 never reached

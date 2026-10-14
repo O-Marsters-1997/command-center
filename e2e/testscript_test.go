@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -101,10 +103,83 @@ func TestScripts(t *testing.T) {
 			"cc-fake-gh":      ccFakeGh,
 			"cc-fake-gh-head": ccFakeGhHead,
 			"cc-daemon":       ccDaemon,
+			"cc-wait":         ccWait,
 		},
 		RequireExplicitExec: true,
 		RequireUniqueNames:  true,
 	})
+}
+
+func TestScriptsDoNotSleep(t *testing.T) {
+	sleepCommand := regexp.MustCompile(`\bexec\s+sleep(?:\s|$)`)
+	files, err := filepath.Glob("tests/*.txtar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range files {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for lineNo, line := range strings.Split(string(body), "\n") {
+			if sleepCommand.MatchString(strings.TrimSpace(line)) {
+				t.Errorf("%s:%d: exec sleep is forbidden; use cc-wait", path, lineNo+1)
+			}
+		}
+	}
+}
+
+func ccWait(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) < 1 || len(args) > 3 {
+		ts.Fatalf("usage: cc-wait <path> [<regexp> [<n>]] (negation unsupported)")
+	}
+	path := filepath.Join(ts.Getenv("WORK"), args[0])
+	var pattern *regexp.Regexp
+	if len(args) >= 2 {
+		var err error
+		pattern, err = regexp.Compile(args[1])
+		ts.Check(err)
+	}
+	want := 1
+	if len(args) == 3 {
+		var err error
+		want, err = strconv.Atoi(args[2])
+		if err != nil || want < 1 {
+			ts.Fatalf("cc-wait: count must be a positive integer: %q", args[2])
+		}
+	}
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	poll := time.NewTicker(5 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		body, err := os.ReadFile(path)
+		seen := 0
+		if err == nil {
+			if pattern == nil {
+				return
+			}
+			for _, line := range strings.Split(string(body), "\n") {
+				if pattern.MatchString(line) {
+					seen++
+				}
+			}
+			if seen >= want {
+				return
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			ts.Fatalf("cc-wait %s: %v", args[0], err)
+		}
+		select {
+		case <-poll.C:
+		case <-deadline.C:
+			patternText := ""
+			if len(args) >= 2 {
+				patternText = args[1]
+			}
+			ts.Fatalf("cc-wait %s pattern %q: saw %d matching lines, want %d within 30s", args[0], patternText, seen, want)
+		}
+	}
 }
 
 // ccInitRepo builds the repository the config points at, plus the bare origin it fetches from.

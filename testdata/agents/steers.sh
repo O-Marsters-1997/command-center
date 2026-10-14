@@ -18,3 +18,4 @@ if [ "$mode" = session-id ]; then
 	sleep 30 &
 	wait
 fi
+if [ -n "${CC_AGENT_LOG:-}" ]; then printf 'steers.sh %s\n' "$mode" >> "${CC_AGENT_LOG%.log}-done.log"; fi

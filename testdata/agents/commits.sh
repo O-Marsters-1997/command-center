@@ -8,3 +8,4 @@ cd "$1"
 printf 'agent was here: %s\n' "$(basename "$1")" > agent.txt
 git add agent.txt
 git commit -q -m "agent: commit from commits.sh"
+if [ -n "${CC_AGENT_LOG:-}" ]; then printf 'commits.sh %s\n' "$(basename "$1")" >> "${CC_AGENT_LOG%.log}-done.log"; fi
