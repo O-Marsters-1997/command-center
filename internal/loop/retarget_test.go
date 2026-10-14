@@ -301,10 +301,21 @@ func (f failingEdit) Edit(_ context.Context, repo, branch, base string) error {
 
 func advanceMain(t *testing.T, root, relPath, contents string) {
 	t.Helper()
-	clone := filepath.Join(t.TempDir(), "main-clone")
-	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	clone := cloneForCommit(t, root, "main-clone")
 	gittest.Commit(t, clone, relPath, contents)
 	gittest.Run(t, clone, "push", "-q", "origin", "HEAD:main")
+}
+
+func cloneForCommit(t *testing.T, root, name string) string {
+	t.Helper()
+	clone := filepath.Join(t.TempDir(), name)
+	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	for key, value := range map[string]string{
+		"user.name": "t", "user.email": "t@example.com", "commit.gpgsign": "false",
+	} {
+		gittest.Run(t, clone, "config", "--local", key, value)
+	}
+	return clone
 }
 
 func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.T) {
@@ -367,8 +378,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 // ancestry with the parent's own, and the branch is gone from the remote.
 func squashParentIntoMain(t *testing.T, root, repoPath string) {
 	t.Helper()
-	clone := filepath.Join(t.TempDir(), "squash-clone")
-	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
+	clone := cloneForCommit(t, root, "squash-clone")
 	gittest.Run(t, clone, "merge", "-q", "--squash", "origin/parent")
 	gittest.Run(t, clone, "commit", "-q", "-m", "the parent's work (#1)")
 	gittest.Run(t, clone, "push", "-q", "origin", "HEAD:main")
