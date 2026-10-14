@@ -152,6 +152,9 @@ func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resol
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
+	if err := l.store.PruneHistory(ctx, l.clock.Now()); err != nil {
+		l.logger.Warn("prune history", "err", err)
+	}
 	if err := l.applyTrackIntents(ctx); err != nil {
 		return err
 	}
@@ -512,7 +515,7 @@ func (l *Loop) disposeRun(
 		metrics = &m
 	}
 	if err := l.store.RecordDisposition(ctx, run.ID, outcome, exitCode, l.clock.Now(), metrics); err != nil {
-		return fmt.Errorf("record disposition for run %d: %w", run.ID, err)
+		return err
 	}
 	readings, _ := parseLog(l.logger, run.LogPath, "run readings", agentlog.ParseReadings)
 	if err := l.store.RecordReadingsAndIntervals(ctx, readings, l.cfg.ClaudeProjectsDir); err != nil {

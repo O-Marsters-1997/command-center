@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
@@ -28,7 +27,7 @@ func (s *Store) QueueEditTicketIntent(
 	err = s.q.QueueEditTicketIntent(ctx, ccdb.QueueEditTicketIntentParams{
 		At:       at.UTC(),
 		TicketID: ticketURL,
-		Payload:  notNull(string(payload)),
+		Payload:  payload,
 	})
 	if err != nil {
 		return fmt.Errorf("queue edit ticket intent for %s: %w", ticketURL, err)
@@ -53,7 +52,7 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 	intents := make([]EditTicketIntent, 0, len(rows))
 	for _, row := range rows {
 		var payload editTicketPayload
-		if err := json.Unmarshal([]byte(row.Payload.String), &payload); err != nil {
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			return nil, fmt.Errorf("decode edit ticket intent payload for %s: %w", row.TicketID, err)
 		}
 		intents = append(intents, EditTicketIntent{
@@ -65,52 +64,39 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 
 // EditTicket writes branch and blocked_by directly. A blocked_by breaking its own
 // feature's closure is refused whole.
-func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
+func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) error {
+	return s.inTx(ctx, func(q *ccdb.Queries) error {
+		feature, err := q.GetTicketFeature(ctx, ticketURL)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("read feature for %s: %w", ticketURL, err)
 		}
-	}()
+		if feature != "" {
+			intended, err := featureTicketsWithOverride(ctx, q, feature, ticketURL, blockedBy)
+			if err != nil {
+				return err
+			}
+			obs, _, err := lastObservation(ctx, q)
+			if err != nil {
+				return fmt.Errorf("read observation for closure check: %w", err)
+			}
+			featureOf, isMerged, err := closureLookups(ctx, q, intended, obs)
+			if err != nil {
+				return err
+			}
+			violation, err := closeUnderBlockedBy(feature, intended, featureOf, isMerged)
+			if err != nil {
+				return err
+			}
+			if violation != nil {
+				return violation
+			}
+		}
 
-	qtx := s.q.WithTx(tx)
-	feature, err := qtx.TicketFeature(ctx, ticketURL)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("read feature for %s: %w", ticketURL, err)
-	}
-	if feature != "" {
-		var intended []ticketBlockedBy
-		intended, err = featureTicketsWithOverride(ctx, qtx, feature, ticketURL, blockedBy)
+		blob, err := encodeBlockedBy(blockedBy)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode blocked_by for %s: %w", ticketURL, err)
 		}
-		var obs plan.Observation
-		obs, _, err = s.LastObservation(ctx)
-		if err != nil {
-			return fmt.Errorf("read observation for closure check: %w", err)
-		}
-		var violation *FeatureClosureError
-		violation, err = closeUnderBlockedBy(
-			feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
-		)
-		if err != nil {
-			return err
-		}
-		if violation != nil {
-			return violation
-		}
-	}
-
-	var blob []byte
-	blob, err = encodeBlockedBy(blockedBy)
-	if err != nil {
-		return fmt.Errorf("encode blocked_by for %s: %w", ticketURL, err)
-	}
-	if err = qtx.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL}); err != nil {
-		return fmt.Errorf("edit ticket %s: %w", ticketURL, err)
-	}
-	return tx.Commit()
+		n, err := q.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL})
+		return matchedRow(n, err, "edit ticket "+ticketURL)
+	})
 }

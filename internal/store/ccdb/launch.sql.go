@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -26,7 +27,7 @@ func (q *Queries) ActiveLaunchMemberCount(ctx context.Context, ticketID string) 
 	return count, err
 }
 
-const cancelActiveLaunches = `-- name: CancelActiveLaunches :exec
+const cancelActiveLaunches = `-- name: CancelActiveLaunches :execrows
 UPDATE launches SET state = 'cancelled' WHERE id IN (
     SELECT lm.launch_id FROM launch_members lm
     JOIN launches l ON l.id = lm.launch_id
@@ -34,23 +35,47 @@ UPDATE launches SET state = 'cancelled' WHERE id IN (
 )
 `
 
-func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) error {
-	_, err := q.db.ExecContext(ctx, cancelActiveLaunches, ticketID)
-	return err
+func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelActiveLaunches, ticketID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const consumeLaunchIntent = `-- name: ConsumeLaunchIntent :exec
-UPDATE intents SET consumed_at = $1 WHERE id = $2
+const claimLaunchIntents = `-- name: ClaimLaunchIntents :many
+UPDATE intents SET consumed_at = $1
+WHERE verb = 'launch' AND consumed_at IS NULL
+RETURNING id, ticket_id, payload
 `
 
-type ConsumeLaunchIntentParams struct {
-	ConsumedAt sql.NullTime
-	ID         int64
+type ClaimLaunchIntentsRow struct {
+	ID       int64
+	TicketID string
+	Payload  json.RawMessage
 }
 
-func (q *Queries) ConsumeLaunchIntent(ctx context.Context, arg ConsumeLaunchIntentParams) error {
-	_, err := q.db.ExecContext(ctx, consumeLaunchIntent, arg.ConsumedAt, arg.ID)
-	return err
+func (q *Queries) ClaimLaunchIntents(ctx context.Context, at sql.NullTime) ([]ClaimLaunchIntentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, claimLaunchIntents, at)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimLaunchIntentsRow
+	for rows.Next() {
+		var i ClaimLaunchIntentsRow
+		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const featureFirstLaunch = `-- name: FeatureFirstLaunch :one
@@ -87,7 +112,7 @@ INSERT INTO events (at, ticket_id, kind, detail) VALUES ($1, NULL, 'launch', $2)
 
 type InsertLaunchEventParams struct {
 	At     time.Time
-	Detail sql.NullString
+	Detail string
 }
 
 func (q *Queries) InsertLaunchEvent(ctx context.Context, arg InsertLaunchEventParams) error {
@@ -95,30 +120,33 @@ func (q *Queries) InsertLaunchEvent(ctx context.Context, arg InsertLaunchEventPa
 	return err
 }
 
-const insertLaunchMember = `-- name: InsertLaunchMember :exec
-INSERT INTO launch_members (launch_id, ticket_id, prompt_hash) VALUES ($1, $2, $3)
+const insertLaunchMembers = `-- name: InsertLaunchMembers :exec
+INSERT INTO launch_members (launch_id, ticket_id, prompt_hash)
+SELECT $1::bigint, m.ticket_id, m.prompt_hash
+FROM jsonb_to_recordset($2::jsonb) AS m(ticket_id text, prompt_hash text)
 `
 
-type InsertLaunchMemberParams struct {
-	LaunchID   int64
-	TicketID   string
-	PromptHash string
+type InsertLaunchMembersParams struct {
+	LaunchID int64
+	Members  json.RawMessage
 }
 
-func (q *Queries) InsertLaunchMember(ctx context.Context, arg InsertLaunchMemberParams) error {
-	_, err := q.db.ExecContext(ctx, insertLaunchMember, arg.LaunchID, arg.TicketID, arg.PromptHash)
+func (q *Queries) InsertLaunchMembers(ctx context.Context, arg InsertLaunchMembersParams) error {
+	_, err := q.db.ExecContext(ctx, insertLaunchMembers, arg.LaunchID, arg.Members)
 	return err
 }
 
-const launchMemberships = `-- name: LaunchMemberships :many
+const listLaunchMemberships = `-- name: ListLaunchMemberships :many
 SELECT lm.ticket_id, lm.launch_id, l.state, lm.prompt_hash,
        COUNT(*) OVER (PARTITION BY lm.launch_id) AS members
 FROM launch_members lm
 JOIN launches l ON l.id = lm.launch_id
 WHERE l.state IN ('active', 'cancelled')
+ORDER BY (l.state = 'active') DESC, lm.launch_id DESC, lm.ticket_id
+LIMIT $1
 `
 
-type LaunchMembershipsRow struct {
+type ListLaunchMembershipsRow struct {
 	TicketID   string
 	LaunchID   int64
 	State      string
@@ -126,15 +154,15 @@ type LaunchMembershipsRow struct {
 	Members    int64
 }
 
-func (q *Queries) LaunchMemberships(ctx context.Context) ([]LaunchMembershipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, launchMemberships)
+func (q *Queries) ListLaunchMemberships(ctx context.Context, maxRows int32) ([]ListLaunchMembershipsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLaunchMemberships, maxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LaunchMembershipsRow
+	var items []ListLaunchMembershipsRow
 	for rows.Next() {
-		var i LaunchMembershipsRow
+		var i ListLaunchMembershipsRow
 		if err := rows.Scan(
 			&i.TicketID,
 			&i.LaunchID,
@@ -155,39 +183,6 @@ func (q *Queries) LaunchMemberships(ctx context.Context) ([]LaunchMembershipsRow
 	return items, nil
 }
 
-const pendingLaunchIntents = `-- name: PendingLaunchIntents :many
-SELECT id, ticket_id, payload FROM intents WHERE verb = 'launch' AND consumed_at IS NULL ORDER BY id
-`
-
-type PendingLaunchIntentsRow struct {
-	ID       int64
-	TicketID string
-	Payload  sql.NullString
-}
-
-func (q *Queries) PendingLaunchIntents(ctx context.Context) ([]PendingLaunchIntentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, pendingLaunchIntents)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []PendingLaunchIntentsRow
-	for rows.Next() {
-		var i PendingLaunchIntentsRow
-		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const queueLaunchIntent = `-- name: QueueLaunchIntent :exec
 INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
 `
@@ -195,7 +190,7 @@ INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, 'launch', $3)
 type QueueLaunchIntentParams struct {
 	At       time.Time
 	TicketID string
-	Payload  sql.NullString
+	Payload  json.RawMessage
 }
 
 func (q *Queries) QueueLaunchIntent(ctx context.Context, arg QueueLaunchIntentParams) error {

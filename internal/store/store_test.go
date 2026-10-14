@@ -2,6 +2,14 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -18,7 +26,7 @@ func openStore(t *testing.T) *storepkg.Store {
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(dsn)
+	store, err := storepkg.OpenStore(t.Context(), dsn)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -44,6 +52,24 @@ func gooseVersion(t *testing.T, dsn string) int64 {
 	return v
 }
 
+func latestMigration(t *testing.T) int64 {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join("migrations", "*.sql"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("list migrations: %v (found %d)", err, len(paths))
+	}
+	var latest int64
+	for _, path := range paths {
+		prefix, _, _ := strings.Cut(filepath.Base(path), "_")
+		version, err := strconv.ParseInt(prefix, 10, 64)
+		if err != nil {
+			t.Fatalf("migration %s has no numeric prefix: %v", path, err)
+		}
+		latest = max(latest, version)
+	}
+	return latest
+}
+
 func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	t.Parallel()
 
@@ -54,8 +80,71 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, dsn); got != 19 {
-		t.Errorf("goose version = %d, want 19", got)
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Errorf("goose version = %d, want the latest migration %d", got, want)
+	}
+}
+
+func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
+	t.Parallel()
+
+	start := time.Now()
+	_, err := storepkg.OpenStore(t.Context(), "postgres://cc@127.0.0.1:1/cc?sslmode=disable")
+	if err == nil {
+		t.Fatal("OpenStore on a dead address succeeded")
+	}
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		t.Errorf("OpenStore error = %v, want the refused connection from the ping", err)
+	}
+	if elapsed := time.Since(start); elapsed > 6*time.Second {
+		t.Errorf("OpenStore took %v, want under the 5s ping timeout", elapsed)
+	}
+}
+
+func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
+	t.Parallel()
+
+	dsn := cctest.DSN(t)
+	const opens = 4
+	errs := make(chan error, opens)
+	for range opens {
+		go func() {
+			st, err := storepkg.OpenStore(t.Context(), dsn)
+			if err == nil {
+				err = st.Close()
+			}
+			errs <- err
+		}()
+	}
+	for range opens {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent OpenStore: %v", err)
+		}
+	}
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Errorf("goose version = %d, want %d", got, want)
+	}
+}
+
+func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
+	t.Parallel()
+
+	u, err := url.Parse(cctest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	q.Set("statement_timeout", "100")
+	u.RawQuery = q.Encode()
+
+	db, err := storepkg.OpenStore(t.Context(), u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.DB().ExecContext(t.Context(), `SELECT pg_sleep(2)`); err == nil {
+		t.Error("a 2s query under a 100ms statement_timeout succeeded")
 	}
 }
 
@@ -64,6 +153,7 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 
 	dsn := cctest.DSN(t)
 	first := openStoreAt(t, dsn)
+	applied := gooseVersion(t, dsn)
 	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
@@ -74,6 +164,9 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	}
 
 	second := openStoreAt(t, dsn)
+	if got := gooseVersion(t, dsn); got != applied {
+		t.Errorf("goose version = %d after the second open, want %d unchanged", got, applied)
+	}
 	tickets, err := second.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -81,8 +174,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, dsn); got != 19 {
-		t.Errorf("goose version = %d, want 19", got)
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Errorf("goose version = %d after the second open, want the latest migration %d", got, want)
 	}
 }
 
@@ -262,7 +355,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		}
 	}
 
-	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0)
+	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0, 100)
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
@@ -273,12 +366,56 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		t.Errorf("second = %+v, want its detail and time round-tripped", all[1])
 	}
 
-	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID)
+	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID, 100)
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
 	if len(newer) != 1 || newer[0].Kind != "second" {
 		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
+	}
+}
+
+func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	const ticketURL = "sandbox://CC-1"
+	tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
+	if err := store.UpsertTickets(ctx, tickets); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	const total, pageSize = 7, 3
+	var want []string
+	for i := range total {
+		kind := fmt.Sprintf("event_%d", i)
+		want = append(want, kind)
+		if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticketURL, Kind: kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var got []string
+	var afterID int64
+	for pages := 0; ; pages++ {
+		page, err := store.TicketEventsAfter(ctx, ticketURL, afterID, pageSize)
+		if err != nil {
+			t.Fatalf("TicketEventsAfter(%s, %d, %d): %v", ticketURL, afterID, pageSize, err)
+		}
+		if len(page) > pageSize {
+			t.Fatalf("page %d has %d events, want at most %d", pages, len(page), pageSize)
+		}
+		for _, e := range page {
+			got = append(got, e.Kind)
+			afterID = e.ID
+		}
+		if len(page) < pageSize {
+			break
+		}
+	}
+	if !slices.Equal(want, got) {
+		t.Errorf("paged kinds = %v, want %v", got, want)
 	}
 }
 

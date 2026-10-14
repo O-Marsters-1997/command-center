@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -46,7 +47,7 @@ func (s *Store) InsertSessionRunSkeleton(
 func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, error) {
 	id, err := s.q.LatestSessionID(ctx, notNull(ticketID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
+		return "", fmt.Errorf("session of %s: %w", ticketID, ErrNotFound)
 	}
 	if err != nil {
 		return "", fmt.Errorf("select latest session of %s: %w", ticketID, err)
@@ -56,16 +57,13 @@ func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, e
 
 // RecordSpawn writes the pgid, its process start time and the log path onto a reserved run.
 func (s *Store) RecordSpawn(ctx context.Context, runID int64, pgid int, startedAt time.Time, logPath string) error {
-	err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
+	n, err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(pgid), Valid: true},
 		ProcStartedAt: notNullTime(startedAt.UTC()),
 		LogPath:       notNull(logPath),
 		ID:            runID,
 	})
-	if err != nil {
-		return fmt.Errorf("record spawn for run %d: %w", runID, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("record spawn for run %d", runID))
 }
 
 func (s *Store) RecordDisposition(
@@ -76,25 +74,19 @@ func (s *Store) RecordDisposition(
 	if exitCode != nil {
 		exitCodeParam = sql.NullInt64{Int64: int64(*exitCode), Valid: true}
 	}
-	err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
+	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(outcome.String()),
 		ExitCode: exitCodeParam,
 		EndedAt:  notNullTime(endedAt.UTC()),
 		CostUsd:  costUSD(metrics),
 		ID:       runID,
 	})
-	if err != nil {
-		return fmt.Errorf("record disposition for run %d: %w", runID, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", runID))
 }
 
 func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string) error {
-	err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
-	if err != nil {
-		return fmt.Errorf("record question for run %d: %w", runID, err)
-	}
-	return nil
+	n, err := s.q.RecordQuestion(ctx, ccdb.RecordQuestionParams{Question: notNull(question), ID: runID})
+	return matchedRow(n, err, fmt.Sprintf("record question for run %d", runID))
 }
 
 func costUSD(metrics *agentlog.RunMetrics) sql.NullFloat64 {
@@ -150,7 +142,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 
 // LatestRunsByTicket returns each ticket's most recent run (highest id).
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[string]plan.RunSummary, error) {
-	rows, err := s.q.LatestRunsByTicket(ctx)
+	rows, err := s.q.ListLatestRunsByTicket(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest runs: %w", err)
 	}
@@ -210,11 +202,15 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID, verb string, at t
 
 // QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
 func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, ticketID, verb, payload string, at time.Time) error {
-	err := s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode %s intent payload for %s: %w", verb, ticketID, err)
+	}
+	err = s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
 		At:       at.UTC(),
 		TicketID: ticketID,
 		Verb:     verb,
-		Payload:  notNull(payload),
+		Payload:  encoded,
 	})
 	if err != nil {
 		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
@@ -231,7 +227,11 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb string) ([]VerbInte
 
 	var intents []VerbIntent
 	for _, row := range rows {
-		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: row.Payload.String})
+		var payload string
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("decode %s intent payload for %s: %w", verb, row.TicketID, err)
+		}
+		intents = append(intents, VerbIntent{ID: row.ID, TicketID: row.TicketID, Payload: payload})
 	}
 	return intents, nil
 }
@@ -252,14 +252,11 @@ func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[string][]string
 
 // ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
-	err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
+	n, err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
 		ConsumedAt: notNullTime(at.UTC()),
 		ID:         id,
 	})
-	if err != nil {
-		return fmt.Errorf("consume intent %d: %w", id, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
 }
 
 // ActiveLaunchHashes returns the authorised prompt hash per ticket in an active launch.
@@ -304,13 +301,11 @@ func (s *Store) SessionRunsForTicket(ctx context.Context, ticketID string) ([]Se
 	return runs, nil
 }
 
-// LatestRunLog returns the newest run's log path for a ticket and whether it has ended.
-// A ticket with no run reads as ended with no path.
 func (s *Store) LatestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
 	row, err := s.q.LatestRunLog(ctx, notNull(ticketURL))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return "", true, nil
+		return "", false, fmt.Errorf("run of %s: %w", ticketURL, ErrNotFound)
 	case err != nil:
 		return "", false, fmt.Errorf("select latest run log for %s: %w", ticketURL, err)
 	default:

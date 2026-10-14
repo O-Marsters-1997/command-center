@@ -7,11 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
+	"io/fs"
+	"strconv"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -21,6 +25,19 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+const (
+	maxOpenConns     = 10
+	maxIdleConns     = 5
+	connMaxLifetime  = 30 * time.Minute
+	pingTimeout      = 5 * time.Second
+	statementTimeout = 30 * time.Second
+)
+
+func isUniqueViolation(err error, constraint string) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
+
 type Store struct {
 	db *sql.DB
 	q  *ccdb.Queries
@@ -28,40 +45,53 @@ type Store struct {
 
 // OpenStore connects to the database dsn names and migrates it up to the latest embedded
 // migration.
-func OpenStore(dsn string) (*Store, error) {
-	db, err := sql.Open("pgx", dsn)
+func OpenStore(ctx context.Context, dsn string) (*Store, error) {
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
 
-	store := &Store{db: db, q: ccdb.New(db)}
-	if err := store.init(context.Background()); err != nil {
-		return nil, errors.Join(err, db.Close())
+	migrateDB := stdlib.OpenDB(*cfg)
+	if err := migrate(ctx, migrateDB); err != nil {
+		return nil, errors.Join(err, migrateDB.Close())
 	}
-	return store, nil
+	if err := migrateDB.Close(); err != nil {
+		return nil, fmt.Errorf("close migration connection: %w", err)
+	}
+
+	if _, ok := cfg.RuntimeParams["statement_timeout"]; !ok {
+		cfg.RuntimeParams["statement_timeout"] = strconv.FormatInt(statementTimeout.Milliseconds(), 10)
+	}
+	db := stdlib.OpenDB(*cfg)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxLifetime(connMaxLifetime)
+	if err := db.PingContext(ctx); err != nil {
+		return nil, errors.Join(fmt.Errorf("ping pool: %w", err), db.Close())
+	}
+	return &Store{db: db, q: ccdb.New(db)}, nil
 }
 
-var (
-	gooseOnce     sync.Once
-	gooseSetupErr error
-)
-
-// goose keeps its base FS, logger and dialect in package-level globals, so setting them
-// per OpenStore races between concurrent opens.
-func setUpGoose() error {
-	gooseOnce.Do(func() {
-		goose.SetBaseFS(migrations)
-		goose.SetLogger(goose.NopLogger())
-		gooseSetupErr = goose.SetDialect("postgres")
-	})
-	return gooseSetupErr
-}
-
-func (s *Store) init(ctx context.Context) error {
-	if err := setUpGoose(); err != nil {
-		return fmt.Errorf("set goose dialect: %w", err)
+func migrate(ctx context.Context, db *sql.DB) error {
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		return fmt.Errorf("ping database: %w", err)
 	}
-	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
+
+	fsys, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return fmt.Errorf("open migrations: %w", err)
+	}
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return fmt.Errorf("create migration locker: %w", err)
+	}
+	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithSessionLocker(locker))
+	if err != nil {
+		return fmt.Errorf("create migration provider: %w", err)
+	}
+	if _, err := p.Up(ctx); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	return nil
@@ -71,46 +101,96 @@ func (s *Store) Close() error { return s.db.Close() }
 
 // UpsertTickets writes a ticket row directly, every column at once, keyed on url.
 // Tests use it to seed an exact row; production imports through ImportTickets.
-func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-
-	qtx := s.q.WithTx(tx)
+func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
+	rows := make([]ticketRow, 0, len(tickets))
 	for _, t := range tickets {
-		var blockedBy []byte
-		blockedBy, err = encodeBlockedBy(t.BlockedBy)
+		blockedBy, err := encodeBlockedBy(t.BlockedBy)
 		if err != nil {
 			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
 		}
-		err = qtx.UpsertTicket(ctx, ccdb.UpsertTicketParams{
-			URL:       t.URL,
-			Repo:      t.Repo,
-			Branch:    t.Branch,
-			BlockedBy: blockedBy,
-			Source:    t.Source,
-			Title:     t.Title,
-			Body:      t.Body,
-			Status:    t.Status,
-			Feature:   t.Feature,
-			SyncedAt:  t.SyncedAt,
-		})
-		if err != nil {
-			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
+		row := ticketRow{
+			URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy, Source: t.Source,
+			Title: t.Title, Body: t.Body, Status: t.Status, Feature: t.Feature,
 		}
+		if !t.SyncedAt.IsZero() {
+			syncedAt := t.SyncedAt.UTC()
+			row.SyncedAt = &syncedAt
+		}
+		rows = append(rows, row)
 	}
-	return tx.Commit()
+	encoded, err := encodeJSON("tickets", lastPerURL(rows))
+	if err != nil {
+		return err
+	}
+	if err := s.q.UpsertTickets(ctx, encoded); err != nil {
+		return fmt.Errorf("upsert %d tickets: %w", len(tickets), err)
+	}
+	return nil
+}
+
+type ticketRow struct {
+	URL       string          `json:"url"`
+	Repo      string          `json:"repo"`
+	Branch    string          `json:"branch"`
+	BlockedBy json.RawMessage `json:"blocked_by"`
+	Source    string          `json:"source"`
+	Title     string          `json:"title"`
+	Body      string          `json:"body"`
+	Status    string          `json:"status"`
+	Feature   string          `json:"feature"`
+	SyncedAt  *time.Time      `json:"synced_at"`
+}
+
+func lastPerURL(rows []ticketRow) []ticketRow {
+	at := make(map[string]int, len(rows))
+	unique := make([]ticketRow, 0, len(rows))
+	for _, row := range rows {
+		if i, seen := at[row.URL]; seen {
+			unique[i] = row
+			continue
+		}
+		at[row.URL] = len(unique)
+		unique = append(unique, row)
+	}
+	return unique
+}
+
+type blockedByUpdate struct {
+	URL       string          `json:"url"`
+	BlockedBy json.RawMessage `json:"blocked_by"`
+}
+
+func encodeJSON(what string, v any) (json.RawMessage, error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("encode %s: %w", what, err)
+	}
+	return encoded, nil
+}
+
+func (s *Store) inTx(ctx context.Context, fn func(q *ccdb.Queries) error) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	tx, err := s.db.BeginTx(context.WithoutCancel(ctx), nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	if err := fn(s.q.WithTx(tx)); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+			return errors.Join(err, rbErr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }
 
 // Tickets returns every ticket row not withdrawn, ordered by url.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
-	rows, err := s.q.Tickets(ctx)
+	rows, err := s.q.ListTickets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select tickets: %w", err)
 	}
@@ -126,7 +206,7 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 			Body:     row.Body,
 			Status:   row.Status,
 			Feature:  row.Feature,
-			SyncedAt: row.SyncedAt,
+			SyncedAt: row.SyncedAt.Time,
 		}
 		blockedBy, err := decodeBlockedBy(row.BlockedBy)
 		if err != nil {
@@ -156,117 +236,129 @@ func (e *FeatureConflictError) refusedTicket() string { return e.URL }
 // once; a merged-and-withdrawn blocker is pruned from every other ticket's blocked_by.
 func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
-) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
+) error {
+	return s.inTx(ctx, func(qtx *ccdb.Queries) (err error) {
+		syncedAt := now.UTC()
+		returned := make(map[string]bool, len(tickets))
+		urls := make([]string, 0, len(tickets))
+		for _, t := range tickets {
+			urls = append(urls, t.URL)
+		}
+		encodedURLs, err := encodeJSON("ticket urls", urls)
 		if err != nil {
-			err = errors.Join(err, tx.Rollback())
+			return err
 		}
-	}()
-
-	qtx := s.q.WithTx(tx)
-	syncedAt := now.UTC().Format(time.RFC3339)
-	returned := make(map[string]bool, len(tickets))
-	for _, t := range tickets {
-		var existing string
-		existing, err = qtx.TicketFeature(ctx, t.URL)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("read feature for %s: %w", t.URL, err)
+		existingRows, err := qtx.ListActiveTicketFeatures(ctx, encodedURLs)
+		if err != nil {
+			return fmt.Errorf("read features of imported tickets: %w", err)
 		}
-		if existing != "" && existing != feature {
-			return &FeatureConflictError{URL: t.URL, Existing: existing, Importing: feature}
+		existing := make(map[string]string, len(existingRows))
+		for _, row := range existingRows {
+			existing[row.URL] = row.Feature
 		}
 
-		returned[t.URL] = true
-		var blockedBy []byte
-		blockedBy, err = encodeBlockedBy(t.BlockedBy)
-		if err != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+		rows := make([]ticketRow, 0, len(tickets))
+		for _, t := range tickets {
+			if prior := existing[t.URL]; prior != "" && prior != feature {
+				return &FeatureConflictError{URL: t.URL, Existing: prior, Importing: feature}
+			}
+
+			returned[t.URL] = true
+			var blockedBy []byte
+			blockedBy, err = encodeBlockedBy(t.BlockedBy)
+			if err != nil {
+				return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+			}
+			rows = append(rows, ticketRow{
+				URL: t.URL, Repo: t.Repo, Source: t.Source, Feature: feature, Title: t.Title, Body: t.Body,
+				Status: t.Status, SyncedAt: &syncedAt, Branch: tracker.BranchSlug(t.Number, t.Title),
+				BlockedBy: blockedBy,
+			})
 		}
-		err = qtx.ImportTicket(ctx, ccdb.ImportTicketParams{
-			URL:       t.URL,
-			Repo:      t.Repo,
-			Source:    t.Source,
-			Feature:   feature,
-			Title:     t.Title,
-			Body:      t.Body,
-			Status:    t.Status,
-			SyncedAt:  syncedAt,
-			Branch:    tracker.BranchSlug(t.Number, t.Title),
-			BlockedBy: blockedBy,
+		encodedRows, err := encodeJSON("imported tickets", lastPerURL(rows))
+		if err != nil {
+			return err
+		}
+		if err = qtx.ImportTickets(ctx, encodedRows); err != nil {
+			return fmt.Errorf("import %d tickets: %w", len(rows), err)
+		}
+
+		previous, err := qtx.ListTicketsInFeature(ctx, feature)
+		if err != nil {
+			return fmt.Errorf("list existing tickets for %s: %w", feature, err)
+		}
+		obs, _, err := lastObservation(ctx, qtx)
+		if err != nil {
+			return fmt.Errorf("read observation for blocker repair: %w", err)
+		}
+
+		intended := make([]ticketBlockedBy, 0, len(returned))
+		for _, row := range previous {
+			if !returned[row.URL] {
+				continue
+			}
+			var blockedBy []string
+			blockedBy, err = decodeBlockedBy(row.BlockedBy)
+			if err != nil {
+				return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+			}
+			intended = append(intended, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
+		}
+		featureOf, isMerged, err := closureLookups(ctx, qtx, intended, obs)
+		if err != nil {
+			return err
+		}
+		violation, err := closeUnderBlockedBy(feature, intended, featureOf, isMerged)
+		if err != nil {
+			return err
+		}
+		if violation != nil {
+			return violation
+		}
+
+		dropped := []string{}
+		for _, t := range previous {
+			if !returned[t.URL] {
+				dropped = append(dropped, t.URL)
+			}
+		}
+		encodedDropped, err := encodeJSON("withdrawn urls", dropped)
+		if err != nil {
+			return err
+		}
+		withdrawn, err := qtx.WithdrawTickets(ctx, ccdb.WithdrawTicketsParams{
+			WithdrawnAt: notNullTime(now), Urls: encodedDropped,
 		})
 		if err != nil {
-			return fmt.Errorf("import ticket %s: %w", t.URL, err)
+			return fmt.Errorf("withdraw %d tickets: %w", len(dropped), err)
 		}
-	}
-
-	previous, err := qtx.TicketsInFeature(ctx, feature)
-	if err != nil {
-		return fmt.Errorf("list existing tickets for %s: %w", feature, err)
-	}
-	obs, _, err := s.LastObservation(ctx)
-	if err != nil {
-		return fmt.Errorf("read observation for blocker repair: %w", err)
-	}
-
-	intended := make([]ticketBlockedBy, 0, len(returned))
-	for _, row := range previous {
-		if !returned[row.URL] {
-			continue
+		if len(dropped) > 0 && withdrawn == 0 {
+			return fmt.Errorf("withdraw %d tickets: %w", len(dropped), ErrNotFound)
 		}
-		var blockedBy []string
-		blockedBy, err = decodeBlockedBy(row.BlockedBy)
+
+		withdrawnRows, err := qtx.ListWithdrawnTickets(ctx)
 		if err != nil {
-			return fmt.Errorf("decode blocked_by for %s: %w", row.URL, err)
+			return fmt.Errorf("list withdrawn tickets for blocker repair: %w", err)
 		}
-		intended = append(intended, ticketBlockedBy{URL: row.URL, BlockedBy: blockedBy})
-	}
-	violation, err := closeUnderBlockedBy(
-		feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
-	)
-	if err != nil {
-		return err
-	}
-	if violation != nil {
-		return violation
-	}
-
-	for _, t := range previous {
-		if returned[t.URL] {
-			continue
+		mergedWithdrawn := make(map[string]bool)
+		for _, row := range withdrawnRows {
+			if obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged {
+				mergedWithdrawn[row.URL] = true
+			}
 		}
-		if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: t.URL}); err != nil {
-			return fmt.Errorf("withdraw ticket %s: %w", t.URL, err)
-		}
-	}
-
-	withdrawnRows, err := qtx.WithdrawnTickets(ctx)
-	if err != nil {
-		return fmt.Errorf("list withdrawn tickets for blocker repair: %w", err)
-	}
-	mergedWithdrawn := make(map[string]bool)
-	for _, row := range withdrawnRows {
-		if obs.PRs[plan.BranchKey(row.Repo, row.Branch)].State == plan.Merged {
-			mergedWithdrawn[row.URL] = true
-		}
-	}
-	if err = repairBlockedBy(ctx, qtx, mergedWithdrawn); err != nil {
-		return err
-	}
-	return tx.Commit()
+		return repairBlockedBy(ctx, qtx, mergedWithdrawn)
+	})
 }
 
 func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[string]bool) error {
 	if len(withdrawn) == 0 {
 		return nil
 	}
-	rows, err := qtx.TicketsWithBlockers(ctx)
+	rows, err := qtx.ListTicketsWithBlockers(ctx)
 	if err != nil {
 		return fmt.Errorf("list tickets for blocker repair: %w", err)
 	}
+	updates := []blockedByUpdate{}
 	for _, row := range rows {
 		blockedBy, err := decodeBlockedBy(row.BlockedBy)
 		if err != nil {
@@ -288,36 +380,42 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 		if err != nil {
 			return fmt.Errorf("encode blocked_by for %s: %w", row.URL, err)
 		}
-		if err := qtx.SetBlockedBy(ctx, ccdb.SetBlockedByParams{BlockedBy: blob, URL: row.URL}); err != nil {
-			return fmt.Errorf("repair blocked_by for %s: %w", row.URL, err)
-		}
+		updates = append(updates, blockedByUpdate{URL: row.URL, BlockedBy: blob})
 	}
-	return nil
+	if len(updates) == 0 {
+		return nil
+	}
+	encoded, err := encodeJSON("blocked_by repairs", updates)
+	if err != nil {
+		return err
+	}
+	n, err := qtx.SetBlockedBys(ctx, encoded)
+	return matchedRow(n, err, fmt.Sprintf("repair blocked_by of %d tickets", len(updates)))
 }
 
 // WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
 // their foreign key. When merged, it also prunes the URL from every other ticket's blocked_by.
-func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, tx.Rollback())
-		}
-	}()
-
-	qtx := s.q.WithTx(tx)
-	if err = qtx.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url}); err != nil {
-		return fmt.Errorf("withdraw ticket %s: %w", url, err)
-	}
-	if merged {
-		if err = repairBlockedBy(ctx, qtx, map[string]bool{url: true}); err != nil {
+func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) error {
+	return s.inTx(ctx, func(q *ccdb.Queries) error {
+		n, err := q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url})
+		if err := matchedRow(n, err, "withdraw ticket "+url); err != nil {
 			return err
 		}
+		if merged {
+			return repairBlockedBy(ctx, q, map[string]bool{url: true})
+		}
+		return nil
+	})
+}
+
+func matchedRow(n int64, err error, what string) error {
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
 	}
-	return tx.Commit()
+	if n == 0 {
+		return fmt.Errorf("%s: %w", what, ErrNotFound)
+	}
+	return nil
 }
 
 func encodeBlockedBy(urls []string) ([]byte, error) {
@@ -409,8 +507,12 @@ func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error
 }
 
 func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, error) {
+	return lastObservation(ctx, s.q)
+}
+
+func lastObservation(ctx context.Context, q *ccdb.Queries) (plan.Observation, bool, error) {
 	var obs plan.Observation
-	found, err := s.getMeta(ctx, metaObservation, &obs)
+	found, err := getMeta(ctx, q, metaObservation, &obs)
 	return obs, found, err
 }
 
@@ -472,7 +574,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 		At:       e.At.UTC(),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
 		Kind:     e.Kind,
-		Detail:   notNull(e.Detail),
+		Detail:   e.Detail,
 	})
 	if err != nil {
 		return fmt.Errorf("append event %s: %w", e.Kind, err)
@@ -491,8 +593,10 @@ func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, err
 	return found, nil
 }
 
+const maxEvents = 5000
+
 func (s *Store) Events(ctx context.Context) ([]Event, error) {
-	rows, err := s.q.Events(ctx)
+	rows, err := s.q.ListEvents(ctx, maxEvents)
 	if err != nil {
 		return nil, fmt.Errorf("select events: %w", err)
 	}
@@ -500,16 +604,17 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 	var events []Event
 	for _, row := range rows {
 		e := Event{At: row.At, Kind: row.Kind}
-		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
+		e.TicketURL, e.Detail = row.TicketID.String, row.Detail
 		events = append(events, e)
 	}
 	return events, nil
 }
 
-func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID int64) ([]Event, error) {
-	rows, err := s.q.TicketEventsAfter(ctx, ccdb.TicketEventsAfterParams{
+func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID int64, limit int) ([]Event, error) {
+	rows, err := s.q.ListTicketEventsAfter(ctx, ccdb.ListTicketEventsAfterParams{
 		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
-		ID:       afterID,
+		AfterID:  afterID,
+		MaxRows:  int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select events for %s: %w", ticketURL, err)
@@ -518,7 +623,7 @@ func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID
 	var events []Event
 	for _, row := range rows {
 		events = append(events, Event{
-			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail.String,
+			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail,
 		})
 	}
 	return events, nil
@@ -529,21 +634,25 @@ func (s *Store) putMeta(ctx context.Context, key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("encode %s: %w", key, err)
 	}
-	if err := s.q.PutMeta(ctx, ccdb.PutMetaParams{Key: key, Value: string(encoded)}); err != nil {
+	if err := s.q.PutMeta(ctx, ccdb.PutMetaParams{Key: key, Value: encoded}); err != nil {
 		return fmt.Errorf("write %s: %w", key, err)
 	}
 	return nil
 }
 
 func (s *Store) getMeta(ctx context.Context, key string, into any) (bool, error) {
-	encoded, err := s.q.GetMeta(ctx, key)
+	return getMeta(ctx, s.q, key, into)
+}
+
+func getMeta(ctx context.Context, q *ccdb.Queries, key string, into any) (bool, error) {
+	encoded, err := q.GetMeta(ctx, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", key, err)
 	}
-	if err := json.Unmarshal([]byte(encoded), into); err != nil {
+	if err := json.Unmarshal(encoded, into); err != nil {
 		return false, fmt.Errorf("decode %s: %w", key, err)
 	}
 	return true, nil

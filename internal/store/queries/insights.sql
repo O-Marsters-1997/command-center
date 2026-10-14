@@ -8,8 +8,8 @@ SELECT t.url AS ticket_id, t.title, t.feature, m.merged_at,
 FROM tickets t
 JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL AND r.ended_at < m.merged_at
-WHERE (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
-  AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
   AND (m.merged_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date
 GROUP BY t.url, t.title, t.feature, m.merged_at
 ORDER BY m.merged_at;
@@ -28,8 +28,8 @@ FROM tickets t
 LEFT JOIN merges m ON m.ticket_id = t.url
 LEFT JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
     AND (m.merged_at IS NULL OR r.ended_at < m.merged_at)
-WHERE (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
-  AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
 GROUP BY t.url, m.merged_at;
 
 -- name: WithdrawnTicketWaste :one
@@ -39,6 +39,6 @@ FROM tickets t
 JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
 WHERE t.withdrawn_at IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ticket_id = t.url AND e.kind = 'pr_merged')
-  AND (sqlc.arg(repo)::text = '' OR t.repo = sqlc.arg(repo))
-  AND (sqlc.arg(feature)::text = '' OR t.feature = sqlc.arg(feature))
+  AND (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
+  AND (sqlc.narg(feature)::text IS NULL OR t.feature = sqlc.narg(feature))
   AND (t.withdrawn_at AT TIME ZONE sqlc.arg(timezone)::text)::date BETWEEN sqlc.arg(since)::date AND sqlc.arg(until)::date;

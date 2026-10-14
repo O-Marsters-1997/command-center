@@ -33,7 +33,7 @@ type Repo struct {
 }
 
 func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
-	rows, err := s.q.Repos(ctx)
+	rows, err := s.q.ListRepos(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select repos: %w", err)
 	}
@@ -67,16 +67,13 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 
 // SetRepoState writes r's state, refusal and settings read onto the row named r.Name.
 func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
-	err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
+	n, err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
 		Name: r.Name, State: string(r.State),
 		RefusalKind: nullIfEmpty(r.RefusalKind), Refusal: nullIfEmpty(r.Refusal),
 		SettingsSource: nullIfEmpty(r.SettingsSource),
 		SettingsReadAt: sql.NullTime{Time: r.SettingsReadAt.UTC(), Valid: !r.SettingsReadAt.IsZero()},
 	})
-	if err != nil {
-		return fmt.Errorf("set repo %s state %s: %w", r.Name, r.State, err)
-	}
-	return nil
+	return matchedRow(n, err, fmt.Sprintf("set repo %s state %s", r.Name, r.State))
 }
 
 // QueueTrackIntent queues a Track for repo unless one is already pending, and reports whether it

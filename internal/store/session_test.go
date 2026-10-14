@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"testing"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -14,9 +15,8 @@ func TestLatestSessionIDIsTheLatestAgentOrFollowUpRunsSession(t *testing.T) {
 	seedOneTicket(t, store)
 	const ticket = "sandbox://CC-1"
 
-	got, err := store.LatestSessionID(ctx, ticket)
-	if err != nil || got != "" {
-		t.Fatalf("LatestSessionID with no runs = %q, %v, want empty", got, err)
+	if _, err := store.LatestSessionID(ctx, ticket); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Fatalf("LatestSessionID with no runs = %v, want ErrNotFound", err)
 	}
 
 	_, agentSession, err := store.InsertSessionRunSkeleton(
@@ -36,7 +36,7 @@ func TestLatestSessionIDIsTheLatestAgentOrFollowUpRunsSession(t *testing.T) {
 		t.Errorf("review run session = %q, want none", reviewSession)
 	}
 
-	got, err = store.LatestSessionID(ctx, ticket)
+	got, err := store.LatestSessionID(ctx, ticket)
 	if err != nil || got != agentSession {
 		t.Errorf("LatestSessionID after a review run = %q, %v, want the agent's %q", got, err, agentSession)
 	}

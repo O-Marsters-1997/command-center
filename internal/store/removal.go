@@ -8,7 +8,7 @@ import (
 // RemovalRefusals returns each ticket's most recent remove-worktree refusal, keyed by
 // ticket URL.
 func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) {
-	rows, err := s.q.LatestRemovalRefusals(ctx, EventRemoveWorktreeRefused)
+	rows, err := s.q.ListLatestRemovalRefusals(ctx, EventRemoveWorktreeRefused)
 	if err != nil {
 		return nil, fmt.Errorf("select removal refusals: %w", err)
 	}
@@ -18,7 +18,7 @@ func (s *Store) RemovalRefusals(ctx context.Context) (map[string]string, error) 
 		if !row.TicketID.Valid {
 			continue
 		}
-		refusals[row.TicketID.String] = row.Detail.String
+		refusals[row.TicketID.String] = row.Detail
 	}
 	return refusals, nil
 }

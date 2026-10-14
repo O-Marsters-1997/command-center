@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -39,7 +40,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 	mode := view.NormalizeLogFilter(r.URL.Query().Get("log"))
 
-	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
+	path, ended, err := s.latestRunLog(ctx, ticketURL)
 	if err != nil {
 		return err
 	}
@@ -92,10 +93,18 @@ func (s *Server) followLog(
 			return ctx.Err()
 		case <-s.clock.After(logPollInterval):
 		}
-		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
+		if path, ended, err = s.latestRunLog(ctx, ticketURL); err != nil {
 			return err
 		}
 	}
+}
+
+func (s *Server) latestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
+	path, ended, err = s.store.LatestRunLog(ctx, ticketURL)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", true, nil
+	}
+	return path, ended, err
 }
 
 func queryOffset(r *http.Request, key string) (int64, error) {
@@ -129,27 +138,24 @@ func flushStream(flusher *http.ResponseController) error {
 func (s *Server) sendRecords(
 	ctx context.Context, w io.Writer, ticketURL string, afterID *int64, offset int64, mode string,
 ) (int, error) {
-	records, err := s.store.TicketEventsAfter(ctx, ticketURL, *afterID)
-	if err != nil {
-		return 0, err
-	}
 	sent := 0
-	for _, record := range records {
+	err := view.EachTicketEvent(ctx, s.store, ticketURL, *afterID, func(record store.Event) error {
 		*afterID = record.ID
 		event := view.RecordOf(record)
 		if !view.RecordShown(record) || !view.EventShown(mode, event) {
-			continue
+			return nil
 		}
 		rendered, err := renderLogLine(view.LineOf(event))
 		if err != nil {
-			return sent, fmt.Errorf("render record %d: %w", record.ID, err)
+			return fmt.Errorf("render record %d: %w", record.ID, err)
 		}
 		if err := writeEvent(w, offset, rendered); err != nil {
-			return sent, err
+			return err
 		}
 		sent++
-	}
-	return sent, nil
+		return nil
+	})
+	return sent, err
 }
 
 func sendLines(w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string) (sent int, err error) {

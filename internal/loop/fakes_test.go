@@ -18,7 +18,7 @@ func openStore(t *testing.T) *storepkg.Store {
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(dsn)
+	store, err := storepkg.OpenStore(t.Context(), dsn)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

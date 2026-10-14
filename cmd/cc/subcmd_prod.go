@@ -71,7 +71,7 @@ func open(ctx context.Context, configPath string, stdout, stderr io.Writer) erro
 }
 
 func trackedRepos(ctx context.Context, databaseURL string) (_ []store.Repo, err error) {
-	st, err := store.OpenStore(databaseURL)
+	st, err := store.OpenStore(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}

@@ -81,7 +81,7 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 	if err != nil {
 		return err
 	}
-	st, err := store.OpenStore(cfg.DatabaseURL)
+	st, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	if err != nil {
 		return err
 	}
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
