@@ -2,6 +2,7 @@ package web
 
 import (
 	"html/template"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,6 +34,8 @@ func renderStates(name string, states []plan.State) (string, error) {
 			Unattended: state.Unattended(),
 			Verbs:      plan.Verbs(state),
 		}
+		r.Launchable = slices.Contains(r.Verbs, plan.VerbLaunch)
+		r.Buttons = r.VerbButtons()
 		rows = append(rows, r)
 	}
 	board.Sections = view.Sectioned(rows)

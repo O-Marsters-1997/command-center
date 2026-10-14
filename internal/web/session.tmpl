@@ -106,15 +106,15 @@
 </article>
 {{template "shellEnd" .}}{{define "sessionActions"}}<div id="session-actions" class="session-actions" hx-get="{{.ActionsPath}}" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">
   {{- with .Toast}}<div id="toast" class="toast" hx-swap-oob="innerHTML" role="status">{{.}}</div>{{end}}
-  <div class="verbs{{if or (eq .Row.Glyph "failed") (eq .Row.Glyph "attention")}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
+  <div class="verbs{{if .Callout}} callout{{end}}" data-glyph="{{.Row.Glyph}}">
     {{- $s := .}}
-    {{- range .ActionVerbs}}
-    <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with confirmation . $s.Row}} hx-confirm="{{.}}"{{end}}>
+    {{- range .Actions}}
+    <form method="post" action="/verb" hx-post="/verb" hx-disabled-elt="find button" hx-sync="closest #session-actions:replace" hx-target="#session-actions" hx-swap="outerHTML"{{with .Confirm}} hx-confirm="{{.}}"{{end}}>
       <input type="hidden" name="ticket" value="{{$s.Row.URL}}">
       <input type="hidden" name="from" value="session">
       <input type="hidden" name="return" value="{{$s.TranscriptPath}}">
-      <button class="btn" type="submit" name="verb" value="{{.}}"{{if eq . "re-run"}} data-key="r"{{else if eq . "remove-worktree"}} data-key="e"{{end}}{{if $s.PendingVerb .}} disabled{{end}}>{{.}}</button>
-      {{- if $s.PendingVerb .}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
+      <button class="btn" type="submit" name="verb" value="{{.Verb}}"{{with .Key}} data-key="{{.}}"{{end}}{{if .Pending}} disabled{{end}}>{{.Label}}</button>
+      {{- if .Pending}}<span class="pending-mark" data-glyph="pending">queued</span>{{end}}
     </form>
     {{- end}}
     {{- with .PRURL}}<a class="btn" href="{{.}}" data-key="o" target="_blank" rel="noopener">Open PR</a>{{end}}
