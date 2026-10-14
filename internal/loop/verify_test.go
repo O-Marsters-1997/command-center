@@ -12,6 +12,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func TestFailedVerificationDoesNotPush(t *testing.T) {
@@ -99,8 +100,9 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 				t.Errorf("remote %s tip = %s, want unchanged %s", s.branch, remoteTip, s.originalTip)
 			}
 			page := renderPage(t, openServer(p.Store, fixedClock(testAt.Add(time.Minute)), ""))
-			if state := rowState(t, page, s.ticketURL); state != "verification_failed" {
-				t.Errorf("row state = %q, want verification_failed", state)
+			row := webtest.RowFor(t, page, s.ticketURL)
+			if row.State != "verification_failed" {
+				t.Errorf("row state = %q, want verification_failed:\n%s", row.State, row.Row.HTML())
 			}
 			for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
 				if !strings.Contains(page, `value="`+string(verb)+`"`) {

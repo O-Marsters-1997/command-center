@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -254,7 +256,7 @@ func TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths(t *testing.T) {
 	if !strings.Contains(page, `hx-get="/board?repo=repo"`) {
 		t.Errorf("the board's own poll dropped the repo scope:\n%s", page)
 	}
-	row := rowHTML(t, page, "sandbox://ROOT")
+	row := webtest.RowFor(t, page, "sandbox://ROOT").Row.HTML()
 	if !strings.Contains(row, "repo=repo") {
 		t.Errorf("ROOT's row paths dropped the repo scope:\n%s", row)
 	}

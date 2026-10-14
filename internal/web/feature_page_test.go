@@ -2,10 +2,11 @@ package web_test
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -18,19 +19,16 @@ func TestFeaturePageSectionsTheBoardAndNamesDependencies(t *testing.T) {
 	if strings.Contains(page, ticketRef("sandbox://LONE")) {
 		t.Errorf("/f/board-scope rendered a ticket from another feature:\n%s", page)
 	}
-	order := regexp.MustCompile(`data-section="([a-z-]+)"`).FindAllStringSubmatch(page, -1)
-	var got []string
-	for _, m := range order {
-		got = append(got, m[1])
+	if got := sectionKeys(t, page); got != "ready,blocked" {
+		t.Errorf("sections = %s, want ready,blocked", got)
 	}
-	if want := "ready,blocked"; strings.Join(got, ",") != want {
-		t.Errorf("sections = %v, want %s", got, want)
+	child := webtest.RowFor(t, page, "sandbox://CHILD")
+	if cell := child.Ticket.Text(); !strings.Contains(cell, "after #ROOT") {
+		t.Errorf("CHILD ticket cell = %q, want after #ROOT:\n%s", cell, child.Row.HTML())
 	}
-	if cell := rowCellAt(t, page, "sandbox://CHILD", 3); !strings.Contains(cell, "after #ROOT") {
-		t.Errorf("CHILD ticket cell = %q, want it to read after #ROOT", cell)
-	}
-	if cell := rowCellAt(t, page, "sandbox://ROOT", 3); !strings.Contains(cell, "unlocks #CHILD") {
-		t.Errorf("ROOT ticket cell = %q, want it to read unlocks #CHILD", cell)
+	root := webtest.RowFor(t, page, "sandbox://ROOT")
+	if cell := root.Ticket.Text(); !strings.Contains(cell, "unlocks #CHILD") {
+		t.Errorf("ROOT ticket cell = %q, want unlocks #CHILD:\n%s", cell, root.Row.HTML())
 	}
 }
 

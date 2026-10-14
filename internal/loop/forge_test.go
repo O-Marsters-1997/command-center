@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -49,9 +51,9 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 			t.Fatalf("RunOnce: %v", err)
 		}
 	}
-	state := func() string {
+	row := func() webtest.BoardRow {
 		t.Helper()
-		return rowState(t, renderPage(t, openServer(store, fixedClock(at), "")), issue.URL)
+		return webtest.RowFor(t, renderPage(t, openServer(store, fixedClock(at), "")), issue.URL)
 	}
 
 	tick()
@@ -87,8 +89,8 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 		tick()
 	}
 
-	if got := state(); got != "review_me" {
-		t.Errorf("row state = %q, want review_me", got)
+	if got := row(); got.State != "review_me" {
+		t.Errorf("row state = %q, want review_me:\n%s", got.State, got.Row.HTML())
 	}
 
 	obs, _, err := store.LastObservation(t.Context())
