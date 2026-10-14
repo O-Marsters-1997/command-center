@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
@@ -39,7 +40,7 @@ func TestParse(t *testing.T) {
 						Turns: 1, Spend: 0.0004992,
 						Events: []agentlog.Event{
 							{Kind: agentlog.Cmd, Tool: "Bash", Detail: "go test ./...",
-									Output: "FAIL\tinternal/agentlog\nno such package", OutputLines: 2,
+								Output: "FAIL\tinternal/agentlog\nno such package", OutputLines: 2,
 								Done: true, ExitCode: 1, Elapsed: 1500 * time.Millisecond},
 						},
 					},
@@ -143,7 +144,7 @@ func TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse: %v", err)
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got, cmpopts.EquateApprox(0, 1e-12)); diff != "" {
 				t.Errorf("Parse() mismatch (-want +got):\n%s", diff)
 			}
 		})

@@ -191,7 +191,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 			branchRef("repo", "parent"): "/repos/parent", branchRef("repo", "child"): "/repos/child",
 		},
 		BranchTips: map[plan.BranchRef]plan.SHA{
-			branchRef("repo", "parent"): plan.SHA(parentTip), web.MainTipKey("repo"): "main-tip",
+			branchRef("repo", "parent"): plan.SHA(parentTip), branchRef("repo", plan.DefaultBaseBranch): "main-tip",
 		},
 		PRs: map[plan.BranchRef]plan.PR{
 			branchRef("repo", "parent"): {
@@ -242,7 +242,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	}
 
 	obs := plan.Observation{
-		BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
 		PRs: map[plan.BranchRef]plan.PR{
 			branchRef("repo", "ci"): {
 				Number: 1, State: plan.Open, HeadOid: tip,
@@ -310,7 +310,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 
 	obs := plan.Observation{
 		Worktrees:  map[plan.BranchRef]string{branchRef("repo", "cc-1"): "/repos/cc-1"},
-		BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
 		PRs: map[plan.BranchRef]plan.PR{
 			branchRef("repo", "cc-1"): {
 				Number: 1, State: plan.Open, HeadOid: tip,
@@ -839,7 +839,7 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 			t.Fatal(err)
 		}
 		obs := plan.Observation{
-			BranchTips: map[plan.BranchRef]plan.SHA{web.MainTipKey("repo"): "main-tip"},
+			BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
 			PRs: map[plan.BranchRef]plan.PR{
 				branchRef("repo", "ci"): {
 					Number: 1, State: plan.Open, HeadOid: "ci-tip",

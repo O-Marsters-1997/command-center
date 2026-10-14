@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -100,7 +99,7 @@ func draftConsumerPR(
 			},
 			branchRef("services", "pla-40"): {State: blockerState},
 		},
-		BranchTips: map[plan.BranchRef]plan.SHA{loop.MainTipKey("repo"): "main-tip"},
+		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
 		Settings:   map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{Success: "CI"}}},
 	}
 }

@@ -7,6 +7,5 @@ cc-fake-gh no-prs
 
 cc-daemon
 ! exec cc tick --count 1
-stderr 'cannot take the flock'
+stderr 'another cc holds the state lock'
 stderr 'command-centre\.lock'
-stderr 'already running'

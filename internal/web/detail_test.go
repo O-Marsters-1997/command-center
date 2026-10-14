@@ -196,7 +196,7 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	logPath := web.WriteRunLog(t, web.ReadTestdata("dropped_kinds.jsonl"))
+	logPath := writeRunLog(t, mustReadTestdata(t, "dropped_kinds.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)
 

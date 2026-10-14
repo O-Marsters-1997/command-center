@@ -44,6 +44,34 @@ linters:
           msg: match errors with errors.Is/As, not by their text
     depguard:
       rules:
+        agentlog-pure:
+          files: ["**/internal/agentlog/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/agentlog
+            - github.com/O-Marsters-1997/command-center/internal/option
+          deny:
+            - pkg: os/exec
+              desc: agentlog parses logs without shelling out
+            - pkg: database/sql
+              desc: agentlog parses logs without SQL
+            - pkg: net/http
+              desc: agentlog parses logs without HTTP
+        verdict-pure:
+          files: ["**/internal/verdict/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/verdict
+            - github.com/O-Marsters-1997/command-center/internal/agentlog
+          deny:
+            - pkg: os/exec
+              desc: verdict derives from facts without shelling out
+            - pkg: database/sql
+              desc: verdict derives from facts without SQL
+            - pkg: net/http
+              desc: verdict derives from facts without HTTP
         plan-pure:
           files: ["**/internal/plan/**", "!$test"]
           list-mode: strict

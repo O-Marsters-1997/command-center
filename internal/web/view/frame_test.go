@@ -21,15 +21,7 @@ func (s *countingFrameStore) Repos(ctx context.Context) ([]store.Repo, error) {
 }
 
 func TestBoardRailAndHomeEachReadReposAndDeriveOnce(t *testing.T) {
-	st, err := store.OpenStore(cctest.DSN(t), store.MaxOpenConns(4))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
+	st := cctest.Store(t)
 	reads := &countingFrameStore{Store: st}
 	r := NewReader(st, "", nil, 5, 0)
 	r.frameStore = reads

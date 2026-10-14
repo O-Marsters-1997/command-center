@@ -21,10 +21,11 @@ func writeRunLog(t *testing.T, body string) string {
 	return path
 }
 
-func mustReadTestdata(name string) string {
+func mustReadTestdata(t *testing.T, name string) string {
+	t.Helper()
 	body, err := os.ReadFile(filepath.Join("view", "testdata", name))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return string(body)
 }
@@ -78,7 +79,7 @@ func extractSSEData(t *testing.T, frame string) string {
 func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 	t.Parallel()
 
-	path := writeRunLog(t, mustReadTestdata("run.jsonl"))
+	path := writeRunLog(t, mustReadTestdata(t, "run.jsonl"))
 
 	var buf strings.Builder
 	sent := mustSendLines(t, &buf, &agentlog.Tail{}, &logFollow{Path: path, Mode: view.LogFails})

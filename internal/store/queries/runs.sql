@@ -77,3 +77,9 @@ ORDER BY runs.id;
 
 -- name: LatestRunLog :one
 SELECT log_path, ended_at FROM runs WHERE ticket_id = sqlc.arg(ticket_id) ORDER BY id DESC LIMIT 1;
+
+-- name: RunDetails :one
+SELECT COALESCE(session_id::text, '')::text AS session_id,
+       COALESCE(message, '')::text AS message,
+       COALESCE(outcome, '')::text AS outcome
+FROM runs WHERE id = sqlc.arg(id);
