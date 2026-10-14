@@ -44,8 +44,11 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 
 		fact := &plan.RunFact{PROpen: true}
 		l.rules(obs).ApplyVerdict(fact, t.Plan(), obs, vd)
-		current := fact.Verdict.Label()
-		if current == "" || lastVerdicts[t.URL] == current {
+		if fact.Verdict == nil {
+			continue
+		}
+		current := fact.Verdict.Kind.String()
+		if lastVerdicts[t.URL] == current {
 			continue
 		}
 

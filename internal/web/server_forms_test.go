@@ -82,8 +82,7 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	t.Parallel()
 
 	verbForm := regexp.MustCompile(`name="verb" value="([a-z-]+)"`)
-	for s := range plan.StateCount {
-		state := plan.State(s)
+	for _, state := range plan.AllStates() {
 		t.Run(state.String(), func(t *testing.T) {
 			t.Parallel()
 

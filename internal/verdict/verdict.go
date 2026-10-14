@@ -21,37 +21,29 @@ const (
 	Skipped
 )
 
-type Verdict int
+type Kind int
 
 const (
-	Checking Verdict = iota
+	KindUnknown Kind = iota
+	Checking
 	ReviewMe
 	NeedsYou
+	CIFailed
 	BaseMoved
 	WaitingOnProducerDeploy
 )
 
-// Label names the result for comparison against the last recorded one. A red leaf under NeedsYou
-// is ci_failed; a nil result has no label.
-func (r *Result) Label() string {
-	if r == nil {
-		return ""
-	}
-	switch r.Verdict {
-	case BaseMoved:
-		return "base_moved"
-	case WaitingOnProducerDeploy:
-		return "waiting_on_producer_deploy"
-	case ReviewMe:
-		return "review_me"
-	case NeedsYou:
-		if len(r.RedLeaves) > 0 {
-			return "ci_failed"
-		}
-		return "needs_you"
-	default:
-		return "checking"
-	}
+var kindNames = map[Kind]string{
+	Checking:                "checking",
+	ReviewMe:                "review_me",
+	NeedsYou:                "needs_you",
+	CIFailed:                "ci_failed",
+	BaseMoved:               "base_moved",
+	WaitingOnProducerDeploy: "waiting_on_producer_deploy",
+}
+
+func (k Kind) String() string {
+	return kindNames[k]
 }
 
 // BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it,
@@ -87,10 +79,8 @@ type Input struct {
 	CompatCheck  string
 }
 
-// Result is Evaluate's answer plus the sentence the page renders. RedLeaves is empty unless
-// Verdict is NeedsYou because a leaf resolved red, rather than the bounded wait elapsing.
 type Result struct {
-	Verdict   Verdict
+	Kind      Kind
 	Reason    string
 	RedLeaves []string
 }
@@ -108,26 +98,26 @@ const (
 // forced green: review-me there means the compat check was the sole red one.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
-		return Result{Verdict: BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"}
+		return Result{Kind: BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"}
 	}
 	if !in.HeadOidMatch {
 		in.Checks = nil
 	}
 
 	result := evaluate(p, in)
-	if result.Verdict != NeedsYou || in.CompatCheck == "" {
+	if (result.Kind != NeedsYou && result.Kind != CIFailed) || in.CompatCheck == "" {
 		return result
 	}
 
 	in.Checks = forcedGreen(in.Checks, in.CompatCheck)
-	switch forced := evaluate(p, in); forced.Verdict {
+	switch forced := evaluate(p, in); forced.Kind {
 	case ReviewMe:
-		return Result{Verdict: WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"}
+		return Result{Kind: WaitingOnProducerDeploy, Reason: "every required check passed except the compat check"}
 	case Checking:
 		return forced
-	default:
-		return result
+	case KindUnknown, NeedsYou, CIFailed, BaseMoved, WaitingOnProducerDeploy:
 	}
+	return result
 }
 
 func evaluate(p Predicate, in Input) Result {
@@ -135,21 +125,21 @@ func evaluate(p Predicate, in Input) Result {
 	switch state {
 	case red:
 		return Result{
-			Verdict:   NeedsYou,
+			Kind:      CIFailed,
 			Reason:    fmt.Sprintf("required check failed: %s", strings.Join(redLeaves, ", ")),
 			RedLeaves: redLeaves,
 		}
 	case green:
 		if !in.ConfigHashOK {
-			return Result{Verdict: Checking, Reason: "check config changed"}
+			return Result{Kind: Checking, Reason: "check config changed"}
 		}
-		return Result{Verdict: ReviewMe, Reason: "every required check passed"}
-	default:
-		if waited(in) {
-			return Result{Verdict: NeedsYou, Reason: "no matching rollup within the wait"}
-		}
-		return Result{Verdict: Checking, Reason: "waiting on checks"}
+		return Result{Kind: ReviewMe, Reason: "every required check passed"}
+	case pending:
 	}
+	if waited(in) {
+		return Result{Kind: NeedsYou, Reason: "no matching rollup within the wait"}
+	}
+	return Result{Kind: Checking, Reason: "waiting on checks"}
 }
 
 func forcedGreen(checks map[string]CheckState, name string) map[string]CheckState {
@@ -222,9 +212,9 @@ func not(t triState) triState {
 		return red
 	case red:
 		return green
-	default:
-		return pending
+	case pending:
 	}
+	return pending
 }
 
 func leaf(p Predicate, in Input) (triState, []string) {
@@ -250,14 +240,13 @@ func leafResult(t triState, name string) (triState, []string) {
 }
 
 func requireConclusion(got, want CheckState) triState {
-	switch got {
-	case want:
+	if got == want {
 		return green
-	case Pending:
-		return pending
-	default:
-		return red
 	}
+	if got == Pending {
+		return pending
+	}
+	return red
 }
 
 func absentOK(checks map[string]CheckState, name string, in Input) triState {
@@ -273,9 +262,9 @@ func absentOK(checks map[string]CheckState, name string, in Input) triState {
 		return green
 	case Pending:
 		return pending
-	default:
-		return red
+	case Failure:
 	}
+	return red
 }
 
 func author(got, want string) triState {

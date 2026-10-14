@@ -28,9 +28,9 @@ func KindShown(mode LogFilter, k agentlog.Kind) bool {
 		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd || k == agentlog.Commit
 	case LogFails:
 		return k == agentlog.Fail
-	default:
-		return true
+	case LogFilterUnknown, LogAll:
 	}
+	return true
 }
 
 func EventShown(mode LogFilter, e agentlog.Event) bool {
@@ -240,7 +240,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 		b.answer(event, anchor)
 	case agentlog.Cmd:
 		b.pending = append(b.pending, cmdPair(event, anchor))
-	default:
+	case agentlog.Skill, agentlog.File, agentlog.Tool:
 		b.pending = append(b.pending, callPair{call: event, called: true})
 	}
 	return nil

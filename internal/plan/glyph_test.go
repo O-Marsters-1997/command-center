@@ -23,8 +23,8 @@ func TestGlyph(t *testing.T) {
 		plan.Blocked: plan.GlyphBlocked, plan.WaitingOnProducerDeploy: plan.GlyphBlocked,
 		plan.PRMerged: plan.GlyphDone,
 	}
-	if len(want) != plan.StateCount {
-		t.Fatalf("table covers %d states, the enum has %d", len(want), plan.StateCount)
+	if len(want) != len(plan.AllStates()) {
+		t.Fatalf("table covers %d states, the enum has %d", len(want), len(plan.AllStates()))
 	}
 	for state, glyph := range want {
 		if got := state.Glyph(); got != glyph {
