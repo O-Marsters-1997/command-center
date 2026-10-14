@@ -16,18 +16,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// stackedConfigAndWorkspace mirrors testConfigAndWorkspace (fakes_test.go) but with stacking on:
-// refresh's own base recompute (plan.Unlocked) only ever names a non-main base under stacking.
-func stackedConfigAndWorkspace(t *testing.T, root string) (config.Config, config.Workspace) {
-	t.Helper()
-	cfg := config.Config{DataDir: root, MaxAgents: 0}
-	ws := config.Workspace{
-		RunsDir:      t.TempDir(),
-		SettingsPath: filepath.Join(t.TempDir(), "agent.json"),
-	}
-	return cfg, ws
-}
-
 // forcePushDivergentCommit pushes a commit sharing no history with branch, from a throwaway
 // clone, so the branch's local worktree can never fast-forward onto it.
 func forcePushDivergentCommit(t *testing.T, root, branch string) {
@@ -141,7 +129,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -202,7 +190,7 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err == nil {
@@ -236,7 +224,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -269,7 +257,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -305,7 +293,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -338,7 +326,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -436,7 +424,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 		return obs, nil
 	}
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
@@ -506,7 +494,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 		return obs, nil
 	}
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
@@ -571,7 +559,7 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 		return obs, nil
 	}
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
 		t.Fatalf("RunOnce: %v", err)
@@ -619,7 +607,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	delete(obs.PRs, branchRef("repo", "parent"))
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 
 	if err := lp.RunOnce(t.Context()); err != nil {

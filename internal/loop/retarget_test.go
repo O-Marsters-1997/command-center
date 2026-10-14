@@ -58,7 +58,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 
 			obs := mergedObservation(f, childBaseRef)
 			observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-			cfg, ws := stackedConfigAndWorkspace(t, root)
+			cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 			lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
 				loop.WithForge(forge))
 			if err := lp.RunOnce(t.Context()); err != nil {
@@ -113,7 +113,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 
 	obs := mergedObservation(f, "main")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 
 	firstTick := at.Add(time.Minute)
 	if err := newLoop(store, observe, fixedClock(firstTick), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge)).
@@ -151,7 +151,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 
 	obs := mergedObservation(f, "main")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
@@ -192,7 +192,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{},
 		loop.WithForge(failingEdit{forge}))
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -345,7 +345,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	obs := mergedObservation(f, "parent")
 	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -418,7 +418,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	}
 	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
@@ -480,7 +480,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 
 	obs := baseObservation(f, newParentTip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -517,7 +517,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 
 	obs := baseObservation(f, f.parentTip0)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -567,7 +567,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	}
 	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("restack RunOnce: %v", err)
@@ -645,7 +645,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	obs.MidMerge[branchRef("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retarget RunOnce: %v", err)
@@ -672,13 +672,4 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 			"still telling baseMoved this row sits on main when it has never been advanced there",
 			f.parentTip0)
 	}
-}
-
-// runGitAllowingFailure runs git and hands back its output and error rather than failing the test,
-// for the commands whose non-zero exit is the point.
-func runGitAllowingFailure(t *testing.T, dir string, args ...string) ([]byte, error) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = os.Environ()
-	return cmd.CombinedOutput()
 }

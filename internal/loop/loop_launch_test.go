@@ -32,10 +32,10 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-	spawned := f.ImplementSpawns()[0]
+	spawned := f.Fake.Spawns[0]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
@@ -72,10 +72,10 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-	promptPath := f.ImplementSpawns()[0].PromptPath
+	promptPath := f.Fake.Spawns[0].PromptPath
 	written, err := os.ReadFile(promptPath)
 	if err != nil {
 		t.Fatal(err)
@@ -107,8 +107,8 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 0 {
-		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 0 {
+		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.Fake.Spawns))
 	}
 	summary := f.Latest(t)[f.Tickets[0].URL]
 	if summary.Outcome != option.Some(plan.OutcomeCutFailed) {
@@ -159,8 +159,8 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.Fake.Spawns))
 	}
 	latest := f.Latest(t)
 	if _, ran := latest["sandbox://CC-1"]; !ran {

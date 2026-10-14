@@ -48,7 +48,7 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -91,7 +91,7 @@ func TestRetargetSkipsAnAwaitingInputTicketUntilItLeavesThatState(t *testing.T) 
 
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
