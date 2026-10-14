@@ -107,7 +107,7 @@ func (c conflictFixture) midMerge(t *testing.T) bool {
 func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConflicted(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 
 	c.tick(t) // the automatic pass merges the advanced parent and conflicts
@@ -126,80 +126,71 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	}
 }
 
-func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testing.T) {
+func TestAbortConflictWithOptionalRefresh(t *testing.T) {
 	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	c := newConflictFixture(t, root, repoPath, at)
-
-	c.tick(t)
-	c.tick(t)
-
-	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name          string
+		verbs         []plan.Verb
+		wantMidMerge  bool
+		wantConflicts int
+		wantState     string
+	}{
+		{name: "abort alone", verbs: []plan.Verb{plan.VerbAbort}, wantState: "base_moved", wantConflicts: 1},
+		{name: "abort then refresh", verbs: []plan.Verb{plan.VerbAbort, plan.VerbRefresh},
+			wantMidMerge: true, wantConflicts: 2, wantState: "refresh_conflicted"},
 	}
-	c.tick(t)
-
-	if c.midMerge(t) {
-		t.Fatal("the child worktree is still mid-merge: abort did not run git merge --abort")
-	}
-	pending, err := c.store.PendingVerbIntents(t.Context(), plan.VerbAbort)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("pending abort intents = %+v, want none: consumed", pending)
-	}
-
-	// The tick after the abort is the one whose observation clears the state.
-	c.tick(t)
-	if c.midMerge(t) {
-		t.Fatal("the automatic pass re-conflicted the aborted merge: abort would be futile")
-	}
-	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state != "base_moved" {
-		t.Errorf("child's state after abort = %q, want base_moved: the base still moved, refresh is the human's now", state)
-	}
-}
-
-func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *testing.T) {
-	t.Parallel()
-	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	c := newConflictFixture(t, root, repoPath, at)
-
-	c.tick(t)
-	c.tick(t)
-
-	for _, verb := range []plan.Verb{plan.VerbAbort, plan.VerbRefresh} {
-		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	c.tick(t)
-
-	events, err := c.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "merge_aborted", "") {
-		t.Fatalf("events = %+v, want a merge_aborted", events)
-	}
-	conflicts := 0
-	for _, e := range events {
-		if e.Kind == "refresh_conflicted" {
-			conflicts++
-		}
-	}
-	if conflicts != 2 {
-		t.Errorf("refresh_conflicted events = %d, want 2: the refresh queued alongside the abort must act "+
-			"on the worktree the abort just freed, not be consumed and dropped", conflicts)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root, repoPath := repoWithOrigin(t)
+			at := testAt
+			c := newConflictFixture(t, root, repoPath, at)
+			c.tick(t)
+			c.tick(t)
+			for _, verb := range tt.verbs {
+				if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c.tick(t)
+			c.tick(t)
+			if got := c.midMerge(t); got != tt.wantMidMerge {
+				t.Errorf("mid-merge after abort = %v, want %v", got, tt.wantMidMerge)
+			}
+			if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state != tt.wantState {
+				t.Errorf("child's state after abort = %q, want %q", state, tt.wantState)
+			}
+			pending, err := c.store.PendingVerbIntents(t.Context(), plan.VerbAbort)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pending) != 0 {
+				t.Errorf("pending abort intents = %+v, want none", pending)
+			}
+			events, err := c.store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !hasEvent(events, "merge_aborted", "") {
+				t.Errorf("events = %+v, want merge_aborted", events)
+			}
+			conflicts := 0
+			for _, event := range events {
+				if event.Kind == "refresh_conflicted" {
+					conflicts++
+				}
+			}
+			if conflicts != tt.wantConflicts {
+				t.Errorf("refresh_conflicted events = %d, want %d", conflicts, tt.wantConflicts)
+			}
+		})
 	}
 }
 
 func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 
 	c.tick(t)
@@ -226,7 +217,7 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 	parentTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 
@@ -256,7 +247,7 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 func TestAGitFailureDuringRefreshThatIsNotAConflictIsATickError(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 	gittest.Run(t, repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
 

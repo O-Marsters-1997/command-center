@@ -14,51 +14,100 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *testing.T) {
+func TestFailedVerificationDoesNotPush(t *testing.T) {
 	t.Parallel()
-	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-
-	f := newStackedFixture(t, repoPath, store, at)
-	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
-	parentTip1 := advanceParent(t, repoPath, f)
-
-	*p.Obs = baseObservation(f, parentTip1)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	verifyCommand := []string{"sh", "-c", "echo 'undefined: dup' >&2; exit 1"}
-	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: verifyCommand}
-	clock := fixedClock(at.Add(time.Minute))
-	p.cfg, p.ws = cfg, ws
-	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
-
-	events := p.events(t, "verification_failed")
-	if len(events) != 1 || events[0].TicketURL != f.child.URL ||
-		!strings.Contains(events[0].Detail, "sh -c") || !strings.Contains(events[0].Detail, "undefined: dup") {
-		t.Errorf("events = %+v, want a verification_failed event naming the command", events)
+	type scenario struct {
+		ticketURL, branch, originalTip, detail string
+		command                                []string
+		mergedFile, needle                     string
+		wantCount                              int
 	}
-	for _, e := range p.events(t, "pushed") {
-		if e.TicketURL == f.child.URL {
-			t.Errorf("pushed event = %+v, want none for %s", e, f.child.URL)
-		}
+	tests := []struct {
+		name  string
+		setup func(*testing.T, *pushFixture) scenario
+	}{
+		{
+			name: "failed restack command",
+			setup: func(t *testing.T, p *pushFixture) scenario {
+				t.Helper()
+				f := newStackedFixture(t, p.Repo, p.Store, testAt)
+				childTip := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
+				parentTip := advanceParent(t, p.Repo, f)
+				*p.Obs = baseObservation(f, parentTip)
+				return scenario{ticketURL: f.child.URL, branch: "child", originalTip: childTip,
+					command: []string{"sh", "-c", "echo 'undefined: dup' >&2; exit 1"}, detail: "undefined: dup",
+					mergedFile: filepath.Join(f.childWorktree, "child.txt"), needle: "child's own work", wantCount: 1}
+			},
+		},
+		{
+			name: "clean merge with duplicate declaration fails go vet",
+			setup: func(t *testing.T, p *pushFixture) scenario {
+				t.Helper()
+				root, repoPath := p.root, p.Repo
+				gittest.Commit(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
+				gittest.Commit(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
+				gittest.Run(t, repoPath, "push", "-q", "origin", "main")
+				f := newStackedFixture(t, repoPath, p.Store, testAt)
+				gittest.Commit(t, f.parentWorktree, "helpers.go", "package fixture\n\nfunc Base() {}\n\nfunc Dup() {}\n")
+				gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
+				advanceMain(t, root, "helpers.go", "package fixture\n\nfunc Dup() {}\n\nfunc Base() {}\n")
+				gittest.Run(t, repoPath, "fetch", "-q", "origin", "main")
+				mainTip := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/main")
+				*p.Obs = baseObservation(f, f.parentTip0)
+				p.Obs.BranchTips[branchRef("repo", "main")] = plan.SHA(mainTip)
+				goBinary, err := exec.LookPath("go")
+				if err != nil {
+					t.Fatalf("LookPath go: %v", err)
+				}
+				return scenario{ticketURL: f.parent.URL, branch: "parent",
+					originalTip: gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent"),
+					command:     []string{goBinary, "vet", "./..."}, detail: "Dup redeclared",
+					mergedFile: filepath.Join(f.parentWorktree, "helpers.go"), needle: "func Dup()", wantCount: 2}
+			},
+		},
 	}
-
-	remoteChildTip := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/child")
-	if remoteChildTip != childTip0 {
-		t.Errorf("remote child tip = %s, want unchanged %s: a failed verification must not push", remoteChildTip, childTip0)
-	}
-
-	server := openServer(store, clock, "")
-	page := renderPage(t, server)
-	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
-		t.Fatalf("child's state = %q, want verification_failed", state)
-	}
-	for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
-		if !strings.Contains(page, `value="`+string(verb)+`"`) {
-			t.Errorf("page does not offer %s:\n%s", verb, page)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			p := newPushFixture(t)
+			s := tt.setup(t, p)
+			cfg, ws := testConfigAndWorkspace(t, p.root, 0, nil)
+			p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: s.command}
+			p.cfg, p.ws = cfg, ws
+			p.reset(testAt.Add(time.Minute), runner.ProcessRunner{})
+			p.tick(t)
+			merged, err := os.ReadFile(s.mergedFile)
+			if err != nil {
+				t.Fatalf("ReadFile %s: %v", s.mergedFile, err)
+			}
+			if got := strings.Count(string(merged), s.needle); got != s.wantCount {
+				t.Errorf("merged file %s contains %q %d times, want %d", s.mergedFile, s.needle, got, s.wantCount)
+			}
+			events := p.events(t, "verification_failed")
+			if len(events) != 1 || events[0].TicketURL != s.ticketURL ||
+				!strings.Contains(events[0].Detail, s.detail) ||
+				!strings.Contains(events[0].Detail, strings.Join(s.command[:2], " ")) {
+				t.Errorf("events = %+v, want verification_failed for %s naming %s", events, s.ticketURL, s.detail)
+			}
+			for _, event := range p.events(t, "pushed") {
+				if event.TicketURL == s.ticketURL {
+					t.Errorf("pushed event = %+v, want none for %s", event, s.ticketURL)
+				}
+			}
+			remoteTip := gittest.Run(t, filepath.Join(p.root, "remote.git"), "rev-parse", "refs/heads/"+s.branch)
+			if remoteTip != s.originalTip {
+				t.Errorf("remote %s tip = %s, want unchanged %s", s.branch, remoteTip, s.originalTip)
+			}
+			page := renderPage(t, openServer(p.Store, fixedClock(testAt.Add(time.Minute)), ""))
+			if state := rowState(t, page, s.ticketURL); state != "verification_failed" {
+				t.Errorf("row state = %q, want verification_failed", state)
+			}
+			for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
+				if !strings.Contains(page, `value="`+string(verb)+`"`) {
+					t.Errorf("page does not offer %s:\n%s", verb, page)
+				}
+			}
+		})
 	}
 }
 
@@ -66,7 +115,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
 	root, repoPath, store := p.root, p.Repo, p.Store
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -98,7 +147,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
 	root, repoPath, store := p.root, p.Repo, p.Store
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -131,7 +180,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
 	root, repoPath, store := p.root, p.Repo, p.Store
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -175,70 +224,5 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	}
 	if factsAfter[plan.TicketURL(f.child.URL)].VerificationFailed {
 		t.Errorf("refresh facts = %+v, want the latch cleared by the push", factsAfter)
-	}
-}
-
-func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testing.T) {
-	t.Parallel()
-	p := newPushFixture(t)
-	root, repoPath := p.root, p.Repo
-	gittest.Commit(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
-	gittest.Commit(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
-	gittest.Run(t, repoPath, "push", "-q", "origin", "main")
-
-	store := p.Store
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	f := newStackedFixture(t, repoPath, store, at)
-
-	// The parent's own PR adds Dup at the bottom of the file.
-	gittest.Commit(t, f.parentWorktree, "helpers.go", "package fixture\n\nfunc Base() {}\n\nfunc Dup() {}\n")
-	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
-
-	// Main independently advanced (another PR squash-merged) with the same helper inserted at the
-	// top: a disjoint line range from the parent's own change, so the merge below has no conflict.
-	advanceMain(t, root, "helpers.go", "package fixture\n\nfunc Dup() {}\n\nfunc Base() {}\n")
-	gittest.Run(t, repoPath, "fetch", "-q", "origin", "main")
-	mainTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/main")
-
-	remoteParentTip0 := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent")
-
-	*p.Obs = baseObservation(f, f.parentTip0)
-	p.Obs.BranchTips[branchRef("repo", "main")] = plan.SHA(mainTip1)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	goBinary, err := exec.LookPath("go")
-	if err != nil {
-		t.Fatalf("LookPath go: %v", err)
-	}
-	vet := []string{goBinary, "vet", "./..."}
-	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: vet}
-	clock := fixedClock(at.Add(time.Minute))
-	p.cfg, p.ws = cfg, ws
-	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
-
-	merged, err := os.ReadFile(filepath.Join(f.parentWorktree, "helpers.go"))
-	if err != nil {
-		t.Fatalf("ReadFile merged helpers: %v", err)
-	}
-	if strings.Count(string(merged), "func Dup()") != 2 {
-		t.Fatalf("merged helpers.go = %q, want Dup declared twice: the merge must produce "+
-			"#85's clean-but-broken result", merged)
-	}
-
-	events := p.events(t, "verification_failed")
-	if len(events) != 1 || events[0].TicketURL != f.parent.URL || !strings.Contains(events[0].Detail, "Dup redeclared") {
-		t.Errorf("events = %+v, want a verification_failed event naming go vet's redeclaration error", events)
-	}
-
-	remoteParentTip1 := gittest.Run(t, filepath.Join(root, "remote.git"), "rev-parse", "refs/heads/parent")
-	if remoteParentTip1 != remoteParentTip0 {
-		t.Errorf("remote parent tip = %s, want unchanged %s: a failed verification must not push",
-			remoteParentTip1, remoteParentTip0)
-	}
-
-	server := openServer(store, clock, "")
-	if state := rowState(t, renderPage(t, server), f.parent.URL); state != "verification_failed" {
-		t.Fatalf("parent's state = %q, want verification_failed", state)
 	}
 }

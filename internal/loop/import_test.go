@@ -54,7 +54,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
 		t.Fatal(err)
 	}
@@ -95,150 +95,88 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	}
 }
 
-func TestLoopRecordsAnImportRefusalWithoutHaltingTheTick(t *testing.T) {
+func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	contested := "https://github.com/acme/alpha/issues/1"
-	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: contested, Number: 1, Title: "Add x"}, Repo: "alpha"}}
-	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
-		t.Fatalf("seed ImportTickets: %v", err)
-	}
-
-	if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
-		t.Fatal(err)
-	}
-	src := fakeTrackerSource{
-		features: []tracker.Feature{"project:y"},
-		tickets: map[string][]tracker.Ticket{
-			"project:y": {{URL: contested, Number: 1, Title: "Add x"}},
+	const outsider = "https://github.com/acme/alpha/issues/1"
+	tests := []struct {
+		name       string
+		imported   tracker.Ticket
+		refusedURL string
+	}{
+		{
+			name:       "ticket already belongs to another feature",
+			imported:   tracker.Ticket{URL: outsider, Number: 1, Title: "Add x"},
+			refusedURL: outsider,
+		},
+		{
+			name: "blocker belongs to another feature", imported: tracker.Ticket{
+				URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Add y", BlockedBy: []string{outsider},
+			},
+			refusedURL: "https://github.com/acme/alpha/issues/2",
 		},
 	}
-	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-	cfg := config.Config{}
-
-	lp := newLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
-	)
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
-	}
-
-	tickets, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tickets) != 1 || tickets[0].Feature != "project:x" {
-		t.Fatalf("tickets = %+v, want the contested ticket to stay under project:x", tickets)
-	}
-
-	pending, err := store.PendingVerbIntents(ctx, "import")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("pending import intents = %+v, want the refused one consumed rather than retried", pending)
-	}
-
-	lastErr, failed, err := store.LastImportError(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, contested) {
-		t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, contested)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, e := range events {
-		if e.Kind == "import_refused" && e.TicketURL == contested {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("events = %+v, want an import_refused event against %s", events, contested)
-	}
-}
-
-func TestLoopRecordsAClosureRefusalWithoutHaltingTheTick(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	outsider := "https://github.com/acme/alpha/issues/1"
-	outsiderSeed := []storepkg.ImportedTicket{{
-		Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
-	}}
-	if err := store.ImportTickets(ctx, "project:x", outsiderSeed, at); err != nil {
-		t.Fatalf("seed ImportTickets: %v", err)
-	}
-
-	blocked := "https://github.com/acme/alpha/issues/2"
-	if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
-		t.Fatal(err)
-	}
-	src := fakeTrackerSource{
-		features: []tracker.Feature{"project:y"},
-		tickets: map[string][]tracker.Ticket{
-			"project:y": {{URL: blocked, Number: 2, Title: "Add y", BlockedBy: []string{outsider}}},
-		},
-	}
-	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-	cfg := config.Config{}
-
-	lp := newLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Hour)), cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
-	)
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
-	}
-
-	tickets, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tickets) != 1 || tickets[0].URL != outsider {
-		t.Fatalf("tickets = %+v, want only the outsider, project:y rolled back whole", tickets)
-	}
-
-	pending, err := store.PendingVerbIntents(ctx, "import")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("pending import intents = %+v, want the refused one consumed rather than retried", pending)
-	}
-
-	lastErr, failed, err := store.LastImportError(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, blocked) {
-		t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, blocked)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, e := range events {
-		if e.Kind == "import_refused" && strings.Contains(e.Detail, blocked) {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("events = %+v, want an import_refused event naming %s", events, blocked)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			store := openStore(t)
+			at := testAt
+			seed := []storepkg.ImportedTicket{{
+				Ticket: tracker.Ticket{URL: outsider, Number: 1, Title: "Outsider"}, Repo: "alpha",
+			}}
+			if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
+				t.Fatalf("seed ImportTickets: %v", err)
+			}
+			if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
+				t.Fatal(err)
+			}
+			src := fakeTrackerSource{
+				features: []tracker.Feature{"project:y"},
+				tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
+			}
+			trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
+			lp := newLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)),
+				config.Config{}, config.Workspace{}, runner.ProcessRunner{},
+				loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})))
+			if err := lp.RunOnce(ctx); err != nil {
+				t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
+			}
+			tickets, err := store.Tickets(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tickets) != 1 || tickets[0].URL != outsider || tickets[0].Feature != "project:x" {
+				t.Errorf("tickets = %+v, want only the outsider under project:x", tickets)
+			}
+			pending, err := store.PendingVerbIntents(ctx, "import")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pending) != 0 {
+				t.Errorf("pending import intents = %+v, want the refused one consumed", pending)
+			}
+			lastErr, failed, err := store.LastImportError(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, tt.refusedURL) {
+				t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, tt.refusedURL)
+			}
+			events, err := store.Events(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, e := range events {
+				if e.Kind == "import_refused" && (e.TicketURL == tt.refusedURL || strings.Contains(e.Detail, tt.refusedURL)) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("events = %+v, want import_refused naming %s", events, tt.refusedURL)
+			}
+		})
 	}
 }
 
@@ -247,7 +185,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
 		t.Fatal(err)
 	}

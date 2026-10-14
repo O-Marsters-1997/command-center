@@ -49,7 +49,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 			root, repoPath := repoWithOrigin(t)
 			forge := &recordingForge{}
 			store := openStore(t)
-			at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+			at := testAt
 
 			f := newStackedFixture(t, repoPath, store, at)
 			childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
@@ -106,7 +106,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	mergeParentIntoMain(t, repoPath)
@@ -144,7 +144,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	mergeParentIntoMain(t, repoPath)
@@ -185,7 +185,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	mergeParentIntoMain(t, repoPath)
@@ -235,7 +235,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	prs := map[plan.BranchRef]plan.PR{
 		branchRef("repo", "parent"): {Number: 1, State: plan.Merged, BaseRef: "main"},
@@ -323,7 +323,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
@@ -405,7 +405,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
@@ -468,7 +468,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	gittest.Commit(t, f.parentWorktree, "parent.txt", "the parent's reworked take\n")
@@ -507,7 +507,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	remoteBefore := gittest.Run(t, repoPath, "rev-parse", "origin/child")
@@ -542,7 +542,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")
@@ -613,7 +613,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	gittest.Commit(t, f.childWorktree, "parent.txt", "the child's rewrite\n")

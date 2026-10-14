@@ -16,7 +16,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	t.Parallel()
 	f := newPushFixture(t)
 	if err := f.Store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "fix the flaky assertion in TestThing", At: testAt,
+		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
 	}); err != nil {
 		t.Fatalf("QueueVerbIntentWithPayload: %v", err)
 	}
@@ -34,17 +34,9 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	if spawned.SystemPromptPath != "" {
 		t.Errorf("system prompt path = %q, want none: the single-shot warning is implement-only", spawned.SystemPromptPath)
 	}
-	if !strings.Contains(spawned.Prompt, "cc/skills/follow-up/SKILL.md") {
-		t.Errorf("prompt = %q, want it to reference the follow-up skill", spawned.Prompt)
-	}
-	if !strings.Contains(spawned.Prompt, "fix the flaky assertion in TestThing") {
+	assertPromptGolden(t, "testdata/prompt-follow-up-fresh.golden.txt", spawned.Prompt, f.ws.RunsDir)
+	if !strings.Contains(spawned.Prompt, "now fix the other test") {
 		t.Errorf("prompt = %q, want it to carry the typed instruction", spawned.Prompt)
-	}
-	if strings.Contains(spawned.Prompt, "/implement") {
-		t.Errorf("prompt = %q, want it never to compose the implement instruction", spawned.Prompt)
-	}
-	if strings.Contains(spawned.Prompt, "diff -u") || strings.HasPrefix(spawned.Prompt, "---") {
-		t.Errorf("prompt = %q, want no re-run diff preamble", spawned.Prompt)
 	}
 
 	latest, err := f.Store.LatestRunsByTicket(t.Context())
