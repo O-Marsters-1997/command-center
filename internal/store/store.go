@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
@@ -31,6 +32,11 @@ const (
 	pingTimeout      = 5 * time.Second
 	statementTimeout = 30 * time.Second
 )
+
+func isUniqueViolation(err error, constraint string) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && pgErr.Code == "23505" && pgErr.ConstraintName == constraint
+}
 
 type Store struct {
 	db *sql.DB

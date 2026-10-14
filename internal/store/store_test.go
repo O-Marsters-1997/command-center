@@ -2,8 +2,12 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
 	"net/url"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -46,6 +50,24 @@ func gooseVersion(t *testing.T, dsn string) int64 {
 	return v
 }
 
+func latestMigration(t *testing.T) int64 {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join("migrations", "*.sql"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("list migrations: %v (found %d)", err, len(paths))
+	}
+	var latest int64
+	for _, path := range paths {
+		prefix, _, _ := strings.Cut(filepath.Base(path), "_")
+		version, err := strconv.ParseInt(prefix, 10, 64)
+		if err != nil {
+			t.Fatalf("migration %s has no numeric prefix: %v", path, err)
+		}
+		latest = max(latest, version)
+	}
+	return latest
+}
+
 func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	t.Parallel()
 
@@ -56,8 +78,8 @@ func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("an empty database did not get the full schema: %v", err)
 	}
-	if got := gooseVersion(t, dsn); got != 19 {
-		t.Errorf("goose version = %d, want 19", got)
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Errorf("goose version = %d, want the latest migration %d", got, want)
 	}
 }
 
@@ -69,8 +91,8 @@ func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
 	if err == nil {
 		t.Fatal("OpenStore on a dead address succeeded")
 	}
-	if !strings.Contains(err.Error(), "ping database") {
-		t.Errorf("OpenStore error = %q, want it to name the ping step", err)
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		t.Errorf("OpenStore error = %v, want the refused connection from the ping", err)
 	}
 	if elapsed := time.Since(start); elapsed > 6*time.Second {
 		t.Errorf("OpenStore took %v, want under the 5s ping timeout", elapsed)
@@ -129,6 +151,7 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 
 	dsn := cctest.DSN(t)
 	first := openStoreAt(t, dsn)
+	applied := gooseVersion(t, dsn)
 	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
@@ -139,6 +162,9 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	}
 
 	second := openStoreAt(t, dsn)
+	if got := gooseVersion(t, dsn); got != applied {
+		t.Errorf("goose version = %d after the second open, want %d unchanged", got, applied)
+	}
 	tickets, err := second.Tickets(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -146,8 +172,8 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
 	}
-	if got := gooseVersion(t, dsn); got != 19 {
-		t.Errorf("goose version = %d, want 19", got)
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Errorf("goose version = %d after the second open, want the latest migration %d", got, want)
 	}
 }
 
