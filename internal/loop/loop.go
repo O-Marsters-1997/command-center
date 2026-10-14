@@ -673,7 +673,10 @@ func (l *Loop) cutAndSpawn(
 
 	if err := l.worktrees.New(ctx, repoPath, branch, "origin/"+baseBranch); err != nil {
 		if _, insertErr := l.store.InsertCutFailedRun(ctx, ticket.URL, promptHash, l.clock.Now()); insertErr != nil {
-			return fmt.Errorf("record failed cut of %s: %w", branch, errors.Join(err, insertErr))
+			return errors.Join(
+				fmt.Errorf("cut %s: %w", branch, err),
+				fmt.Errorf("record failed cut of %s: %w", branch, insertErr),
+			)
 		}
 		return l.event(ctx, ticket.URL, store.EventCutFailed, err.Error())
 	}
@@ -783,7 +786,10 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		if dispositionErr := l.store.RecordDisposition(
 			ctx, runID, plan.Disposition(0), nil, l.clock.Now(), nil,
 		); dispositionErr != nil {
-			return fmt.Errorf("record disposition for failed spawn of run %d: %w", runID, errors.Join(err, dispositionErr))
+			return errors.Join(
+				fmt.Errorf("spawn run %d: %w", runID, err),
+				fmt.Errorf("record disposition for failed spawn of run %d: %w", runID, dispositionErr),
+			)
 		}
 		return l.event(ctx, ticket.URL, store.EventSpawnFailed, err.Error())
 	}

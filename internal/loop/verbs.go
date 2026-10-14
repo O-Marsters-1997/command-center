@@ -58,7 +58,7 @@ func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick) error {
 	return l.eachIntent(ctx, plan.VerbFollowUp, func(intent store.VerbIntent) error {
 		ticket, ok, err := l.ticket(ctx, intent.TicketID)
 		if err != nil {
-			return err
+			return fmt.Errorf("look up %s: %w", intent.TicketID, err)
 		}
 		if !ok {
 			return nil
@@ -148,7 +148,7 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tic
 	return l.eachIntent(ctx, plan.VerbReRun, func(intent store.VerbIntent) error {
 		ticket, ok, err := l.ticket(ctx, intent.TicketID)
 		if err != nil {
-			return err
+			return fmt.Errorf("look up %s: %w", intent.TicketID, err)
 		}
 		if !ok {
 			return nil
