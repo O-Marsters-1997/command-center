@@ -89,7 +89,7 @@ func (s *Server) followLog(
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("follow run log: %w", ctx.Err())
 		case <-time.After(logPollInterval):
 		}
 		if path, ended, err = s.store.LatestRunLog(ctx, ticketURL); err != nil {
@@ -119,9 +119,11 @@ func writeEnd(w io.Writer, flusher *http.ResponseController) error {
 
 func flushStream(flusher *http.ResponseController) error {
 	err := flusher.Flush()
-	switch {
-	case err == nil, errors.Is(err, http.ErrNotSupported):
-		return err
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, http.ErrNotSupported) {
+		return fmt.Errorf("flush stream: %w", err)
 	}
 	return fmt.Errorf("%w: %w", errClientGone, err)
 }

@@ -34,5 +34,8 @@ func (l *Flock) Close() error {
 	if err := syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN); err != nil {
 		return errors.Join(fmt.Errorf("release flock: %w", err), l.f.Close())
 	}
-	return l.f.Close()
+	if err := l.f.Close(); err != nil {
+		return fmt.Errorf("close lock file: %w", err)
+	}
+	return nil
 }

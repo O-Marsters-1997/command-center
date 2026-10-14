@@ -21,6 +21,7 @@ linters:
     - tparallel # t.Parallel() used consistently between a test and its subtests
     - usetesting # t.Context(), t.TempDir(), t.Setenv() over manual equivalents
     - forbidigo # bans reflect.DeepEqual and time.Sleep in tests
+    - wrapcheck # errors from other packages are wrapped with context
     - depguard # plan stays pure, only store reaches ccdb, no testify
   settings:
     lll:
@@ -72,6 +73,12 @@ linters:
               desc: compare with == and slices.Equal, and match errors with errors.Is/As
   exclusions:
     rules:
+      - path: ^internal/store/ccdb/
+        linters:
+          - wrapcheck
+      - path: _test\.go
+        linters:
+          - wrapcheck
       - path-except: _test\.go
         text: reflect\.DeepEqual|time\.Sleep|Error\b
         linters:

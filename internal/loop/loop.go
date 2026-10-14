@@ -731,14 +731,10 @@ func (spec spawnSpec) session() store.RunSession {
 	}
 }
 
-func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64, sessionID string, err error) {
-	return l.store.InsertSessionRunSkeleton(
-		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
-}
-
 func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
-	runID, sessionID, err := l.insertSkeleton(ctx, spec)
+	runID, sessionID, err := l.store.InsertSessionRunSkeleton(
+		ctx, ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 	if err != nil {
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}
