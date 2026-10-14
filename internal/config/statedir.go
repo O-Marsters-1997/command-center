@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,9 @@ func ResolveDataDir(configured string, env Env) (string, error) {
 		dir = env.DataDir
 	}
 	if dir == "" {
+		if env.UserConfigDir == "" {
+			return "", errors.New("resolve data dir: no data_dir, CC_DATA_DIR or user config dir")
+		}
 		dir = filepath.Join(env.UserConfigDir, "command-centre")
 	}
 	dir, err := expandHome(dir, env.Home)

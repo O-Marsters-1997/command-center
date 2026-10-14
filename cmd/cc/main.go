@@ -40,7 +40,6 @@ func main() {
 	}
 	if err := cmd(ctx, logger, *configPath, env); err != nil {
 		logger.Error("cc exited", "err", err)
-		stop()
 		os.Exit(1)
 	}
 }

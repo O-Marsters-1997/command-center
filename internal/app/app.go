@@ -74,11 +74,7 @@ func New(
 		return nil, err
 	}
 	var webOpts []web.Option
-	if env.TZ != "" {
-		loc, err := time.LoadLocation(env.TZ)
-		if err != nil {
-			return nil, fmt.Errorf("load TZ %q: %w", env.TZ, err)
-		}
+	if loc, err := time.LoadLocation(env.TZ); env.TZ != "" && err == nil {
 		webOpts = append(webOpts, web.WithLocation(loc))
 	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
