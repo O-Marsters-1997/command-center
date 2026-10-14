@@ -85,7 +85,7 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 		var intended []ticketBlockedBy
 		intended, err = featureTicketsWithOverride(ctx, qtx, feature, ticketURL, blockedBy)
 		if err != nil {
-			return err
+			return fmt.Errorf("read feature tickets for %s: %w", ticketURL, err)
 		}
 		var obs plan.Observation
 		obs, _, err = s.LastObservation(ctx)
@@ -97,7 +97,7 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 			feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("check feature closure for %s: %w", ticketURL, err)
 		}
 		if violation != nil {
 			return violation
@@ -112,5 +112,8 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 	if err = qtx.EditTicket(ctx, ccdb.EditTicketParams{Branch: branch, BlockedBy: blob, URL: ticketURL}); err != nil {
 		return fmt.Errorf("edit ticket %s: %w", ticketURL, err)
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit edit of ticket %s: %w", ticketURL, err)
+	}
+	return nil
 }

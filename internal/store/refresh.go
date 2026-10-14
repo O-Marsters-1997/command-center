@@ -13,7 +13,7 @@ import (
 func (s *Store) RefreshFacts(ctx context.Context) (map[string]plan.RefreshFact, error) {
 	outcomes, err := s.LatestRefreshOutcomes(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read latest refresh outcomes: %w", err)
 	}
 	facts := make(map[string]plan.RefreshFact, len(outcomes))
 	for ticketID, o := range outcomes {

@@ -54,7 +54,10 @@ func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
 }
 
 func (s *Store) UpsertRepo(ctx context.Context, r Repo) error {
-	return upsertRepo(ctx, s.q, r)
+	if err := upsertRepo(ctx, s.q, r); err != nil {
+		return fmt.Errorf("upsert repo %s: %w", r.Name, err)
+	}
+	return nil
 }
 
 func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
@@ -87,17 +90,23 @@ func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 // queued.
 func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time) (bool, error) {
 	pending, err := s.TrackPending(ctx, repo)
-	if err != nil || pending {
-		return false, err
+	if err != nil {
+		return false, fmt.Errorf("check pending track for %s: %w", repo, err)
 	}
-	return true, s.QueueVerbIntent(ctx, repo, plan.VerbTrack, at)
+	if pending {
+		return false, nil
+	}
+	if err := s.QueueVerbIntent(ctx, repo, plan.VerbTrack, at); err != nil {
+		return false, fmt.Errorf("queue track for %s: %w", repo, err)
+	}
+	return true, nil
 }
 
 // TrackPending reports whether a Track for repo, ignoring case, has been queued and not yet applied.
 func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
 	intents, err := s.PendingVerbIntents(ctx, plan.VerbTrack)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("select pending track intents: %w", err)
 	}
 	return slices.ContainsFunc(intents, func(i VerbIntent) bool { return strings.EqualFold(i.TicketID, repo) }), nil
 }

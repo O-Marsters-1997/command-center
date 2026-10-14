@@ -18,7 +18,10 @@ func (s *Store) InsertRunSkeleton(
 	ctx context.Context, ticketID string, kind plan.RunKind, baselineSHA, promptHash string,
 ) (int64, error) {
 	id, _, err := s.InsertSessionRunSkeleton(ctx, ticketID, kind, baselineSHA, promptHash, RunSession{})
-	return id, err
+	if err != nil {
+		return 0, fmt.Errorf("insert run skeleton for %s: %w", ticketID, err)
+	}
+	return id, nil
 }
 
 type RunSession struct {
