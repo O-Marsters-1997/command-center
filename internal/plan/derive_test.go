@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -87,7 +88,7 @@ func TestDeriveConflictedBase(t *testing.T) {
 }
 
 func pushedRun() plan.RunSummary {
-	return plan.RunSummary{HasOutcome: true, Outcome: plan.OutcomePush, LogPath: "run.log"}
+	return plan.RunSummary{Outcome: option.Some(plan.OutcomePush), LogPath: "run.log"}
 }
 
 func peerConflicts(pairs ...[2]string) map[string]map[string]bool {
@@ -165,8 +166,8 @@ func TestDeriveConflictingPeer(t *testing.T) {
 
 			got := map[string]string{}
 			for _, tk := range tt.tickets {
-				if e := entry(t, snap, tk.URL); e.Run != nil && e.Run.ConflictingPeer != "" {
-					got[tk.URL] = e.Run.ConflictingPeer
+				if e := entry(t, snap, tk.URL); e.Run.IsSome() && e.Run.Unwrap().ConflictingPeer != "" {
+					got[tk.URL] = e.Run.Unwrap().ConflictingPeer
 				}
 			}
 			if len(got) != len(tt.want) {
@@ -199,11 +200,11 @@ func TestDeriveChainDoesNotSerialisePastTheHoldingPeer(t *testing.T) {
 	}
 	snap := derive(plan.Rules{}, in)
 
-	if got := entry(t, snap, b.URL).Run.ConflictingPeer; got != a.Branch {
+	if got := entry(t, snap, b.URL).Run.Unwrap().ConflictingPeer; got != a.Branch {
 		t.Errorf("b held by %q, want %q", got, a.Branch)
 	}
 	for _, free := range []plan.Ticket{a, c} {
-		if got := entry(t, snap, free.URL).Run.ConflictingPeer; got != "" {
+		if got := entry(t, snap, free.URL).Run.UnwrapOr(plan.RunFact{}).ConflictingPeer; got != "" {
 			t.Errorf("%s held by %q, want unheld", free.Branch, got)
 		}
 	}

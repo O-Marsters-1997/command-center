@@ -21,6 +21,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -318,7 +319,7 @@ func (s *Server) handleFeatureLaunch(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return fmt.Errorf("load feature modal: %w", err)
 	}
-	board.Launch = &modal
+	board.Launch = option.Some(modal)
 	return renderHTML(w, "feature.tmpl", board)
 }
 

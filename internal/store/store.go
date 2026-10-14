@@ -13,6 +13,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
 	"github.com/pressly/goose/v3"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -460,13 +461,16 @@ func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 }
 
 // LastError returns the last tick failure. A later success does not clear it.
-func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
+func (s *Store) LastError(ctx context.Context) (option.Option[TickError], error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
 	if err != nil {
-		return tickErr, found, fmt.Errorf("read %s meta: %w", metaLastError, err)
+		return option.None[TickError](), fmt.Errorf("read %s meta: %w", metaLastError, err)
 	}
-	return tickErr, found, nil
+	if !found {
+		return option.None[TickError](), nil
+	}
+	return option.Some(tickErr), nil
 }
 
 // ImportError is the last feature-conflict import refusal.

@@ -80,11 +80,11 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 }
 
 func (l *Loop) recordTickError(ctx context.Context, message string) error {
-	last, found, err := l.store.LastError(ctx)
+	last, err := l.store.LastError(ctx)
 	if err != nil {
 		return fmt.Errorf("last tick error: %w", err)
 	}
-	if found && last.Message == message {
+	if last.IsSome() && last.Unwrap().Message == message {
 		return nil
 	}
 	if err := l.store.RecordTickError(ctx, store.TickError{At: l.clock.Now(), Message: message}); err != nil {

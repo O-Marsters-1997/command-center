@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
 func TestParseMetrics(t *testing.T) {
@@ -22,8 +23,7 @@ func TestParseMetrics(t *testing.T) {
 			name:    "a settled run reads cost off the result line",
 			fixture: "run27.jsonl",
 			want: agentlog.RunMetrics{
-				CostUSD: &cost,
-				Settled: true,
+				CostUSD: option.Some(cost),
 				Requests: []agentlog.Request{
 					{InputTokens: 2, CacheCreationTokens: 28560, CacheReadTokens: 24902, OutputTokens: 6},
 					{InputTokens: 2, CacheCreationTokens: 138, CacheReadTokens: 125101, OutputTokens: 8},
@@ -33,7 +33,7 @@ func TestParseMetrics(t *testing.T) {
 			},
 		},
 		{
-			name:    "a run with no result line keeps its requests and stays unsettled",
+			name:    "a run with no result line keeps its requests and has no cost",
 			fixture: "alive.jsonl",
 			want: agentlog.RunMetrics{
 				Requests: []agentlog.Request{
@@ -44,10 +44,9 @@ func TestParseMetrics(t *testing.T) {
 			},
 		},
 		{
-			name:    "a dialect that emits no cost settles with CostUSD nil, not zero",
+			name:    "a dialect that emits no cost has no CostUSD, not zero",
 			fixture: "no_cost.jsonl",
 			want: agentlog.RunMetrics{
-				Settled:  true,
 				Requests: []agentlog.Request{{OutputTokens: 3}},
 			},
 		},
@@ -131,19 +130,10 @@ func TestParseMetricsRejectsUnusableLogs(t *testing.T) {
 func assertMetrics(t *testing.T, got, want agentlog.RunMetrics) {
 	t.Helper()
 
-	if got.Settled != want.Settled {
-		t.Errorf("Settled = %v; want %v", got.Settled, want.Settled)
-	}
 	if !slices.Equal(got.Requests, want.Requests) || (got.Requests == nil) != (want.Requests == nil) {
 		t.Errorf("Requests = %+v; want %+v", got.Requests, want.Requests)
 	}
-	gotCost, wantCost := got.CostUSD, want.CostUSD
-	switch {
-	case wantCost == nil && gotCost != nil:
-		t.Errorf("CostUSD = %v; want nil", *gotCost)
-	case wantCost != nil && gotCost == nil:
-		t.Errorf("CostUSD = nil; want %v", *wantCost)
-	case wantCost != nil && gotCost != nil && *gotCost != *wantCost:
-		t.Errorf("CostUSD = %v; want %v", *gotCost, *wantCost)
+	if got.CostUSD != want.CostUSD {
+		t.Errorf("CostUSD = %v; want %v", got.CostUSD, want.CostUSD)
 	}
 }

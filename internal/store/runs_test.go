@@ -9,8 +9,8 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -86,7 +86,7 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 	if !ok {
 		t.Fatal("LatestRunsByTicket has no entry for sandbox://CC-1")
 	}
-	if summary.LogPath != "/state/runs/1.jsonl" || summary.HasOutcome {
+	if summary.LogPath != "/state/runs/1.jsonl" || summary.Outcome.IsSome() {
 		t.Errorf("summary = %+v, want the log path set and no outcome yet", summary)
 	}
 }
@@ -109,7 +109,9 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 
 	endedAt := startedAt.Add(30 * time.Second)
 	exitCode := 0
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, &exitCode, endedAt, nil); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomeFailed, option.Some(exitCode), endedAt, option.None[float64](),
+	); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -126,13 +128,13 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary := latest["sandbox://CC-1"]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomeFailed {
+	if summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Errorf("summary = %+v, want outcome failed", summary)
 	}
-	if summary.ExitCode == nil || *summary.ExitCode != 0 {
+	if summary.ExitCode != option.Some(0) {
 		t.Errorf("exit code = %v, want 0", summary.ExitCode)
 	}
-	if summary.EndedAt == nil || !summary.EndedAt.Equal(endedAt) {
+	if summary.EndedAt.IsNone() || !summary.EndedAt.Unwrap().Equal(endedAt) {
 		t.Errorf("ended_at = %v, want %s", summary.EndedAt, endedAt)
 	}
 }
@@ -155,12 +157,11 @@ func TestRecordDispositionWritesCostAlongsideOutcome(t *testing.T) {
 	}
 
 	cost := 0.42
-	metrics := agentlog.RunMetrics{
-		CostUSD: &cost, Settled: true,
-	}
 	exitCode := 0
 	endedAt := startedAt.Add(30 * time.Second)
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomePush, &exitCode, endedAt, &metrics); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomePush, option.Some(exitCode), endedAt, option.Some(cost),
+	); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -182,7 +183,9 @@ func TestRecordDispositionLeavesCostNullWithoutAParse(t *testing.T) {
 		t.Fatal(err)
 	}
 	endedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	if err := store.RecordDisposition(ctx, runID, plan.OutcomeFailed, nil, endedAt, nil); err != nil {
+	if err := store.RecordDisposition(
+		ctx, runID, plan.OutcomeFailed, option.None[int](), endedAt, option.None[float64](),
+	); err != nil {
 		t.Fatalf("RecordDisposition: %v", err)
 	}
 
@@ -216,7 +219,7 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 		t.Fatal(err)
 	}
 	summary := latest["sandbox://CC-1"]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomeCutFailed || summary.Pgid != nil {
+	if summary.Outcome != option.Some(plan.OutcomeCutFailed) || summary.Pgid.IsSome() {
 		t.Errorf("summary = %+v, want cut_failed with no pgid", summary)
 	}
 }

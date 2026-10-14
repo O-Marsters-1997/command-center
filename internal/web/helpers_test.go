@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -44,7 +45,9 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 		t.Fatal(err)
 	}
 	exitCode := 0
-	if err := st.RecordDisposition(t.Context(), runID, plan.OutcomePush, &exitCode, at, nil); err != nil {
+	if err := st.RecordDisposition(
+		t.Context(), runID, plan.OutcomePush, option.Some(exitCode), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -191,10 +191,11 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Errorf("prs = %+v, want the previous observation intact", after.PRs)
 	}
 
-	tickErr, found, err := store.LastError(ctx)
-	if err != nil || !found {
-		t.Fatalf("LastError: found=%v err=%v", found, err)
+	last, err := store.LastError(ctx)
+	if err != nil || last.IsNone() {
+		t.Fatalf("LastError: last=%v err=%v", last, err)
 	}
+	tickErr := last.Unwrap()
 	if !tickErr.At.Equal(bad) {
 		t.Errorf("error at = %s, want %s", tickErr.At, bad)
 	}

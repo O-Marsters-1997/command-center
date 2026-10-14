@@ -70,9 +70,9 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 	if merges.Phase != plan.RepoRefused || merges.RefusalKind != plan.RefusalMergeSettings {
 		t.Errorf("acme/merges = %+v, want refused(merge_settings)", merges)
 	}
-	lastErr, found, err := st.LastError(t.Context())
-	if err != nil || !found || !strings.Contains(lastErr.Message, "acme/merges") {
-		t.Errorf("last error = %+v (found %v, err %v), want one naming acme/merges", lastErr, found, err)
+	lastErr, err := st.LastError(t.Context())
+	if err != nil || lastErr.IsNone() || !strings.Contains(lastErr.Unwrap().Message, "acme/merges") {
+		t.Errorf("last error = %v (err %v), want one naming acme/merges", lastErr, err)
 	}
 }
 

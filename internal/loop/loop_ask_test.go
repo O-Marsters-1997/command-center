@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -56,7 +57,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 		t.Fatal(err)
 	}
 	summary := latest[ticket.URL]
-	if !summary.HasOutcome || summary.Outcome != plan.OutcomeAsked {
+	if summary.Outcome != option.Some(plan.OutcomeAsked) {
 		t.Fatalf("summary = %+v, want asked", summary)
 	}
 	if !strings.HasPrefix(summary.Question, "Which database?\n") || len(summary.Question) != 4096 {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
@@ -154,11 +155,9 @@ const (
 )
 
 // RunFact is the latest run's liveness and disposition as the loop observed it this tick.
-// HasOutcome distinguishes "not yet disposed" from a genuine zero-value Outcome.
 type RunFact struct {
 	Alive                    bool
-	Outcome                  Outcome
-	HasOutcome               bool
+	Outcome                  option.Option[Outcome]
 	LogPath                  string
 	PushRefused              bool
 	PushRefusedPath          string
@@ -166,7 +165,7 @@ type RunFact struct {
 	PROpen                   bool
 	PRMerged                 bool
 	PRClosedUnmerged         bool
-	Verdict                  *verdict.Result
+	Verdict                  option.Option[verdict.Result]
 	RefreshRefused           bool
 	RefreshRefusedReason     Reason
 	MidMerge                 bool
@@ -178,11 +177,11 @@ type RunFact struct {
 	Question                 string
 }
 
-// Facts is everything Status derives from. LatestRun is nil until a ticket's first launch.
+// Facts is everything Status derives from. LatestRun is None until a ticket's first launch.
 type Facts struct {
 	Unlock          Unlock
 	Authorised      bool
-	LatestRun       *RunFact
+	LatestRun       option.Option[RunFact]
 	CancelledMember bool
 	ConflictedBase  string
 }
@@ -191,10 +190,10 @@ type Facts struct {
 // disposition outrank the unlocked and authorised facts that mattered only before its first
 // launch.
 func Status(f Facts) (State, Reason) {
-	if f.LatestRun != nil && f.Unlock.BlockerClosed {
+	if f.LatestRun.IsSome() && f.Unlock.BlockerClosed {
 		return BaseGone, f.Unlock.Reason
 	}
-	if f.LatestRun != nil && f.LatestRun.PRMerged {
+	if f.LatestRun.IsSome() && f.LatestRun.Unwrap().PRMerged {
 		return PRMerged, "pull request merged"
 	}
 	if state, reason, ok := statusFromRun(f.LatestRun, f.Unlock); ok {
@@ -216,19 +215,20 @@ func Status(f Facts) (State, Reason) {
 	}
 }
 
-func statusFromRun(run *RunFact, unlock Unlock) (State, Reason, bool) {
-	if run == nil {
+func statusFromRun(latest option.Option[RunFact], unlock Unlock) (State, Reason, bool) {
+	if latest.IsNone() {
 		return 0, "", false
 	}
+	run := latest.Unwrap()
 	if run.Alive {
 		return Running, "agent running", true
 	}
-	if !run.HasOutcome {
+	if run.Outcome.IsNone() {
 		return 0, "", false
 	}
-	switch run.Outcome {
+	switch run.Outcome.Unwrap() {
 	case OutcomePush:
-		state, reason := statusFromPush(*run, unlock)
+		state, reason := statusFromPush(run, unlock)
 		return state, reason, true
 	case OutcomeAsked:
 		return AwaitingInput, firstLine(run.Question), true
@@ -266,11 +266,11 @@ func statusFromPush(run RunFact, unlock Unlock) (State, Reason) {
 		return PushFailed, "push or pull request creation failed"
 	case run.RefreshRefused:
 		return NeedsYou, run.RefreshRefusedReason
-	case run.Verdict != nil && run.Verdict.Kind != verdict.Checking:
-		return stateOfVerdict(*run.Verdict), Reason(run.Verdict.Reason)
+	case run.Verdict.IsSome() && run.Verdict.Unwrap().Kind != verdict.Checking:
+		return stateOfVerdict(run.Verdict.Unwrap()), Reason(run.Verdict.Unwrap().Reason)
 	case run.PROpen:
-		if run.Verdict != nil {
-			return Checking, Reason(run.Verdict.Reason)
+		if run.Verdict.IsSome() {
+			return Checking, Reason(run.Verdict.Unwrap().Reason)
 		}
 		return Checking, "pull request open, no verdict yet"
 	case !unlock.Unlocked && len(unlock.Blocking) > 0:

@@ -9,6 +9,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -21,10 +22,7 @@ func (l *Loop) applyRefreshIntents(ctx context.Context, snap plan.Snapshot, obs 
 		if !ok {
 			return nil
 		}
-		var row plan.PushRow
-		if e.LastPush != nil {
-			row = *e.LastPush
-		}
+		row := e.LastPush.UnwrapOr(plan.PushRow{})
 		if err := l.refreshOne(ctx, snap, obs, e.Ticket, row, true); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
@@ -49,20 +47,23 @@ func (l *Loop) autoRefresh(
 		if requested[t.URL] {
 			continue
 		}
-		if e.Run == nil || !e.Run.HasOutcome || e.Run.Outcome != plan.OutcomePush {
+		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
 			continue
 		}
 		if obs.PRs[plan.BranchKey(t.Repo, t.Branch)].State != plan.Open {
 			continue
 		}
-		pushRow := e.LastPush
-		if pushRow == nil || !baseMoved(*pushRow, obs, t.Repo) {
+		if e.LastPush.IsNone() {
 			continue
 		}
-		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, *pushRow, obs) {
+		pushRow := e.LastPush.Unwrap()
+		if !baseMoved(pushRow, obs, t.Repo) {
 			continue
 		}
-		if err := l.refreshOne(ctx, snap, obs, t, *pushRow, false); err != nil {
+		if o, tried := outcomes[t.URL]; tried && !supersededConflict(o, t, pushRow, obs) {
+			continue
+		}
+		if err := l.refreshOne(ctx, snap, obs, t, pushRow, false); err != nil {
 			return fmt.Errorf("%s/%s: %w", t.Repo, t.Branch, err)
 		}
 	}

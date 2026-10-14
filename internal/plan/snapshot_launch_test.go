@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -55,7 +56,7 @@ func TestSnapshotLaunch(t *testing.T) {
 			in: plan.Input{
 				Tickets:     []plan.Ticket{first},
 				Memberships: map[string]plan.LaunchMembership{first.URL: authorised(first)},
-				Runs:        map[string]plan.RunSummary{first.URL: {ID: 1, HasOutcome: true}},
+				Runs:        map[string]plan.RunSummary{first.URL: {ID: 1, Outcome: option.Some(plan.OutcomePush)}},
 			},
 		},
 		{
@@ -66,7 +67,7 @@ func TestSnapshotLaunch(t *testing.T) {
 				Memberships: map[string]plan.LaunchMembership{
 					second.URL: authorised(second), third.URL: authorised(third),
 				},
-				Runs: map[string]plan.RunSummary{first.URL: {ID: 1, Pgid: &live}},
+				Runs: map[string]plan.RunSummary{first.URL: {ID: 1, Pgid: option.Some(live)}},
 			},
 			want: []string{second.URL},
 		},
@@ -118,7 +119,7 @@ func TestEntryCarriesWhatTheLoopActsOn(t *testing.T) {
 	if got.PromptHash != member.PromptHash {
 		t.Errorf("PromptHash = %q, want %q", got.PromptHash, member.PromptHash)
 	}
-	if got.LastPush == nil || *got.LastPush != row {
+	if got.LastPush != option.Some(row) {
 		t.Errorf("LastPush = %v, want %v", got.LastPush, row)
 	}
 }

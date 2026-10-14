@@ -23,13 +23,17 @@ func TestNoImpureImports(t *testing.T) {
 	imports = append(imports, pkg.TestImports...)
 	imports = append(imports, pkg.XTestImports...)
 
+	allowed := []string{
+		"github.com/O-Marsters-1997/command-center/internal/agentlog",
+		"github.com/O-Marsters-1997/command-center/internal/option",
+	}
 	forbidden := []string{"os/exec", "database/sql", "net/http"}
 	for _, path := range imports {
 		if slices.Contains(forbidden, path) {
 			t.Errorf("internal/agentlog imports %q; this package is pure", path)
 		}
-		if !isStdlib(path) && path != "github.com/O-Marsters-1997/command-center/internal/agentlog" {
-			t.Errorf("internal/agentlog imports non-stdlib %q; only the standard library is allowed", path)
+		if !isStdlib(path) && !slices.Contains(allowed, path) {
+			t.Errorf("internal/agentlog imports %q; only the standard library and internal/option are allowed", path)
 		}
 	}
 }

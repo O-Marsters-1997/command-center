@@ -79,10 +79,12 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	if remoteHasBranch(t, root, "cc-1") {
 		t.Error("cc-1 was pushed although its repo's settings could not be read")
 	}
-	lastErr, found, err := store.LastError(t.Context())
-	named := strings.Contains(lastErr.Message, "repo") && strings.Contains(lastErr.Message, "stackin")
-	if err != nil || !found || !named {
-		t.Errorf("last error = %+v (found %v, err %v), want one naming the repo and the bad key", lastErr, found, err)
+	lastErr, err := store.LastError(t.Context())
+	if err != nil || lastErr.IsNone() {
+		t.Fatalf("last error = %v (err %v), want one naming the repo and the bad key", lastErr, err)
+	}
+	if msg := lastErr.Unwrap().Message; !strings.Contains(msg, "repo") || !strings.Contains(msg, "stackin") {
+		t.Errorf("last error = %q, want one naming the repo and the bad key", msg)
 	}
 }
 

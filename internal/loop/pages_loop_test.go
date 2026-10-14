@@ -108,14 +108,14 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 
 	var runningTicket string
 	for ticketURL, summary := range f.Latest(t) {
-		if summary.Pgid != nil {
+		if summary.Pgid.IsSome() {
 			runningTicket = ticketURL
 		}
 	}
 	if runningTicket == "" {
 		t.Fatal("no ticket recorded a run after tick 1")
 	}
-	runningPgid := *f.Latest(t)[runningTicket].Pgid
+	runningPgid := f.Latest(t)[runningTicket].Pgid.Unwrap()
 
 	var queuedSibling string
 	for _, ticket := range f.Tickets {
@@ -149,7 +149,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 			t.Errorf("memberships = %+v, want %s cancelled: the whole launch was cancelled", memberships, ticket.URL)
 		}
 	}
-	if f.Latest(t)[runningTicket].HasOutcome {
+	if f.Latest(t)[runningTicket].Outcome.IsSome() {
 		t.Error("the running member was disposed; cancel must not touch a live run")
 	}
 

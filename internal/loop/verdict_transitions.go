@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -34,7 +35,7 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 	changed := false
 	for _, t := range tickets {
 		summary, ok := latest[t.URL]
-		if !ok || !summary.HasOutcome || summary.Outcome != plan.OutcomePush {
+		if !ok || summary.Outcome != option.Some(plan.OutcomePush) {
 			continue
 		}
 		pf := pushFacts[t.URL]
@@ -42,19 +43,18 @@ func (l *Loop) recordVerdictTransitions(ctx context.Context, obs plan.Observatio
 			continue
 		}
 
-		fact := &plan.RunFact{PROpen: true}
-		l.rules(obs).ApplyVerdict(fact, t.Plan(), obs, vd)
-		if fact.Verdict == nil {
+		result := l.rules(obs).ApplyVerdict(t.Plan(), obs, vd)
+		if result.IsNone() {
 			continue
 		}
-		current := fact.Verdict.Kind.String()
+		current := result.Unwrap().Kind.String()
 		if current == "" || lastVerdicts[t.URL] == current {
 			continue
 		}
 
 		lastVerdicts[t.URL] = current
 		changed = true
-		if err := l.event(ctx, t.URL, store.EventVerdictTransition, current+": "+fact.Verdict.Reason); err != nil {
+		if err := l.event(ctx, t.URL, store.EventVerdictTransition, current+": "+result.Unwrap().Reason); err != nil {
 			return fmt.Errorf("record verdict transition for %s: %w", t.URL, err)
 		}
 	}

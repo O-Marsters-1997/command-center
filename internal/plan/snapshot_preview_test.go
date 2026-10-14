@@ -117,7 +117,7 @@ func TestSnapshotPreviewCarriesTheBaseTicketsRunForAStackedRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want, _ := snap.Entry(first.URL); rows[0].BaseRun == nil || want.Run == nil {
+	if want, _ := snap.Entry(first.URL); rows[0].BaseRun.IsNone() || want.Run.IsNone() {
 		t.Fatalf("BaseRun = %v, want the base ticket's run %v", rows[0].BaseRun, want.Run)
 	}
 
@@ -125,7 +125,7 @@ func TestSnapshotPreviewCarriesTheBaseTicketsRunForAStackedRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows[0].BaseRun != nil {
-		t.Errorf("a main-based row has BaseRun %v, want nil", rows[0].BaseRun)
+	if rows[0].BaseRun.IsSome() {
+		t.Errorf("a main-based row has BaseRun %v, want None", rows[0].BaseRun)
 	}
 }

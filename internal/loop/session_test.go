@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -71,7 +72,9 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	if err := store.RecordSpawn(t.Context(), agentRunID, 999, at, "/state/runs/1.jsonl"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.RecordDisposition(t.Context(), agentRunID, plan.OutcomeFailed, nil, at, nil); err != nil {
+	if err := store.RecordDisposition(
+		t.Context(), agentRunID, plan.OutcomeFailed, option.None[int](), at, option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 

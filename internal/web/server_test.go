@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
@@ -70,7 +71,9 @@ func seededFailed(t *testing.T) *storepkg.Store {
 	store := seededStore(t, time.Now())
 	runID := seedRun(t, store, "sandbox://CC-1")
 	exitCode := 1
-	if err := store.RecordDisposition(t.Context(), runID, plan.OutcomeFailed, &exitCode, time.Now(), nil); err != nil {
+	if err := store.RecordDisposition(
+		t.Context(), runID, plan.OutcomeFailed, option.Some(exitCode), time.Now(), option.None[float64](),
+	); err != nil {
 		t.Fatal(err)
 	}
 	return store

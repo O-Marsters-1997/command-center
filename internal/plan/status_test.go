@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
@@ -64,7 +65,7 @@ func TestStatus(t *testing.T) {
 func TestStatusPushPendingNamesTheBlockerHoldingThePush(t *testing.T) {
 	t.Parallel()
 
-	run := &plan.RunFact{Alive: false, HasOutcome: true, Outcome: plan.OutcomePush}
+	run := option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomePush)})
 	held := plan.Unlock{Reason: "blocked", Blocking: []string{"#259"}}
 
 	state, reason := plan.Status(plan.Facts{Unlock: held, LatestRun: run})
@@ -111,7 +112,7 @@ func TestStatusNeverDerivesCancelledOnceItHasRun(t *testing.T) {
 
 	state, _ := plan.Status(plan.Facts{
 		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-		LatestRun:       &plan.RunFact{Alive: true},
+		LatestRun:       option.Some(plan.RunFact{Alive: true}),
 		CancelledMember: true,
 	})
 	if state != plan.Running {
@@ -126,245 +127,245 @@ func TestStatusWithLatestRun(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		latestRun  *plan.RunFact
+		latestRun  option.Option[plan.RunFact]
 		wantState  plan.State
 		reasonHas  string
 		reasonHasA string // second required substring, for the failed-with-log-path case
 	}{
 		{
 			name:      "an alive run derives running regardless of unlock or authorisation",
-			latestRun: &plan.RunFact{Alive: true},
+			latestRun: option.Some(plan.RunFact{Alive: true}),
 			wantState: plan.Running,
 		},
 		{
 			name: "a dead run with no commits derives failed, naming the log path",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, LogPath: "/state/runs/7.jsonl",
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeFailed), LogPath: "/state/runs/7.jsonl",
+			}),
 			wantState:  plan.Failed,
 			reasonHas:  "no commits",
 			reasonHasA: "/state/runs/7.jsonl",
 		},
 		{
 			name: "a dead run with commits derives push pending",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, LogPath: "/state/runs/8.jsonl",
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), LogPath: "/state/runs/8.jsonl",
+			}),
 			wantState: plan.PushPending,
 		},
 		{
 			name: "an asked run derives awaiting input with the question's first line",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeAsked,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeAsked),
 				Question: "Which database?\nPostgres or SQLite.",
-			},
+			}),
 			wantState: plan.AwaitingInput,
 			reasonHas: "Which database?",
 		},
 		{
 			name: "a continued run derives queued while the resume is pending",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeContinued,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeContinued),
+			}),
 			wantState: plan.Queued,
 			reasonHas: "resuming with your message",
 		},
 		{
 			name: "a failed cut derives cut failed",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeCutFailed),
+			}),
 			wantState: plan.CutFailed,
 		},
 		{
 			name: "a refused push derives needs you, naming the path",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush),
 				PushRefused: true, PushRefusedPath: ".github/workflows/ci.yml",
-			},
+			}),
 			wantState: plan.NeedsYou,
 			reasonHas: ".github/workflows/ci.yml",
 		},
 		{
 			name: "a push or PR-create failure derives push failed",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PushFailed: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PushFailed: true,
+			}),
 			wantState: plan.PushFailed,
 		},
 		{
 			name: "an open PR with no verdict yet derives checking",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+			}),
 			wantState: plan.Checking,
 			reasonHas: "no verdict yet",
 		},
 		{
 			name: "an open PR with a checking verdict derives checking, naming the verdict's reason",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Kind: verdict.Checking, Reason: "check config changed"},
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.Checking, Reason: "check config changed"}),
+			}),
 			wantState: plan.Checking,
 			reasonHas: "check config changed",
 		},
 		{
 			name: "an open PR with a review-me verdict derives review me",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"},
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
+			}),
 			wantState: plan.ReviewMe,
 			reasonHas: "every required check passed",
 		},
 		{
 			name: "an open PR with a needs-you verdict derives needs you over push facts alone",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Kind: verdict.NeedsYou, Reason: "a required check failed"},
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.NeedsYou, Reason: "a required check failed"}),
+			}),
 			wantState: plan.NeedsYou,
 			reasonHas: "a required check failed",
 		},
 		{
 			name: "commits with no push attempt yet still derives push pending",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush),
+			}),
 			wantState: plan.PushPending,
 		},
 		{
 			name: "the pull request having merged outranks an open-PR verdict",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: false, PRMerged: true,
-				Verdict: &verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"},
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: false, PRMerged: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
+			}),
 			wantState: plan.PRMerged,
 		},
 		{
 			name: "the pull request having closed unmerged outranks a would-be checking state",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRClosedUnmerged: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PRClosedUnmerged: true,
+			}),
 			wantState: plan.PRClosedUnmerged,
 		},
 		{
 			name: "a waiting-on-producer-deploy verdict derives waiting on producer deploy",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{
 					Kind:   verdict.WaitingOnProducerDeploy,
 					Reason: "every required check passed except the compat check",
-				},
-			},
+				}),
+			}),
 			wantState: plan.WaitingOnProducerDeploy,
 			reasonHas: "except the compat check",
 		},
 		{
 			name: "a base-moved verdict derives base moved even over a needs-you check reading",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{
 					Kind:   verdict.BaseMoved,
 					Reason: "base moved: the parent advanced past what this branch was cut from",
-				},
-			},
+				}),
+			}),
 			wantState: plan.BaseMoved,
 			reasonHas: "the parent advanced",
 		},
 		{
 			name: "a refused fast-forward derives needs you naming the reason, outranking base moved",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				Verdict: &verdict.Result{Kind: verdict.BaseMoved}, RefreshRefused: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.BaseMoved}), RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
-			},
+			}),
 			wantState: plan.NeedsYou,
 			reasonHas: "not a fast-forward",
 		},
 		{
 			name: "an unresolved merge derives refresh conflicted over base moved and a refused fast-forward",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
-				MidMerge: true, Verdict: &verdict.Result{Kind: verdict.BaseMoved}, RefreshRefused: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
+				MidMerge: true, Verdict: option.Some(verdict.Result{Kind: verdict.BaseMoved}), RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
-			},
+			}),
 			wantState: plan.RefreshConflicted,
 			reasonHas: "mid-merge",
 		},
 		{
 			name: "an unresolved merge outranks a push failure, whose re-run would spawn into it",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, MidMerge: true, PushFailed: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), MidMerge: true, PushFailed: true,
+			}),
 			wantState: plan.RefreshConflicted,
 		},
 		{
 			name: "a merged pull request outranks an unresolved merge in the worktree",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRMerged: true, MidMerge: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PRMerged: true, MidMerge: true,
+			}),
 			wantState: plan.PRMerged,
 		},
 		{
 			name: "a branch that no longer merges into main derives conflicts with main, naming the branch",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
-			},
+			}),
 			wantState: plan.ConflictsWithMain,
 			reasonHas: "no longer merges cleanly into main",
 		},
 		{
 			name: "conflicts with main outranks a refused fast-forward and a base-moved verdict",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
-				Verdict: &verdict.Result{Kind: verdict.BaseMoved}, RefreshRefused: true,
+				Verdict: option.Some(verdict.Result{Kind: verdict.BaseMoved}), RefreshRefused: true,
 				RefreshRefusedReason: "not a fast-forward: diverged from origin/cc-1",
-			},
+			}),
 			wantState: plan.ConflictsWithMain,
 		},
 		{
 			name: "an unresolved merge outranks conflicts with main, whose refresh would spawn into it",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, MidMerge: true, ConflictsWithMain: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), MidMerge: true, ConflictsWithMain: true,
+			}),
 			wantState: plan.RefreshConflicted,
 		},
 		{
 			name: "a merged pull request outranks a branch that no longer merges into main",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PRMerged: true, ConflictsWithMain: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PRMerged: true, ConflictsWithMain: true,
+			}),
 			wantState: plan.PRMerged,
 		},
 		{
 			name: "a conflicting peer derives blocked, naming the peer",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictingPeer: "cc-9-lower-ref",
-			},
+			}),
 			wantState: plan.Blocked,
 			reasonHas: "cc-9-lower-ref",
 		},
 		{
 			name: "conflicts with main outranks a conflicting peer",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictsWithMain: true, ConflictsWithMainReason: "cc-9-example no longer merges cleanly into main",
 				ConflictingPeer: "cc-9-lower-ref",
-			},
+			}),
 			wantState: plan.ConflictsWithMain,
 		},
 		{
 			name: "a conflicting peer outranks a review-me verdict, which it suppresses",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true,
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomePush), PROpen: true,
 				ConflictingPeer: "cc-9-lower-ref",
-				Verdict:         &verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"},
-			},
+				Verdict:         option.Some(verdict.Result{Kind: verdict.ReviewMe, Reason: "every required check passed"}),
+			}),
 			wantState: plan.Blocked,
 			reasonHas: "cc-9-lower-ref",
 		},
@@ -395,26 +396,26 @@ func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		latestRun *plan.RunFact
+		latestRun option.Option[plan.RunFact]
 	}{
 		{
 			name: "a later failed run with no push row (#251)",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, PRMerged: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeFailed), PRMerged: true,
+			}),
 		},
 		{
 			name: "a later failed cut (#251)",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeCutFailed, PRMerged: true,
-			},
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeCutFailed), PRMerged: true,
+			}),
 		},
 		{
 			name: "a failed run whose branch was pushed and merged outside the daemon (#234)",
-			latestRun: &plan.RunFact{
-				Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed, LogPath: "/state/runs/4.jsonl",
+			latestRun: option.Some(plan.RunFact{
+				Alive: false, Outcome: option.Some(plan.OutcomeFailed), LogPath: "/state/runs/4.jsonl",
 				PRMerged: true,
-			},
+			}),
 		},
 	}
 	for _, tt := range tests {
@@ -438,10 +439,22 @@ func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
 	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
 	state, _ := plan.Status(plan.Facts{
 		Unlock: unlocked, Authorised: false,
-		LatestRun: &plan.RunFact{Alive: false, HasOutcome: true, Outcome: plan.OutcomeFailed},
+		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomeFailed)}),
 	})
 	if state != plan.Failed {
 		t.Errorf("state = %v, want failed", state)
+	}
+}
+
+func TestStatusDerivesAnUndisposedRunAsNotFailed(t *testing.T) {
+	t.Parallel()
+
+	state, _ := plan.Status(plan.Facts{
+		Unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
+		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.None[plan.Outcome]()}),
+	})
+	if state == plan.Failed {
+		t.Errorf("state = %v, want anything but failed for a run with no outcome", state)
 	}
 }
 
@@ -467,12 +480,15 @@ func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		latestRun *plan.RunFact
+		latestRun option.Option[plan.RunFact]
 	}{
-		{name: "a live run", latestRun: &plan.RunFact{Alive: true}},
-		{name: "a failed run", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomeFailed}},
-		{name: "a run still waiting to push", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomePush}},
-		{name: "a run already checking", latestRun: &plan.RunFact{HasOutcome: true, Outcome: plan.OutcomePush, PROpen: true}},
+		{name: "a live run", latestRun: option.Some(plan.RunFact{Alive: true})},
+		{name: "a failed run", latestRun: option.Some(plan.RunFact{Outcome: option.Some(plan.OutcomeFailed)})},
+		{name: "a run still waiting to push", latestRun: option.Some(plan.RunFact{Outcome: option.Some(plan.OutcomePush)})},
+		{
+			name:      "a run already checking",
+			latestRun: option.Some(plan.RunFact{Outcome: option.Some(plan.OutcomePush), PROpen: true}),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -496,12 +512,12 @@ func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
 		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []string{"sandbox://CC-1"},
 	}
 
-	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: nil})
+	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: option.None[plan.RunFact]()})
 	if state != plan.Blocked {
 		t.Errorf("state = %v, want blocked: no run ever happened", state)
 	}
 
-	state, _ = plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: nil})
+	state, _ = plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: option.None[plan.RunFact]()})
 	if state != plan.Queued {
 		t.Errorf("state = %v, want queued: authorised but never launched", state)
 	}
@@ -532,7 +548,7 @@ func TestStatusPrefersARunToAConflictedBase(t *testing.T) {
 		Unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first"},
 		Authorised:     true,
 		ConflictedBase: "cc-1-first",
-		LatestRun:      &plan.RunFact{Alive: true},
+		LatestRun:      option.Some(plan.RunFact{Alive: true}),
 	})
 	if state != plan.Running {
 		t.Errorf("state = %v, want running", state)

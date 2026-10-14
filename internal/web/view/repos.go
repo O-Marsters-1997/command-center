@@ -10,6 +10,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -41,7 +42,7 @@ type ReposPage struct {
 	Chrome
 	Groups          []RepoGroup
 	NewProject      NewProjectForm
-	LastImportError *ImportError
+	LastImportError option.Option[ImportError]
 }
 
 type RepoGroup struct {
@@ -75,7 +76,7 @@ type RepoPage struct {
 	Ready           bool
 	Banner          Banner
 	Features        []FeatureRow
-	LastImportError *ImportError
+	LastImportError option.Option[ImportError]
 	Tickets         Board
 }
 
@@ -291,13 +292,15 @@ func (r *Reader) RepoPage(
 	return page, nil
 }
 
-func (r *Reader) importError(ctx context.Context, now time.Time) (*ImportError, error) {
+func (r *Reader) importError(ctx context.Context, now time.Time) (option.Option[ImportError], error) {
 	lastErr, failed, err := r.store.LastImportError(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load last import error: %w", err)
+		return option.None[ImportError](), fmt.Errorf("load last import error: %w", err)
 	}
 	if !failed {
-		return nil, nil
+		return option.None[ImportError](), nil
 	}
-	return &ImportError{Age: relative(now, lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message}, nil
+	return option.Some(ImportError{
+		Age: relative(now, lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message,
+	}), nil
 }

@@ -1,6 +1,10 @@
 package plan
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/O-Marsters-1997/command-center/internal/option"
+)
 
 type PreviewLabel int
 
@@ -67,7 +71,7 @@ type PreviewRow struct {
 	Label      PreviewLabel
 	Reason     Reason
 	Base       string
-	BaseRun    *RunFact
+	BaseRun    option.Option[RunFact]
 	Prompt     string
 	PromptHash string
 }
@@ -97,14 +101,14 @@ func (s Snapshot) Preview(selection []string) ([]PreviewRow, error) {
 	return rows, nil
 }
 
-func (s Snapshot) baseRun(base string) *RunFact {
+func (s Snapshot) baseRun(base string) option.Option[RunFact] {
 	if base == DefaultBaseBranch {
-		return nil
+		return option.None[RunFact]()
 	}
 	for _, e := range s.Entries {
 		if e.Ticket.Branch == base {
 			return e.Run
 		}
 	}
-	return nil
+	return option.None[RunFact]()
 }
