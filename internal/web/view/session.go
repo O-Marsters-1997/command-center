@@ -144,7 +144,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	return Session{
 		Turns:          turns,
-		ActionsPath:    self + "?part=actions",
+		ActionsPath:    self + "/actions",
 		PRURL:          prURL,
 		Chrome:         chrome,
 		Row:            row,

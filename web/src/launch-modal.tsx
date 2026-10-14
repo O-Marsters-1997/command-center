@@ -57,7 +57,7 @@ customElement(
       onCleanup(() => controller.abort());
       try {
         const query = props.tickets || `feature=${encodeURIComponent(props.feature)}`;
-        const res = await fetch(`/launch/candidates?${query}`, { signal: controller.signal });
+        const res = await fetch(`/launch/candidates.json?${query}`, { signal: controller.signal });
         if (!res.ok) throw new Error(String(res.status));
         const data: Candidate[] = await res.json();
         setCandidates(data);

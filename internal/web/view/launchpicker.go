@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"net/url"
 	"slices"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 type LaunchPicker struct {
 	Chrome
 	Features []LaunchFeature
+	Launch   *LaunchModal // set on /launch?ticket=…
 }
 
 // LaunchFeature is one picker row. Now and OnUnlock count the feature's launchable tickets by the
@@ -49,7 +49,7 @@ func (r *Reader) LaunchPicker(ctx context.Context, now time.Time) (LaunchPicker,
 		if err != nil {
 			return LaunchPicker{}, fmt.Errorf("preview launch of feature %s: %w", feature, err)
 		}
-		row := LaunchFeature{Name: feature, Path: "/f/" + url.PathEscape(feature) + "/launch"}
+		row := LaunchFeature{Name: feature, Path: featureLaunchPath(feature)}
 		for _, c := range candidates {
 			switch c.Label {
 			case plan.Now.String():

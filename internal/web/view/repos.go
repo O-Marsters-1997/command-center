@@ -41,6 +41,8 @@ type ReposPage struct {
 	Groups          []RepoGroup
 	NewProject      NewProjectForm
 	LastImportError *ImportError
+	Query           string      // /repos?q=; the search box's value
+	Search          *RepoSearch // set when Query is non-blank
 }
 
 type RepoGroup struct {

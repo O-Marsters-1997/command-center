@@ -33,7 +33,7 @@ type jsonCandidate struct {
 func fetchCandidates(t *testing.T, srv *httptest.Server, query string) []jsonCandidate {
 	t.Helper()
 
-	resp, err := http.Get(srv.URL + "/launch/candidates?" + query)
+	resp, err := http.Get(srv.URL + "/launch/candidates.json?" + query)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func fetchCandidates(t *testing.T, srv *httptest.Server, query string) []jsonCan
 	}
 	var candidates []jsonCandidate
 	if err := json.NewDecoder(resp.Body).Decode(&candidates); err != nil {
-		t.Fatalf("decode /launch/candidates: %v", err)
+		t.Fatalf("decode /launch/candidates.json: %v", err)
 	}
 	return candidates
 }

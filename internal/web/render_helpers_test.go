@@ -22,7 +22,11 @@ func renderBoard(t *testing.T, server *web.Server) string {
 
 func renderPath(t *testing.T, server *web.Server, path string) string {
 	t.Helper()
-	rec := get(t, server, path)
+	fetch := get
+	if isFragmentRoute(path) {
+		fetch = getHX
+	}
+	rec := fetch(t, server, path)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}

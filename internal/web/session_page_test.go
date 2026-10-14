@@ -257,7 +257,7 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?part=actions")
+	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1/actions")
 
 	for _, want := range []string{`value="remove-worktree" data-key="e"`, `data-key="o" target="_blank"`} {
 		if !strings.Contains(body, want) {
@@ -289,7 +289,7 @@ func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 		t.Errorf("queued verb shows no pending mark:\n%s", body)
 	}
 
-	poll := renderPath(t, srv, "/s/acme/web/1?part=actions")
+	poll := renderPath(t, srv, "/s/acme/web/1/actions")
 	if !strings.Contains(poll, `data-glyph="pending"`) || strings.Contains(poll, `class="toast"`) {
 		t.Errorf("polled actions should keep the pending mark and drop the toast:\n%s", poll)
 	}
