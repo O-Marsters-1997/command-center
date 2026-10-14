@@ -22,7 +22,10 @@ func (s *Store) RecordPush(ctx context.Context, ticketID, pushedTip, baseBranch,
 	if err != nil {
 		return fmt.Errorf("record push for %s: %w", ticketID, err)
 	}
-	return s.ResetCheckingTicks(ctx, ticketID)
+	if err := s.ResetCheckingTicks(ctx, ticketID); err != nil {
+		return fmt.Errorf("reset checking ticks for %s: %w", ticketID, err)
+	}
+	return nil
 }
 
 // RestackedSinceLastPush names every ticket whose branch the app rebased since it last

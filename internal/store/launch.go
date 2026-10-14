@@ -50,7 +50,7 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err erro
 	qtx := s.q.WithTx(tx)
 	groups, order, err := pendingLaunchIntents(ctx, qtx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read pending launch intents: %w", err)
 	}
 
 	nowUTC := now.UTC()
@@ -59,7 +59,10 @@ func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) (err erro
 			return fmt.Errorf("apply launch group %s: %w", group, err)
 		}
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit launch intents: %w", err)
+	}
+	return nil
 }
 
 type pendingIntent struct {

@@ -46,14 +46,14 @@ func closeUnderBlockedBy(
 		for _, blocker := range t.BlockedBy {
 			blockerFeature, err := ticketFeature(blocker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read feature of blocker %s: %w", blocker, err)
 			}
 			if blockerFeature == feature {
 				continue
 			}
 			isMerged, err := merged(blocker)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read merged state of blocker %s: %w", blocker, err)
 			}
 			if isMerged {
 				continue

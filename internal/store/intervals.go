@@ -45,7 +45,7 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	}
 	previous, err := s.LatestReadingsFull(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read previous readings: %w", err)
 	}
 	weigh := func(start, end time.Time) (float64, error) { return spend.SumWeight(requests, start, end), nil }
 	intervals, _, err := spend.Intervals(readings, previous, weigh)
@@ -53,7 +53,7 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 		return fmt.Errorf("build utilization intervals: %w", err)
 	}
 	if err := s.RecordReadings(ctx, readings); err != nil {
-		return err
+		return fmt.Errorf("record readings: %w", err)
 	}
 	for _, interval := range intervals {
 		err := s.q.RecordInterval(ctx, ccdb.RecordIntervalParams{

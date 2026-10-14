@@ -41,7 +41,7 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	}
 	repos, err := s.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select repos: %w", err)
 	}
 	projects := make([]Project, 0, len(rows))
 	index := make(map[string]int, len(rows))
@@ -81,10 +81,13 @@ func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos [
 	}
 	for _, repo := range repos {
 		if err = setRepoProjectID(ctx, qtx, repo, sql.NullInt64{Int64: id, Valid: true}); err != nil {
-			return err
+			return fmt.Errorf("assign repo %s to project %q: %w", repo, name, err)
 		}
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit project %q: %w", name, err)
+	}
+	return nil
 }
 
 func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error {
@@ -99,7 +102,10 @@ func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error 
 		}
 		id = sql.NullInt64{Int64: projectID, Valid: true}
 	}
-	return setRepoProjectID(ctx, s.q, repo, id)
+	if err := setRepoProjectID(ctx, s.q, repo, id); err != nil {
+		return fmt.Errorf("set project of repo %s: %w", repo, err)
+	}
+	return nil
 }
 
 func setRepoProjectID(ctx context.Context, q *ccdb.Queries, repo string, id sql.NullInt64) error {

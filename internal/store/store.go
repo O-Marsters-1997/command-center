@@ -52,14 +52,16 @@ func setUpGoose() error {
 	gooseOnce.Do(func() {
 		goose.SetBaseFS(migrations)
 		goose.SetLogger(goose.NopLogger())
-		gooseSetupErr = goose.SetDialect("postgres")
+		if err := goose.SetDialect("postgres"); err != nil {
+			gooseSetupErr = fmt.Errorf("set goose dialect: %w", err)
+		}
 	})
 	return gooseSetupErr
 }
 
 func (s *Store) init(ctx context.Context) error {
 	if err := setUpGoose(); err != nil {
-		return fmt.Errorf("set goose dialect: %w", err)
+		return fmt.Errorf("set up goose: %w", err)
 	}
 	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
 		return fmt.Errorf("migrate: %w", err)
@@ -67,7 +69,12 @@ func (s *Store) init(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close database: %w", err)
+	}
+	return nil
+}
 
 // UpsertTickets writes a ticket row directly, every column at once, keyed on url.
 // Tests use it to seed an exact row; production imports through ImportTickets.
@@ -105,7 +112,10 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) (err error)
 			return fmt.Errorf("upsert ticket %s: %w", t.URL, err)
 		}
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit ticket upserts: %w", err)
+	}
+	return nil
 }
 
 // Tickets returns every ticket row not withdrawn, ordered by url.
@@ -228,7 +238,7 @@ func (s *Store) ImportTickets(
 		feature, intended, ticketFeatureLookup(ctx, qtx), blockerMergedLookup(ctx, qtx, obs),
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("check feature closure for %s: %w", feature, err)
 	}
 	if violation != nil {
 		return violation
@@ -254,9 +264,12 @@ func (s *Store) ImportTickets(
 		}
 	}
 	if err = repairBlockedBy(ctx, qtx, mergedWithdrawn); err != nil {
-		return err
+		return fmt.Errorf("repair blocked_by after import of %s: %w", feature, err)
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit import of %s: %w", feature, err)
+	}
+	return nil
 }
 
 func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[string]bool) error {
@@ -314,20 +327,27 @@ func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, m
 	}
 	if merged {
 		if err = repairBlockedBy(ctx, qtx, map[string]bool{url: true}); err != nil {
-			return err
+			return fmt.Errorf("repair blocked_by after withdrawing %s: %w", url, err)
 		}
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit withdrawal of %s: %w", url, err)
+	}
+	return nil
 }
 
 func encodeBlockedBy(urls []string) ([]byte, error) {
-	return json.Marshal(nonNil(urls))
+	blob, err := json.Marshal(nonNil(urls))
+	if err != nil {
+		return nil, fmt.Errorf("marshal blocked_by: %w", err)
+	}
+	return blob, nil
 }
 
 func decodeBlockedBy(raw []byte) ([]string, error) {
 	var urls []string
 	if err := json.Unmarshal(raw, &urls); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal blocked_by: %w", err)
 	}
 	return urls, nil
 }
@@ -360,7 +380,7 @@ const (
 func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 	ticks := map[string]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s meta: %w", metaCheckingTicks, err)
 	}
 	return ticks, nil
 }
@@ -369,63 +389,84 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[string]int, error) {
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read checking ticks: %w", err)
 	}
 	for _, url := range ticketURLs {
 		ticks[url]++
 	}
-	return s.putMeta(ctx, metaCheckingTicks, ticks)
+	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
+	}
+	return nil
 }
 
 // ResetCheckingTicks zeroes one ticket's counter on every fresh push.
 func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID string) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("read checking ticks: %w", err)
 	}
 	if _, ok := ticks[ticketID]; !ok {
 		return nil
 	}
 	delete(ticks, ticketID)
-	return s.putMeta(ctx, metaCheckingTicks, ticks)
+	if err := s.putMeta(ctx, metaCheckingTicks, ticks); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaCheckingTicks, err)
+	}
+	return nil
 }
 
 // LastVerdicts returns each ticket's most recently recorded CI verdict label, keyed by ticket URL.
 func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s meta: %w", metaLastVerdicts, err)
 	}
 	return verdicts, nil
 }
 
 func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string) error {
-	return s.putMeta(ctx, metaLastVerdicts, verdicts)
+	if err := s.putMeta(ctx, metaLastVerdicts, verdicts); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaLastVerdicts, err)
+	}
+	return nil
 }
 
 // SaveObservation replaces the persisted observation. Only a successful tick calls it.
 func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
-	return s.putMeta(ctx, metaObservation, obs)
+	if err := s.putMeta(ctx, metaObservation, obs); err != nil {
+		return fmt.Errorf("write %s meta: %w", metaObservation, err)
+	}
+	return nil
 }
 
 func (s *Store) LastObservation(ctx context.Context) (plan.Observation, bool, error) {
 	var obs plan.Observation
 	found, err := s.getMeta(ctx, metaObservation, &obs)
-	return obs, found, err
+	if err != nil {
+		return obs, found, fmt.Errorf("read %s meta: %w", metaObservation, err)
+	}
+	return obs, found, nil
 }
 
 func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	if err := s.putMeta(ctx, metaLastError, tickErr); err != nil {
-		return err
+		return fmt.Errorf("write %s meta: %w", metaLastError, err)
 	}
-	return s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message})
+	if err := s.AppendEvent(ctx, Event{At: tickErr.At, Kind: EventTickError, Detail: tickErr.Message}); err != nil {
+		return fmt.Errorf("append tick error event: %w", err)
+	}
+	return nil
 }
 
 // LastError returns the last tick failure. A later success does not clear it.
 func (s *Store) LastError(ctx context.Context) (TickError, bool, error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
-	return tickErr, found, err
+	if err != nil {
+		return tickErr, found, fmt.Errorf("read %s meta: %w", metaLastError, err)
+	}
+	return tickErr, found, nil
 }
 
 // ImportError is the last feature-conflict import refusal.
@@ -444,18 +485,25 @@ type importRefusal interface {
 func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal importRefusal, now time.Time) error {
 	importErr := ImportError{At: now, Feature: feature, Message: refusal.Error()}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
-		return err
+		return fmt.Errorf("write %s meta: %w", metaImportError, err)
 	}
-	return s.AppendEvent(ctx, Event{
+	err := s.AppendEvent(ctx, Event{
 		At: now, TicketURL: refusal.refusedTicket(), Kind: EventImportRefused, Detail: refusal.Error(),
 	})
+	if err != nil {
+		return fmt.Errorf("append import refusal event: %w", err)
+	}
+	return nil
 }
 
 // LastImportError returns the last import refusal; a later success does not clear it.
 func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) {
 	var importErr ImportError
 	found, err := s.getMeta(ctx, metaImportError, &importErr)
-	return importErr, found, err
+	if err != nil {
+		return importErr, found, fmt.Errorf("read %s meta: %w", metaImportError, err)
+	}
+	return importErr, found, nil
 }
 
 // Event is one append-only audit row.
