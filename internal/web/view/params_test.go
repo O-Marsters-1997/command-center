@@ -28,11 +28,11 @@ func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		query string
-		want  string
+		want  LogFilter
 	}{
-		{"absent defaults to all", "", "all"},
-		{"a named filter passes through", "log=fails", "fails"},
-		{"an unrecognised value falls back to all", "log=bogus", "all"},
+		{"absent defaults to all", "", LogAll},
+		{"a named filter passes through", "log=fails", LogFails},
+		{"an unrecognised value falls back to all", "log=bogus", LogAll},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

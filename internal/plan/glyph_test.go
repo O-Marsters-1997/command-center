@@ -9,24 +9,25 @@ import (
 func TestGlyph(t *testing.T) {
 	t.Parallel()
 
-	want := map[plan.State]string{
-		plan.Failed: "failed", plan.CutFailed: "failed", plan.PushFailed: "failed", plan.CIFailed: "failed",
-		plan.ConflictsWithMain: "failed", plan.RefreshConflicted: "failed", plan.BaseGone: "failed",
-		plan.VerificationFailed: "failed", plan.PRClosedUnmerged: "failed",
-		plan.ReviewMe: "attention", plan.NeedsYou: "attention",
-		plan.AwaitingInput: "attention",
-		plan.Running:       "running",
-		plan.PushPending:   "pending", plan.Queued: "pending", plan.BaseMoved: "pending",
-		plan.Checking: "checking",
-		plan.Ready:    "ready", plan.Cancelled: "ready",
-		plan.Blocked: "blocked", plan.WaitingOnProducerDeploy: "blocked",
-		plan.PRMerged: "done",
+	want := map[plan.State]plan.GlyphWord{
+		plan.Failed: plan.GlyphFailed, plan.CutFailed: plan.GlyphFailed, plan.PushFailed: plan.GlyphFailed,
+		plan.CIFailed: plan.GlyphFailed, plan.ConflictsWithMain: plan.GlyphFailed,
+		plan.RefreshConflicted: plan.GlyphFailed, plan.BaseGone: plan.GlyphFailed,
+		plan.VerificationFailed: plan.GlyphFailed, plan.PRClosedUnmerged: plan.GlyphFailed,
+		plan.ReviewMe: plan.GlyphAttention, plan.NeedsYou: plan.GlyphAttention,
+		plan.AwaitingInput: plan.GlyphAttention,
+		plan.Running:       plan.GlyphRunning,
+		plan.PushPending:   plan.GlyphPending, plan.Queued: plan.GlyphPending, plan.BaseMoved: plan.GlyphPending,
+		plan.Checking: plan.GlyphChecking,
+		plan.Ready:    plan.GlyphReady, plan.Cancelled: plan.GlyphReady,
+		plan.Blocked: plan.GlyphBlocked, plan.WaitingOnProducerDeploy: plan.GlyphBlocked,
+		plan.PRMerged: plan.GlyphDone,
 	}
 	if len(want) != plan.StateCount {
 		t.Fatalf("table covers %d states, the enum has %d", len(want), plan.StateCount)
 	}
 	for state, glyph := range want {
-		if got := plan.Glyph(state); got != glyph {
+		if got := state.Glyph(); got != glyph {
 			t.Errorf("Glyph(%s) = %q, want %q", state, got, glyph)
 		}
 	}
@@ -36,18 +37,18 @@ func TestRailGroup(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		glyph  string
+		glyph  plan.GlyphWord
 		group  string
 		folded bool
 	}{
-		{"failed", "needs-you", false},
-		{"attention", "needs-you", false},
-		{"running", "in-flight", false},
-		{"pending", "in-flight", false},
-		{"checking", "in-flight", false},
-		{"ready", "in-flight", true},
-		{"blocked", "in-flight", true},
-		{"done", "settled", false},
+		{plan.GlyphFailed, "needs-you", false},
+		{plan.GlyphAttention, "needs-you", false},
+		{plan.GlyphRunning, "in-flight", false},
+		{plan.GlyphPending, "in-flight", false},
+		{plan.GlyphChecking, "in-flight", false},
+		{plan.GlyphReady, "in-flight", true},
+		{plan.GlyphBlocked, "in-flight", true},
+		{plan.GlyphDone, "settled", false},
 	}
 	for _, tt := range tests {
 		group, folded := plan.RailGroup(tt.glyph)

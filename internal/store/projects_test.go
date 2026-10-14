@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -15,7 +16,7 @@ func trackRepos(t *testing.T, store *storepkg.Store, names ...string) {
 		repo := storepkg.Repo{
 			Name:      name,
 			Remote:    "git@github.com:" + name + ".git",
-			State:     storepkg.RepoReady,
+			Phase:     plan.RepoReady,
 			TrackedAt: trackedAt,
 		}
 		if err := store.UpsertRepo(t.Context(), repo); err != nil {

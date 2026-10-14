@@ -30,7 +30,7 @@ func mustReadTestdata(name string) string {
 }
 
 func mustSendLines(
-	t *testing.T, w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode string,
+	t *testing.T, w io.Writer, tail *agentlog.Tail, path string, offset *int64, mode view.LogFilter,
 ) int {
 	t.Helper()
 
@@ -59,7 +59,7 @@ func TestStreamedLineAndServerRenderedLineAreByteIdentical(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
+	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, view.LogAll); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	fromStream := extractSSEData(t, buf.String())
@@ -85,7 +85,7 @@ func TestSendLinesAppliesTheCurrentFilter(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "fails")
+	sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, view.LogFails)
 
 	if sent != 1 {
 		t.Fatalf("sendLines(mode=fails) sent %d events, want 1 (just the run's one Fail)", sent)
@@ -104,7 +104,7 @@ func TestSendLinesCarriesAMultiLineOutputAsOneDataLinePerLine(t *testing.T) {
 
 	var buf strings.Builder
 	offset := int64(0)
-	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, "all"); sent != 1 {
+	if sent := mustSendLines(t, &buf, &agentlog.Tail{}, path, &offset, view.LogAll); sent != 1 {
 		t.Fatalf("sendLines sent %d events, want 1", sent)
 	}
 	frame := buf.String()

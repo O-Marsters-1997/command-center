@@ -91,9 +91,9 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var got []string
+			var got []plan.Verb
 			for _, m := range verbForm.FindAllStringSubmatch(board, -1) {
-				got = append(got, m[1])
+				got = append(got, plan.Verb(m[1]))
 			}
 			if want := wantRowVerbs[state]; !slices.Equal(got, want) {
 				t.Errorf("verb forms for %s = %v, want %v", state, got, want)
@@ -102,7 +102,7 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	}
 }
 
-var wantRowVerbs = map[plan.State][]string{
+var wantRowVerbs = map[plan.State][]plan.Verb{
 	plan.Queued:                  {plan.VerbCancel},
 	plan.Running:                 {plan.VerbKill},
 	plan.Failed:                  {plan.VerbReRun},

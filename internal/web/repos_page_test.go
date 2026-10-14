@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -235,7 +236,7 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 
 	st := track(t, openStore(t), alphaRepo)
 	refused := storepkg.Repo{
-		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", State: storepkg.RepoRefused,
+		Name: "acme/beta", Remote: "https://github.com/acme/beta.git", Phase: plan.RepoRefused,
 		RefusalKind: "clone", Refusal: "default branch is master", TrackedAt: testNow,
 	}
 	if err := st.UpsertRepo(t.Context(), refused); err != nil {

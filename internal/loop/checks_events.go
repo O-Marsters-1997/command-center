@@ -6,10 +6,9 @@ import (
 	"slices"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
-
-const eventChecksLanded = "checks_landed"
 
 func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observation) error {
 	tickets, err := l.store.Tickets(ctx)
@@ -29,7 +28,7 @@ func (l *Loop) recordChecksLanded(ctx context.Context, prev, obs plan.Observatio
 			if was, ok := before[name]; ok && plan.ToVerdictCheckState(was) != verdict.Pending {
 				continue
 			}
-			if err := l.event(ctx, t.URL, eventChecksLanded, name+" "+landedWord(landed)); err != nil {
+			if err := l.event(ctx, t.URL, store.EventChecksLanded, name+" "+landedWord(landed)); err != nil {
 				return err
 			}
 		}

@@ -36,6 +36,10 @@ function nodeTag(node: GraphNode): string {
   return node.glyph === "running" ? node.elapsed : "";
 }
 
+function assertNever(value: never): never {
+  throw new Error(`unhandled glyph ${String(value)}`);
+}
+
 function nodeFoot(node: GraphNode): string {
   switch (node.glyph) {
     case "blocked":
@@ -44,8 +48,14 @@ function nodeFoot(node: GraphNode): string {
       return "Ready to launch";
     case "done":
       return node.pr_number ? `Merged #${node.pr_number}` : "Merged";
-    default:
+    case "failed":
+    case "attention":
+    case "running":
+    case "pending":
+    case "checking":
       return node.reason || (node.pr_number ? `PR #${node.pr_number}` : node.state);
+    default:
+      return assertNever(node.glyph);
   }
 }
 

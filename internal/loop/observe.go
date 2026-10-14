@@ -266,7 +266,7 @@ func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]st
 		return nil, err
 	}
 	return slices.DeleteFunc(repos, func(r store.Repo) bool {
-		if r.State == store.RepoCloning {
+		if r.Phase == plan.RepoCloning {
 			return true
 		}
 		_, err := os.Stat(config.CheckoutPath(dataDir, r.Name))
@@ -280,7 +280,7 @@ func ReadyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return slices.DeleteFunc(repos, func(r store.Repo) bool { return r.State != store.RepoReady }), nil
+	return slices.DeleteFunc(repos, func(r store.Repo) bool { return r.Phase != plan.RepoReady }), nil
 }
 
 func branchesFor(tickets []store.Ticket, repo string) []string {

@@ -25,7 +25,7 @@ func TestAssertRepoSettings(t *testing.T) {
 	tests := []struct {
 		name       string
 		fixture    string
-		wantKind   string
+		wantKind   plan.RefusalKind
 		wantReason string
 	}{
 		{name: "squash only on main passes", fixture: "squash_only.json"},

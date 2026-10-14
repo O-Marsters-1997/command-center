@@ -15,6 +15,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -163,7 +164,7 @@ func (s *Sandbox) LandOnMain(ctx context.Context, repoName string, files map[str
 func (s *Sandbox) Repos(trackedAt time.Time) []store.Repo {
 	out := make([]store.Repo, 0, len(s.repos))
 	for _, r := range s.repos {
-		out = append(out, store.Repo{Name: r.scenarioName, Remote: r.origin, State: store.RepoReady, TrackedAt: trackedAt})
+		out = append(out, store.Repo{Name: r.scenarioName, Remote: r.origin, Phase: plan.RepoReady, TrackedAt: trackedAt})
 	}
 	return out
 }

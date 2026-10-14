@@ -29,7 +29,7 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 	if err != nil {
 		return repo, err
 	}
-	if kind != "" {
+	if kind != plan.RefusalUnknown {
 		return refuse(repo, kind, reason), nil
 	}
 
@@ -42,13 +42,13 @@ func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time
 		return refuse(repo, plan.RefusalSettingsParse, err.Error()), nil
 	}
 
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoReady, "", ""
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, plan.RefusalUnknown, ""
 	repo.SettingsSource, repo.SettingsReadAt = string(source), now
 	return repo, nil
 }
 
-func refuse(repo store.Repo, kind, reason string) store.Repo {
-	repo.State, repo.RefusalKind, repo.Refusal = store.RepoRefused, kind, reason
+func refuse(repo store.Repo, kind plan.RefusalKind, reason string) store.Repo {
+	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, kind, reason
 	return repo
 }
 
@@ -61,7 +61,7 @@ func (l *Loop) validateCloningRepos(ctx context.Context) error {
 	}
 	var failures []error
 	for _, repo := range repos {
-		if repo.State != store.RepoCloning {
+		if repo.Phase != plan.RepoCloning {
 			continue
 		}
 		settled, err := l.validate(ctx, l.cfg.DataDir, repo, l.clock.Now())
@@ -94,14 +94,14 @@ func (l *Loop) recordTickError(ctx context.Context, message string) error {
 // same tick settles it. A ready repo is left alone; a refused one is validated afresh. A repo
 // whose remote GitHub will not give is refused for Track again.
 func (l *Loop) applyTrackIntents(ctx context.Context) error {
-	return l.eachIntent(ctx, store.TrackVerb, func(intent store.VerbIntent) error {
+	return l.eachIntent(ctx, plan.VerbTrack, func(intent store.VerbIntent) error {
 		repos, err := l.store.Repos(ctx)
 		if err != nil {
 			return err
 		}
 		repo := store.Repo{Name: intent.TicketID, TrackedAt: l.clock.Now()}
 		if i := slices.IndexFunc(repos, func(r store.Repo) bool { return strings.EqualFold(r.Name, repo.Name) }); i >= 0 {
-			if repos[i].State == store.RepoReady {
+			if repos[i].Phase == plan.RepoReady {
 				return nil
 			}
 			repo = repos[i]
@@ -113,7 +113,7 @@ func (l *Loop) applyTrackIntents(ctx context.Context) error {
 			}
 			repo.Remote = remote
 		}
-		repo.State, repo.RefusalKind, repo.Refusal = store.RepoCloning, "", ""
+		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoCloning, plan.RefusalUnknown, ""
 		return l.store.UpsertRepo(ctx, repo)
 	})
 }

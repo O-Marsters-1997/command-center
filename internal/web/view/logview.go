@@ -20,21 +20,21 @@ type LineRenderer func(LogLine) (string, error)
 
 // KindShown decides, for one of the four ?log= modes, whether an event's kind renders as a line.
 // Phase headers always render regardless of mode; this only gates the lines inside them.
-func KindShown(mode string, k agentlog.Kind) bool {
+func KindShown(mode LogFilter, k agentlog.Kind) bool {
 	switch mode {
-	case "skills":
+	case LogSkills:
 		return k == agentlog.Skill
-	case "tools":
+	case LogTools:
 		return k == agentlog.Tool || k == agentlog.File || k == agentlog.Cmd || k == agentlog.Commit
-	case "fails":
+	case LogFails:
 		return k == agentlog.Fail
 	default:
 		return true
 	}
 }
 
-func EventShown(mode string, e agentlog.Event) bool {
-	if e.Kind == agentlog.Cmd && mode == "fails" {
+func EventShown(mode LogFilter, e agentlog.Event) bool {
+	if e.Kind == agentlog.Cmd && mode == LogFails {
 		return cmdFailed(e)
 	}
 	return KindShown(mode, e.Kind)
@@ -94,7 +94,7 @@ func buildLogDetail(
 	}
 	final := takeFinalAnswer(&run)
 	stats := measure(run)
-	mode := NormalizeLogFilter(params.Log)
+	mode := params.Log
 
 	detail.Lines = run.Lines
 	detail.PhaseCount = len(run.Phases)
@@ -112,11 +112,11 @@ func buildLogDetail(
 }
 
 func RecordShown(e store.Event) bool {
-	return e.Kind == "pr_merged" || e.Kind == "pr_opened" || e.Kind == "checks_landed"
+	return e.Kind == store.EventPRMerged || e.Kind == store.EventPROpened || e.Kind == store.EventChecksLanded
 }
 
 func RecordOf(e store.Event) agentlog.Event {
-	return agentlog.Event{Kind: agentlog.Record, Tool: e.Kind, Detail: e.Detail}
+	return agentlog.Event{Kind: agentlog.Record, Tool: string(e.Kind), Detail: e.Detail}
 }
 
 func lastRecordID(records []store.Event) int64 {
@@ -181,9 +181,9 @@ func takeFinalAnswer(run *agentlog.Run) string {
 	return final
 }
 
-func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) ([]phaseView, error) {
+func renderPhases(render LineRenderer, phases []agentlog.Phase, mode LogFilter) ([]phaseView, error) {
 	firstFail := firstFailureIndex(phases)
-	openGroups := mode == "tools" || mode == "fails"
+	openGroups := mode == LogTools || mode == LogFails
 	idx := 0
 	var views []phaseView
 	for _, phase := range phases {
@@ -204,7 +204,7 @@ func renderPhases(render LineRenderer, phases []agentlog.Phase, mode string) ([]
 
 type phaseBuilder struct {
 	render     LineRenderer
-	mode       string
+	mode       LogFilter
 	openGroups bool
 	items      []logItem
 	pending    []callPair
@@ -314,10 +314,10 @@ func formatOffset(d time.Duration) string {
 	return fmt.Sprintf("+%02d:%02d", m, s)
 }
 
-func logStreamPath(ticketURL string, from, afterRecord int64, mode string) string {
+func logStreamPath(ticketURL string, from, afterRecord int64, mode LogFilter) string {
 	path := fmt.Sprintf("/ticket/%s/log?from=%d&records=%d", url.PathEscape(ticketURL), from, afterRecord)
-	if mode != "" && mode != "all" {
-		path += "&log=" + url.QueryEscape(mode)
+	if mode != LogFilterUnknown && mode != LogAll {
+		path += "&log=" + url.QueryEscape(string(mode))
 	}
 	return path
 }

@@ -463,7 +463,7 @@ type Event struct {
 	ID        int64
 	At        time.Time
 	TicketURL string
-	Kind      string
+	Kind      EventKind
 	Detail    string
 }
 
@@ -471,7 +471,7 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	err := s.q.AppendEvent(ctx, ccdb.AppendEventParams{
 		At:       e.At.UTC(),
 		TicketID: sql.NullString{String: e.TicketURL, Valid: e.TicketURL != ""},
-		Kind:     e.Kind,
+		Kind:     string(e.Kind),
 		Detail:   notNull(e.Detail),
 	})
 	if err != nil {
@@ -480,10 +480,10 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 	return nil
 }
 
-func (s *Store) HasEvent(ctx context.Context, ticketURL, kind string) (bool, error) {
+func (s *Store) HasEvent(ctx context.Context, ticketURL string, kind EventKind) (bool, error) {
 	found, err := s.q.HasEvent(ctx, ccdb.HasEventParams{
 		TicketID: sql.NullString{String: ticketURL, Valid: ticketURL != ""},
-		Kind:     kind,
+		Kind:     string(kind),
 	})
 	if err != nil {
 		return false, fmt.Errorf("has event %s for %s: %w", kind, ticketURL, err)
@@ -499,7 +499,11 @@ func (s *Store) Events(ctx context.Context) ([]Event, error) {
 
 	var events []Event
 	for _, row := range rows {
-		e := Event{At: row.At, Kind: row.Kind}
+		kind, err := ParseEventKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read events.kind of %s: %w", row.TicketID.String, err)
+		}
+		e := Event{At: row.At, Kind: kind}
 		e.TicketURL, e.Detail = row.TicketID.String, row.Detail.String
 		events = append(events, e)
 	}
@@ -517,8 +521,12 @@ func (s *Store) TicketEventsAfter(ctx context.Context, ticketURL string, afterID
 
 	var events []Event
 	for _, row := range rows {
+		kind, err := ParseEventKind(row.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("read events.kind of event %d: %w", row.ID, err)
+		}
 		events = append(events, Event{
-			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: row.Kind, Detail: row.Detail.String,
+			ID: row.ID, At: row.At, TicketURL: row.TicketID.String, Kind: kind, Detail: row.Detail.String,
 		})
 	}
 	return events, nil

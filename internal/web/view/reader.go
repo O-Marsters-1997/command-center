@@ -276,7 +276,7 @@ func (r *Reader) refusedRepos(ctx context.Context) ([]RefusedRepo, error) {
 	}
 	var refused []RefusedRepo
 	for _, repo := range repos {
-		if repo.State == store.RepoRefused {
+		if repo.Phase == plan.RepoRefused {
 			refused = append(refused, RefusedRepo{Name: repo.Name, Reason: repo.Refusal, Path: RepoPath(repo.Name)})
 		}
 	}

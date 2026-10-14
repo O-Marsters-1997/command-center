@@ -315,10 +315,13 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	}
 
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	queued := []struct{ ticket, verb string }{
-		{"sandbox://CC-1", "kill"},
-		{"sandbox://CC-1", "follow-up"},
-		{"sandbox://CC-2", "re-run"},
+	queued := []struct {
+		ticket string
+		verb   plan.Verb
+	}{
+		{"sandbox://CC-1", plan.VerbKill},
+		{"sandbox://CC-1", plan.VerbFollowUp},
+		{"sandbox://CC-2", plan.VerbReRun},
 	}
 	for i, q := range queued {
 		if err := store.QueueVerbIntent(ctx, q.ticket, q.verb, at.Add(time.Duration(i)*time.Second)); err != nil {
@@ -330,9 +333,9 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingIntentsByTicket: %v", err)
 	}
-	want := map[string][]string{
-		"sandbox://CC-1": {"kill", "follow-up"},
-		"sandbox://CC-2": {"re-run"},
+	want := map[string][]plan.Verb{
+		"sandbox://CC-1": {plan.VerbKill, plan.VerbFollowUp},
+		"sandbox://CC-2": {plan.VerbReRun},
 	}
 	if !maps.EqualFunc(byTicket, want, slices.Equal) {
 		t.Fatalf("byTicket = %+v, want %+v", byTicket, want)
@@ -350,7 +353,7 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want["sandbox://CC-1"] = []string{"follow-up"}
+	want["sandbox://CC-1"] = []plan.Verb{plan.VerbFollowUp}
 	if !maps.EqualFunc(after, want, slices.Equal) {
 		t.Fatalf("after = %+v, want %+v", after, want)
 	}

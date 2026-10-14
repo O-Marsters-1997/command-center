@@ -45,7 +45,7 @@ INSERT INTO intents (at, ticket_id, verb, payload) VALUES ($1, $2, $3, $4);
 SELECT id, ticket_id, payload FROM intents WHERE verb = $1 AND consumed_at IS NULL ORDER BY id;
 
 -- name: PendingIntentsByTicket :many
-SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
+SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL AND verb <> 'edit_ticket' ORDER BY id;
 
 -- name: ConsumeVerbIntent :exec
 UPDATE intents SET consumed_at = $1 WHERE id = $2;

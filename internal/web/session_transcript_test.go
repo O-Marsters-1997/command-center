@@ -22,9 +22,9 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 	dir := t.TempDir()
 	session := storepkg.RunSession{StartNew: true}
 	for i, message := range messages {
-		kind := "follow_up"
+		kind := plan.RunKindFollowUp
 		if i == 0 {
-			kind = "agent"
+			kind = plan.RunKindAgent
 		}
 		session.Message = message
 		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, sessionTicket, kind, "base", "hash", session)

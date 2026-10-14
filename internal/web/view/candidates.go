@@ -118,7 +118,7 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
 	view := LaunchModal{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
-	intents, err := r.store.PendingVerbIntents(ctx, store.ImportVerb)
+	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbImport)
 	if err != nil {
 		return LaunchModal{}, err
 	}

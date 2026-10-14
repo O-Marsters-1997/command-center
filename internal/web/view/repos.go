@@ -269,7 +269,7 @@ func (r *Reader) RepoPage(
 	page.RepoCrumb, page.RepoCrumbPath = page.Title, RepoPath(page.Title)
 	page.Remote = repo.Remote
 	page.Known = true
-	page.Ready = repo.State == store.RepoReady
+	page.Ready = repo.Phase == plan.RepoReady
 	for _, f := range offered {
 		page.Features = append(page.Features, FeatureRow{Feature: f, Imported: imported[f], OtherRepos: others[f]})
 	}

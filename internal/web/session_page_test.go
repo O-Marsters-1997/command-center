@@ -16,20 +16,20 @@ import (
 
 const sessionTicket = "https://github.com/acme/web/issues/1"
 
-func sessionStore(t *testing.T, kind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
+func sessionStore(t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
 	t.Helper()
 	return sessionStoreEnding(t, kind, prompt, keepPrompt, alive, plan.OutcomePush)
 }
 
 func sessionStoreEnding(
-	t *testing.T, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+	t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
 	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
 }
 
 func sessionStoreInFeature(
-	t *testing.T, feature, kind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
+	t *testing.T, feature string, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
 ) (*storepkg.Store, string) {
 	t.Helper()
 	ctx := t.Context()
@@ -72,7 +72,7 @@ func sessionStoreInFeature(
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"agent", "follow-up"} {
+	for _, kind := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
 		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
 		st, _ := sessionStore(t, kind, prompt, true, true)
 		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")

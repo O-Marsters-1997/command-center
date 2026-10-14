@@ -8,8 +8,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func railRow(n, feature, glyph string) Row {
-	return Row{URL: "sandbox://" + n, Repo: "repo", Feature: feature, Glyph: glyph, Verbs: []string{"re-run"}}
+func railRow(n, feature string, glyph plan.GlyphWord) Row {
+	return Row{URL: "sandbox://" + n, Repo: "repo", Feature: feature, Glyph: glyph, Verbs: []plan.Verb{plan.VerbReRun}}
 }
 
 func refs(items []RailItem) []string {
@@ -109,7 +109,7 @@ func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
 	row := railRow("3", "billing", plan.GlyphAttention)
 	row.State = plan.AwaitingInput.String()
 	row.Reason = "Which database?"
-	row.Verbs = []string{plan.VerbFollowUp, plan.VerbReRun}
+	row.Verbs = []plan.Verb{plan.VerbFollowUp, plan.VerbReRun}
 
 	rail := buildRail([]Row{row}, time.Now(), RailParams{})
 
@@ -129,7 +129,7 @@ func TestBuildRailKeepsTheVerbWhenAnAwaitingInputRunCannotBeRepliedTo(t *testing
 	row := railRow("4", "billing", plan.GlyphAttention)
 	row.State = plan.AwaitingInput.String()
 	row.Reason = "Which database?"
-	row.Verbs = []string{plan.VerbReRun}
+	row.Verbs = []plan.Verb{plan.VerbReRun}
 
 	got := buildRail([]Row{row}, time.Now(), RailParams{}).NeedsYou[0]
 

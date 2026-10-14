@@ -16,7 +16,7 @@ whether a row's state offers a verb.
 - The store returns `plan.Input` (`Store.PlanInput`). There is one adapter, with no store interface
   and no fake.
 - `plan` owns `Observation`, the fact types a derivation reads and the value sets they carry, such
-  as `RepoState`. The store converts its columns to them at the boundary.
+  as `RepoPhase`. The store converts its columns to them at the boundary, through `Parse…`.
 - `plan` imports only the stdlib-only leaves `spend`, `verdict` and `option`, enforced by depguard.
   A fact that may be absent is an `option.Option[T]`, never a `*T`.
 - The web derives per render. Nothing is cached between requests, so a page never shows a label the

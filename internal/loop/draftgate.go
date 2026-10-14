@@ -4,11 +4,7 @@ import (
 	"context"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-)
-
-const (
-	eventDraftReady       = "draft_ready"
-	eventDraftReadyFailed = "draft_ready_failed"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
@@ -25,7 +21,7 @@ func (l *Loop) applyDraftGate(ctx context.Context, snap plan.Snapshot) error {
 
 func (l *Loop) readyOne(ctx context.Context, t plan.Ticket) error {
 	if err := l.forge.Ready(ctx, l.checkout(t.Repo), t.Branch); err != nil {
-		return l.event(ctx, t.URL, eventDraftReadyFailed, err.Error())
+		return l.event(ctx, t.URL, store.EventDraftReadyFailed, err.Error())
 	}
-	return l.event(ctx, t.URL, eventDraftReady, "")
+	return l.event(ctx, t.URL, store.EventDraftReady, "")
 }
