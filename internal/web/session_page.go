@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,7 +16,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 		r.URL.Query().Get("log") == "raw",
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("load session: %w", err)
 	}
 	if r.URL.Query().Get("part") == "actions" {
 		return renderHTML(w, "sessionActions", page)
@@ -35,7 +36,7 @@ func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticket
 	parts := strings.Split(strings.TrimPrefix(self, "/s/"), "/")
 	page, err := s.view.Session(r.Context(), s.clock.Now(), parts[0], parts[1], parts[2], false)
 	if err != nil {
-		return err
+		return fmt.Errorf("load session: %w", err)
 	}
 	page.Toast = "Queued " + string(verb)
 	page.ResetComposer = verb == plan.VerbFollowUp

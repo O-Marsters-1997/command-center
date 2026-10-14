@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -96,7 +97,7 @@ func (r *Reader) repoScope(ctx context.Context, scope string) (string, error) {
 	}
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("load repos: %w", err)
 	}
 	return normalizeRepoScope(scope, repos), nil
 }
@@ -107,7 +108,7 @@ func (r *Reader) projectScope(ctx context.Context, scope string) (store.Project,
 	}
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
-		return store.Project{}, err
+		return store.Project{}, fmt.Errorf("load projects: %w", err)
 	}
 	return normalizeProjectScope(scope, projects), nil
 }
@@ -116,7 +117,7 @@ func (r *Reader) projectScope(ctx context.Context, scope string) (store.Project,
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return store.Repo{}, false, err
+		return store.Repo{}, false, fmt.Errorf("load repos: %w", err)
 	}
 	for _, repo := range repos {
 		if scope != "" && strings.EqualFold(repo.Name, scope) {
@@ -130,33 +131,36 @@ func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool,
 func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
-		return ReposPage{}, err
+		return ReposPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.Section = "repos"
 	groups, form, err := r.repoGroups(ctx)
 	if err != nil {
-		return ReposPage{}, err
+		return ReposPage{}, fmt.Errorf("load repo groups: %w", err)
 	}
 	importErr, err := r.importError(ctx, now)
 	if err != nil {
-		return ReposPage{}, err
+		return ReposPage{}, fmt.Errorf("import error: %w", err)
 	}
 	return ReposPage{Chrome: chrome, Groups: groups, NewProject: form, LastImportError: importErr}, nil
 }
 
 func (r *Reader) RepoGroups(ctx context.Context) ([]RepoGroup, error) {
 	groups, _, err := r.repoGroups(ctx)
-	return groups, err
+	if err != nil {
+		return nil, fmt.Errorf("load repo groups: %w", err)
+	}
+	return groups, nil
 }
 
 func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, err
+		return nil, NewProjectForm{}, fmt.Errorf("load repos: %w", err)
 	}
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, err
+		return nil, NewProjectForm{}, fmt.Errorf("load projects: %w", err)
 	}
 	byName := make(map[string]store.Repo, len(repos))
 	names := make([]string, 0, len(repos))
@@ -190,7 +194,7 @@ func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, e
 func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
 	tracked, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load repos: %w", err)
 	}
 	q := strings.ToLower(strings.TrimSpace(query))
 	rows := make([]RepoRow, 0, len(tracked))
@@ -230,22 +234,25 @@ func (r *Reader) RepoPage(
 ) (RepoPage, error) {
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
 	}
 	chrome.Section = "repos"
 	chrome.RepoCrumb, chrome.RepoCrumbPath = scope, RepoPath(scope)
 	page := RepoPage{Chrome: chrome, Title: scope}
 	if page.Banner, err = r.Banner(ctx, scope); err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load banner: %w", err)
 	}
 
 	repo, known, err := r.KnownRepo(ctx, scope)
-	if err != nil || !known {
-		return page, err
+	if err != nil {
+		return page, fmt.Errorf("load known repo: %w", err)
+	}
+	if !known {
+		return page, nil
 	}
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load tickets: %w", err)
 	}
 	imported := make(map[string]bool)
 	others := make(map[string][]string)
@@ -275,19 +282,22 @@ func (r *Reader) RepoPage(
 	}
 	page.LastImportError, err = r.importError(ctx, now)
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("import error: %w", err)
 	}
 	page.Tickets, err = r.Board(ctx, now, ParseParams(url.Values{"repo": {repo.Name}, "ticket": selected}))
 	if err != nil {
-		return RepoPage{}, err
+		return RepoPage{}, fmt.Errorf("load board: %w", err)
 	}
 	return page, nil
 }
 
 func (r *Reader) importError(ctx context.Context, now time.Time) (*ImportError, error) {
 	lastErr, failed, err := r.store.LastImportError(ctx)
-	if err != nil || !failed {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("load last import error: %w", err)
+	}
+	if !failed {
+		return nil, nil
 	}
 	return &ImportError{Age: relative(now, lastErr.At).Age, Feature: lastErr.Feature, Message: lastErr.Message}, nil
 }

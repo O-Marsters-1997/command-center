@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -41,11 +42,11 @@ func (b Banner) TrackLabel() string {
 func (r *Reader) Banner(ctx context.Context, scope string) (Banner, error) {
 	pending, err := r.store.TrackPending(ctx, scope)
 	if err != nil {
-		return Banner{}, err
+		return Banner{}, fmt.Errorf("track pending: %w", err)
 	}
 	repo, known, err := r.KnownRepo(ctx, scope)
 	if err != nil {
-		return Banner{}, err
+		return Banner{}, fmt.Errorf("load known repo: %w", err)
 	}
 	b := Banner{Repo: scope}
 	switch {

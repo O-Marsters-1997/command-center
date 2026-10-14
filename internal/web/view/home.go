@@ -2,6 +2,7 @@ package view
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -15,11 +16,11 @@ type Home struct {
 func (r *Reader) Home(ctx context.Context, now time.Time) (Home, error) {
 	chrome, err := r.Chrome(ctx, now, Params{})
 	if err != nil {
-		return Home{}, err
+		return Home{}, fmt.Errorf("load chrome: %w", err)
 	}
 	rail, err := r.Rail(ctx, now, RailParams{})
 	if err != nil {
-		return Home{}, err
+		return Home{}, fmt.Errorf("load rail: %w", err)
 	}
 	chrome.Home = true
 	chrome.Section = "tickets"

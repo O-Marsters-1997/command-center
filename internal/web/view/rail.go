@@ -119,36 +119,36 @@ func RailSelection(currentURL string) string {
 func (r *Reader) Rail(ctx context.Context, now time.Time, params RailParams) (Rail, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load tickets: %w", err)
 	}
 	in, err := r.store.PlanInput(ctx)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load plan input: %w", err)
 	}
 	lastErr, failed, err := r.store.LastError(ctx)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load last error: %w", err)
 	}
 	gauges, err := r.store.LatestReadings(ctx)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load latest readings: %w", err)
 	}
 	split, err := r.gaugeSplit(ctx, now)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("gauge split: %w", err)
 	}
 	in.Now = now
 	if params.Repo, err = r.repoScope(ctx, params.Repo); err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load repo scope: %w", err)
 	}
 	project, err := r.projectScope(ctx, params.Project)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load project scope: %w", err)
 	}
 	params.Project, params.projectRepos = project.Name, project.Repos
 	projects, err := r.projectMarks(ctx)
 	if err != nil {
-		return Rail{}, err
+		return Rail{}, fmt.Errorf("load project marks: %w", err)
 	}
 	rows := deriveRows(tickets, in, plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), projects)
 	chrome := r.buildChrome(tickets, in.Obs, in.Observed, lastErr, failed, gauges, split, now, Params{})

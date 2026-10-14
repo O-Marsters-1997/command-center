@@ -79,7 +79,7 @@ func buildLogDetail(
 
 	whole, resumeAt, err := wholeLines(path)
 	if err != nil {
-		return LogDetail{}, err
+		return LogDetail{}, fmt.Errorf("load whole lines: %w", err)
 	}
 	detail.StreamPath = logStreamPath(ticketURL, resumeAt, lastRecordID(records), params.Log)
 	if whole == nil && len(records) == 0 {
@@ -101,7 +101,7 @@ func buildLogDetail(
 	detail.Worked = stats.worked()
 	mergeRecords(&run, records)
 	if detail.Phases, err = renderPhases(render, run.Phases, mode); err != nil {
-		return LogDetail{}, err
+		return LogDetail{}, fmt.Errorf("render phases: %w", err)
 	}
 	if final != "" {
 		if detail.Final, err = render(sayLine(final)); err != nil {
@@ -190,12 +190,12 @@ func renderPhases(render LineRenderer, phases []agentlog.Phase, mode LogFilter) 
 		b := phaseBuilder{render: render, mode: mode, openGroups: openGroups}
 		for _, event := range phase.Events {
 			if err := b.add(event, idx == firstFail); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("add event: %w", err)
 			}
 			idx++
 		}
 		if err := b.flush(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("flush: %w", err)
 		}
 		views = append(views, phaseView{Skill: phase.Skill, Note: phase.Note, At: formatOffset(phase.At), Items: b.items})
 	}
@@ -214,7 +214,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 	switch event.Kind {
 	case agentlog.Say:
 		if err := b.flush(); err != nil {
-			return err
+			return fmt.Errorf("flush: %w", err)
 		}
 		if !KindShown(b.mode, event.Kind) {
 			return nil
@@ -226,7 +226,7 @@ func (b *phaseBuilder) add(event agentlog.Event, anchor bool) error {
 		b.items = append(b.items, logItem{Kind: "say", Line: line})
 	case agentlog.Record, agentlog.Commit:
 		if err := b.flush(); err != nil {
-			return err
+			return fmt.Errorf("flush: %w", err)
 		}
 		if !KindShown(b.mode, event.Kind) {
 			return nil

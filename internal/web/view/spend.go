@@ -58,7 +58,7 @@ func applySpend(rows []Row, cache *SpendCache) error {
 	for i := range rows {
 		tokens, err := cache.Spend(rows[i].LogPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("read spend for %s: %w", rows[i].LogPath, err)
 		}
 		rows[i].SpendTokens = tokens
 	}

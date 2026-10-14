@@ -98,7 +98,7 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 	}
 	repos, err := c.list(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list pushable repos: %w", err)
 	}
 	c.repos, c.fetched = repos, now
 	return repos, nil
@@ -174,6 +174,30 @@ func (s *Server) handle(h func(http.ResponseWriter, *http.Request) error) http.H
 	})
 }
 
+func clientMessage(err error) string {
+	if se, ok := errors.AsType[statusError](err); ok {
+		return se.Error()
+	}
+	if invalid, ok := errors.AsType[view.InvalidError](err); ok {
+		return invalid.Error()
+	}
+	for _, m := range statusMap {
+		if !errors.Is(err, m.target) {
+			continue
+		}
+		e := err
+		for {
+			next := errors.Unwrap(e)
+			if next == nil || errors.Unwrap(next) == nil || !errors.Is(next, m.target) {
+				break
+			}
+			e = next
+		}
+		return e.Error()
+	}
+	return err.Error()
+}
+
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status := statusOf(err)
 	if status >= http.StatusInternalServerError {
@@ -182,13 +206,13 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	if r.Header.Get("HX-Request") == "" {
-		http.Error(w, err.Error(), status)
+		http.Error(w, clientMessage(err), status)
 		return
 	}
 	w.Header().Set("HX-Retarget", "#flash")
 	w.Header().Set("HX-Reswap", "innerHTML")
 	w.Header().Set("HX-Reselect", "p.banner")
-	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", err.Error()); renderErr != nil {
+	if renderErr := renderHTMLStatus(w, http.StatusUnprocessableEntity, "flash", clientMessage(err)); renderErr != nil {
 		s.logger.ErrorContext(r.Context(), "render flash", "err", renderErr)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
@@ -240,7 +264,7 @@ func (s *Server) handleStylesheet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) error {
 	home, err := s.view.Home(r.Context(), s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("load home: %w", err)
 	}
 	return renderHTML(w, "home.tmpl", home)
 }
@@ -250,7 +274,7 @@ func (s *Server) handleTickets(w http.ResponseWriter, r *http.Request) error {
 	q.Set("all", "1")
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
 	if err != nil {
-		return err
+		return fmt.Errorf("load board: %w", err)
 	}
 	return renderHTML(w, "tickets.tmpl", board)
 }
@@ -266,7 +290,7 @@ func (s *Server) handleFeatureGraph(w http.ResponseWriter, r *http.Request) erro
 func (s *Server) renderFeature(w http.ResponseWriter, r *http.Request, tmpl string) error {
 	board, err := s.featureBoard(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("load feature board: %w", err)
 	}
 	return renderHTML(w, tmpl, board)
 }
@@ -277,7 +301,7 @@ func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
 	q.Set("feature", feature)
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(q))
 	if err != nil {
-		return view.Board{}, err
+		return view.Board{}, fmt.Errorf("load board: %w", err)
 	}
 	if board.FeatureScope != feature {
 		return view.Board{}, errorf(http.StatusNotFound, "no feature %q", feature)
@@ -288,11 +312,11 @@ func (s *Server) featureBoard(r *http.Request) (view.Board, error) {
 func (s *Server) handleFeatureLaunch(w http.ResponseWriter, r *http.Request) error {
 	board, err := s.featureBoard(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("load feature board: %w", err)
 	}
 	modal, err := s.view.FeatureModal(r.Context(), s.clock.Now(), board.FeatureScope)
 	if err != nil {
-		return err
+		return fmt.Errorf("load feature modal: %w", err)
 	}
 	board.Launch = &modal
 	return renderHTML(w, "feature.tmpl", board)
@@ -301,7 +325,7 @@ func (s *Server) handleFeatureLaunch(w http.ResponseWriter, r *http.Request) err
 func (s *Server) handleLaunchPicker(w http.ResponseWriter, r *http.Request) error {
 	page, err := s.view.LaunchPicker(r.Context(), s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("load launch picker: %w", err)
 	}
 	return renderHTML(w, "launch_picker.tmpl", page)
 }
@@ -326,7 +350,7 @@ func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
 	}
 	rail, err := s.view.Rail(r.Context(), s.clock.Now(), params)
 	if err != nil {
-		return err
+		return fmt.Errorf("load rail: %w", err)
 	}
 	return renderHTML(w, "rail", rail)
 }
@@ -334,7 +358,7 @@ func (s *Server) handleRail(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(r.URL.Query()))
 	if err != nil {
-		return err
+		return fmt.Errorf("load board: %w", err)
 	}
 	return writeJSON(w, board.Groups)
 }
@@ -351,18 +375,20 @@ func renderHTML(w http.ResponseWriter, name string, data any) error {
 func renderHTMLStatus(w http.ResponseWriter, status int, name string, data any) error {
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {
-		return err
+		return fmt.Errorf("execute template: %w", err)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, err := buf.WriteTo(w)
-	return err
+	if _, err := buf.WriteTo(w); err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) renderBoard(w http.ResponseWriter, r *http.Request, name string) error {
 	board, err := s.view.Board(r.Context(), s.clock.Now(), view.ParseParams(r.URL.Query()))
 	if err != nil {
-		return err
+		return fmt.Errorf("load board: %w", err)
 	}
 	return renderHTML(w, name, board)
 }
@@ -370,7 +396,7 @@ func (s *Server) renderBoard(w http.ResponseWriter, r *http.Request, name string
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
 	events, err := s.store.Events(r.Context())
 	if err != nil {
-		return err
+		return fmt.Errorf("load events: %w", err)
 	}
 	return writeJSON(w, events)
 }
@@ -387,13 +413,13 @@ func (s *Server) handleLaunchOpen(w http.ResponseWriter, r *http.Request) error 
 
 	if feature := r.FormValue("feature"); feature != "" {
 		if err := s.store.QueueVerbIntent(ctx, feature, plan.VerbImport, s.clock.Now()); err != nil {
-			return err
+			return fmt.Errorf("queue verb intent: %w", err)
 		}
 		s.nudge()
 
 		modal, err := s.view.FeatureModal(ctx, s.clock.Now(), feature)
 		if err != nil {
-			return err
+			return fmt.Errorf("load feature modal: %w", err)
 		}
 		return renderLaunchModal(w, modal)
 	}
@@ -417,7 +443,7 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) error 
 		if feature := q.Get("feature"); feature != "" {
 			modal, err := s.view.FeatureModal(ctx, now, feature)
 			if err != nil {
-				return err
+				return fmt.Errorf("load feature modal: %w", err)
 			}
 			return renderLaunchModal(w, modal)
 		}
@@ -434,7 +460,7 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) error 
 
 	candidates, err := s.view.Candidates(ctx, now, q)
 	if err != nil {
-		return err
+		return fmt.Errorf("load candidates: %w", err)
 	}
 	return writeJSON(w, candidates)
 }
@@ -461,7 +487,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 
 	snap, err := s.view.Snapshot(ctx, s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("load snapshot: %w", err)
 	}
 	rows, err := snap.Preview(requested)
 	if err != nil {
@@ -479,13 +505,13 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) error {
 
 	group, err := randomGroup()
 	if err != nil {
-		return err
+		return fmt.Errorf("pick launch group: %w", err)
 	}
 
 	now := s.clock.Now()
 	for _, ticketURL := range requested {
 		if err := s.store.QueueLaunchIntent(ctx, ticketURL, hashes[ticketURL], group, now); err != nil {
-			return err
+			return fmt.Errorf("queue launch intent: %w", err)
 		}
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -514,7 +540,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 
 	snap, err := s.view.Snapshot(ctx, s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("load snapshot: %w", err)
 	}
 	entry, ok := snap.Entry(ticketURL)
 	if !ok {
@@ -531,7 +557,7 @@ func (s *Server) handleVerb(w http.ResponseWriter, r *http.Request) error {
 		err = s.store.QueueVerbIntent(ctx, ticketURL, verb, s.clock.Now())
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	if r.FormValue("from") == "rail" && r.Header.Get("HX-Request") != "" {
 		return s.handleRail(w, r)
@@ -574,7 +600,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 
 	tickets, err := s.store.Tickets(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("load tickets: %w", err)
 	}
 	ticket, ok := ticketByURL(tickets, ticketURL)
 	if !ok {
@@ -584,7 +610,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	if branch != ticket.Branch {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("load last observation: %w", err)
 		}
 		if worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]; ok {
 			return errorf(http.StatusConflict, "branch %s already has a worktree at %s, remove it before changing branch",
@@ -593,7 +619,7 @@ func (s *Server) handleTicket(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if err := s.store.QueueEditTicketIntent(ctx, ticketURL, branch, blockedBy, s.clock.Now()); err != nil {
-		return err
+		return fmt.Errorf("queue edit ticket intent: %w", err)
 	}
 	http.Redirect(w, r, afterTicketEdit(r.FormValue("return")), http.StatusSeeOther)
 	return nil
@@ -611,7 +637,7 @@ func afterTicketEdit(back string) string {
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 	page, err := s.view.Repos(r.Context(), s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("load repos: %w", err)
 	}
 	return renderHTML(w, "repos.tmpl", page)
 }
@@ -624,21 +650,21 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 	}
 	repo, known, err := s.view.KnownRepo(ctx, scope)
 	if err != nil {
-		return err
+		return fmt.Errorf("load known repo: %w", err)
 	}
 	var offered []string
 	if known && repo.Phase == plan.RepoReady {
 		obs, _, err := s.store.LastObservation(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("load last observation: %w", err)
 		}
 		if offered, err = importFeatures(ctx, []store.Repo{repo}, obs.Settings, s.trackerFor); err != nil {
-			return err
+			return fmt.Errorf("import features: %w", err)
 		}
 	}
 	page, err := s.view.RepoPage(ctx, s.clock.Now(), scope, offered, r.URL.Query()["ticket"])
 	if err != nil {
-		return err
+		return fmt.Errorf("load repo page: %w", err)
 	}
 	return renderHTML(w, "repo.tmpl", page)
 }
@@ -646,7 +672,7 @@ func (s *Server) handleRepo(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleBanner(w http.ResponseWriter, r *http.Request) error {
 	banner, err := s.view.Banner(r.Context(), r.URL.Query().Get("repo"))
 	if err != nil {
-		return err
+		return fmt.Errorf("load banner: %w", err)
 	}
 	rawSeen := r.URL.Query().Get("seen")
 	if rawSeen != "" {
@@ -673,7 +699,7 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	}
 	queued, err := s.store.QueueTrackIntent(r.Context(), repo, s.clock.Now())
 	if err != nil {
-		return err
+		return fmt.Errorf("queue track intent: %w", err)
 	}
 	if queued {
 		s.nudge()
@@ -684,7 +710,7 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) error {
 	}
 	banner, err := s.view.Banner(r.Context(), repo)
 	if err != nil {
-		return err
+		return fmt.Errorf("load banner: %w", err)
 	}
 	return renderHTML(w, "repoBanner", banner)
 }
@@ -706,7 +732,7 @@ func (s *Server) handleRepoSearch(w http.ResponseWriter, r *http.Request) error 
 	}
 	rows, err := s.view.SearchRepos(r.Context(), query, pushable)
 	if err != nil {
-		return err
+		return fmt.Errorf("search repos: %w", err)
 	}
 	search.Rows = rows
 	return renderHTML(w, "repoResults", search)
@@ -724,7 +750,7 @@ func ticketByURL(tickets []store.Ticket, url string) (store.Ticket, bool) {
 func (s *Server) handleImportFeature(w http.ResponseWriter, r *http.Request) error {
 	feature := r.PathValue("feature")
 	if err := s.store.QueueVerbIntent(r.Context(), feature, plan.VerbImport, s.clock.Now()); err != nil {
-		return err
+		return fmt.Errorf("queue verb intent: %w", err)
 	}
 	s.nudge()
 	return s.redirectOrSwap(w, r)

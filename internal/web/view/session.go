@@ -78,7 +78,7 @@ func SessionPath(ticketURL string) string {
 func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n string, raw bool) (Session, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("load tickets: %w", err)
 	}
 	suffix := "/" + owner + "/" + name + "/issues/" + n
 	ticketURL := ""
@@ -94,7 +94,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 
 	board, err := r.Board(ctx, now, Params{Sel: ticketURL, Log: "all"})
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("load board: %w", err)
 	}
 	row, ok := board.Row(ticketURL)
 	if !ok {
@@ -103,7 +103,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 
 	intents, err := r.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("load pending verb intents: %w", err)
 	}
 	var pendingMessages []string
 	for _, intent := range intents {
@@ -122,12 +122,12 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	runs, err := r.store.SessionRunsForTicket(ctx, ticketURL)
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("load session runs for ticket: %w", err)
 	}
 	turns := []Turn{{Log: row.Log}}
 	if !raw {
 		if turns, err = r.turns(row, runs); err != nil {
-			return Session{}, err
+			return Session{}, fmt.Errorf("build turns: %w", err)
 		}
 	}
 	promptLog := row.LogPath
@@ -136,11 +136,11 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 	}
 	prompt, err := readPrompt(promptLog)
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("read prompt: %w", err)
 	}
 	rawText, err := rawLog(raw, row.LogPath)
 	if err != nil {
-		return Session{}, err
+		return Session{}, fmt.Errorf("load raw log: %w", err)
 	}
 	return Session{
 		Turns:          turns,
