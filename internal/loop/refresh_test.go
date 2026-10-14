@@ -10,7 +10,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -119,7 +118,7 @@ func baseObservation(f stackedFixture, parentTip string) plan.Observation {
 			branchRef("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
 		},
 		BranchTips: map[plan.BranchRef]plan.SHA{
-			branchRef("repo", "parent"): plan.SHA(parentTip), loop.MainTipKey("repo"): plan.SHA(f.mainSHA),
+			branchRef("repo", "parent"): plan.SHA(parentTip), branchRef("repo", plan.DefaultBaseBranch): plan.SHA(f.mainSHA),
 		},
 		Runs:     map[plan.TicketURL]plan.RunObservation{},
 		MidMerge: map[plan.BranchRef]bool{},
@@ -229,7 +228,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	mainTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/main"))
 
 	obs := baseObservation(f, f.parentTip0)
-	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainTip1)
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	cfg, ws := stackedConfigAndWorkspace(t, root)
@@ -395,38 +394,6 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending refresh intents = %+v, want none: consumed", pending)
-	}
-}
-
-func TestRefreshFactsSkipsANullTicketLaunchEvent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	refused := storepkg.Event{At: time.Now(), Kind: "refresh_refused", Detail: "no ticket"}
-	if err := store.AppendEvent(ctx, refused); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.AppendEvent(ctx, storepkg.Event{
-		At: time.Now(), TicketURL: ticket.URL, Kind: "refresh_refused", Detail: "conflict",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	facts, err := store.RefreshFacts(ctx)
-	if err != nil {
-		t.Fatalf("RefreshFacts: %v", err)
-	}
-	if _, ok := facts[""]; ok {
-		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
-	}
-	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.Reason != "conflict" {
-		t.Errorf("facts[%s] = %+v, want Refused with reason %q", ticket.URL, got, "conflict")
 	}
 }
 

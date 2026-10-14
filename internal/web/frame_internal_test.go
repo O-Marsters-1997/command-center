@@ -11,7 +11,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 type boardTestClock struct{}
@@ -87,15 +86,7 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 }
 
 func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
-	st, err := store.OpenStore(cctest.DSN(t), store.MaxOpenConns(4))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
+	st := cctest.Store(t)
 
 	started := make(chan struct{})
 	release := make(chan struct{})

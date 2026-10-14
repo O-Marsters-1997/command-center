@@ -29,6 +29,31 @@ type RunSession struct {
 	Message  string
 }
 
+type RunDetails struct {
+	SessionID string
+	Message   string
+	Outcome   option.Option[plan.Outcome]
+}
+
+func (s *Store) RunDetails(ctx context.Context, id plan.RunID) (RunDetails, error) {
+	row, err := s.q.RunDetails(ctx, int64(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return RunDetails{}, fmt.Errorf("run %d: %w", id, ErrNotFound)
+	}
+	if err != nil {
+		return RunDetails{}, fmt.Errorf("read run %d: %w", id, err)
+	}
+	details := RunDetails{SessionID: row.SessionID, Message: row.Message}
+	if row.Outcome != "" {
+		outcome, err := plan.ParseOutcome(row.Outcome)
+		if err != nil {
+			return RunDetails{}, fmt.Errorf("read outcome of run %d: %w", id, err)
+		}
+		details.Outcome = option.Some(outcome)
+	}
+	return details, nil
+}
+
 func (s *Store) InsertSessionRunSkeleton(
 	ctx context.Context, r RunSkeleton,
 ) (runID int64, sessionID string, err error) {
