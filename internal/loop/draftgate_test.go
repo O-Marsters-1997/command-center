@@ -48,27 +48,27 @@ func draftConsumerPR(
 	}
 }
 
-func TestDraftGateStaysDraftWhileGatingBlockerIsOpen(t *testing.T) {
+func TestDraftGateStaysDraftUntilBlockerMergedAndVerdictGreen(t *testing.T) {
 	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	*f.Obs = draftConsumerPR(plan.Open, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
-
-	if got := len(f.Forge.Calls("Ready")); got != 0 {
-		t.Errorf("pr ready calls = %d, want 0: the gating blocker is still open", got)
+	tests := []struct {
+		name         string
+		blockerState plan.PRState
+		conclusion   string
+	}{
+		{name: "gating blocker open", blockerState: plan.Open, conclusion: "SUCCESS"},
+		{name: "consumer checks failing", blockerState: plan.Merged, conclusion: "FAILURE"},
 	}
-}
-
-func TestDraftGateStaysDraftWhileVerdictIsNotGreen(t *testing.T) {
-	t.Parallel()
-	f := newPushFixture(t)
-	f.seedDraftGate(t)
-	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("FAILURE"), "cc-1-tip")
-	f.tick(t)
-
-	if got := len(f.Forge.Calls("Ready")); got != 0 {
-		t.Errorf("pr ready calls = %d, want 0: the consumer's own CI has not gone green", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newPushFixture(t)
+			f.seedDraftGate(t)
+			*f.Obs = draftConsumerPR(tt.blockerState, ciCheck(tt.conclusion), "cc-1-tip")
+			f.tick(t)
+			if got := len(f.Forge.Calls("Ready")); got != 0 {
+				t.Errorf("pr ready calls = %d, want 0", got)
+			}
+		})
 	}
 }
 

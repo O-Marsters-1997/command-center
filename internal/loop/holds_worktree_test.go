@@ -39,7 +39,7 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	dispositionAs(t, store, f.child.URL, plan.OutcomeAsked, at.Add(time.Second))
@@ -83,7 +83,7 @@ func TestRetargetSkipsAnAwaitingInputTicketUntilItLeavesThatState(t *testing.T) 
 	root, repoPath := repoWithOrigin(t)
 	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	dispositionAs(t, store, f.child.URL, plan.OutcomeAsked, at.Add(time.Second))

@@ -2,12 +2,14 @@ package loop_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -256,6 +258,14 @@ func trackRepo(t *testing.T, store *storepkg.Store, name, remote string) {
 
 var update = flag.Bool("update", false, "regenerate golden files")
 
+var questionPath = regexp.MustCompile(`<runs>/[0-9]+\.question`)
+
+func assertPromptGolden(t *testing.T, path, prompt, runsDir string) {
+	t.Helper()
+	normalized := strings.ReplaceAll(prompt, runsDir, "<runs>")
+	assertGolden(t, path, []byte(questionPath.ReplaceAllString(normalized, "<runs>/<run>.question")))
+}
+
 func assertGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
 	if *update {
@@ -267,9 +277,36 @@ func assertGolden(t *testing.T, path string, got []byte) {
 	if err != nil {
 		t.Fatalf("ReadFile golden (regenerate with -update): %v", err)
 	}
-	if string(got) != string(want) {
-		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
+	if strings.HasSuffix(path, ".json") {
+		got = canonicalJSON(t, got)
+		want = canonicalJSON(t, want)
 	}
+	if string(got) != string(want) {
+		gotLines, wantLines := strings.Split(string(got), "\n"), strings.Split(string(want), "\n")
+		line := 0
+		for line < len(gotLines) && line < len(wantLines) && gotLines[line] == wantLines[line] {
+			line++
+		}
+		start := max(0, line-1)
+		endGot := min(len(gotLines), line+2)
+		endWant := min(len(wantLines), line+2)
+		t.Errorf("%s differs at line %d (want %d bytes, got %d bytes); rerun with -update to accept\n"+
+			"--- want ---\n%s\n--- got ---\n%s", path, line+1, len(want), len(got),
+			strings.Join(wantLines[start:endWant], "\n"), strings.Join(gotLines[start:endGot], "\n"))
+	}
+}
+
+func canonicalJSON(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode golden JSON: %v", err)
+	}
+	canonical, err := json.MarshalIndent(decoded, "", "  ")
+	if err != nil {
+		t.Fatalf("encode golden JSON: %v", err)
+	}
+	return canonical
 }
 
 func runGitAllowingFailure(t *testing.T, dir string, args ...string) ([]byte, error) {

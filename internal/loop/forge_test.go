@@ -3,7 +3,6 @@ package loop_test
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
@@ -30,7 +29,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 
 	store := openStore(t)
 	trackRepo(t, store, "repo", "git@github.com:acme/repo.git")
-	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	at := testAt.AddDate(0, 2, -15)
 	forge := &recordingForge{}
 	worktrees := &recordingWorktrees{}
 	runner := runner.NewFake()

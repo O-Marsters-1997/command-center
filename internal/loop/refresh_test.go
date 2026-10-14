@@ -121,7 +121,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -173,7 +173,7 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -210,7 +210,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
@@ -247,7 +247,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -280,7 +280,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -312,7 +312,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
@@ -408,7 +408,7 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
@@ -477,7 +477,7 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
@@ -542,7 +542,7 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
@@ -598,7 +598,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)

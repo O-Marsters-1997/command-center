@@ -5,96 +5,62 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
+func TestRecordMergedEvents(t *testing.T) {
 	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
+	mergedAt := testAt.Add(-26*time.Hour - 30*time.Minute)
+	type mergedEvent struct {
+		URL string
+		At  time.Time
 	}
-
-	tickAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
-	observed := plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
-		},
+	tests := []struct {
+		name string
+		pr   plan.PR
+		want []mergedEvent
+	}{
+		{name: "merged PR", pr: plan.PR{Number: 41, State: plan.Merged, MergedAt: mergedAt},
+			want: []mergedEvent{{URL: "sandbox://CC-1", At: mergedAt}}},
+		{name: "closed unmerged PR", pr: plan.PR{Number: 41, State: plan.Closed}},
 	}
-	lp := newLoop(store,
-		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(tickAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("first RunOnce: %v", err)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	merges := mergedEvents(events)
-	if len(merges) != 1 {
-		t.Fatalf("pr_merged events = %d, want exactly 1: %+v", len(merges), events)
-	}
-	if merges[0].TicketURL != ticket.URL {
-		t.Errorf("ticket url = %q, want %q", merges[0].TicketURL, ticket.URL)
-	}
-	if !merges[0].At.Equal(mergedAt) {
-		t.Errorf("event time = %s, want GitHub's own merge time %s, not the tick clock %s",
-			merges[0].At, mergedAt, tickAt)
-	}
-	if err := store.SaveObservation(ctx, plan.Observation{}); err != nil {
-		t.Fatalf("reset observation: %v", err)
-	}
-
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	events, err = store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if got := len(mergedEvents(events)); got != 1 {
-		t.Errorf("pr_merged events after a second tick = %d, want still 1", got)
-	}
-}
-
-func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	observed := plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Closed},
-		},
-	}
-	lp := newLoop(store,
-		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if got := len(mergedEvents(events)); got != 0 {
-		t.Errorf("pr_merged events for a closed-unmerged PR = %d, want 0: %+v", got, events)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			store := openStore(t)
+			ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+			if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
+				t.Fatalf("UpsertTickets: %v", err)
+			}
+			observed := plan.Observation{PRs: map[plan.BranchRef]plan.PR{branchRef(ticket.Repo, ticket.Branch): tt.pr}}
+			lp := newLoop(store, func(context.Context) (plan.Observation, error) { return observed, nil },
+				fixedClock(testAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+			for tick := range 2 {
+				if err := lp.RunOnce(ctx); err != nil {
+					t.Fatalf("RunOnce tick %d: %v", tick, err)
+				}
+				events, err := store.Events(ctx)
+				if err != nil {
+					t.Fatalf("Events: %v", err)
+				}
+				var got []mergedEvent
+				for _, event := range mergedEvents(events) {
+					got = append(got, mergedEvent{URL: event.TicketURL, At: event.At})
+				}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("merged events after tick %d mismatch (-want +got):\n%s", tick, diff)
+				}
+				if err := store.SaveObservation(ctx, plan.Observation{}); err != nil {
+					t.Fatalf("reset observation: %v", err)
+				}
+			}
+		})
 	}
 }
 

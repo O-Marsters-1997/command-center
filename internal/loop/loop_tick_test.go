@@ -27,7 +27,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	dispositionAsPushed(t, store, tickets[0].URL, at)
 	authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), at)
 	if err := store.QueueVerbIntent(t.Context(), tickets[0].URL, "re-run", at); err != nil {
@@ -70,7 +70,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
