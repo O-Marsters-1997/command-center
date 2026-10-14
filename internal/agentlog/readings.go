@@ -1,6 +1,7 @@
 package agentlog
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ func ParseReadings(logPath string) ([]Reading, error) {
 		}
 	})
 	if err != nil {
-		return readings, err
+		return readings, fmt.Errorf("parse rate limit readings: %w", err)
 	}
 
 	slices.SortFunc(readings, func(a, b Reading) int {

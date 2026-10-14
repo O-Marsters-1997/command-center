@@ -78,17 +78,17 @@ func DSN(t *testing.T) string {
 func Create() (dsn string, drop func() error, err error) {
 	admin, err := server()
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("find test server: %w", err)
 	}
 	// The pid keeps two test binaries sharing one CC_TEST_DATABASE_URL server from colliding.
 	name := fmt.Sprintf("cc_test_%d_%d", os.Getpid(), nextDB.Add(1))
 	if err := exec(admin, "CREATE DATABASE "+name); err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("create test database %s: %w", name, err)
 	}
 
 	dsn, err = withDatabase(admin, name)
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("address test database %s: %w", name, err)
 	}
 	return dsn, func() error {
 		// FORCE rather than a bare DROP: a daemon an e2e script left running still holds
