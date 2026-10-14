@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // Event kinds the refresh domain writes and RefreshFacts reads back.
@@ -42,13 +41,13 @@ type RefreshOutcome struct{ Kind, Detail string }
 // LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last
 // recorded push, keyed by ticket URL.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[string]RefreshOutcome, error) {
-	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
-		Kind:   EventRefreshRefused,
-		Kind_2: EventRefreshConflicted,
-		Kind_3: EventVerificationFailed,
-		Kind_4: EventRefreshed,
-		Kind_5: EventRestacked,
+	kinds, err := encodeJSON("refresh outcome kinds", []string{
+		EventRefreshRefused, EventRefreshConflicted, EventVerificationFailed, EventRefreshed, EventRestacked,
 	})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListLatestRefreshOutcomes(ctx, kinds)
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}

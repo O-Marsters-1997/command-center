@@ -33,7 +33,7 @@ type Repo struct {
 }
 
 func (s *Store) Repos(ctx context.Context) ([]Repo, error) {
-	rows, err := s.q.Repos(ctx)
+	rows, err := s.q.ListRepos(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select repos: %w", err)
 	}

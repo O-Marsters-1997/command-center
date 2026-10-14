@@ -1,13 +1,18 @@
--- name: RecordInterval :exec
+-- name: RecordIntervals :exec
 INSERT INTO utilization_intervals (
     "window", start_at, end_at, utilization_start, utilization_end, weight_usd
-) VALUES ($1, $2, $3, $4, $5, $6)
+)
+SELECT i."window", i.start_at, i.end_at, i.utilization_start, i.utilization_end, i.weight_usd
+FROM jsonb_to_recordset(sqlc.arg(intervals)::jsonb) AS i(
+    "window" text, start_at timestamptz, end_at timestamptz,
+    utilization_start double precision, utilization_end double precision, weight_usd double precision
+)
 ON CONFLICT ("window", start_at) DO NOTHING;
 
--- name: IntervalsSince :many
+-- name: ListIntervalsSince :many
 SELECT "window", start_at, end_at, utilization_start, utilization_end, weight_usd
 FROM utilization_intervals
-WHERE end_at >= $1
+WHERE end_at >= sqlc.arg(since)
 ORDER BY "window", start_at;
 
 -- name: CCCostSince :one

@@ -47,7 +47,7 @@ func TestInTxCancelledMidFnRollsBackAndReturnsFnsErrorAlone(t *testing.T) {
 		t.Fatalf("inTx = %v, want boom alone", err)
 	}
 
-	_, err = s.q.ProjectID(t.Context(), "partial")
+	_, err = s.q.GetProjectID(t.Context(), "partial")
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("ProjectID(partial) error = %v, want sql.ErrNoRows", err)
 	}

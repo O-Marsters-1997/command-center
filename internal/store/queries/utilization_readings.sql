@@ -1,6 +1,9 @@
--- name: RecordReading :exec
+-- name: RecordReadings :exec
 INSERT INTO utilization_readings (at, "window", utilization, resets_at)
-VALUES ($1, $2, $3, $4)
+SELECT r.at, r."window", r.utilization, r.resets_at
+FROM jsonb_to_recordset(sqlc.arg(readings)::jsonb) AS r(
+    at timestamptz, "window" text, utilization double precision, resets_at timestamptz
+)
 ON CONFLICT (at, "window") DO NOTHING;
 
 -- name: LatestReadingsFull :many

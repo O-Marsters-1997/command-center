@@ -12,6 +12,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
+const maxLaunchMemberships = 5000
+
 type launchPayload struct {
 	PromptHash string `json:"prompt_hash"`
 	Group      string `json:"group"`
@@ -87,17 +89,33 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 		return fmt.Errorf("insert launch: %w", err)
 	}
 
-	for _, m := range members {
-		if err := q.InsertLaunchMember(ctx, ccdb.InsertLaunchMemberParams{
-			LaunchID: launchID, TicketID: m.ticketID, PromptHash: m.promptHash,
-		}); err != nil {
-			return fmt.Errorf("insert launch member %s: %w", m.ticketID, err)
-		}
-		if err := q.ConsumeLaunchIntent(ctx, ccdb.ConsumeLaunchIntentParams{
-			ConsumedAt: notNullTime(at), ID: m.id,
-		}); err != nil {
-			return fmt.Errorf("consume intent %d: %w", m.id, err)
-		}
+	type memberRow struct {
+		TicketID   string `json:"ticket_id"`
+		PromptHash string `json:"prompt_hash"`
+	}
+	rows := make([]memberRow, len(members))
+	ids := make([]int64, len(members))
+	for i, m := range members {
+		rows[i] = memberRow{TicketID: m.ticketID, PromptHash: m.promptHash}
+		ids[i] = m.id
+	}
+	encodedMembers, err := encodeJSON("launch members", rows)
+	if err != nil {
+		return err
+	}
+	encodedIDs, err := encodeJSON("launch intent ids", ids)
+	if err != nil {
+		return err
+	}
+	if err := q.InsertLaunchMembers(ctx, ccdb.InsertLaunchMembersParams{
+		LaunchID: launchID, Members: encodedMembers,
+	}); err != nil {
+		return fmt.Errorf("insert %d launch members: %w", len(members), err)
+	}
+	if err := q.ConsumeLaunchIntents(ctx, ccdb.ConsumeLaunchIntentsParams{
+		ConsumedAt: notNullTime(at), Ids: encodedIDs,
+	}); err != nil {
+		return fmt.Errorf("consume %d launch intents: %w", len(members), err)
 	}
 
 	detail := fmt.Sprintf("launch %d authorised with %d member(s)", launchID, len(members))
@@ -110,7 +128,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 // LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
 // Cancelled entry for a ticket whose launch was cancelled and not relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[string]plan.LaunchMembership, error) {
-	rows, err := s.q.LaunchMemberships(ctx)
+	rows, err := s.q.ListLaunchMemberships(ctx, maxLaunchMemberships)
 	if err != nil {
 		return nil, fmt.Errorf("select launch memberships: %w", err)
 	}

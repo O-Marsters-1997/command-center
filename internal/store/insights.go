@@ -29,7 +29,7 @@ func (s *Store) MergedTicketSpend(
 	ctx context.Context, repo, feature, tz string, since, until time.Time,
 ) ([]TicketSpend, error) {
 	rows, err := s.q.MergedTicketSpend(ctx, ccdb.MergedTicketSpendParams{
-		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
+		Repo: nullIfEmpty(repo), Feature: nullIfEmpty(feature), Timezone: tz, Since: since, Until: until,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select merged ticket spend: %w", err)
@@ -59,7 +59,7 @@ func (t BoardTicketSpend) TotalUSD() float64 {
 // BoardTicketSpend returns every ticket in scope's weight, keyed by ticket URL: runs
 // disposed before pr_merged when merged, every disposed run when open.
 func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map[string]BoardTicketSpend, error) {
-	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{Repo: repo, Feature: feature})
+	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{Repo: nullIfEmpty(repo), Feature: nullIfEmpty(feature)})
 	if err != nil {
 		return nil, fmt.Errorf("select ticket spend: %w", err)
 	}
@@ -79,7 +79,7 @@ func (s *Store) WithdrawnTicketWaste(
 	ctx context.Context, repo, feature, tz string, since, until time.Time,
 ) (float64, error) {
 	usd, err := s.q.WithdrawnTicketWaste(ctx, ccdb.WithdrawnTicketWasteParams{
-		Repo: repo, Feature: feature, Timezone: tz, Since: since, Until: until,
+		Repo: nullIfEmpty(repo), Feature: nullIfEmpty(feature), Timezone: tz, Since: since, Until: until,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("select withdrawn ticket waste: %w", err)

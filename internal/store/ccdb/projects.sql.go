@@ -32,8 +32,8 @@ const deleteProject = `-- name: DeleteProject :execrows
 DELETE FROM projects WHERE lower(name) = lower($1)
 `
 
-func (q *Queries) DeleteProject(ctx context.Context, lower string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteProject, lower)
+func (q *Queries) DeleteProject(ctx context.Context, name string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteProject, name)
 	if err != nil {
 		return 0, err
 	}
@@ -58,35 +58,35 @@ func (q *Queries) EditProject(ctx context.Context, arg EditProjectParams) (int64
 	return result.RowsAffected()
 }
 
-const projectID = `-- name: ProjectID :one
+const getProjectID = `-- name: GetProjectID :one
 SELECT id FROM projects WHERE lower(name) = lower($1)
 `
 
-func (q *Queries) ProjectID(ctx context.Context, lower string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, projectID, lower)
+func (q *Queries) GetProjectID(ctx context.Context, name string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getProjectID, name)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
 }
 
-const projects = `-- name: Projects :many
+const listProjects = `-- name: ListProjects :many
 SELECT name, hue FROM projects ORDER BY lower(name)
 `
 
-type ProjectsRow struct {
+type ListProjectsRow struct {
 	Name string
 	Hue  int16
 }
 
-func (q *Queries) Projects(ctx context.Context) ([]ProjectsRow, error) {
-	rows, err := q.db.QueryContext(ctx, projects)
+func (q *Queries) ListProjects(ctx context.Context) ([]ListProjectsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProjects)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ProjectsRow
+	var items []ListProjectsRow
 	for rows.Next() {
-		var i ProjectsRow
+		var i ListProjectsRow
 		if err := rows.Scan(&i.Name, &i.Hue); err != nil {
 			return nil, err
 		}
@@ -102,16 +102,16 @@ func (q *Queries) Projects(ctx context.Context) ([]ProjectsRow, error) {
 }
 
 const setRepoProjectID = `-- name: SetRepoProjectID :execrows
-UPDATE repos SET project_id = $2 WHERE name = $1
+UPDATE repos SET project_id = $1 WHERE name = $2
 `
 
 type SetRepoProjectIDParams struct {
-	Name      string
 	ProjectID sql.NullInt64
+	Name      string
 }
 
 func (q *Queries) SetRepoProjectID(ctx context.Context, arg SetRepoProjectIDParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setRepoProjectID, arg.Name, arg.ProjectID)
+	result, err := q.db.ExecContext(ctx, setRepoProjectID, arg.ProjectID, arg.Name)
 	if err != nil {
 		return 0, err
 	}

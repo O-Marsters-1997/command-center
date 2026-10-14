@@ -138,7 +138,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	applyTicketSpend(rows, ticketSpend, split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
-		if records, err = r.store.TicketEventsAfter(ctx, params.Sel, 0); err != nil {
+		err = EachTicketEvent(ctx, r.store, params.Sel, 0, func(e store.Event) error {
+			records = append(records, e)
+			return nil
+		})
+		if err != nil {
 			return Board{}, err
 		}
 	}

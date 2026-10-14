@@ -31,7 +31,7 @@ type Project struct {
 }
 
 func (s *Store) Projects(ctx context.Context) ([]Project, error) {
-	rows, err := s.q.Projects(ctx)
+	rows, err := s.q.ListProjects(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select projects: %w", err)
 	}
@@ -77,7 +77,7 @@ func (s *Store) CreateProject(ctx context.Context, name string, hue int, repos [
 func (s *Store) SetRepoProject(ctx context.Context, repo, project string) error {
 	var id sql.NullInt64
 	if project != "" {
-		projectID, err := s.q.ProjectID(ctx, project)
+		projectID, err := s.q.GetProjectID(ctx, project)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("project %q: %w", project, ErrNotFound)
 		}

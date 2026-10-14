@@ -66,7 +66,7 @@ func (s *Store) PendingEditTicketIntents(ctx context.Context) ([]EditTicketInten
 // feature's closure is refused whole.
 func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blockedBy []string) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
-		feature, err := q.TicketFeature(ctx, ticketURL)
+		feature, err := q.GetTicketFeature(ctx, ticketURL)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("read feature for %s: %w", ticketURL, err)
 		}
@@ -79,9 +79,11 @@ func (s *Store) EditTicket(ctx context.Context, ticketURL, branch string, blocke
 			if err != nil {
 				return fmt.Errorf("read observation for closure check: %w", err)
 			}
-			violation, err := closeUnderBlockedBy(
-				feature, intended, ticketFeatureLookup(ctx, q), blockerMergedLookup(ctx, q, obs),
-			)
+			featureOf, isMerged, err := closureLookups(ctx, q, intended, obs)
+			if err != nil {
+				return err
+			}
+			violation, err := closeUnderBlockedBy(feature, intended, featureOf, isMerged)
 			if err != nil {
 				return err
 			}

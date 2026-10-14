@@ -3,8 +3,10 @@ package store_test
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -353,7 +355,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		}
 	}
 
-	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0)
+	all, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", 0, 100)
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
@@ -364,12 +366,55 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		t.Errorf("second = %+v, want its detail and time round-tripped", all[1])
 	}
 
-	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID)
+	newer, err := store.TicketEventsAfter(ctx, "sandbox://CC-1", all[0].ID, 100)
 	if err != nil {
 		t.Fatalf("TicketEventsAfter: %v", err)
 	}
 	if len(newer) != 1 || newer[0].Kind != "second" {
 		t.Errorf("TicketEventsAfter(CC-1, %d) = %+v, want only second, whatever its time", all[0].ID, newer)
+	}
+}
+
+func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	const ticketURL = "sandbox://CC-1"
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	const total, pageSize = 7, 3
+	var want []string
+	for i := range total {
+		kind := fmt.Sprintf("event_%d", i)
+		want = append(want, kind)
+		if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticketURL, Kind: kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var got []string
+	var afterID int64
+	for pages := 0; ; pages++ {
+		page, err := store.TicketEventsAfter(ctx, ticketURL, afterID, pageSize)
+		if err != nil {
+			t.Fatalf("TicketEventsAfter(%s, %d, %d): %v", ticketURL, afterID, pageSize, err)
+		}
+		if len(page) > pageSize {
+			t.Fatalf("page %d has %d events, want at most %d", pages, len(page), pageSize)
+		}
+		for _, e := range page {
+			got = append(got, e.Kind)
+			afterID = e.ID
+		}
+		if len(page) < pageSize {
+			break
+		}
+	}
+	if !slices.Equal(want, got) {
+		t.Errorf("paged kinds = %v, want %v", got, want)
 	}
 }
 
