@@ -215,7 +215,7 @@ func (r Rules) Derive(in Input) Snapshot {
 			HasRun:            run.IsSome(),
 			ConflictedBase:    conflictedBase,
 		})
-		if pgid.IsSome() && run.Unwrap().Outcome.IsNone() {
+		if pgid.IsSome() && run.IsSome() && run.Unwrap().Outcome.IsNone() {
 			snap.running++
 		}
 
