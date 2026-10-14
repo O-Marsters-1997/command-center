@@ -29,12 +29,11 @@ var pushable = []gh.RepoSummary{
 
 func reposServer(t *testing.T, calls *atomic.Int32) *web.Server {
 	t.Helper()
-	server := openServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "")
-	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
-		calls.Add(1)
-		return pushable, nil
-	})
-	return server
+	return openServer(track(t, openStore(t), alphaRepo, betaRepo), fixedClock(testNow), "",
+		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
+			calls.Add(1)
+			return pushable, nil
+		}))
 }
 
 func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
@@ -133,11 +132,10 @@ func TestRepoSearchRefetchesOnceTheCacheExpires(t *testing.T) {
 
 	var calls atomic.Int32
 	clock := &steppingClock{at: testNow}
-	server := openServer(openStore(t), clock, "")
-	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
+	server := openServer(openStore(t), clock, "", web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
 		calls.Add(1)
 		return pushable, nil
-	})
+	}))
 
 	renderPath(t, server, "/repos/search?q=api")
 	clock.at = clock.at.Add(61 * time.Second)
@@ -155,10 +153,10 @@ func (*steppingClock) After(d time.Duration) <-chan time.Time { return time.Afte
 func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 	t.Parallel()
 
-	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "")
-	server.SetPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
-		return nil, errors.New("gh: not logged in")
-	})
+	server := openServer(track(t, openStore(t), alphaRepo), fixedClock(testNow), "",
+		web.WithPushableSource(func(context.Context) ([]gh.RepoSummary, error) {
+			return nil, errors.New("gh: not logged in")
+		}))
 
 	body := renderPath(t, server, "/repos/search?q=alpha")
 	for _, want := range []string{"acme/alpha", "gh search failed", "not logged in"} {
@@ -181,11 +179,11 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "")
-	server.SetTrackerSource(resolveByRemote(map[string]tracker.Source{
-		"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}},
-		"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
-	}))
+	server := openServer(track(t, store, alphaRepo, betaRepo), fixedClock(testNow), "",
+		web.WithTrackerSource(resolveByRemote(map[string]tracker.Source{
+			"github.com/acme/alpha": fakeTrackerSource{features: []tracker.Feature{"project:x", "project:y"}},
+			"github.com/acme/beta":  fakeTrackerSource{features: []tracker.Feature{"project:z"}},
+		})))
 
 	body := renderPath(t, server, "/repos/acme/alpha")
 	for _, want := range []string{

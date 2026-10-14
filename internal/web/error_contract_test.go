@@ -15,7 +15,9 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 	t.Parallel()
 	st := openStore(t)
 	var logs bytes.Buffer
-	server := web.NewServer(slog.New(slog.NewTextHandler(&logs, nil)), st, fixedClock(testNow), "")
+	server := web.NewServer(web.Deps{
+		Logger: slog.New(slog.NewTextHandler(&logs, nil)), Store: st, Clock: fixedClock(testNow),
+	})
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}

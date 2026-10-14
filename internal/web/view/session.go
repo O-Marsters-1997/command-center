@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
@@ -157,7 +157,7 @@ func (r *Reader) Session(ctx context.Context, now time.Time, owner, name, n stri
 		RawPath:        self + "?log=raw",
 
 		PendingMessages: pendingMessages,
-		Model:           loop.AgentModel,
+		Model:           config.AgentModel,
 	}, nil
 }
 

@@ -9,7 +9,6 @@ import (
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
@@ -39,7 +38,7 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -82,7 +81,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

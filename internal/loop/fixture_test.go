@@ -14,6 +14,15 @@ import (
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
+func newLoop(
+	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
+	rn runner.Runner, opts ...loop.Option,
+) *loop.Loop {
+	return loop.New(loop.Deps{
+		Logger: discardLog, Store: st, Clock: clock, Runner: rn, Observe: observe, Config: cfg, Workspace: ws,
+	}, opts...)
+}
+
 type loopFixture struct {
 	Store   *storepkg.Store
 	Loop    *loop.Loop
@@ -77,7 +86,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	fake := runner.NewFake()
 	return &loopFixture{
 		Store:   store,
-		Loop:    loop.NewLoop(discardLog, store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
+		Loop:    newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake),
 		Fake:    fake,
 		Cfg:     cfg,
 		WS:      ws,

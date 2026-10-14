@@ -51,21 +51,21 @@ func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, re
 	return worktreePath, ""
 }
 
-func (l *Loop) applyFollowUpIntents(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick) error {
 	return l.eachIntent(ctx, plan.VerbFollowUp, func(intent store.VerbIntent) error {
 		ticket, ok, err := l.ticket(ctx, intent.TicketID)
 		if err != nil || !ok {
 			return err
 		}
-		return l.followUpOne(ctx, ticket, intent.Payload, obs)
+		return l.followUpOne(ctx, t, ticket, intent.Payload)
 	})
 }
 
-func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText string, obs plan.Observation) error {
-	if obs.Runs[ticket.URL].Alive {
+func (l *Loop) followUpOne(ctx context.Context, t *tick, ticket store.Ticket, promptText string) error {
+	if t.obs.Runs[ticket.URL].Alive {
 		return errIntentPending
 	}
-	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), obs)
+	worktreePath, refusal := idleWorktreeFor(ticket.Plan(), t.obs)
 	if refusal != "" {
 		return l.event(ctx, ticket.URL, store.EventFollowUpRefused, refusal)
 	}
@@ -91,11 +91,11 @@ func (l *Loop) followUpOne(ctx context.Context, ticket store.Ticket, promptText 
 		spec.prompt = plan.ComposeMessage(promptText, latest[ticket.URL].Outcome)
 		spec.resumeSessionID = sessionID
 	}
-	if err := l.spawnRun(ctx, spec); err != nil {
+	if err := l.spawnRun(ctx, t, spec); err != nil {
 		return err
 	}
-	if slices.Contains(l.spawned, ticket.URL) {
-		obs.Runs[ticket.URL] = plan.RunObservation{Alive: true}
+	if slices.Contains(t.spawned, ticket.URL) {
+		t.obs.Runs[ticket.URL] = plan.RunObservation{Alive: true}
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	})
 }
 
-func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
+func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tick) error {
 	return l.eachIntent(ctx, plan.VerbReRun, func(intent store.VerbIntent) error {
 		ticket, ok, err := l.ticket(ctx, intent.TicketID)
 		if err != nil || !ok {
@@ -143,27 +143,27 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, obs pl
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		return l.reRunOne(ctx, ticket, baseBranch, obs, entry.PromptHash)
+		return l.reRunOne(ctx, t, ticket, baseBranch, entry.PromptHash)
 	})
 }
 
 func (l *Loop) reRunOne(
-	ctx context.Context, ticket store.Ticket, baseBranch string, obs plan.Observation, promptHash string,
+	ctx context.Context, t *tick, ticket store.Ticket, baseBranch string, promptHash string,
 ) error {
 	repoPath := l.checkout(ticket.Repo)
-	worktreePath, ok := obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
+	worktreePath, ok := t.obs.Worktrees[plan.BranchKey(ticket.Repo, ticket.Branch)]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		return l.cutAndSpawn(ctx, ticket, baseBranch, promptHash)
+		return l.cutAndSpawn(ctx, t, ticket, baseBranch, promptHash)
 	}
 
 	baselineSHA, err := git.BranchTip(ctx, repoPath, ticket.Branch)
 	if err != nil {
 		return fmt.Errorf("read baseline for re-run of %s: %w", ticket.URL, err)
 	}
-	return l.spawnRun(ctx, spawnSpec{
+	return l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
 		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
 	})

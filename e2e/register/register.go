@@ -25,23 +25,23 @@ import (
 )
 
 // Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
-func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string) error {
+func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
 	if len(args) == 0 {
 		return nil
 	}
 	rest := args[1:]
 	switch args[0] {
 	case "tick":
-		return func(ctx context.Context, logger *slog.Logger, configPath string) error {
-			return tick(ctx, logger, configPath, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return tick(ctx, logger, configPath, env, rest)
 		}
 	case "request":
-		return func(ctx context.Context, logger *slog.Logger, configPath string) error {
-			return request(ctx, logger, configPath, rest)
+		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
+			return request(ctx, logger, configPath, env, rest)
 		}
 	case "import":
-		return func(ctx context.Context, _ *slog.Logger, configPath string) error {
-			return importFeature(ctx, configPath, rest)
+		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
+			return importFeature(ctx, configPath, env, rest)
 		}
 	default:
 		return nil
@@ -50,7 +50,7 @@ func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, config
 
 // tick takes the flock and runs the loop exactly --count times with no sleeping, so a script
 // asserts against a known number of ticks rather than against the wall clock.
-func tick(ctx context.Context, logger *slog.Logger, configPath string, args []string) (err error) {
+func tick(ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string) (err error) {
 	flags := flag.NewFlagSet("tick", flag.ContinueOnError)
 	count := flags.Int("count", 1, "number of ticks to run")
 	if err := flags.Parse(args); err != nil {
@@ -58,7 +58,7 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, args []st
 	}
 
 	instance, err := app.New(
-		ctx, logger, configPath, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
+		ctx, logger, configPath, env, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
 	)
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
@@ -73,12 +73,12 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, args []st
 	return nil
 }
 
-func importFeature(ctx context.Context, configPath string, args []string) (err error) {
+func importFeature(ctx context.Context, configPath string, env config.Env, args []string) (err error) {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: cc import <feature>")
 	}
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath, env)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -97,7 +97,9 @@ func importFeature(ctx context.Context, configPath string, args []string) (err e
 // request prints the page a real HTTP client gets back from the real handler. It deliberately
 // does not take the flock: a script reads while `cc tick` or a daemon holds it. POST /launch's
 // write is one blind INSERT the server serialises; a future verb doing more would revisit inv. 9.
-func request(ctx context.Context, logger *slog.Logger, configPath string, args []string) (err error) {
+func request(
+	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string,
+) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
 	// -form is how a script drives a route the way the page's own forms do, with the fields in
@@ -112,7 +114,7 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	}
 	method, path := rest[0], rest[1]
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath, env)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -127,7 +129,9 @@ func request(ctx context.Context, logger *slog.Logger, configPath string, args [
 	defer func() { err = errors.Join(err, store.Close()) }()
 
 	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
-	server := httptest.NewServer(web.NewServer(logger, store, loop.RealClock{}, ws.DataDir))
+	server := httptest.NewServer(web.NewServer(web.Deps{
+		Logger: logger, Store: store, Clock: loop.RealClock{}, DataDir: ws.DataDir,
+	}))
 	defer server.Close()
 
 	var body io.Reader

@@ -15,7 +15,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -23,41 +22,21 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-const AgentModel = "claude-sonnet-5-5"
-
 // Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
 	logger     *slog.Logger
 	store      *store.Store
 	observe    ObserveFunc
 	clock      Clock
-	forge      gh.Forge
-	worktrees  git.Worktrees
+	forge      forge
+	worktrees  worktrees
 	validate   ValidateFunc
 	remoteOf   RemoteFunc
-	runner     runner.Runner
+	runner     agentRunner
 	cfg        config.Config
 	ws         config.Workspace
 	trackerFor tracker.Resolver
 	nudgeCh    chan struct{}
-	spawned    []string
-}
-
-// NewLoop assembles the loop over an observe phase, a clock and the configuration a tick's cut
-// and spawn steps need (data_dir, agent_command, max_agents, the state dir's runs and settings
-// paths). spawner is the seam a test substitutes for real process spawning, liveness and cancel.
-func NewLoop(
-	logger *slog.Logger, store *store.Store, observe ObserveFunc, clock Clock, cfg config.Config,
-	ws config.Workspace, spawner runner.Runner,
-) *Loop {
-	return &Loop{
-		logger: logger, store: store, observe: observe, clock: clock, forge: gh.CLI{}, runner: spawner, cfg: cfg, ws: ws,
-		worktrees:  git.CLI{},
-		validate:   ValidateRepo,
-		remoteOf:   gh.RepoRemote,
-		trackerFor: tracker.New,
-		nudgeCh:    make(chan struct{}, 1),
-	}
 }
 
 func (l *Loop) checkout(repo string) string { return config.CheckoutPath(l.cfg.DataDir, repo) }
@@ -98,44 +77,6 @@ func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, erro
 	return tickets[i], true, nil
 }
 
-func runSteps(steps ...func() error) error {
-	for _, step := range steps {
-		if err := step(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Nudge wakes Run for one tick right now rather than at the end of store.TickPeriod. A nudge that
-// finds the buffer full is dropped, not queued: the tick already in flight will pick up
-// whatever intent prompted it anyway.
-func (l *Loop) Nudge() {
-	select {
-	case l.nudgeCh <- struct{}{}:
-	default:
-	}
-}
-
-// SetForge replaces the real gh-backed Forge, so a test can fake GitHub in-process.
-func (l *Loop) SetForge(forge gh.Forge) { l.forge = forge }
-
-// SetWorktrees replaces the real tp-backed Worktrees, so a test can cut and remove worktrees
-// without the tp binary.
-func (l *Loop) SetWorktrees(worktrees git.Worktrees) { l.worktrees = worktrees }
-
-// SetValidator replaces the gh- and git-backed repo validation, so a test or the e2e build can
-// settle a cloning repo without GitHub.
-func (l *Loop) SetValidator(validate ValidateFunc) { l.validate = validate }
-
-// SetRemoteSource replaces the gh-backed remote lookup Track makes, so a test can track a repo
-// without GitHub.
-func (l *Loop) SetRemoteSource(remoteOf RemoteFunc) { l.remoteOf = remoteOf }
-
-// SetTrackerSource replaces the loop's tracker.New, so a test can drive applyImportIntents with a
-// fake source rather than shelling out to gh.
-func (l *Loop) SetTrackerSource(resolve tracker.Resolver) { l.trackerFor = resolve }
-
 // RunOnce runs one tick. A failed observe records the error and leaves the last good
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting.
@@ -163,73 +104,111 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return tickErr
 	}
 
-	obs.ObservedAt = l.clock.Now()
-	if obs.LocalTips == nil {
-		obs.LocalTips = map[string]string{}
+	t := &tick{now: l.clock.Now(), obs: obs}
+	t.obs.ObservedAt = t.now
+	if t.obs.LocalTips == nil {
+		t.obs.LocalTips = map[string]string{}
 	}
-	if obs.Runs == nil {
-		obs.Runs = map[string]plan.RunObservation{}
+	if t.obs.Runs == nil {
+		t.obs.Runs = map[string]plan.RunObservation{}
 	}
-	if err := l.absorb(ctx, obs); err != nil {
+	if err := l.absorb(ctx, t); err != nil {
 		return err
 	}
-	if err := l.recordRepoProblems(ctx, obs); err != nil {
+	if err := l.recordRepoProblems(ctx, t.obs); err != nil {
 		return err
 	}
-	skipped, err := l.skippedRepos(ctx, obs)
+	skipped, err := l.skippedRepos(ctx, t.obs)
 	if err != nil {
 		return err
 	}
-	snap, err := l.derive(ctx, obs)
+	snap, err := l.derive(ctx, t.obs)
 	if err != nil {
 		return err
 	}
-	return l.act(ctx, snap.Skipping(skipped), obs)
+	return l.act(ctx, snap.Skipping(skipped), t)
 }
 
-func (l *Loop) absorb(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) absorb(ctx context.Context, t *tick) error {
 	prev, _, err := l.store.LastObservation(ctx)
 	if err != nil {
 		return err
 	}
-	return runSteps(
-		func() error { return l.recordRepoStates(ctx, obs) },
-		func() error { return l.tickCheckingWaits(ctx) },
-		func() error { return l.recordOpenedEvents(ctx, prev, obs) },
-		func() error { return l.recordChecksLanded(ctx, prev, obs) },
-		func() error { return l.store.SaveObservation(ctx, obs) },
-		func() error { return l.store.ApplyLaunchIntents(ctx, l.clock.Now()) },
-		func() error { return l.applyCancelIntents(ctx) },
-		func() error { l.spawned = nil; return nil },
-		func() error { return l.applyKillIntents(ctx) },
-		func() error { return l.interruptForFollowUps(ctx) },
-		func() error { return l.reconcileRuns(ctx, obs) },
-		func() error { return l.store.SaveObservation(ctx, obs) },
-		func() error { return l.recordVerdictTransitions(ctx, obs) },
-		func() error { return l.recordMergedEvents(ctx, obs) },
-	)
+	if err := l.recordRepoStates(ctx, t.obs); err != nil {
+		return err
+	}
+	if err := l.tickCheckingWaits(ctx); err != nil {
+		return err
+	}
+	if err := l.recordOpenedEvents(ctx, prev, t.obs); err != nil {
+		return err
+	}
+	if err := l.recordChecksLanded(ctx, prev, t.obs); err != nil {
+		return err
+	}
+	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
+		return err
+	}
+	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
+		return err
+	}
+	if err := l.applyCancelIntents(ctx); err != nil {
+		return err
+	}
+	if err := l.applyKillIntents(ctx); err != nil {
+		return err
+	}
+	if err := l.interruptForFollowUps(ctx); err != nil {
+		return err
+	}
+	if err := l.reconcileRuns(ctx, t.obs); err != nil {
+		return err
+	}
+	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
+		return err
+	}
+	if err := l.recordVerdictTransitions(ctx, t.obs); err != nil {
+		return err
+	}
+	return l.recordMergedEvents(ctx, t.obs)
 }
 
-func (l *Loop) act(ctx context.Context, snap plan.Snapshot, obs plan.Observation) error {
-	return runSteps(
-		func() error { return l.applyReRunIntents(ctx, snap, obs) },
-		func() error { return l.applyFollowUpIntents(ctx, obs) },
-		func() error { return l.applyAbortIntents(ctx, snap, obs) },
-		func() error { l.markSpawnedAlive(obs); return nil },
-		func() error { return l.retargetMerged(ctx, snap, obs) },
-		func() error { return l.applyRefreshIntents(ctx, snap, obs) },
-		func() error { l.rereadLocalTips(ctx, obs); return nil },
-		func() error { return l.applyRetryPushIntents(ctx, snap, obs) },
-		func() error { return l.applyRemoveWorktreeIntents(ctx, snap, obs) },
-		func() error { return l.pushPushable(ctx, snap, obs) },
-		func() error { return l.applyDraftGate(ctx, snap) },
-		func() error { return l.launchEligible(ctx, snap) },
-	)
+func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick) error {
+	if err := l.applyReRunIntents(ctx, snap, t); err != nil {
+		return err
+	}
+	if err := l.applyFollowUpIntents(ctx, t); err != nil {
+		return err
+	}
+	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	t.markSpawnedAlive()
+	if err := l.retargetMerged(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	if err := l.applyRefreshIntents(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	l.rereadLocalTips(ctx, t.obs)
+	if err := l.applyRetryPushIntents(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	if err := l.applyRemoveWorktreeIntents(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	if err := l.pushPushable(ctx, snap, t.obs); err != nil {
+		return err
+	}
+	if err := l.applyDraftGate(ctx, snap); err != nil {
+		return err
+	}
+	return l.launchEligible(ctx, snap, t)
 }
 
-func (l *Loop) markSpawnedAlive(obs plan.Observation) {
-	for _, url := range l.spawned {
-		obs.Runs[url] = plan.RunObservation{Alive: true}
+func (t *tick) markSpawnedAlive() {
+	for _, url := range t.spawned {
+		t.obs.Runs[url] = plan.RunObservation{Alive: true}
 	}
 }
 
@@ -602,8 +581,8 @@ func (l *Loop) commitsSinceBaseline(
 	return git.CommitsSince(ctx, repoPath, baselineSHA, tip)
 }
 
-func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
-	toLaunch := snap.LaunchAfter(len(l.spawned))
+func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) error {
+	toLaunch := snap.LaunchAfter(len(t.spawned))
 	if len(toLaunch) == 0 {
 		return nil
 	}
@@ -616,7 +595,7 @@ func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot) error {
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
 		ticket := byTicket[ticketURL]
-		if err := l.cutAndSpawn(ctx, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
+		if err := l.cutAndSpawn(ctx, t, ticket, entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
 			return err
 		}
 	}
@@ -644,7 +623,7 @@ func ticketsByURL(tickets []store.Ticket) map[string]store.Ticket {
 }
 
 func (l *Loop) cutAndSpawn(
-	ctx context.Context, ticket store.Ticket, baseBranch, promptHash string,
+	ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string,
 ) error {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
@@ -670,7 +649,7 @@ func (l *Loop) cutAndSpawn(
 		return fmt.Errorf("tp new %s reported success but git worktree list does not show it", branch)
 	}
 
-	return l.spawnRun(ctx, spawnSpec{
+	return l.spawnRun(ctx, t, spawnSpec{
 		ticket: ticket, worktree: worktreePath, baseline: baselineSHA, hash: promptHash,
 		kind: plan.RunKindAgent, prompt: agentPrompt(ticket),
 	})
@@ -708,7 +687,7 @@ func (l *Loop) insertSkeleton(ctx context.Context, spec spawnSpec) (runID int64,
 		ctx, spec.ticket.URL, spec.kind, spec.baseline, spec.hash, spec.session())
 }
 
-func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
+func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error) {
 	ticket := spec.ticket
 	runID, sessionID, err := l.insertSkeleton(ctx, spec)
 	if err != nil {
@@ -743,7 +722,7 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 		AgentCommand: l.cfg.AgentCommand,
 		WorktreePath: spec.worktree,
 		SettingsPath: l.ws.SettingsPath,
-		Model:        AgentModel,
+		Model:        config.AgentModel,
 		Prompt:       prompt,
 		PromptPath:   promptPath,
 		SessionID:    sessionID,
@@ -766,6 +745,6 @@ func (l *Loop) spawnRun(ctx context.Context, spec spawnSpec) (err error) {
 	if err := l.store.RecordSpawn(ctx, runID, result.Pid, l.clock.Now(), logPath); err != nil {
 		return err
 	}
-	l.spawned = append(l.spawned, ticket.URL)
+	t.spawned = append(t.spawned, ticket.URL)
 	return l.event(ctx, ticket.URL, store.EventRunLaunched, fmt.Sprintf("spawned pid %d in %s", result.Pid, spec.worktree))
 }

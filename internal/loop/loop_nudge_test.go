@@ -2,6 +2,9 @@ package loop_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -11,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 func runLoop(ctx context.Context, t *testing.T, lp *loop.Loop) (stop func()) {
@@ -40,7 +44,8 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 			return plan.Observation{}, nil
 		}
 		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-		lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		nudger := lp.Nudger()
 		stop := runLoop(t.Context(), t, lp)
 
 		synctest.Wait()
@@ -48,14 +53,14 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 			t.Fatalf("ticks after start = %d, want 1", got)
 		}
 
-		lp.Nudge()
+		nudger.Nudge()
 		synctest.Wait()
 		if got := ticks.Load(); got != 2 {
 			t.Fatalf("ticks after a nudge = %d, want 2", got)
 		}
 
 		for range 5 {
-			lp.Nudge()
+			nudger.Nudge()
 		}
 		close(proceed)
 		synctest.Wait()
@@ -65,6 +70,42 @@ func TestLoopNudgeTicksImmediatelyAndCoalescesMidTick(t *testing.T) {
 
 		stop()
 	})
+}
+
+func TestAVerbHandlersNudgeReachesTheLoopThroughItsNudger(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	ticks := make(chan struct{}, 8)
+	observe := func(context.Context) (plan.Observation, error) {
+		ticks <- struct{}{}
+		return plan.Observation{}, nil
+	}
+	waitForTick := func(what string) {
+		t.Helper()
+		select {
+		case <-ticks:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("no tick %s", what)
+		}
+	}
+	clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
+	lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+	server := web.NewServer(web.Deps{Logger: discardLog, Store: store, Clock: clock, Nudger: lp.Nudger()})
+	stop := runLoop(t.Context(), t, lp)
+	defer stop()
+
+	waitForTick("after start")
+
+	req := httptest.NewRequest(http.MethodPost, "/features/"+url.PathEscape("project:x")+"/import", nil)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+
+	waitForTick("after the handler queued an import")
 }
 
 func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
@@ -78,7 +119,7 @@ func TestLoopRunTicksOnTheInjectedClockWithoutSleeping(t *testing.T) {
 			return plan.Observation{}, nil
 		}
 		clock := newManualClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC))
-		lp := loop.NewLoop(discardLog, store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		lp := newLoop(store, observe, clock, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 		stop := runLoop(t.Context(), t, lp)
 
 		synctest.Wait()

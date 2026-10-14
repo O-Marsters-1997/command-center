@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -47,7 +46,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
 	fake.CanReap[999] = true
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

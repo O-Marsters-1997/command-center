@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -37,7 +36,7 @@ func TestRecordChecksLandedAppendsOnePerCheckThatLands(t *testing.T) {
 	}
 
 	observed := observe(pending)
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)), config.Config{}, config.Workspace{},
 		runner.ProcessRunner{})
@@ -92,7 +91,7 @@ func TestRecordChecksLandedIgnoresChecksAlreadyTerminalInThePreviousObservation(
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {

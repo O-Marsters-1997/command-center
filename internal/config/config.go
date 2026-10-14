@@ -4,7 +4,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -48,7 +47,7 @@ var defaultAgentCommand = []string{
 }
 
 // LoadConfig decodes the config file and resolves the data directory, database and agent command.
-func LoadConfig(path string) (Config, error) {
+func LoadConfig(path string, env Env) (Config, error) {
 	cfg := Config{
 		Port: defaultPort, MaxAgents: defaultMaxAgents, BoardPollSeconds: DefaultBoardPollSeconds,
 		AgentCommand: slices.Clone(defaultAgentCommand),
@@ -61,18 +60,18 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("config %s: board_poll_seconds must be at least 1, got %d", path, cfg.BoardPollSeconds)
 	}
 
-	dataDir, err := ResolveDataDir(cfg.DataDir)
+	dataDir, err := ResolveDataDir(cfg.DataDir, env)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.DataDir = dataDir
-	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL)
-	claudeProjectsDir, err := ResolveClaudeProjectsDir(cfg.ClaudeProjectsDir)
+	cfg.DatabaseURL = resolveDatabaseURL(cfg.DatabaseURL, env)
+	claudeProjectsDir, err := ResolveClaudeProjectsDir(cfg.ClaudeProjectsDir, env)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.ClaudeProjectsDir = claudeProjectsDir
-	if err := applyAgentCommandEnv(&cfg); err != nil {
+	if err := applyAgentCommandEnv(&cfg, env); err != nil {
 		return Config{}, err
 	}
 	if err := requireAgentCommandParts(cfg.AgentCommand); err != nil {
@@ -90,8 +89,8 @@ func withMaxTurns(argv []string, turns int) []string {
 
 const agentCommandEnv = "CC_AGENT_COMMAND"
 
-func applyAgentCommandEnv(cfg *Config) error {
-	raw := os.Getenv(agentCommandEnv)
+func applyAgentCommandEnv(cfg *Config, env Env) error {
+	raw := env.AgentCommand
 	if raw == "" {
 		return nil
 	}

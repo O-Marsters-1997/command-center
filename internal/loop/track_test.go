@@ -16,20 +16,22 @@ func trackLoop(t *testing.T, st *storepkg.Store, validations *[]string) *loop.Lo
 	t.Helper()
 	cfg, ws := testConfigAndWorkspace(t, t.TempDir(), 1, []string{"true"})
 	idle := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	lp := loop.NewLoop(discardLog, st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{})
-	lp.SetRemoteSource(func(_ context.Context, name string) (string, error) {
+	remoteOf := func(_ context.Context, name string) (string, error) {
 		if name == "acme/missing" {
 			return "", errors.New("gh: Not Found")
 		}
 		return "git@github.com:" + name + ".git", nil
-	})
-	lp.SetValidator(func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
+	}
+	validate := func(_ context.Context, _ string, repo storepkg.Repo, now time.Time) (storepkg.Repo, error) {
 		*validations = append(*validations, repo.Name)
 		repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoReady, "", ""
 		repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 		return repo, nil
-	})
-	return lp
+	}
+	return newLoop(
+		st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+		loop.WithRemoteSource(remoteOf), loop.WithValidator(validate),
+	)
 }
 
 func queueTrack(t *testing.T, st *storepkg.Store, repo string) {

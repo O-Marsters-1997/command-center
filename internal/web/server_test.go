@@ -381,32 +381,6 @@ func TestLaunchRejectsBadOriginAndMethod(t *testing.T) {
 	}
 }
 
-func TestNewPOSTRouteIsProtectedWithoutBeingWrapped(t *testing.T) {
-	t.Parallel()
-
-	server := openServer(seededStore(t, time.Now()), realClock{}, "")
-	server.RegisterTestRoute("POST /test-route", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	srv := httptest.NewServer(server)
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/test-route", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Origin", "http://evil.example")
-
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 (a route this test registered after NewServer, never wrapped)", resp.StatusCode)
-	}
-}
-
 func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	t.Parallel()
 

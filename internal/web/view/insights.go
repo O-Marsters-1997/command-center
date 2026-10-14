@@ -63,12 +63,7 @@ func insightsTimezone(loc *time.Location) string {
 	return "UTC"
 }
 
-// systemTimezoneName resolves the OS's configured zone to an IANA name: TZ overrides time.Local,
-// else /etc/localtime is a symlink into the zoneinfo tree.
 func systemTimezoneName() string {
-	if tz := os.Getenv("TZ"); tz != "" {
-		return tz
-	}
 	target, err := os.Readlink("/etc/localtime")
 	if err != nil {
 		return ""

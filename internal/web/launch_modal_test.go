@@ -32,9 +32,8 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := openServer(store, realClock{}, "")
 	var nudged atomic.Bool
-	server.SetNudge(func() { nudged.Store(true) })
+	server := openNudgingServer(store, func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
 	t.Cleanup(srv.Close)
 
@@ -83,9 +82,8 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 		t.Fatal(err)
 	}
 
-	server := openServer(store, realClock{}, "")
 	var nudged atomic.Bool
-	server.SetNudge(func() { nudged.Store(true) })
+	server := openNudgingServer(store, func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
 	t.Cleanup(srv.Close)
 

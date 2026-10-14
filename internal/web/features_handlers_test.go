@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -52,7 +51,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := openServer(store, loop.RealClock{}, "")
+	server := openServer(store, realClock{}, "")
 	rec := httptest.NewRecorder()
 	server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/repos", nil))
 	if rec.Code != http.StatusOK {
@@ -71,9 +70,8 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	server := openServer(store, loop.RealClock{}, "")
 	var nudged atomic.Bool
-	server.SetNudge(func() { nudged.Store(true) })
+	server := openNudgingServer(store, func() { nudged.Store(true) })
 	srv := httptest.NewServer(server)
 	t.Cleanup(srv.Close)
 
@@ -108,7 +106,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/features/"+url.PathEscape("project:x")+"/import", nil)
@@ -129,7 +127,7 @@ func TestHandleImportFeatureRejectsAForeignOrigin(t *testing.T) {
 func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Post(srv.URL+"/features/"+url.PathEscape("project:x")+"/import", "", nil)
@@ -145,7 +143,7 @@ func TestHandleImportFeatureAllowsAMissingOrigin(t *testing.T) {
 func TestHandleImportFeatureRedirectsWithoutHtmx(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(openStore(t), loop.RealClock{}, ""))
+	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
 	t.Cleanup(srv.Close)
 
 	resp := postVerb(t, srv, "/features/"+url.PathEscape("project:x")+"/import", nil)

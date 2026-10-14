@@ -8,7 +8,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -31,7 +30,7 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(tickAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 
@@ -84,7 +83,7 @@ func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
 			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
 		},
 	}
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(mergedAt.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
@@ -128,7 +127,7 @@ func TestRecordMergedEventsSkipsAnUnmergedPR(t *testing.T) {
 			plan.BranchKey("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Closed},
 		},
 	}
-	lp := loop.NewLoop(discardLog, store,
+	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {

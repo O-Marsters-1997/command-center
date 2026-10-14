@@ -2,7 +2,6 @@ package web
 
 import (
 	"html/template"
-	"net/http"
 	"strings"
 	"testing"
 
@@ -56,10 +55,6 @@ func ReadTestdata(name string) string { return mustReadTestdata(name) }
 func WriteRunLog(t *testing.T, body string) string {
 	t.Helper()
 	return writeRunLog(t, body)
-}
-
-func (s *Server) RegisterTestRoute(pattern string, h http.HandlerFunc) {
-	s.rawMux.HandleFunc(pattern, h)
 }
 
 func MainTipKey(repo string) string { return plan.BranchKey(repo, "main") }

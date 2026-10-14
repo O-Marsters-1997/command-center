@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -137,7 +136,7 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := loop.NewLoop(discardLog, f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
+	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
 	return lp.RunOnce(t.Context())
 }
 

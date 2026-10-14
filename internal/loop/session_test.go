@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -98,7 +97,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
-	lp := loop.NewLoop(discardLog, store, observe, fixedClock(at), cfg, ws, fake)
+	lp := newLoop(store, observe, fixedClock(at), cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

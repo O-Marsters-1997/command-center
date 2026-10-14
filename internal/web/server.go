@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -66,15 +66,17 @@ func newRowSlot(r view.Row, scope, featureScope string) rowSlot {
 // Server is the status page plus the launch, authorisation and features routes. It only queues
 // intents; it never writes the database directly.
 type Server struct {
-	logger     *slog.Logger
-	store      *store.Store
-	clock      loop.Clock
-	view       *view.Reader
-	trackerFor tracker.Resolver
-	rawMux     *http.ServeMux
-	mux        http.Handler
-	nudge      func()
-	pushable   pushableCache
+	logger           *slog.Logger
+	store            *store.Store
+	clock            Clock
+	view             *view.Reader
+	trackerFor       tracker.Resolver
+	mux              http.Handler
+	nudger           Nudger
+	pushable         pushableCache
+	loc              *time.Location
+	spendLimit5h     int
+	boardPollSeconds int
 }
 
 const pushableTTL = time.Minute
@@ -102,15 +104,17 @@ func (c *pushableCache) get(ctx context.Context, now time.Time) ([]gh.RepoSummar
 	return repos, nil
 }
 
-// NewServer assembles the page and its routes over a store, a clock and the data directory.
-func NewServer(logger *slog.Logger, store *store.Store, clock loop.Clock, dataDir string) *Server {
+func NewServer(d Deps, opts ...Option) *Server {
 	s := &Server{
-		logger: logger, store: store, clock: clock,
-		view:       view.NewReader(store, dataDir, renderLogLine),
-		trackerFor: tracker.New,
-		nudge:      func() {},
-		pushable:   pushableCache{list: gh.PushableRepos},
+		logger: d.Logger, store: d.Store, clock: d.Clock, nudger: d.Nudger,
+		trackerFor:       tracker.New,
+		pushable:         pushableCache{list: gh.PushableRepos},
+		boardPollSeconds: config.DefaultBoardPollSeconds,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	s.view = view.NewReader(d.Store, d.DataDir, renderLogLine, s.boardPollSeconds, s.spendLimit5h)
 	mux := http.NewServeMux()
 	mux.Handle("GET /{$}", s.handle(s.handleIndex))
 	mux.Handle("GET /tickets", s.handle(s.handleTickets))
@@ -143,25 +147,22 @@ func NewServer(logger *slog.Logger, store *store.Store, clock loop.Clock, dataDi
 	mux.Handle("POST /launch", s.handle(s.handleLaunch))
 	mux.Handle("POST /verb", s.handle(s.handleVerb))
 	mux.Handle("POST /ticket", s.handle(s.handleTicket))
-	s.rawMux = mux
 	s.mux = http.NewCrossOriginProtection().Handler(mux)
 	return s
 }
 
-// SetTrackerSource replaces the tracker constructor so a test can drive GET /repos/{owner}/{name} without gh.
-func (s *Server) SetTrackerSource(resolve tracker.Resolver) { s.trackerFor = resolve }
-
-// SetPushableSource replaces the gh listing behind repo search so a test can drive it without gh.
-func (s *Server) SetPushableSource(list func(context.Context) ([]gh.RepoSummary, error)) {
-	s.pushable.list = list
+func (s *Server) nudge() {
+	if s.nudger != nil {
+		s.nudger.Nudge()
+	}
 }
 
-// SetNudge sets the call that wakes the loop once the server has queued an import intent.
-func (s *Server) SetNudge(nudge func()) { s.nudge = nudge }
-
-func (s *Server) SetBoardPollSeconds(seconds int) { s.view.SetBoardPollSeconds(seconds) }
-
-func (s *Server) SetSpendLimit5h(pct int) { s.view.SetSpendLimit5h(pct) }
+func (s *Server) now() time.Time {
+	if s.loc != nil {
+		return s.clock.Now().In(s.loc)
+	}
+	return s.clock.Now()
+}
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 

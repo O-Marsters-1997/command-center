@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -67,17 +66,16 @@ type Reader struct {
 	renderLine       LineRenderer
 }
 
-func NewReader(st *store.Store, dataDir string, renderLine LineRenderer) *Reader {
+func NewReader(
+	st *store.Store, dataDir string, renderLine LineRenderer, boardPollSeconds, spendLimit5h int,
+) *Reader {
 	return &Reader{
 		store: st, dataDir: dataDir, renderLine: renderLine,
-		boardPollSeconds: config.DefaultBoardPollSeconds,
+		boardPollSeconds: boardPollSeconds,
+		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
 	}
 }
-
-func (r *Reader) SetBoardPollSeconds(seconds int) { r.boardPollSeconds = seconds }
-
-func (r *Reader) SetSpendLimit5h(pct int) { r.spendLimit5h = pct }
 
 func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, error) {
 	in, err := r.store.PlanInput(ctx)

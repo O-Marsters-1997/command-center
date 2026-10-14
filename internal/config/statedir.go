@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,38 +27,32 @@ type Workspace struct {
 	SystemPromptPath string
 }
 
-const dataDirEnv = "CC_DATA_DIR"
+const defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
 
-const (
-	databaseURLEnv     = "CC_DATABASE_URL"
-	defaultDatabaseURL = "postgres://cc:cc@localhost:5432/cc?sslmode=disable"
-)
-
-func resolveDatabaseURL(configured string) string {
+func resolveDatabaseURL(configured string, env Env) string {
 	if configured != "" {
 		return configured
 	}
-	if fromEnv := os.Getenv(databaseURLEnv); fromEnv != "" {
-		return fromEnv
+	if env.DatabaseURL != "" {
+		return env.DatabaseURL
 	}
 	return defaultDatabaseURL
 }
 
 // ResolveDataDir answers where the app keeps everything: the config's own data_dir, else
 // CC_DATA_DIR, else os.UserConfigDir()/command-centre. A leading ~ expands.
-func ResolveDataDir(configured string) (string, error) {
+func ResolveDataDir(configured string, env Env) (string, error) {
 	dir := configured
 	if dir == "" {
-		dir = os.Getenv(dataDirEnv)
+		dir = env.DataDir
 	}
 	if dir == "" {
-		base, err := os.UserConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve user config dir: %w", err)
+		if env.UserConfigDir == "" {
+			return "", errors.New("resolve data dir: no data_dir, CC_DATA_DIR or user config dir")
 		}
-		dir = filepath.Join(base, "command-centre")
+		dir = filepath.Join(env.UserConfigDir, "command-centre")
 	}
-	dir, err := expandHome(dir)
+	dir, err := expandHome(dir, env.Home)
 	if err != nil {
 		return "", err
 	}
@@ -68,25 +63,24 @@ const defaultClaudeProjectsDir = "~/.claude/projects"
 
 // ResolveClaudeProjectsDir answers where usage.Weigh reads transcripts from: the config's own
 // claude_projects_dir, else defaultClaudeProjectsDir. A leading ~ expands.
-func ResolveClaudeProjectsDir(configured string) (string, error) {
+func ResolveClaudeProjectsDir(configured string, env Env) (string, error) {
 	dir := configured
 	if dir == "" {
 		dir = defaultClaudeProjectsDir
 	}
-	dir, err := expandHome(dir)
+	dir, err := expandHome(dir, env.Home)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Abs(dir)
 }
 
-func expandHome(path string) (string, error) {
+func expandHome(path, home string) (string, error) {
 	if path != "~" && !strings.HasPrefix(path, "~/") {
 		return path, nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("expand %s: %w", path, err)
+	if home == "" {
+		return "", fmt.Errorf("expand %s: home directory is unknown", path)
 	}
 	return filepath.Join(home, strings.TrimPrefix(path, "~")), nil
 }

@@ -19,8 +19,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func openServer(st *storepkg.Store, clock loop.Clock, dataDir string) *web.Server {
-	return web.NewServer(slog.New(slog.DiscardHandler), st, clock, dataDir)
+func openServer(st *storepkg.Store, clock loop.Clock, dataDir string, opts ...web.Option) *web.Server {
+	deps := web.Deps{Logger: slog.New(slog.DiscardHandler), Store: st, Clock: clock, DataDir: dataDir}
+	return web.NewServer(deps, opts...)
 }
 
 func renderPage(t *testing.T, server *web.Server) string {

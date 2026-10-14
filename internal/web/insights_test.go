@@ -256,6 +256,22 @@ func fetchInsights(t *testing.T, server *web.Server, query string) (*http.Respon
 	return resp, body
 }
 
+func TestInsightsNamesTheLocationTheServerWasGiven(t *testing.T) {
+	t.Parallel()
+
+	paris, err := time.LoadLocation("Europe/Paris")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := newServer(openStore(t), testNow, web.WithLocation(paris))
+
+	_, body := fetchInsights(t, server, "")
+
+	if body.Timezone != "Europe/Paris" {
+		t.Errorf("timezone = %q, want Europe/Paris", body.Timezone)
+	}
+}
+
 type insightsJSON struct {
 	Since        string          `json:"since"`
 	Until        string          `json:"until"`
