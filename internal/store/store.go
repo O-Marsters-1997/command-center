@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
+	"io/fs"
+	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx", pure Go
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
@@ -21,6 +24,14 @@ import (
 
 //go:embed migrations/*.sql
 var migrations embed.FS
+
+const (
+	maxOpenConns     = 10
+	maxIdleConns     = 5
+	connMaxLifetime  = 30 * time.Minute
+	pingTimeout      = 5 * time.Second
+	statementTimeout = 30 * time.Second
+)
 
 func isUniqueViolation(err error, constraint string) bool {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
@@ -34,40 +45,53 @@ type Store struct {
 
 // OpenStore connects to the database dsn names and migrates it up to the latest embedded
 // migration.
-func OpenStore(dsn string) (*Store, error) {
-	db, err := sql.Open("pgx", dsn)
+func OpenStore(ctx context.Context, dsn string) (*Store, error) {
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
 
-	store := &Store{db: db, q: ccdb.New(db)}
-	if err := store.init(context.Background()); err != nil {
-		return nil, errors.Join(err, db.Close())
+	migrateDB := stdlib.OpenDB(*cfg)
+	if err := migrate(ctx, migrateDB); err != nil {
+		return nil, errors.Join(err, migrateDB.Close())
 	}
-	return store, nil
+	if err := migrateDB.Close(); err != nil {
+		return nil, fmt.Errorf("close migration connection: %w", err)
+	}
+
+	if _, ok := cfg.RuntimeParams["statement_timeout"]; !ok {
+		cfg.RuntimeParams["statement_timeout"] = strconv.FormatInt(statementTimeout.Milliseconds(), 10)
+	}
+	db := stdlib.OpenDB(*cfg)
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
+	db.SetConnMaxLifetime(connMaxLifetime)
+	if err := db.PingContext(ctx); err != nil {
+		return nil, errors.Join(fmt.Errorf("ping pool: %w", err), db.Close())
+	}
+	return &Store{db: db, q: ccdb.New(db)}, nil
 }
 
-var (
-	gooseOnce     sync.Once
-	gooseSetupErr error
-)
-
-// goose keeps its base FS, logger and dialect in package-level globals, so setting them
-// per OpenStore races between concurrent opens.
-func setUpGoose() error {
-	gooseOnce.Do(func() {
-		goose.SetBaseFS(migrations)
-		goose.SetLogger(goose.NopLogger())
-		gooseSetupErr = goose.SetDialect("postgres")
-	})
-	return gooseSetupErr
-}
-
-func (s *Store) init(ctx context.Context) error {
-	if err := setUpGoose(); err != nil {
-		return fmt.Errorf("set goose dialect: %w", err)
+func migrate(ctx context.Context, db *sql.DB) error {
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		return fmt.Errorf("ping database: %w", err)
 	}
-	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
+
+	fsys, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return fmt.Errorf("open migrations: %w", err)
+	}
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return fmt.Errorf("create migration locker: %w", err)
+	}
+	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithSessionLocker(locker))
+	if err != nil {
+		return fmt.Errorf("create migration provider: %w", err)
+	}
+	if _, err := p.Up(ctx); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	return nil

@@ -86,7 +86,7 @@ func New(ctx context.Context, logger *slog.Logger, configPath string, opts ...Op
 		}
 	}()
 
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
