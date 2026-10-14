@@ -3,18 +3,19 @@ package web
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
-	page, err := s.view.Session(
-		r.Context(), s.clock.Now(),
-		r.PathValue("owner"), r.PathValue("name"), r.PathValue("n"),
-		r.URL.Query().Get("log") == "raw",
-	)
+	n, err := strconv.Atoi(r.PathValue("n"))
+	if err != nil {
+		return withStatus(http.StatusNotFound, view.ErrSessionNotFound)
+	}
+	ref := view.SessionRef{Owner: r.PathValue("owner"), Name: r.PathValue("name"), N: n}
+	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, r.URL.Query().Get("log") == "raw")
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
@@ -25,16 +26,15 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) afterSessionVerb(w http.ResponseWriter, r *http.Request, ticketURL string, verb plan.Verb) error {
-	self := view.SessionPath(ticketURL)
-	if self == "" {
+	ref, err := view.ParseSessionRef(plan.TicketURL(ticketURL))
+	if err != nil {
 		return errorf(http.StatusBadRequest, "%q has no session page", ticketURL)
 	}
 	if r.Header.Get("HX-Request") == "" {
-		http.Redirect(w, r, self, http.StatusSeeOther)
+		http.Redirect(w, r, ref.Path(), http.StatusSeeOther)
 		return nil
 	}
-	parts := strings.Split(strings.TrimPrefix(self, "/s/"), "/")
-	page, err := s.view.Session(r.Context(), s.clock.Now(), parts[0], parts[1], parts[2], false)
+	page, err := s.view.Session(r.Context(), s.clock.Now(), ref, false)
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}

@@ -228,11 +228,16 @@ func tracks(tracked []store.Repo, p gh.RepoSummary) bool {
 	})
 }
 
+type RepoPageRequest struct {
+	Scope    string
+	Offered  []string
+	Selected []string
+}
+
 // RepoPage shapes the scoped page. offered is the repo's own tracker's features; a feature
 // imported with tickets in other repos names them.
-func (r *Reader) RepoPage(
-	ctx context.Context, now time.Time, scope string, offered, selected []string,
-) (RepoPage, error) {
+func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageRequest) (RepoPage, error) {
+	scope, offered, selected := req.Scope, req.Offered, req.Selected
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))
 	if err != nil {
 		return RepoPage{}, fmt.Errorf("load chrome: %w", err)
