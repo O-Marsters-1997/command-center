@@ -138,7 +138,7 @@ type Sim struct {
 }
 
 func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err error) {
-	sb, err := NewSandbox(sc.Repos)
+	sb, err := NewSandbox(ctx, sc.Repos)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 			return nil, err
 		}
 		for _, kv := range [][2]string{{"user.name", authorName}, {"user.email", authorEmail}} {
-			if _, err := git(checkout, "config", kv[0], kv[1]); err != nil {
+			if _, err := git(ctx, checkout, "config", kv[0], kv[1]); err != nil {
 				return nil, err
 			}
 		}
@@ -239,13 +239,13 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 // Tick plays one loop tick: the world moves, the loop runs, then the sim reads every board state
 // and presses launch for tickets that reached ready.
 func (s *Sim) Tick(ctx context.Context) error {
-	if err := s.landMain(); err != nil {
+	if err := s.landMain(ctx); err != nil {
 		return err
 	}
-	if err := s.forge.Advance(); err != nil {
+	if err := s.forge.Advance(ctx); err != nil {
 		return err
 	}
-	if err := s.agent.Step(); err != nil {
+	if err := s.agent.Step(ctx); err != nil {
 		return err
 	}
 	if err := s.loop.RunOnce(ctx); err != nil {
@@ -356,13 +356,13 @@ func (s *Sim) resolveConflicts(ctx context.Context, states map[string]string) er
 		if !ok {
 			return fmt.Errorf("no worktree for conflicted branch %s", i.branch)
 		}
-		if _, err := git(dir, "checkout", "--ours", "--", "."); err != nil {
+		if _, err := git(ctx, dir, "checkout", "--ours", "--", "."); err != nil {
 			return err
 		}
-		if _, err := git(dir, "add", "-A"); err != nil {
+		if _, err := git(ctx, dir, "add", "-A"); err != nil {
 			return err
 		}
-		if _, err := git(dir, "commit", "-q", "--no-edit"); err != nil {
+		if _, err := git(ctx, dir, "commit", "-q", "--no-edit"); err != nil {
 			return err
 		}
 	}
@@ -391,14 +391,14 @@ func (s *Sim) launchReady(states map[string]string) error {
 	return nil
 }
 
-func (s *Sim) landMain() error {
+func (s *Sim) landMain(ctx context.Context) error {
 	elapsed := s.clock.Now().Sub(simStart)
 	for ; s.landed < len(s.scenario.Main); s.landed++ {
 		m := s.scenario.Main[s.landed]
 		if m.At > elapsed {
 			return nil
 		}
-		if err := s.sandbox.LandOnMain(m.Repo, m.Files); err != nil {
+		if err := s.sandbox.LandOnMain(ctx, m.Repo, m.Files); err != nil {
 			return err
 		}
 	}

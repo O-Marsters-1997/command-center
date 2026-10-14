@@ -4,12 +4,9 @@ package gh
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // PRState is a pull request's state. The zero value is Absent: absence is a value, not a
@@ -85,7 +82,7 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 // List reads the pull requests for the tracked branches of the repo checked out at repoPath:
 // one bulk read, then one fallback read per tracked branch the bulk read did not cover.
 func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := run(ctx, repoPath, "pr", "list", "--state", "open",
+	out, err := Run(ctx, repoPath, "pr", "list", "--state", "open",
 		"--limit", strconv.Itoa(listLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, err
@@ -107,7 +104,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 		if _, ok := byBranch[branch]; ok {
 			continue
 		}
-		out, err := run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
+		out, err := Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
 			"--limit", "1", "--json", fallbackFields)
 		if err != nil {
 			return Snapshot{}, err
@@ -153,38 +150,38 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 	if draft {
 		args = append(args, "--draft")
 	}
-	_, err := run(ctx, repoPath, args...)
+	_, err := Run(ctx, repoPath, args...)
 	return err
 }
 
 // Ready marks branch's pull request as ready for review, undoing draft state.
 func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
-	_, err := run(ctx, repoPath, "pr", "ready", branch)
+	_, err := Run(ctx, repoPath, "pr", "ready", branch)
 	return err
 }
 
 // Comment adds body as a comment on branch's pull request.
 func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
-	_, err := run(ctx, repoPath, "pr", "comment", branch, "--body", body)
+	_, err := Run(ctx, repoPath, "pr", "comment", branch, "--body", body)
 	return err
 }
 
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
 // delete-branch-on-merge retarget may have got there first.
 func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
-	_, err := run(ctx, repoPath, "pr", "edit", branch, "--base", base)
+	_, err := Run(ctx, repoPath, "pr", "edit", branch, "--base", base)
 	return err
 }
 
 // CloseIssue closes issueURL's GitHub issue.
 func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
-	_, err := run(ctx, repoPath, "issue", "close", issueURL)
+	_, err := Run(ctx, repoPath, "issue", "close", issueURL)
 	return err
 }
 
 // IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
 func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
+	out, err := Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +193,9 @@ func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string,
 }
 
 func decodeIssueTitles(raw []byte) (map[string]string, error) {
-	var decoded []rawIssue
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal issue list: %w", err)
+	decoded, err := Decode[[]rawIssue](raw)
+	if err != nil {
+		return nil, fmt.Errorf("issue list: %w", err)
 	}
 	if len(decoded) >= listLimit {
 		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
@@ -208,10 +205,6 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 		titles[issue.URL] = issue.Title
 	}
 	return titles, nil
-}
-
-func run(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
-	return command.Output(ctx, repoPath, "gh", args...)
 }
 
 type rawPR struct {
@@ -251,9 +244,9 @@ type rawCheck struct {
 }
 
 func decode(raw []byte) ([]PR, error) {
-	var decoded []rawPR
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("unmarshal pr list: %w", err)
+	decoded, err := Decode[[]rawPR](raw)
+	if err != nil {
+		return nil, fmt.Errorf("pr list: %w", err)
 	}
 
 	prs := make([]PR, 0, len(decoded))
