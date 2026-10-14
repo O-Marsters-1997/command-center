@@ -68,7 +68,7 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 		if errors.As(err, &perr) {
 			return RepoSettings{}, fmt.Errorf("line %d: %s", perr.Position.Line, perr.Message)
 		}
-		return RepoSettings{}, err
+		return RepoSettings{}, fmt.Errorf("decode repo settings: %w", err)
 	}
 	if settings.Tracker == "" {
 		settings.Tracker = string(tracker.GitHub)

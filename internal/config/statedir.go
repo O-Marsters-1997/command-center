@@ -54,9 +54,13 @@ func ResolveDataDir(configured string, env Env) (string, error) {
 	}
 	dir, err := expandHome(dir, env.Home)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("expand data dir: %w", err)
 	}
-	return filepath.Abs(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("absolute data dir %s: %w", dir, err)
+	}
+	return abs, nil
 }
 
 const defaultClaudeProjectsDir = "~/.claude/projects"
@@ -70,9 +74,13 @@ func ResolveClaudeProjectsDir(configured string, env Env) (string, error) {
 	}
 	dir, err := expandHome(dir, env.Home)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("expand claude projects dir: %w", err)
 	}
-	return filepath.Abs(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("absolute claude projects dir %s: %w", dir, err)
+	}
+	return abs, nil
 }
 
 func expandHome(path, home string) (string, error) {
