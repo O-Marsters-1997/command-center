@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const editTicket = `-- name: EditTicket :exec
+const editTicket = `-- name: EditTicket :execrows
 UPDATE tickets SET branch = $1, blocked_by = $2 WHERE url = $3
 `
 
@@ -21,9 +21,12 @@ type EditTicketParams struct {
 	URL       string
 }
 
-func (q *Queries) EditTicket(ctx context.Context, arg EditTicketParams) error {
-	_, err := q.db.ExecContext(ctx, editTicket, arg.Branch, arg.BlockedBy, arg.URL)
-	return err
+func (q *Queries) EditTicket(ctx context.Context, arg EditTicketParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, editTicket, arg.Branch, arg.BlockedBy, arg.URL)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const pendingEditTicketIntents = `-- name: PendingEditTicketIntents :many

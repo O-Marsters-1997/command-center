@@ -10,14 +10,14 @@ VALUES (
 SELECT session_id::text AS session_id FROM runs
 WHERE ticket_id = $1 AND kind IN ('agent', 'follow_up') AND session_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 
--- name: RecordSpawn :exec
+-- name: RecordSpawn :execrows
 UPDATE runs SET pgid = $1, proc_started_at = $2, log_path = $3 WHERE id = $4;
 
--- name: RecordDisposition :exec
+-- name: RecordDisposition :execrows
 UPDATE runs SET outcome = $1, exit_code = $2, ended_at = $3, cost_usd = $4
-WHERE id = $5;
+WHERE id = $5 AND outcome IS NULL;
 
--- name: RecordQuestion :exec
+-- name: RecordQuestion :execrows
 UPDATE runs SET question = $1 WHERE id = $2;
 
 -- name: InsertCutFailedRun :one
@@ -47,8 +47,8 @@ SELECT id, ticket_id, COALESCE(payload, 'null'::jsonb) AS payload FROM intents W
 -- name: PendingIntentsByTicket :many
 SELECT ticket_id, verb FROM intents WHERE consumed_at IS NULL ORDER BY id;
 
--- name: ConsumeVerbIntent :exec
-UPDATE intents SET consumed_at = $1 WHERE id = $2;
+-- name: ConsumeVerbIntent :execrows
+UPDATE intents SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL;
 
 -- name: ActiveLaunchHashes :many
 SELECT lm.ticket_id, lm.prompt_hash FROM launch_members lm

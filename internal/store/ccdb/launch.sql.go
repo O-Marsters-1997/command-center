@@ -27,7 +27,7 @@ func (q *Queries) ActiveLaunchMemberCount(ctx context.Context, ticketID string) 
 	return count, err
 }
 
-const cancelActiveLaunches = `-- name: CancelActiveLaunches :exec
+const cancelActiveLaunches = `-- name: CancelActiveLaunches :execrows
 UPDATE launches SET state = 'cancelled' WHERE id IN (
     SELECT lm.launch_id FROM launch_members lm
     JOIN launches l ON l.id = lm.launch_id
@@ -35,23 +35,47 @@ UPDATE launches SET state = 'cancelled' WHERE id IN (
 )
 `
 
-func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) error {
-	_, err := q.db.ExecContext(ctx, cancelActiveLaunches, ticketID)
-	return err
+func (q *Queries) CancelActiveLaunches(ctx context.Context, ticketID string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelActiveLaunches, ticketID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const consumeLaunchIntent = `-- name: ConsumeLaunchIntent :exec
-UPDATE intents SET consumed_at = $1 WHERE id = $2
+const claimLaunchIntents = `-- name: ClaimLaunchIntents :many
+UPDATE intents SET consumed_at = $1
+WHERE verb = 'launch' AND consumed_at IS NULL
+RETURNING id, ticket_id, payload
 `
 
-type ConsumeLaunchIntentParams struct {
-	ConsumedAt sql.NullTime
-	ID         int64
+type ClaimLaunchIntentsRow struct {
+	ID       int64
+	TicketID string
+	Payload  json.RawMessage
 }
 
-func (q *Queries) ConsumeLaunchIntent(ctx context.Context, arg ConsumeLaunchIntentParams) error {
-	_, err := q.db.ExecContext(ctx, consumeLaunchIntent, arg.ConsumedAt, arg.ID)
-	return err
+func (q *Queries) ClaimLaunchIntents(ctx context.Context, at sql.NullTime) ([]ClaimLaunchIntentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, claimLaunchIntents, at)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimLaunchIntentsRow
+	for rows.Next() {
+		var i ClaimLaunchIntentsRow
+		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const featureFirstLaunch = `-- name: FeatureFirstLaunch :one
@@ -143,39 +167,6 @@ func (q *Queries) LaunchMemberships(ctx context.Context) ([]LaunchMembershipsRow
 			&i.PromptHash,
 			&i.Members,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const pendingLaunchIntents = `-- name: PendingLaunchIntents :many
-SELECT id, ticket_id, payload FROM intents WHERE verb = 'launch' AND consumed_at IS NULL ORDER BY id
-`
-
-type PendingLaunchIntentsRow struct {
-	ID       int64
-	TicketID string
-	Payload  json.RawMessage
-}
-
-func (q *Queries) PendingLaunchIntents(ctx context.Context) ([]PendingLaunchIntentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, pendingLaunchIntents)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []PendingLaunchIntentsRow
-	for rows.Next() {
-		var i PendingLaunchIntentsRow
-		if err := rows.Scan(&i.ID, &i.TicketID, &i.Payload); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
