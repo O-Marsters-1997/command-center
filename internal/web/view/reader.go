@@ -113,7 +113,11 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	applyTicketSpend(rows, ticketSpend, f.split[agentlog.SevenDay].Fit.Factor)
 	var records []store.Event
 	if params.Sel != "" {
-		if records, err = r.store.TicketEventsAfter(ctx, params.Sel, 0); err != nil {
+		err = EachTicketEvent(ctx, r.store, params.Sel, 0, func(e store.Event) error {
+			records = append(records, e)
+			return nil
+		})
+		if err != nil {
 			return Board{}, fmt.Errorf("load ticket events after: %w", err)
 		}
 	}
@@ -132,12 +136,12 @@ func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board
 	}
 	launched := option.None[Age]()
 	if params.Feature != "" {
-		at, ok, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
-		if err != nil {
-			return Board{}, fmt.Errorf("load feature first launch: %w", err)
-		}
-		if ok {
+		at, err := r.store.FeatureFirstLaunch(ctx, params.Feature)
+		switch {
+		case err == nil:
 			launched = option.Some(relative(now, at))
+		case !errors.Is(err, store.ErrNotFound):
+			return Board{}, fmt.Errorf("load feature first launch: %w", err)
 		}
 	}
 	return Board{

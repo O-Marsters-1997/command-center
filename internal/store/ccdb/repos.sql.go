@@ -11,13 +11,13 @@ import (
 	"time"
 )
 
-const repos = `-- name: Repos :many
+const listRepos = `-- name: ListRepos :many
 SELECT r.name, r.remote, r.state, r.refusal_kind, r.refusal, r.settings_source, r.settings_read_at, r.tracked_at,
     p.name AS project, p.hue AS project_hue
 FROM repos r LEFT JOIN projects p ON p.id = r.project_id ORDER BY r.name
 `
 
-type ReposRow struct {
+type ListReposRow struct {
 	Name           string
 	Remote         string
 	State          string
@@ -30,15 +30,15 @@ type ReposRow struct {
 	ProjectHue     sql.NullInt16
 }
 
-func (q *Queries) Repos(ctx context.Context) ([]ReposRow, error) {
-	rows, err := q.db.QueryContext(ctx, repos)
+func (q *Queries) ListRepos(ctx context.Context) ([]ListReposRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRepos)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ReposRow
+	var items []ListReposRow
 	for rows.Next() {
-		var i ReposRow
+		var i ListReposRow
 		if err := rows.Scan(
 			&i.Name,
 			&i.Remote,
@@ -64,30 +64,34 @@ func (q *Queries) Repos(ctx context.Context) ([]ReposRow, error) {
 	return items, nil
 }
 
-const setRepoState = `-- name: SetRepoState :exec
-UPDATE repos SET state = $2, refusal_kind = $3, refusal = $4, settings_source = $5, settings_read_at = $6
-WHERE name = $1
+const setRepoState = `-- name: SetRepoState :execrows
+UPDATE repos SET state = $1, refusal_kind = $2, refusal = $3,
+    settings_source = $4, settings_read_at = $5
+WHERE name = $6
 `
 
 type SetRepoStateParams struct {
-	Name           string
 	State          string
 	RefusalKind    sql.NullString
 	Refusal        sql.NullString
 	SettingsSource sql.NullString
 	SettingsReadAt sql.NullTime
+	Name           string
 }
 
-func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) error {
-	_, err := q.db.ExecContext(ctx, setRepoState,
-		arg.Name,
+func (q *Queries) SetRepoState(ctx context.Context, arg SetRepoStateParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRepoState,
 		arg.State,
 		arg.RefusalKind,
 		arg.Refusal,
 		arg.SettingsSource,
 		arg.SettingsReadAt,
+		arg.Name,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertRepo = `-- name: UpsertRepo :exec

@@ -19,7 +19,7 @@ type Ticket struct {
 	Body      string
 	Status    string
 	Feature   string
-	SyncedAt  string
+	SyncedAt  time.Time
 }
 
 func (t Ticket) Ref() plan.BranchRef { return plan.BranchRef{Repo: t.Repo, Branch: t.Branch} }

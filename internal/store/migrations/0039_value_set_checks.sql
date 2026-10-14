@@ -1,4 +1,5 @@
 -- +goose Up
+SET lock_timeout = '5s';
 ALTER TABLE runs ADD CONSTRAINT runs_kind_check
     CHECK (kind IN ('agent', 'follow_up')) NOT VALID;
 ALTER TABLE runs ADD CONSTRAINT runs_outcome_check
@@ -20,3 +21,13 @@ ALTER TABLE utilization_readings ADD CONSTRAINT utilization_readings_window_chec
     CHECK ("window" IN ('five_hour', 'seven_day')) NOT VALID;
 ALTER TABLE utilization_intervals ADD CONSTRAINT utilization_intervals_window_check
     CHECK ("window" IN ('five_hour', 'seven_day')) NOT VALID;
+
+-- +goose Down
+SET lock_timeout = '5s';
+ALTER TABLE utilization_intervals DROP CONSTRAINT utilization_intervals_window_check;
+ALTER TABLE utilization_readings DROP CONSTRAINT utilization_readings_window_check;
+ALTER TABLE events DROP CONSTRAINT events_kind_check;
+ALTER TABLE repos DROP CONSTRAINT repos_refusal_kind_check;
+ALTER TABLE intents DROP CONSTRAINT intents_verb_check;
+ALTER TABLE runs DROP CONSTRAINT runs_outcome_check;
+ALTER TABLE runs DROP CONSTRAINT runs_kind_check;

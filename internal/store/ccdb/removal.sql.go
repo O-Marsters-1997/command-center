@@ -10,28 +10,27 @@ import (
 	"database/sql"
 )
 
-const latestRemovalRefusals = `-- name: LatestRemovalRefusals :many
-SELECT e.ticket_id, e.detail
-FROM events e
-JOIN (
-    SELECT e2.ticket_id, MAX(e2.id) AS id FROM events e2 WHERE e2.kind = $1 GROUP BY e2.ticket_id
-) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id
+const listLatestRemovalRefusals = `-- name: ListLatestRemovalRefusals :many
+SELECT DISTINCT ON (ticket_id) ticket_id, detail
+FROM events
+WHERE ticket_id IS NOT NULL AND kind = $1
+ORDER BY ticket_id, id DESC
 `
 
-type LatestRemovalRefusalsRow struct {
+type ListLatestRemovalRefusalsRow struct {
 	TicketID sql.NullString
-	Detail   sql.NullString
+	Detail   string
 }
 
-func (q *Queries) LatestRemovalRefusals(ctx context.Context, kind string) ([]LatestRemovalRefusalsRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestRemovalRefusals, kind)
+func (q *Queries) ListLatestRemovalRefusals(ctx context.Context, kind string) ([]ListLatestRemovalRefusalsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestRemovalRefusals, kind)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LatestRemovalRefusalsRow
+	var items []ListLatestRemovalRefusalsRow
 	for rows.Next() {
-		var i LatestRemovalRefusalsRow
+		var i ListLatestRemovalRefusalsRow
 		if err := rows.Scan(&i.TicketID, &i.Detail); err != nil {
 			return nil, err
 		}

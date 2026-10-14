@@ -8,50 +8,17 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
-const lastPushedTips = `-- name: LastPushedTips :many
-SELECT p.ticket_id, p.pushed_tip FROM pushes p
-JOIN (SELECT ticket_id, MAX(id) AS id FROM pushes GROUP BY ticket_id) latest
-  ON latest.ticket_id = p.ticket_id AND latest.id = p.id
+const listLatestPushes = `-- name: ListLatestPushes :many
+SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at
+FROM pushes
+ORDER BY ticket_id, id DESC
 `
 
-type LastPushedTipsRow struct {
-	TicketID  string
-	PushedTip string
-}
-
-func (q *Queries) LastPushedTips(ctx context.Context) ([]LastPushedTipsRow, error) {
-	rows, err := q.db.QueryContext(ctx, lastPushedTips)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []LastPushedTipsRow
-	for rows.Next() {
-		var i LastPushedTipsRow
-		if err := rows.Scan(&i.TicketID, &i.PushedTip); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const latestPushes = `-- name: LatestPushes :many
-SELECT p.ticket_id, p.pushed_tip, p.base_branch, p.base_sha_at_push, p.pushed_at FROM pushes p
-JOIN (SELECT ticket_id, MAX(id) AS id FROM pushes GROUP BY ticket_id) latest
-  ON latest.ticket_id = p.ticket_id AND latest.id = p.id
-`
-
-type LatestPushesRow struct {
+type ListLatestPushesRow struct {
 	TicketID      string
 	PushedTip     string
 	BaseBranch    string
@@ -59,15 +26,15 @@ type LatestPushesRow struct {
 	PushedAt      time.Time
 }
 
-func (q *Queries) LatestPushes(ctx context.Context) ([]LatestPushesRow, error) {
-	rows, err := q.db.QueryContext(ctx, latestPushes)
+func (q *Queries) ListLatestPushes(ctx context.Context) ([]ListLatestPushesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestPushes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []LatestPushesRow
+	var items []ListLatestPushesRow
 	for rows.Next() {
-		var i LatestPushesRow
+		var i ListLatestPushesRow
 		if err := rows.Scan(
 			&i.TicketID,
 			&i.PushedTip,
@@ -88,40 +55,33 @@ func (q *Queries) LatestPushes(ctx context.Context) ([]LatestPushesRow, error) {
 	return items, nil
 }
 
-const pushFacts = `-- name: PushFacts :many
-SELECT e.ticket_id, e.kind, e.detail
+const listPushFacts = `-- name: ListPushFacts :many
+SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
 FROM events e
-JOIN (
-    SELECT e2.ticket_id, MAX(e2.id) AS id
-    FROM events e2
-    LEFT JOIN (
-        SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
-    ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN ($1, $2) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
-    GROUP BY e2.ticket_id
-) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id
+LEFT JOIN (
+    SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
+) p ON p.ticket_id = e.ticket_id
+WHERE e.ticket_id IS NOT NULL
+  AND e.kind IN (SELECT jsonb_array_elements_text($1::jsonb))
+  AND (p.pushed_at IS NULL OR e.at > p.pushed_at)
+ORDER BY e.ticket_id, e.id DESC
 `
 
-type PushFactsParams struct {
-	Kind   string
-	Kind_2 string
-}
-
-type PushFactsRow struct {
+type ListPushFactsRow struct {
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
-func (q *Queries) PushFacts(ctx context.Context, arg PushFactsParams) ([]PushFactsRow, error) {
-	rows, err := q.db.QueryContext(ctx, pushFacts, arg.Kind, arg.Kind_2)
+func (q *Queries) ListPushFacts(ctx context.Context, kinds json.RawMessage) ([]ListPushFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPushFacts, kinds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PushFactsRow
+	var items []ListPushFactsRow
 	for rows.Next() {
-		var i PushFactsRow
+		var i ListPushFactsRow
 		if err := rows.Scan(&i.TicketID, &i.Kind, &i.Detail); err != nil {
 			return nil, err
 		}

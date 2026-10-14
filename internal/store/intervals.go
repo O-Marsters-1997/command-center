@@ -55,23 +55,37 @@ func (s *Store) RecordReadingsAndIntervals(ctx context.Context, readings []agent
 	if err := s.RecordReadings(ctx, readings); err != nil {
 		return fmt.Errorf("record readings: %w", err)
 	}
-	for _, interval := range intervals {
-		err := s.q.RecordInterval(ctx, ccdb.RecordIntervalParams{
+	rows := make([]intervalRow, len(intervals))
+	for i, interval := range intervals {
+		rows[i] = intervalRow{
 			Window: string(interval.Window), StartAt: interval.Start.UTC(), EndAt: interval.End.UTC(),
 			UtilizationStart: interval.UtilizationStart, UtilizationEnd: interval.UtilizationEnd,
-			WeightUsd: interval.WeightUSD,
-		})
-		if err != nil {
-			return fmt.Errorf("record interval %s %s-%s: %w", interval.Window, interval.Start, interval.End, err)
+			WeightUSD: interval.WeightUSD,
 		}
 	}
+	encoded, err := encodeJSON("intervals", rows)
+	if err != nil {
+		return err
+	}
+	if err := s.q.RecordIntervals(ctx, encoded); err != nil {
+		return fmt.Errorf("record %d intervals: %w", len(intervals), err)
+	}
 	return nil
+}
+
+type intervalRow struct {
+	Window           string    `json:"window"`
+	StartAt          time.Time `json:"start_at"`
+	EndAt            time.Time `json:"end_at"`
+	UtilizationStart float64   `json:"utilization_start"`
+	UtilizationEnd   float64   `json:"utilization_end"`
+	WeightUSD        float64   `json:"weight_usd"`
 }
 
 // FitFactors returns each window's least-squares dollars-to-utilization factor over the
 // trailing seven days. A window below spend.MinSamples is absent.
 func (s *Store) FitFactors(ctx context.Context, now time.Time) (map[agentlog.Window]spend.Result, error) {
-	rows, err := s.q.IntervalsSince(ctx, now.Add(-sevenDayDuration))
+	rows, err := s.q.ListIntervalsSince(ctx, now.Add(-sevenDayDuration))
 	if err != nil {
 		return nil, fmt.Errorf("select intervals: %w", err)
 	}

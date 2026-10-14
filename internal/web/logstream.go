@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -39,7 +40,7 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) error {
 	}
 	mode := view.ParseLogFilter(r.URL.Query().Get("log"))
 
-	path, ended, err := s.store.LatestRunLog(ctx, ticketURL)
+	path, ended, err := s.latestRunLog(ctx, ticketURL)
 	if err != nil {
 		return fmt.Errorf("load latest run log: %w", err)
 	}
@@ -101,10 +102,21 @@ func (s *Server) followLog(ctx context.Context, w io.Writer, flusher *http.Respo
 			return fmt.Errorf("follow run log: %w", ctx.Err())
 		case <-time.After(logPollInterval):
 		}
-		if f.Path, f.Ended, err = s.store.LatestRunLog(ctx, f.TicketURL); err != nil {
+		if f.Path, f.Ended, err = s.latestRunLog(ctx, f.TicketURL); err != nil {
 			return fmt.Errorf("load latest run log: %w", err)
 		}
 	}
+}
+
+func (s *Server) latestRunLog(ctx context.Context, ticketURL string) (path string, ended bool, err error) {
+	path, ended, err = s.store.LatestRunLog(ctx, ticketURL)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", true, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read latest run log for %s: %w", ticketURL, err)
+	}
+	return path, ended, nil
 }
 
 func queryOffset(r *http.Request, key string) (int64, error) {
@@ -138,25 +150,25 @@ func flushStream(flusher *http.ResponseController) error {
 }
 
 func (s *Server) sendRecords(ctx context.Context, w io.Writer, f *logFollow) (int, error) {
-	records, err := s.store.TicketEventsAfter(ctx, f.TicketURL, f.AfterRecord)
-	if err != nil {
-		return 0, fmt.Errorf("load ticket events after: %w", err)
-	}
 	sent := 0
-	for _, record := range records {
+	err := view.EachTicketEvent(ctx, s.store, f.TicketURL, f.AfterRecord, func(record store.Event) error {
 		f.AfterRecord = record.ID
 		event := view.RecordOf(record)
 		if !view.RecordShown(record) || !view.EventShown(f.Mode, event) {
-			continue
+			return nil
 		}
 		rendered, err := renderLogLine(view.LineOf(event))
 		if err != nil {
-			return sent, fmt.Errorf("render record %d: %w", record.ID, err)
+			return fmt.Errorf("render record %d: %w", record.ID, err)
 		}
 		if err := writeEvent(w, f.Offset, rendered); err != nil {
-			return sent, fmt.Errorf("write event: %w", err)
+			return fmt.Errorf("write event: %w", err)
 		}
 		sent++
+		return nil
+	})
+	if err != nil {
+		return sent, fmt.Errorf("read ticket events for %s: %w", f.TicketURL, err)
 	}
 	return sent, nil
 }

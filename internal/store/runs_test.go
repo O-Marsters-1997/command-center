@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"database/sql"
+	"errors"
 	"maps"
 	"slices"
 	"testing"
@@ -353,5 +354,50 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	want["sandbox://CC-1"] = []plan.Verb{plan.VerbFollowUp}
 	if !maps.EqualFunc(after, want, slices.Equal) {
 		t.Fatalf("after = %+v, want %+v", after, want)
+	}
+}
+
+func TestConsumeVerbIntentTwiceReportsNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.QueueVerbIntent(ctx, "sandbox://CC-1", "kill", at); err != nil {
+		t.Fatalf("QueueVerbIntent: %v", err)
+	}
+	pending, err := store.PendingVerbIntents(ctx, "kill")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.ConsumeVerbIntent(ctx, pending[0].ID, at); err != nil {
+		t.Fatalf("first ConsumeVerbIntent = %v, want nil", err)
+	}
+	if err := store.ConsumeVerbIntent(ctx, pending[0].ID, at); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Errorf("second ConsumeVerbIntent = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRecordDispositionTwiceReportsNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	store := openStore(t)
+	seedOneTicket(t, store)
+	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "hash-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	disposition := storepkg.Disposition{RunID: plan.RunID(runID), Outcome: plan.OutcomePush, EndedAt: at}
+	if err := store.RecordDisposition(ctx, disposition); err != nil {
+		t.Fatalf("first RecordDisposition = %v, want nil", err)
+	}
+	if err := store.RecordDisposition(ctx, disposition); !errors.Is(err, storepkg.ErrNotFound) {
+		t.Errorf("second RecordDisposition = %v, want ErrNotFound", err)
 	}
 }

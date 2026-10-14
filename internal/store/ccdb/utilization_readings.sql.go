@@ -7,6 +7,7 @@ package ccdb
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -51,25 +52,41 @@ func (q *Queries) LatestReadingsFull(ctx context.Context) ([]LatestReadingsFullR
 	return items, nil
 }
 
-const recordReading = `-- name: RecordReading :exec
+const pruneReadings = `-- name: PruneReadings :execrows
+DELETE FROM utilization_readings WHERE id IN (
+    SELECT r.id FROM utilization_readings r
+    WHERE r.at < $1
+      AND EXISTS (
+          SELECT 1 FROM utilization_readings newer
+          WHERE newer."window" = r."window" AND newer.at > r.at
+      )
+    LIMIT $2
+)
+`
+
+type PruneReadingsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneReadings(ctx context.Context, arg PruneReadingsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneReadings, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const recordReadings = `-- name: RecordReadings :exec
 INSERT INTO utilization_readings (at, "window", utilization, resets_at)
-VALUES ($1, $2, $3, $4)
+SELECT r.at, r."window", r.utilization, r.resets_at
+FROM jsonb_to_recordset($1::jsonb) AS r(
+    at timestamptz, "window" text, utilization double precision, resets_at timestamptz
+)
 ON CONFLICT (at, "window") DO NOTHING
 `
 
-type RecordReadingParams struct {
-	At          time.Time
-	Window      string
-	Utilization float64
-	ResetsAt    time.Time
-}
-
-func (q *Queries) RecordReading(ctx context.Context, arg RecordReadingParams) error {
-	_, err := q.db.ExecContext(ctx, recordReading,
-		arg.At,
-		arg.Window,
-		arg.Utilization,
-		arg.ResetsAt,
-	)
+func (q *Queries) RecordReadings(ctx context.Context, readings json.RawMessage) error {
+	_, err := q.db.ExecContext(ctx, recordReadings, readings)
 	return err
 }

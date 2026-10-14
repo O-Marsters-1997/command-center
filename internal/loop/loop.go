@@ -86,6 +86,9 @@ func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, erro
 // observation in place rather than applying any transition, so the page's observe age
 // keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
+	if err := l.store.PruneHistory(ctx, l.clock.Now()); err != nil {
+		l.logger.Warn("prune history", "err", err)
+	}
 	if err := l.applyTrackIntents(ctx); err != nil {
 		return l.failTick(ctx, fmt.Errorf("track: %w", err))
 	}

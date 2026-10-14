@@ -20,7 +20,7 @@ type AppendEventParams struct {
 	At       time.Time
 	TicketID sql.NullString
 	Kind     string
-	Detail   sql.NullString
+	Detail   string
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error {
@@ -33,54 +33,26 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) error 
 	return err
 }
 
-const events = `-- name: Events :many
-SELECT at, ticket_id, kind, detail FROM events ORDER BY id
-`
-
-type EventsRow struct {
-	At       time.Time
-	TicketID sql.NullString
-	Kind     string
-	Detail   sql.NullString
-}
-
-func (q *Queries) Events(ctx context.Context) ([]EventsRow, error) {
-	rows, err := q.db.QueryContext(ctx, events)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []EventsRow
-	for rows.Next() {
-		var i EventsRow
-		if err := rows.Scan(
-			&i.At,
-			&i.TicketID,
-			&i.Kind,
-			&i.Detail,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getMeta = `-- name: GetMeta :one
 SELECT value FROM meta WHERE key = $1
 `
 
-func (q *Queries) GetMeta(ctx context.Context, key string) (string, error) {
+func (q *Queries) GetMeta(ctx context.Context, key string) (json.RawMessage, error) {
 	row := q.db.QueryRowContext(ctx, getMeta, key)
-	var value string
+	var value json.RawMessage
 	err := row.Scan(&value)
 	return value, err
+}
+
+const getTicketFeature = `-- name: GetTicketFeature :one
+SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
+`
+
+func (q *Queries) GetTicketFeature(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getTicketFeature, url)
+	var feature string
+	err := row.Scan(&feature)
+	return feature, err
 }
 
 const hasEvent = `-- name: HasEvent :one
@@ -101,102 +73,147 @@ func (q *Queries) HasEvent(ctx context.Context, arg HasEventParams) (bool, error
 	return found, err
 }
 
-const importTicket = `-- name: ImportTicket :exec
+const importTickets = `-- name: ImportTickets :exec
 INSERT INTO tickets (url, repo, source, feature, title, body, status, synced_at, branch, blocked_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT t.url, t.repo, t.source, t.feature, t.title, t.body, t.status, t.synced_at, t.branch, t.blocked_by
+FROM jsonb_to_recordset($1::jsonb) AS t(
+    url text, repo text, source text, feature text, title text, body text,
+    status text, synced_at timestamptz, branch text, blocked_by jsonb
+)
 ON CONFLICT (url) DO UPDATE SET
     repo = excluded.repo, source = excluded.source, feature = excluded.feature,
     title = excluded.title, body = excluded.body, status = excluded.status,
     synced_at = excluded.synced_at, withdrawn_at = NULL
 `
 
-type ImportTicketParams struct {
-	URL       string
-	Repo      string
-	Source    string
-	Feature   string
-	Title     string
-	Body      string
-	Status    string
-	SyncedAt  string
-	Branch    string
-	BlockedBy json.RawMessage
-}
-
-func (q *Queries) ImportTicket(ctx context.Context, arg ImportTicketParams) error {
-	_, err := q.db.ExecContext(ctx, importTicket,
-		arg.URL,
-		arg.Repo,
-		arg.Source,
-		arg.Feature,
-		arg.Title,
-		arg.Body,
-		arg.Status,
-		arg.SyncedAt,
-		arg.Branch,
-		arg.BlockedBy,
-	)
+func (q *Queries) ImportTickets(ctx context.Context, tickets json.RawMessage) error {
+	_, err := q.db.ExecContext(ctx, importTickets, tickets)
 	return err
 }
 
-const putMeta = `-- name: PutMeta :exec
-INSERT INTO meta (key, value) VALUES ($1, $2)
-ON CONFLICT (key) DO UPDATE SET value = excluded.value
+const listActiveTicketFeatures = `-- name: ListActiveTicketFeatures :many
+SELECT url, feature FROM tickets
+WHERE url IN (SELECT jsonb_array_elements_text($1::jsonb)) AND withdrawn_at IS NULL
 `
 
-type PutMetaParams struct {
-	Key   string
-	Value string
+type ListActiveTicketFeaturesRow struct {
+	URL     string
+	Feature string
 }
 
-func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
-	_, err := q.db.ExecContext(ctx, putMeta, arg.Key, arg.Value)
-	return err
+func (q *Queries) ListActiveTicketFeatures(ctx context.Context, urls json.RawMessage) ([]ListActiveTicketFeaturesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveTicketFeatures, urls)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveTicketFeaturesRow
+	for rows.Next() {
+		var i ListActiveTicketFeaturesRow
+		if err := rows.Scan(&i.URL, &i.Feature); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const setBlockedBy = `-- name: SetBlockedBy :exec
-UPDATE tickets SET blocked_by = $1 WHERE url = $2
+const listEvents = `-- name: ListEvents :many
+SELECT at, ticket_id, kind, detail FROM (
+    SELECT id, at, ticket_id, kind, detail FROM events ORDER BY id DESC LIMIT $1
+) newest
+ORDER BY id
 `
 
-type SetBlockedByParams struct {
-	BlockedBy json.RawMessage
-	URL       string
+type ListEventsRow struct {
+	At       time.Time
+	TicketID sql.NullString
+	Kind     string
+	Detail   string
 }
 
-func (q *Queries) SetBlockedBy(ctx context.Context, arg SetBlockedByParams) error {
-	_, err := q.db.ExecContext(ctx, setBlockedBy, arg.BlockedBy, arg.URL)
-	return err
+func (q *Queries) ListEvents(ctx context.Context, maxRows int32) ([]ListEventsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEvents, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEventsRow
+	for rows.Next() {
+		var i ListEventsRow
+		if err := rows.Scan(
+			&i.At,
+			&i.TicketID,
+			&i.Kind,
+			&i.Detail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const ticketBranch = `-- name: TicketBranch :one
-SELECT repo, branch FROM tickets WHERE url = $1
+const listTicketBranches = `-- name: ListTicketBranches :many
+SELECT url, repo, branch FROM tickets WHERE url IN (SELECT jsonb_array_elements_text($1::jsonb))
 `
 
-type TicketBranchRow struct {
+type ListTicketBranchesRow struct {
+	URL    string
 	Repo   string
 	Branch string
 }
 
-func (q *Queries) TicketBranch(ctx context.Context, url string) (TicketBranchRow, error) {
-	row := q.db.QueryRowContext(ctx, ticketBranch, url)
-	var i TicketBranchRow
-	err := row.Scan(&i.Repo, &i.Branch)
-	return i, err
+func (q *Queries) ListTicketBranches(ctx context.Context, urls json.RawMessage) ([]ListTicketBranchesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketBranches, urls)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTicketBranchesRow
+	for rows.Next() {
+		var i ListTicketBranchesRow
+		if err := rows.Scan(&i.URL, &i.Repo, &i.Branch); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const ticketEventsAfter = `-- name: TicketEventsAfter :many
+const listTicketEventsAfter = `-- name: ListTicketEventsAfter :many
 SELECT id, at, ticket_id, kind, detail FROM events
 WHERE ticket_id = $1 AND id > $2
 ORDER BY id
+LIMIT $3
 `
 
-type TicketEventsAfterParams struct {
+type ListTicketEventsAfterParams struct {
 	TicketID sql.NullString
-	ID       int64
+	AfterID  int64
+	MaxRows  int32
 }
 
-func (q *Queries) TicketEventsAfter(ctx context.Context, arg TicketEventsAfterParams) ([]Event, error) {
-	rows, err := q.db.QueryContext(ctx, ticketEventsAfter, arg.TicketID, arg.ID)
+func (q *Queries) ListTicketEventsAfter(ctx context.Context, arg ListTicketEventsAfterParams) ([]Event, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketEventsAfter, arg.TicketID, arg.AfterID, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -224,34 +241,44 @@ func (q *Queries) TicketEventsAfter(ctx context.Context, arg TicketEventsAfterPa
 	return items, nil
 }
 
-const ticketFeature = `-- name: TicketFeature :one
-SELECT feature FROM tickets WHERE url = $1 AND withdrawn_at IS NULL
+const listTicketFeatures = `-- name: ListTicketFeatures :many
+SELECT url, feature FROM tickets WHERE url IN (SELECT jsonb_array_elements_text($1::jsonb))
 `
 
-func (q *Queries) TicketFeature(ctx context.Context, url string) (string, error) {
-	row := q.db.QueryRowContext(ctx, ticketFeature, url)
-	var feature string
-	err := row.Scan(&feature)
-	return feature, err
+type ListTicketFeaturesRow struct {
+	URL     string
+	Feature string
 }
 
-const ticketFeatureAny = `-- name: TicketFeatureAny :one
-SELECT feature FROM tickets WHERE url = $1
-`
-
-func (q *Queries) TicketFeatureAny(ctx context.Context, url string) (string, error) {
-	row := q.db.QueryRowContext(ctx, ticketFeatureAny, url)
-	var feature string
-	err := row.Scan(&feature)
-	return feature, err
+func (q *Queries) ListTicketFeatures(ctx context.Context, urls json.RawMessage) ([]ListTicketFeaturesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketFeatures, urls)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTicketFeaturesRow
+	for rows.Next() {
+		var i ListTicketFeaturesRow
+		if err := rows.Scan(&i.URL, &i.Feature); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const tickets = `-- name: Tickets :many
+const listTickets = `-- name: ListTickets :many
 SELECT url, repo, branch, blocked_by, source, title, body, status, feature, synced_at
 FROM tickets WHERE withdrawn_at IS NULL ORDER BY url
 `
 
-type TicketsRow struct {
+type ListTicketsRow struct {
 	URL       string
 	Repo      string
 	Branch    string
@@ -261,18 +288,18 @@ type TicketsRow struct {
 	Body      string
 	Status    string
 	Feature   string
-	SyncedAt  string
+	SyncedAt  sql.NullTime
 }
 
-func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, tickets)
+func (q *Queries) ListTickets(ctx context.Context) ([]ListTicketsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTickets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketsRow
+	var items []ListTicketsRow
 	for rows.Next() {
-		var i TicketsRow
+		var i ListTicketsRow
 		if err := rows.Scan(
 			&i.URL,
 			&i.Repo,
@@ -298,26 +325,26 @@ func (q *Queries) Tickets(ctx context.Context) ([]TicketsRow, error) {
 	return items, nil
 }
 
-const ticketsInFeature = `-- name: TicketsInFeature :many
+const listTicketsInFeature = `-- name: ListTicketsInFeature :many
 SELECT url, repo, branch, blocked_by FROM tickets WHERE feature = $1 AND withdrawn_at IS NULL
 `
 
-type TicketsInFeatureRow struct {
+type ListTicketsInFeatureRow struct {
 	URL       string
 	Repo      string
 	Branch    string
 	BlockedBy json.RawMessage
 }
 
-func (q *Queries) TicketsInFeature(ctx context.Context, feature string) ([]TicketsInFeatureRow, error) {
-	rows, err := q.db.QueryContext(ctx, ticketsInFeature, feature)
+func (q *Queries) ListTicketsInFeature(ctx context.Context, feature string) ([]ListTicketsInFeatureRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketsInFeature, feature)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketsInFeatureRow
+	var items []ListTicketsInFeatureRow
 	for rows.Next() {
-		var i TicketsInFeatureRow
+		var i ListTicketsInFeatureRow
 		if err := rows.Scan(
 			&i.URL,
 			&i.Repo,
@@ -337,24 +364,24 @@ func (q *Queries) TicketsInFeature(ctx context.Context, feature string) ([]Ticke
 	return items, nil
 }
 
-const ticketsWithBlockers = `-- name: TicketsWithBlockers :many
+const listTicketsWithBlockers = `-- name: ListTicketsWithBlockers :many
 SELECT url, blocked_by FROM tickets WHERE withdrawn_at IS NULL
 `
 
-type TicketsWithBlockersRow struct {
+type ListTicketsWithBlockersRow struct {
 	URL       string
 	BlockedBy json.RawMessage
 }
 
-func (q *Queries) TicketsWithBlockers(ctx context.Context) ([]TicketsWithBlockersRow, error) {
-	rows, err := q.db.QueryContext(ctx, ticketsWithBlockers)
+func (q *Queries) ListTicketsWithBlockers(ctx context.Context) ([]ListTicketsWithBlockersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketsWithBlockers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketsWithBlockersRow
+	var items []ListTicketsWithBlockersRow
 	for rows.Next() {
-		var i TicketsWithBlockersRow
+		var i ListTicketsWithBlockersRow
 		if err := rows.Scan(&i.URL, &i.BlockedBy); err != nil {
 			return nil, err
 		}
@@ -369,77 +396,25 @@ func (q *Queries) TicketsWithBlockers(ctx context.Context) ([]TicketsWithBlocker
 	return items, nil
 }
 
-const upsertTicket = `-- name: UpsertTicket :exec
-INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, feature, synced_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT (url) DO UPDATE SET
-    repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
-    source = excluded.source, title = excluded.title, body = excluded.body,
-    status = excluded.status, feature = excluded.feature, synced_at = excluded.synced_at
-`
-
-type UpsertTicketParams struct {
-	URL       string
-	Repo      string
-	Branch    string
-	BlockedBy json.RawMessage
-	Source    string
-	Title     string
-	Body      string
-	Status    string
-	Feature   string
-	SyncedAt  string
-}
-
-func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) error {
-	_, err := q.db.ExecContext(ctx, upsertTicket,
-		arg.URL,
-		arg.Repo,
-		arg.Branch,
-		arg.BlockedBy,
-		arg.Source,
-		arg.Title,
-		arg.Body,
-		arg.Status,
-		arg.Feature,
-		arg.SyncedAt,
-	)
-	return err
-}
-
-const withdrawTicket = `-- name: WithdrawTicket :exec
-UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL
-`
-
-type WithdrawTicketParams struct {
-	WithdrawnAt sql.NullTime
-	URL         string
-}
-
-func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) error {
-	_, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
-	return err
-}
-
-const withdrawnTickets = `-- name: WithdrawnTickets :many
+const listWithdrawnTickets = `-- name: ListWithdrawnTickets :many
 SELECT url, repo, branch FROM tickets WHERE withdrawn_at IS NOT NULL
 `
 
-type WithdrawnTicketsRow struct {
+type ListWithdrawnTicketsRow struct {
 	URL    string
 	Repo   string
 	Branch string
 }
 
-func (q *Queries) WithdrawnTickets(ctx context.Context) ([]WithdrawnTicketsRow, error) {
-	rows, err := q.db.QueryContext(ctx, withdrawnTickets)
+func (q *Queries) ListWithdrawnTickets(ctx context.Context) ([]ListWithdrawnTicketsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWithdrawnTickets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WithdrawnTicketsRow
+	var items []ListWithdrawnTicketsRow
 	for rows.Next() {
-		var i WithdrawnTicketsRow
+		var i ListWithdrawnTicketsRow
 		if err := rows.Scan(&i.URL, &i.Repo, &i.Branch); err != nil {
 			return nil, err
 		}
@@ -452,4 +427,124 @@ func (q *Queries) WithdrawnTickets(ctx context.Context) ([]WithdrawnTicketsRow, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneConsumedIntents = `-- name: PruneConsumedIntents :execrows
+DELETE FROM intents WHERE id IN (
+    SELECT i.id FROM intents i WHERE i.consumed_at < $1 LIMIT $2
+)
+`
+
+type PruneConsumedIntentsParams struct {
+	Before sql.NullTime
+	Batch  int32
+}
+
+func (q *Queries) PruneConsumedIntents(ctx context.Context, arg PruneConsumedIntentsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneConsumedIntents, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneTickErrors = `-- name: PruneTickErrors :execrows
+DELETE FROM events WHERE id IN (
+    SELECT e.id FROM events e WHERE e.kind = 'tick_error' AND e.at < $1 LIMIT $2
+)
+`
+
+type PruneTickErrorsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneTickErrors(ctx context.Context, arg PruneTickErrorsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneTickErrors, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const putMeta = `-- name: PutMeta :exec
+INSERT INTO meta (key, value) VALUES ($1, $2)
+ON CONFLICT (key) DO UPDATE SET value = excluded.value
+`
+
+type PutMetaParams struct {
+	Key   string
+	Value json.RawMessage
+}
+
+func (q *Queries) PutMeta(ctx context.Context, arg PutMetaParams) error {
+	_, err := q.db.ExecContext(ctx, putMeta, arg.Key, arg.Value)
+	return err
+}
+
+const setBlockedBys = `-- name: SetBlockedBys :execrows
+UPDATE tickets t SET blocked_by = u.blocked_by
+FROM jsonb_to_recordset($1::jsonb) AS u(url text, blocked_by jsonb)
+WHERE t.url = u.url
+`
+
+func (q *Queries) SetBlockedBys(ctx context.Context, updates json.RawMessage) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setBlockedBys, updates)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const upsertTickets = `-- name: UpsertTickets :exec
+INSERT INTO tickets (url, repo, branch, blocked_by, source, title, body, status, feature, synced_at)
+SELECT t.url, t.repo, t.branch, t.blocked_by, t.source, t.title, t.body, t.status, t.feature, t.synced_at
+FROM jsonb_to_recordset($1::jsonb) AS t(
+    url text, repo text, branch text, blocked_by jsonb, source text, title text, body text,
+    status text, feature text, synced_at timestamptz
+)
+ON CONFLICT (url) DO UPDATE SET
+    repo = excluded.repo, branch = excluded.branch, blocked_by = excluded.blocked_by,
+    source = excluded.source, title = excluded.title, body = excluded.body,
+    status = excluded.status, feature = excluded.feature, synced_at = excluded.synced_at
+`
+
+func (q *Queries) UpsertTickets(ctx context.Context, tickets json.RawMessage) error {
+	_, err := q.db.ExecContext(ctx, upsertTickets, tickets)
+	return err
+}
+
+const withdrawTicket = `-- name: WithdrawTicket :execrows
+UPDATE tickets SET withdrawn_at = $1 WHERE url = $2 AND withdrawn_at IS NULL
+`
+
+type WithdrawTicketParams struct {
+	WithdrawnAt sql.NullTime
+	URL         string
+}
+
+func (q *Queries) WithdrawTicket(ctx context.Context, arg WithdrawTicketParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawTicket, arg.WithdrawnAt, arg.URL)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const withdrawTickets = `-- name: WithdrawTickets :execrows
+UPDATE tickets SET withdrawn_at = $1
+WHERE url IN (SELECT jsonb_array_elements_text($2::jsonb)) AND withdrawn_at IS NULL
+`
+
+type WithdrawTicketsParams struct {
+	WithdrawnAt sql.NullTime
+	Urls        json.RawMessage
+}
+
+func (q *Queries) WithdrawTickets(ctx context.Context, arg WithdrawTicketsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, withdrawTickets, arg.WithdrawnAt, arg.Urls)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

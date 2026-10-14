@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
-	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
 // RefreshFacts returns every ticket's outstanding refresh-domain problem, keyed by ticket URL.
@@ -36,13 +35,13 @@ type RefreshOutcome struct {
 // LatestRefreshOutcomes returns each ticket's latest refresh-domain event since its last
 // recorded push, keyed by ticket URL.
 func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]RefreshOutcome, error) {
-	rows, err := s.q.LatestRefreshOutcomes(ctx, ccdb.LatestRefreshOutcomesParams{
-		Kind:   string(EventRefreshRefused),
-		Kind_2: string(EventRefreshConflicted),
-		Kind_3: string(EventVerificationFailed),
-		Kind_4: string(EventRefreshed),
-		Kind_5: string(EventRestacked),
+	kinds, err := encodeJSON("refresh outcome kinds", []EventKind{
+		EventRefreshRefused, EventRefreshConflicted, EventVerificationFailed, EventRefreshed, EventRestacked,
 	})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListLatestRefreshOutcomes(ctx, kinds)
 	if err != nil {
 		return nil, fmt.Errorf("select refresh outcomes: %w", err)
 	}
@@ -56,7 +55,7 @@ func (s *Store) LatestRefreshOutcomes(ctx context.Context) (map[plan.TicketURL]R
 		if err != nil {
 			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
-		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail.String}
+		outcomes[plan.TicketURL(row.TicketID.String)] = RefreshOutcome{Kind: kind, Detail: row.Detail}
 	}
 	return outcomes, nil
 }

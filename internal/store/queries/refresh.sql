@@ -1,12 +1,10 @@
--- name: LatestRefreshOutcomes :many
-SELECT e.ticket_id, e.kind, e.detail
+-- name: ListLatestRefreshOutcomes :many
+SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
 FROM events e
-JOIN (
-    SELECT e2.ticket_id, MAX(e2.id) AS id
-    FROM events e2
-    LEFT JOIN (
-        SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
-    ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN ($1, $2, $3, $4, $5) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
-    GROUP BY e2.ticket_id
-) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id;
+LEFT JOIN (
+    SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
+) p ON p.ticket_id = e.ticket_id
+WHERE e.ticket_id IS NOT NULL
+  AND e.kind IN (SELECT jsonb_array_elements_text(sqlc.arg(kinds)::jsonb))
+  AND (p.pushed_at IS NULL OR e.at > p.pushed_at)
+ORDER BY e.ticket_id, e.id DESC;

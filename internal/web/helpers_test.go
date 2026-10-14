@@ -16,7 +16,7 @@ import (
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.OpenStore(cctest.DSN(t))
+	st, err := store.OpenStore(t.Context(), cctest.DSN(t))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

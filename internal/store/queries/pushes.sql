@@ -1,6 +1,6 @@
 -- name: RecordPush :exec
 INSERT INTO pushes (ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at)
-VALUES ($1, $2, $3, $4, $5);
+VALUES (sqlc.arg(ticket_id), sqlc.arg(pushed_tip), sqlc.arg(base_branch), sqlc.arg(base_sha_at_push), sqlc.arg(pushed_at));
 
 -- name: RestackedSinceLastPush :many
 SELECT DISTINCT e.ticket_id
@@ -8,27 +8,20 @@ FROM events e
 LEFT JOIN (
     SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
 ) p ON p.ticket_id = e.ticket_id
-WHERE e.kind = $1 AND (p.pushed_at IS NULL OR e.at >= p.pushed_at);
+WHERE e.kind = sqlc.arg(kind) AND (p.pushed_at IS NULL OR e.at >= p.pushed_at);
 
--- name: LastPushedTips :many
-SELECT p.ticket_id, p.pushed_tip FROM pushes p
-JOIN (SELECT ticket_id, MAX(id) AS id FROM pushes GROUP BY ticket_id) latest
-  ON latest.ticket_id = p.ticket_id AND latest.id = p.id;
+-- name: ListLatestPushes :many
+SELECT DISTINCT ON (ticket_id) ticket_id, pushed_tip, base_branch, base_sha_at_push, pushed_at
+FROM pushes
+ORDER BY ticket_id, id DESC;
 
--- name: LatestPushes :many
-SELECT p.ticket_id, p.pushed_tip, p.base_branch, p.base_sha_at_push, p.pushed_at FROM pushes p
-JOIN (SELECT ticket_id, MAX(id) AS id FROM pushes GROUP BY ticket_id) latest
-  ON latest.ticket_id = p.ticket_id AND latest.id = p.id;
-
--- name: PushFacts :many
-SELECT e.ticket_id, e.kind, e.detail
+-- name: ListPushFacts :many
+SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
 FROM events e
-JOIN (
-    SELECT e2.ticket_id, MAX(e2.id) AS id
-    FROM events e2
-    LEFT JOIN (
-        SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
-    ) p ON p.ticket_id = e2.ticket_id
-    WHERE e2.kind IN ($1, $2) AND (p.pushed_at IS NULL OR e2.at > p.pushed_at)
-    GROUP BY e2.ticket_id
-) latest ON latest.ticket_id = e.ticket_id AND latest.id = e.id;
+LEFT JOIN (
+    SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id
+) p ON p.ticket_id = e.ticket_id
+WHERE e.ticket_id IS NOT NULL
+  AND e.kind IN (SELECT jsonb_array_elements_text(sqlc.arg(kinds)::jsonb))
+  AND (p.pushed_at IS NULL OR e.at > p.pushed_at)
+ORDER BY e.ticket_id, e.id DESC;

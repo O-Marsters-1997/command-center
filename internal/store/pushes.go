@@ -48,21 +48,21 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]
 
 // LastPushedTips returns each ticket's most recently recorded pushed_tip.
 func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA, error) {
-	rows, err := s.q.LastPushedTips(ctx)
+	pushes, err := s.LatestPushes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("select last pushed tips: %w", err)
+		return nil, err
 	}
 
-	tips := map[plan.TicketURL]plan.SHA{}
-	for _, row := range rows {
-		tips[plan.TicketURL(row.TicketID)] = plan.SHA(row.PushedTip)
+	tips := make(map[plan.TicketURL]plan.SHA, len(pushes))
+	for ticketID, push := range pushes {
+		tips[ticketID] = push.PushedTip
 	}
 	return tips, nil
 }
 
 // LatestPushes returns each ticket's latest recorded push, keyed by ticket URL.
 func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushRow, error) {
-	rows, err := s.q.LatestPushes(ctx)
+	rows, err := s.q.ListLatestPushes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("select latest pushes: %w", err)
 	}
@@ -82,9 +82,11 @@ func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushR
 // PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL.
 // A failure blocks the automatic retry; a refusal never does.
 func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact, error) {
-	rows, err := s.q.PushFacts(ctx, ccdb.PushFactsParams{
-		Kind: string(EventPushRefused), Kind_2: string(EventPushFailed),
-	})
+	kinds, err := encodeJSON("push fact kinds", []EventKind{EventPushRefused, EventPushFailed})
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListPushFacts(ctx, kinds)
 	if err != nil {
 		return nil, fmt.Errorf("select push facts: %w", err)
 	}
@@ -99,7 +101,7 @@ func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact
 			return nil, fmt.Errorf("read events.kind for %s: %w", row.TicketID.String, err)
 		}
 		if kind == EventPushRefused {
-			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Refused: true, RefusedPath: row.Detail.String}
+			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Refused: true, RefusedPath: row.Detail}
 		}
 		if kind == EventPushFailed {
 			facts[plan.TicketURL(row.TicketID.String)] = plan.PushFact{Failed: true}

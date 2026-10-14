@@ -8,6 +8,7 @@ package ccdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -36,14 +37,14 @@ func (q *Queries) CCCostSince(ctx context.Context, arg CCCostSinceParams) (CCCos
 	return i, err
 }
 
-const intervalsSince = `-- name: IntervalsSince :many
+const listIntervalsSince = `-- name: ListIntervalsSince :many
 SELECT "window", start_at, end_at, utilization_start, utilization_end, weight_usd
 FROM utilization_intervals
 WHERE end_at >= $1
 ORDER BY "window", start_at
 `
 
-type IntervalsSinceRow struct {
+type ListIntervalsSinceRow struct {
 	Window           string
 	StartAt          time.Time
 	EndAt            time.Time
@@ -52,15 +53,15 @@ type IntervalsSinceRow struct {
 	WeightUsd        float64
 }
 
-func (q *Queries) IntervalsSince(ctx context.Context, endAt time.Time) ([]IntervalsSinceRow, error) {
-	rows, err := q.db.QueryContext(ctx, intervalsSince, endAt)
+func (q *Queries) ListIntervalsSince(ctx context.Context, since time.Time) ([]ListIntervalsSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntervalsSince, since)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []IntervalsSinceRow
+	var items []ListIntervalsSinceRow
 	for rows.Next() {
-		var i IntervalsSinceRow
+		var i ListIntervalsSinceRow
 		if err := rows.Scan(
 			&i.Window,
 			&i.StartAt,
@@ -82,30 +83,38 @@ func (q *Queries) IntervalsSince(ctx context.Context, endAt time.Time) ([]Interv
 	return items, nil
 }
 
-const recordInterval = `-- name: RecordInterval :exec
+const pruneIntervals = `-- name: PruneIntervals :execrows
+DELETE FROM utilization_intervals WHERE id IN (
+    SELECT u.id FROM utilization_intervals u WHERE u.end_at < $1 LIMIT $2
+)
+`
+
+type PruneIntervalsParams struct {
+	Before time.Time
+	Batch  int32
+}
+
+func (q *Queries) PruneIntervals(ctx context.Context, arg PruneIntervalsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneIntervals, arg.Before, arg.Batch)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const recordIntervals = `-- name: RecordIntervals :exec
 INSERT INTO utilization_intervals (
     "window", start_at, end_at, utilization_start, utilization_end, weight_usd
-) VALUES ($1, $2, $3, $4, $5, $6)
+)
+SELECT i."window", i.start_at, i.end_at, i.utilization_start, i.utilization_end, i.weight_usd
+FROM jsonb_to_recordset($1::jsonb) AS i(
+    "window" text, start_at timestamptz, end_at timestamptz,
+    utilization_start double precision, utilization_end double precision, weight_usd double precision
+)
 ON CONFLICT ("window", start_at) DO NOTHING
 `
 
-type RecordIntervalParams struct {
-	Window           string
-	StartAt          time.Time
-	EndAt            time.Time
-	UtilizationStart float64
-	UtilizationEnd   float64
-	WeightUsd        float64
-}
-
-func (q *Queries) RecordInterval(ctx context.Context, arg RecordIntervalParams) error {
-	_, err := q.db.ExecContext(ctx, recordInterval,
-		arg.Window,
-		arg.StartAt,
-		arg.EndAt,
-		arg.UtilizationStart,
-		arg.UtilizationEnd,
-		arg.WeightUsd,
-	)
+func (q *Queries) RecordIntervals(ctx context.Context, intervals json.RawMessage) error {
+	_, err := q.db.ExecContext(ctx, recordIntervals, intervals)
 	return err
 }

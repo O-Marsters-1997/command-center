@@ -29,7 +29,9 @@ One binary, `cmd/cc`, wired together in `internal/app`.
 - `internal/store`: Postgres, and the only importer of the generated `internal/store/ccdb`
   ([ADR 4](docs/adr/0004-sql-is-generated-from-the-schema.md)). Queries live in
   `internal/store/queries`, migrations in `internal/store/migrations`. Never edit an applied
-  migration.
+  migration. Every migration from 0020 starts transactional files with `SET lock_timeout = '5s';`
+  (a `NO TRANSACTION` file holds one statement) and ends with a real Down or the irreversible
+  marker `SELECT 'irreversible: <why>'::int;` inside `-- +goose StatementBegin`/`StatementEnd`.
 - `internal/web`: handlers and `html/template` pages. It derives per render through `plan` and
   caches nothing.
 
