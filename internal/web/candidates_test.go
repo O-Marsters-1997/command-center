@@ -9,7 +9,6 @@ import (
 	"time"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -139,7 +138,7 @@ func TestCandidatesShowsTheBasesVerdictForAStackedRow(t *testing.T) {
 
 	obs := plan.Observation{
 		BranchTips: map[plan.BranchRef]plan.SHA{
-			branchRef("repo", "parent"): plan.SHA(parentTip), web.MainTipKey("repo"): "main-tip",
+			branchRef("repo", "parent"): plan.SHA(parentTip), branchRef("repo", plan.DefaultBaseBranch): "main-tip",
 		},
 		PRs: map[plan.BranchRef]plan.PR{
 			branchRef("repo", "parent"): {

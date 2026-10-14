@@ -4,7 +4,6 @@ import (
 	"html/template"
 	"slices"
 	"strings"
-	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -52,11 +51,3 @@ func RenderLogLine(e agentlog.Event, anchor bool) (template.HTML, error) {
 	line.Anchor = anchor
 	return renderLogLine(line)
 }
-
-func ReadTestdata(name string) string { return mustReadTestdata(name) }
-func WriteRunLog(t *testing.T, body string) string {
-	t.Helper()
-	return writeRunLog(t, body)
-}
-
-func MainTipKey(repo string) plan.BranchRef { return plan.BranchRef{Repo: repo, Branch: "main"} }

@@ -17,6 +17,22 @@ const (
 	waitDelay      = 2 * time.Second
 )
 
+// Error carries the command, working directory and stderr of a failed process.
+type Error struct {
+	Cmd, Dir, Stderr string
+	Err              error
+}
+
+func (e *Error) Error() string {
+	line := e.Cmd
+	if e.Dir != "" {
+		line += " in " + e.Dir
+	}
+	return fmt.Sprintf("%s: %v: %s", line, e.Err, e.Stderr)
+}
+
+func (e *Error) Unwrap() error { return e.Err }
+
 func Output(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
 	return OutputWithin(ctx, defaultTimeout, dir, name, args...)
 }
@@ -64,10 +80,7 @@ func wrap(err error, cmd *exec.Cmd, stderr *bytes.Buffer) error {
 	}
 	line := strings.Join(cmd.Args, " ")
 	if len(line) > maxCommandLine {
-		line = line[:maxCommandLine] + "..."
+		line = line[:maxCommandLine-3] + "..."
 	}
-	if cmd.Dir != "" {
-		line += " in " + cmd.Dir
-	}
-	return fmt.Errorf("%s: %w: %s", line, err, bytes.TrimSpace(stderr.Bytes()))
+	return &Error{Cmd: line, Dir: cmd.Dir, Stderr: string(bytes.TrimSpace(stderr.Bytes())), Err: err}
 }

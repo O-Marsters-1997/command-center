@@ -19,6 +19,15 @@ const SettingsFile = plan.SettingsFile
 
 const settingsRef = "origin/main"
 
+// SettingsParseError identifies the line of invalid repository settings.
+type SettingsParseError struct {
+	Line int
+	Err  error
+}
+
+func (e *SettingsParseError) Error() string { return fmt.Sprintf("line %d: %v", e.Line, e.Err) }
+func (e *SettingsParseError) Unwrap() error { return e.Err }
+
 // Source says where a repo's settings came from.
 type Source string
 
@@ -65,7 +74,7 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 	if err != nil {
 		var perr toml.ParseError
 		if errors.As(err, &perr) {
-			return RepoSettings{}, fmt.Errorf("line %d: %s", perr.Position.Line, perr.Message)
+			return RepoSettings{}, &SettingsParseError{Line: perr.Position.Line, Err: err}
 		}
 		return RepoSettings{}, fmt.Errorf("decode repo settings: %w", err)
 	}
@@ -74,10 +83,14 @@ func ParseRepoSettings(body string) (RepoSettings, error) {
 	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		key := undecoded[0]
-		return RepoSettings{}, fmt.Errorf("line %d: unknown key %q", lineOfKey(body, key), key.String())
+		return RepoSettings{}, &SettingsParseError{
+			Line: lineOfKey(body, key), Err: fmt.Errorf("unknown key %q", key.String()),
+		}
 	}
 	if err := validatePredicate(settings.Checks, true); err != nil {
-		return RepoSettings{}, fmt.Errorf("line %d: invalid checks: %w", lineOfKey(body, toml.Key{"checks"}), err)
+		return RepoSettings{}, &SettingsParseError{
+			Line: lineOfKey(body, toml.Key{"checks"}), Err: fmt.Errorf("invalid checks: %w", err),
+		}
 	}
 	return settings, nil
 }

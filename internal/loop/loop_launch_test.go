@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -287,8 +286,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
+	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)

@@ -2,11 +2,9 @@ package loop_test
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -53,6 +51,9 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 		t.Errorf("event time = %s, want GitHub's own merge time %s, not the tick clock %s",
 			merges[0].At, mergedAt, tickAt)
 	}
+	if err := store.SaveObservation(ctx, plan.Observation{}); err != nil {
+		t.Fatalf("reset observation: %v", err)
+	}
 
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
@@ -63,52 +64,6 @@ func TestRecordMergedEventsAppendsOnceWithGitHubsMergeTime(t *testing.T) {
 	}
 	if got := len(mergedEvents(events)); got != 1 {
 		t.Errorf("pr_merged events after a second tick = %d, want still 1", got)
-	}
-}
-
-func TestRecordMergedEventsDedupeSurvivesAClearedMetaTable(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	mergedAt := time.Date(2026, 8, 19, 9, 30, 0, 0, time.UTC)
-	observed := plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Merged, MergedAt: mergedAt},
-		},
-	}
-	lp := newLoop(store,
-		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(mergedAt.Add(time.Hour)), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("first RunOnce: %v", err)
-	}
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.Exec(`DELETE FROM meta`); err != nil {
-		t.Fatalf("simulate a restart onto a reset meta table: %v", err)
-	}
-
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce after clearing meta: %v", err)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if got := len(mergedEvents(events)); got != 1 {
-		t.Errorf("pr_merged events after a cleared meta table = %d, want still 1: %+v", got, events)
 	}
 }
 

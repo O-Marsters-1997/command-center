@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
@@ -115,8 +117,19 @@ func TestTpChild(t *testing.T) {
 		t.Fatalf("unknown tp action %q", action)
 	}
 	if os.Getenv("CC_TEST_TP_FAIL") == "true" {
-		if err == nil || !strings.Contains(err.Error(), "cc-1-first") {
-			t.Errorf("CLI(%s) = %v, want error naming branch", action, err)
+		var cmdErr *command.Error
+		if !errors.As(err, &cmdErr) {
+			t.Fatalf("CLI(%s) = %v, want *command.Error", action, err)
+		}
+		want := "tp new cc-1-first --base origin/main"
+		switch action {
+		case "Remove":
+			want = "tp remove --merged cc-1-first"
+		case "Remove forced":
+			want = "tp remove --force cc-1-first"
+		}
+		if cmdErr.Cmd != want || cmdErr.Dir != repo {
+			t.Errorf("CLI(%s) command = %q in %q, want %q in %q", action, cmdErr.Cmd, cmdErr.Dir, want, repo)
 		}
 	} else if err != nil {
 		t.Errorf("CLI(%s) = %v, want nil", action, err)

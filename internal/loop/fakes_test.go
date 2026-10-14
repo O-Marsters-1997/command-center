@@ -26,20 +26,6 @@ func openStore(t *testing.T) *storepkg.Store {
 	return cctest.Store(t)
 }
 
-func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
-	t.Helper()
-	store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("close store: %v", err)
-		}
-	})
-	return store
-}
-
 func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	t.Helper()
 	root = t.TempDir()

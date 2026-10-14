@@ -2,14 +2,12 @@ package loop_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -23,7 +21,6 @@ func (stubbornRunner) Cancel(int) error { return nil }
 
 type steerFixture struct {
 	store     *storepkg.Store
-	dsn       string
 	fake      *runner.Fake
 	loop      *loop.Loop
 	ticket    storepkg.Ticket
@@ -40,8 +37,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
+	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -80,7 +76,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		rn = wrap(fake)
 	}
 	return &steerFixture{
-		store: store, dsn: dsn, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, at: at,
+		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, at: at,
 		loop: newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
 	}
 }
@@ -154,17 +150,19 @@ func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
 
 	f.tick(t)
 
-	db, err := sql.Open("pgx", f.dsn)
+	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = db.Close() }()
-	var outcome string
-	if err := db.QueryRow(`SELECT outcome FROM runs ORDER BY id LIMIT 1`).Scan(&outcome); err != nil {
+	if len(ids) != 2 {
+		t.Fatalf("runs = %v, want 2", ids)
+	}
+	first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome != plan.OutcomeContinued.String() {
-		t.Errorf("first run outcome = %q, want %q", outcome, plan.OutcomeContinued)
+	if !first.Outcome.IsSome() || first.Outcome.Unwrap() != plan.OutcomeContinued {
+		t.Errorf("first run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)
 	}
 }
 

@@ -269,7 +269,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		}
 		obs := plan.Observation{
 			Worktrees:  map[plan.BranchRef]string{branchRef("repo", "child"): "/repos/child"},
-			BranchTips: map[plan.BranchRef]plan.SHA{loop.MainTipKey("repo"): plan.SHA(observedMainTip)},
+			BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): plan.SHA(observedMainTip)},
 			PRs:        prs,
 			Settings:   map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 		}
@@ -343,7 +343,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
 	obs := mergedObservation(f, "parent")
-	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
@@ -416,7 +416,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 	obs.PRs[branchRef("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
@@ -565,7 +565,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 	obs.PRs[branchRef("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
@@ -642,7 +642,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	obs.PRs[branchRef("repo", "parent")] = plan.PR{
 		Number: 1, HeadRef: "parent", BaseRef: "main", State: plan.Merged, HeadOid: plan.SHA(f.parentTip0),
 	}
-	obs.BranchTips[loop.MainTipKey("repo")] = plan.SHA(mainSHA)
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(mainSHA)
 	obs.MidMerge[branchRef("repo", "child")] = true
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := stackedConfigAndWorkspace(t, root)

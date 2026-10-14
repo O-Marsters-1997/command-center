@@ -12,6 +12,9 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
+// ErrOriginMismatch indicates that the checkout belongs to a different remote.
+var ErrOriginMismatch = errors.New("checkout origin differs from the configured remote")
+
 // EnsureCheckout clones remote into checkout when absent, otherwise verifies its origin. It never
 // resets, pulls or checks anything out. An empty remote means a path repo, never cloned or
 // origin-checked.
@@ -34,7 +37,8 @@ func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 		return fmt.Errorf("repo %s: %s is not a git repository with an origin: %w", name, checkout, err)
 	}
 	if remote != "" && !SameRemote(origin, remote) {
-		return fmt.Errorf("repo %s: %s has origin %s, but the config says %s", name, checkout, origin, remote)
+		return fmt.Errorf("repo %s: %s has origin %s, but the config says %s: %w",
+			name, checkout, origin, remote, ErrOriginMismatch)
 	}
 	if err := enableRerere(ctx, checkout); err != nil {
 		return err

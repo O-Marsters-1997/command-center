@@ -2,40 +2,17 @@ package loop_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
-
-type sessionRow struct {
-	SessionID sql.NullString
-	Message   sql.NullString
-}
-
-func readSessionRow(t *testing.T, dsn string, runID int64) sessionRow {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-
-	var row sessionRow
-	if err := db.QueryRow(`SELECT session_id::text, message FROM runs WHERE id = $1`, runID).
-		Scan(&row.SessionID, &row.Message); err != nil {
-		t.Fatalf("read session of run %d: %v", runID, err)
-	}
-	return row
-}
 
 type followUpCase struct {
 	startSession    bool
@@ -45,7 +22,7 @@ type followUpCase struct {
 type followUpResult struct {
 	spawn     runner.SpawnConfig
 	sessionID string
-	row       sessionRow
+	row       storepkg.RunDetails
 }
 
 func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
@@ -53,8 +30,7 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := cutWorktree(t, repoPath, "cc-1")
 
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
+	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -115,10 +91,14 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	if err != nil {
 		t.Fatal(err)
 	}
+	row, err := store.RunDetails(t.Context(), latest[plan.TicketURL(ticket.URL)].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return followUpResult{
 		spawn:     fake.Spawns[0],
 		sessionID: sessionID,
-		row:       readSessionRow(t, dsn, int64(latest[plan.TicketURL(ticket.URL)].ID)),
+		row:       row,
 	}
 }
 
@@ -129,11 +109,11 @@ func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
 	if !got.spawn.Resume || got.spawn.SessionID != got.sessionID {
 		t.Errorf("spawn = resume %v session %q, want a resume of %q", got.spawn.Resume, got.spawn.SessionID, got.sessionID)
 	}
-	if got.row.SessionID.String != got.sessionID {
-		t.Errorf("run session_id = %q, want the resumed session %q", got.row.SessionID.String, got.sessionID)
+	if got.row.SessionID != got.sessionID {
+		t.Errorf("run session_id = %q, want the resumed session %q", got.row.SessionID, got.sessionID)
 	}
-	if got.row.Message.String != "now fix the other test" {
-		t.Errorf("run message = %q, want the owner's raw text", got.row.Message.String)
+	if got.row.Message != "now fix the other test" {
+		t.Errorf("run message = %q, want the owner's raw text", got.row.Message)
 	}
 	if !strings.Contains(got.spawn.Prompt, "now fix the other test") ||
 		strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
@@ -151,8 +131,8 @@ func TestFollowUpSpawnsFreshWhenTheTranscriptIsMissing(t *testing.T) {
 	if got.spawn.SessionID == "" || got.spawn.SessionID == got.sessionID {
 		t.Errorf("spawn session = %q, want a new session distinct from %q", got.spawn.SessionID, got.sessionID)
 	}
-	if got.row.Message.String != "now fix the other test" {
-		t.Errorf("run message = %q, want the owner's raw text kept on a fresh follow-up too", got.row.Message.String)
+	if got.row.Message != "now fix the other test" {
+		t.Errorf("run message = %q, want the owner's raw text kept on a fresh follow-up too", got.row.Message)
 	}
 	if !strings.Contains(got.spawn.Prompt, "cc/skills/follow-up/SKILL.md") {
 		t.Errorf("prompt = %q, want the fresh follow-up prompt", got.spawn.Prompt)
