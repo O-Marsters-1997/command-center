@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -188,11 +190,13 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	if state := rowState(t, page, "sandbox://PARENT"); state != "ci_failed" {
-		t.Fatalf("parent's own state = %q, want ci_failed (its CI check failed)", state)
+	parent := webtest.RowFor(t, page, "sandbox://PARENT")
+	if state := parent.State; state != "ci_failed" {
+		t.Fatalf("parent's state = %q, want ci_failed:\n%s", state, parent.Row.HTML())
 	}
 
-	if got := rowCellAt(t, page, "sandbox://CHILD", 1); !strings.Contains(got, `title="base verdict: ci_failed"`) {
+	child := webtest.RowFor(t, page, "sandbox://CHILD")
+	if got := child.Row.HTML(); !strings.Contains(got, `title="base verdict: ci_failed"`) {
 		t.Errorf("child's rendered base verdict flag = %q, want ci_failed (the parent's own verdict)", got)
 	}
 }
@@ -236,27 +240,40 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	if state := rowState(t, page, ticket.URL); state != "ci_failed" {
-		t.Fatalf("state = %q, want ci_failed", state)
+	row := webtest.RowFor(t, page, ticket.URL)
+	if row.State != "ci_failed" {
+		t.Fatalf("state = %q, want ci_failed:\n%s", row.State, row.Row.HTML())
 	}
-
-	reason := rowCellAt(t, page, ticket.URL, 3)
-	ciLink := `<a href="https://github.com/o/r/actions/runs/1" target="_blank" rel="noopener">CI</a>`
-	if !strings.Contains(reason, ciLink) {
-		t.Errorf("CI is not linked to its DetailsURL:\n%s", reason)
+	reason := row.Ticket.HTML()
+	links := row.Ticket.Find("a[href]")
+	for _, tc := range []struct{ href, name string }{
+		{"https://github.com/o/r/actions/runs/1", "CI"},
+		{"https://github.com/o/r/actions/runs/2", "Deploy"},
+	} {
+		matches := row.Ticket.Find(`a[href="` + tc.href + `"]`)
+		if len(matches) != 1 {
+			t.Errorf("found %d links for %s, want one:\n%s", len(matches), tc.href, row.Row.HTML())
+			continue
+		}
+		link := matches[0]
+		if link.Text() != tc.name {
+			t.Errorf("link for %s = %q, want %q:\n%s", tc.href, link.Text(), tc.name, row.Row.HTML())
+		}
+		if target, _ := link.Attr("target"); target != "_blank" {
+			t.Errorf("link target = %q, want _blank:\n%s", target, row.Row.HTML())
+		}
+		if rel, _ := link.Attr("rel"); rel != "noopener" {
+			t.Errorf("link rel = %q, want noopener:\n%s", rel, row.Row.HTML())
+		}
 	}
-	deployLink := `<a href="https://github.com/o/r/actions/runs/2" target="_blank" rel="noopener">Deploy</a>`
-	if !strings.Contains(reason, deployLink) {
-		t.Errorf("Deploy is not linked to its DetailsURL:\n%s", reason)
-	}
-	if got := strings.Count(reason, "<a href="); got != 2 {
-		t.Errorf("reason has %d links, want 2 (one per red check with a DetailsURL):\n%s", got, reason)
+	if got := len(links); got != 2 {
+		t.Errorf("reason has %d links, want 2 (one per red check with a DetailsURL):\n%s", got, row.Row.HTML())
 	}
 	if !strings.Contains(reason, "Lint") {
-		t.Errorf("Lint is not named:\n%s", reason)
+		t.Errorf("Lint is not named:\n%s", row.Row.HTML())
 	}
 	if strings.Contains(reason, `<a href=""`) {
-		t.Errorf("Lint has no DetailsURL and should not render an empty anchor:\n%s", reason)
+		t.Errorf("Lint has no DetailsURL and should not render an empty anchor:\n%s", row.Row.HTML())
 	}
 }
 
@@ -302,8 +319,9 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	if state := rowState(t, page, "sandbox://CC-1"); state != "waiting_on_producer_deploy" {
-		t.Fatalf("state = %q, want waiting_on_producer_deploy (only the compat check is red)", state)
+	row := webtest.RowFor(t, page, "sandbox://CC-1")
+	if state := row.State; state != "waiting_on_producer_deploy" {
+		t.Fatalf("state = %q, want waiting_on_producer_deploy:\n%s", state, row.Row.HTML())
 	}
 	if !strings.Contains(page, `value="re-run"`) {
 		t.Error("page has no re-run button for the waiting_on_producer_deploy row")
@@ -673,8 +691,9 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := renderPage(t, server)
-	if got := rowState(t, page, ticket.URL); got != "running · kill queued" {
-		t.Errorf("state = %q, want %q", got, "running · kill queued")
+	row := webtest.RowFor(t, page, ticket.URL)
+	if got := row.State; got != "running · kill queued" {
+		t.Errorf("state = %q, want running · kill queued:\n%s", got, row.Row.HTML())
 	}
 	const killButton = `<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`
 	if !strings.Contains(page, killButton) {
@@ -684,8 +703,9 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := rowState(t, renderPage(t, server), ticket.URL); got != "running · kill queued · follow-up queued" {
-		t.Errorf("state = %q, want both queued verbs", got)
+	queued := webtest.RowFor(t, renderPage(t, server), ticket.URL)
+	if got := queued.State; got != "running · kill queued · follow-up queued" {
+		t.Errorf("state = %q, want both queued verbs:\n%s", got, queued.Row.HTML())
 	}
 
 	pending, err := store.PendingVerbIntents(ctx, "kill")
@@ -696,8 +716,9 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = renderPage(t, server)
-	if got := rowState(t, page, ticket.URL); got != "running · follow-up queued" {
-		t.Errorf("state = %q, want the consumed kill gone", got)
+	row = webtest.RowFor(t, page, ticket.URL)
+	if got := row.State; got != "running · follow-up queued" {
+		t.Errorf("state = %q, want consumed kill gone:\n%s", got, row.Row.HTML())
 	}
 	if !strings.Contains(page, killButton) {
 		t.Errorf("kill button missing after the tick consumed the intent:\n%s", page)
@@ -716,15 +737,17 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	}
 
 	server := newServer(store, now)
-	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "ready · launch queued" {
-		t.Errorf("state = %q, want %q", got, "ready · launch queued")
+	row := webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1")
+	if got := row.State; got != "ready · launch queued" {
+		t.Errorf("state = %q, want ready · launch queued:\n%s", got, row.Row.HTML())
 	}
 
 	if err := store.ApplyLaunchIntents(t.Context(), now.Add(15*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if got := rowState(t, renderPage(t, server), "sandbox://CC-1"); got != "queued" {
-		t.Errorf("state = %q, want a bare %q once the tick consumed the intent", got, "queued")
+	row = webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1")
+	if got := row.State; got != "queued" {
+		t.Errorf("state = %q, want queued after tick:\n%s", got, row.Row.HTML())
 	}
 }
 
@@ -823,7 +846,7 @@ func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 	t.Parallel()
 
-	stateWith := func(t *testing.T, checks verdict.Predicate) string {
+	rowWith := func(t *testing.T, checks verdict.Predicate) webtest.BoardRow {
 		t.Helper()
 		ctx := t.Context()
 		store := openStore(t)
@@ -848,13 +871,13 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 			t.Fatal(err)
 		}
 		server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
-		return rowState(t, renderPage(t, server), ticket.URL)
+		return webtest.RowFor(t, renderPage(t, server), ticket.URL)
 	}
 
-	if got := stateWith(t, verdict.Predicate{Success: "CI"}); got != "review_me" {
-		t.Fatalf("state with CI required = %q, want review_me: the control this test rests on", got)
+	if got := rowWith(t, verdict.Predicate{Success: "CI"}); got.State != "review_me" {
+		t.Fatalf("state with CI required = %q, want review_me:\n%s", got.State, got.Row.HTML())
 	}
-	if got := stateWith(t, verdict.Predicate{Success: "Lint"}); got == "review_me" {
-		t.Errorf("state with a never-reported check required = %q, want the verdict to follow the observed checks", got)
+	if got := rowWith(t, verdict.Predicate{Success: "Lint"}); got.State == "review_me" {
+		t.Errorf("state with unreported check = %q, want observed verdict:\n%s", got.State, got.Row.HTML())
 	}
 }

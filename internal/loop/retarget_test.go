@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -245,7 +247,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		},
 	}
 
-	stateOfChild := func(t *testing.T, retargeted bool, observedMainTip string) string {
+	rowOfChild := func(t *testing.T, retargeted bool, observedMainTip string) webtest.BoardRow {
 		t.Helper()
 		ctx := t.Context()
 		store := openStore(t)
@@ -276,19 +278,17 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatal(err)
 		}
-		return rowState(t, renderPage(t, openServer(store, fixedClock(at), "")), "sandbox://CHILD")
+		return webtest.RowFor(t, renderPage(t, openServer(store, fixedClock(at), "")), "sandbox://CHILD")
 	}
 
-	if got := stateOfChild(t, false, "main-tip-later"); got != "base_moved" {
-		t.Fatalf("child's state before the retarget = %q, want base_moved: the control this test rests on", got)
+	if got := rowOfChild(t, false, "main-tip-later"); got.State != "base_moved" {
+		t.Fatalf("child's state before retarget = %q, want base_moved:\n%s", got.State, got.Row.HTML())
 	}
-	if got := stateOfChild(t, true, "main-tip"); got != "review_me" {
-		t.Errorf("child's state right after the retarget = %q, want review_me: the retarget's own recorded "+
-			"main tip still matches what's observed, so nothing has moved since", got)
+	if got := rowOfChild(t, true, "main-tip"); got.State != "review_me" {
+		t.Errorf("child's state after retarget = %q, want review_me:\n%s", got.State, got.Row.HTML())
 	}
-	if got := stateOfChild(t, true, "main-tip-later"); got != "base_moved" {
-		t.Errorf("child's state = %q, want base_moved: main advanced again after the retarget, so this "+
-			"main-based row is exactly as stale as a still-stacked row would be", got)
+	if got := rowOfChild(t, true, "main-tip-later"); got.State != "base_moved" {
+		t.Errorf("child's state after main advances = %q, want base_moved:\n%s", got.State, got.Row.HTML())
 	}
 }
 

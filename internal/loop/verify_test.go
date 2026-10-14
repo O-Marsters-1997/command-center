@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -52,8 +54,9 @@ func TestARestackThatFailsVerificationReadsVerificationFailedAndIsNotPushed(t *t
 
 	server := openServer(store, clock, "")
 	page := renderPage(t, server)
-	if state := rowState(t, page, f.child.URL); state != "verification_failed" {
-		t.Fatalf("child's state = %q, want verification_failed", state)
+	row := webtest.RowFor(t, page, f.child.URL)
+	if state := row.State; state != "verification_failed" {
+		t.Fatalf("child's state = %q, want verification_failed:\n%s", state, row.Row.HTML())
 	}
 	for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
 		if !strings.Contains(page, `value="`+string(verb)+`"`) {
@@ -238,7 +241,8 @@ func TestTwoIndependentAdditionsOfTheSameHelperMergeCleanlyButFailGoVet(t *testi
 	}
 
 	server := openServer(store, clock, "")
-	if state := rowState(t, renderPage(t, server), f.parent.URL); state != "verification_failed" {
-		t.Fatalf("parent's state = %q, want verification_failed", state)
+	row := webtest.RowFor(t, renderPage(t, server), f.parent.URL)
+	if state := row.State; state != "verification_failed" {
+		t.Fatalf("parent's state = %q, want verification_failed:\n%s", state, row.Row.HTML())
 	}
 }

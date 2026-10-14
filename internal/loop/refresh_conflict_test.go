@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -118,8 +120,9 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	c.tick(t) // the next tick's observation is the one that reads MERGE_HEAD
 
 	page := renderPage(t, c.server)
-	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
-		t.Fatalf("child's state = %q, want refresh_conflicted", state)
+	row := webtest.RowFor(t, page, c.f.child.URL)
+	if state := row.State; state != "refresh_conflicted" {
+		t.Fatalf("child's state = %q, want refresh_conflicted:\n%s", state, row.Row.HTML())
 	}
 	if !strings.Contains(page, `value="`+string(plan.VerbAbort)+`"`) {
 		t.Errorf("page offers no abort button:\n%s", page)
@@ -156,8 +159,9 @@ func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testin
 	if c.midMerge(t) {
 		t.Fatal("the automatic pass re-conflicted the aborted merge: abort would be futile")
 	}
-	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state != "base_moved" {
-		t.Errorf("child's state after abort = %q, want base_moved: the base still moved, refresh is the human's now", state)
+	row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL)
+	if state := row.State; state != "base_moved" {
+		t.Errorf("child's state after abort = %q, want base_moved:\n%s", state, row.Row.HTML())
 	}
 }
 
@@ -240,8 +244,9 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 
 	c.tick(t)
 
-	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state == "refresh_conflicted" {
-		t.Error("child still reads refresh_conflicted after the conflict was resolved and committed by hand")
+	row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL)
+	if row.State == "refresh_conflicted" {
+		t.Errorf("child still refresh_conflicted after hand resolution:\n%s", row.Row.HTML())
 	}
 	pushes, err := c.store.LatestPushes(t.Context())
 	if err != nil {

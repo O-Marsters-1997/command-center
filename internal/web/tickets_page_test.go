@@ -1,15 +1,18 @@
 package web_test
 
 import (
-	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
-func sectionKeys(page string) string {
+func sectionKeys(t *testing.T, page string) string {
+	t.Helper()
 	var got []string
-	for _, m := range regexp.MustCompile(`data-section="([a-z-]+)"`).FindAllStringSubmatch(page, -1) {
-		got = append(got, m[1])
+	for _, section := range htmltest.Parse(t, page).One(t, "table#board").Find("tbody[data-section]") {
+		key, _ := section.Attr("data-section")
+		got = append(got, key)
 	}
 	return strings.Join(got, ",")
 }
@@ -37,7 +40,7 @@ func TestTicketsFilterKeepsOneSectionAndMarksItsTab(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/tickets?filter=blocked")
 
-	if got := sectionKeys(page); got != "blocked" {
+	if got := sectionKeys(t, page); got != "blocked" {
 		t.Errorf("sections = %q, want blocked", got)
 	}
 	want := `href="/tickets?filter=blocked" hx-get="/tickets?filter=blocked"` + navBundleTail +
@@ -55,7 +58,7 @@ func TestTicketsUnknownFilterShowsAll(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/tickets?filter=bogus")
 
-	if got := sectionKeys(page); got != "ready,blocked" {
+	if got := sectionKeys(t, page); got != "ready,blocked" {
 		t.Errorf("sections = %q, want ready,blocked", got)
 	}
 }

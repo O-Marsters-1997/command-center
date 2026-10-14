@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -122,9 +124,9 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 
 	server := openServer(f.Store, fixedClock(testAt), "")
 	page := renderPage(t, server)
-	state := rowState(t, page, "sandbox://CC-1")
-	if state == "base_gone" {
-		t.Error("state = base_gone, which is reserved for a stacking parent, never a gating edge")
+	row := webtest.RowFor(t, page, "sandbox://CC-1")
+	if row.State == "base_gone" {
+		t.Errorf("state = base_gone, reserved for a stacking parent, not a gating edge:\n%s", row.Row.HTML())
 	}
 }
 
@@ -201,11 +203,12 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	server := openServer(store, fixedClock(testAt), "")
 	page := renderPage(t, server)
 
-	if stack := rowCellAt(t, page, "sandbox://CHILD", 4); stack != "L2 ← parent" {
-		t.Errorf("child's stack = %q, want it based on parent: a draft PR is still OPEN for unlock purposes", stack)
+	child := webtest.RowFor(t, page, "sandbox://CHILD")
+	if stack := child.Stack.Text(); stack != "L2 ← parent" {
+		t.Errorf("child's stack = %q, want parent base (draft PR is open):\n%s", stack, child.Row.HTML())
 	}
-	if state := rowState(t, page, "sandbox://CHILD"); state != "ready" {
-		t.Errorf("child's state = %q, want ready", state)
+	if state := child.State; state != "ready" {
+		t.Errorf("child's state = %q, want ready:\n%s", state, child.Row.HTML())
 	}
 }
 

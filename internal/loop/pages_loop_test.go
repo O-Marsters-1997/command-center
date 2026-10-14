@@ -4,8 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -35,57 +33,6 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
 	}
 	return rec.Body.String()
-}
-
-func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
-
-// rowHTML finds the whole <tr>...</tr> whose ticket-link button names ticketURL. Go's RE2 engine
-// has no lookahead to keep a lazy ".*?" from crossing a row boundary, so this splits on literal
-// "<tr" instead of matching in one regexp.
-func rowHTML(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	ref := ticketRef(ticketURL)
-	for _, block := range strings.Split(page, "<tr") {
-		if !strings.Contains(block, ref) {
-			continue
-		}
-		end := strings.Index(block, "</tr>")
-		if end < 0 {
-			continue
-		}
-		return "<tr" + block[:end+len("</tr>")]
-	}
-	t.Fatalf("no row found for %s in page:\n%s", ticketURL, page)
-	return ""
-}
-
-var (
-	glyphTextRE  = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
-	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)
-)
-
-func rowState(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	cell := rowCellAt(t, page, ticketURL, 1)
-	glyph := glyphTextRE.FindStringSubmatch(cell)
-	if glyph == nil {
-		t.Fatalf("no state glyph found for %s in cell:\n%s", ticketURL, cell)
-	}
-	state := glyph[1]
-	for _, m := range queuedVerbRE.FindAllStringSubmatch(cell, -1) {
-		state += " · " + m[1] + " queued"
-	}
-	return state
-}
-
-func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	cells := regexp.MustCompile(`(?s)<td[^>]*>(.*?)</td>`).FindAllStringSubmatch(row, -1)
-	if column >= len(cells) {
-		t.Fatalf("no column %d found for %s in page:\n%s", column, ticketURL, page)
-	}
-	return strings.TrimSpace(cells[column][1])
 }
 
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
