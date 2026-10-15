@@ -24,7 +24,7 @@ func TestNewObservationAllocatesEveryMapAndMarksAlive(t *testing.T) {
 		"Titles": obs.Titles, "MidMerge": obs.MidMerge, "ConflictsWithBase": obs.ConflictsWithBase,
 		"ConflictsWithPeer": obs.ConflictsWithPeer, "Settings": obs.Settings,
 		"SettingsErrors": obs.SettingsErrors, "SettingsSources": obs.SettingsSources,
-		"RepoErrors": obs.RepoErrors,
+		"RepoErrors": obs.RepoErrors, "Questions": obs.Questions,
 	} {
 		if reflect.ValueOf(value).IsNil() {
 			t.Errorf("NewObservation(%v).%s = nil, want allocated map", at, name)

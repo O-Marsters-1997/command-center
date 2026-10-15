@@ -3,6 +3,7 @@ package plan_test
 import (
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -25,6 +26,43 @@ func TestParseOutcomeRejectsAnUnknownString(t *testing.T) {
 
 	if _, err := plan.ParseOutcome("bogus"); err == nil {
 		t.Error(`ParseOutcome("bogus") error = nil, want an error`)
+	}
+}
+
+func TestAsked(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		kind plan.RunKind
+		file option.Option[string]
+		want option.Option[string]
+	}{
+		{name: "no question file", kind: plan.RunKindAgent, file: option.None[string](), want: option.None[string]()},
+		{name: "agent run asked", kind: plan.RunKindAgent, file: option.Some("Which database?"), want: option.Some("Which database?")},
+		{name: "follow-up run asked", kind: plan.RunKindFollowUp, file: option.Some("Which?"), want: option.Some("Which?")},
+		{name: "unknown kind never asks", kind: plan.RunKindUnknown, file: option.Some("Which?"), want: option.None[string]()},
+		{
+			name: "surrounding space is trimmed", kind: plan.RunKindAgent,
+			file: option.Some("\n  Which database?\n\n"), want: option.Some("Which database?"),
+		},
+		{
+			name: "invalid utf-8 is dropped", kind: plan.RunKindAgent,
+			file: option.Some("Which\xff database?"), want: option.Some("Which database?"),
+		},
+		{
+			name: "an empty file still asks", kind: plan.RunKindAgent,
+			file: option.Some(" \n"), want: option.Some("(the agent asked without writing a question)"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := plan.Asked(tt.kind, tt.file); got != tt.want {
+				t.Errorf("Asked(%q, %v) = %v, want %v", tt.kind, tt.file, got, tt.want)
+			}
+		})
 	}
 }
 

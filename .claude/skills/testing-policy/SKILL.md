@@ -163,5 +163,3 @@ first.
 - **Port fakes:** forge and worktree fakes live in `loop`'s tests, `runner.Fake` ships in `runner`,
   and `demo` has its own; the worktree fake re-implements `tp`'s refusals → one fake per port in
   `<owner>test` with a contract suite.
-- **Question file:** the loop reads the agent's question file with `os.ReadFile` mid-decision →
-  the observer reads it into the `Observation`, so "asked" is a `plan` case.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -98,6 +99,9 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	}
 
 	obs, err := l.observe(ctx)
+	if err == nil {
+		err = l.observeRuns(ctx, &obs)
+	}
 	if err != nil {
 		at := l.clock.Now()
 		tickErr := fmt.Errorf("observe: %w", err)
@@ -107,7 +111,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 		return tickErr
 	}
 
-	t := &tick{now: l.clock.Now(), obs: obs}
+	t := &tick{now: l.clock.Now(), obs: obs, cancelled: map[int]bool{}}
 	t.obs.ObservedAt = t.now
 	if err := l.absorb(ctx, t); err != nil {
 		return l.failTick(ctx, err)
@@ -162,13 +166,13 @@ func (l *Loop) absorb(ctx context.Context, t *tick) error {
 	if err := l.applyCancelIntents(ctx); err != nil {
 		return fmt.Errorf("cancel: %w", err)
 	}
-	if err := l.applyKillIntents(ctx); err != nil {
+	if err := l.applyKillIntents(ctx, t); err != nil {
 		return fmt.Errorf("kill: %w", err)
 	}
-	if err := l.interruptForFollowUps(ctx); err != nil {
+	if err := l.interruptForFollowUps(ctx, t); err != nil {
 		return fmt.Errorf("interrupt for follow-ups: %w", err)
 	}
-	if err := l.reconcileRuns(ctx, t.obs); err != nil {
+	if err := l.reconcileRuns(ctx, t); err != nil {
 		return fmt.Errorf("reconcile runs: %w", err)
 	}
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
@@ -400,22 +404,28 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	return nil
 }
 
-func (l *Loop) applyKillIntents(ctx context.Context) error {
+func (l *Loop) cancelRun(t *tick, ticketURL string, pgid int) error {
+	if err := l.runner.Cancel(pgid); err != nil {
+		return fmt.Errorf("cancel %s (pgid %d): %w", ticketURL, pgid, err)
+	}
+	t.cancelled[pgid] = true
+	return nil
+}
+
+func (l *Loop) applyKillIntents(ctx context.Context, t *tick) error {
 	return l.eachIntent(ctx, plan.VerbKill, func(intent store.VerbIntent) error {
 		latest, err := l.store.LatestRunsByTicket(ctx)
 		if err != nil {
 			return fmt.Errorf("latest runs: %w", err)
 		}
 		if run, ok := latest[plan.TicketURL(intent.TicketID)]; ok && run.Pgid.IsSome() && run.Outcome.IsNone() {
-			if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
-				return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
-			}
+			return l.cancelRun(t, intent.TicketID, run.Pgid.Unwrap())
 		}
 		return nil
 	})
 }
 
-func (l *Loop) interruptForFollowUps(ctx context.Context) error {
+func (l *Loop) interruptForFollowUps(ctx context.Context, t *tick) error {
 	intents, err := l.store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
 		return fmt.Errorf("list pending follow-up intents: %w", err)
@@ -436,14 +446,14 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 			continue
 		}
 		cancelled[url] = true
-		if err := l.runner.Cancel(run.Pgid.Unwrap()); err != nil {
-			return fmt.Errorf("cancel %s (pgid %d): %w", intent.TicketID, run.Pgid.Unwrap(), err)
+		if err := l.cancelRun(t, intent.TicketID, run.Pgid.Unwrap()); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) reconcileRuns(ctx context.Context, t *tick) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
 		return fmt.Errorf("list runs awaiting disposition: %w", err)
@@ -458,22 +468,24 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	}
 	byTicket := ticketsByURL(tickets)
 
-	now := l.clock.Now()
 	for _, run := range pending {
-		alive, err := l.runner.Liveness(run.Pgid, run.ProcStartedAt, now)
-		if err != nil {
-			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
-		}
 		url := plan.TicketURL(run.TicketID)
-		if alive {
-			obs.MarkAlive(url)
-		} else {
-			obs.Runs[url] = plan.RunObservation{}
+		observed, seen := t.obs.Runs[url]
+		if !seen || observed.Alive {
+			if seen && !t.cancelled[run.Pgid] {
+				continue
+			}
+			alive, err := l.runner.Liveness(run.Pgid, run.ProcStartedAt, l.clock.Now())
+			if err != nil {
+				return fmt.Errorf("liveness for run %d: %w", run.ID, err)
+			}
+			if alive {
+				t.obs.MarkAlive(url)
+				continue
+			}
+			t.obs.Runs[url] = plan.RunObservation{}
 		}
-		if alive {
-			continue
-		}
-		if err := l.disposeRun(ctx, run, byTicket[url], obs); err != nil {
+		if err := l.disposeRun(ctx, run, byTicket[url], t.obs); err != nil {
 			return fmt.Errorf("dispose run %d of %s: %w", run.ID, run.TicketID, err)
 		}
 	}
@@ -524,18 +536,19 @@ func (l *Loop) outcomeFor(
 			return plan.OutcomeContinued, nil
 		}
 	}
-	question, err := l.readQuestion(run)
-	if err != nil {
-		return 0, fmt.Errorf("read question for run %d: %w", run.ID, err)
+	questionFile := option.None[string]()
+	if raw, ok := obs.Questions[plan.RunID(run.ID)]; ok {
+		questionFile = option.Some(raw)
 	}
-	if question != "" {
-		if err := l.store.RecordQuestion(ctx, run.ID, question); err != nil {
+	if question := plan.Asked(run.Kind, questionFile); question.IsSome() {
+		if err := l.store.RecordQuestion(ctx, run.ID, question.Unwrap()); err != nil {
 			return 0, fmt.Errorf("record question for run %d: %w", run.ID, err)
 		}
 		return plan.OutcomeAsked, nil
 	}
 	commits := 0
 	if run.BaselineSHA != "" {
+		var err error
 		commits, err = l.commitsSinceBaseline(ctx, ticket, obs, plan.SHA(run.BaselineSHA))
 		if err != nil {
 			return 0, fmt.Errorf("commits since baseline for run %d: %w", run.ID, err)
@@ -558,25 +571,55 @@ func (l *Loop) questionPath(runID plan.RunID) string {
 	return filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.question", runID))
 }
 
-func (l *Loop) readQuestion(run store.PendingRun) (string, error) {
-	if run.Kind != plan.RunKindAgent && run.Kind != plan.RunKindFollowUp {
-		return "", nil
+func (l *Loop) observeRuns(ctx context.Context, obs *plan.Observation) error {
+	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
+	if err != nil {
+		return fmt.Errorf("list runs awaiting disposition: %w", err)
 	}
-	data, err := os.ReadFile(l.questionPath(plan.RunID(run.ID)))
+	if obs.Runs == nil {
+		obs.Runs = map[plan.TicketURL]plan.RunObservation{}
+	}
+	obs.Questions = map[plan.RunID]string{}
+	now := l.clock.Now()
+	for _, run := range pending {
+		alive, err := l.runner.Liveness(run.Pgid, run.ProcStartedAt, now)
+		if err != nil {
+			return fmt.Errorf("liveness for run %d: %w", run.ID, err)
+		}
+		url := plan.TicketURL(run.TicketID)
+		if alive {
+			obs.MarkAlive(url)
+			continue
+		}
+		obs.Runs[url] = plan.RunObservation{}
+		id := plan.RunID(run.ID)
+		question, wrote, err := l.readQuestionFile(id)
+		if err != nil {
+			return err
+		}
+		if wrote {
+			obs.Questions[id] = question
+		}
+	}
+	return nil
+}
+
+func (l *Loop) readQuestionFile(id plan.RunID) (question string, wrote bool, err error) {
+	f, err := os.Open(l.questionPath(id))
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+		return "", false, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("read question for run %d: %w", run.ID, err)
+		return "", false, fmt.Errorf("open question for run %d: %w", id, err)
 	}
-	if len(data) > maxQuestionBytes {
-		data = data[:maxQuestionBytes]
+	data, err := io.ReadAll(io.LimitReader(f, maxQuestionBytes))
+	if closeErr := f.Close(); closeErr != nil {
+		err = errors.Join(err, closeErr)
 	}
-	question := strings.TrimSpace(strings.ToValidUTF8(string(data), ""))
-	if question == "" {
-		return "(the agent asked without writing a question)", nil
+	if err != nil {
+		return "", false, fmt.Errorf("read question for run %d: %w", id, err)
 	}
-	return question, nil
+	return string(data), true, nil
 }
 
 func parseLog[T any](logger *slog.Logger, logPath, what string, parse func(string) (T, error)) (T, bool) {
