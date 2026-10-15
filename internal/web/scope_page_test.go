@@ -3,9 +3,11 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -37,29 +39,34 @@ func threeRepoServer(t *testing.T) *web.Server {
 	return openServer(track(t, threeRepoStore(t), repos...), fixedClock(at), "")
 }
 
-func TestRepoScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
+func TestBoardScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
 	t.Parallel()
 
-	server := threeRepoServer(t)
+	for _, tt := range []struct {
+		name, groupPath, otherPath string
+		server                     func(*testing.T) *web.Server
+	}{
+		{"repo", "/board?repo=repo", "/board?repo=other", threeRepoServer},
+		{"feature", "/f/board-scope", "/f/sqlc-migration", threeFeatureServer},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			server := tt.server(t)
+			refs := ticketRefs(webtest.BoardRows(t, renderPath(t, server, tt.groupPath)))
+			for _, ticket := range []string{"sandbox://ROOT", "sandbox://CHILD"} {
+				if !slices.Contains(refs, ticketRef(ticket)) {
+					t.Errorf("%s lacks %s; refs = %q", tt.groupPath, ticket, refs)
+				}
+			}
+			if slices.Contains(refs, ticketRef("sandbox://LONE")) {
+				t.Errorf("%s includes unrelated LONE; refs = %q", tt.groupPath, refs)
+			}
 
-	underRepo := renderPath(t, server, "/board?repo=repo")
-	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
-		if !strings.Contains(underRepo, want) {
-			t.Errorf("?repo=repo dropped %s from its own group:\n%s", want, underRepo)
-		}
-	}
-	if strings.Contains(underRepo, ticketRef("sandbox://LONE")) {
-		t.Errorf("?repo=repo rendered the unrelated LONE ticket:\n%s", underRepo)
-	}
-
-	underOther := renderPath(t, server, "/board?repo=other")
-	if !strings.Contains(underOther, ticketRef("sandbox://LONE")) {
-		t.Errorf("?repo=other dropped its own LONE ticket:\n%s", underOther)
-	}
-	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
-		if strings.Contains(underOther, want) {
-			t.Errorf("?repo=other rendered %s, from a group with no member in other:\n%s", want, underOther)
-		}
+			refs = ticketRefs(webtest.BoardRows(t, renderPath(t, server, tt.otherPath)))
+			if !slices.Equal(refs, []string{ticketRef("sandbox://LONE")}) {
+				t.Errorf("%s refs = %q, want [#LONE]", tt.otherPath, refs)
+			}
+		})
 	}
 }
 
@@ -76,8 +83,8 @@ func TestRepoScopeAcceptsAnOwnerNameWithItsSlash(t *testing.T) {
 	server := openServer(tracked, fixedClock(testNow), "")
 
 	page := renderPath(t, server, "/board?repo=O-Marsters-1997/command-center")
-	if !strings.Contains(page, ticketRef("sandbox://MINE")) || strings.Contains(page, ticketRef("sandbox://THEIRS")) {
-		t.Errorf("?repo=O-Marsters-1997/command-center did not scope the board to that repo:\n%s", page)
+	if refs := ticketRefs(webtest.BoardRows(t, page)); !slices.Equal(refs, []string{ticketRef("sandbox://MINE")}) {
+		t.Errorf("owner/repo scope refs = %q, want [#MINE]", refs)
 	}
 }
 
@@ -85,9 +92,10 @@ func TestRepoScopeUnknownFallsBackToUnscoped(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, threeRepoServer(t), "/board?repo=bogus")
-	for _, want := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
-		if !strings.Contains(page, ticketRef(want)) {
-			t.Errorf("?repo=bogus dropped %s, want the unscoped board:\n%s", want, page)
+	refs := ticketRefs(webtest.BoardRows(t, page))
+	for _, ticket := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
+		if !slices.Contains(refs, ticketRef(ticket)) {
+			t.Errorf("?repo=bogus lacks %s; refs = %q", ticket, refs)
 		}
 	}
 }
@@ -112,32 +120,6 @@ func threeFeatureServer(t *testing.T) *web.Server {
 	t.Helper()
 	at := testNow
 	return newServer(threeFeatureStore(t), at)
-}
-
-func TestFeatureScopeAdmitsAGroupWholeAndDropsAnUnrelatedOne(t *testing.T) {
-	t.Parallel()
-
-	server := threeFeatureServer(t)
-
-	underFeature := renderPath(t, server, "/f/board-scope")
-	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
-		if !strings.Contains(underFeature, want) {
-			t.Errorf("/f/board-scope dropped %s from its own group:\n%s", want, underFeature)
-		}
-	}
-	if strings.Contains(underFeature, ticketRef("sandbox://LONE")) {
-		t.Errorf("/f/board-scope rendered the unrelated LONE ticket:\n%s", underFeature)
-	}
-
-	underOther := renderPath(t, server, "/f/sqlc-migration")
-	if !strings.Contains(underOther, ticketRef("sandbox://LONE")) {
-		t.Errorf("/f/sqlc-migration dropped its own LONE ticket:\n%s", underOther)
-	}
-	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
-		if strings.Contains(underOther, want) {
-			t.Errorf("/f/sqlc-migration rendered %s, from a group with no member in it:\n%s", want, underOther)
-		}
-	}
 }
 
 func TestFeatureScopeUnknownIs404(t *testing.T) {
@@ -167,13 +149,8 @@ func TestFeatureAndRepoScopeComposeNeitherOverridingTheOther(t *testing.T) {
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 
 	page := renderPath(t, server, "/board?feature=board-scope&repo=repo")
-	if !strings.Contains(page, ticketRef("sandbox://MATCH")) {
-		t.Errorf("/board?feature=board-scope&repo=repo dropped the ticket matching both:\n%s", page)
-	}
-	for _, want := range []string{ticketRef("sandbox://WRONG-REPO"), ticketRef("sandbox://WRONG-FEATURE")} {
-		if strings.Contains(page, want) {
-			t.Errorf("/board?feature=board-scope&repo=repo rendered %s, matching only one axis:\n%s", want, page)
-		}
+	if refs := ticketRefs(webtest.BoardRows(t, page)); !slices.Equal(refs, []string{ticketRef("sandbox://MATCH")}) {
+		t.Errorf("composed scope refs = %q, want [#MATCH]", refs)
 	}
 }
 
@@ -183,13 +160,14 @@ func TestClearingOneScopeAxisLeavesTheOtherApplied(t *testing.T) {
 	server := threeRepoServer(t)
 
 	page := renderPath(t, server, "/board?repo=repo&feature=")
-	for _, want := range []string{ticketRef("sandbox://ROOT"), ticketRef("sandbox://CHILD")} {
-		if !strings.Contains(page, want) {
-			t.Errorf("?repo=repo&feature= dropped %s though the repo scope should still apply:\n%s", want, page)
+	refs := ticketRefs(webtest.BoardRows(t, page))
+	for _, ticket := range []string{"sandbox://ROOT", "sandbox://CHILD"} {
+		if !slices.Contains(refs, ticketRef(ticket)) {
+			t.Errorf("cleared feature scope lacks %s; refs = %q", ticket, refs)
 		}
 	}
-	if strings.Contains(page, ticketRef("sandbox://LONE")) {
-		t.Errorf("?repo=repo&feature= rendered the out-of-repo LONE ticket:\n%s", page)
+	if slices.Contains(refs, ticketRef("sandbox://LONE")) {
+		t.Errorf("cleared feature scope includes unrelated LONE; refs = %q", refs)
 	}
 }
 
@@ -197,8 +175,11 @@ func TestSidebarOmitsFeatureLinksWithNoTicketCarryingAFeature(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, seededServer(t), "/tickets")
-	if strings.Contains(page, `href="/f/`) {
-		t.Errorf("sidebar rendered a feature link though no ticket carries one:\n%s", page)
+	sidebar := htmltest.Parse(t, page).One(t, "aside#sidebar")
+	for _, link := range sidebar.Find("a[href]") {
+		if href, _ := link.Attr("href"); strings.HasPrefix(href, "/f/") {
+			t.Errorf("sidebar rendered an unexpected feature link: %s", link.HTML())
+		}
 	}
 }
 
@@ -253,11 +234,13 @@ func TestRepoScopeSurvivesTheBoardsOwnPollAndRowPaths(t *testing.T) {
 	t.Parallel()
 
 	page := renderPath(t, threeRepoServer(t), "/board?repo=repo")
-	if !strings.Contains(page, `hx-get="/board?repo=repo"`) {
-		t.Errorf("the board's own poll dropped the repo scope:\n%s", page)
+	board := htmltest.Parse(t, page).One(t, "table#board")
+	if got, _ := board.Attr("hx-get"); got != "/board?repo=repo" {
+		t.Errorf("board poll hx-get = %q, want /board?repo=repo", got)
 	}
-	row := webtest.RowFor(t, page, "sandbox://ROOT").Row.HTML()
-	if !strings.Contains(row, "repo=repo") {
-		t.Errorf("ROOT's row paths dropped the repo scope:\n%s", row)
+	row := webtest.RowFor(t, page, "sandbox://ROOT").Row
+	selection := row.One(t, `input[name="ticket"]`)
+	if got, _ := selection.Attr("hx-get"); !strings.Contains(got, "repo=repo") {
+		t.Errorf("ROOT row selection hx-get = %q: %s", got, selection.HTML())
 	}
 }

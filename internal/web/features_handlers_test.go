@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
@@ -51,13 +52,14 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 
 	result := do(t, newServer(store, testNow), http.MethodGet, "/repos", req{})
 	if result.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", result.Code, result.Body)
+		t.Fatalf("status = %d, want 200", result.Code)
 	}
 	body := result.Body
-	for _, want := range []string{"project:y", url, "already belongs to feature"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
+	root := htmltest.Parse(t, body).One(t, "main#main")
+	text := root.Text()
+	if !strings.Contains(text, "project:y") || !strings.Contains(text, url) ||
+		!strings.Contains(text, "already belongs to feature") {
+		t.Error("refusal text missing feature, ticket URL, or already belongs to feature")
 	}
 }
 

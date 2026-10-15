@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func sectionKeys(t *testing.T, page string) string {
@@ -23,15 +24,24 @@ func TestTicketsPageShowsEveryFeatureInSections(t *testing.T) {
 	page := renderPath(t, threeFeatureServer(t), "/tickets")
 
 	for _, url := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
-		if !strings.Contains(page, ticketRef(url)) {
-			t.Errorf("/tickets missing %s:\n%s", ticketRef(url), page)
+		webtest.RowFor(t, page, url)
+	}
+	root := htmltest.Parse(t, page)
+	all := root.One(t, `nav[aria-label="ticket filters"] a[href="/tickets"]`)
+	attrs := map[string]string{
+		"hx-get": "/tickets", "hx-select": "#main", "hx-target": "#main",
+		"hx-swap": "outerHTML", "hx-push-url": "true",
+	}
+	for name, want := range attrs {
+		if got, _ := all.Attr(name); got != want {
+			t.Errorf("All %s = %q, want %q: %s", name, got, want, all.HTML())
 		}
 	}
-	if !strings.Contains(page, `href="/tickets" hx-get="/tickets"`+navBundleTail+` aria-current="page">All`) {
-		t.Errorf("/tickets does not mark All current:\n%s", page)
+	if current, _ := all.Attr("aria-current"); current != "page" {
+		t.Errorf("All aria-current = %q: %s", current, all.HTML())
 	}
-	if !strings.Contains(page, `hx-get="/board?all=1"`) {
-		t.Errorf("/tickets board does not poll its own fragment:\n%s", page)
+	if get, _ := root.One(t, "table#board").Attr("hx-get"); get != "/board?all=1" {
+		t.Errorf("board hx-get = %q", get)
 	}
 }
 
@@ -43,13 +53,22 @@ func TestTicketsFilterKeepsOneSectionAndMarksItsTab(t *testing.T) {
 	if got := sectionKeys(t, page); got != "blocked" {
 		t.Errorf("sections = %q, want blocked", got)
 	}
-	want := `href="/tickets?filter=blocked" hx-get="/tickets?filter=blocked"` + navBundleTail +
-		` aria-current="page">Blocked`
-	if !strings.Contains(page, want) {
-		t.Errorf("blocked tab not current:\n%s", page)
+	root := htmltest.Parse(t, page)
+	blocked := root.One(t, `nav[aria-label="ticket filters"] a[href="/tickets?filter=blocked"]`)
+	attrs := map[string]string{
+		"hx-get": "/tickets?filter=blocked", "hx-select": "#main",
+		"hx-target": "#main", "hx-swap": "outerHTML", "hx-push-url": "true",
 	}
-	if !strings.Contains(page, `hx-get="/board?all=1&amp;filter=blocked"`) {
-		t.Errorf("filtered board polls the wrong fragment:\n%s", page)
+	for name, want := range attrs {
+		if got, _ := blocked.Attr(name); got != want {
+			t.Errorf("Blocked %s = %q, want %q: %s", name, got, want, blocked.HTML())
+		}
+	}
+	if current, _ := blocked.Attr("aria-current"); current != "page" {
+		t.Errorf("Blocked aria-current = %q: %s", current, blocked.HTML())
+	}
+	if get, _ := root.One(t, "table#board").Attr("hx-get"); get != "/board?all=1&filter=blocked" {
+		t.Errorf("filtered board hx-get = %q", get)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -47,13 +48,12 @@ func TestReposPageListsExactlyTheKnownRepos(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			body := renderPath(t, server, tt.path)
-			for _, want := range []string{"acme/alpha", "acme/beta"} {
-				if !strings.Contains(body, want) {
-					t.Errorf("GET %s missing known repo %s:\n%s", tt.path, want, body)
-				}
+			root := htmltest.Parse(t, body)
+			for _, repo := range []string{"acme/alpha", "acme/beta"} {
+				root.One(t, `a[href="/repos/`+repo+`"]`)
 			}
-			if strings.Contains(body, "acme/api") || strings.Contains(body, "not tracked") {
-				t.Errorf("GET %s listed a repo the app does not know:\n%s", tt.path, body)
+			if api := root.Find(`a[href="/repos/acme/api"]`); len(api) != 0 {
+				t.Errorf("GET %s listed unknown repo: %s", tt.path, api[0].HTML())
 			}
 		})
 	}
@@ -69,21 +69,32 @@ func TestRepoSearchMergesPushableMatchesAndNeverShowsReadOnlyRepos(t *testing.T)
 	server := reposServer(t, &calls)
 
 	body := renderPath(t, server, "/repos/search?q=API")
-	for _, want := range []string{"acme/api", "acme/payments-api", "not tracked", `href="/repos/acme/api"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("search for API missing %q:\n%s", want, body)
+	root := htmltest.Parse(t, body)
+	for _, repo := range []string{"acme/api", "acme/payments-api"} {
+		row := searchRow(t, body, repo)
+		if links := row.Find(`a[href="/repos/` + repo + `"]`); len(links) != 2 {
+			t.Errorf("search result %s links = %d, want name and track: %s", repo, len(links), row.HTML())
+		}
+		if !strings.Contains(row.Text(), "not tracked") {
+			t.Errorf("search result %s missing not-tracked label: %s", repo, row.HTML())
 		}
 	}
-	if strings.Contains(body, "acme/ro") {
-		t.Errorf("search listed a repo gh never returned as pushable:\n%s", body)
+	if other := root.Find(`a[href="/repos/acme/ro"]`); len(other) != 0 {
+		t.Errorf("search listed a non-pushable repo: %s", other[0].HTML())
 	}
 
 	tracked := renderPath(t, server, "/repos/search?q=alpha")
-	if !strings.Contains(tracked, "acme/alpha") || strings.Contains(tracked, "not tracked") {
-		t.Errorf("a pushable repo that is already tracked must show once, tracked:\n%s", tracked)
-	}
-	if strings.Count(tracked, "acme/alpha") != 2 {
-		t.Errorf("acme/alpha rendered a duplicate row:\n%s", tracked)
+	trackedRoot := htmltest.Parse(t, tracked)
+	if rows := trackedRoot.Find(`.track-hit`); len(rows) != 1 {
+		t.Errorf("tracked search rows = %d, want one", len(rows))
+	} else {
+		link := rows[0].One(t, `a[href="/repos/acme/alpha"]`)
+		if got := link.Text(); got != "acme/alpha" {
+			t.Errorf("tracked repo link text = %q, want acme/alpha", got)
+		}
+		if got := rows[0].Text(); strings.Contains(got, "not tracked") {
+			t.Errorf("tracked repo labelled untracked: %s", rows[0].HTML())
+		}
 	}
 }
 
@@ -95,26 +106,26 @@ func TestRepoSearchMarksARepoWhoseDefaultBranchIsNotMain(t *testing.T) {
 
 	body := renderPath(t, server, "/repos/search?q=api")
 	paymentsRow, apiRow := searchRow(t, body, "acme/payments-api"), searchRow(t, body, "acme/api")
-	if !strings.Contains(paymentsRow, "will be refused: default branch is <code>master</code>") {
-		t.Errorf("master-default repo is not marked:\n%s", paymentsRow)
+	if got := paymentsRow.Text(); !strings.Contains(got, "will be refused: default branch is master") {
+		t.Errorf("master-default repo is not marked: %s", paymentsRow.HTML())
 	}
-	if !strings.Contains(paymentsRow, `<a href="/repos/acme/payments-api">track &rarr;</a>`) {
-		t.Errorf("marked row lost its track link:\n%s", paymentsRow)
+	if links := paymentsRow.Find(`a[href="/repos/acme/payments-api"]`); len(links) != 2 || links[1].Text() != "track →" {
+		t.Errorf("marked row lacks track link: %s", paymentsRow.HTML())
 	}
-	if strings.Contains(apiRow, "will be refused") {
-		t.Errorf("main-default repo is marked:\n%s", apiRow)
+	if strings.Contains(apiRow.Text(), "will be refused") {
+		t.Errorf("main-default repo is marked: %s", apiRow.HTML())
 	}
 }
 
-func searchRow(t *testing.T, body, fullName string) string {
+func searchRow(t *testing.T, body, fullName string) htmltest.Node {
 	t.Helper()
-	for row := range strings.SplitSeq(body, `<div class="track-hit"`) {
-		if strings.Contains(row, ">"+fullName+"</a>") {
+	for _, row := range htmltest.Parse(t, body).Find(".track-hit") {
+		if len(row.Find(`a[href="/repos/`+fullName+`"]`)) != 0 {
 			return row
 		}
 	}
-	t.Fatalf("no search row for %s:\n%s", fullName, body)
-	return ""
+	t.Fatalf("no search row for %s", fullName)
+	return htmltest.Node{}
 }
 
 func TestRepoSearchMakesOneGhCallWithinTheCacheWindow(t *testing.T) {
@@ -197,10 +208,10 @@ func TestRepoSearchFallsBackToKnownReposWhenGhFails(t *testing.T) {
 		}))
 
 	body := renderPath(t, server, "/repos/search?q=alpha")
-	for _, want := range []string{"acme/alpha", "gh search failed", "not logged in"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("failed search missing %q:\n%s", want, body)
-		}
+	root := htmltest.Parse(t, body)
+	root.One(t, `a[href="/repos/acme/alpha"]`)
+	if got := root.Text(); !strings.Contains(got, "gh search failed") || !strings.Contains(got, "not logged in") {
+		t.Errorf("failed search message = %q", got)
 	}
 }
 
@@ -224,30 +235,30 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		})))
 
 	body := renderPath(t, server, "/repos/acme/alpha")
-	for _, want := range []string{
-		"<h1>acme/alpha</h1>", "git@github.com:acme/alpha.git",
-		"project:x", "project:y", "also in acme/beta",
-		`<a href="/repos/acme/alpha">acme/alpha</a>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("scoped page missing %q:\n%s", want, body)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if got := main.One(t, "h1").Text(); got != "acme/alpha" {
+		t.Errorf("repo heading = %q", got)
+	}
+	main.One(t, `a[href="/repos/acme/alpha"]`)
+	for _, want := range []string{"git@github.com:acme/alpha.git", "project:x", "project:y", "also in acme/beta"} {
+		if got := main.Text(); !strings.Contains(got, want) {
+			t.Errorf("repo content lacks %q: %q", want, got)
 		}
 	}
-	if !strings.Contains(body, `<table id="board"`) || !strings.Contains(body, `hx-get="/board?repo=acme%2Falpha"`) {
-		t.Errorf("scoped page missing its repo's board:\n%s", body)
+	board := main.One(t, "table#board")
+	if got, _ := board.Attr("hx-get"); got != "/board?repo=acme%2Falpha" {
+		t.Errorf("repo board hx-get = %q, want /board?repo=acme%%2Falpha", got)
 	}
-	if strings.Contains(body, "issues/2") {
-		t.Errorf("scoped page's board listed a ticket from beta:\n%s", body)
+	if beta := board.Find(`a[href="/s/acme/beta/2"]`); len(beta) != 0 {
+		t.Errorf("repo board includes beta ticket: %s", beta[0].HTML())
 	}
-	if strings.Contains(body, "project:z") {
-		t.Errorf("scoped page listed a feature from beta's tracker:\n%s", body)
+	if strings.Contains(main.Text(), "project:z") {
+		t.Error("repo page contains beta-only feature")
 	}
-	if strings.Contains(body, `action="/features/project:y/import"`) {
-		t.Errorf("unimported project:y offers reimport:\n%s", body)
+	if reimport := main.Find(`form[action="/features/project:y/import"]`); len(reimport) != 0 {
+		t.Errorf("unimported feature offers reimport: %s", reimport[0].HTML())
 	}
-	if !strings.Contains(body, `action="/features/project:x/import"`) {
-		t.Errorf("imported project:x is missing reimport:\n%s", body)
-	}
+	main.One(t, `form[action="/features/project:x/import"]`)
 }
 
 func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
@@ -257,13 +268,16 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	server := reposServer(t, &calls)
 
 	body := renderPath(t, server, "/repos/acme/stranger")
-	for _, want := range []string{"<h1>acme/stranger</h1>", `data-glyph="ready"`, "Not tracked."} {
-		if !strings.Contains(body, want) {
-			t.Errorf("unknown repo page missing %q:\n%s", want, body)
-		}
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if got := main.One(t, "h1").Text(); got != "acme/stranger" {
+		t.Errorf("unknown repo heading = %q", got)
 	}
-	if strings.Contains(body, "board &rarr;") {
-		t.Errorf("unknown repo page offers a board link:\n%s", body)
+	main.One(t, `#repo-banner[data-glyph="ready"]`)
+	if got := main.Text(); !strings.Contains(got, "Not tracked.") {
+		t.Errorf("unknown repo status = %q", got)
+	}
+	if board := main.Find("table#board"); len(board) != 0 {
+		t.Errorf("unknown repo offers board: %s", board[0].HTML())
 	}
 }
 
@@ -288,8 +302,10 @@ func TestNoticeRaisesARefusedRepoOnEveryPage(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("GET %s: status = %d", tt.path, rec.Code)
 			}
-			if !strings.Contains(rec.Body, `<a href="/repos/acme/beta">acme/beta</a> is refused`) {
-				t.Errorf("GET %s missing refused-repo link:\n%s", tt.path, rec.Body)
+			notices := htmltest.Parse(t, rec.Body).One(t, "#notices")
+			link := notices.One(t, `a[href="/repos/acme/beta"]`)
+			if got := link.Text(); got != "acme/beta" {
+				t.Errorf("GET %s refusal link = %q: %s", tt.path, got, link.HTML())
 			}
 		})
 	}

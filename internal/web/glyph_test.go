@@ -2,10 +2,10 @@ package web_test
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -22,12 +22,12 @@ func TestRunningRowGlyphPulses(t *testing.T) {
 	server := newServer(store, now)
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	body := rec.Body
-	if !strings.Contains(body, `class="glyph glyph-running glyph-pulse"`) {
-		t.Errorf("running row's glyph is not a pulsing running glyph:\n%s", body)
+	row := htmltest.Parse(t, rec.Body).One(t, `tr.group`)
+	if glyphs := row.Find(`.glyph-running.glyph-pulse`); len(glyphs) != 1 {
+		t.Errorf("running row has %d pulsing glyphs, want one: %s", len(glyphs), row.HTML())
 	}
 }
 
@@ -38,16 +38,12 @@ func TestEndedRunsGlyphDoesNotPulse(t *testing.T) {
 	server := newServer(seededStore(t, now), now)
 
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
-	body := rec.Body
-
-	if strings.Contains(body, "glyph-pulse") {
-		t.Errorf("no run is alive, but a glyph still pulses:\n%s", body)
+	board := htmltest.Parse(t, rec.Body).One(t, `table#board`)
+	for _, word := range []string{"ready", "blocked"} {
+		board.One(t, `.glyph-`+word)
 	}
-	if !strings.Contains(body, `class="glyph glyph-ready"`) {
-		t.Errorf("ready row is not a ready glyph:\n%s", body)
-	}
-	if !strings.Contains(body, `class="glyph glyph-blocked"`) {
-		t.Errorf("blocked row is not a blocked glyph:\n%s", body)
+	if glyphs := board.Find(`.glyph-pulse`); len(glyphs) != 0 {
+		t.Errorf("ended board has %d pulsing glyphs: %s", len(glyphs), glyphs[0].HTML())
 	}
 }
 
@@ -59,11 +55,12 @@ func TestBoardRendersEveryGlyphWordAsAClass(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	board := htmltest.Parse(t, body).One(t, "table#board")
 	for _, word := range []string{
 		"failed", "attention", "running", "pending", "checking", "ready", "blocked", "done",
 	} {
-		if want := `class="glyph glyph-` + word + `"`; !strings.Contains(body, want) {
-			t.Errorf("no row renders %s:\n%s", want, body)
+		if got := board.Find(`.glyph-` + word); len(got) == 0 {
+			t.Errorf("board has no glyph for %q", word)
 		}
 	}
 }

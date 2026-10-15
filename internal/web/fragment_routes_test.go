@@ -3,10 +3,10 @@ package web_test
 import (
 	"net/http"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -50,13 +50,13 @@ func TestFragmentRoutesSendAPlainRequestToTheirHostPage(t *testing.T) {
 
 			fragment := do(t, server, http.MethodGet, tt.route, req{Header: http.Header{"Hx-Request": {"true"}}})
 			if fragment.Code != http.StatusOK {
-				t.Fatalf("htmx GET %s = %d, want 200: %s", tt.route, fragment.Code, fragment.Body)
+				t.Fatalf("htmx GET %s = %d, want 200", tt.route, fragment.Code)
 			}
 			if got := fragment.Header.Get("Vary"); got != "HX-Request" {
 				t.Errorf("htmx Vary = %q, want HX-Request", got)
 			}
-			if strings.Contains(fragment.Body, "<html") {
-				t.Errorf("htmx GET %s answered a full page:\n%s", tt.route, fragment.Body)
+			if got := htmltest.Parse(t, fragment.Body).Find("main#main"); len(got) != 0 {
+				t.Errorf("htmx GET %s answered a full page (main#main present)", tt.route)
 			}
 		})
 	}
@@ -76,9 +76,7 @@ func TestSessionActionsIsAFragmentOfTheSessionPage(t *testing.T) {
 		t.Errorf("Vary = %q, want HX-Request", got)
 	}
 	fragment := do(t, server, http.MethodGet, "/s/acme/web/1/actions", req{Header: http.Header{"Hx-Request": {"true"}}})
-	if body := fragment.Body; !strings.Contains(body, `id="session-actions"`) {
-		t.Errorf("htmx actions is not the actions fragment:\n%s", body)
-	}
+	htmltest.Parse(t, fragment.Body).One(t, "#session-actions")
 }
 
 func TestHistoryRestoreOfAFragmentRouteGetsThePage(t *testing.T) {
@@ -115,9 +113,8 @@ func TestPlainLaunchOpenSendsATicketSliceToThePickerWithTheDialogOpen(t *testing
 	}
 
 	page := renderPath(t, server, location)
-	if !strings.Contains(page, `<dialog id="launch-modal-body"`) || !strings.Contains(page, `<cc-launch-modal tickets=`) {
-		t.Errorf("%s did not render the picker with the dialog open:\n%s", location, page)
-	}
+	dialog := htmltest.Parse(t, page).One(t, "dialog#launch-modal-body")
+	dialog.One(t, `cc-launch-modal[tickets]`)
 }
 
 func TestPlainVerbAndImportPostsGoBackToALocalReturn(t *testing.T) {
@@ -155,7 +152,9 @@ func TestReposPageRendersTheSearchResultsInThePage(t *testing.T) {
 	var calls atomic.Int32
 	page := renderPath(t, reposServer(t, &calls), "/repos?q=api")
 
-	if !strings.Contains(page, `value="api"`) || !strings.Contains(page, "acme/api") {
-		t.Errorf("/repos?q=api did not render the search box value and results:\n%s", page)
+	root := htmltest.Parse(t, page)
+	root.One(t, `input[name="q"][value="api"]`)
+	if results := root.Find(`a[href="/repos/acme/api"]`); len(results) == 0 {
+		t.Errorf("/repos?q=api has no acme/api result")
 	}
 }

@@ -7,43 +7,38 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func TestVerbQueuesExactlyOneKillIntent(t *testing.T) {
+func TestVerbQueuesExactlyOneKillOrCancelIntent(t *testing.T) {
 	t.Parallel()
-
-	store := seededRunning(t)
-	server := openServer(store, fixedClock(testNow), "")
-	got := do(t, server, http.MethodPost, "/verb?verb=kill&ticket=sandbox://CC-1", req{})
-	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST kill = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
-	}
-
-	pending, err := store.PendingVerbIntents(t.Context(), "kill")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
-		t.Fatalf("pending kill intents = %+v, want exactly one for sandbox://CC-1", pending)
-	}
-}
-
-func TestVerbQueuesExactlyOneCancelIntent(t *testing.T) {
-	t.Parallel()
-
-	store := seededQueued(t)
-	server := openServer(store, fixedClock(testNow), "")
-	got := do(t, server, http.MethodPost, "/verb?verb=cancel&ticket=sandbox://CC-1", req{})
-	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST cancel = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
-	}
-
-	pending, err := store.PendingVerbIntents(t.Context(), "cancel")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
-		t.Fatalf("pending cancel intents = %+v, want exactly one for sandbox://CC-1", pending)
+	for _, tt := range []struct {
+		name string
+		verb plan.Verb
+		seed func(*testing.T) *storepkg.Store
+	}{
+		{name: "kill running", verb: "kill", seed: seededRunning},
+		{name: "cancel queued", verb: "cancel", seed: seededQueued},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := tt.seed(t)
+			server := openServer(store, fixedClock(testNow), "")
+			got := do(t, server, http.MethodPost, "/verb?verb="+string(tt.verb)+"&ticket=sandbox://CC-1", req{})
+			if got.Code != http.StatusSeeOther || got.Location != "/" {
+				t.Fatalf("POST %s = %d %q, want 303 /", tt.verb, got.Code, got.Location)
+			}
+			pending, err := store.PendingVerbIntents(t.Context(), tt.verb)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pending) != 1 || pending[0].TicketID != "sandbox://CC-1" {
+				t.Fatalf("pending %s intents = %+v, want one for sandbox://CC-1", tt.verb, pending)
+			}
+		})
 	}
 }
 
@@ -77,7 +72,7 @@ func TestVerbAcceptsFormEncodedFields(t *testing.T) {
 	form := url.Values{"verb": {"kill"}, "ticket": {"sandbox://CC-1"}}
 	got := do(t, server, http.MethodPost, "/verb", req{Form: form})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST kill form = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+		t.Fatalf("POST kill form = %d %q, want 303 /", got.Code, got.Location)
 	}
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
@@ -116,9 +111,7 @@ func TestVerbLandsTheBrowserBackOnTheBoard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), ">Command Centre<") {
-		t.Errorf("body after the redirect is not the board: %s", body)
-	}
+	htmltest.Parse(t, string(body)).One(t, `main#main[data-home]`).One(t, `a[href="/tickets"]`)
 }
 
 func TestVerbRejectsFollowUpWithNoPromptText(t *testing.T) {
@@ -166,7 +159,7 @@ func TestVerbQueuesFollowUpIntentCarryingThePromptAsPayload(t *testing.T) {
 	}
 	got := do(t, server, http.MethodPost, "/verb", req{Form: form})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST follow-up = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+		t.Fatalf("POST follow-up = %d %q, want 303 /", got.Code, got.Location)
 	}
 
 	pending, err := store.PendingVerbIntents(t.Context(), "follow-up")

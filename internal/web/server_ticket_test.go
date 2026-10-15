@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
@@ -130,14 +131,11 @@ func TestSessionPageRendersEditFormPrefilled(t *testing.T) {
 
 	page := renderPath(t, newServer(st, testNow), "/s/o/r/2")
 
-	for _, want := range []string{
-		`action="/ticket"`,
-		`name="ticket" value="https://github.com/o/r/issues/2"`,
-		`name="branch" value="cc-2-second"`,
-		`name="blocked_by" value="https://github.com/o/r/issues/1"`,
+	form := htmltest.Parse(t, page).One(t, `form[action="/ticket"]`)
+	for name, value := range map[string]string{
+		"ticket": "https://github.com/o/r/issues/2", "branch": "cc-2-second",
+		"blocked_by": "https://github.com/o/r/issues/1",
 	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("session page missing %s", want)
-		}
+		form.One(t, `input[name="`+name+`"][value="`+value+`"]`)
 	}
 }
