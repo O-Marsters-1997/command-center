@@ -29,7 +29,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
 	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)

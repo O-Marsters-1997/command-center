@@ -26,7 +26,7 @@ import (
 func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 	t.Helper()
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
-		Ticket: ticketURL, Kind: "agent", BaselineSHA: "basesha", PromptHash: "hash-1",
+		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%q): %v", ticketURL, err)
@@ -559,7 +559,7 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)

@@ -59,7 +59,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 		}
 	}
 	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: sessionTicket, Kind: opts.Kind, BaselineSHA: "base", PromptHash: "hash",
+		Ticket: sessionTicket, Kind: opts.Kind, PromptHash: "hash",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%q): %v", sessionTicket, err)

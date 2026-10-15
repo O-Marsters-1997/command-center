@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"time"
 
@@ -57,8 +56,6 @@ func IsInvalid(err error) bool {
 
 type Reader struct {
 	store            *store.Store
-	frameStore       frameStore
-	derive           func(plan.Input) plan.Snapshot
 	dataDir          string
 	spendLimit5h     int
 	boardPollSeconds int
@@ -71,10 +68,6 @@ func NewReader(
 ) *Reader {
 	return &Reader{
 		store: st, dataDir: dataDir, renderLine: renderLine,
-		frameStore: st,
-		derive: func(in plan.Input) plan.Snapshot {
-			return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in)
-		},
 		boardPollSeconds: boardPollSeconds,
 		spendLimit5h:     spendLimit5h,
 		spend:            NewSpendCache(),
@@ -225,9 +218,6 @@ func (r *Reader) buildChrome(in chromeInput, now time.Time, params Params) Chrom
 	}
 	if params.Repo != "" {
 		c.RepoCrumbPath = RepoPath(params.Repo)
-	}
-	if params.Feature != "" {
-		c.FeatureQuery = url.QueryEscape(params.Feature)
 	}
 	return c
 }

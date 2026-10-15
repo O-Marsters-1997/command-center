@@ -8,8 +8,8 @@ import (
 )
 
 type workedLine struct {
-	Label string `json:"label"`
-	Stats string `json:"stats"`
+	Label string
+	Stats string
 }
 
 type runStats struct {

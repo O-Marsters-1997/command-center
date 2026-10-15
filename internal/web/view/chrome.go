@@ -1,7 +1,6 @@
 package view
 
 import (
-	"net/url"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
@@ -27,10 +26,8 @@ type Chrome struct {
 	RepoCrumb      string
 	RepoCrumbPath  string
 	FeatureScope   string
-	FeatureQuery   string
 	ProjectScope   string
 	ProjectHue     int
-	ProjectQuery   string
 	ProjectInitial string
 	ScopeMenu      []ScopeChoice
 	Launch         NavItem
@@ -74,7 +71,7 @@ func (c *Chrome) badge(key, text string, warn bool) {
 func (c *Chrome) titled(page string) { c.PageTitle = page + " · " + appTitle }
 
 func (c *Chrome) scopeToProject(p store.Project) {
-	c.ProjectScope, c.ProjectHue, c.ProjectQuery = p.Name, p.Hue, url.QueryEscape(p.Name)
+	c.ProjectScope, c.ProjectHue = p.Name, p.Hue
 	c.ProjectInitial = initial(p.Name)
 }
 
