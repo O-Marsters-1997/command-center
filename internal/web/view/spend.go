@@ -6,8 +6,6 @@ import (
 	"io/fs"
 	"sync"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 	"github.com/O-Marsters-1997/command-center/internal/store"
@@ -15,7 +13,6 @@ import (
 
 type SpendCache struct {
 	mu      sync.Mutex
-	flight  singleflight.Group
 	settled map[string]int
 	parse   func(string) (agentlog.RunMetrics, error)
 }
@@ -30,37 +27,22 @@ func (c *SpendCache) Spend(path string) (int, error) {
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if tokens, ok := c.settled[path]; ok {
-		c.mu.Unlock()
 		return tokens, nil
 	}
-	c.mu.Unlock()
-	value, err, _ := c.flight.Do(path, func() (any, error) {
-		c.mu.Lock()
-		if tokens, ok := c.settled[path]; ok {
-			c.mu.Unlock()
-			return tokens, nil
-		}
-		c.mu.Unlock()
-		metrics, err := c.parse(path)
-		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, agentlog.ErrNoParseableLines) {
-			return 0, nil
-		}
-		if err != nil {
-			return 0, fmt.Errorf("measure spend of %s: %w", path, err)
-		}
-		tokens := tokensOf(metrics)
-		if metrics.CostUSD.IsSome() {
-			c.mu.Lock()
-			c.settled[path] = tokens
-			c.mu.Unlock()
-		}
-		return tokens, nil
-	})
+	metrics, err := c.parse(path)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, agentlog.ErrNoParseableLines) {
+		return 0, nil
+	}
 	if err != nil {
-		return 0, fmt.Errorf("read spend: %w", err)
+		return 0, fmt.Errorf("read spend: measure spend of %s: %w", path, err)
 	}
-	return value.(int), nil
+	tokens := tokensOf(metrics)
+	if metrics.CostUSD.IsSome() {
+		c.settled[path] = tokens
+	}
+	return tokens, nil
 }
 
 func tokensOf(metrics agentlog.RunMetrics) int {

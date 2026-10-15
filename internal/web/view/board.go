@@ -18,57 +18,58 @@ import (
 const defaultBaseBranch = "main"
 
 type Row struct {
-	URL        string
-	Repo       string
-	Feature    string
-	Project    string
-	ProjectHue int
+	URL        string `json:"url"`
+	Ref        string `json:"ref"`
+	Repo       string `json:"-"`
+	Feature    string `json:"-"`
+	Project    string `json:"-"`
+	ProjectHue int    `json:"-"`
 	// GitHub's issue list caps reads at 100 rows, leaving titles beyond the limit empty.
-	Title           string
-	State           string
-	Reason          string
-	Question        string
-	Glyph           plan.GlyphWord
-	Alive           bool
-	Verbs           []plan.Verb
-	Branch          string
-	BlockedBy       []string
-	PendingVerbs    []plan.Verb
-	Base            string
-	BaseVerdict     string
-	StackDepth      int
-	MergeOrder      int
-	Warning         string
-	Blocking        []string
-	After           []string
-	Unlocks         []string
-	Worktree        string
-	PRNumber        int
-	PRState         string
-	Pgid            string
-	Elapsed         string
-	ElapsedSeconds  int
-	ElapsedPercent  int
-	LogPath         string
-	CancelCount     int
-	SpendTokens     int
-	Checks          []Check
-	RedChecks       []Check
-	Draft           bool
-	DraftReason     string
-	AgentPctWeek    float64
-	FollowUpPctWeek float64
-	SpendPctWeek    float64
-	TicketOpen      bool
+	Title           string         `json:"title"`
+	State           string         `json:"state"`
+	Reason          string         `json:"reason"`
+	Question        string         `json:"-"`
+	Glyph           plan.GlyphWord `json:"glyph"`
+	Alive           bool           `json:"alive"`
+	Verbs           []plan.Verb    `json:"-"`
+	Branch          string         `json:"-"`
+	BlockedBy       []string       `json:"-"`
+	PendingVerbs    []plan.Verb    `json:"-"`
+	Base            string         `json:"-"`
+	BaseVerdict     string         `json:"-"`
+	StackDepth      int            `json:"-"`
+	MergeOrder      int            `json:"-"`
+	Warning         string         `json:"-"`
+	Blocking        []string       `json:"blocking"`
+	After           []string       `json:"after"`
+	Unlocks         []string       `json:"-"`
+	Worktree        string         `json:"-"`
+	PRNumber        int            `json:"pr_number"`
+	PRState         string         `json:"-"`
+	Pgid            string         `json:"-"`
+	Elapsed         string         `json:"elapsed"`
+	ElapsedSeconds  int            `json:"-"`
+	ElapsedPercent  int            `json:"-"`
+	LogPath         string         `json:"-"`
+	CancelCount     int            `json:"-"`
+	SpendTokens     int            `json:"-"`
+	Checks          []Check        `json:"-"`
+	RedChecks       []Check        `json:"-"`
+	Draft           bool           `json:"-"`
+	DraftReason     string         `json:"-"`
+	AgentPctWeek    float64        `json:"-"`
+	FollowUpPctWeek float64        `json:"-"`
+	SpendPctWeek    float64        `json:"-"`
+	TicketOpen      bool           `json:"-"`
 
-	Checked     bool
-	Launchable  bool
-	Buttons     []VerbButton
-	SessionPath string
-	TogglePath  string
-	TogglePush  string
-	VerbPath    string
-	Log         LogDetail
+	Checked     bool         `json:"-"`
+	Launchable  bool         `json:"-"`
+	Buttons     []VerbButton `json:"-"`
+	SessionPath string       `json:"session_path"`
+	TogglePath  string       `json:"-"`
+	TogglePush  string       `json:"-"`
+	VerbPath    string       `json:"-"`
+	Log         LogDetail    `json:"-"`
 }
 
 type Check struct {

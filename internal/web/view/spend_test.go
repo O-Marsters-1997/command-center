@@ -4,13 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func TestSpendCacheDoesNotLockDuringParse(t *testing.T) {
+func TestSpendCacheHoldsLockDuringParse(t *testing.T) {
 	t.Parallel()
 
 	started := make(chan struct{})
@@ -27,17 +26,10 @@ func TestSpendCacheDoesNotLockDuringParse(t *testing.T) {
 		done <- err
 	}()
 	<-started
-	lockAvailable := make(chan struct{})
-	go func() {
-		cache.mu.Lock()
-		close(lockAvailable)
+	if cache.mu.TryLock() {
 		cache.mu.Unlock()
-	}()
-	select {
-	case <-lockAvailable:
-	case <-time.After(time.Second):
 		close(release)
-		t.Fatal("Spend held the cache mutex during log parsing")
+		t.Fatal("Spend released the cache mutex during log parsing")
 	}
 	close(release)
 	if err := <-done; err != nil {
