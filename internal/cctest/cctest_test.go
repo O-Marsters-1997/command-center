@@ -11,6 +11,7 @@ import (
 )
 
 func TestStartGivingUpReturnsErrNoServer(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -24,6 +25,7 @@ func TestStartGivingUpReturnsErrNoServer(t *testing.T) {
 }
 
 func TestSweep(t *testing.T) {
+	t.Parallel()
 	DSN(t)
 	s := shared
 	now := time.Now()
@@ -32,7 +34,7 @@ func TestSweep(t *testing.T) {
 	inUse := scratchDatabase(t, s, now.Add(-2*staleAfter-time.Second))
 	conn, err := pgx.Connect(t.Context(), s.dsn(inUse))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Connect(%s): %v", inUse, err)
 	}
 	t.Cleanup(func() {
 		if err := conn.Close(context.WithoutCancel(t.Context())); err != nil {
@@ -41,7 +43,7 @@ func TestSweep(t *testing.T) {
 	})
 
 	if err := s.sweep(t.Context(), now); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sweep(%s): %v", now, err)
 	}
 	for _, tt := range []struct {
 		name string
@@ -53,7 +55,7 @@ func TestSweep(t *testing.T) {
 		err := s.admin.QueryRow(t.Context(), "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", tt.name).
 			Scan(&exists)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Scan(exists for %s): %v", tt.name, err)
 		}
 		if exists != tt.want {
 			t.Errorf("exists(%s) = %v, want %v", tt.name, exists, tt.want)
@@ -65,7 +67,7 @@ func scratchDatabase(t *testing.T, s *server, created time.Time) string {
 	t.Helper()
 	name := fmt.Sprintf("cc_test_%d_%08x", created.Unix(), uint32(created.UnixNano()))
 	if _, err := s.admin.Exec(t.Context(), "CREATE DATABASE "+ident(name)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Exec(CREATE DATABASE %s): %v", name, err)
 	}
 	t.Cleanup(func() {
 		statement := "DROP DATABASE IF EXISTS " + ident(name) + " WITH (FORCE)"

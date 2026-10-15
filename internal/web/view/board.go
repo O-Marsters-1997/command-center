@@ -23,8 +23,7 @@ type Row struct {
 	Feature    string `json:"feature"`
 	Project    string `json:"project"`
 	ProjectHue int    `json:"project_hue"`
-	// Title is empty when the tick's read did not cover the ticket: a fresh DB, or an issue past
-	// `gh issue list`'s own 100-row limit.
+	// GitHub's issue list caps reads at 100 rows, leaving titles beyond the limit empty.
 	Title           string         `json:"title"`
 	State           string         `json:"state"`
 	Reason          string         `json:"reason"`
@@ -106,15 +105,12 @@ func (r Row) ChecksPassed() int {
 	return passed
 }
 
-// DetailID is the row's DOM id: hx-target needs a selector and hx-preserve an id, and a ticket
-// URL is neither.
+// DetailID supplies the selector and id required by htmx's hx-target and hx-preserve.
 func (r Row) DetailID() string {
 	sum := sha256.Sum256([]byte(r.URL))
 	return "detail-" + hex.EncodeToString(sum[:6])
 }
 
-// Group is one blocker and the rows waiting on it. A row with no blocker is its own group with a
-// nil Root.
 type Group struct {
 	Root     option.Option[Row] `json:"root"`
 	Children []Row              `json:"children"`

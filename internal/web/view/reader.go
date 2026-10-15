@@ -28,8 +28,7 @@ type Board struct {
 	Launched         option.Option[Age]
 	TicketCount      int
 	WaveCount        int
-	// Launch is set on /f/{feature}/launch, where the page opens with the launch dialog over it.
-	Launch option.Option[LaunchModal]
+	Launch           option.Option[LaunchModal]
 }
 
 func (b Board) Row(ticketURL string) (Row, bool) {
@@ -46,7 +45,6 @@ func (b Board) Row(ticketURL string) (Row, bool) {
 	return Row{}, false
 }
 
-// InvalidError marks a request the caller got wrong, as opposed to a read that failed.
 type InvalidError struct{ Err error }
 
 func (e InvalidError) Error() string { return e.Err.Error() }
@@ -57,9 +55,6 @@ func IsInvalid(err error) bool {
 	return errors.As(err, &invalid)
 }
 
-// Reader reads the store, derives plan's snapshot and shapes it for the pages. It imports neither
-// net/http nor html/template: handlers parse the request, call a Reader, then render or queue an
-// intent.
 type Reader struct {
 	store            *store.Store
 	frameStore       frameStore
@@ -95,8 +90,6 @@ func (r *Reader) Snapshot(ctx context.Context, now time.Time) (plan.Snapshot, er
 	return plan.RulesFor(plan.Daemon{}, in.Obs).Derive(in), nil
 }
 
-// Board derives the board page. The repo and feature scopes narrow the groups after grouping, so
-// a group with a member in scope stays whole.
 func (r *Reader) Board(ctx context.Context, now time.Time, params Params) (Board, error) {
 	f, err := r.loadFrame(ctx, now, params)
 	if err != nil {

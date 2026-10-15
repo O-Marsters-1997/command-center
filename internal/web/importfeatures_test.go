@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -16,7 +17,7 @@ type featureSource struct{ features []tracker.Feature }
 func (f featureSource) Features(context.Context) ([]tracker.Feature, error) { return f.features, nil }
 
 func (featureSource) Tickets(context.Context, string) ([]tracker.Ticket, error) {
-	return nil, fmt.Errorf("listing features must not read tickets")
+	return nil, errors.New("listing features must not read tickets")
 }
 
 func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {

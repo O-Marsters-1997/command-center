@@ -1,7 +1,3 @@
-// Package plan holds the Command Centre's decisions: pure functions over value types.
-//
-// It imports only the standard library and the pure internal/verdict — never internal/gh, which
-// execs — so that "would this launch, and why is it waiting?" is a table test. api_test.go enforces it.
 package plan
 
 import (
@@ -13,7 +9,6 @@ import (
 )
 
 // PRState is a pull request's state as this package needs it. The zero value is Absent.
-// internal/gh owns the wire shape; the shell maps one onto the other.
 type PRState int
 
 const (
@@ -48,8 +43,6 @@ func (t Ticket) Ref() BranchRef { return BranchRef{Repo: t.Repo, Branch: t.Branc
 
 type Reason string
 
-// Unlock is the answer to "could this ticket be cut, and off what?". BlockerClosed is true only
-// when the blocker's PR closed without merging, not merely absent.
 type Unlock struct {
 	Unlocked      bool
 	BaseBranch    string
@@ -58,11 +51,9 @@ type Unlock struct {
 	BlockerClosed bool
 }
 
-// DefaultBaseBranch is the branch an unstacked ticket cuts from and merges into.
 const DefaultBaseBranch = "main"
 
-// Unlocked decides whether a ticket's blockers are satisfied, over stacking edges only: a
-// cross-repo blocker feeds the draft gate, never unlock or the base.
+// Unlocked decides whether a ticket's stacking blockers are satisfied.
 func Unlocked(t Ticket, byURL map[TicketURL]Ticket, prs map[string]PRState, stacking bool) Unlock {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {
@@ -127,7 +118,6 @@ func unlockedOnBlockers(blockers []Ticket, prs map[string]PRState) Unlock {
 	}
 }
 
-// State is a ticket's derived label. It is never stored: labels are derived every tick.
 type State int
 
 const (
@@ -156,7 +146,6 @@ const (
 	AwaitingInput
 )
 
-// RunFact is the latest run's liveness and disposition as the loop observed it this tick.
 type RunFact struct {
 	Alive                    bool
 	Outcome                  option.Option[Outcome]
@@ -179,7 +168,6 @@ type RunFact struct {
 	Question                 string
 }
 
-// Facts is everything Status derives from. LatestRun is None until a ticket's first launch.
 type Facts struct {
 	Unlock          Unlock
 	Authorised      bool
@@ -188,9 +176,6 @@ type Facts struct {
 	ConflictedBase  string
 }
 
-// Status derives a ticket's state and the sentence explaining it. A run's liveness and
-// disposition outrank the unlocked and authorised facts that mattered only before its first
-// launch.
 func Status(f Facts) (State, Reason) {
 	if f.LatestRun.IsSome() && f.Unlock.BlockerClosed {
 		return BaseGone, f.Unlock.Reason

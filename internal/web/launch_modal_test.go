@@ -37,7 +37,7 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(ctx, "import")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(import): %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "project:x" {
 		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)
@@ -76,7 +76,7 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 
 	pending, err := store.PendingVerbIntents(ctx, "import")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(import): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Fatalf("pending import intents = %+v, want none", pending)
@@ -128,7 +128,7 @@ func TestHandleCandidatesFragment(t *testing.T) {
 			seed: func(t *testing.T, store *storepkg.Store) {
 				t.Helper()
 				if err := store.QueueVerbIntent(t.Context(), "project:x", "import", testNow); err != nil {
-					t.Fatal(err)
+					t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 				}
 			},
 			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{true},
@@ -169,7 +169,7 @@ func TestHandleCandidatesFragment(t *testing.T) {
 				storetest.Tickets(t, store, storepkg.Ticket{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"})
 				conflict := &storepkg.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
 				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
-					t.Fatal(err)
+					t.Fatalf("RecordImportRefusal(project:x): %v", err)
 				}
 			},
 			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{true},
@@ -184,7 +184,7 @@ func TestHandleCandidatesFragment(t *testing.T) {
 				})
 				conflict := &storepkg.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
 				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
-					t.Fatal(err)
+					t.Fatalf("RecordImportRefusal(project:x): %v", err)
 				}
 			},
 			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{false},
@@ -251,6 +251,8 @@ func TestHandleCandidatesFragment(t *testing.T) {
 }
 
 func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
+	t.Parallel()
+
 	store := openStore(t)
 	storetest.Tickets(t, store, storepkg.Ticket{
 		URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
@@ -266,6 +268,7 @@ func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
 		{name: "with HX-Request", header: http.Header{"Hx-Request": {"true"}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			response := do(t, srv, http.MethodGet, "/launch/candidates.json?feature=project%3Ax", req{Header: tt.header})
 			if ct := response.Header.Get("Content-Type"); ct != "application/json" {
 				t.Errorf("Content-Type = %q, want application/json", ct)

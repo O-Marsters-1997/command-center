@@ -89,8 +89,7 @@ func (pr *pullRequest) check(now time.Time, repo, name, outcome string) gh.Check
 	return state
 }
 
-// Forge is the in-memory GitHub. It keeps pull requests and plays the scenario's CI and merge
-// steps against real git origins.
+// Forge simulates pull requests and CI against real Git origins.
 type Forge struct {
 	clock  loop.Clock
 	sb     *Sandbox
@@ -101,7 +100,7 @@ type Forge struct {
 	next int
 }
 
-func NewForge(clock loop.Clock, sb *Sandbox, issues []issue) *Forge {
+func newForge(clock loop.Clock, sb *Sandbox, issues []issue) *Forge {
 	return &Forge{clock: clock, sb: sb, issues: issues, prs: map[string]*pullRequest{}}
 }
 
@@ -116,9 +115,7 @@ func (f *Forge) issueFor(repo *sandboxRepo, branch string) (issue, bool) {
 	return issue{}, false
 }
 
-// Advance lands a main commit on a conflict ticket's file once its pull request has been open
-// half its merge time, and merges every open, non-draft pull request whose merge time has come,
-// whose checks are green and that still merges cleanly.
+// Advance applies due main commits and merges eligible pull requests.
 func (f *Forge) Advance(ctx context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

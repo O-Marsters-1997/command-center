@@ -8,8 +8,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// RecordReadings writes every reading once each, relying on utilization_readings' own (at,
-// window) unique constraint to dedupe two overlapping runs that logged the same rate_limit_event.
+// RecordReadings deduplicates readings from overlapping runs by time and window.
 func (s *Store) RecordReadings(ctx context.Context, readings []agentlog.Reading) error {
 	rows := make([]readingRow, len(readings))
 	for i, r := range readings {
@@ -32,14 +31,13 @@ type readingRow struct {
 	ResetsAt    time.Time `json:"resets_at"`
 }
 
-// Gauge is the masthead's own view of one window's latest utilization.
+// Gauge holds the latest utilization and reset time for one window.
 type Gauge struct {
 	Utilization float64
 	ResetsAt    time.Time
 }
 
-// LatestReadings returns the newest reading for every window that has one, keyed by
-// window. A window with no reading is absent.
+// LatestReadings omits windows with no reading.
 func (s *Store) LatestReadings(ctx context.Context) (map[agentlog.Window]Gauge, error) {
 	readings, err := s.LatestReadingsFull(ctx)
 	if err != nil {

@@ -63,7 +63,7 @@ func TestInsightsNamesTheLocationTheServerWasGiven(t *testing.T) {
 
 	paris, err := time.LoadLocation("Europe/Paris")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LoadLocation(Europe/Paris): %v", err)
 	}
 	server := newServer(openStore(t), testNow, web.WithLocation(paris))
 
@@ -94,7 +94,7 @@ func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 
 	store := openStore(t)
 	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
-	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	now := testNow.Add(31*24*time.Hour + 3*time.Hour)
 	disposeInsightsRun(t, store, "sandbox://CC-1", "agent", now.Add(-time.Hour), 4.20)
 	mergeInsightsTicket(t, store, "sandbox://CC-1", now)
 
@@ -125,7 +125,7 @@ func TestHandleInsightsFallsBackToThirtyDaysOnBadSince(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	now := testNow.Add(31*24*time.Hour + 3*time.Hour)
 	server := newServer(store, now)
 
 	for _, query := range []string{"", "since=not-a-date", "since=2026-13-40"} {

@@ -16,8 +16,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// forcePushDivergentCommit pushes a commit sharing no history with branch, from a throwaway
-// clone, so the branch's local worktree can never fast-forward onto it.
 func forcePushDivergentCommit(t *testing.T, root, branch string) {
 	t.Helper()
 	remote := filepath.Join(root, "remote.git")
@@ -27,16 +25,13 @@ func forcePushDivergentCommit(t *testing.T, root, branch string) {
 	gittest.Run(t, clone, "config", "user.email", "t@example.com")
 	gittest.Run(t, clone, "checkout", "-q", "-b", branch, "origin/main")
 	if err := os.WriteFile(filepath.Join(clone, "divergent.txt"), []byte("someone else's history\n"), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(divergent.txt): %v", err)
 	}
 	gittest.Run(t, clone, "add", "divergent.txt")
 	gittest.Run(t, clone, "commit", "-q", "-m", "diverging commit")
 	gittest.Run(t, clone, "push", "-q", "--force", "origin", "HEAD:"+branch)
 }
 
-// stackedFixture cuts a parent branch and a child stacked on it, both pushed and recorded as
-// tickets. Their commits diverge from the common ancestor, so a refresh merge is a genuine
-// three-way merge rather than a fast-forward.
 type stackedFixture struct {
 	parent, child                 storepkg.Ticket
 	parentWorktree, childWorktree string
@@ -63,7 +58,7 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 		URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"},
 	}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{parent, child}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(parent, child): %v", err)
 	}
 	dispositionAsPushed(t, store, parent.URL, at)
 	dispositionAsPushed(t, store, child.URL, at)
@@ -73,14 +68,14 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 		BaseBranch: "main", At: at,
 	}
 	if err := store.RecordPush(ctx, parentPush); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(parent): %v", err)
 	}
 	childPush := storepkg.Push{
 		Ticket: plan.TicketURL(child.URL), Tip: plan.SHA(childTip0), BaseSHA: plan.SHA(parentTip0),
 		BaseBranch: "parent", At: at,
 	}
 	if err := store.RecordPush(ctx, childPush); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(child): %v", err)
 	}
 
 	return stackedFixture{
@@ -89,9 +84,6 @@ func newStackedFixture(t *testing.T, repoPath string, store *storepkg.Store, at 
 	}
 }
 
-// advanceParent pushes a second commit onto the parent branch -- "the parent needs a fix" (PRD §
-// Scenarios) -- and returns its new tip, which the child's recorded base_sha_at_push (parentTip0)
-// no longer matches.
 func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 	t.Helper()
 	gittest.Commit(t, f.parentWorktree, "parent-fix.txt", "the fix\n")
@@ -151,7 +143,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refreshed", "") {
 		t.Errorf("events = %+v, want a refreshed event", events)
@@ -162,7 +154,7 @@ func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick
 
 	pushes, err := store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes(): %v", err)
 	}
 	if got := pushes[plan.TicketURL(f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s", got, parentTip1)
@@ -185,7 +177,7 @@ func TestAGitFailureDuringRefreshRecordsATickErrorNamingTheStepAndBranch(t *test
 		BaseBranch: "parent", At: pushedAt,
 	}
 	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.child.URL, err)
 	}
 
 	obs := baseObservation(f, parentTip1)
@@ -214,9 +206,6 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 
 	f := newStackedFixture(t, repoPath, store, at)
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
-	// advanceMain pushes from a throwaway clone, so repoPath's own tracking ref (what Merge below
-	// resolves "origin/main" against) needs an explicit fetch -- unlike advanceParent, which pushes
-	// straight from repoPath and so updates it as a push side effect.
 	gittest.Run(t, repoPath, "fetch", "-q", "origin", "main")
 	mainTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/main")
 
@@ -236,7 +225,7 @@ func TestAutomaticRefreshAlsoMergesAnAdvancedMainIntoARootRow(t *testing.T) {
 
 	pushes, err := store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes(): %v", err)
 	}
 	if got := pushes[plan.TicketURL(f.parent.URL)].BaseSHAAtPush; string(got) != mainTip1 {
 		t.Errorf("parent's recorded base sha = %s, want the advanced main tip %s", got, mainTip1)
@@ -269,7 +258,7 @@ func TestAutomaticRefreshNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if hasEvent(events, "refreshed", "") || hasEvent(events, "refresh_refused", "") {
 		t.Errorf("events = %+v, want no refresh activity while a run is alive", events)
@@ -290,7 +279,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -301,7 +290,7 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_refused", "a run is alive") {
 		t.Errorf("events = %+v, want a refresh_refused naming the live run as why the manual refresh did nothing", events)
@@ -317,8 +306,6 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := advanceParent(t, repoPath, f)
 
-	// Someone force-pushed different history to origin/child: the worktree's own branch, still on
-	// its prior commit, can no longer fast-forward onto it.
 	forcePushDivergentCommit(t, root, "child")
 	gittest.Run(t, repoPath, "fetch", "-q", "origin")
 	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
@@ -338,7 +325,7 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 
 	facts, err := store.RefreshFacts(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RefreshFacts(): %v", err)
 	}
 	if !facts[plan.TicketURL(f.child.URL)].Refused {
 		t.Fatalf("refresh facts = %+v, want %s refused", facts, f.child.URL)
@@ -346,19 +333,18 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_refused", "") {
 		t.Errorf("events = %+v, want a refresh_refused event", events)
 	}
 
-	// A second automatic tick must not retry it.
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
 	eventsAfter, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	refusalCount := 0
 	for _, e := range eventsAfter {
@@ -370,11 +356,9 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 		t.Errorf("refresh_refused events = %d after a second automatic tick, want still 1: no auto-retry", refusalCount)
 	}
 
-	// The human's refresh verb retries regardless -- rewrite origin/child to the worktree's own
-	// commit first, standing in for the human resolving the divergence by hand.
 	gittest.Run(t, f.childWorktree, "push", "-q", "--force", "origin", "child")
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retry RunOnce: %v", err)
@@ -386,16 +370,13 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	}
 	pending, err := store.PendingVerbIntents(t.Context(), plan.VerbRefresh)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(refresh): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending refresh intents = %+v, want none: consumed", pending)
 	}
 }
 
-// advanceParentPastTheConflict rewrites parent back to parentTip0 and adds a later commit that
-// never touches shared.txt, standing in for someone rewriting the base to drop the change that
-// conflicted -- a later merge of it is genuinely a different one from the failed attempt.
 func advanceParentPastTheConflict(t *testing.T, repoPath string, f stackedFixture) string {
 	t.Helper()
 	gittest.Run(t, f.parentWorktree, "reset", "-q", "--hard", f.parentTip0)
@@ -426,22 +407,20 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_conflicted", "") {
 		t.Fatalf("events = %+v, want a refresh_conflicted event", events)
 	}
 
-	// Resolve the conflict and push it from a separate clone, entirely outside the app-managed
-	// worktree: a human fixing it by hand with plain git rather than through the app.
 	clone := filepath.Join(t.TempDir(), "outside-clone")
 	gittest.Run(t, ".", "clone", "-q", filepath.Join(root, "remote.git"), clone)
 	gittest.Run(t, clone, "config", "user.name", "t")
@@ -449,23 +428,20 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	gittest.Run(t, clone, "checkout", "-q", "child")
 	gittest.Run(t, clone, "merge", "-q", "-X", "ours", "-m", "resolved by hand", "origin/parent")
 	gittest.Run(t, clone, "push", "-q", "origin", "child")
-	// The push went straight to the bare remote, so repoPath's own tracking ref -- what
-	// MergeFFOnly resolves "origin/child" against in f.childWorktree -- needs an explicit fetch,
-	// same as advanceMain's (retarget_test.go).
 	gittest.Run(t, repoPath, "fetch", "-q", "origin", "child")
 	cloneHead := gittest.Run(t, clone, "rev-parse", "HEAD")
 	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("abort RunOnce: %v", err)
 	}
 
 	eventsAfter, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(eventsAfter, "refreshed", "") {
 		t.Errorf("events = %+v, want a refreshed event once the branch was resolved and pushed "+
@@ -496,23 +472,23 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("abort RunOnce: %v", err)
 	}
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if hasEvent(events, "refreshed", "") {
 		t.Fatalf("events = %+v, want no refreshed event yet: the base has not moved past the failed merge", events)
@@ -521,13 +497,13 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 	parentTip2 := advanceParentPastTheConflict(t, repoPath, f)
 	obs.BranchTips[branchRef("repo", "parent")] = plan.SHA(parentTip2)
 
-	if err := lp.RunOnce(t.Context()); err != nil { // the base moved past the failed attempt
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("retry RunOnce: %v", err)
 	}
 
 	eventsAfter, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(eventsAfter, "refreshed", "") {
 		t.Errorf("events = %+v, want a refreshed event once the base moved past the failed merge, "+
@@ -561,26 +537,26 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil { // the automatic pass merges and conflicts
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // the next tick's observation reads MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // abort clears the stale MERGE_HEAD
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("abort RunOnce: %v", err)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil { // neither tip has moved since the conflict
+	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	conflicts := 0
 	for _, e := range events {
@@ -615,14 +591,14 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if hasEvent(events, "refresh_refused", "") {
 		t.Errorf("events = %+v, want no refresh_refused from an automatic tick", events)
 	}
 
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("verb RunOnce: %v", err)
@@ -630,7 +606,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 
 	events, err = store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_refused", f.parent.URL) {
 		t.Errorf("events = %+v, want a refresh_refused naming the blocker %s", events, f.parent.URL)
@@ -638,7 +614,7 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), plan.VerbRefresh)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(refresh): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending refresh intents = %+v, want none: consumed", pending)

@@ -29,12 +29,12 @@ func seedRun(t *testing.T, store *storepkg.Store, ticketURL string) int64 {
 		Ticket: ticketURL, Kind: "agent", BaselineSHA: "basesha", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticketURL, err)
 	}
 	if err := store.RecordSpawn(t.Context(), storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: testNow, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	return runID
 }
@@ -46,11 +46,11 @@ func seededRunning(t *testing.T) *storepkg.Store {
 	seedRun(t, store, "sandbox://CC-1")
 	obs, _, err := store.LastObservation(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastObservation: %v", err)
 	}
 	obs.Runs = map[plan.TicketURL]plan.RunObservation{"sandbox://CC-1": {Alive: true}}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -65,7 +65,7 @@ func seededFailed(t *testing.T) *storepkg.Store {
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: testNow,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 	return store
 }
@@ -78,10 +78,10 @@ func seededQueued(t *testing.T) *storepkg.Store {
 	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-1", At: now,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 	if err := store.ApplyLaunchIntents(t.Context(), now); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	return store
 }
@@ -103,11 +103,11 @@ func seededStore(t *testing.T, observedAt time.Time) *storepkg.Store {
 		Worktrees:  map[plan.BranchRef]string{branchRef("cc-sandbox", "cc-1-first"): "/repos/cc-sandbox-cc-1-first"},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	tickErr := storepkg.TickError{At: observedAt.Add(15 * time.Second), Message: "observe: gh pr list: exit status 1"}
 	if err := store.RecordTickError(ctx, tickErr); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordTickError: %v", err)
 	}
 	return store
 }
@@ -120,7 +120,7 @@ func seededServer(t *testing.T) *web.Server {
 	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: observedAt,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 	return newServer(store, observedAt.Add(45*time.Second))
 }
@@ -184,7 +184,7 @@ func TestPageRendersTheParentsVerdictOnAStackedRow(t *testing.T) {
 		Settings: map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -234,7 +234,7 @@ func TestCIFailedRowLinksEachRedRequiredCheck(t *testing.T) {
 		}}}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -313,7 +313,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 		}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -347,7 +347,7 @@ func pendingMutationIntentCount(t *testing.T, store *storepkg.Store) int {
 	t.Helper()
 	byTicket, err := store.PendingIntentsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingIntentsByTicket: %v", err)
 	}
 	count := 0
 	for _, intents := range byTicket {
@@ -355,7 +355,7 @@ func pendingMutationIntentCount(t *testing.T, store *storepkg.Store) int {
 	}
 	edits, err := store.PendingEditTicketIntents(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	return count + len(edits)
 }
@@ -390,11 +390,12 @@ func TestMutationRoutesCheckOrigin(t *testing.T) {
 			t.Parallel()
 			for _, tc := range origins {
 				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
 					store := route.seed(t)
 					before := pendingMutationIntentCount(t, store)
 					beforeTickets, err := store.Tickets(t.Context())
 					if err != nil {
-						t.Fatal(err)
+						t.Fatalf("Tickets(before POST %s): %v", route.target, err)
 					}
 					got := do(t, newServer(store, testNow), http.MethodPost, route.target, req{
 						Form: route.form, Origin: tc.value,
@@ -407,7 +408,7 @@ func TestMutationRoutesCheckOrigin(t *testing.T) {
 					}
 					afterTickets, err := store.Tickets(t.Context())
 					if err != nil {
-						t.Fatal(err)
+						t.Fatalf("Tickets(after POST %s): %v", route.target, err)
 					}
 					if diff := cmp.Diff(beforeTickets, afterTickets); diff != "" {
 						t.Errorf("tickets changed before reconciliation (-before +after):\n%s", diff)
@@ -518,7 +519,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	server := openServer(store, fixedClock(testNow), "")
@@ -528,7 +529,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 	var candidates []jsonCandidate
 	if err := json.Unmarshal([]byte(candidateResp.Body), &candidates); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Unmarshal(candidates): %v", err)
 	}
 	if got := len(candidates); got != fanOut+1 {
 		t.Fatalf("candidates = %d, want %d: the slice must not be truncated", got, fanOut+1)
@@ -540,11 +541,11 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if len(memberships) != fanOut+1 {
 		t.Fatalf("authorised memberships = %d, want %d: the slice must not be truncated", len(memberships), fanOut+1)
@@ -561,19 +562,19 @@ func runningRowStore(t *testing.T, ticket storepkg.Ticket, startedAt, now time.T
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: true}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -611,7 +612,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	storetest.Tickets(t, store, ticket)
 	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	server := openServer(store, fixedClock(testNow), "")
@@ -621,11 +622,11 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ActiveLaunchHashes: %v", err)
 	}
 	want := plan.Hash(plan.Compose(plan.Ticket{URL: plan.TicketURL(ticket.URL)}))
 	if got := hashes[ticket.URL]; got != want {
@@ -685,7 +686,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	server := newServer(store, now)
 
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(kill): %v", err)
 	}
 	page := renderPage(t, server)
 	row := webtest.RowFor(t, page, ticket.URL)
@@ -695,7 +696,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	row.Row.One(t, `button[name="verb"][value="kill"]`)
 
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 	}
 	queued := webtest.RowFor(t, renderPage(t, server), ticket.URL)
 	if got := queued.State; got != "running · kill queued · follow-up queued" {
@@ -704,10 +705,10 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(ctx, "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if err := store.ConsumeVerbIntent(ctx, pending[0].ID, now.Add(2*time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ConsumeVerbIntent(%d): %v", pending[0].ID, err)
 	}
 	page = renderPage(t, server)
 	row = webtest.RowFor(t, page, ticket.URL)
@@ -725,7 +726,7 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	if err := store.QueueLaunchIntent(t.Context(), storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: now,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 
 	server := newServer(store, now)
@@ -735,7 +736,7 @@ func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
 	}
 
 	if err := store.ApplyLaunchIntents(t.Context(), now.Add(15*time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	row = webtest.RowFor(t, renderPage(t, server), "sandbox://CC-1")
 	if got := row.State; got != "queued" {
@@ -755,7 +756,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	obs := plan.Observation{ObservedAt: testNow, PRs: map[plan.BranchRef]plan.PR{}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	server := openServer(store, fixedClock(testNow), "")
@@ -781,11 +782,11 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ActiveLaunchHashes: %v", err)
 	}
 	if len(hashes) != 0 {
 		t.Errorf("active launch hashes = %v, want nothing queued", hashes)
@@ -812,11 +813,11 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	hashes, err := store.ActiveLaunchHashes(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ActiveLaunchHashes: %v", err)
 	}
 	if _, ok := hashes["sandbox://CC-1"]; !ok || len(hashes) != 1 {
 		t.Errorf("active launch hashes = %v, want only sandbox://CC-1", hashes)
@@ -860,7 +861,7 @@ func TestTheBoardDerivesWithTheChecksTheObservationCarries(t *testing.T) {
 			Settings: map[string]config.RepoSettings{"repo": {Checks: checks}},
 		}
 		if err := store.SaveObservation(ctx, obs); err != nil {
-			t.Fatal(err)
+			t.Fatalf("SaveObservation: %v", err)
 		}
 		server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
 		return webtest.RowFor(t, renderPage(t, server), ticket.URL)

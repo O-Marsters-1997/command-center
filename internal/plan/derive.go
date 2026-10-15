@@ -20,7 +20,6 @@ type LaunchMembership struct {
 	PromptHash string
 }
 
-// RunSummary is the latest run the board and the launch-eligibility check need per ticket.
 type RunSummary struct {
 	ID            RunID
 	Pgid          option.Option[int]
@@ -60,8 +59,7 @@ type VerdictFacts struct {
 	CheckingFor map[TicketURL]time.Duration
 }
 
-// Input is every durable fact and the observation one derivation reads, keyed by ticket URL.
-// Now is passed in because this package never calls time.Now.
+// Input holds the facts and observation for a derivation, keyed by ticket URL.
 type Input struct {
 	Now          time.Time
 	Observed     bool
@@ -77,8 +75,6 @@ type Input struct {
 	FiveHour     float64
 }
 
-// Entry is one ticket's derived state: what the board shows and the verbs it may offer.
-// Run is None until the ticket's first run; Elapsed is None unless that run is alive.
 type Entry struct {
 	Ticket         Ticket
 	Unlock         Unlock
@@ -115,13 +111,10 @@ func (s Snapshot) LaunchAfter(spawned int) []TicketURL {
 	return LaunchPlan(s.launch, s.running+spawned, s.maxAgents, s.spendPaused)
 }
 
-// HasSlotAfter reports whether a run may spawn when spawned agents have started since this snapshot.
 func (s Snapshot) HasSlotAfter(spawned int) bool {
 	return !s.spendPaused && s.maxAgents-s.running-spawned > 0
 }
 
-// Skipping is the snapshot without the tickets of the named repos: nothing is acted on for a repo
-// whose settings could not be read this tick.
 func (s Snapshot) Skipping(repos map[string]bool) Snapshot {
 	if len(repos) == 0 {
 		return s
@@ -174,8 +167,6 @@ func prsByBranch(tickets []Ticket, obs Observation) map[string]PRState {
 	return prs
 }
 
-// Derive labels every ticket from the stored facts plus this tick's observation. No status is
-// stored: labels are derived on every call.
 func (r Rules) Derive(in Input) Snapshot {
 	byURL := ticketsByURL(in.Tickets)
 	prs := prsByBranch(in.Tickets, in.Obs)
@@ -236,9 +227,6 @@ func (r Rules) Derive(in Input) Snapshot {
 	return snap
 }
 
-// ConflictedBase names the base a launch would cut this ticket from when that base already
-// carries a merge conflict, and "" when it is clean. A locked row is judged on the base it
-// would get once unlocked.
 func (r Rules) ConflictedBase(t Ticket, byURL map[TicketURL]Ticket, unlock Unlock, obs Observation) string {
 	base := unlock.BaseBranch
 	if base == "" {
@@ -399,8 +387,7 @@ func verdictChecks(checks map[string]CheckState) map[string]verdict.CheckState {
 	return out
 }
 
-// ToVerdictCheckState reads anything completed but not exactly SUCCESS or SKIPPED as a definite
-// Failure, never a third kind of maybe.
+// ToVerdictCheckState maps a completed check other than SUCCESS or SKIPPED to Failure.
 func ToVerdictCheckState(cs CheckState) verdict.CheckState {
 	if cs.Status != "COMPLETED" {
 		return verdict.Pending

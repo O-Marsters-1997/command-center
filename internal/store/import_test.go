@@ -16,7 +16,7 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	url := "https://github.com/acme/alpha/issues/1"
 	blocker := "https://github.com/acme/alpha/issues/2"
@@ -37,7 +37,7 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 2 {
 		t.Fatalf("tickets = %+v, want 2 (the ticket and its blocker)", tickets)
@@ -71,7 +71,7 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 
 	tickets, err = store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets after reimport: %v", err)
 	}
 	if len(tickets) != 1 {
 		t.Fatalf("tickets = %+v, want the same url upserted, not a second row", tickets)
@@ -93,35 +93,35 @@ func TestReimportKeepsAQueuedEditTicketIntent(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	st := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 	url := "https://github.com/acme/alpha/issues/1"
 	seed := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x", Status: "ready"}, Repo: "alpha",
 	}}
 	if err := st.ImportTickets(ctx, "project:x", seed, at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ImportTickets (seed): %v", err)
 	}
 	if err := st.QueueEditTicketIntent(ctx, storepkg.EditRequest{
 		Ticket: url, Branch: "cc-1-custom-branch", At: at.Add(time.Minute),
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueEditTicketIntent: %v", err)
 	}
 	again := []storepkg.ImportedTicket{{
 		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x, renamed", Status: "in-progress"}, Repo: "alpha",
 	}}
 	if err := st.ImportTickets(ctx, "project:x", again, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ImportTickets (again): %v", err)
 	}
 	intents, err := st.PendingEditTicketIntents(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	if len(intents) != 1 || intents[0].TicketID != url || intents[0].Branch != "cc-1-custom-branch" {
 		t.Errorf("PendingEditTicketIntents = %+v, want the queued branch edit for %s", intents, url)
 	}
 	tickets, err := st.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].Title != "Add x, renamed" {
 		t.Errorf("Tickets = %+v, want the refreshed tracker-owned title", tickets)
@@ -133,7 +133,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	kept := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Add x"}
 	withdrawn := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/2", Number: 2, Title: "Add y"}
@@ -146,10 +146,9 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 	runID, err := store.InsertRunSkeleton(
 		ctx, storepkg.RunSkeleton{Ticket: withdrawn.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 
-	// withdrawn.URL is relabelled to status:backlog, so the next import of project:x omits it.
 	onlyKept := []storepkg.ImportedTicket{{Ticket: kept, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyKept, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets after relabelling to backlog: %v", err)
@@ -157,7 +156,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets after withdrawal: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != kept.URL {
 		t.Fatalf("tickets = %+v, want only %s left on the board", tickets, kept.URL)
@@ -165,20 +164,19 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 
 	runIDs, err := store.RunIDsForTicket(ctx, withdrawn.URL)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunIDsForTicket(%s): %v", withdrawn.URL, err)
 	}
 	if len(runIDs) != 1 || runIDs[0] != runID {
 		t.Errorf("run ids for %s = %v, want the run to survive withdrawal", withdrawn.URL, runIDs)
 	}
 
-	// withdrawn.URL is relabelled back to status:ready: the next import returns it again.
 	if err := store.ImportTickets(ctx, "project:x", both, at.Add(2*time.Hour)); err != nil {
 		t.Fatalf("ImportTickets after relabelling back: %v", err)
 	}
 
 	tickets, err = store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets after restoration: %v", err)
 	}
 	if len(tickets) != 2 {
 		t.Fatalf("tickets = %+v, want %s restored alongside %s", tickets, withdrawn.URL, kept.URL)
@@ -186,7 +184,7 @@ func TestImportTicketsWithdrawsAndRestoresOnReimport(t *testing.T) {
 
 	runIDs, err = store.RunIDsForTicket(ctx, withdrawn.URL)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunIDsForTicket(%s) after restoration: %v", withdrawn.URL, err)
 	}
 	if len(runIDs) != 1 || runIDs[0] != runID {
 		t.Errorf("run ids for %s = %v, want the restored ticket's run history intact", withdrawn.URL, runIDs)
@@ -198,7 +196,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
 	otherBlocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/99", Number: 99, Title: "Other blocker"}
@@ -215,14 +213,12 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	// The blocker's pull request merges.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
 	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	// Its issue closes: the next import of its own feature no longer returns it, withdrawing it.
 	onlyDependentAndOther := []storepkg.ImportedTicket{
 		{Ticket: otherBlocker, Repo: "alpha"},
 		{Ticket: dependent, Repo: "alpha"},
@@ -233,7 +229,7 @@ func TestImportTicketsRepairsBlockedByOnceItsBlockerWithdraws(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 2 {
 		t.Fatalf("tickets = %+v, want the dependent and otherBlocker left on the board", tickets)
@@ -251,7 +247,7 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
 	dependent := tracker.Ticket{
@@ -266,28 +262,24 @@ func TestImportTicketsRepairsBlockedByOnceTheMergeFactCatchesUpToAnEarlierWithdr
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	// The blocker's issue closes and withdraws before its merged pull request fact reaches obs.
 	onlyDependent := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
 	}
 
-	// The merge fact lands afterwards.
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
 	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	// A later reimport of the same feature returns exactly what it already had -- nothing
-	// transitions from present to absent this time, only the earlier withdrawal is now merged.
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(2*time.Hour)); err != nil {
 		t.Fatalf("ImportTickets reimporting after the merge fact lands: %v", err)
 	}
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
 		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
@@ -303,7 +295,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
 	dependent := tracker.Ticket{
@@ -318,7 +310,7 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
 	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	dependentSeed := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "beta"}}
@@ -326,14 +318,13 @@ func TestImportTicketsRepairsBlockedByAcrossFeatures(t *testing.T) {
 		t.Fatalf("ImportTickets dependent: %v", err)
 	}
 
-	// project:x's next import withdraws the blocker; project:y is never re-imported.
 	if err := store.ImportTickets(ctx, "project:x", nil, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
 	}
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
 		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
@@ -348,7 +339,7 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
 	dependent := tracker.Ticket{
@@ -363,8 +354,6 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 		t.Fatalf("ImportTickets: %v", err)
 	}
 
-	// The blocker drops off the tracker (its project: label removed, say): it drops out of the
-	// next import with no merged (or any) pull request recorded for it.
 	onlyDependent := []storepkg.ImportedTicket{{Ticket: dependent, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", onlyDependent, at.Add(time.Hour)); err != nil {
 		t.Fatalf("ImportTickets withdrawing the blocker: %v", err)
@@ -372,7 +361,7 @@ func TestImportTicketsLeavesBlockedByAloneWhenTheBlockerWithdrawsUnmerged(t *tes
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
 		t.Fatalf("tickets = %+v, want only the dependent left on the board", tickets)
@@ -388,7 +377,7 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	contested := "https://github.com/acme/alpha/issues/1"
 	first := []storepkg.ImportedTicket{{
@@ -417,7 +406,7 @@ func TestImportTicketsRefusesAFeatureConflict(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].Feature != "project:x" {
 		t.Fatalf("tickets = %+v, want only the original row, still under project:x, and fresh rolled back", tickets)
@@ -429,7 +418,7 @@ func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	outsider := "https://github.com/acme/alpha/issues/1"
 	outsiderSeed := []storepkg.ImportedTicket{{
@@ -464,7 +453,7 @@ func TestImportTicketsRefusesAClosureViolation(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != outsider {
 		t.Fatalf("tickets = %+v, want only the original outsider row, project:y rolled back whole", tickets)
@@ -476,7 +465,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	blocker := tracker.Ticket{URL: "https://github.com/acme/alpha/issues/1", Number: 1, Title: "Blocker"}
 	blockerSeed := []storepkg.ImportedTicket{{Ticket: blocker, Repo: "alpha"}}
@@ -487,7 +476,7 @@ func TestImportTicketsAllowsAnOutsideBlockerWhosePullRequestMerged(t *testing.T)
 	blockerBranch := tracker.BranchSlug(blocker.Number, blocker.Title)
 	obs := plan.Observation{PRs: map[plan.BranchRef]plan.PR{{Repo: "alpha", Branch: blockerBranch}: {State: plan.Merged}}}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	dependent := tracker.Ticket{
@@ -505,7 +494,7 @@ func TestImportTicketsRefusesABlockerNeverImported(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	unseen := "https://github.com/acme/alpha/issues/1"
 	dependent := tracker.Ticket{
@@ -528,7 +517,7 @@ func TestImportTicketsAllowsAWithdrawnTicketIntoANewFeature(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	relabelled := "https://github.com/acme/alpha/issues/1"
 	first := []storepkg.ImportedTicket{{
@@ -551,7 +540,7 @@ func TestImportTicketsAllowsAWithdrawnTicketIntoANewFeature(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].Feature != "project:y" {
 		t.Fatalf("tickets = %+v, want the relabelled ticket restored under project:y", tickets)

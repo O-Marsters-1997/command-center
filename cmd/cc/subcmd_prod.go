@@ -60,7 +60,11 @@ func open(ctx context.Context, configPath string, env config.Env, stdout, stderr
 		fmt.Fprintln(stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
-	if !daemonListening(cfg.Port) {
+	listening, err := daemonListening(cfg.Port)
+	if err != nil {
+		return fmt.Errorf("probe daemon on port %d: %w", cfg.Port, err)
+	}
+	if !listening {
 		fmt.Fprintf(stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
 		fmt.Fprintln(stdout, target)
 		return nil
@@ -89,11 +93,13 @@ func trackedRepos(ctx context.Context, databaseURL string) (_ []store.Repo, err 
 	return repos, nil
 }
 
-func daemonListening(port int) bool {
+func daemonListening(port int) (bool, error) {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
 	if err != nil {
-		return false
+		return false, nil
 	}
-	conn.Close()
-	return true
+	if err := conn.Close(); err != nil {
+		return true, fmt.Errorf("close daemon probe: %w", err)
+	}
+	return true, nil
 }

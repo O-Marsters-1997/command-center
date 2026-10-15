@@ -1,5 +1,3 @@
-// Package loop is the Command Centre's imperative shell: the tick loop and its steps.
-// The pure decisions live in internal/plan; gh's JSON shape lives in internal/gh.
 package loop
 
 import (
@@ -23,7 +21,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// Loop is the reconcile loop: observe, decide, act. It is the only writer of reconciled state.
 type Loop struct {
 	logger     *slog.Logger
 	store      *store.Store
@@ -58,9 +55,10 @@ func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.Ver
 		return fmt.Errorf("list pending %s intents: %w", verb, err)
 	}
 	for _, intent := range intents {
-		if err := fn(intent); errors.Is(err, errIntentPending) {
+		switch err := fn(intent); {
+		case errors.Is(err, errIntentPending):
 			continue
-		} else if err != nil {
+		case err != nil:
 			return fmt.Errorf("intent %d for %s: %w", intent.ID, intent.TicketID, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, l.clock.Now()); err != nil {
@@ -82,9 +80,6 @@ func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, erro
 	return tickets[i], true, nil
 }
 
-// RunOnce runs one tick. A failed observe records the error and leaves the last good
-// observation in place rather than applying any transition, so the page's observe age
-// keeps growing instead of resetting.
 func (l *Loop) RunOnce(ctx context.Context) error {
 	if err := l.store.PruneHistory(ctx, l.clock.Now()); err != nil {
 		l.logger.Warn("prune history", "err", err)
@@ -244,8 +239,6 @@ func (l *Loop) rules(obs plan.Observation) plan.Rules {
 	return plan.RulesFor(plan.Daemon{MaxAgents: l.cfg.MaxAgents, SpendLimit5h: l.cfg.SpendLimit5h}, obs)
 }
 
-// recordRepoStates writes what this tick's settings read says about each repo onto its row: a
-// ready repo whose file would not parse is refused, and a clean read heals that refusal alone.
 func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
@@ -271,8 +264,6 @@ func (l *Loop) recordRepoStates(ctx context.Context, obs plan.Observation) error
 	return nil
 }
 
-// recordRepoProblems puts every repo the loop cannot drive this tick on the masthead's last
-// error: unreadable settings, a failed observe, or a refusal that waits for Track.
 func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
@@ -297,8 +288,6 @@ func (l *Loop) recordRepoProblems(ctx context.Context, obs plan.Observation) err
 	return l.recordTickError(ctx, strings.Join(parts, "; "))
 }
 
-// skippedRepos is every repo the act steps must leave alone this tick: those not ready, and those
-// whose observation failed or whose settings would not read.
 func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[string]bool, error) {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
@@ -319,8 +308,6 @@ func (l *Loop) skippedRepos(ctx context.Context, obs plan.Observation) (map[stri
 	return skipped, nil
 }
 
-// Run ticks until the context is cancelled, sleeping after each tick's work. A tick error is
-// already recorded for the page, so the loop logs it and carries on.
 func (l *Loop) Run(ctx context.Context) error {
 	for {
 		if err := l.RunOnce(ctx); err != nil {
@@ -398,11 +385,12 @@ func (l *Loop) applyEditTicketIntents(ctx context.Context) error {
 	for _, intent := range intents {
 		err := l.store.EditTicket(ctx, intent.TicketID, intent.Branch, intent.BlockedBy)
 		var closure *store.FeatureClosureError
-		if errors.As(err, &closure) {
+		switch {
+		case errors.As(err, &closure):
 			if err := l.store.RecordImportRefusal(ctx, closure.Feature, closure, now); err != nil {
 				return fmt.Errorf("record import refusal for %s: %w", intent.TicketID, err)
 			}
-		} else if err != nil {
+		case err != nil:
 			return fmt.Errorf("edit %s: %w", intent.TicketID, err)
 		}
 		if err := l.store.ConsumeVerbIntent(ctx, intent.ID, now); err != nil {

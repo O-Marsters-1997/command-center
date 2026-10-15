@@ -11,19 +11,12 @@ import (
 // Workspace is the tree under the data directory: state/ for everything the app owns and
 // repos/ for the checkouts, with the worktrees tp cuts beside them.
 type Workspace struct {
-	// DataDir is the root the whole layout hangs off, and the name the page's header shows.
-	DataDir  string
-	StateDir string
-	// ReposDir holds one checkout per tracked repo, at <owner>/<name>.
-	ReposDir string
-	// LockPath is the file the one-instance-per-workspace flock is taken on.
-	LockPath string
-	// RunsDir holds one <run-id>.jsonl per run: agent stdout and stderr, redirected, never
-	// piped, outside any checkout so a crash never loses it.
-	RunsDir string
-	// SettingsPath is the app-owned deny settings file passed to every spawn.
-	SettingsPath string
-	// SystemPromptPath is the app-owned system prompt appended to every spawn.
+	DataDir          string
+	StateDir         string
+	ReposDir         string
+	LockPath         string
+	RunsDir          string
+	SettingsPath     string
 	SystemPromptPath string
 }
 
@@ -93,8 +86,7 @@ func expandHome(path, home string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~")), nil
 }
 
-// ResolveWorkspace lays out dataDir and creates every directory in it 0700. It derives nothing
-// from where the config file happens to sit.
+// ResolveWorkspace creates the workspace directories under dataDir with mode 0700.
 func ResolveWorkspace(dataDir string) (Workspace, error) {
 	state := filepath.Join(dataDir, "state")
 	ws := Workspace{

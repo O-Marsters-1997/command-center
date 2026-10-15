@@ -14,7 +14,7 @@ func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%s): %v", name, err)
 	}
 	return raw
 }
@@ -104,10 +104,6 @@ func TestDecodeLabels(t *testing.T) {
 	}
 }
 
-// TestBulkAndFallbackFieldsBothRequestLabels guards the gap the fallback read almost carried: a
-// PR resolved only through it (merged, closed, or past the bulk page's own limit) must still
-// decode ready-to-merge, since invariant 2's warning reads whatever labels the PR actually has
-// (docs/designs/command-centre-design.md § 4a inv. 2).
 func TestBulkAndFallbackFieldsBothRequestLabels(t *testing.T) {
 	t.Parallel()
 

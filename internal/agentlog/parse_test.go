@@ -376,7 +376,7 @@ func TestParseCountsEditsAndWritesFromTheStructuredResult(t *testing.T) {
 
 	body, err := os.ReadFile(filepath.Join("testdata", "edits.jsonl"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(edits.jsonl): %v", err)
 	}
 	run := parseString(t, string(body))
 

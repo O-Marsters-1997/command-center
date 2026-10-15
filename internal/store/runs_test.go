@@ -20,8 +20,9 @@ func readRunCost(t *testing.T, dsn string, runID int64) sql.NullFloat64 {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	defer func() { _ = db.Close() }()
 
 	var cost sql.NullFloat64
@@ -35,7 +36,7 @@ func seedOneTicket(t *testing.T, store *storepkg.Store) {
 	t.Helper()
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 }
 
@@ -61,7 +62,7 @@ func TestInsertRunSkeletonThenRecordSpawnPopulatesTheRow(t *testing.T) {
 		t.Errorf("pending = %+v, want none before a pgid is recorded", before)
 	}
 
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
@@ -107,13 +108,13 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 
 	endedAt := startedAt.Add(30 * time.Second)
@@ -127,7 +128,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 
 	pending, err := store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingRunsAwaitingDisposition: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending = %+v, want none once disposed", pending)
@@ -135,7 +136,7 @@ func TestRecordDispositionMarksTheRunFailedOrPush(t *testing.T) {
 
 	latest, err := store.LatestRunsByTicket(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
 	summary := latest["sandbox://CC-1"]
 	if summary.Outcome != option.Some(plan.OutcomeFailed) {
@@ -161,13 +162,13 @@ func TestRecordDispositionWritesCostAlongsideOutcome(t *testing.T) {
 		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	startedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	startedAt := testNow
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: startedAt, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 
 	cost := 0.42
@@ -197,9 +198,9 @@ func TestRecordDispositionLeavesCostNullWithoutAParse(t *testing.T) {
 		Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	endedAt := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	endedAt := testNow
 	if err := store.RecordDisposition(ctx, storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.None[int](),
 		Cost: option.None[float64](), EndedAt: endedAt,
@@ -219,14 +220,14 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 	store := openStore(t)
 	seedOneTicket(t, store)
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if _, err := store.InsertCutFailedRun(ctx, "sandbox://CC-1", "hash-1", at); err != nil {
 		t.Fatalf("InsertCutFailedRun: %v", err)
 	}
 
 	pending, err := store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingRunsAwaitingDisposition: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending = %+v, want none: a cut failure never claims a pgid", pending)
@@ -234,7 +235,7 @@ func TestInsertCutFailedRunNeverClaimsAPgid(t *testing.T) {
 
 	latest, err := store.LatestRunsByTicket(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
 	summary := latest["sandbox://CC-1"]
 	if summary.Outcome != option.Some(plan.OutcomeCutFailed) || summary.Pgid.IsSome() {
@@ -249,7 +250,7 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 	store := openStore(t)
 	seedOneTicket(t, store)
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.QueueVerbIntent(ctx, "sandbox://CC-1", "kill", at); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
@@ -268,7 +269,7 @@ func TestVerbIntentsQueuePendConsume(t *testing.T) {
 
 	after, err := store.PendingVerbIntents(ctx, "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if len(after) != 0 {
 		t.Errorf("pending = %+v, want none once consumed", after)
@@ -282,14 +283,14 @@ func TestActiveLaunchHashesReturnsTheAuthorisedHashPerTicket(t *testing.T) {
 	store := openStore(t)
 	seedOneTicket(t, store)
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
 		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 
 	hashes, err := store.ActiveLaunchHashes(ctx)
@@ -309,10 +310,10 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 	seedOneTicket(t, store)
 	second := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{second}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(second): %v", err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testNow
 	queued := []struct {
 		ticket string
 		verb   plan.Verb
@@ -341,15 +342,15 @@ func TestPendingIntentsByTicketKeysUnconsumedVerbsByTicket(t *testing.T) {
 
 	consumed, err := store.PendingVerbIntents(ctx, "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if err := store.ConsumeVerbIntent(ctx, consumed[0].ID, at.Add(time.Minute)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ConsumeVerbIntent(%d): %v", consumed[0].ID, err)
 	}
 
 	after, err := store.PendingIntentsByTicket(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingIntentsByTicket: %v", err)
 	}
 	want["sandbox://CC-1"] = []plan.Verb{plan.VerbFollowUp}
 	if !maps.EqualFunc(after, want, slices.Equal) {
@@ -362,13 +363,13 @@ func TestConsumeVerbIntentTwiceReportsNotFound(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 	if err := store.QueueVerbIntent(ctx, "sandbox://CC-1", "kill", at); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
 	pending, err := store.PendingVerbIntents(ctx, "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 
 	if err := store.ConsumeVerbIntent(ctx, pending[0].ID, at); err != nil {
@@ -389,9 +390,9 @@ func TestRecordDispositionTwiceReportsNotFound(t *testing.T) {
 		Ticket: "sandbox://CC-1", Kind: plan.RunKindAgent, BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	disposition := storepkg.Disposition{RunID: plan.RunID(runID), Outcome: plan.OutcomePush, EndedAt: at}
 	if err := store.RecordDisposition(ctx, disposition); err != nil {

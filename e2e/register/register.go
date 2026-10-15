@@ -1,6 +1,3 @@
-// Package register holds the subcommands that exist only in an end-to-end build of cc. It is
-// an ordinary untagged package so it compiles and lints like any other; cmd/cc/register_e2e.go
-// is the build-tagged file that decides whether the release binary can reach it.
 package register
 
 import (
@@ -24,7 +21,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// Lookup returns the e2e-only subcommand named by args[0], or nil if args names none.
 func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
 	if len(args) == 0 {
 		return nil
@@ -48,8 +44,6 @@ func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, config
 	}
 }
 
-// tick takes the flock and runs the loop exactly --count times with no sleeping, so a script
-// asserts against a known number of ticks rather than against the wall clock.
 func tick(ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string) (err error) {
 	flags := flag.NewFlagSet("tick", flag.ContinueOnError)
 	count := flags.Int("count", 1, "number of ticks to run")
@@ -75,7 +69,7 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, env confi
 
 func importFeature(ctx context.Context, configPath string, env config.Env, args []string) (err error) {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: cc import <feature>")
+		return errors.New("usage: cc import <feature>")
 	}
 
 	cfg, err := config.Load(configPath, env)
@@ -94,16 +88,11 @@ func importFeature(ctx context.Context, configPath string, env config.Env, args 
 	return nil
 }
 
-// request prints the page a real HTTP client gets back from the real handler. It deliberately
-// does not take the flock: a script reads while `cc tick` or a daemon holds it. POST /launch's
-// write is one blind INSERT the server serialises; a future verb doing more would revisit inv. 9.
 func request(
 	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, args []string,
 ) (err error) {
 	flags := flag.NewFlagSet("request", flag.ContinueOnError)
 	origin := flags.String("origin", "", "Origin header to send (default: the server's own URL)")
-	// -form is how a script drives a route the way the page's own forms do, with the fields in
-	// the body: a path-only `cc request POST /verb` cannot express that.
 	form := flags.String("form", "", "url-encoded body to post as application/x-www-form-urlencoded")
 	htmx := flags.Bool("hx", false, "send HX-Request: true, as htmx does for a fragment")
 	if err := flags.Parse(args); err != nil {
@@ -111,7 +100,7 @@ func request(
 	}
 	rest := flags.Args()
 	if len(rest) != 2 {
-		return fmt.Errorf("usage: cc request [-origin url] [-hx] [-form body] <method> <path>")
+		return errors.New("usage: cc request [-origin url] [-hx] [-form body] <method> <path>")
 	}
 	method, path := rest[0], rest[1]
 
@@ -123,15 +112,14 @@ func request(
 	if err != nil {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
-	defer func() { err = errors.Join(err, store.Close()) }()
+	defer func() { err = errors.Join(err, st.Close()) }()
 
-	// httptest over an ephemeral port rather than the configured one: scripts run in parallel.
 	server := httptest.NewServer(web.NewServer(web.Deps{
-		Logger: logger, Store: store, Clock: loop.RealClock{}, DataDir: ws.DataDir,
+		Logger: logger, Store: st, Clock: loop.RealClock{}, DataDir: ws.DataDir,
 	}))
 	defer server.Close()
 

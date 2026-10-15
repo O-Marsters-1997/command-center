@@ -7,8 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// Ticket is one tracked issue. Source, Title, Body, Status, Feature and SyncedAt are the
-// tracker's, refreshed on every import; Branch and BlockedBy are the app's, seeded once.
+// Ticket is a tracked issue; tracker fields refresh on import while branch and blockers are seeded once.
 type Ticket struct {
 	URL       string
 	Repo      string
@@ -32,19 +31,18 @@ func (t Ticket) Plan() plan.Ticket {
 	return plan.Ticket{URL: plan.TicketURL(t.URL), Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy}
 }
 
-// ImportedTicket is one tracker.Ticket with the tracked repo it came from.
+// ImportedTicket associates a tracker ticket with its repo.
 type ImportedTicket struct {
 	tracker.Ticket
 	Repo   string
 	Source string
 }
 
-// TickError is the last failed tick, with its age shown on the page.
+// TickError holds the last failed tick and its age.
 type TickError struct {
 	At      time.Time `json:"at"`
 	Message string    `json:"message"`
 }
 
-// TickPeriod is the sleep after the loop's work; ticks never overlap. A verdict's checking
-// time is counted in these.
+// TickPeriod separates non-overlapping ticks and determines verdict checking time.
 const TickPeriod = 15 * time.Second

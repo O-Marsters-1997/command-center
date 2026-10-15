@@ -15,20 +15,21 @@ import (
 )
 
 func TestOpenWritesThroughInjectedWriters(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Listen(127.0.0.1:0): %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	if err := ln.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Close(listener): %v", err)
 	}
 
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	body := fmt.Sprintf("port = %d\ndata_dir = %q\ndatabase_url = %q\n",
 		port, t.TempDir(), "postgres://cc@127.0.0.1:1/cc?sslmode=disable&connect_timeout=1")
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", configPath, err)
 	}
 
 	var stdout, stderr bytes.Buffer

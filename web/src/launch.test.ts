@@ -128,6 +128,14 @@ describe("columnsFor", () => {
     const cols = columnsFor(candidates);
     expect(cols.get("c")).toBe(2);
   });
+
+  test("a cycle terminates with finite columns", () => {
+    const cols = columnsFor([
+      candidate({ url: "a", blocked_by: ["b"] }),
+      candidate({ url: "b", blocked_by: ["a"] }),
+    ]);
+    expect([...cols.values()].every(Number.isFinite)).toBe(true);
+  });
 });
 
 describe("sectionsFor", () => {
@@ -157,8 +165,8 @@ describe("cancelHref", () => {
 
 describe("toggleResult", () => {
   const candidates = [
-    candidate({ url: "x/1", title: "first" }),
-    candidate({ url: "x/2", title: "second", blocked_by: ["x/1"] }),
+    candidate({ url: "x/1", ref: "#1", title: "first" }),
+    candidate({ url: "x/2", ref: "#2", title: "second", blocked_by: ["x/1"] }),
   ];
 
   test("a refused tick leaves the ticked set unchanged and names the blocker", () => {
@@ -173,6 +181,11 @@ describe("toggleResult", () => {
     const result = toggleResult(candidates, ticked, "x/1");
     expect(result).toEqual({ refusal: "#2 second depends on #1 -- clear it first" });
     expect(ticked).toEqual(new Set(["x/1", "x/2"]));
+  });
+
+  test("refusals use supplied refs rather than parsing URLs", () => {
+    const named = [candidate({ url: "opaque-a", ref: "ACME-1", title: "first" }), candidate({ url: "opaque-b", ref: "ACME-2", title: "second", blocked_by: ["opaque-a"] })];
+    expect(toggleResult(named, new Set<string>(), "opaque-b")).toEqual({ refusal: "ACME-2 is blocked by ACME-1 first -- tick it first" });
   });
 
   test("an allowed tick and clear return a new set", () => {

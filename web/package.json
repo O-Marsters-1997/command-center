@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tailwindcss -i ./app.css -o ../internal/web/assets/dist/app.css --minify && tsc --noEmit && vite build",
     "test": "bun test --conditions browser",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "lint": "biome lint .",
     "format": "biome format --write ."
   },

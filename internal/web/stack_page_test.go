@@ -35,7 +35,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	if err := store.RecordPush(ctx, storepkg.Push{
 		Ticket: "sandbox://ROOT", Tip: "root-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(root): %v", err)
 	}
 	prs[branchRef("repo", "root")] = plan.PR{Number: 1, State: plan.Open, HeadOid: "root-tip"}
 
@@ -46,7 +46,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		if err := store.RecordPush(ctx, storepkg.Push{
 			Ticket: plan.TicketURL(ticket), Tip: plan.SHA(branch + "-tip"), BaseBranch: "root", BaseSHA: "root-tip", At: at,
 		}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordPush(%q): %v", ticket, err)
 		}
 		prs[branchRef("repo", branch)] = plan.PR{Number: 2, State: plan.Open, HeadOid: plan.SHA(branch + "-tip")}
 	}
@@ -56,7 +56,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 		PRs:        prs,
 		Settings:   map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -93,12 +93,12 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	if err := store.RecordPush(ctx, storepkg.Push{
 		Ticket: "sandbox://PARENT", Tip: "parent-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(parent): %v", err)
 	}
 	if err := store.RecordPush(ctx, storepkg.Push{
 		Ticket: "sandbox://CHILD", Tip: "child-tip", BaseBranch: "parent", BaseSHA: "parent-tip", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(child): %v", err)
 	}
 
 	obs := plan.Observation{
@@ -114,7 +114,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		Settings: map[string]config.RepoSettings{"repo": {Stacking: true}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	repos := named("repo")
@@ -147,19 +147,19 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	if err := store.RecordPush(ctx, storepkg.Push{
 		Ticket: plan.TicketURL(ticket.URL), Tip: "merged-tip", BaseBranch: "main", BaseSHA: "main-tip", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(merged): %v", err)
 	}
 	if err := store.AppendEvent(ctx, storepkg.Event{
 		At: at, TicketURL: ticket.URL, Kind: "remove_worktree_refused", Detail: "worktree is dirty",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("AppendEvent(remove_worktree_refused): %v", err)
 	}
 
 	obs := plan.Observation{
 		PRs: map[plan.BranchRef]plan.PR{branchRef("repo", "merged"): {Number: 1, State: plan.Merged, HeadOid: "merged-tip"}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	server := openServer(track(t, store, named("repo")...), fixedClock(at), "")

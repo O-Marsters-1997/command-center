@@ -11,6 +11,8 @@ import (
 )
 
 func TestSpendCacheDoesNotLockDuringParse(t *testing.T) {
+	t.Parallel()
+
 	started := make(chan struct{})
 	release := make(chan struct{})
 	cache := NewSpendCache()
@@ -48,20 +50,6 @@ const aliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","r
 
 const resultLine = `{"type":"result","subtype":"success","duration_ms":1000,"num_turns":3,"total_cost_usd":1.23}` + "\n"
 
-func writeLog(t *testing.T, lines ...string) string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), "run.jsonl")
-	var content string
-	for _, line := range lines {
-		content += line
-	}
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 func spendOf(t *testing.T, cache *SpendCache, path string) int {
 	t.Helper()
 
@@ -77,10 +65,10 @@ func TestSpendCacheReportsTokensWhetherAliveOrSettled(t *testing.T) {
 
 	cache := NewSpendCache()
 
-	if got := spendOf(t, cache, writeLog(t, aliveLine)); got != 15 {
+	if got := spendOf(t, cache, writeRunLog(t, aliveLine)); got != 15 {
 		t.Errorf("Spend(alive) = %d, want 15", got)
 	}
-	if got := spendOf(t, cache, writeLog(t, aliveLine, resultLine)); got != 15 {
+	if got := spendOf(t, cache, writeRunLog(t, aliveLine+resultLine)); got != 15 {
 		t.Errorf("Spend(ended) = %d, want 15", got)
 	}
 }
@@ -97,11 +85,11 @@ func TestSpendCacheNeverRescansASettledLog(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
-	path := writeLog(t, aliveLine, resultLine)
+	path := writeRunLog(t, aliveLine+resultLine)
 	tokens := spendOf(t, cache, path)
 
 	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Remove(%q): %v", path, err)
 	}
 	for range 5 {
 		if got := spendOf(t, cache, path); got != tokens {
@@ -114,9 +102,9 @@ func TestSpendCacheTreatsARerunsNewLogPathAsANewEntry(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
-	spendOf(t, cache, writeLog(t, aliveLine, resultLine))
+	spendOf(t, cache, writeRunLog(t, aliveLine+resultLine))
 
-	if got := spendOf(t, cache, writeLog(t, aliveLine, aliveLine)); got != 15 {
+	if got := spendOf(t, cache, writeRunLog(t, aliveLine+aliveLine)); got != 15 {
 		t.Errorf("Spend(second) = %d, want 15: a fresh key, not the first's settled value", got)
 	}
 }
@@ -125,12 +113,12 @@ func TestSpendCacheRereadsALiveLogOnEveryCall(t *testing.T) {
 	t.Parallel()
 
 	cache := NewSpendCache()
-	path := writeLog(t, aliveLine)
+	path := writeRunLog(t, aliveLine)
 	spendOf(t, cache, path)
 
 	appended := `{"type":"assistant","request_id":"r2","message":{"usage":{"input_tokens":1,"output_tokens":2}}}` + "\n"
 	if err := os.WriteFile(path, []byte(aliveLine+appended+resultLine), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.WriteFile(%q): %v", path, err)
 	}
 	if got := spendOf(t, cache, path); got != 18 {
 		t.Errorf("Spend(path) after appending = %d, want 18", got)

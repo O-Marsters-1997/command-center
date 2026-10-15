@@ -1,5 +1,3 @@
-// Package gh is the only place that knows the gh CLI's JSON shape. It normalises a pull
-// request's status check rollup before anything else sees it.
 package gh
 
 import (
@@ -9,8 +7,7 @@ import (
 	"time"
 )
 
-// PRState is a pull request's state. The zero value is Absent: absence is a value, not a
-// nil pointer.
+// PRState is a pull request's state; its zero value represents absence.
 type PRState int
 
 const (
@@ -21,21 +18,13 @@ const (
 )
 
 func (s PRState) String() string {
-	switch s {
-	case Open:
-		return "open"
-	case Merged:
-		return "merged"
-	case Closed:
-		return "closed"
-	case Absent:
-		return "absent"
-	default:
-		return "absent"
+	names := [...]string{"absent", "open", "merged", "closed"}
+	if s >= 0 && int(s) < len(names) {
+		return names[s]
 	}
+	return "absent"
 }
 
-// CheckState is one gating check, after CheckRun and StatusContext have been collapsed.
 type CheckState struct {
 	Name       string    `json:"name"`
 	Status     string    `json:"status"`
@@ -44,7 +33,7 @@ type CheckState struct {
 	StartedAt  time.Time `json:"started_at"`
 }
 
-// PR is one pull request with its rollup reduced to the latest completed run per check name.
+// PR is a pull request with checks reduced to the latest completed run per name.
 type PR struct {
 	Number      int                   `json:"number"`
 	HeadRef     string                `json:"head_ref"`
@@ -56,11 +45,9 @@ type PR struct {
 	State       PRState               `json:"state"`
 	Checks      map[string]CheckState `json:"checks"`
 	Labels      []string              `json:"labels"`
-	// MergedAt is GitHub's own merge timestamp, zero unless State is Merged.
-	MergedAt time.Time `json:"merged_at"`
+	MergedAt    time.Time             `json:"merged_at"`
 }
 
-// Snapshot is the tracked branches' pull requests, keyed by head branch.
 type Snapshot struct {
 	ByBranch map[string]PR `json:"by_branch"`
 }
@@ -73,19 +60,18 @@ func (e *fullPageError) Error() string {
 	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
 }
 
-// gh pr list's own defaults (--state open --limit 30) would hide merged PRs and truncate.
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
 	"statusCheckRollup,author,labels,mergedAt"
 
 const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 
-// List reads the pull requests for the tracked branches of the repo checked out at repoPath:
-// one bulk read, then one fallback read per tracked branch the bulk read did not cover.
+// List reads tracked branches' pull requests, including merged and closed PRs
+// omitted by GitHub's open-only bulk listing.
 func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
 	out, err := Run(ctx, repoPath, "pr", "list", "--state", "open",
 		"--limit", strconv.Itoa(listLimit), "--json", bulkFields)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, fmt.Errorf("list open pull requests: %w", err)
 	}
 	prs, err := decode(out)
 	if err != nil {
@@ -107,7 +93,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 		out, err := Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
 			"--limit", "1", "--json", fallbackFields)
 		if err != nil {
-			return Snapshot{}, err
+			return Snapshot{}, fmt.Errorf("list pull requests for %s: %w", branch, err)
 		}
 		found, err := decode(out)
 		if err != nil {
@@ -124,8 +110,6 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 	return Snapshot{ByBranch: byBranch}, nil
 }
 
-// Forge is every GitHub call the reconcile loop and its verbs make. CLI is the real one; a test
-// substitutes its own.
 type Forge interface {
 	List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error)
 	IssueTitles(ctx context.Context, repoPath string) (map[string]string, error)
@@ -136,12 +120,10 @@ type Forge interface {
 	CloseIssue(ctx context.Context, repoPath, issueURL string) error
 }
 
-// CLI is the Forge that shells out to the gh binary.
 type CLI struct{}
 
-// Create opens a pull request for the branch checked out at repoPath against base, applying the
-// keep-open label that defuses both repos' 14-day auto-close. A non-empty body overrides
-// --fill's body.
+// Create opens a pull request with the keep-open label to avoid GitHub's
+// configured 14-day auto-close; a non-empty body overrides --fill.
 func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) error {
 	args := []string{"pr", "create", "--base", base, "--fill", "--label", "keep-open"}
 	if body != "" {
@@ -151,39 +133,50 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 		args = append(args, "--draft")
 	}
 	_, err := Run(ctx, repoPath, args...)
-	return err
+	if err != nil {
+		return fmt.Errorf("create pull request: %w", err)
+	}
+	return nil
 }
 
-// Ready marks branch's pull request as ready for review, undoing draft state.
 func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 	_, err := Run(ctx, repoPath, "pr", "ready", branch)
-	return err
+	if err != nil {
+		return fmt.Errorf("ready pull request %s: %w", branch, err)
+	}
+	return nil
 }
 
-// Comment adds body as a comment on branch's pull request.
 func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
 	_, err := Run(ctx, repoPath, "pr", "comment", branch, "--body", body)
-	return err
+	if err != nil {
+		return fmt.Errorf("comment on pull request %s: %w", branch, err)
+	}
+	return nil
 }
 
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
 // delete-branch-on-merge retarget may have got there first.
 func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
 	_, err := Run(ctx, repoPath, "pr", "edit", branch, "--base", base)
-	return err
+	if err != nil {
+		return fmt.Errorf("edit pull request %s: %w", branch, err)
+	}
+	return nil
 }
 
-// CloseIssue closes issueURL's GitHub issue.
 func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 	_, err := Run(ctx, repoPath, "issue", "close", issueURL)
-	return err
+	if err != nil {
+		return fmt.Errorf("close issue %s: %w", issueURL, err)
+	}
+	return nil
 }
 
-// IssueTitles reads the open issues of the repo checked out at repoPath, keyed by issue URL.
 func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
 	out, err := Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list issue titles: %w", err)
 	}
 	titles, err := decodeIssueTitles(out)
 	if err != nil {
@@ -304,8 +297,7 @@ func parseState(s string) (PRState, error) {
 	}
 }
 
-// normalise reduces the rollup to the latest completed run per check name. gh's rollup repeats
-// a name several times at one head SHA, and StatusContext entries can carry no name at all.
+// GitHub's rollup repeats a name at one head SHA; StatusContext can omit name.
 func normalise(rollup []rawCheck) map[string]CheckState {
 	checks := make(map[string]CheckState, len(rollup))
 	for _, r := range rollup {

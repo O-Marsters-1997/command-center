@@ -2,27 +2,21 @@ package runner
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 )
 
-// Runner spawns agent processes, reads back their liveness and signals them dead. ProcessRunner
-// is the real one; Fake stands in for tests.
 type Runner interface {
 	Spawn(ctx context.Context, cfg SpawnConfig) (SpawnResult, error)
 	Liveness(pgid int, wantStart, now time.Time) (bool, error)
 	Cancel(pgid int) error
-	// Reap collects a dead process's exit code. ok is false when there is none to report.
 	Reap(pid int) (exitCode int, ok bool)
 }
 
-// SpawnConfig is everything Spawn needs to start one agent process. AgentCommand is the
-// configured argv template; {worktree}, {settings}, {system_prompt}, {model}, {prompt} and
-// {prompt_file} are substituted into every element before exec.
+// SpawnConfig supplies an agent command and its process environment.
+// AgentCommand substitutes {worktree}, {settings}, {system_prompt}, {model},
+// {prompt} and {prompt_file} in each element before exec.
 type SpawnConfig struct {
 	AgentCommand     []string
 	WorktreePath     string
@@ -33,16 +27,14 @@ type SpawnConfig struct {
 	PromptPath       string
 	SessionID        string
 	Resume           bool
-	// LogFile is both stdout and stderr and is never a pipe, which would need a draining goroutine.
-	LogFile *os.File
+	LogFile          *os.File
 }
 
-// SpawnResult is what the caller learns from a successful Spawn.
 type SpawnResult struct {
 	Pid int
 }
 
-// ProcessRunner is the real Runner, spawning and signalling OS processes.
+// ProcessRunner runs agent processes on Unix.
 type ProcessRunner struct{}
 
 func substitute(arg string, cfg SpawnConfig) string {
@@ -96,28 +88,4 @@ func stripAPIKey(environ []string) []string {
 		out = append(out, kv)
 	}
 	return out
-}
-
-// Spawn starts one agent process as its own process group leader, so Cancel reaches its
-// subprocesses. exec.CommandContext is avoided: since Go 1.20 it kills only the leader pid on
-// ctx cancellation, but a graceful shutdown must leave agents running as a crash does.
-func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
-	if len(cfg.AgentCommand) == 0 {
-		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command is empty")
-	}
-	argv := buildArgv(cfg)
-	if len(argv) == 0 {
-		return SpawnResult{}, fmt.Errorf("spawn agent: agent_command builds an empty argv")
-	}
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Dir = cfg.WorktreePath
-	cmd.Stdout = cfg.LogFile
-	cmd.Stderr = cfg.LogFile
-	cmd.Env = stripAPIKey(os.Environ())
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	if err := cmd.Start(); err != nil {
-		return SpawnResult{}, fmt.Errorf("spawn agent %s: %w", argv[0], err)
-	}
-	return SpawnResult{Pid: cmd.Process.Pid}, nil
 }

@@ -1,4 +1,3 @@
-// Package cctest hands a test its own empty Postgres database.
 package cctest
 
 import (

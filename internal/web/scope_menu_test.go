@@ -17,7 +17,7 @@ func TestScopeMenuListsProjectsThenLooseReposWithKeys(t *testing.T) {
 	if err := st.CreateProject(t.Context(), storepkg.NewProject{
 		Name: "acme", Hue: 1, Repos: []string{"acme/alpha", "acme/beta"}, At: testNow,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(acme): %v", err)
 	}
 	server := openServer(st, fixedClock(testNow), "")
 
@@ -68,7 +68,7 @@ func TestScopeMenuSummaryNamesTheScope(t *testing.T) {
 	if err := st.CreateProject(t.Context(), storepkg.NewProject{
 		Name: "acme", Hue: 1, Repos: []string{"acme/alpha"}, At: testNow,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProject(acme): %v", err)
 	}
 	server := openServer(st, fixedClock(testNow), "")
 

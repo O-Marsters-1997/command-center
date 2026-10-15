@@ -40,31 +40,31 @@ func failedRootAndQueuedChildren(t *testing.T, children []string) *storepkg.Stor
 		Ticket: "sandbox://ROOT", Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(sandbox://ROOT): %v", err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	exitCode := 1
 	if err := store.RecordDisposition(ctx, storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 	for _, c := range children {
 		launch := storepkg.LaunchRequest{Ticket: c, PromptHash: "hash-1", Group: "group-a", At: at}
 		if err := store.QueueLaunchIntent(ctx, launch); err != nil {
-			t.Fatal(err)
+			t.Fatalf("QueueLaunchIntent(%s): %v", c, err)
 		}
 	}
 	if err := store.ApplyLaunchIntents(ctx, at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -140,7 +140,7 @@ func TestBoardPutsATwoBlockerRowUnderTheFirstOnly(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	page := boardFor(t, store)
@@ -174,7 +174,7 @@ func TestBoardListsAChainOfBlockersOnceEach(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	page := boardFor(t, store)
@@ -202,7 +202,7 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	storetest.Tickets(t, store, tickets...)
 	at := testNow
 	if err := store.SaveObservation(ctx, plan.Observation{ObservedAt: at}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	page := boardFor(t, store)
@@ -226,19 +226,19 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%s): %v", ticket.URL, err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	exitCode := 1
 	if err := store.RecordDisposition(ctx, storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 
 	obs := plan.Observation{
@@ -246,7 +246,7 @@ func TestBoardShowsAMergedPRDespiteALaterRunFailing(t *testing.T) {
 		PRs:        map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 262, State: plan.Merged}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	page := boardFor(t, store)

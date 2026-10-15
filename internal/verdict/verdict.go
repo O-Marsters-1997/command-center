@@ -1,6 +1,3 @@
-// Package verdict evaluates one repo's boolean check predicate over a normalised snapshot —
-// never gh's raw JSON. It declares its own CheckState rather than importing gh's;
-// api_test.go enforces the import purity.
 package verdict
 
 import (
@@ -10,8 +7,7 @@ import (
 	"time"
 )
 
-// CheckState is one gating check's outcome. The zero value, Pending, doubles as "absent from the
-// rollup", since a missing map key already returns it.
+// CheckState is one gating check's outcome; absent rollup entries are Pending.
 type CheckState int
 
 const (
@@ -46,12 +42,10 @@ func (k Kind) String() string {
 	return kindNames[k]
 }
 
-// BoundedWait is how long a still-pending predicate is tolerated before Evaluate gives up on it,
-// clocked over ticks whose observe phase succeeded so a GitHub outage cannot walk every row to needs_you.
+// BoundedWait limits how long a predicate may remain pending.
+// A GitHub outage cannot advance the wait because only successful observations count.
 const BoundedWait = 10 * time.Minute
 
-// Predicate is the boolean check-config grammar: all_of, any_of, not, success, skipped,
-// absent_ok, plus Author for a PR's author, which is not a check-run.
 type Predicate struct {
 	AllOf    []Predicate `toml:"all_of"`
 	AnyOf    []Predicate `toml:"any_of"`
@@ -93,9 +87,6 @@ const (
 	red
 )
 
-// Evaluate resolves p against in. A foreign-SHA or absent rollup is never green, and the
-// stacked-base expiry outranks red. A needs_you verdict is re-resolved with the compat check
-// forced green: review-me there means the compat check was the sole red one.
 func Evaluate(p Predicate, in Input) Result {
 	if in.StackedBase && !in.BaseSHAMatch {
 		return Result{Kind: BaseMoved, Reason: "base moved: the parent advanced past what this branch was cut from"}

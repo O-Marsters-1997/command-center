@@ -18,9 +18,11 @@ func TestSystemTimezoneNameReadsEtcLocaltime(t *testing.T) {
 }
 
 func TestInsightsTimezoneUsesTheLocationsOwnNameWhenItHasOne(t *testing.T) {
+	t.Parallel()
+
 	paris, err := time.LoadLocation("Europe/Paris")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("time.LoadLocation(Europe/Paris): %v", err)
 	}
 	if got := insightsTimezone(paris); got != "Europe/Paris" {
 		t.Errorf("insightsTimezone(Europe/Paris) = %q, want Europe/Paris", got)
@@ -43,9 +45,11 @@ func TestInsightsTimezoneResolvesTimeLocalFromTheOSRatherThanUTC(t *testing.T) {
 }
 
 func TestCivilDateKeepsTheWallClockDateAtUTCMidnight(t *testing.T) {
+	t.Parallel()
+
 	paris, err := time.LoadLocation("Europe/Paris")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("time.LoadLocation(Europe/Paris): %v", err)
 	}
 	got := civilDate(time.Date(2026, 6, 15, 23, 30, 0, 0, paris))
 	want := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
@@ -55,7 +59,9 @@ func TestCivilDateKeepsTheWallClockDateAtUTCMidnight(t *testing.T) {
 }
 
 func TestParseSinceOrDefault(t *testing.T) {
-	until := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
+	t.Parallel()
+
+	until := testNow
 	for _, tc := range []struct {
 		name string
 		raw  string
@@ -67,6 +73,8 @@ func TestParseSinceOrDefault(t *testing.T) {
 		{name: "wrong format", raw: "20/26/09", want: until.AddDate(0, 0, -insightsDefaultRangeDays)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := parseSinceOrDefault(tc.raw, until); !got.Equal(tc.want) {
 				t.Errorf("parseSinceOrDefault(%q, %v) = %v, want %v", tc.raw, until, got, tc.want)
 			}
@@ -75,6 +83,8 @@ func TestParseSinceOrDefault(t *testing.T) {
 }
 
 func TestSpendSplitRowsSumToTheChartTotal(t *testing.T) {
+	t.Parallel()
+
 	points := []insightsPointJSON{
 		{PctWeek: 1.125, AgentPctWeek: 1, FollowUpPctWeek: 0.125},
 		{PctWeek: 2, AgentPctWeek: 1.75, FollowUpPctWeek: 0.25},
@@ -90,7 +100,9 @@ func TestSpendSplitRowsSumToTheChartTotal(t *testing.T) {
 }
 
 func TestBuildLimitsLeavesAWindowWithoutAReadingBlank(t *testing.T) {
-	now := time.Date(2026, 9, 20, 15, 0, 0, 0, time.UTC)
+	t.Parallel()
+
+	now := testNow
 	limits := buildLimits([]Gauge{
 		{Label: "five-hour", ResetsAt: now.Add(26*time.Hour + 10*time.Minute)},
 		{Label: "weekly"},

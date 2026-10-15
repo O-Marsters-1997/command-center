@@ -34,8 +34,9 @@ func TestPruneHistoryDeletesOnlyExpiredRows(t *testing.T) {
 	store := openStoreAt(t, dsn)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	t.Cleanup(func() { _ = db.Close() })
 
 	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
@@ -44,7 +45,7 @@ func TestPruneHistoryDeletesOnlyExpiredRows(t *testing.T) {
 
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 	const (
 		consumedIntent = "INSERT INTO intents (at, ticket_id, verb, consumed_at) VALUES "

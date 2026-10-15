@@ -144,18 +144,15 @@ func TestUnlocked(t *testing.T) {
 			if !strings.Contains(string(got.Reason), tt.reasonNames) {
 				t.Errorf("reason %q does not name %q", got.Reason, tt.reasonNames)
 			}
-			if !equalUnordered(got.Blocking, tt.wantBlocking) {
+			blocking := slices.Clone(got.Blocking)
+			wantBlocking := slices.Clone(tt.wantBlocking)
+			slices.Sort(blocking)
+			slices.Sort(wantBlocking)
+			if !slices.Equal(blocking, wantBlocking) {
 				t.Errorf("blocking = %v, want %v", got.Blocking, tt.wantBlocking)
 			}
 		})
 	}
-}
-
-func equalUnordered(got, want []plan.TicketURL) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	return slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values(want)))
 }
 
 func TestUnlockedBlockerClosedFlag(t *testing.T) {

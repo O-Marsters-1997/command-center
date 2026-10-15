@@ -93,12 +93,12 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	cfg.SpendLimit5h = fc.spendLimit
 	if fc.extraRepo != "" {
 		if err := os.Symlink(config.CheckoutPath(root, "repo"), config.CheckoutPath(root, fc.extraRepo)); err != nil {
-			t.Fatal(err)
+			t.Fatalf("Symlink(%q): %v", fc.extraRepo, err)
 		}
 	}
 	store := openStore(t)
 	if err := store.UpsertTickets(t.Context(), fc.tickets); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%d tickets): %v", len(fc.tickets), err)
 	}
 	fake := runner.NewFake()
 	forge := &recordingForge{}
@@ -138,7 +138,7 @@ func (f *loopFixture) Latest(t *testing.T) map[string]plan.RunSummary {
 	t.Helper()
 	latest, err := f.Store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	byURL := make(map[string]plan.RunSummary, len(latest))
 	for url, summary := range latest {

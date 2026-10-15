@@ -27,7 +27,6 @@ type ImportError struct {
 	Message string
 }
 
-// RepoRow is one line of the repos page: a repo the app tracks, or a pushable one it does not.
 type RepoRow struct {
 	FullName      string
 	Tracked       bool
@@ -37,7 +36,6 @@ type RepoRow struct {
 	Steps         []CheckStep
 }
 
-// ReposPage is the /repos page: every repo the app knows.
 type ReposPage struct {
 	Chrome
 	Groups          []RepoGroup
@@ -64,14 +62,11 @@ type NewProjectForm struct {
 	Repos      []string
 }
 
-// RepoSearch is the fragment GET /repos/search swaps in. SearchError is set when gh failed, in
-// which case Rows still hold the known repos that match.
 type RepoSearch struct {
 	Rows        []RepoRow
 	SearchError string
 }
 
-// RepoPage is the /repos/{owner}/{name} page. Known is false for a repo the app does not track.
 type RepoPage struct {
 	Chrome
 	Title           string
@@ -84,7 +79,6 @@ type RepoPage struct {
 	Tickets         Board
 }
 
-// RepoPath is the page of fullName, an owner/name pair.
 func RepoPath(fullName string) string {
 	return "/repos/" + fullName
 }
@@ -96,7 +90,6 @@ func trackedRow(r store.Repo) RepoRow {
 	}
 }
 
-// KnownRepo finds the tracked repo whose owner/name is scope, ignoring case.
 func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
@@ -110,7 +103,6 @@ func (r *Reader) KnownRepo(ctx context.Context, scope string) (store.Repo, bool,
 	return store.Repo{}, false, nil
 }
 
-// Repos shapes the unscoped page: the tracked repos.
 func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 	f, err := r.loadFrame(ctx, now, Params{})
 	if err != nil {
@@ -179,8 +171,6 @@ func repoGroups(repos []store.Repo, projects []store.Project) ([]RepoGroup, NewP
 	return groups, form
 }
 
-// SearchRepos merges the pushable repos whose name contains query with the tracked repos that
-// match it. An empty query is the tracked repos alone.
 func (r *Reader) SearchRepos(ctx context.Context, query string, pushable []gh.RepoSummary) ([]RepoRow, error) {
 	tracked, err := r.store.Repos(ctx)
 	if err != nil {
@@ -223,8 +213,6 @@ type RepoPageRequest struct {
 	Selected []string
 }
 
-// RepoPage shapes the scoped page. offered is the repo's own tracker's features; a feature
-// imported with tickets in other repos names them.
 func (r *Reader) RepoPage(ctx context.Context, now time.Time, req RepoPageRequest) (RepoPage, error) {
 	scope, offered, selected := req.Scope, req.Offered, req.Selected
 	chrome, err := r.Chrome(ctx, now, ParseParams(nil))

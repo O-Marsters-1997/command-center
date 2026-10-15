@@ -97,36 +97,3 @@ func TestGatingBlockers(t *testing.T) {
 		t.Errorf("GatingBlockers = %+v, want only %s", got, crossRepo.URL)
 	}
 }
-
-func TestOpensAsDraft(t *testing.T) {
-	t.Parallel()
-
-	blocker := plan.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
-	byURL := map[plan.TicketURL]plan.Ticket{blocker.URL: blocker}
-
-	tests := []struct {
-		name   string
-		ticket plan.Ticket
-		want   bool
-	}{
-		{
-			name:   "a gating edge alone opens as a draft",
-			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo", BlockedBy: []plan.TicketURL{"sandbox://PLA-40"}},
-			want:   true,
-		},
-		{
-			name:   "no gating edge opens as a plain PR",
-			ticket: plan.Ticket{URL: "sandbox://CC-1", Repo: "repo"},
-			want:   false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := plan.OpensAsDraft(tt.ticket, byURL); got != tt.want {
-				t.Errorf("OpensAsDraft = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}

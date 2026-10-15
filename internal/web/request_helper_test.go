@@ -13,7 +13,7 @@ func TestDoSendsFormHeadersAndOrigin(t *testing.T) {
 			t.Errorf("headers = %v, want own origin and HX-Request", r.Header)
 		}
 		if err := r.ParseForm(); err != nil {
-			t.Fatal(err)
+			t.Fatalf("ParseForm: %v", err)
 		}
 		if r.Form.Get("repo") != "acme/new" {
 			t.Errorf("form repo = %q, want acme/new", r.Form.Get("repo"))

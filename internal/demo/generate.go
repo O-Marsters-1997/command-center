@@ -26,8 +26,7 @@ var (
 	}
 )
 
-// Generate builds the same scenario for the same seed and ticket count: two or three repos, two or
-// three features and a random DAG, with every ticket drawing its own durations and outcome.
+// Generate produces a reproducible scenario for a seed and ticket count.
 func Generate(seed int64, tickets int) Scenario {
 	//nolint:gosec // reproducible demo data, not security
 	rng := rand.New(rand.NewPCG(uint64(seed), 0))

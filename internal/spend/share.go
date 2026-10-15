@@ -6,8 +6,7 @@ func Paused(fiveHourUtilization float64, limit5h int) bool {
 	return limit5h > 0 && Pct(fiveHourUtilization) >= limit5h
 }
 
-// Share is cc's own share of a window already totalPct percent used, clamped inside
-// [0, totalPct]. calibrating is true, and the share zero, when fit is below MinSamples.
+// Share returns cc's portion of a window's utilization, clamped to [0, totalPct].
 func Share(totalPct int, fit Result, ccUSD float64) (pct int, calibrating bool) {
 	if fit.Samples < MinSamples {
 		return 0, true

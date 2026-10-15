@@ -14,8 +14,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// oneMillionInputTokensLine is one $6.40 (at the calibrated sonnet rate) assistant request, for a
-// test to place at a chosen timestamp and request id.
 func oneMillionInputTokensLine(timestamp, requestID string) string {
 	return fmt.Sprintf(
 		`{"type":"assistant","timestamp":%q,"request_id":%q,`+
@@ -34,7 +32,7 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 	projectsDir := t.TempDir()
 	project := filepath.Join(projectsDir, "proj")
 	if err := os.Mkdir(project, 0o755); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Mkdir(%s): %v", project, err)
 	}
 
 	var lines string
@@ -43,7 +41,7 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 		lines += oneMillionInputTokensLine(at.Format(time.RFC3339), fmt.Sprintf("r%d", i)) + "\n"
 	}
 	if err := os.WriteFile(filepath.Join(project, "session.jsonl"), []byte(lines), 0o644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.WriteFile(session.jsonl): %v", err)
 	}
 
 	for i := range 6 {
@@ -69,6 +67,7 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 	if got.Samples != 5 {
 		t.Errorf("Samples = %d; want 5", got.Samples)
 	}
+	// One million Sonnet input tokens cost $6.40 at the calibrated vendor rate.
 	const wantFactor = 0.02 / 6.40
 	if diff := (got.Factor - wantFactor) / wantFactor; diff > 0.01 || diff < -0.01 {
 		t.Errorf("Factor = %v; want within 1%% of %v", got.Factor, wantFactor)
@@ -116,19 +115,19 @@ func TestCCCostUSDSumsWithinEachWindowsOwnTrailingSpan(t *testing.T) {
 			Ticket: "sandbox://CC-1", Kind: "agent", BaselineSHA: "deadbeef", PromptHash: fmt.Sprintf("hash-%v", endedAt),
 		})
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("InsertRunSkeleton: %v", err)
 		}
 		if err := store.RecordDisposition(ctx, storepkg.Disposition{
 			RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.None[int](),
 			Cost: option.Some(costUSD), EndedAt: endedAt,
 		}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordDisposition: %v", err)
 		}
 	}
 
-	recordRun(now.Add(-1*time.Hour), 2.00)    // inside both windows
-	recordRun(now.Add(-6*time.Hour), 3.00)    // inside seven_day only
-	recordRun(now.Add(-8*24*time.Hour), 4.00) // outside both
+	recordRun(now.Add(-1*time.Hour), 2.00)
+	recordRun(now.Add(-6*time.Hour), 3.00)
+	recordRun(now.Add(-8*24*time.Hour), 4.00)
 
 	got, err := store.CCCostUSD(ctx, now)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// RepoSummary is one repository the gh identity can push to.
 type RepoSummary struct {
 	FullName      string
 	SSHURL        string
@@ -47,12 +46,11 @@ func RepoRemote(ctx context.Context, fullName string) (string, error) {
 	return repo.SSHURL, nil
 }
 
-// PushableRepos lists the unarchived repositories the gh identity can push to.
 func PushableRepos(ctx context.Context) ([]RepoSummary, error) {
 	out, err := Run(ctx, "", "api", "--paginate",
 		"user/repos?affiliation=owner,collaborator,organization_member&per_page=100")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list user repos: %w", err)
 	}
 	repos, err := decodePushable(out)
 	if err != nil {
@@ -74,7 +72,7 @@ type rawRepo struct {
 func decodePushable(raw []byte) ([]RepoSummary, error) {
 	pages, err := DecodeStream[rawRepo](raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode user repos: %w", err)
 	}
 	var repos []RepoSummary
 	for _, r := range pages {
