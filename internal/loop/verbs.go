@@ -54,12 +54,9 @@ func idleWorktreeFor(ticket plan.Ticket, obs plan.Observation) (worktreePath, re
 	return worktreePath, ""
 }
 
-func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick) error {
+func (l *Loop) applyFollowUpIntents(ctx context.Context, t *tick, byURL map[plan.TicketURL]store.Ticket) error {
 	return l.eachIntent(ctx, plan.VerbFollowUp, func(intent store.VerbIntent) error {
-		ticket, ok, err := l.ticket(ctx, intent.TicketID)
-		if err != nil {
-			return fmt.Errorf("look up %s: %w", intent.TicketID, err)
-		}
+		ticket, ok := l.ticket(byURL, intent.TicketID)
 		if !ok {
 			return nil
 		}
@@ -145,12 +142,11 @@ func (l *Loop) applyCancelIntents(ctx context.Context) error {
 	})
 }
 
-func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tick) error {
+func (l *Loop) applyReRunIntents(
+	ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket,
+) error {
 	return l.eachIntent(ctx, plan.VerbReRun, func(intent store.VerbIntent) error {
-		ticket, ok, err := l.ticket(ctx, intent.TicketID)
-		if err != nil {
-			return fmt.Errorf("look up %s: %w", intent.TicketID, err)
-		}
+		ticket, ok := l.ticket(byURL, intent.TicketID)
 		if !ok {
 			return nil
 		}
@@ -159,23 +155,21 @@ func (l *Loop) applyReRunIntents(ctx context.Context, snap plan.Snapshot, t *tic
 		if baseBranch == "" {
 			baseBranch = plan.DefaultBaseBranch
 		}
-		cut := cutSpec{ticket: ticket, baseBranch: baseBranch, promptHash: entry.PromptHash}
-		if err := l.reRunOne(ctx, t, cut); err != nil {
+		if err := l.reRunOne(ctx, t, ticket, baseBranch, entry.PromptHash); err != nil {
 			return fmt.Errorf("%s/%s: %w", ticket.Repo, ticket.Branch, err)
 		}
 		return nil
 	})
 }
 
-func (l *Loop) reRunOne(ctx context.Context, t *tick, cut cutSpec) error {
-	ticket, promptHash := cut.ticket, cut.promptHash
+func (l *Loop) reRunOne(ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string) error {
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, ok := t.obs.Worktrees[ticket.Ref()]
 	if !ok {
 		if err := git.DeleteBranchIfExists(ctx, repoPath, ticket.Branch); err != nil {
 			return fmt.Errorf("clear stale branch before re-cutting %s: %w", ticket.Branch, err)
 		}
-		if err := l.cutAndSpawn(ctx, t, cut); err != nil {
+		if err := l.cutAndSpawn(ctx, t, ticket, baseBranch, promptHash); err != nil {
 			return fmt.Errorf("re-cut %s: %w", ticket.Branch, err)
 		}
 		return nil

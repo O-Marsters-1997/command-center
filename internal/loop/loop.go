@@ -68,16 +68,9 @@ func (l *Loop) eachIntent(ctx context.Context, verb plan.Verb, fn func(store.Ver
 	return nil
 }
 
-func (l *Loop) ticket(ctx context.Context, url string) (store.Ticket, bool, error) {
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return store.Ticket{}, false, fmt.Errorf("list tickets: %w", err)
-	}
-	i := slices.IndexFunc(tickets, func(t store.Ticket) bool { return t.URL == url })
-	if i < 0 {
-		return store.Ticket{}, false, nil
-	}
-	return tickets[i], true, nil
+func (l *Loop) ticket(byURL map[plan.TicketURL]store.Ticket, url string) (store.Ticket, bool) {
+	ticket, ok := byURL[plan.TicketURL(url)]
+	return ticket, ok
 }
 
 func (l *Loop) RunOnce(ctx context.Context) error {
@@ -109,7 +102,8 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 
 	t := &tick{now: l.clock.Now(), obs: obs}
 	t.obs.ObservedAt = t.now
-	if err := l.absorb(ctx, t); err != nil {
+	byURL, err := l.absorb(ctx, t)
+	if err != nil {
 		return l.failTick(ctx, err)
 	}
 	if err := l.recordRepoProblems(ctx, t.obs); err != nil {
@@ -123,7 +117,7 @@ func (l *Loop) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return l.failTick(ctx, fmt.Errorf("derive: %w", err))
 	}
-	return l.failTick(ctx, l.act(ctx, snap.Skipping(skipped), t))
+	return l.failTick(ctx, l.act(ctx, snap.Skipping(skipped), t, byURL))
 }
 
 func (l *Loop) failTick(ctx context.Context, err error) error {
@@ -136,58 +130,60 @@ func (l *Loop) failTick(ctx context.Context, err error) error {
 	return err
 }
 
-func (l *Loop) absorb(ctx context.Context, t *tick) error {
+func (l *Loop) absorb(ctx context.Context, t *tick) (map[plan.TicketURL]store.Ticket, error) {
+	tickets, err := l.store.Tickets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list tickets: %w", err)
+	}
+	byURL := ticketsByURL(tickets)
 	prev, _, err := l.store.LastObservation(ctx)
 	if err != nil {
-		return fmt.Errorf("last observation: %w", err)
+		return nil, fmt.Errorf("last observation: %w", err)
 	}
 	if err := l.recordRepoStates(ctx, t.obs); err != nil {
-		return fmt.Errorf("record repo states: %w", err)
+		return nil, fmt.Errorf("record repo states: %w", err)
 	}
-	if err := l.tickCheckingWaits(ctx); err != nil {
-		return fmt.Errorf("tick checking waits: %w", err)
+	if err := l.tickCheckingWaits(ctx, tickets); err != nil {
+		return nil, fmt.Errorf("tick checking waits: %w", err)
 	}
-	if err := l.recordOpenedEvents(ctx, prev, t.obs); err != nil {
-		return fmt.Errorf("opened events: %w", err)
+	if err := l.recordOpenedEvents(ctx, prev, t.obs, tickets); err != nil {
+		return nil, fmt.Errorf("opened events: %w", err)
 	}
-	if err := l.recordChecksLanded(ctx, prev, t.obs); err != nil {
-		return fmt.Errorf("checks landed: %w", err)
-	}
-	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
-		return fmt.Errorf("save observation: %w", err)
+	if err := l.recordChecksLanded(ctx, prev, t.obs, tickets); err != nil {
+		return nil, fmt.Errorf("checks landed: %w", err)
 	}
 	if err := l.store.ApplyLaunchIntents(ctx, l.clock.Now()); err != nil {
-		return fmt.Errorf("apply launch intents: %w", err)
+		return nil, fmt.Errorf("apply launch intents: %w", err)
 	}
 	if err := l.applyCancelIntents(ctx); err != nil {
-		return fmt.Errorf("cancel: %w", err)
+		return nil, fmt.Errorf("cancel: %w", err)
 	}
 	if err := l.applyKillIntents(ctx); err != nil {
-		return fmt.Errorf("kill: %w", err)
+		return nil, fmt.Errorf("kill: %w", err)
 	}
 	if err := l.interruptForFollowUps(ctx); err != nil {
-		return fmt.Errorf("interrupt for follow-ups: %w", err)
+		return nil, fmt.Errorf("interrupt for follow-ups: %w", err)
 	}
-	if err := l.reconcileRuns(ctx, t.obs); err != nil {
-		return fmt.Errorf("reconcile runs: %w", err)
+	if err := l.reconcileRuns(ctx, t.obs, byURL); err != nil {
+		return nil, fmt.Errorf("reconcile runs: %w", err)
 	}
 	if err := l.store.SaveObservation(ctx, t.obs); err != nil {
-		return fmt.Errorf("save observation: %w", err)
+		return nil, fmt.Errorf("save observation: %w", err)
 	}
-	if err := l.recordVerdictTransitions(ctx, t.obs); err != nil {
-		return fmt.Errorf("verdict transitions: %w", err)
+	if err := l.recordVerdictTransitions(ctx, t.obs, tickets); err != nil {
+		return nil, fmt.Errorf("verdict transitions: %w", err)
 	}
-	if err := l.recordMergedEvents(ctx, t.obs); err != nil {
-		return fmt.Errorf("merged events: %w", err)
+	if err := l.recordMergedEvents(ctx, t.obs, tickets); err != nil {
+		return nil, fmt.Errorf("merged events: %w", err)
 	}
-	return nil
+	return byURL, nil
 }
 
-func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick) error {
-	if err := l.applyReRunIntents(ctx, snap, t); err != nil {
+func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick, byURL map[plan.TicketURL]store.Ticket) error {
+	if err := l.applyReRunIntents(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("re-run: %w", err)
 	}
-	if err := l.applyFollowUpIntents(ctx, t); err != nil {
+	if err := l.applyFollowUpIntents(ctx, t, byURL); err != nil {
 		return fmt.Errorf("follow-up: %w", err)
 	}
 	if err := l.applyAbortIntents(ctx, snap, t.obs); err != nil {
@@ -213,7 +209,7 @@ func (l *Loop) act(ctx context.Context, snap plan.Snapshot, t *tick) error {
 	if err := l.applyDraftGate(ctx, snap); err != nil {
 		return fmt.Errorf("draft gate: %w", err)
 	}
-	if err := l.launchEligible(ctx, snap, t); err != nil {
+	if err := l.launchEligible(ctx, snap, t, byURL); err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
 	return nil
@@ -333,7 +329,7 @@ func (l *Loop) importFeature(ctx context.Context, feature string) error {
 	if err != nil {
 		return fmt.Errorf("last observation: %w", err)
 	}
-	repos, err := ReadyRepos(ctx, l.store)
+	repos, err := readyRepos(ctx, l.store)
 	if err != nil {
 		return fmt.Errorf("list ready repos: %w", err)
 	}
@@ -443,7 +439,9 @@ func (l *Loop) interruptForFollowUps(ctx context.Context) error {
 	return nil
 }
 
-func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
+func (l *Loop) reconcileRuns(
+	ctx context.Context, obs plan.Observation, byTicket map[plan.TicketURL]store.Ticket,
+) error {
 	pending, err := l.store.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
 		return fmt.Errorf("list runs awaiting disposition: %w", err)
@@ -451,12 +449,6 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 	if len(pending) == 0 {
 		return nil
 	}
-
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return fmt.Errorf("list tickets: %w", err)
-	}
-	byTicket := ticketsByURL(tickets)
 
 	now := l.clock.Now()
 	for _, run := range pending {
@@ -613,32 +605,24 @@ func (l *Loop) commitsSinceBaseline(
 	return commits, nil
 }
 
-func (l *Loop) launchEligible(ctx context.Context, snap plan.Snapshot, t *tick) error {
+func (l *Loop) launchEligible(
+	ctx context.Context, snap plan.Snapshot, t *tick, byTicket map[plan.TicketURL]store.Ticket,
+) error {
 	toLaunch := snap.LaunchAfter(len(t.spawned))
 	if len(toLaunch) == 0 {
 		return nil
 	}
 
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return fmt.Errorf("list tickets: %w", err)
-	}
-	byTicket := ticketsByURL(tickets)
 	for _, ticketURL := range toLaunch {
 		entry, _ := snap.Entry(ticketURL)
-		cut := cutSpec{ticket: byTicket[ticketURL], baseBranch: entry.Unlock.BaseBranch, promptHash: entry.PromptHash}
-		if err := l.cutAndSpawn(ctx, t, cut); err != nil {
+		if err := l.cutAndSpawn(ctx, t, byTicket[ticketURL], entry.Unlock.BaseBranch, entry.PromptHash); err != nil {
 			return fmt.Errorf("%s: %w", ticketURL, err)
 		}
 	}
 	return nil
 }
 
-func (l *Loop) tickCheckingWaits(ctx context.Context) error {
-	tickets, err := l.store.Tickets(ctx)
-	if err != nil {
-		return fmt.Errorf("list tickets: %w", err)
-	}
+func (l *Loop) tickCheckingWaits(ctx context.Context, tickets []store.Ticket) error {
 	urls := make([]plan.TicketURL, len(tickets))
 	for i, t := range tickets {
 		urls[i] = plan.TicketURL(t.URL)
@@ -657,13 +641,19 @@ func ticketsByURL(tickets []store.Ticket) map[plan.TicketURL]store.Ticket {
 	return byURL
 }
 
-type cutSpec struct {
-	ticket                 store.Ticket
-	baseBranch, promptHash string
+func eachEntry(snap plan.Snapshot, keep func(plan.Entry) bool, fn func(plan.Entry) error) error {
+	for _, entry := range snap.Entries {
+		if !keep(entry) {
+			continue
+		}
+		if err := fn(entry); err != nil {
+			return fmt.Errorf("%s/%s: %w", entry.Ticket.Repo, entry.Ticket.Branch, err)
+		}
+	}
+	return nil
 }
 
-func (l *Loop) cutAndSpawn(ctx context.Context, t *tick, cut cutSpec) error {
-	ticket, baseBranch, promptHash := cut.ticket, cut.baseBranch, cut.promptHash
+func (l *Loop) cutAndSpawn(ctx context.Context, t *tick, ticket store.Ticket, baseBranch, promptHash string) error {
 	branch := ticket.Branch
 	repoPath := l.checkout(ticket.Repo)
 

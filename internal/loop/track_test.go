@@ -28,10 +28,10 @@ func trackLoop(t *testing.T, st *storepkg.Store, validations *[]string) *loop.Lo
 		repo.SettingsSource, repo.SettingsReadAt = "defaults", now
 		return repo, nil
 	}
-	return newLoop(
-		st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
-		loop.WithRemoteSource(remoteOf), loop.WithValidator(validate),
-	)
+	return newLoopWithDeps(loop.Deps{
+		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Runner: runner.ProcessRunner{}, RemoteOf: remoteOf, Validate: validate,
+	})
 }
 
 func queueTrack(t *testing.T, st *storepkg.Store, repo string) {

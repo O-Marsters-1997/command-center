@@ -64,10 +64,11 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
 
-	lp := newLoop(
-		store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
-	)
+	lp := newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: cfg,
+		Runner:  runner.ProcessRunner{},
+		Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -130,9 +131,11 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 				tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
 			}
 			trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-			lp := newLoop(store, noOpObserve, fixedClock(at.Add(time.Hour)),
-				config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-				loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})))
+			lp := newLoopWithDeps(loop.Deps{
+				Store: store, Observe: noOpObserve, Clock: fixedClock(at.Add(time.Hour)),
+				Runner:  runner.ProcessRunner{},
+				Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+			})
 			if err := lp.RunOnce(ctx); err != nil {
 				t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
 			}
@@ -199,10 +202,11 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		t.Fatalf("SaveObservation(seed): %v", err)
 	}
 
-	lp := newLoop(
-		store, noOpObserve, fixedClock(at), cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src})),
-	)
+	lp := newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: fixedClock(at), Config: cfg,
+		Runner:  runner.ProcessRunner{},
+		Tracker: resolveByRemote(map[string]tracker.Source{"github.com/acme/alpha": src}),
+	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
