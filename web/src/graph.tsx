@@ -1,14 +1,13 @@
-import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { createStore } from "solid-js/store";
 import { type GraphNode, applyPoll } from "./graph-state";
+import { defineIsland, hx } from "./island";
 import {
   CARD,
   MARGIN,
   bounds as layoutBounds,
   edgePath,
   edgesFor,
-  sessionPath,
   traceChain,
   waveLabel,
 } from "./layout";
@@ -16,19 +15,11 @@ import type { Group } from "./types";
 
 const POLL_MS = 5000;
 const PHONE = "(max-width: 759px)";
-
-declare global {
-  interface Window {
-    htmx?: { process: (el: Element) => void };
-  }
-}
+const DIRECTIONS: Record<string, [number, number]> = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+};
 
 type Status = { kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string };
-
-function ticketRef(url: string): string {
-  const parts = url.split("/");
-  return `#${parts[parts.length - 1]}`;
-}
 
 function nodeTag(node: GraphNode): string {
   if (node.glyph === "failed") return node.reason;
@@ -59,13 +50,8 @@ function nodeFoot(node: GraphNode): string {
   }
 }
 
-customElement("cc-graph", {}, () => {
-  noShadowDOM();
-  // solid-element inserts into the element rather than clearing it first, so the light-DOM
-  // fallback content (the Go-only-build message) survives an upgrade unless it goes here.
-  const element = getCurrentElement();
-  const src = element.dataset.src ?? `/graph.json${window.location.search}`;
-  element.textContent = "";
+defineIsland("cc-graph", { src: "" }, (props, element) => {
+  const src = props.src || element.dataset.src || "/graph.json";
 
   const [nodes, setNodes] = createStore<GraphNode[]>([]);
   const [status, setStatus] = createSignal<Status>({ kind: "loading" });
@@ -134,9 +120,7 @@ customElement("cc-graph", {}, () => {
   });
 
   function onNodeKeyDown(e: KeyboardEvent, node: GraphNode) {
-    const dir = ({ ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] } as const)[
-      e.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
-    ];
+    const dir = DIRECTIONS[e.key];
     if (!dir) return;
     e.preventDefault();
     const [dCol] = dir;
@@ -146,18 +130,19 @@ customElement("cc-graph", {}, () => {
         : nodes.filter((n) => Math.sign(n.col - node.col) === dCol);
     if (inDirection.length === 0) return;
     inDirection.sort((a, b) => Math.abs(a.y - node.y) - Math.abs(b.y - node.y));
-    nodeRefs.get(inDirection[0].url)?.focus();
+    const nearest = inDirection[0];
+    if (nearest) nodeRefs.get(nearest.url)?.focus();
   }
 
   function nodeLink(node: GraphNode, stacked: boolean) {
     const isLit = () => traced().has(node.url);
-    const href = () => sessionPath(node.url);
+    const href = () => node.session_path;
     return (
       <a
         data-node
-        class="grid h-[104px] cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left no-underline [font:inherit] text-inherit"
+        class="grid cursor-pointer content-start gap-1 rounded-lg border px-[10px] py-[9px] text-left no-underline [font:inherit] text-inherit"
         classList={{
-          "absolute w-[240px]": !stacked,
+          absolute: !stacked,
           "w-full": stacked,
           "bg-surface": node.glyph !== "blocked",
           "bg-canvas border-dashed": node.glyph === "blocked",
@@ -165,7 +150,9 @@ customElement("cc-graph", {}, () => {
           "border-border-soft": !isLit() && node.glyph === "done",
           "border-s-attention": isLit(),
         }}
-        style={stacked ? undefined : { left: `${node.x}px`, top: `${node.y}px` }}
+        style={stacked
+          ? { height: `${CARD.nodeH}px` }
+          : { left: `${node.x}px`, top: `${node.y}px`, width: `${CARD.nodeW}px`, height: `${CARD.nodeH}px` }}
         href={href() || undefined}
         hx-get={href() || undefined}
         hx-select="#main"
@@ -175,7 +162,7 @@ customElement("cc-graph", {}, () => {
         ref={(el) => {
           nodeRefs.set(node.url, el);
           onCleanup(() => nodeRefs.get(node.url) === el && nodeRefs.delete(node.url));
-          queueMicrotask(() => window.htmx?.process(el));
+          hx(el);
         }}
         onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(node.url)}
         onPointerLeave={() => setHovered(null)}
@@ -185,12 +172,11 @@ customElement("cc-graph", {}, () => {
       >
         <span class="flex items-center gap-[7px]">
           <span class={`glyph glyph-${node.glyph}${node.alive ? " glyph-pulse" : ""}`}>{node.state}</span>
-          <span class="text-xs text-meta">{ticketRef(node.url)}</span>
+          <span class="text-xs text-meta">{node.ref}</span>
           <span class="ml-auto text-2xs text-muted">{nodeTag(node)}</span>
         </span>
         <span
-          class="overflow-hidden text-sm font-medium leading-[1.35]"
-          style={{ display: "-webkit-box", "-webkit-line-clamp": 2, "-webkit-box-orient": "vertical" }}
+          class="line-clamp-2 overflow-hidden text-sm font-medium leading-[1.35]"
         >
           {node.title || "untitled"}
         </span>
@@ -214,7 +200,7 @@ customElement("cc-graph", {}, () => {
           <div class="grid gap-4">
             <For each={cols()}>
               {(col) => (
-                <section class="grid gap-2" aria-label={waveLabel(col)}>
+                <section class="grid gap-2">
                   <h3 class="text-xs font-medium text-fg-2">{waveLabel(col)}</h3>
                   <For each={nodes.filter((n) => n.col === col)}>{(node) => nodeLink(node, true)}</For>
                 </section>
@@ -235,7 +221,7 @@ customElement("cc-graph", {}, () => {
                 </span>
               )}
             </For>
-            <svg width={bounds().width} height={bounds().height} aria-hidden="true" role="presentation">
+            <svg width={bounds().width} height={bounds().height} aria-hidden="true">
               <For each={edges()}>
                 {(edge) => {
                   const lit = () => traced().has(edge.from.url) && traced().has(edge.to.url);

@@ -1,7 +1,7 @@
-import { customElement, getCurrentElement, noShadowDOM } from "solid-element";
 import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import type { JSX } from "solid-js";
-import { bounds, edgePath, edgesFor, stackByColumn } from "./layout";
+import { defineIsland, hx } from "./island";
+import { COMPACT, bounds, edgePath, edgesFor, stackByColumn } from "./layout";
 import {
   type Candidate,
   REFUSED,
@@ -9,11 +9,53 @@ import {
   columnsFor,
   initialTicked,
   sectionsFor,
-  ticketRef,
   toggleResult,
 } from "./launch";
 
 type Status = "loading" | "error" | "ready";
+
+function Section(props: {
+  title: string;
+  rows: Candidate[];
+  ticked: Set<string>;
+  toggle: (c: Candidate, box: HTMLInputElement) => void;
+}) {
+  return (
+    <Show when={props.rows.length > 0}>
+      <section class="launch-section">
+        <h3 class="launch-section-title">
+          {props.title} <span class="text-muted">{props.rows.length}</span>
+        </h3>
+        <ul class="launch-rows">
+          <For each={props.rows}>
+            {(c) => (
+              <li class="launch-row max-[759px]:flex-col max-[759px]:items-stretch">
+                <label class="launch-row-main">
+                  <input
+                    type="checkbox"
+                    checked={props.ticked.has(c.url)}
+                    disabled={c.label === REFUSED}
+                    onChange={(e) => props.toggle(c, e.currentTarget)}
+                  />
+                  <Show when={props.ticked.has(c.url) && c.label !== REFUSED}>
+                    <input type="hidden" name="ticket" value={c.url} />
+                    <input type="hidden" name="hash" value={`${c.url} ${c.prompt_hash}`} />
+                  </Show>
+                  <span class="launch-row-ref">{c.ref}</span>
+                  <span>{c.title}</span>
+                </label>
+                <span class="launch-row-meta min-w-0 wrap-anywhere text-muted max-[759px]:ml-0 max-[759px]:pl-[25px]">
+                  {c.base} &middot; {c.base_verdict}
+                  {c.reason && <> &middot; {c.reason}</>}
+                </span>
+              </li>
+            )}
+          </For>
+        </ul>
+      </section>
+    </Show>
+  );
+}
 
 function Banner(props: { children: JSX.Element }) {
   return (
@@ -24,22 +66,18 @@ function Banner(props: { children: JSX.Element }) {
   );
 }
 
-customElement(
+defineIsland(
   "cc-launch-modal",
   { feature: "", tickets: "" },
-  (props: { feature: string; tickets: string }) => {
-    noShadowDOM();
-    // solid-element inserts into the element rather than clearing it first, so the light-DOM
-    // fallback content (the Go-only-build message) survives an upgrade unless it goes here.
-    getCurrentElement().textContent = "";
-
+  (props, element) => {
     const [candidates, setCandidates] = createSignal<Candidate[]>([]);
     const [ticked, setTicked] = createSignal<Set<string>>(new Set());
     const [refusal, setRefusal] = createSignal<string | null>(null);
     const [status, setStatus] = createSignal<Status>("loading");
 
     onMount(async () => {
-      const dialog = getCurrentElement().closest("dialog");
+      hx(element);
+      const dialog = element.closest("dialog");
       if (dialog) {
         const onClose = () => {
           dialog.remove();
@@ -50,7 +88,7 @@ customElement(
         dialog.addEventListener("close", onClose);
         onCleanup(() => dialog.removeEventListener("close", onClose));
         dialog.removeAttribute("open");
-      dialog.showModal();
+        dialog.showModal();
       }
 
       const controller = new AbortController();
@@ -93,44 +131,6 @@ customElement(
 
     const sections = createMemo(() => sectionsFor(candidates()));
 
-    function Section(sec: { title: string; rows: Candidate[] }) {
-      return (
-        <Show when={sec.rows.length > 0}>
-          <section class="launch-section" aria-label={sec.title}>
-            <h3 class="launch-section-title">
-              {sec.title} <span class="text-muted">{sec.rows.length}</span>
-            </h3>
-            <ul class="launch-rows">
-              <For each={sec.rows}>
-                {(c) => (
-                  <li class="launch-row">
-                    <label class="launch-row-main">
-                      <input
-                        type="checkbox"
-                        checked={ticked().has(c.url)}
-                        disabled={c.label === REFUSED}
-                        onChange={(e) => toggle(c, e.currentTarget)}
-                      />
-                      <Show when={ticked().has(c.url) && c.label !== REFUSED}>
-                        <input type="hidden" name="ticket" value={c.url} />
-                        <input type="hidden" name="hash" value={`${c.url} ${c.prompt_hash}`} />
-                      </Show>
-                      <span class="launch-row-ref">{c.ref}</span>
-                      <span>{c.title}</span>
-                    </label>
-                    <span class="launch-row-meta text-muted">
-                      {c.base} &middot; {c.base_verdict}
-                      {c.reason && <> &middot; {c.reason}</>}
-                    </span>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </section>
-        </Show>
-      );
-    }
-
     return (
       <div>
         <Switch>
@@ -147,35 +147,32 @@ customElement(
             <Show when={refusal()}>{(message) => <Banner>{message()}</Banner>}</Show>
 
             <div
-              class="relative mb-3 overflow-hidden rounded border border-border"
-              style={{ width: `${dagBounds().width}px`, height: `${dagBounds().height}px` }}
+              class="mb-3 max-w-full overflow-x-auto rounded border border-border"
+              style={{ width: `${dagBounds().width}px` }}
             >
-              <svg
-                width={dagBounds().width}
-                height={dagBounds().height}
-                aria-hidden="true"
-                role="presentation"
-              >
-                <For each={dagEdges()}>
-                  {(edge) => <path class="fill-none stroke-border stroke-[1.5]" d={edgePath(edge)} />}
+              <div class="relative" style={{ width: `${dagBounds().width}px`, height: `${dagBounds().height}px` }}>
+                <svg width={dagBounds().width} height={dagBounds().height} aria-hidden="true">
+                  <For each={dagEdges()}>
+                    {(edge) => <path class="fill-none stroke-border stroke-[1.5]" d={edgePath(edge)} />}
+                  </For>
+                </svg>
+                <For each={dagNodes()}>
+                  {(node) => (
+                    <div
+                      class="absolute flex items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-surface px-2 py-[0.3rem] text-[0.85em]"
+                      style={{ left: `${node.x}px`, top: `${node.y}px`, width: `${COMPACT.nodeW}px` }}
+                    >
+                      {node.ref} {node.title || "untitled"}
+                    </div>
+                  )}
                 </For>
-              </svg>
-              <For each={dagNodes()}>
-                {(node) => (
-                  <div
-                    class="absolute flex w-[200px] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded border border-border bg-surface px-2 py-[0.3rem] text-[0.85em]"
-                    style={{ left: `${node.x}px`, top: `${node.y}px` }}
-                  >
-                    {ticketRef(node.url)} {node.title || "untitled"}
-                  </div>
-                )}
-              </For>
+              </div>
             </div>
 
             <form method="post" action="/launch">
-              <Section title="Ready now" rows={sections().now} />
-              <Section title="On unlock" rows={sections().onUnlock} />
-              <Section title="Refused" rows={sections().refused} />
+              <Section title="Ready now" rows={sections().now} ticked={ticked()} toggle={toggle} />
+              <Section title="On unlock" rows={sections().onUnlock} ticked={ticked()} toggle={toggle} />
+              <Section title="Refused" rows={sections().refused} ticked={ticked()} toggle={toggle} />
               <div class="launch-actions">
                 <a class="btn btn-ghost" href={cancelHref(props.feature)}>
                   Cancel

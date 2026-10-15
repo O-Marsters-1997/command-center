@@ -1,5 +1,3 @@
-// Mirrors internal/web/view's row/group json tags verbatim.
-
 export type Glyph =
   | "failed" | "attention" | "running" | "pending" | "checking" | "ready" | "blocked" | "done";
 
@@ -11,16 +9,17 @@ export type State =
 
 export interface Row {
   url: string;
+  ref: string;
   title: string;
   state: State;
   glyph: Glyph;
-  unattended: boolean;
   alive: boolean;
   blocking: string[] | null;
   after: string[] | null;
   reason: string;
   elapsed: string;
   pr_number: number;
+  session_path: string;
 }
 
 export interface Group {
