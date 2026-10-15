@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
@@ -17,9 +19,7 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 	ctx := t.Context()
 	st := openStore(t)
 	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: "checkout"}
-	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, ticket)
 	dir := t.TempDir()
 	session := storepkg.RunSession{StartNew: true}
 	for i, message := range messages {
@@ -72,34 +72,34 @@ func TestSessionPageReadsAsOneConversationAcrossRuns(t *testing.T) {
 	st := transcriptStore(t, "", "also add <b>tests</b>", "ship it")
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
-	wants := []string{
-		"opening prompt",
-		"turn 1 answer",
-		`<span class="line-label">you</span> also add &lt;b&gt;tests&lt;/b&gt;`,
-		"turn 2 answer",
-		`<span class="line-label">you</span> ship it`,
-		"turn 3 answer",
+	page := htmltest.Parse(t, body)
+	if got := page.One(t, "pre.prompt-text").Text(); got != "opening prompt" {
+		t.Errorf("opening prompt = %q", got)
 	}
-	last := -1
-	for _, want := range wants {
-		i := strings.Index(body, want)
-		if i < 0 {
-			t.Fatalf("page lacks %q:\n%s", want, body)
-		}
-		if i < last {
-			t.Errorf("%q renders before the line preceding it in %v", want, wants)
-		}
-		last = i
+	lines := page.Find(".line")
+	var got []string
+	for _, line := range lines {
+		got = append(got, line.Text())
 	}
-	if n := strings.Count(body, `class="line line-you"`); n != 2 {
-		t.Errorf("page has %d you lines, want 2", n)
+	want := []string{"turn 1 answer", "you also add <b>tests</b>", "turn 2 answer", "you ship it", "turn 3 answer"}
+	if !slices.Equal(got, want) {
+		t.Errorf("session lines = %q, want %q", got, want)
+	}
+	if you := htmltest.Parse(t, body).Find(".line-you"); len(you) != 2 {
+		t.Errorf("you lines = %d, want 2", len(you))
 	}
 }
 
 func TestSessionPageWithOneRunHasNoYouLine(t *testing.T) {
 	t.Parallel()
 	body := renderPath(t, newServer(transcriptStore(t, ""), testNow), "/s/acme/web/1")
-	if strings.Contains(body, "line-you") || !strings.Contains(body, "turn 1 answer") {
-		t.Errorf("single-run session page wrong:\n%s", body)
+	page := htmltest.Parse(t, body)
+	if lines := page.Find(".line"); len(lines) == 0 {
+		t.Error("single-run session has no transcript lines")
+	} else if got := lines[0].Text(); got != "turn 1 answer" {
+		t.Errorf("single-run transcript = %q: %s", got, lines[0].HTML())
+	}
+	if you := page.Find(".line-you"); len(you) != 0 {
+		t.Errorf("single-run session has a you line: %s", you[0].HTML())
 	}
 }

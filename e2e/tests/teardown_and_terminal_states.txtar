@@ -14,9 +14,8 @@ exec cc import project:teardown
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait agent-done.log 'empty.sh repo-cc-7-x'
 exec cc tick --count 1
 exec cc request GET /tickets
 stdout '>failed</span>[\s\S]*?>#CC-7</a>'
@@ -32,10 +31,9 @@ exec cc tick --count 1
 exec cc request POST '/verb?verb=re-run&ticket=https://github.com/sandbox-org/teardown/issues/CC-7'
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/teardown/issues/CC-1&ticket=https://github.com/sandbox-org/teardown/issues/CC-3&ticket=https://github.com/sandbox-org/teardown/issues/CC-4'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
 grep -count=1 'new cc-7-x' $WORK/tp.log
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-[137]-x' 3
 exec cc tick --count 1
 
 # CC-7's re-run pushed its commits through the very same push step a fresh launch uses.
@@ -49,7 +47,7 @@ stdout '"TicketURL":"https://github.com/sandbox-org/teardown/issues/CC-7","Kind"
 # Swap the fixture: CC-1's PR is now merged, CC-3's is open (which unlocks CC-4), CC-7's is open.
 cc-fake-gh teardown-mid
 exec cc tick --count 1
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-4-x'
 exec cc tick --count 1
 exec git -C $WORK/remote.git rev-parse --verify refs/heads/cc-4-x
 exec cc request GET /tickets

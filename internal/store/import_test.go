@@ -53,12 +53,8 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 		t.Errorf("repo/source/feature = %q/%q/%q", seeded.Repo, seeded.Source, seeded.Feature)
 	}
 
-	// An operator hand-edits the branch and clears the blockers before the next import lands.
-	edited := seeded
-	edited.Branch = "cc-1-custom-branch"
-	edited.BlockedBy = nil
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{edited}); err != nil {
-		t.Fatal(err)
+	if err := store.EditTicket(ctx, url, "cc-1-custom-branch", nil); err != nil {
+		t.Fatalf("EditTicket: %v", err)
 	}
 
 	second := []storepkg.ImportedTicket{{
@@ -90,6 +86,45 @@ func TestImportTicketsRefreshesTrackerFieldsButNotBranchOrBlockedBy(t *testing.T
 	}
 	if len(refreshed.BlockedBy) != 0 {
 		t.Errorf("blocked_by = %v, want the cleared blockers to survive re-import", refreshed.BlockedBy)
+	}
+}
+
+func TestReimportKeepsAQueuedEditTicketIntent(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	st := openStore(t)
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	url := "https://github.com/acme/alpha/issues/1"
+	seed := []storepkg.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x", Status: "ready"}, Repo: "alpha",
+	}}
+	if err := st.ImportTickets(ctx, "project:x", seed, at); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.QueueEditTicketIntent(ctx, storepkg.EditRequest{
+		Ticket: url, Branch: "cc-1-custom-branch", At: at.Add(time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	again := []storepkg.ImportedTicket{{
+		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x, renamed", Status: "in-progress"}, Repo: "alpha",
+	}}
+	if err := st.ImportTickets(ctx, "project:x", again, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	intents, err := st.PendingEditTicketIntents(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(intents) != 1 || intents[0].TicketID != url || intents[0].Branch != "cc-1-custom-branch" {
+		t.Errorf("PendingEditTicketIntents = %+v, want the queued branch edit for %s", intents, url)
+	}
+	tickets, err := st.Tickets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].Title != "Add x, renamed" {
+		t.Errorf("Tickets = %+v, want the refreshed tracker-owned title", tickets)
 	}
 }
 

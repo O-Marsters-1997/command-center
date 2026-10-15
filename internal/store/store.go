@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,7 @@ const (
 	maxIdleConns     = 5
 	connMaxLifetime  = 30 * time.Minute
 	pingTimeout      = 5 * time.Second
+	openTimeout      = 2 * time.Minute
 	statementTimeout = 30 * time.Second
 )
 
@@ -44,20 +46,31 @@ type Store struct {
 	q  *ccdb.Queries
 }
 
-// OpenStore connects to the database dsn names and migrates it up to the latest embedded
-// migration.
-func OpenStore(ctx context.Context, dsn string) (*Store, error) {
+type Option func(*sql.DB)
+
+// MaxOpenConns limits the store pool's concurrent connections.
+func MaxOpenConns(n int) Option { return func(db *sql.DB) { db.SetMaxOpenConns(n) } }
+
+// Migrations returns the embedded files used to key test database templates.
+func Migrations() fs.FS { return migrations }
+
+// OpenStore connects to dsn and migrates it unless opened from a prepared template.
+func OpenStore(dsn string, opts ...Option) (*Store, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
+	defer cancel()
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
 
-	migrateDB := stdlib.OpenDB(*cfg)
-	if err := migrate(ctx, migrateDB); err != nil {
-		return nil, errors.Join(err, migrateDB.Close())
-	}
-	if err := migrateDB.Close(); err != nil {
-		return nil, fmt.Errorf("close migration connection: %w", err)
+	if !strings.HasPrefix(cfg.Database, "cc_test_") || cfg.RuntimeParams["application_name"] != "cc-cctest-clone" {
+		migrateDB := stdlib.OpenDB(*cfg)
+		if err := migrate(ctx, migrateDB); err != nil {
+			return nil, errors.Join(err, migrateDB.Close())
+		}
+		if err := migrateDB.Close(); err != nil {
+			return nil, fmt.Errorf("close migration connection: %w", err)
+		}
 	}
 
 	if _, ok := cfg.RuntimeParams["statement_timeout"]; !ok {
@@ -67,6 +80,9 @@ func OpenStore(ctx context.Context, dsn string) (*Store, error) {
 	db.SetMaxOpenConns(maxOpenConns)
 	db.SetMaxIdleConns(maxIdleConns)
 	db.SetConnMaxLifetime(connMaxLifetime)
+	for _, opt := range opts {
+		opt(db)
+	}
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(fmt.Errorf("ping pool: %w", err), db.Close())
 	}

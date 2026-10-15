@@ -2,13 +2,14 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func stackStore(t *testing.T) *storepkg.Store {
@@ -22,9 +23,7 @@ func stackStore(t *testing.T) *storepkg.Store {
 		{URL: base + "3", Repo: "acme/web", Branch: "cc-3", Feature: "checkout", BlockedBy: []string{base + "2"}},
 		{URL: base + "4", Repo: "acme/web", Branch: "cc-4", Feature: "checkout", BlockedBy: []string{base + "2"}},
 	}
-	if err := st.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	if err := st.SaveObservation(ctx, plan.Observation{ObservedAt: testNow}); err != nil {
 		t.Fatal(err)
 	}
@@ -33,20 +32,17 @@ func stackStore(t *testing.T) *storepkg.Store {
 
 func TestSessionStackPanelListsBlockersAndUnlocks(t *testing.T) {
 	t.Parallel()
-	body := renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
-	panel := body[strings.Index(body, `class="stack-panel"`):]
-	blockedBy, unlocks, _ := strings.Cut(panel, "Merging this unlocks")
-	if !strings.Contains(blockedBy, `href="/s/acme/web/1"`) {
-		t.Errorf("blockers lack #1:\n%s", blockedBy)
+	page := htmltest.Parse(t, renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2"))
+	panel := page.One(t, ".stack-panel")
+	lists := panel.Find("ul.stack-list")
+	if len(lists) != 3 {
+		t.Fatalf("stack lists = %d, want 3", len(lists))
 	}
+	lists[1].One(t, `a[href="/s/acme/web/1"]`)
 	for _, ref := range []string{"/s/acme/web/3", "/s/acme/web/4"} {
-		if !strings.Contains(unlocks, `href="`+ref+`"`) {
-			t.Errorf("unlocks lack %s:\n%s", ref, unlocks)
-		}
+		lists[2].One(t, `a[href="`+ref+`"]`)
 	}
-	if !strings.Contains(unlocks, `name="blocked_by" value="https://github.com/acme/web/issues/1"`) {
-		t.Errorf("form lacks the current blocker:\n%s", unlocks)
-	}
+	panel.One(t, `input[name="blocked_by"][value="https://github.com/acme/web/issues/1"]`)
 }
 
 func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.T) {
@@ -59,42 +55,40 @@ func TestSessionStackFormReturnsToTheSessionAndRendersTheAppliedEdit(t *testing.
 		"return":     {"/s/acme/web/3"},
 		"blocked_by": {"https://github.com/acme/web/issues/1", ""},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/ticket", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/s/acme/web/3" {
-		t.Fatalf("status = %d, location = %q", rec.Code, rec.Header().Get("Location"))
+	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/3" {
+		t.Fatalf("status = %d, location = %q", rec.Code, rec.Location)
 	}
 	if err := st.EditTicket(t.Context(), "https://github.com/acme/web/issues/3", "cc-3",
 		[]string{"https://github.com/acme/web/issues/1"}); err != nil {
 		t.Fatal(err)
 	}
-	body := renderPath(t, server, "/s/acme/web/3")
-	_, afterBlockedBy, ok := strings.Cut(body, `<h2 class="stack-title">Blocked by</h2>`)
-	if !ok {
-		t.Fatalf("no Blocked by heading:\n%s", body)
+	page := htmltest.Parse(t, renderPath(t, server, "/s/acme/web/3"))
+	panel := page.One(t, ".stack-panel")
+	lists := panel.Find("ul.stack-list")
+	if len(lists) != 2 {
+		t.Fatalf("stack lists = %d, want 2", len(lists))
 	}
-	panel, _, _ := strings.Cut(afterBlockedBy, "Merging this unlocks")
-	if !strings.Contains(panel, `href="/s/acme/web/1"`) || strings.Contains(panel, `href="/s/acme/web/2"`) {
-		t.Errorf("panel does not reflect the edit:\n%s", panel)
+	lists[1].One(t, `a[href="/s/acme/web/1"]`)
+	if old := lists[1].Find(`a[href="/s/acme/web/2"]`); len(old) != 0 {
+		t.Errorf("panel still has the former blocker: %s", old[0].HTML())
 	}
 }
 
 func TestSessionPeekPanelShowsTheFeatureAndTheTicketsProps(t *testing.T) {
 	t.Parallel()
-	body := renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2")
-	panel := body[strings.Index(body, `class="stack-panel"`):]
-	for _, want := range []string{
-		"checkout",
-		"0/4 merged",
-		`href="/f/checkout/graph"`,
-		`href="/f/checkout"`,
-		`<dd class="mono">cc-2</dd>`,
-		`href="/s/acme/web/4"`,
-	} {
-		if !strings.Contains(panel, want) {
-			t.Errorf("peek panel lacks %q:\n%s", want, panel)
+	page := htmltest.Parse(t, renderPath(t, newServer(stackStore(t), testNow), "/s/acme/web/2"))
+	panel := page.One(t, ".stack-panel")
+	for _, href := range []string{"/f/checkout/graph", "/f/checkout"} {
+		panel.One(t, `a[href="`+href+`"]`)
+	}
+	panel.One(t, `ul.stack-list li[aria-current="page"] a[href="/s/acme/web/2"]`)
+	if links := panel.Find(`a[href="/s/acme/web/4"]`); len(links) == 0 {
+		t.Error("stack has no #4 link")
+	}
+	for _, text := range []string{"checkout", "0/4 merged", "cc-2"} {
+		if !strings.Contains(panel.Text(), text) {
+			t.Errorf("peek panel has no property %q", text)
 		}
 	}
 }
@@ -105,11 +99,8 @@ func TestTicketEditIgnoresAnOffSiteReturn(t *testing.T) {
 	form := url.Values{
 		"ticket": {"https://github.com/acme/web/issues/3"}, "branch": {"cc-3"}, "return": {"//evil.example"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/ticket", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	if got := rec.Header().Get("Location"); got != "/" {
+	rec := do(t, server, http.MethodPost, "/ticket", req{Form: form})
+	if got := rec.Location; got != "/" {
 		t.Errorf("location = %q, want /", got)
 	}
 }

@@ -1,102 +1,37 @@
 package loop_test
 
 import (
-	"context"
-	"errors"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// installFakeGh puts a script named gh on PATH that logs every invocation to a file and answers
-// `pr create` per the caller's control: failCreate makes it exit non-zero, exercising push
-// failed without a real GitHub call. `issue view` always answers with a canned body, which is
-// what lets a spawn's prompt-composition step run against a fake ticket URL.
-func installFakeGh(t *testing.T, failCreate bool) (logPath string) {
-	t.Helper()
-	bin := t.TempDir()
-	logPath = filepath.Join(t.TempDir(), "gh.log")
-
-	fail := "0"
-	if failCreate {
-		fail = "1"
-	}
-	script := "#!/bin/sh\n" +
-		"echo \"$*\" >> \"" + logPath + "\"\n" +
-		"if [ \"$1 $2\" = \"pr create\" ] && [ \"" + fail + "\" = \"1\" ]; then\n" +
-		"  echo 'fake gh: pr create failed' >&2\n" +
-		"  exit 1\n" +
-		"fi\n" +
-		"exit 0\n"
-	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return logPath
-}
-
-// cutWorktree creates a real worktree for branch off origin/main, the shape pushOne's diff and
-// push both need without going through tp new (already covered by loop_launch_test.go).
-func cutWorktree(t *testing.T, repoPath, branch string) string {
-	t.Helper()
-	worktreePath := filepath.Join(t.TempDir(), "wt-"+branch)
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", branch, worktreePath, "origin/main")
-	return worktreePath
-}
-
-func commitFile(t *testing.T, worktreePath, relPath, contents string) {
-	t.Helper()
-	full := filepath.Join(worktreePath, relPath)
-	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(full, []byte(contents), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runGit(t, "-C", worktreePath, "add", relPath)
-	runGit(t, "-C", worktreePath, "commit", "-q", "-m", "agent: touch "+relPath)
-}
-
-// dispositionAsPushed records a run whose disposition is already known to be push, so these
-// tests can drive pushPushable directly without re-exercising spawn/dispose (loop_launch_test.go
-// already covers that).
 func dispositionAsPushed(t *testing.T, store *storepkg.Store, ticketURL string, at time.Time) {
 	t.Helper()
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	exitCode := 0
 	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition: %v", err)
 	}
-}
-
-func countEvents(events []storepkg.Event, kind storepkg.EventKind) int {
-	n := 0
-	for _, e := range events {
-		if e.Kind == kind {
-			n++
-		}
-	}
-	return n
 }
 
 func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring string) bool {
@@ -108,389 +43,169 @@ func hasEvent(events []storepkg.Event, kind storepkg.EventKind, detailSubstring 
 	return false
 }
 
-func remoteHasBranch(t *testing.T, root, branch string) bool {
-	t.Helper()
-	remote := filepath.Join(root, "remote.git")
-	err := exec.Command("git", "-C", remote, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch).Run()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return false
-	}
-	if err != nil {
-		t.Fatalf("rev-parse refs/heads/%s in %s: %v", branch, remote, err)
-	}
-	return true
-}
-
-func countLines(t *testing.T, path string) int {
-	t.Helper()
-	body, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return 0
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	trimmed := strings.TrimSpace(string(body))
-	if trimmed == "" {
-		return 0
-	}
-	return len(strings.Split(trimmed, "\n"))
-}
-
 func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
+	t.Parallel()
+	f := newPushFixture(t)
+	gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+	f.tick(t)
 
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, ".github/workflows/x.yml", "name: x\n")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, ticket.URL, at)
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if remoteHasBranch(t, root, "cc-1") {
+	if gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 must not exist on the remote: the diff hit the push policy")
 	}
 
-	facts, err := store.PushFacts(t.Context())
+	facts, err := f.Store.PushFacts(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PushFacts: %v", err)
 	}
-	f := facts[plan.TicketURL(ticket.URL)]
-	if !f.Refused || f.RefusedPath != ".github/workflows/x.yml" {
-		t.Errorf("push facts = %+v, want refused naming .github/workflows/x.yml", f)
+	fact := facts[plan.TicketURL(f.Ticket.URL)]
+	if !fact.Refused || fact.RefusedPath != ".github/workflows/x.yml" {
+		t.Errorf("push facts = %+v, want refused naming .github/workflows/x.yml", fact)
 	}
-
-	events, err := store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "push_refused", ".github/workflows/x.yml") {
+	events := f.events(t, "push_refused")
+	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL ||
+		!strings.Contains(events[0].Detail, ".github/workflows/x.yml") {
 		t.Errorf("events = %+v, want a push_refused event naming the path", events)
 	}
-
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	events, err = store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := countEvents(events, "push_refused"); got != 1 {
+	f.tick(t)
+	if got := len(f.events(t, "push_refused")); got != 1 {
 		t.Errorf("push_refused events after a second tick = %d, want 1: no auto-retry", got)
 	}
 }
 
 func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	t.Parallel()
+	f := newPushFixture(t)
+	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+	f.tick(t)
 
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, ticket.URL, at)
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if !remoteHasBranch(t, root, "cc-1") {
+	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Fatal("cc-1 was not pushed to the remote")
 	}
-	if got := countLines(t, ghLog); got != 1 {
-		t.Fatalf("gh invocations = %d, want exactly 1 (pr create)", got)
-	}
-	body, err := os.ReadFile(ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{"pr create", "--base main", "--fill", "--label keep-open"} {
-		if !strings.Contains(string(body), want) {
-			t.Errorf("gh log %q does not contain %q", body, want)
-		}
+	calls := f.Forge.Calls("Create")
+	if len(calls) != 1 || calls[0].Repo != f.Worktree || calls[0].Base != "main" || calls[0].Draft {
+		t.Errorf("Create calls = %+v, want one non-draft PR based on main", calls)
 	}
 
-	tips, err := store.LastPushedTips(t.Context())
+	tips, err := f.Store.LastPushedTips(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastPushedTips: %v", err)
 	}
-	if tips[plan.TicketURL(ticket.URL)] == "" {
+	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
 		t.Error("no pushes row recorded")
 	}
 
-	// A second tick with the tip unchanged must not push or create again (inv. 20).
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	if got := countLines(t, ghLog); got != 1 {
-		t.Errorf("gh invocations after a second tick = %d, want still 1", got)
+	f.tick(t)
+	if got := len(f.Forge.Calls("Create")); got != 1 {
+		t.Errorf("Create calls after a second tick = %d, want 1", got)
 	}
 }
 
 func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	t.Parallel()
+	f := newPushFixture(t)
+	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+	f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Open}
+	f.tick(t)
 
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, ticket.URL, at)
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath},
-		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {Number: 7, HeadRef: "cc-1", State: plan.Open}},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	if !remoteHasBranch(t, root, "cc-1") {
+	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 was not pushed to the remote")
 	}
-	if got := countLines(t, ghLog); got != 0 {
-		t.Errorf("gh invocations = %d, want 0: an open PR must be adopted, never duplicated", got)
+	if got := len(f.Forge.Calls("Create")); got != 0 {
+		t.Errorf("Create calls = %d, want 0: an open PR must be adopted, never duplicated", got)
 	}
 
-	tips, err := store.LastPushedTips(t.Context())
+	tips, err := f.Store.LastPushedTips(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastPushedTips: %v", err)
 	}
-	if tips[plan.TicketURL(ticket.URL)] == "" {
+	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
 		t.Error("no pushes row recorded despite adopting the existing PR")
 	}
 }
 
 func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, true) // pr create fails
-
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, ticket.URL, at)
-
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-	if !remoteHasBranch(t, root, "cc-1") {
+	t.Parallel()
+	f := newPushFixture(t)
+	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
+	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingCreate{f.Forge}))
+	f.tick(t)
+	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Fatal("the push itself must still succeed even though pr create fails")
 	}
-	if got := countLines(t, ghLog); got != 1 {
-		t.Fatalf("gh invocations = %d, want 1 (the failed pr create)", got)
+	if got := len(f.Forge.Calls("Create")); got != 1 {
+		t.Fatalf("Create calls = %d, want 1 (the failed attempt)", got)
 	}
 
-	facts, err := store.PushFacts(t.Context())
+	facts, err := f.Store.PushFacts(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PushFacts: %v", err)
 	}
-	if !facts[plan.TicketURL(ticket.URL)].Failed {
+	if !facts[plan.TicketURL(f.Ticket.URL)].Failed {
 		t.Fatal("push facts must record the failure")
 	}
-	tips, err := store.LastPushedTips(t.Context())
+	tips, err := f.Store.LastPushedTips(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastPushedTips: %v", err)
 	}
-	if tips[plan.TicketURL(ticket.URL)] != "" {
+	if tips[plan.TicketURL(f.Ticket.URL)] != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
-	// A second automatic tick must not retry: still exactly one gh invocation.
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-	if got := countLines(t, ghLog); got != 1 {
-		t.Errorf("gh invocations after an automatic tick = %d, want still 1: no auto-retry", got)
+	f.tick(t)
+	if got := len(f.Forge.Calls("Create")); got != 1 {
+		t.Errorf("Create calls after an automatic tick = %d, want 1: no auto-retry", got)
 	}
 
-	// The human's retry-push verb bypasses the gate. Rewrite the fake gh to succeed first.
-	if err := os.WriteFile(filepath.Join(filepath.Dir(mustLookPath(t, "gh")), "gh"),
-		[]byte("#!/bin/sh\necho \"$*\" >> \""+ghLog+"\"\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
+	f.reset(testAt, runner.ProcessRunner{})
+	if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "retry-push", testAt.Add(time.Second)); err != nil {
+		t.Fatalf("QueueVerbIntent: %v", err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "retry-push", at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+	f.tick(t)
+	if got := len(f.Forge.Calls("Create")); got != 2 {
+		t.Fatalf("Create calls after retry-push = %d, want 2", got)
 	}
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("retry RunOnce: %v", err)
-	}
-	if got := countLines(t, ghLog); got != 2 {
-		t.Fatalf("gh invocations after retry-push = %d, want 2", got)
-	}
-	if tips, err := store.LastPushedTips(t.Context()); err != nil || tips[plan.TicketURL(ticket.URL)] == "" {
-		t.Errorf("pushes row missing after a successful retry-push (err=%v)", err)
-	}
-
-	pending, err := store.PendingVerbIntents(t.Context(), "retry-push")
+	tips, err = f.Store.LastPushedTips(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastPushedTips: %v", err)
+	}
+	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
+		t.Error("pushes row missing after a successful retry-push")
+	}
+
+	pending, err := f.Store.PendingVerbIntents(t.Context(), "retry-push")
+	if err != nil {
+		t.Fatalf("PendingVerbIntents: %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending retry-push intents = %+v, want none: consumed", pending)
 	}
 }
 
-func mustLookPath(t *testing.T, name string) string {
-	t.Helper()
-	path, err := exec.LookPath(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	installFakeGh(t, false)
-
-	worktreePath := cutWorktree(t, repoPath, "cc-1")
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "cc-1")
-
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	dispositionAsPushed(t, store, ticket.URL, at)
+	t.Parallel()
+	f := newPushFixture(t)
+	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
+	gittest.Run(t, f.Repo, "push", "-q", "origin", "cc-1")
+	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
 	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
-	tip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	tip := f.head(t, f.Repo, "refs/heads/cc-1")
 	push := storepkg.Push{
-		Ticket: plan.TicketURL(ticket.URL), Tip: plan.SHA(tip), BaseSHA: plan.SHA(tip), BaseBranch: "main", At: at,
+		Ticket: plan.TicketURL(f.Ticket.URL), Tip: plan.SHA(tip), BaseSHA: plan.SHA(tip), BaseBranch: "main", At: testAt,
 	}
-	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+	if err := f.Store.RecordPush(t.Context(), push); err != nil {
+		t.Fatalf("RecordPush: %v", err)
 	}
 
 	// The worktree and the branch are both gone -- tp remove --force's real effect.
-	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
-	runGit(t, "-C", repoPath, "branch", "-D", "cc-1")
-
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{}, PRs: map[plan.BranchRef]plan.PR{}}
-	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at), cfg, ws, runner.ProcessRunner{})
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("RunOnce must not fail once a pushed ticket's branch has been removed: %v", err)
-	}
+	gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
+	gittest.Run(t, f.Repo, "branch", "-D", "cc-1")
+	delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
+	f.tick(t)
 	// A second tick too: the hazard is that every future tick would fail, not just the first.
-	if err := lp.RunOnce(t.Context()); err != nil {
-		t.Fatalf("second RunOnce: %v", err)
-	}
-}
-
-func TestRestackedSinceLastPushSkipsANullTicketLaunchEvent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := store.AppendEvent(ctx, storepkg.Event{At: time.Now(), Kind: "restacked"}); err != nil {
-		t.Fatal(err)
-	}
-	restackedEv := storepkg.Event{At: time.Now(), TicketURL: ticket.URL, Kind: "restacked"}
-	if err := store.AppendEvent(ctx, restackedEv); err != nil {
-		t.Fatal(err)
-	}
-
-	restacked, err := store.RestackedSinceLastPush(ctx)
-	if err != nil {
-		t.Fatalf("RestackedSinceLastPush: %v", err)
-	}
-	if restacked[""] {
-		t.Errorf("restacked = %+v, want no entry for a NULL-ticket event", restacked)
-	}
-	if !restacked[plan.TicketURL(ticket.URL)] {
-		t.Errorf("restacked = %+v, want %s present", restacked, ticket.URL)
-	}
-}
-
-func TestPushFactsSkipsANullTicketLaunchEvent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-
-	refused := storepkg.Event{At: time.Now(), Kind: "push_refused", Detail: "no ticket"}
-	if err := store.AppendEvent(ctx, refused); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.AppendEvent(ctx, storepkg.Event{
-		At: time.Now(), TicketURL: ticket.URL, Kind: "push_refused", Detail: "policy hit",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	facts, err := store.PushFacts(ctx)
-	if err != nil {
-		t.Fatalf("PushFacts: %v", err)
-	}
-	if _, ok := facts[""]; ok {
-		t.Errorf("facts = %+v, want no entry for a NULL-ticket event", facts)
-	}
-	if got := facts[plan.TicketURL(ticket.URL)]; !got.Refused || got.RefusedPath != "policy hit" {
-		t.Errorf("facts[%s] = %+v, want Refused with path %q", ticket.URL, got, "policy hit")
-	}
+	f.tick(t)
 }

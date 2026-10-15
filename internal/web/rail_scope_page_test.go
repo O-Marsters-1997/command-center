@@ -2,12 +2,12 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
@@ -20,9 +20,7 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 		{URL: alpha, Repo: "acme/alpha", Branch: "a-1"},
 		{URL: solo, Repo: "acme/solo", Branch: "s-4"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	if err := st.CreateProject(t.Context(), storepkg.NewProject{
 		Name: "acme", Hue: 1, Repos: []string{"acme/alpha"}, At: testNow,
 	}); err != nil {
@@ -47,22 +45,28 @@ func TestRailNarrowsToTheProjectInTheCurrentURL(t *testing.T) {
 	server := newServer(st, testNow)
 
 	rail := func(currentURL string) string {
-		req := httptest.NewRequest(http.MethodGet, "/rail", nil)
-		req.Header.Set("HX-Request", "true")
-		req.Header.Set("HX-Current-URL", currentURL)
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, req)
-		return rec.Body.String()
+		return do(t, server, http.MethodGet, "/rail", req{Header: http.Header{
+			"Hx-Request":     {"true"},
+			"Hx-Current-Url": {currentURL},
+		}}).Body
 	}
 
-	scoped := rail("http://cc/tickets?project=acme")
-	if !strings.Contains(scoped, `href="/s/acme/alpha/1?project=acme"`) {
-		t.Errorf("scoped rail missing the acme card with its scope:\n%s", scoped)
+	scoped := htmltest.Parse(t, rail("http://cc/tickets?project=acme"))
+	scopedGroup := scoped.One(t, "#rail-body").One(t, `[data-group="in-flight"]`)
+	if got := len(scopedGroup.Find(`a[href="/s/acme/alpha/1?project=acme"]`)); got != 1 {
+		t.Errorf("scoped rail alpha links = %d, want 1", got)
 	}
-	if strings.Contains(scoped, "/s/acme/solo/4") {
-		t.Errorf("scoped rail listed a ticket outside the project:\n%s", scoped)
+	if got := len(scopedGroup.Find("a.rail-link")); got != 1 {
+		t.Errorf("scoped rail ticket links = %d, want 1", got)
 	}
-	if unscoped := rail("http://cc/tickets"); !strings.Contains(unscoped, "/s/acme/solo/4") {
-		t.Errorf("unscoped rail dropped a ticket:\n%s", unscoped)
+	unscoped := htmltest.Parse(t, rail("http://cc/tickets")).One(t, "#rail-body").One(t, `[data-group="in-flight"]`)
+	if got := len(unscoped.Find(`a[href="/s/acme/alpha/1"]`)); got != 1 {
+		t.Errorf("unscoped rail alpha links = %d, want 1", got)
+	}
+	if got := len(unscoped.Find(`a[href="/s/acme/solo/4"]`)); got != 1 {
+		t.Errorf("unscoped rail solo links = %d, want 1", got)
+	}
+	if got := len(unscoped.Find("a.rail-link")); got != 2 {
+		t.Errorf("unscoped rail ticket links = %d, want 2", got)
 	}
 }

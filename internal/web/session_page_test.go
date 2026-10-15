@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -10,42 +9,43 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
 const sessionTicket = "https://github.com/acme/web/issues/1"
 
-func sessionStore(t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool) (*storepkg.Store, string) {
-	t.Helper()
-	return sessionStoreEnding(t, kind, prompt, keepPrompt, alive, plan.OutcomePush)
+type sessionRunOpts struct {
+	Feature    string
+	Kind       plan.RunKind
+	Prompt     string
+	KeepPrompt bool
+	Alive      bool
+	Outcome    plan.Outcome
 }
 
-func sessionStoreEnding(
-	t *testing.T, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
-) (*storepkg.Store, string) {
+func sessionStore(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
 	t.Helper()
-	return sessionStoreInFeature(t, "checkout", kind, prompt, keepPrompt, alive, outcome)
+	opts.Outcome = plan.OutcomePush
+	return sessionStoreEnding(t, opts)
 }
 
-func sessionStoreInFeature(
-	t *testing.T, feature string, kind plan.RunKind, prompt string, keepPrompt, alive bool, outcome plan.Outcome,
-) (*storepkg.Store, string) {
+func sessionStoreEnding(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
+	t.Helper()
+	opts.Feature = "checkout"
+	return sessionStoreInFeature(t, opts)
+}
+
+func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, string) {
 	t.Helper()
 	ctx := t.Context()
 	st := openStore(t)
-	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: feature}
-	if err := st.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
-	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ticket := storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1", Feature: opts.Feature}
+	storetest.Tickets(t, st, ticket)
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "1.jsonl")
 	line := `{"type":"assistant","timestamp":"2026-08-20T12:00:01Z",` +
@@ -53,20 +53,26 @@ func sessionStoreInFeature(
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if keepPrompt {
-		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(prompt), 0o600); err != nil {
+	if opts.KeepPrompt {
+		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(opts.Prompt), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
+		Ticket: sessionTicket, Kind: opts.Kind, BaselineSHA: "base", PromptHash: "hash",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := st.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !alive {
-		exit := 0
+	if !opts.Alive {
+		exitCode := 0
 		if err := st.RecordDisposition(ctx, storepkg.Disposition{
-			RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exit),
+			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(exitCode),
 			Cost: option.None[float64](), EndedAt: testNow,
 		}); err != nil {
 			t.Fatal(err)
@@ -74,7 +80,7 @@ func sessionStoreInFeature(
 	}
 	obs := plan.Observation{
 		ObservedAt: testNow,
-		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: alive}},
+		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: opts.Alive}},
 	}
 	if err := st.SaveObservation(ctx, obs); err != nil {
 		t.Fatal(err)
@@ -83,40 +89,58 @@ func sessionStoreInFeature(
 }
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
-	t.Parallel()
-	for _, kind := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
-		prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
-		st, _ := sessionStore(t, kind, prompt, true, true)
-		body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
+	for _, tt := range []struct {
+		name string
+		kind plan.RunKind
+	}{
+		{name: "agent", kind: plan.RunKindAgent},
+		{name: "follow-up", kind: plan.RunKindFollowUp},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
+			st, _ := sessionStore(t, sessionRunOpts{Kind: tt.kind, Prompt: prompt, KeepPrompt: true, Alive: true})
+			body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
-		for _, want := range []string{
-			`data-glyph="running"`, "#1", "acme/web", "checkout", `<main id="main"`, `class="back"`,
-			`<pre class="prompt-text">Implement &lt;b&gt;#1&lt;/b&gt;` + "\n  &amp; keep   spacing\n</pre>",
-			`sse-connect="/ticket/`, `id="session-actions"`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("%s run: page lacks %q:\n%s", kind, want, body)
+			main := htmltest.Parse(t, body).One(t, "main#main")
+			main.One(t, `header.session-head [data-glyph="running"]`)
+			main.One(t, "a.back")
+			main.One(t, "#session-actions")
+			text := main.Text()
+			if !strings.Contains(text, "#1") || !strings.Contains(text, "acme/web") ||
+				!strings.Contains(text, "checkout") {
+				t.Errorf("%s session heading missing #1, acme/web, or checkout", tt.kind)
 			}
-		}
+			pre := main.One(t, "pre.prompt-text")
+			if got := pre.HTML(); !strings.Contains(got, "Implement &lt;b&gt;#1&lt;/b&gt;\n  &amp; keep   spacing\n") {
+				t.Errorf("%s prompt bytes = %s", tt.kind, got)
+			}
+			if streams := main.Find("[sse-connect]"); len(streams) == 0 {
+				t.Errorf("%s session has no event stream", tt.kind)
+			}
+		})
 	}
 }
 
 func TestSessionPageSaysWhenPromptWasPruned(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "", false, false)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
-	if !strings.Contains(body, "The prompt was not kept.") || strings.Contains(body, `class="prompt-text"`) {
-		t.Errorf("pruned prompt not announced:\n%s", body)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if got := main.Text(); !strings.Contains(got, "The prompt was not kept.") {
+		t.Error("pruned prompt status missing")
+	}
+	if pre := main.Find("pre.prompt-text"); len(pre) != 0 {
+		t.Errorf("pruned prompt still shown: %s", pre[0].HTML())
 	}
 }
 
 func TestSessionRawTabServesTheJSONL(t *testing.T) {
 	t.Parallel()
-	st, line := sessionStore(t, "agent", "p", true, false)
+	st, line := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1?log=raw")
-	escaped := strings.TrimSpace(strings.ReplaceAll(line, `"`, "&#34;"))
-	if !strings.Contains(body, `<pre class="raw-log">`) || !strings.Contains(body, escaped) {
-		t.Errorf("raw tab lacks the JSONL:\n%s", body)
+	pre := htmltest.Parse(t, body).One(t, "pre.raw-log")
+	if got := pre.Text(); got != strings.TrimSpace(line) {
+		t.Errorf("raw log = %q, want %q", got, strings.TrimSpace(line))
 	}
 }
 
@@ -124,14 +148,23 @@ func TestSessionPageShowsTheWorktreeToShellInto(t *testing.T) {
 	t.Parallel()
 	now := testNow
 	body := renderPath(t, newServer(detailStore(t, writeLog(t, 1), now, now), now), "/s/o/r/76")
-	if !strings.Contains(body, "<code>/repos/repo-cc-76</code>") {
-		t.Errorf("session page does not show the ticket's worktree:\n%s", body)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if codes := main.Find("code"); len(codes) == 0 {
+		t.Error("session has no worktree path")
+	} else {
+		found := false
+		for _, code := range codes {
+			found = found || code.Text() == "/repos/repo-cc-76"
+		}
+		if !found {
+			t.Errorf("worktree path absent from %d code elements", len(codes))
+		}
 	}
 }
 
 func TestSessionPageUnknownTicketIs404(t *testing.T) {
 	t.Parallel()
-	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/9")
+	rec := do(t, newServer(openStore(t), testNow), http.MethodGet, "/s/acme/web/9", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -139,7 +172,7 @@ func TestSessionPageUnknownTicketIs404(t *testing.T) {
 
 func TestSessionPageWithANonNumericTicketIs404(t *testing.T) {
 	t.Parallel()
-	rec := get(t, newServer(openStore(t), testNow), "/s/acme/web/nine")
+	rec := do(t, newServer(openStore(t), testNow), http.MethodGet, "/s/acme/web/nine", req{})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
@@ -170,7 +203,7 @@ func TestParseSessionRefRefusesATooShortURL(t *testing.T) {
 func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	st, _ := sessionStore(t, "agent", "", false, false)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
 	logPath, _, err := st.LatestRunLog(ctx, sessionTicket)
 	if err != nil {
 		t.Fatal(err)
@@ -185,55 +218,48 @@ func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
-	if !strings.Contains(body, `<span class="line-label">merged</span> PR #1 merged`) {
-		t.Errorf("session page lacks the merge line:\n%s", body)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if got := main.Text(); !strings.Contains(got, "merged PR #1 merged") {
+		t.Error("session merge line missing merged PR #1 merged")
 	}
-	if strings.Contains(body, "Nothing to show yet") {
-		t.Errorf("session page claims there is nothing to show:\n%s", body)
+	if strings.Contains(main.Text(), "Nothing to show yet") {
+		t.Error("session falsely claims empty log")
 	}
-}
-
-func sessionVerb(t *testing.T, srv http.Handler, form url.Values, htmx bool) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/verb", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if htmx {
-		req.Header.Set("HX-Request", "true")
-	}
-	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	return rec
 }
 
 func TestSessionComposerFollowsTheState(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
-	for _, want := range []string{
-		`class="composer-running"`, "Agent is running", `value="kill"`, `href="/s/acme/web/1?log=raw"`,
-		`class="composer"`, `value="follow-up"`, "Send the running agent a message",
-		`class="composer-chip"`, config.AgentModel,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("running session lacks %q:\n%s", want, body)
-		}
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	runningStatus := main.One(t, ".composer-running")
+	if got := runningStatus.Text(); !strings.Contains(got, "Agent is running") {
+		t.Errorf("running status = %q", got)
+	}
+	main.One(t, `button[value="kill"]`)
+	main.One(t, `nav[aria-label="log view"] a[href="/s/acme/web/1?log=raw"]`)
+	composer := main.One(t, ".composer")
+	composer.One(t, `input[name="verb"][value="follow-up"]`)
+	composer.One(t, `textarea[aria-label="follow-up prompt"]`)
+	if got := main.One(t, ".composer-chip").Text(); !strings.Contains(got, config.AgentModel) {
+		t.Errorf("composer model = %q", got)
 	}
 
-	idle, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	idle, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	body = renderPath(t, newServer(idle, testNow), "/s/acme/web/1")
-	for _, want := range []string{`class="composer"`, `value="follow-up"`, `value="re-run"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("finished session lacks %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, "Agent is running") {
-		t.Errorf("finished session claims to be running:\n%s", body)
+	main = htmltest.Parse(t, body).One(t, "main#main")
+	main.One(t, ".composer").One(t, `input[name="verb"][value="follow-up"]`)
+	main.One(t, `button[value="re-run"]`)
+	if status := main.Find(".composer-running"); len(status) != 0 {
+		t.Errorf("finished session claims to be running: %s", status[0].HTML())
 	}
 }
 
 func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
 	}); err != nil {
@@ -241,17 +267,20 @@ func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	}
 
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
-	for _, want := range []string{`class="pending-message"`, "use sqlite instead", `class="composer"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("running session with a queued message lacks %q:\n%s", want, body)
-		}
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	pending := main.One(t, ".pending-message")
+	if got := pending.Text(); !strings.Contains(got, "use sqlite instead") {
+		t.Errorf("queued message = %q: %s", got, pending.HTML())
 	}
+	main.One(t, ".composer")
 }
 
 func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 	t.Parallel()
-	running, _ := sessionStore(t, "agent", "p", true, true)
-	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+	failed, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	tests := []struct {
 		name    string
 		store   *storepkg.Store
@@ -259,27 +288,26 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 		absent  []string
 	}{
 		{
-			"failed", failed,
-			[]string{`value="re-run" data-key="r"`, `<textarea name="prompt" rows="2" data-key="enter"`},
-			[]string{`data-key="o"`, `data-key="e"`},
+			name: "failed", store: failed,
+			present: []string{`button[value="re-run"][data-key="r"]`, `textarea[name="prompt"][rows="2"][data-key="enter"]`},
+			absent:  []string{`[data-key="o"]`, `[data-key="e"]`},
 		},
 		{
-			"running", running, []string{`<textarea name="prompt" rows="2" data-key="enter"`},
-			[]string{`data-key="r"`, `data-key="o"`, `data-key="e"`},
+			name: "running", store: running,
+			present: []string{`textarea[name="prompt"][rows="2"][data-key="enter"]`},
+			absent:  []string{`[data-key="r"]`, `[data-key="o"]`, `[data-key="e"]`},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			body := renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1")
-			for _, want := range tt.present {
-				if !strings.Contains(body, want) {
-					t.Errorf("actions lack %q:\n%s", want, body)
-				}
+			main := htmltest.Parse(t, renderPath(t, newServer(tt.store, testNow), "/s/acme/web/1")).One(t, "main#main")
+			for _, selector := range tt.present {
+				main.One(t, selector)
 			}
-			for _, bad := range tt.absent {
-				if strings.Contains(body, bad) {
-					t.Errorf("actions carry %q:\n%s", bad, body)
+			for _, selector := range tt.absent {
+				if unwanted := main.Find(selector); len(unwanted) != 0 {
+					t.Errorf("actions carry %s: %s", selector, unwanted[0].HTML())
 				}
 			}
 		})
@@ -288,7 +316,7 @@ func TestSessionVerbKeysAnchorOnlyWhereTheStateOffersThem(t *testing.T) {
 
 func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomePush)
+	st, _ := sessionStoreEnding(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomePush})
 	pr := plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Merged, MergedAt: testNow}
 	obs := plan.Observation{
 		ObservedAt: testNow,
@@ -301,102 +329,126 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1/actions")
 
-	for _, want := range []string{`value="remove-worktree" data-key="e"`, `data-key="o" target="_blank"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("merged session lacks %q:\n%s", want, body)
-		}
-	}
+	root := htmltest.Parse(t, body)
+	root.One(t, `button[value="remove-worktree"][data-key="e"]`)
+	root.One(t, `a[data-key="o"][target="_blank"]`)
 }
 
 func TestRailVerbButtonsCarryNoKey(t *testing.T) {
 	t.Parallel()
-	failed, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	failed, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	body := renderPath(t, newServer(failed, testNow), "/rail")
-	if !strings.Contains(body, `name="verb"`) || strings.Contains(body, `data-key="r"`) {
-		t.Errorf("rail verb buttons carry a verb key:\n%s", body)
+	rail := htmltest.Parse(t, body).One(t, "#rail-body")
+	if buttons := rail.Find(`button[name="verb"]`); len(buttons) == 0 {
+		t.Error("rail has no verb buttons")
+	} else {
+		for _, button := range buttons {
+			if key, ok := button.Attr("data-key"); ok {
+				t.Errorf("rail verb has key %q: %s", key, button.HTML())
+			}
+		}
 	}
 }
 
 func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	srv := newServer(st, testNow)
 
-	rec := sessionVerb(t, srv, url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, `role="status">Queued kill`) {
-		t.Fatalf("status %d, want a Queued kill toast:\n%s", rec.Code, body)
+	rec := do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", rec.Code)
 	}
-	if !strings.Contains(body, `data-glyph="pending"`) || !strings.Contains(body, " disabled") {
-		t.Errorf("queued verb shows no pending mark:\n%s", body)
+	root := htmltest.Parse(t, rec.Body)
+	toast := root.One(t, `[role="status"]`)
+	if got := toast.Text(); !strings.Contains(got, "Queued kill") {
+		t.Errorf("kill toast = %q", got)
 	}
+	root.One(t, `[data-glyph="pending"]`)
+	root.One(t, `button[value="kill"][disabled]`)
 
-	poll := renderPath(t, srv, "/s/acme/web/1/actions")
-	if !strings.Contains(poll, `data-glyph="pending"`) || strings.Contains(poll, `class="toast"`) {
-		t.Errorf("polled actions should keep the pending mark and drop the toast:\n%s", poll)
+	poll := htmltest.Parse(t, renderPath(t, srv, "/s/acme/web/1/actions"))
+	poll.One(t, `[data-glyph="pending"]`)
+	if toasts := poll.Find(".toast"); len(toasts) != 0 {
+		t.Errorf("polled actions include toast: %s", toasts[0].HTML())
 	}
 }
 
 func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
-	t.Parallel()
-	st, _ := sessionStore(t, plan.RunKindAgent, "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 	if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	srv := newServer(st, testNow)
-	confirm := `hx-confirm="kill on https://github.com/acme/web/issues/1 signals the process group of ` +
-		`its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 99"`
-	for _, tc := range []struct{ path, verbPath string }{
-		{"/tickets", "/verb?all=1"},
-		{"/f/checkout", "/verb?feature=checkout"},
+	confirm := `kill on https://github.com/acme/web/issues/1 signals the process group of ` +
+		`its live agent run, stopping it where it is. It cannot be undone. pgid at risk: 99`
+	for _, tc := range []struct{ name, path, verbPath string }{
+		{name: "tickets", path: "/tickets", verbPath: "/verb?all=1"},
+		{name: "feature", path: "/f/checkout", verbPath: "/verb?feature=checkout"},
 	} {
-		body := renderPath(t, srv, tc.path)
-		for _, want := range []string{
-			`<table id="board"`, `data-section="in-progress"`, `hx-post="` + tc.verbPath + `"`,
-			confirm, `name="verb" value="kill"`, `kill queued`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s lacks %q:\n%s", tc.path, want, body)
+		t.Run(tc.name, func(t *testing.T) {
+			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
+			board.One(t, `[data-section="in-progress"]`)
+			form := board.One(t, `form[hx-post="`+tc.verbPath+`"]`)
+			if got, _ := form.Attr("hx-confirm"); got != confirm {
+				t.Errorf("%s kill confirmation = %q, want %q: %s", tc.path, got, confirm, form.HTML())
 			}
-		}
+			form.One(t, `button[name="verb"][value="kill"]`)
+			if got := board.Text(); !strings.Contains(got, "kill queued") {
+				t.Errorf("%s pending board state missing kill queued", tc.path)
+			}
+		})
 	}
 	for _, path := range []string{"/s/acme/web/1", "/s/acme/web/1/actions"} {
-		body := renderPath(t, srv, path)
-		for _, want := range []string{
-			`id="session-actions"`, `hx-post="/verb"`, confirm,
-			`name="verb" value="kill" disabled>kill</button>`,
-			`<span class="pending-mark" data-glyph="pending">queued</span>`,
-		} {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s lacks %q:\n%s", path, want, body)
-			}
+		actions := htmltest.Parse(t, renderPath(t, srv, path)).One(t, "#session-actions")
+		form := actions.One(t, `form[hx-post="/verb"]`)
+		if got, _ := form.Attr("hx-confirm"); got != confirm {
+			t.Errorf("%s kill confirmation = %q, want %q: %s", path, got, confirm, form.HTML())
+		}
+		form.One(t, `button[name="verb"][value="kill"][disabled]`)
+		if got := actions.One(t, `.pending-mark[data-glyph="pending"]`).Text(); got != "queued" {
+			t.Errorf("%s pending mark = %q", path, got)
 		}
 	}
 }
 
 func TestSessionVerbWithoutHTMXRedirectsBack(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	form := url.Values{"verb": {"kill"}, "ticket": {sessionTicket}, "from": {"session"}}
-	rec := sessionVerb(t, newServer(st, testNow), form, false)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/s/acme/web/1" {
-		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Header().Get("Location"))
+	rec := do(t, newServer(st, testNow), http.MethodPost, "/verb", req{Form: form})
+	if rec.Code != http.StatusSeeOther || rec.Location != "/s/acme/web/1" {
+		t.Errorf("got %d %q, want 303 to the session", rec.Code, rec.Location)
 	}
 }
 
 func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStoreEnding(t, "agent", "p", true, false, plan.OutcomeFailed)
+	st, _ := sessionStoreEnding(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Outcome: plan.OutcomeFailed,
+	})
 	srv := newServer(st, testNow)
-	rec := sessionVerb(t, srv, url.Values{
-		"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"},
-	}, true)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Queued follow-up") {
-		t.Fatalf("status %d:\n%s", rec.Code, rec.Body.String())
+	rec := do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}, "prompt": {"try again"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("follow-up status = %d, want 200", rec.Code)
 	}
-	rec = sessionVerb(t, srv, url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}}, true)
+	if got := htmltest.Parse(t, rec.Body).One(t, `[role="status"]`).Text(); !strings.Contains(got, "Queued follow-up") {
+		t.Errorf("follow-up toast = %q", got)
+	}
+	rec = do(t, srv, http.MethodPost, "/verb", req{
+		Form:   url.Values{"verb": {"follow-up"}, "ticket": {sessionTicket}, "from": {"session"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("blank follow-up status = %d, want 422", rec.Code)
 	}
@@ -404,45 +456,29 @@ func TestSessionFollowUpQueuesThePrompt(t *testing.T) {
 
 func TestSessionFeatureLinkCarriesTheFeatureKey(t *testing.T) {
 	t.Parallel()
-	withFeature, _ := sessionStore(t, "agent", "p", true, true)
-	noFeature, _ := sessionStoreInFeature(t, "", "agent", "p", true, true, plan.OutcomePush)
+	withFeature, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
+	noFeature, _ := sessionStoreInFeature(t, sessionRunOpts{
+		Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true, Outcome: plan.OutcomePush,
+	})
 
 	body := renderPath(t, newServer(withFeature, testNow), "/s/acme/web/1")
-	if want := `href="/f/checkout/graph" data-key="f"`; !strings.Contains(body, want) {
-		t.Errorf("session with a feature lacks %q:\n%s", want, body)
-	}
+	htmltest.Parse(t, body).One(t, `a[href="/f/checkout/graph"][data-key="f"]`)
 	body = renderPath(t, newServer(noFeature, testNow), "/s/acme/web/1")
-	if strings.Contains(body, `data-key="f"`) {
-		t.Errorf("session with no feature carries data-key=\"f\":\n%s", body)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	if keys := main.Find(`[data-key="f"]`); len(keys) != 0 {
+		t.Errorf("session with no feature carries feature key: %s", keys[0].HTML())
 	}
 }
 
 func TestSessionComposerIsOutsideEveryPolledElement(t *testing.T) {
 	t.Parallel()
-	st, _ := sessionStore(t, "agent", "p", true, true)
+	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
 
-	if !strings.Contains(body, "<textarea") {
-		t.Fatalf("no composer textarea on the page:\n%s", body)
-	}
-	start := strings.Index(body, `<div id="session-actions"`)
-	if start < 0 {
-		t.Fatalf("no polled session-actions block:\n%s", body)
-	}
-	polled := body[start:]
-	depth := 0
-	for i := 0; i < len(polled); i++ {
-		switch {
-		case strings.HasPrefix(polled[i:], "<div"):
-			depth++
-		case strings.HasPrefix(polled[i:], "</div>"):
-			depth--
-			if depth == 0 {
-				polled = polled[:i]
-			}
-		}
-	}
-	if strings.Contains(polled, "<textarea") {
-		t.Errorf("the composer textarea sits inside the polled #session-actions:\n%s", polled)
+	main := htmltest.Parse(t, body).One(t, "main#main")
+	main.One(t, `textarea[name="prompt"]`)
+	actions := main.One(t, "#session-actions")
+	if composer := actions.Find(`textarea[name="prompt"]`); len(composer) != 0 {
+		t.Errorf("composer is inside polled actions: %s", composer[0].HTML())
 	}
 }

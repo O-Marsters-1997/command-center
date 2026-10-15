@@ -2,24 +2,14 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
-
-func postProjectForm(t *testing.T, server *web.Server, form url.Values) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	return rec
-}
 
 var soloRepo = storepkg.Repo{Name: "acme/solo", Remote: "git@github.com:acme/solo.git"}
 
@@ -32,62 +22,75 @@ func TestCreateProjectGroupsItsReposUnderASquare(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
 
-	rec := postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha", "acme/beta"}})
+	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha", "acme/beta"}}
+	rec := do(t, server, http.MethodPost, "/projects", req{Form: form})
 
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST /projects = %d, want 303: %s", rec.Code, rec.Body)
+		t.Fatalf("POST /projects = %d, want 303", rec.Code)
 	}
 	body := renderPath(t, server, "/repos")
-	square := `class="avatar" data-hue="1" aria-hidden="true">A</span>`
-	for _, want := range []string{square, "2 repos", "acme/alpha", "acme/beta"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("GET /repos missing %q:\n%s", want, body)
-		}
+	root := htmltest.Parse(t, body).One(t, "main#main")
+	group := root.One(t, `[data-scope="project"]`)
+	if avatar := group.One(t, `[data-hue="1"][aria-hidden="true"]`); avatar.Text() != "A" {
+		t.Errorf("project avatar = %q: %s", avatar.Text(), avatar.HTML())
 	}
-	if strings.Count(body, `data-scope="project"`) != 1 || strings.Count(body, `data-scope="repo"`) != 1 {
-		t.Errorf("GET /repos want one project group and one loose repo:\n%s", body)
+	for _, href := range []string{"/repos/acme/alpha", "/repos/acme/beta"} {
+		group.One(t, `a[href="`+href+`"]`)
 	}
+	if got := group.Text(); !strings.Contains(got, "2 repos") {
+		t.Errorf("project group text = %q", got)
+	}
+	root.One(t, `[data-scope="repo"]`)
 }
 
 func TestCreateProjectAnswersHTMXWithTheGroupsFragment(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
 	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
-	req := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
+	rec := do(t, server, http.MethodPost, "/projects", req{Form: form, Header: http.Header{"Hx-Request": {"true"}}})
 
-	server.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-hue="2"`) ||
-		strings.Contains(rec.Body.String(), "<html") {
-		t.Errorf("htmx POST /projects = %d, want the groups fragment:\n%s", rec.Code, rec.Body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("htmx POST /projects = %d, want 200", rec.Code)
+	}
+	fragment := htmltest.Parse(t, rec.Body)
+	fragment.One(t, `[data-scope="project"] h2 [data-hue="2"][aria-hidden="true"]`)
+	if full := fragment.Find("main#main"); len(full) != 0 {
+		t.Error("htmx POST /projects returned page (main#main present)")
 	}
 }
 
 func TestCreateProjectRefusesBadInput(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	if rec := postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}}); rec.Code != http.StatusSeeOther {
+	form := url.Values{"name": {"acme"}, "hue": {"1"}}
+	if rec := do(t, server, http.MethodPost, "/projects", req{Form: form}); rec.Code != http.StatusSeeOther {
 		t.Fatalf("first create = %d, want 303", rec.Code)
 	}
 
-	for name, c := range map[string]struct {
+	for _, c := range []struct {
+		name string
 		form url.Values
 		want int
 	}{
-		"malformed name":   {url.Values{"name": {"-bad name"}, "hue": {"1"}}, http.StatusBadRequest},
-		"hue out of range": {url.Values{"name": {"other"}, "hue": {"4"}}, http.StatusBadRequest},
-		"missing hue":      {url.Values{"name": {"other"}}, http.StatusBadRequest},
-		"malformed repo":   {url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"nope"}}, http.StatusBadRequest},
-		"case-only dupe":   {url.Values{"name": {"ACME"}, "hue": {"1"}}, http.StatusConflict},
-		"untracked repo":   {url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"acme/ghost"}}, http.StatusNotFound},
+		{name: "malformed name", form: url.Values{"name": {"-bad name"}, "hue": {"1"}}, want: http.StatusBadRequest},
+		{name: "hue out of range", form: url.Values{"name": {"other"}, "hue": {"4"}}, want: http.StatusBadRequest},
+		{name: "missing hue", form: url.Values{"name": {"other"}}, want: http.StatusBadRequest},
+		{name: "malformed repo", form: url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"nope"}},
+			want: http.StatusBadRequest},
+		{name: "case-only dupe", form: url.Values{"name": {"ACME"}, "hue": {"1"}}, want: http.StatusConflict},
+		{name: "untracked repo", form: url.Values{"name": {"other"}, "hue": {"1"}, "repo": {"acme/ghost"}},
+			want: http.StatusNotFound},
 	} {
-		if rec := postProjectForm(t, server, c.form); rec.Code != c.want {
-			t.Errorf("%s: POST /projects = %d, want %d: %s", name, rec.Code, c.want, rec.Body)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			before := renderPath(t, server, "/repos")
+			if rec := do(t, server, http.MethodPost, "/projects", req{Form: c.form}); rec.Code != c.want {
+				t.Errorf("POST /projects = %d, want %d", rec.Code, c.want)
+			}
+			if after := renderPath(t, server, "/repos"); after != before {
+				t.Errorf("POST /projects changed the repos page on refusal; project groups = %d, want %d",
+					len(htmltest.Parse(t, after).Find(`[data-scope="project"]`)),
+					len(htmltest.Parse(t, before).Find(`[data-scope="project"]`)))
+			}
+		})
 	}
 }
 
@@ -97,124 +100,138 @@ func TestLooseRepoRendersUnderItsOwnNameWithNoSquare(t *testing.T) {
 
 	body := renderPath(t, server, "/repos")
 
-	if !strings.Contains(body, `href="/repos/acme/solo"`) {
-		t.Errorf("GET /repos missing the loose repo:\n%s", body)
+	root := htmltest.Parse(t, body).One(t, "main#main")
+	loose := root.One(t, `form[action="/repos/acme/solo/project"]`)
+	root.One(t, `a[href="/repos/acme/solo"]`)
+	if projects := root.Find(`[data-scope="project"]`); len(projects) != 0 {
+		t.Errorf("loose repo grouped under project: %s", projects[0].HTML())
 	}
-	projectGroup := `data-scope="project"`
-	square := `class="avatar" data-hue="1" aria-hidden`
-	if strings.Contains(body, projectGroup) || strings.Contains(body, square) {
-		t.Errorf("GET /repos gave a loose repo a project square:\n%s", body)
+	if avatars := loose.Find("[data-hue]"); len(avatars) != 0 {
+		t.Errorf("loose repo has a project square: %s", avatars[0].HTML())
 	}
 }
 
 func TestNewProjectFormPreselectsTheLeastUsedHue(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	for _, form := range []url.Values{
-		{"name": {"one"}, "hue": {"1"}},
-		{"name": {"two"}, "hue": {"2"}},
+	for _, tt := range []struct {
+		name string
+		form url.Values
+	}{
+		{name: "first hue", form: url.Values{"name": {"one"}, "hue": {"1"}}},
+		{name: "second hue", form: url.Values{"name": {"two"}, "hue": {"2"}}},
 	} {
-		if rec := postProjectForm(t, server, form); rec.Code != http.StatusSeeOther {
-			t.Fatalf("create %v = %d", form, rec.Code)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if rec := do(t, server, http.MethodPost, "/projects", req{Form: tt.form}); rec.Code != http.StatusSeeOther {
+				t.Fatalf("create %v = %d", tt.form, rec.Code)
+			}
+		})
 	}
 
-	page := renderPath(t, server, "/repos")
-	_, body, _ := strings.Cut(page, "<summary>New project</summary>")
-	body, _, _ = strings.Cut(body, "</details>")
-
-	if !strings.Contains(body, `value="3" checked`) || strings.Contains(body, `value="1" checked`) {
-		t.Errorf("GET /repos should preselect hue 3:\n%s", body)
+	page := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, `form[action="/projects"]`)
+	page.One(t, `input[name="hue"][value="3"][checked]`)
+	if first := page.Find(`input[name="hue"][value="1"][checked]`); len(first) != 0 {
+		t.Errorf("hue 1 still preselected: %s", first[0].HTML())
 	}
-}
-
-func postPath(t *testing.T, server *web.Server, path string, form url.Values) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	rec := httptest.NewRecorder()
-	server.ServeHTTP(rec, req)
-	return rec
 }
 
 func TestEditProjectRenamesAndKeepsReposAndHue(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}})
+	form := url.Values{"name": {"acme"}, "hue": {"2"}, "repo": {"acme/alpha"}}
+	do(t, server, http.MethodPost, "/projects", req{Form: form})
 
-	rec := postPath(t, server, "/projects/acme", url.Values{"name": {"acme-co"}, "hue": {"2"}})
+	rec := do(t, server, http.MethodPost, "/projects/acme", req{Form: url.Values{"name": {"acme-co"}, "hue": {"2"}}})
 
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST /projects/acme = %d, want 303: %s", rec.Code, rec.Body)
+		t.Fatalf("POST /projects/acme = %d, want 303", rec.Code)
 	}
 	body := renderPath(t, server, "/repos")
-	if !strings.Contains(body, `data-hue="2" aria-hidden="true">A</span>`) || !strings.Contains(body, "acme-co") ||
-		!strings.Contains(body, "1 repo<") {
-		t.Errorf("GET /repos after rename:\n%s", body)
+	group := htmltest.Parse(t, body).One(t, `[data-scope="project"]`)
+	if got := group.One(t, `[data-hue="2"][aria-hidden="true"]`).Text(); got != "A" {
+		t.Errorf("renamed project avatar = %q", got)
+	}
+	if got := group.Text(); !strings.Contains(got, "acme-co") || !strings.Contains(got, "1 repo") {
+		t.Errorf("renamed project group = %q", got)
 	}
 }
 
 func TestEditProjectRefusals(t *testing.T) {
-	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
-	postProjectForm(t, server, url.Values{"name": {"beta"}, "hue": {"1"}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"beta"}, "hue": {"1"}}})
 
-	for name, c := range map[string]struct {
+	for _, c := range []struct {
+		name string
 		path string
 		form url.Values
 		want int
 	}{
-		"onto existing": {"/projects/acme", url.Values{"name": {"beta"}, "hue": {"1"}}, http.StatusConflict},
-		"unknown":       {"/projects/ghost", url.Values{"name": {"x"}, "hue": {"1"}}, http.StatusNotFound},
-		"bad hue":       {"/projects/acme", url.Values{"name": {"acme"}, "hue": {"9"}}, http.StatusBadRequest},
-		"delete ghost":  {"/projects/ghost/delete", nil, http.StatusNotFound},
-		"move unknown project": {
-			"/repos/acme/alpha/project", url.Values{"project": {"ghost"}}, http.StatusNotFound,
-		},
-		"move unknown repo": {"/repos/acme/ghost/project", url.Values{"project": {"acme"}}, http.StatusNotFound},
+		{name: "onto existing", path: "/projects/acme", form: url.Values{"name": {"beta"}, "hue": {"1"}},
+			want: http.StatusConflict},
+		{name: "unknown", path: "/projects/ghost", form: url.Values{"name": {"x"}, "hue": {"1"}}, want: http.StatusNotFound},
+		{name: "bad hue", path: "/projects/acme", form: url.Values{"name": {"acme"}, "hue": {"9"}},
+			want: http.StatusBadRequest},
+		{name: "delete ghost", path: "/projects/ghost/delete", want: http.StatusNotFound},
+		{name: "move unknown project", path: "/repos/acme/alpha/project", form: url.Values{"project": {"ghost"}},
+			want: http.StatusNotFound},
+		{name: "move unknown repo", path: "/repos/acme/ghost/project", form: url.Values{"project": {"acme"}},
+			want: http.StatusNotFound},
 	} {
-		if rec := postPath(t, server, c.path, c.form); rec.Code != c.want {
-			t.Errorf("%s: POST %s = %d, want %d: %s", name, c.path, rec.Code, c.want, rec.Body)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			before := renderPath(t, server, "/repos")
+			if rec := do(t, server, http.MethodPost, c.path, req{Form: c.form}); rec.Code != c.want {
+				t.Errorf("POST %s = %d, want %d", c.path, rec.Code, c.want)
+			}
+			if after := renderPath(t, server, "/repos"); after != before {
+				t.Errorf("POST %s changed the repos page on refusal; project groups = %d, want %d",
+					c.path, len(htmltest.Parse(t, after).Find(`[data-scope="project"]`)),
+					len(htmltest.Parse(t, before).Find(`[data-scope="project"]`)))
+			}
+		})
 	}
 }
 
 func TestDeleteProjectLeavesReposLoose(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}})
+	form := url.Values{"name": {"acme"}, "hue": {"1"}, "repo": {"acme/alpha"}}
+	do(t, server, http.MethodPost, "/projects", req{Form: form})
 
-	if rec := postPath(t, server, "/projects/acme/delete", nil); rec.Code != http.StatusSeeOther {
-		t.Fatalf("delete = %d, want 303: %s", rec.Code, rec.Body)
+	if rec := do(t, server, http.MethodPost, "/projects/acme/delete", req{}); rec.Code != http.StatusSeeOther {
+		t.Fatalf("delete = %d, want 303", rec.Code)
 	}
 
 	body := renderPath(t, server, "/repos")
-	if strings.Contains(body, `data-scope="project"`) || !strings.Contains(body, `href="/repos/acme/alpha"`) {
-		t.Errorf("GET /repos after delete:\n%s", body)
+	root := htmltest.Parse(t, body).One(t, "main#main")
+	root.One(t, `a[href="/repos/acme/alpha"]`)
+	if groups := root.Find(`[data-scope="project"]`); len(groups) != 0 {
+		t.Errorf("deleted project group persists: %s", groups[0].HTML())
 	}
 }
 
 func TestRepoSelectMovesAndLoosensARepo(t *testing.T) {
 	t.Parallel()
 	server := projectsServer(t)
-	postProjectForm(t, server, url.Values{"name": {"acme"}, "hue": {"1"}})
+	do(t, server, http.MethodPost, "/projects", req{Form: url.Values{"name": {"acme"}, "hue": {"1"}}})
 
 	move := url.Values{"project": {"acme"}}
-	if rec := postPath(t, server, "/repos/acme/solo/project", move); rec.Code != http.StatusSeeOther {
-		t.Fatalf("move = %d: %s", rec.Code, rec.Body)
+	moveRec := do(t, server, http.MethodPost, "/repos/acme/solo/project", req{Form: move})
+	if moveRec.Code != http.StatusSeeOther {
+		t.Fatalf("move = %d, want 303", moveRec.Code)
 	}
-	if body := renderPath(t, server, "/repos"); !strings.Contains(body, `data-scope="project"`) ||
-		!strings.Contains(body, `<option value="acme" selected>`) {
-		t.Errorf("GET /repos after move:\n%s", body)
-	}
+	root := htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
+	root.One(t, `[data-scope="project"]`)
+	root.One(t, `form[action="/repos/acme/solo/project"] option[value="acme"][selected]`)
 
 	loosen := url.Values{"project": {""}}
-	if rec := postPath(t, server, "/repos/acme/solo/project", loosen); rec.Code != http.StatusSeeOther {
-		t.Fatalf("loosen = %d: %s", rec.Code, rec.Body)
+	loosenRec := do(t, server, http.MethodPost, "/repos/acme/solo/project", req{Form: loosen})
+	if loosenRec.Code != http.StatusSeeOther {
+		t.Fatalf("loosen = %d, want 303", loosenRec.Code)
 	}
-	if body := renderPath(t, server, "/repos"); strings.Contains(body, `<option value="acme" selected>`) {
-		t.Errorf("GET /repos after loosen still selects acme:\n%s", body)
+	root = htmltest.Parse(t, renderPath(t, server, "/repos")).One(t, "main#main")
+	selection := root.One(t, `form[action="/repos/acme/solo/project"]`)
+	selection.One(t, `option[value="acme"]`)
+	if selected := selection.Find(`option[value="acme"][selected]`); len(selected) != 0 {
+		t.Errorf("loosened repo still selects acme: %s", selected[0].HTML())
 	}
 }

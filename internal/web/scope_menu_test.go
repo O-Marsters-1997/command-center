@@ -1,9 +1,13 @@
 package web_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
@@ -18,27 +22,43 @@ func TestScopeMenuListsProjectsThenLooseReposWithKeys(t *testing.T) {
 	server := openServer(st, fixedClock(testNow), "")
 
 	body := renderPath(t, server, "/tickets")
-	var last int
-	for _, want := range []string{
-		`data-scope-menu`, `All projects · 0 running`,
-		`href="/tickets" data-key="g 0"`,
-		`href="/tickets?project=acme" data-key="g 1"`,
-		`href="/tickets?repo=acme%2Fsolo" data-key="g 2"`,
-	} {
-		i := strings.Index(body, want)
-		if i < 0 {
-			t.Fatalf("GET /tickets missing %q:\n%s", want, body)
-		}
-		if i < last {
-			t.Errorf("GET /tickets has %q out of order", want)
-		}
-		last = i
+	page := htmltest.Parse(t, body)
+	menu := page.One(t, "[data-scope-menu]")
+	if got := menu.One(t, "summary").Text(); got != "All projects · 0 running" {
+		t.Errorf("scope summary = %q: %s", got, menu.HTML())
 	}
-	if strings.Contains(body, `data-key="g 3"`) {
-		t.Errorf("GET /tickets gave a third entry a key")
+	links := menu.Find("nav a")
+	var got []string
+	for _, link := range links {
+		href, _ := link.Attr("href")
+		key, _ := link.Attr("data-key")
+		got = append(got, href+" "+key)
 	}
-	if strings.Index(body, `data-scope-menu`) > strings.Index(body, `id="rail-search"`) {
-		t.Errorf("GET /tickets put the scope menu below the search box")
+	want := []string{"/tickets g 0", "/tickets?project=acme g 1", "/tickets?repo=acme%2Fsolo g 2"}
+	if !slices.Equal(got, want) {
+		t.Errorf("scope links = %q, want %q: %s", got, want, menu.HTML())
+	}
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("parse scope menu page: %v", err)
+	}
+	var order []string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			for _, attr := range n.Attr {
+				if attr.Key == "data-scope-menu" || attr.Key == "id" && attr.Val == "rail-search" {
+					order = append(order, attr.Key)
+				}
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(doc)
+	if !slices.Equal(order, []string{"data-scope-menu", "id"}) {
+		t.Errorf("scope menu and rail search DOM order = %q, want menu before search: %s", order, menu.HTML())
 	}
 }
 
@@ -52,12 +72,13 @@ func TestScopeMenuSummaryNamesTheScope(t *testing.T) {
 	}
 	server := openServer(st, fixedClock(testNow), "")
 
-	project := renderPath(t, server, "/tickets?project=acme")
-	if !strings.Contains(project, `aria-hidden="true">A</span> acme</summary>`) {
-		t.Errorf("GET /tickets?project=acme summary does not name the project:\n%s", project)
+	project := htmltest.Parse(t, renderPath(t, server, "/tickets?project=acme")).One(t, "[data-scope-menu] summary")
+	project.One(t, `[data-hue][aria-hidden="true"]`)
+	if got := project.Text(); got != "A acme" {
+		t.Errorf("project scope summary = %q: %s", got, project.HTML())
 	}
-	repo := renderPath(t, server, "/tickets?repo=acme%2Fsolo")
-	if !strings.Contains(repo, `px-2">acme/solo</summary>`) {
-		t.Errorf("GET /tickets?repo=acme/solo summary does not name the repo:\n%s", repo)
+	repo := htmltest.Parse(t, renderPath(t, server, "/tickets?repo=acme%2Fsolo")).One(t, "[data-scope-menu] summary")
+	if got := repo.Text(); got != "acme/solo" {
+		t.Errorf("repo scope summary = %q: %s", got, repo.HTML())
 	}
 }

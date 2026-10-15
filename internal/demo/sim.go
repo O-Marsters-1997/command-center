@@ -163,7 +163,7 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 	if err != nil {
 		return nil, fmt.Errorf("create workspace: %w", err)
 	}
-	st, err := store.OpenStore(ctx, sb.DSN)
+	st, err := store.OpenStore(sb.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}

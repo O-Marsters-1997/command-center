@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -38,7 +37,7 @@ func TestRecordChecksLandedAppendsOnePerCheckThatLands(t *testing.T) {
 	observed := observe(pending)
 	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)), config.Config{}, config.Workspace{},
+		fixedClock(testAt), config.Config{}, config.Workspace{},
 		runner.ProcessRunner{})
 
 	landed := func(obs plan.Observation) []string {
@@ -93,7 +92,7 @@ func TestRecordChecksLandedIgnoresChecksAlreadyTerminalInThePreviousObservation(
 
 	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
-		fixedClock(time.Now()), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+		fixedClock(testAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

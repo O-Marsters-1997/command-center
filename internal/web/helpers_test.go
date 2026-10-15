@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -18,22 +19,12 @@ import (
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.OpenStore(t.Context(), cctest.DSN(t))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("close store: %v", err)
-		}
-	})
-	return st
+	return cctest.Store(t)
 }
 
 type frozenClock struct{ at time.Time }
 
-func (c frozenClock) Now() time.Time                       { return c.at }
-func (frozenClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+func (c frozenClock) Now() time.Time { return c.at }
 
 func fixedClock(at time.Time) web.Clock { return frozenClock{at} }
 
@@ -59,11 +50,6 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 	}
 }
 
-type realClock struct{}
-
-func (realClock) Now() time.Time                         { return time.Now() }
-func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
-
 var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 
 func openServer(st *store.Store, clock web.Clock, dataDir string, opts ...web.Option) *web.Server {
@@ -77,7 +63,7 @@ func (f nudgeFunc) Nudge() { f() }
 
 func openNudgingServer(st *store.Store, nudge func(), opts ...web.Option) *web.Server {
 	return web.NewServer(web.Deps{
-		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: realClock{}, Nudger: nudgeFunc(nudge),
+		Logger: slog.New(slog.DiscardHandler), Store: st, Clock: fixedClock(testNow), Nudger: nudgeFunc(nudge),
 	}, opts...)
 }
 
@@ -85,20 +71,45 @@ func newServer(st *store.Store, now time.Time, opts ...web.Option) *web.Server {
 	return openServer(st, fixedClock(now), "", opts...)
 }
 
-func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-	return rec
+type req struct {
+	Form   url.Values
+	Header http.Header
+	Origin string
 }
 
-func getHX(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
+type resp struct {
+	Code     int
+	Header   http.Header
+	Body     string
+	Location string
+}
+
+func do(t *testing.T, h http.Handler, method, target string, r req) resp {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	req.Header.Set("HX-Request", "true")
+	body := ""
+	if r.Form != nil {
+		body = r.Form.Encode()
+	}
+	request := httptest.NewRequest(method, target, strings.NewReader(body))
+	if r.Form != nil {
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	for key, values := range r.Header {
+		request.Header[key] = slices.Clone(values)
+	}
+	if r.Origin != "-" {
+		origin := r.Origin
+		if origin == "" {
+			origin = "http://" + request.Host
+		}
+		request.Header.Set("Origin", origin)
+	}
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
+	h.ServeHTTP(rec, request)
+	return resp{
+		Code: rec.Code, Header: rec.Header().Clone(), Body: rec.Body.String(),
+		Location: rec.Header().Get("Location"),
+	}
 }
 
 func isFragmentRoute(path string) bool {

@@ -44,8 +44,36 @@ linters:
           msg: match errors with errors.Is/As, not by their text
     depguard:
       rules:
+        agentlog-pure:
+          files: ["**/internal/agentlog/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/agentlog
+            - github.com/O-Marsters-1997/command-center/internal/option
+          deny:
+            - pkg: os/exec
+              desc: agentlog parses logs without shelling out
+            - pkg: database/sql
+              desc: agentlog parses logs without SQL
+            - pkg: net/http
+              desc: agentlog parses logs without HTTP
+        verdict-pure:
+          files: ["**/internal/verdict/**", "!$test"]
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/O-Marsters-1997/command-center/internal/verdict
+            - github.com/O-Marsters-1997/command-center/internal/agentlog
+          deny:
+            - pkg: os/exec
+              desc: verdict derives from facts without shelling out
+            - pkg: database/sql
+              desc: verdict derives from facts without SQL
+            - pkg: net/http
+              desc: verdict derives from facts without HTTP
         plan-pure:
-          files: ["**/internal/plan/**"]
+          files: ["**/internal/plan/**", "!$test"]
           list-mode: strict
           allow:
             - $gostd
@@ -65,6 +93,11 @@ linters:
           deny:
             - pkg: github.com/O-Marsters-1997/command-center/internal/store/ccdb
               desc: only internal/store uses the generated queries; call a Store method (ADR 0004)
+        cctest-only:
+          files: ["$all", "!**/internal/cctest/**"]
+          deny:
+            - pkg: github.com/testcontainers/testcontainers-go
+              desc: only internal/cctest starts Postgres for tests
         no-testify:
           files: ["**/*_test.go"]
           deny:
@@ -89,12 +122,8 @@ linters:
       - path: ^internal/loop/clock\.go$
         linters:
           - forbidigo
-      - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/)
+      - path: ^(cmd/cc/|e2e/|internal/(app|loop|demo|runner)/|internal/cctest/cctest\.go$)
         text: time\.Now
-        linters:
-          - forbidigo
-      - path: ^internal/(app|cctest|command|config|git)/.*_test\.go$
-        text: Error
         linters:
           - forbidigo
 

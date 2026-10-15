@@ -3,14 +3,13 @@ package loop_test
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -28,14 +27,15 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 }
 
 func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t)
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-	spawned := f.ImplementSpawns()[0]
+	spawned := f.Fake.Spawns[0]
 	if !strings.HasSuffix(spawned.WorktreePath, "wt-cc-1") {
 		t.Errorf("worktree path = %q, want it to end in wt-cc-1", spawned.WorktreePath)
 	}
@@ -65,25 +65,26 @@ func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 }
 
 func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
+	t.Parallel()
 	ticket := sandboxTicket("1")
 	ticket.Body = "fake ticket body"
 	f := newLoopFixture(t, withTickets(ticket))
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want 1", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want 1", len(f.Fake.Spawns))
 	}
-	promptPath := f.ImplementSpawns()[0].PromptPath
+	promptPath := f.Fake.Spawns[0].PromptPath
 	written, err := os.ReadFile(promptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runsDir := filepath.Dir(promptPath)
-	assertGolden(t, goldenPrompt, []byte(strings.ReplaceAll(string(written), runsDir, "<runs>")))
+	assertPromptGolden(t, "testdata/prompt-implement.golden.txt", string(written), filepath.Dir(promptPath))
 }
 
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t)
 	authoriseTicket(t, f.Store, f.Tickets[0].URL, plan.Hash("a prompt this ticket never composed to"), testAt)
 	for range 3 {
@@ -100,12 +101,13 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 }
 
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t, withFailingTp())
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 0 {
-		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 0 {
+		t.Errorf("implement spawns = %d, want 0: a cut failure must never reach Spawn", len(f.Fake.Spawns))
 	}
 	summary := f.Latest(t)[f.Tickets[0].URL]
 	if summary.Outcome != option.Some(plan.OutcomeCutFailed) {
@@ -117,6 +119,7 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 }
 
 func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		opts      []fixtureOption
@@ -124,11 +127,12 @@ func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 		kind      storepkg.EventKind
 		cause     string
 	}{
-		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: storepkg.EventCutFailed, cause: "forced failure"},
+		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: storepkg.EventCutFailed, cause: "forge refused"},
 		{name: "spawn", failSpawn: true, kind: storepkg.EventSpawnFailed, cause: "spawn failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newLoopFixture(t, tt.opts...)
 			f.Fake.FailNext = tt.failSpawn
 			f.AuthoriseAll(t)
@@ -149,12 +153,13 @@ func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 }
 
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
-		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.ImplementSpawns()))
+	if len(f.Fake.Spawns) != 1 {
+		t.Fatalf("implement spawns = %d, want exactly 1 (max_agents = 1)", len(f.Fake.Spawns))
 	}
 	latest := f.Latest(t)
 	if _, ran := latest["sandbox://CC-1"]; !ran {
@@ -166,10 +171,11 @@ func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -183,7 +189,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -217,9 +223,9 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 
 	// A second run against the same branch, with a real commit after ITS OWN baseline: must
 	// derive push, and the first run's now-stale baseline must not leak into this one.
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
-	newBaseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	newBaseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
 
 	runID2, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: newBaseline, PromptHash: "hash-2",
@@ -253,32 +259,40 @@ const (
 	killedRunResultLine = `{"type":"result","total_cost_usd":0.42}` + "\n"
 )
 
-func TestLoopRecordsNoCostForAKilledRunWhoseLogNeverSettled(t *testing.T) {
-	got := disposeKilledRun(t, killedRunAssistantLine)
+func TestLoopDisposesAKilledRunWithUnsettledPartials(t *testing.T) {
+	t.Parallel()
+	reading := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
+		`"five_hour":{"utilization":0.05,"resetsAt":1787665200}}}}` + "\n"
+	got, usage := disposeKilledRun(t, killedRunAssistantLine+reading+`{"type":"result","total_cost_usd":`)
 
 	if got[agentlog.FiveHour] != 0 || got[agentlog.SevenDay] != 0 {
 		t.Errorf("cost of an unsettled run = %v, want none recorded", got)
 	}
+	if got := usage[agentlog.FiveHour].Utilization; got != 0.05 {
+		t.Errorf("settled reading before partial result = %+v, want five_hour utilization 0.05", usage)
+	}
 }
 
 func TestLoopRecordsTheCostOfAKilledRunWhoseLogSettled(t *testing.T) {
-	got := disposeKilledRun(t, killedRunAssistantLine+killedRunResultLine)
+	t.Parallel()
+	got, _ := disposeKilledRun(t, killedRunAssistantLine+killedRunResultLine)
 
 	if got[agentlog.FiveHour] != 0.42 {
 		t.Errorf("five_hour cost = %v, want 0.42", got[agentlog.FiveHour])
 	}
 }
 
-func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 {
+func disposeKilledRun(t *testing.T, logBody string) (
+	map[agentlog.Window]float64, map[agentlog.Window]agentlog.Reading,
+) {
 	t.Helper()
 
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
+	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
@@ -290,7 +304,7 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	logPath := filepath.Join(t.TempDir(), "1.jsonl")
 	if err := os.WriteFile(logPath, []byte(logBody), 0o600); err != nil {
 		t.Fatal(err)
@@ -325,14 +339,19 @@ func disposeKilledRun(t *testing.T, logBody string) map[agentlog.Window]float64 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cost
+	readings, err := store.LatestReadingsFull(t.Context())
+	if err != nil {
+		t.Fatalf("LatestReadingsFull: %v", err)
+	}
+	return cost, readings
 }
 
 func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -353,7 +372,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -385,17 +404,18 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 }
 
 func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
 	// The agent's commit reaches origin (via its own push, or a prior tick's pushPushable)
 	// before the worktree disappears -- issue #189's race.
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
-	runGit(t, "-C", worktreePath, "push", "-q", "origin", "cc-1")
-	originTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/remotes/origin/cc-1"))
-	runGit(t, "-C", repoPath, "worktree", "remove", "--force", worktreePath)
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	gittest.Run(t, worktreePath, "push", "-q", "origin", "cc-1")
+	originTip := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/cc-1")
+	gittest.Run(t, repoPath, "worktree", "remove", "--force", worktreePath)
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -409,7 +429,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -441,10 +461,11 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 }
 
 func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -458,7 +479,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -507,17 +528,20 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 }
 
 func TestLoopSpendLimit5h(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		utilizations []float64
 		wantSpawns   []int
 	}{
-		{"pauses at the limit", []float64{0.80}, []int{0}},
-		{"launches under the limit", []float64{0.50}, []int{1}},
-		{"resumes once a newer reading drops below the limit", []float64{0.85, 0.50}, []int{0, 1}},
+		{name: "pauses at the limit", utilizations: []float64{0.80}, wantSpawns: []int{0}},
+		{name: "launches under the limit", utilizations: []float64{0.50}, wantSpawns: []int{1}},
+		{name: "resumes once a newer reading drops below the limit",
+			utilizations: []float64{0.85, 0.50}, wantSpawns: []int{0, 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newLoopFixture(t, withSpendLimit5h(80))
 			f.AuthoriseAll(t)
 			for i, utilization := range tt.utilizations {
@@ -539,10 +563,11 @@ func TestLoopSpendLimit5h(t *testing.T) {
 }
 
 func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
@@ -556,7 +581,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatal(err)
@@ -585,24 +610,4 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	if !fake.Alive[4242] {
 		t.Error("the live run's process was stopped; spend_limit_5h must leave it running")
 	}
-}
-
-func runGit(t *testing.T, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v: %s", args, err, out)
-	}
-}
-
-func runGitOutput(t *testing.T, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Env = os.Environ()
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git %v: %v", args, err)
-	}
-	return string(out)
 }

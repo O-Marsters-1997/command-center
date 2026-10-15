@@ -72,7 +72,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	observed := plan.Observation{
 		PRs: map[plan.BranchRef]plan.PR{
@@ -108,7 +108,7 @@ func TestRunOnceAppliesQueuedLaunchIntents(t *testing.T) {
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at}
 	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
@@ -134,7 +134,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	good := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	good := testAt
 	bad := good.Add(15 * time.Second)
 
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}

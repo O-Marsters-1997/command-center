@@ -2,30 +2,17 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
-
-func getModalFragment(t *testing.T, srv *httptest.Server, target string) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequest(http.MethodGet, srv.URL+target, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("HX-Request", "true")
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return resp
-}
 
 func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	t.Parallel()
@@ -34,28 +21,15 @@ func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
 	store := openStore(t)
 	var nudged atomic.Bool
 	server := openNudgingServer(store, func() { nudged.Store(true) })
-	srv := httptest.NewServer(server)
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("feature=project%3Ax"))
-	if err != nil {
-		t.Fatal(err)
+	response := do(t, server, http.MethodPost, "/launch/open", req{
+		Form: url.Values{"feature": {"project:x"}}, Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
 	}
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
-	body := readBody(t, resp)
-	if !strings.Contains(body, "importing project:x") {
-		t.Errorf("open response is not the pending fragment:\n%s", body)
+	body := response.Body
+	if got := htmltest.Parse(t, body).One(t, "[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
+		t.Errorf("pending fragment text = %q, want importing project:x", got)
 	}
 	if !nudged.Load() {
 		t.Error("handleLaunchOpen did not nudge the loop")
@@ -79,39 +53,22 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	var nudged atomic.Bool
 	server := openNudgingServer(store, func() { nudged.Store(true) })
-	srv := httptest.NewServer(server)
-	t.Cleanup(srv.Close)
-
-	body := url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}}.Encode()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
+	response := do(t, server, http.MethodPost, "/launch/open", req{
+		Form:   url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}},
+		Header: http.Header{"Hx-Request": {"true"}},
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
 	}
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
-	got := readBody(t, resp)
-	want := `<cc-launch-modal tickets="ticket=sandbox%3A%2F%2FCC-1&amp;ticket=sandbox%3A%2F%2FCC-2">`
-	if !strings.Contains(got, want) {
-		t.Errorf("open response = %q, want it to mount the island by ticket:\n%s", want, got)
-	}
-	if strings.Contains(got, "importing") {
-		t.Errorf("a ticket-based open must not queue an import:\n%s", got)
+	root := htmltest.Parse(t, response.Body)
+	dialog := root.One(t, "dialog#launch-modal-body")
+	dialog.One(t, `cc-launch-modal[tickets="ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2"]`)
+	if got := dialog.Text(); strings.Contains(got, "importing") {
+		t.Errorf("ticket-based modal queues an import: %s", dialog.HTML())
 	}
 	if nudged.Load() {
 		t.Error("a ticket-based open must not nudge the loop -- nothing needs importing")
@@ -129,271 +86,190 @@ func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.
 func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("ticket=sandbox://GHOST"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	srv := newServer(openStore(t), testNow)
+	response := do(t, srv, http.MethodPost, "/launch/open", req{Form: url.Values{"ticket": {"sandbox://GHOST"}}})
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
 	}
 }
 
-func TestHandleLaunchOpenRejectsAForeignOrigin(t *testing.T) {
+func TestHandleCandidatesFragment(t *testing.T) {
 	t.Parallel()
-
-	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/launch/open", strings.NewReader("feature=x"))
-	if err != nil {
-		t.Fatal(err)
+	type message struct {
+		Feature, Importing, Refused, Empty bool
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", "http://evil.example")
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
+	type modal struct {
+		Feature, Tickets                     string
+		ContainsImport, ContainsCandidateURL bool
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	type outcome struct {
+		Status, Buttons, Cancels int
+		Titles                   []string
+		DialogsOpen              []bool
+		EmbedsCandidateURL       bool
+		Polling                  []string
+		Messages                 []message
+		Modals                   []modal
+		Scripts                  []string
 	}
-}
-
-func TestHandleLaunchOpenAllowsAMissingOrigin(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp, err := noRedirect(srv).Post(
-		srv.URL+"/launch/open", "application/x-www-form-urlencoded", strings.NewReader("feature=x"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("status = %d, want 303", resp.StatusCode)
-	}
-	if got := resp.Header.Get("Location"); got != "/f/x/launch" {
-		t.Errorf("Location = %q, want /f/x/launch", got)
-	}
-}
-
-func TestHandleCandidatesFragmentStillPendingWhileImportUnconsumed(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	if err := store.QueueVerbIntent(ctx, "project:x", "import", time.Now()); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, "importing project:x") {
-		t.Errorf("still-pending poll = %q, want the pending fragment", body)
-	}
-	if !strings.Contains(body, `hx-get="/launch/candidates?feature=project%3Ax"`) {
-		t.Errorf("pending fragment does not keep polling itself:\n%s", body)
-	}
-}
-
-func TestHandleCandidatesFragmentMountsTheIslandOnceImported(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+	const featurePath = "/launch/candidates?feature=project%3Ax"
+	const ticketQuery = "ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2"
+	featureTitle := []string{"Launch project:x"}
+	featureModal := []modal{{Feature: "project:x"}}
+	featureScript := []string{"/assets/dist/launch-modal.js"}
+	noSeed := func(*testing.T, *storepkg.Store) {}
+	cases := []struct {
+		name, path string
+		seed       func(*testing.T, *storepkg.Store)
+		want       outcome
+	}{
 		{
-			URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:x",
-			BlockedBy: []string{"sandbox://CC-1"},
+			name: "pending import", path: featurePath,
+			seed: func(t *testing.T, store *storepkg.Store) {
+				t.Helper()
+				if err := store.QueueVerbIntent(t.Context(), "project:x", "import", testNow); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{true},
+				Polling: []string{featurePath}, Messages: []message{{Feature: true, Importing: true}}, Cancels: 1},
+		},
+		{
+			name: "imported feature mounts island", path: featurePath,
+			seed: func(t *testing.T, store *storepkg.Store) {
+				t.Helper()
+				storetest.Tickets(t, store,
+					storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+					storepkg.Ticket{
+						URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:x",
+						BlockedBy: []string{"sandbox://CC-1"},
+					},
+				)
+			},
+			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{false},
+				Modals: featureModal, Scripts: featureScript},
+		},
+		{
+			name: "ticket slice mounts island", path: "/launch/candidates?" + ticketQuery,
+			seed: func(t *testing.T, store *storepkg.Store) {
+				t.Helper()
+				storetest.Tickets(t, store,
+					storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+					storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
+				)
+			},
+			want: outcome{Status: http.StatusOK, Titles: []string{"Launch tickets"}, DialogsOpen: []bool{false},
+				Modals: []modal{{Tickets: ticketQuery}}, Scripts: featureScript},
+		},
+		{
+			name: "refusal", path: featurePath,
+			seed: func(t *testing.T, store *storepkg.Store) {
+				t.Helper()
+				claimed := "https://github.com/acme/alpha/issues/1"
+				storetest.Tickets(t, store, storepkg.Ticket{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"})
+				conflict := &storepkg.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
+				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{true},
+				Messages: []message{{Feature: true, Refused: true}}, Cancels: 1},
+		},
+		{
+			name: "candidates outrank stale refusal", path: featurePath,
+			seed: func(t *testing.T, store *storepkg.Store) {
+				t.Helper()
+				storetest.Tickets(t, store, storepkg.Ticket{
+					URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
+				})
+				conflict := &storepkg.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
+				if err := store.RecordImportRefusal(t.Context(), "project:x", conflict, testNow); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{false},
+				Modals: featureModal, Scripts: featureScript},
+		},
+		{
+			name: "empty feature", path: featurePath,
+			seed: noSeed,
+			want: outcome{Status: http.StatusOK, Titles: featureTitle, DialogsOpen: []bool{true},
+				Messages: []message{{Feature: true, Empty: true}}, Cancels: 1},
+		},
+		{
+			name: "unknown ticket", path: "/launch/candidates?ticket=sandbox%3A%2F%2FGHOST",
+			seed: noSeed,
+			want: outcome{Status: http.StatusUnprocessableEntity},
 		},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, `<cc-launch-modal feature="project:x">`) {
-		t.Errorf("ready fragment does not mount the island:\n%s", body)
-	}
-	if !strings.Contains(body, `<script type="module" src="/assets/dist/launch-modal.js">`) {
-		t.Errorf("ready fragment does not load the island's script:\n%s", body)
-	}
-	if strings.Contains(body, "sandbox://CC-1") {
-		t.Errorf("ready fragment embeds candidate data, want the island to fetch its own JSON:\n%s", body)
-	}
-	if strings.Contains(body, "hx-get=") {
-		t.Errorf("terminal candidate fragment must not keep polling:\n%s", body)
-	}
-}
-
-func TestHandleCandidatesFragmentMountsATicketSlice(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	want := `<cc-launch-modal tickets="ticket=sandbox%3A%2F%2FCC-1&amp;ticket=sandbox%3A%2F%2FCC-2">`
-	if !strings.Contains(body, want) {
-		t.Errorf("ready fragment = %q, want it to mount the island by ticket:\n%s", want, body)
-	}
-	if strings.Contains(body, "hx-get=") {
-		t.Errorf("terminal candidate fragment must not keep polling:\n%s", body)
-	}
-}
-
-func TestHandleCandidatesFragmentRejectsAnUnknownTicket(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?ticket=sandbox%3A%2F%2FGHOST")
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("status = %d, want 422", resp.StatusCode)
-	}
-}
-
-func TestHandleCandidatesFragmentShowsARefusalNamingTheFeature(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	claimed := "https://github.com/acme/alpha/issues/1"
-	seed := []storepkg.Ticket{{URL: claimed, Repo: "alpha", Branch: "b", Feature: "project:y"}}
-	if err := store.UpsertTickets(ctx, seed); err != nil {
-		t.Fatal(err)
-	}
-	conflict := &storepkg.FeatureConflictError{URL: claimed, Existing: "project:y", Importing: "project:x"}
-	if err := store.RecordImportRefusal(ctx, "project:x", conflict, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, "project:x") || !strings.Contains(body, "already belongs to feature") {
-		t.Errorf("refused fragment = %q, want it to name the feature and the refusal", body)
-	}
-	if strings.Contains(body, "hx-get=") {
-		t.Errorf("terminal refused fragment must not keep polling:\n%s", body)
-	}
-}
-
-func TestHandleCandidatesFragmentPrefersCandidatesOverAStaleRefusal(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	conflict := &storepkg.FeatureConflictError{URL: "sandbox://CC-1", Existing: "project:y", Importing: "project:x"}
-	if err := store.RecordImportRefusal(ctx, "project:x", conflict, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, `<cc-launch-modal feature="project:x">`) {
-		t.Errorf("fragment = %q, want the island mounted despite the stale refusal", body)
-	}
-	if strings.Contains(body, "already belongs to feature") {
-		t.Errorf("fragment = %q, want the stale refusal not to shadow a real candidate set", body)
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := openStore(t)
+			tt.seed(t, store)
+			response := do(t, newServer(store, testNow), http.MethodGet, tt.path,
+				req{Header: http.Header{"Hx-Request": {"true"}}})
+			root := htmltest.Parse(t, response.Body)
+			got := outcome{Status: response.Code, Buttons: len(root.Find("button")),
+				Cancels: len(root.Find(`a[href="/f/project:x"]`))}
+			for _, node := range root.Find("dialog#launch-modal-body") {
+				_, open := node.Attr("open")
+				got.DialogsOpen = append(got.DialogsOpen, open)
+				got.EmbedsCandidateURL = strings.Contains(node.HTML(), "sandbox://CC-1")
+			}
+			for _, node := range root.Find("h2#launch-dialog-title") {
+				got.Titles = append(got.Titles, node.Text())
+			}
+			for _, node := range root.Find("[hx-get]") {
+				value, _ := node.Attr("hx-get")
+				got.Polling = append(got.Polling, value)
+			}
+			for _, node := range root.Find("dialog p") {
+				text := node.Text()
+				got.Messages = append(got.Messages, message{
+					Feature: strings.Contains(text, "project:x"), Importing: strings.Contains(text, "importing project:x"),
+					Refused: strings.Contains(text, "already belongs to feature"),
+					Empty:   strings.Contains(text, "no tickets to launch"),
+				})
+			}
+			for _, node := range root.Find("cc-launch-modal") {
+				feature, _ := node.Attr("feature")
+				tickets, _ := node.Attr("tickets")
+				got.Modals = append(got.Modals, modal{Feature: feature, Tickets: tickets,
+					ContainsImport:       strings.Contains(node.HTML(), "importing"),
+					ContainsCandidateURL: strings.Contains(node.HTML(), "sandbox://CC-1")})
+			}
+			for _, node := range root.Find(`script[type="module"]`) {
+				src, _ := node.Attr("src")
+				got.Scripts = append(got.Scripts, src)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("candidates fragment (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
 func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, storepkg.Ticket{
+		URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
+	})
 
-	srv := httptest.NewServer(openServer(store, realClock{}, ""))
-	t.Cleanup(srv.Close)
+	srv := newServer(store, testNow)
 
-	for _, header := range []string{"", "true"} {
-		req, err := http.NewRequest(http.MethodGet, srv.URL+"/launch/candidates.json?feature=project%3Ax", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if header != "" {
-			req.Header.Set("HX-Request", header)
-		}
-		resp, err := srv.Client().Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
-			t.Errorf("HX-Request %q: Content-Type = %q, want application/json", header, ct)
-		}
-		_ = resp.Body.Close()
-	}
-}
-
-func TestHandleCandidatesFragmentShowsAnEmptyFeatureWithoutOfferingConfirm(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(openServer(openStore(t), realClock{}, ""))
-	t.Cleanup(srv.Close)
-
-	resp := getModalFragment(t, srv, "/launch/candidates?feature=project%3Ax")
-	defer func() { _ = resp.Body.Close() }()
-	body := readBody(t, resp)
-	if !strings.Contains(body, "no tickets to launch") {
-		t.Errorf("fragment = %q, want the empty-feature message", body)
-	}
-	if strings.Contains(body, "[ confirm ]") {
-		t.Errorf("fragment = %q, want no confirm button with zero candidates", body)
+	for _, tt := range []struct {
+		name   string
+		header http.Header
+	}{
+		{name: "without HX-Request"},
+		{name: "with HX-Request", header: http.Header{"Hx-Request": {"true"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := do(t, srv, http.MethodGet, "/launch/candidates.json?feature=project%3Ax", req{Header: tt.header})
+			if ct := response.Header.Get("Content-Type"); ct != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", ct)
+			}
+		})
 	}
 }

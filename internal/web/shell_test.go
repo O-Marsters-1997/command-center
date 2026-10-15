@@ -1,14 +1,15 @@
 package web_test
 
 import (
-	"html"
-	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -50,19 +51,18 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {
 		t.Errorf("page does not open a document:\n%s", body[:min(len(body), 200)])
 	}
-	for _, want := range []string{
-		"<title>Tickets · Command Centre</title>",
-		"</head>",
-		"<body>",
-		"</body>",
-		"</html>",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page is missing %q:\n%s", want, body)
+	for _, closing := range []string{"</head>", "</body>", "</html>"} {
+		if !strings.Contains(body, closing) {
+			t.Errorf("document is missing closing tag %q", closing)
 		}
 	}
-	if !strings.Contains(body, ">fleet-hq<") {
-		t.Errorf("header does not name the workspace:\n%s", body)
+	root := htmltest.Parse(t, body)
+	root.One(t, "head title")
+	if got := root.One(t, "title").Text(); got != "Tickets · Command Centre" {
+		t.Errorf("title = %q", got)
+	}
+	if got := root.One(t, "body").Text(); !strings.Contains(got, "fleet-hq") {
+		t.Error("workspace name fleet-hq absent from body text")
 	}
 }
 
@@ -73,13 +73,44 @@ func TestShellIsLightOnlyAndMakesNoThirdPartyRequest(t *testing.T) {
 	server := newServer(shellStore(t, &now, ""), now)
 	body := renderPath(t, server, "/tickets")
 
-	for _, gone := range []string{"data-theme", "toggleTheme", "localStorage", "prefers-color-scheme"} {
-		if strings.Contains(body, gone) {
-			t.Errorf("the page still carries %q:\n%s", gone, body)
+	root := htmltest.Parse(t, body)
+	if themed := root.Find("[data-theme]"); len(themed) != 0 {
+		t.Errorf("light-only page carries a theme toggle: %s", themed[0].HTML())
+	}
+	for _, script := range root.Find("script") {
+		for _, mechanism := range []string{"toggleTheme", "localStorage", "prefers-color-scheme"} {
+			if strings.Contains(script.Text(), mechanism) {
+				t.Errorf("inline theme mechanism %q in %s", mechanism, script.HTML())
+			}
 		}
 	}
-	if strings.Contains(body, "https://") || strings.Contains(body, "//fonts.") {
-		t.Errorf("the page requests a third-party origin:\n%s", body)
+	for _, resource := range []struct{ selector, attr string }{
+		{"script[src]", "src"}, {"link[href]", "href"}, {"base[href]", "href"},
+		{"img[src]", "src"}, {"img[srcset]", "srcset"},
+		{"source[src]", "src"}, {"source[srcset]", "srcset"},
+		{"iframe[src]", "src"}, {"frame[src]", "src"},
+		{"video[src]", "src"}, {"video[poster]", "poster"},
+		{"audio[src]", "src"}, {"track[src]", "src"},
+		{"embed[src]", "src"}, {"object[data]", "data"},
+		{"input[src]", "src"}, {"image[href]", "href"}, {"use[href]", "href"},
+	} {
+		for _, node := range root.Find(resource.selector) {
+			value, _ := node.Attr(resource.attr)
+			urls := []string{value}
+			if resource.attr == "srcset" {
+				urls = nil
+				for _, candidate := range strings.Split(value, ",") {
+					if fields := strings.Fields(candidate); len(fields) > 0 {
+						urls = append(urls, fields[0])
+					}
+				}
+			}
+			for _, url := range urls {
+				if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "//") {
+					t.Errorf("shell resource %s %s = %q requests a third-party origin", resource.selector, resource.attr, url)
+				}
+			}
+		}
 	}
 }
 
@@ -89,20 +120,30 @@ func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	for _, path := range []string{"/tickets", "/insights", "/repos"} {
-		body := renderPath(t, server, path)
-		anchors := []string{`<aside class="sidebar"`, `<main id="main"`, `<ol class="crumbs">`, `class="topbar-action"`}
-		for _, want := range anchors {
-			if !strings.Contains(body, want) {
-				t.Errorf("GET %s is missing %q:\n%s", path, want, body)
+	for _, tt := range []struct{ name, path string }{
+		{name: "tickets", path: "/tickets"},
+		{name: "insights", path: "/insights"},
+		{name: "repos", path: "/repos"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			body := renderPath(t, server, tt.path)
+			root := htmltest.Parse(t, body)
+			for _, selector := range []string{"aside#sidebar", "main#main", "ol.crumbs", ".topbar-action"} {
+				root.One(t, selector)
 			}
-		}
+		})
 	}
 
-	body := renderPath(t, server, "/insights")
-	for _, want := range []string{`hx-get="/insights"`, `hx-select="#main"`, `hx-target="#main"`, `hx-push-url="true"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("sidebar link is missing %q:\n%s", want, body)
+	root := htmltest.Parse(t, renderPath(t, server, "/insights"))
+	link := root.One(t, `nav#sidebar-nav a[href="/insights"]`)
+	attrs := map[string]string{
+		"hx-get": "/insights", "hx-select": "#main",
+		"hx-target": "#main", "hx-push-url": "true",
+	}
+	for name, want := range attrs {
+		if got, _ := link.Attr(name); got != want {
+			t.Errorf("sidebar %s = %q, want %q: %s", name, got, want, link.HTML())
 		}
 	}
 }
@@ -113,15 +154,18 @@ func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	if body := renderPath(t, server, "/"); !strings.Contains(body, `<main id="main" data-home data-desktop-target=`) {
-		t.Errorf("the bare root is not marked as home:\n%s", body)
+	root := htmltest.Parse(t, renderPath(t, server, "/")).One(t, "main#main")
+	if _, ok := root.Attr("data-home"); !ok {
+		t.Error("home main lacks data-home")
 	}
-	if body := renderPath(t, server, "/tickets"); !strings.Contains(body, `<main id="main">`) {
-		t.Errorf("a destination's main is not the plain, non-home element:\n%s", body)
+	if _, ok := root.Attr("data-desktop-target"); !ok {
+		t.Error("home main lacks desktop target")
 	}
-	if body := renderPath(t, server, "/insights"); !strings.Contains(body, `class="back"`) {
-		t.Errorf("an opened page has no back link:\n%s", body)
+	main := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "main#main")
+	if _, ok := main.Attr("data-home"); ok {
+		t.Error("tickets main is marked home")
 	}
+	htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, `main#main a[href="/"]`)
 }
 
 func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
@@ -131,19 +175,16 @@ func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
 	server := newServer(shellStore(t, &now, ""), now)
 	body := renderPath(t, server, "/")
 
-	for _, want := range []string{
-		`href="/" data-key="g h"`,
-		`href="/tickets" data-key="g t"`,
-		`href="/insights" data-key="g i"`,
-		`href="/repos" data-key="g r"`,
-		`href="/launch" data-key="c"`,
-		`<input id="rail-search" class="rail-search" data-key="mod+k"`,
-		`<script type="module" src="/assets/dist/keys.js"></script>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("home page is missing %q:\n%s", want, body)
-		}
+	root := htmltest.Parse(t, body)
+	anchors := map[string]string{
+		"g h": "/", "g t": "/tickets", "g i": "/insights",
+		"g r": "/repos", "c": "/launch",
 	}
+	for key, href := range anchors {
+		root.One(t, `a[data-key="`+key+`"][href="`+href+`"]`)
+	}
+	root.One(t, `input#rail-search[data-key="mod+k"]`)
+	root.One(t, `script[type="module"][src="/assets/dist/keys.js"]`)
 }
 
 func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
@@ -152,27 +193,36 @@ func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
 	now := testNow
 	server := newServer(shellStore(t, &now, ""), now)
 
-	for _, path := range []string{"/", "/tickets", "/insights", "/repos"} {
-		body := renderPath(t, server, path)
-		sheet := strings.Index(body, `<dialog id="key-sheet"`)
-		main := strings.Index(body, `id="main"`)
-		if sheet < 0 || main < 0 || sheet > main {
-			t.Errorf("GET %s: sheet at %d, main at %d, want the sheet in the sidebar before main", path, sheet, main)
-		}
-		if !strings.Contains(body, `data-key="?"`) {
-			t.Errorf("GET %s: no Shortcuts button with data-key=\"?\"", path)
-		}
-		for _, group := range view.Keymap {
-			if !strings.Contains(body, ">"+html.EscapeString(group.Title)+"</h3>") {
-				t.Errorf("GET %s: sheet is missing the group heading %q", path, group.Title)
+	for _, tt := range []struct{ name, path string }{
+		{name: "home", path: "/"},
+		{name: "tickets", path: "/tickets"},
+		{name: "insights", path: "/insights"},
+		{name: "repos", path: "/repos"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := htmltest.Parse(t, renderPath(t, server, tt.path))
+			root.One(t, "main#main")
+			sidebar := root.One(t, "aside#sidebar")
+			sidebar.One(t, `button[data-key="?"]`)
+			sheet := sidebar.One(t, "dialog#key-sheet")
+			var got []string
+			for _, row := range sheet.Find(".key-row") {
+				got = append(got, row.One(t, "kbd").Text()+" "+row.One(t, "dd").Text())
 			}
-			for _, row := range group.Rows {
-				want := "<kbd>" + html.EscapeString(row.Keys) + "</kbd></dt><dd>" + html.EscapeString(row.Does) + "</dd>"
-				if !strings.Contains(body, want) {
-					t.Errorf("GET %s: sheet is missing the row %q", path, want)
+			var want []string
+			for _, group := range view.Keymap {
+				if !strings.Contains(sheet.Text(), group.Title) {
+					t.Errorf("shortcut sheet lacks heading %q: %s", group.Title, sheet.HTML())
+				}
+				for _, row := range group.Rows {
+					want = append(want, row.Keys+" "+row.Does)
 				}
 			}
-		}
+			if !slices.Equal(got, want) {
+				t.Errorf("shortcut rows = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -203,16 +253,13 @@ func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
 			}
 			now := observedAt.Add(tt.age)
 			server := newServer(shellStore(t, at, ""), now)
-			body := flattenTimes(renderPath(t, server, "/rail"))
-
-			if !strings.Contains(body, tt.wantChip) {
-				t.Errorf("chip does not read %q:\n%s", tt.wantChip, body)
+			chip := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, ".rail-health")
+			if got := chip.Text(); !strings.Contains(got, tt.wantChip) {
+				t.Errorf("chip = %q, want %q: %s", got, tt.wantChip, chip.HTML())
 			}
 		})
 	}
 }
-
-const railBanner = `<p class="rail-health banner ribbon"`
 
 func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	t.Parallel()
@@ -221,15 +268,17 @@ func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
 	now := observedAt.Add(45 * time.Second)
 
 	quiet := newServer(shellStore(t, &observedAt, ""), now)
-	if body := renderPath(t, quiet, "/rail"); strings.Contains(body, railBanner) {
-		t.Errorf("a banner opened with no failed tick:\n%s", body)
+	quietRail := htmltest.Parse(t, renderPath(t, quiet, "/rail"))
+	quietRail.One(t, ".rail-health")
+	if banners := quietRail.Find(".rail-health.banner"); len(banners) != 0 {
+		t.Errorf("banner opened with no failed tick: %s", banners[0].HTML())
 	}
 
 	failed := newServer(shellStore(t, &observedAt, "gh is unavailable"), now)
-	body := flattenTimes(renderPath(t, failed, "/rail"))
+	banner := htmltest.Parse(t, renderPath(t, failed, "/rail")).One(t, ".rail-health.banner")
 	for _, want := range []string{"tick failed 44s ago", "gh is unavailable"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("banner is missing %q:\n%s", want, body)
+		if got := banner.Text(); !strings.Contains(got, want) {
+			t.Errorf("banner = %q, want %q: %s", got, want, banner.HTML())
 		}
 	}
 }
@@ -245,12 +294,13 @@ func TestRailBannerClosesOnceATickSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := flattenTimes(renderPath(t, newServer(store, now), "/rail"))
-	if strings.Contains(body, railBanner) {
-		t.Errorf("the banner is still open after a tick recovered:\n%s", body)
+	rail := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail"))
+	if banners := rail.Find(".rail-health.banner"); len(banners) != 0 {
+		t.Errorf("banner persists after recovery: %s", banners[0].HTML())
 	}
-	if !strings.Contains(body, `<p class="rail-health">`) || !strings.Contains(body, "observed 2s ago") {
-		t.Errorf("the chip does not read quietly after a tick recovered:\n%s", body)
+	chip := rail.One(t, ".rail-health")
+	if got := chip.Text(); !strings.Contains(got, "observed 2s ago") {
+		t.Errorf("recovered chip = %q: %s", got, chip.HTML())
 	}
 }
 
@@ -259,14 +309,15 @@ func TestRailCountsLiveAgents(t *testing.T) {
 
 	now := testNow
 	live := newServer(detailStore(t, writeLog(t, 1), now, now), now)
-	if body := renderPath(t, live, "/rail"); !strings.Contains(body, `<p class="rail-health">1 live`) {
-		t.Errorf("rail does not count the one live agent:\n%s", body)
+	chip := htmltest.Parse(t, renderPath(t, live, "/rail")).One(t, ".rail-health")
+	if !strings.Contains(chip.Text(), "1 live") {
+		t.Errorf("live agent chip = %q: %s", chip.Text(), chip.HTML())
 	}
 
 	idle := newServer(shellStore(t, &now, ""), now)
-	body := renderPath(t, idle, "/rail")
-	if !strings.Contains(body, `<p class="rail-health">0 live`) {
-		t.Errorf("rail does not count zero live agents:\n%s", body)
+	chip = htmltest.Parse(t, renderPath(t, idle, "/rail")).One(t, ".rail-health")
+	if got := chip.Text(); !strings.Contains(got, "0 live") {
+		t.Errorf("idle chip = %q: %s", got, chip.HTML())
 	}
 }
 
@@ -280,9 +331,7 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	dependent := storepkg.Ticket{
 		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},
 	}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{blocker, dependent}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, blocker, dependent)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
@@ -303,12 +352,8 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body := renderPath(t, newServer(store, now), "/rail")
-	if !strings.Contains(body, "1 live") {
-		t.Errorf("rail does not count the live agent behind a base_gone row:\n%s", body)
+	chip := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).One(t, ".rail-health")
+	if got := chip.Text(); !strings.Contains(got, "1 live") {
+		t.Errorf("base_gone live chip = %q: %s", got, chip.HTML())
 	}
 }
-
-var timeTag = regexp.MustCompile(`<time datetime="[^"]*">([^<]*)</time>`)
-
-func flattenTimes(s string) string { return timeTag.ReplaceAllString(s, "$1") }

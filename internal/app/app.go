@@ -91,7 +91,7 @@ func New(
 		}
 	}()
 
-	store, err := store.OpenStore(ctx, cfg.DatabaseURL)
+	store, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}

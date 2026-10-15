@@ -5,22 +5,27 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 func TestRepoNameForDir(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name      string
-		remote    string
-		setOrigin string
-		dir       func(t *testing.T, repoPath string) string
-		wantName  string
-		wantOK    bool
+		name     string
+		remote   func(root string) string
+		dir      func(t *testing.T, repoPath string) string
+		wantName string
+		wantOK   bool
 	}{
-		{name: "root", dir: func(_ *testing.T, repo string) string { return repo }, wantName: "r", wantOK: true},
 		{
-			name: "subdirectory",
+			name: "root", remote: localRemote,
+			dir:      func(_ *testing.T, repo string) string { return repo },
+			wantName: "r", wantOK: true,
+		},
+		{
+			name: "subdirectory", remote: localRemote,
 			dir: func(t *testing.T, repo string) string {
 				t.Helper()
 				sub := filepath.Join(repo, "sub")
@@ -32,27 +37,31 @@ func TestRepoNameForDir(t *testing.T) {
 			wantName: "r", wantOK: true,
 		},
 		{
-			name: "worktree",
+			name: "worktree", remote: localRemote,
 			dir: func(t *testing.T, repo string) string {
 				t.Helper()
 				worktree := filepath.Join(filepath.Dir(repo), "worktree")
-				runGit(t, "-C", repo, "worktree", "add", worktree)
+				gittest.Run(t, repo, "worktree", "add", worktree)
 				return worktree
 			},
 			wantName: "r", wantOK: true,
 		},
 		{
-			name: "the other URL form of the same remote", remote: "https://github.com/o/r",
-			setOrigin: "git@github.com:o/r.git",
-			dir:       func(_ *testing.T, repo string) string { return repo },
-			wantName:  "r", wantOK: true,
+			name:   "the other URL form of the same remote",
+			remote: func(string) string { return "https://github.com/o/r" },
+			dir: func(t *testing.T, repo string) string {
+				t.Helper()
+				gittest.Run(t, repo, "remote", "set-url", "origin", "git@github.com:o/r.git")
+				return repo
+			},
+			wantName: "r", wantOK: true,
 		},
 		{
-			name: "no matching repo", remote: "git@github.com:o/other.git",
+			name: "no matching repo", remote: func(string) string { return "git@github.com:o/other.git" },
 			dir: func(_ *testing.T, repo string) string { return repo },
 		},
 		{
-			name: "no origin",
+			name: "no origin", remote: localRemote,
 			dir: func(t *testing.T, _ string) string {
 				t.Helper()
 				return t.TempDir()
@@ -61,15 +70,9 @@ func TestRepoNameForDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			root, repoPath := repoWithOrigin(t)
-			remote := tt.remote
-			if remote == "" {
-				remote = filepath.Join(root, "remote.git")
-			}
-			if tt.setOrigin != "" {
-				runGit(t, "-C", repoPath, "remote", "set-url", "origin", tt.setOrigin)
-			}
-			repos := []store.Repo{{Name: "r", Remote: remote}}
+			repos := []store.Repo{{Name: "r", Remote: tt.remote(root)}}
 
 			name, ok := loop.RepoNameForDir(t.Context(), tt.dir(t, repoPath), repos)
 			if ok != tt.wantOK || name != tt.wantName {
@@ -78,3 +81,5 @@ func TestRepoNameForDir(t *testing.T) {
 		})
 	}
 }
+
+func localRemote(root string) string { return filepath.Join(root, "remote.git") }

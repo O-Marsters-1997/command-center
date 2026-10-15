@@ -45,7 +45,7 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	dsn := cctest.DSN(t)
+	dsn := cctest.UnmigratedDSN(t)
 	db := migrateTo(t, dsn, lastIndexMigration)
 	at := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
 

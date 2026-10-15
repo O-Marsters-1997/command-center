@@ -5,6 +5,8 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
@@ -15,9 +17,7 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 		{URL: "https://github.com/owner/repo/issues/100", Repo: "repo", Branch: "cc-100"},
 		{URL: "https://github.com/owner/repo/issues/101", Repo: "repo", Branch: "cc-101"},
 	}
-	if err := st.UpsertTickets(t.Context(), tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, st, tickets...)
 	obs := plan.Observation{
 		ObservedAt: testNow,
 		Titles: map[plan.TicketURL]string{
@@ -31,17 +31,23 @@ func TestBoardNamesEachTicketByItsIssueTitle(t *testing.T) {
 
 	page := renderBoard(t, newServer(st, testNow))
 
-	for _, tc := range []struct{ name, got, want string }{
-		{"titled ticket cell", rowCellText(t, page, tickets[0].URL, `a href="[^"]*"[^>]*`, "a"), "#100"},
-		{
-			"titled task cell", rowCellText(t, page, tickets[0].URL, "div", "div"),
-			"Put each ticket&#39;s issue title on its row",
-		},
-		{"untitled ticket cell", rowCellText(t, page, tickets[1].URL, `a href="[^"]*"[^>]*`, "a"), "#101"},
-		{"untitled task cell", rowCellText(t, page, tickets[1].URL, "div", "div"), "untitled"},
+	for _, tc := range []struct{ name, ticketURL, ref, title string }{
+		{"titled", tickets[0].URL, "#100", "Put each ticket's issue title on its row"},
+		{"untitled", tickets[1].URL, "#101", "untitled"},
 	} {
-		if tc.got != tc.want {
-			t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			row := webtest.RowFor(t, page, tc.ticketURL)
+			if row.Ref != tc.ref {
+				t.Errorf("ref = %q, want %q:\n%s", row.Ref, tc.ref, row.Row.HTML())
+			}
+			divs := row.Ticket.Find("div")
+			if len(divs) == 0 {
+				t.Fatalf("ticket cell has no title div:\n%s", row.Row.HTML())
+			}
+			if got := divs[len(divs)-1].Text(); got != tc.title {
+				t.Errorf("title = %q, want %q:\n%s", got, tc.title, row.Row.HTML())
+			}
+		})
 	}
 }

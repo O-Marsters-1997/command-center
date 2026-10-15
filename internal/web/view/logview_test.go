@@ -109,15 +109,26 @@ func TestBuildLogDetailPlacesStoreEventsAmongTheAgentsLinesByTime(t *testing.T) 
 		t.Errorf("StreamPath = %q, want it to resume after record 7", detail.StreamPath)
 	}
 
-	for _, mode := range []LogFilter{LogSkills, LogTools, LogFails} {
-		hidden := mustLogDetail(t, testLine, path, false, "sandbox://x", records, Params{Log: mode})
-		for _, phase := range hidden.Phases {
-			for _, item := range phase.Items {
-				if item.Kind == "record" {
-					t.Errorf("mode %q rendered a store line; they show under all only", mode)
+	for _, tt := range []struct {
+		name string
+		mode LogFilter
+	}{
+		{name: "skills", mode: LogSkills},
+		{name: "tools", mode: LogTools},
+		{name: "fails", mode: LogFails},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			hidden := mustLogDetail(t, testLine, path, false, "sandbox://x", records, Params{Log: tt.mode})
+			for _, phase := range hidden.Phases {
+				for _, item := range phase.Items {
+					if item.Kind == "record" {
+						t.Errorf("mode %q rendered a store line; they show under all only", tt.mode)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
@@ -144,7 +155,7 @@ func TestLineOfSplitsAChecksLandedRecordIntoResultAndCheckName(t *testing.T) {
 func TestBuildLogDetailRendersStoreEventsWhenTheLogIsGone(t *testing.T) {
 	t.Parallel()
 
-	records := []store.Event{{ID: 3, At: time.Now(), Kind: "pr_merged", Detail: "PR #12 merged"}}
+	records := []store.Event{{ID: 3, At: testNow, Kind: "pr_merged", Detail: "PR #12 merged"}}
 	gone := filepath.Join(t.TempDir(), "pruned.jsonl")
 
 	detail := mustLogDetail(t, testLine, gone, false, "sandbox://x", records, Params{Log: "all"})
@@ -181,15 +192,16 @@ func TestBuildLogDetailFiltersCallsButKeepsPhaseHeaders(t *testing.T) {
 
 	path := writeRunLog(t, testRunLog)
 	for _, tc := range []struct {
+		name      string
 		mode      LogFilter
 		wantLines [2]int
 	}{
-		{"all", [2]int{1, 1}},
-		{"skills", [2]int{0, 0}},
-		{"tools", [2]int{1, 1}},
-		{"fails", [2]int{1, 0}},
+		{name: "all", mode: LogAll, wantLines: [2]int{1, 1}},
+		{name: "skills", mode: LogSkills, wantLines: [2]int{0, 0}},
+		{name: "tools", mode: LogTools, wantLines: [2]int{1, 1}},
+		{name: "fails", mode: LogFails, wantLines: [2]int{1, 0}},
 	} {
-		t.Run(string(tc.mode), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: tc.mode})
@@ -224,13 +236,19 @@ func TestBuildLogDetailAnchorSurvivesAFilterThatHidesTheFailure(t *testing.T) {
 	t.Parallel()
 
 	path := writeRunLog(t, testRunLog)
-	for _, mode := range []LogFilter{LogSkills, LogTools} {
-		t.Run(string(mode), func(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		mode LogFilter
+	}{
+		{name: "skills", mode: LogSkills},
+		{name: "tools", mode: LogTools},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: mode})
+			detail := mustLogDetail(t, testLine, path, false, "sandbox://x", nil, Params{Log: tt.mode})
 			if anchorCount(detail) != 1 {
-				t.Errorf("mode %q renders no #first-fail target, but the jump link still points at it", mode)
+				t.Errorf("mode %q renders no #first-fail target, but the jump link still points at it", tt.mode)
 			}
 		})
 	}
@@ -316,29 +334,30 @@ func TestKindShownByMode(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
+		name string
 		mode LogFilter
 		kind agentlog.Kind
 		want bool
 	}{
-		{"all", agentlog.Tool, true},
-		{"all", agentlog.Fail, true},
-		{"skills", agentlog.Skill, true},
-		{"skills", agentlog.Tool, false},
-		{"skills", agentlog.Fail, false},
-		{"tools", agentlog.Tool, true},
-		{"tools", agentlog.File, true},
-		{"tools", agentlog.Fail, false},
-		{"fails", agentlog.Fail, true},
-		{"fails", agentlog.Pass, false},
-		{"all", agentlog.Commit, true},
-		{"tools", agentlog.Commit, true},
-		{"skills", agentlog.Commit, false},
-		{"fails", agentlog.Commit, false},
-		{"all", agentlog.Say, true},
-		{"tools", agentlog.Say, false},
-		{"fails", agentlog.Say, false},
+		{name: "all tool", mode: LogAll, kind: agentlog.Tool, want: true},
+		{name: "all fail", mode: LogAll, kind: agentlog.Fail, want: true},
+		{name: "skills skill", mode: LogSkills, kind: agentlog.Skill, want: true},
+		{name: "skills tool", mode: LogSkills, kind: agentlog.Tool},
+		{name: "skills fail", mode: LogSkills, kind: agentlog.Fail},
+		{name: "tools tool", mode: LogTools, kind: agentlog.Tool, want: true},
+		{name: "tools file", mode: LogTools, kind: agentlog.File, want: true},
+		{name: "tools fail", mode: LogTools, kind: agentlog.Fail},
+		{name: "fails fail", mode: LogFails, kind: agentlog.Fail, want: true},
+		{name: "fails pass", mode: LogFails, kind: agentlog.Pass},
+		{name: "all commit", mode: LogAll, kind: agentlog.Commit, want: true},
+		{name: "tools commit", mode: LogTools, kind: agentlog.Commit, want: true},
+		{name: "skills commit", mode: LogSkills, kind: agentlog.Commit},
+		{name: "fails commit", mode: LogFails, kind: agentlog.Commit},
+		{name: "all say", mode: LogAll, kind: agentlog.Say, want: true},
+		{name: "tools say", mode: LogTools, kind: agentlog.Say},
+		{name: "fails say", mode: LogFails, kind: agentlog.Say},
 	} {
-		t.Run(string(tc.mode)+"/"+tc.kind.String(), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			if got := KindShown(tc.mode, tc.kind); got != tc.want {
@@ -352,16 +371,21 @@ func TestFormatOffset(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
+		name string
 		d    time.Duration
 		want string
 	}{
-		{0, "+00:00"},
-		{6*time.Minute + 52*time.Second, "+06:52"},
-		{90 * time.Second, "+01:30"},
+		{name: "zero", d: 0, want: "+00:00"},
+		{name: "minutes and seconds", d: 6*time.Minute + 52*time.Second, want: "+06:52"},
+		{name: "over a minute", d: 90 * time.Second, want: "+01:30"},
 	} {
-		if got := formatOffset(tc.d); got != tc.want {
-			t.Errorf("formatOffset(%v) = %q, want %q", tc.d, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := formatOffset(tc.d); got != tc.want {
+				t.Errorf("formatOffset(%v) = %q, want %q", tc.d, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -369,16 +393,21 @@ func TestFormatShort(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
+		name string
 		d    time.Duration
 		want string
 	}{
-		{41 * time.Second, "41s"},
-		{1031 * time.Second, "17m 11s"},
-		{3661 * time.Second, "1h 01m"},
+		{name: "seconds", d: 41 * time.Second, want: "41s"},
+		{name: "minutes", d: 1031 * time.Second, want: "17m 11s"},
+		{name: "hours", d: 3661 * time.Second, want: "1h 01m"},
 	} {
-		if got := formatShort(tc.d); got != tc.want {
-			t.Errorf("formatShort(%v) = %q, want %q", tc.d, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := formatShort(tc.d); got != tc.want {
+				t.Errorf("formatShort(%v) = %q, want %q", tc.d, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -390,12 +419,13 @@ func TestToolMixSummary(t *testing.T) {
 		mix  toolMix
 		want string
 	}{
-		{"reads and a search", toolMix{reading: 2, searching: 1}, "Read 2 files, searched once"},
-		{"one command", toolMix{running: 1}, "Ran 1 command"},
-		{"edits and runs", toolMix{editing: 1, running: 3}, "Edited 1 file, ran 3 commands"},
-		{"only other tools", toolMix{other: 2}, "Used 2 tools"},
-		{"other tools after named ones", toolMix{searching: 2, other: 1}, "Searched twice, used 1 other tool"},
-		{"nothing called", toolMix{}, "Tool results"},
+		{name: "reads and a search", mix: toolMix{reading: 2, searching: 1}, want: "Read 2 files, searched once"},
+		{name: "one command", mix: toolMix{running: 1}, want: "Ran 1 command"},
+		{name: "edits and runs", mix: toolMix{editing: 1, running: 3}, want: "Edited 1 file, ran 3 commands"},
+		{name: "only other tools", mix: toolMix{other: 2}, want: "Used 2 tools"},
+		{name: "other tools after named ones", mix: toolMix{searching: 2, other: 1},
+			want: "Searched twice, used 1 other tool"},
+		{name: "nothing called", mix: toolMix{}, want: "Tool results"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -461,23 +491,28 @@ func TestBuildLogDetailShowsEditAndWriteCounts(t *testing.T) {
 		log  string
 		want []string
 	}{
-		{"from the structured result", log, []string{"+3 -2", "+3 -0", "+3 -1"}},
-		{"from the inputs when there is no result", withoutResults, []string{"+1 -1", "+3 -0", "+5 -0"}},
+		{name: "from the structured result", log: log, want: []string{"+3 -2", "+3 -0", "+3 -1"}},
+		{name: "from the inputs when there is no result", log: withoutResults,
+			want: []string{"+1 -1", "+3 -0", "+5 -0"}},
 	} {
-		render := func(l LogLine) (template.HTML, error) {
-			return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
-		}
-		detail := mustLogDetail(t, render, writeRunLog(t, tc.log), false, "sandbox://x", nil, Params{Log: "all"})
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-		var got []string
-		for _, item := range detail.Phases[0].Items {
-			for _, line := range item.Group.Lines {
-				got = append(got, string(line))
+			render := func(l LogLine) (template.HTML, error) {
+				return template.HTML(fmt.Sprintf("+%d -%d", l.Added, l.Removed)), nil
 			}
-		}
-		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s: counts = %v, want %v", tc.name, got, tc.want)
-		}
+			detail := mustLogDetail(t, render, writeRunLog(t, tc.log), false, "sandbox://x", nil, Params{Log: "all"})
+
+			var got []string
+			for _, item := range detail.Phases[0].Items {
+				for _, line := range item.Group.Lines {
+					got = append(got, string(line))
+				}
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("counts = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -523,19 +558,20 @@ func TestLineOfShapesEachEventKind(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		name string
 		kind agentlog.Kind
 		want LineShape
 	}{
-		{agentlog.Say, LineSay},
-		{agentlog.Skill, LineSkill},
-		{agentlog.Record, LineRecord},
-		{agentlog.Commit, LineCall},
-		{agentlog.Cmd, LineCall},
-		{agentlog.Fail, LineCall},
-		{agentlog.Tool, LineCall},
+		{name: "say", kind: agentlog.Say, want: LineSay},
+		{name: "skill", kind: agentlog.Skill, want: LineSkill},
+		{name: "record", kind: agentlog.Record, want: LineRecord},
+		{name: "commit", kind: agentlog.Commit, want: LineCall},
+		{name: "cmd", kind: agentlog.Cmd, want: LineCall},
+		{name: "fail", kind: agentlog.Fail, want: LineCall},
+		{name: "tool", kind: agentlog.Tool, want: LineCall},
 	}
 	for _, tt := range tests {
-		t.Run(tt.kind.String(), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := LineOf(agentlog.Event{Kind: tt.kind}).Shape; got != tt.want {
 				t.Errorf("LineOf(%s).Shape = %q, want %q", tt.kind, got, tt.want)

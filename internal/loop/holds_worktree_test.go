@@ -3,10 +3,11 @@ package loop_test
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -35,24 +36,25 @@ func dispositionAs(t *testing.T, store *storepkg.Store, ticketURL string, outcom
 }
 
 func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	dispositionAs(t, store, f.child.URL, plan.OutcomeAsked, at.Add(time.Second))
 	parentTip1 := advanceParent(t, repoPath, f)
-	childTip0 := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD"))
+	childTip0 := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
 
 	obs := baseObservation(f, parentTip1)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if got := strings.TrimSpace(runGitOutput(t, "-C", f.childWorktree, "rev-parse", "HEAD")); got != childTip0 {
+	if got := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD"); got != childTip0 {
 		t.Errorf("child worktree HEAD = %s, want unchanged %s while awaiting input", got, childTip0)
 	}
 	events, err := store.Events(t.Context())
@@ -77,10 +79,11 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 }
 
 func TestRetargetSkipsAnAwaitingInputTicketUntilItLeavesThatState(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
 	store := openStore(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
 	dispositionAs(t, store, f.child.URL, plan.OutcomeAsked, at.Add(time.Second))
@@ -88,25 +91,27 @@ func TestRetargetSkipsAnAwaitingInputTicketUntilItLeavesThatState(t *testing.T) 
 
 	obs := mergedObservation(f, "parent")
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	cfg, ws := stackedConfigAndWorkspace(t, root)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{})
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, runner.ProcessRunner{}, loop.WithForge(forge))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 0 {
-		t.Errorf("gh pr edit calls = %q, want none while awaiting input", got)
+	if got := forge.Calls("Edit"); len(got) != 0 {
+		t.Errorf("forge Edit calls = %+v, want none while awaiting input", got)
 	}
 
 	dispositionAs(t, store, f.child.URL, plan.OutcomePush, at.Add(2*time.Second))
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce after the session moved on: %v", err)
 	}
-	if got := ghLogLines(t, ghLog, "pr edit"); len(got) != 1 || got[0] != "pr edit child --base main" {
-		t.Errorf("gh pr edit calls = %q, want exactly [pr edit child --base main]", got)
+	want := forgeCall{Method: "Edit", Repo: repoPath, Branch: "child", Base: "main"}
+	if got := forge.Calls("Edit"); len(got) != 1 || got[0] != want {
+		t.Errorf("forge Edit calls = %+v, want one edit of child onto main", got)
 	}
 }
 
 func TestRemoveWorktreeRefusesAnAwaitingInputTicket(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	dispositionAs(t, f.store, f.ticket.URL, plan.OutcomeAsked, f.at.Add(time.Second))
 	obs := plan.Observation{

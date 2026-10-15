@@ -28,8 +28,8 @@ func TestImportFeaturesListsLabelsAcrossRepos(t *testing.T) {
 		{Name: "local"},
 	}
 	byRemote := map[string]tracker.Source{
-		"github.com/acme/alpha": featureSource{[]tracker.Feature{"project:x"}},
-		"github.com/acme/beta":  featureSource{[]tracker.Feature{"project:x", "project:y"}},
+		"github.com/acme/alpha": featureSource{features: []tracker.Feature{"project:x"}},
+		"github.com/acme/beta":  featureSource{features: []tracker.Feature{"project:x", "project:y"}},
 	}
 	resolve := func(_ tracker.Kind, remote string) (tracker.Source, error) {
 		src, ok := byRemote[remote]

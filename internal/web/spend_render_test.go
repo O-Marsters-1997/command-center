@@ -2,7 +2,6 @@ package web_test
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 const spendAliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
@@ -24,9 +25,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 
 	ctx := t.Context()
 	store := openStore(t)
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
@@ -60,9 +59,10 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	}
 	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
 	aliveServer := newServer(aliveStore, now)
-	rec := get(t, aliveServer, "/tickets")
-	if !strings.Contains(rec.Body.String(), "15 tok") {
-		t.Errorf("alive run's page does not contain \"15 tok\":\n%s", rec.Body)
+	got := do(t, aliveServer, http.MethodGet, "/tickets", req{})
+	aliveSpend := webtest.RowFor(t, got.Body, aliveTicket.URL).Spend
+	if text := aliveSpend.Text(); !strings.Contains(text, "15 tok") {
+		t.Errorf("alive run spend = %q, want 15 tok", text)
 	}
 
 	endedTicket := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"}
@@ -72,9 +72,9 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	}
 	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
 	endedServer := newServer(endedStore, now)
-	rec = httptest.NewRecorder()
-	endedServer.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tickets", nil))
-	if strings.Contains(rec.Body.String(), "$1.23") {
-		t.Errorf("ended run's page contains \"$1.23\", want no dollar amount:\n%s", rec.Body)
+	got = do(t, endedServer, http.MethodGet, "/tickets", req{})
+	endedSpend := webtest.RowFor(t, got.Body, endedTicket.URL).Spend
+	if strings.Contains(endedSpend.Text(), "$1.23") {
+		t.Errorf("ended run spend contains dollar amount: %q", endedSpend.Text())
 	}
 }

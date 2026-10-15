@@ -11,7 +11,6 @@ exec cc import project:fan-out
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/fan-out/issues/CC-1&ticket=https://github.com/sandbox-org/fan-out/issues/CC-2&ticket=https://github.com/sandbox-org/fan-out/issues/CC-3&ticket=https://github.com/sandbox-org/fan-out/issues/CC-4&ticket=https://github.com/sandbox-org/fan-out/issues/CC-5'
 exec cc tick --count 1
-exec sleep 0.5
 
 # Tick: the root has no blockers, so it alone is unlocked and authorised -- cuts and spawns.
 # Every dependent is locked, naming the root as what it is waiting on.
@@ -21,7 +20,7 @@ stdout -count=1 'run_launched'
 exec cc request GET /tickets
 stdout -count=4 'waiting on https://github.com/sandbox-org/fan-out/issues/CC-1&#39;s PR'
 
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 
 # Tick: the root's dead run disposes with commits, pushes to origin/main and opens its own PR --
 # base main, so no stacked body. The dependents still read this tick's pre-push snapshot.
@@ -42,8 +41,7 @@ grep -count=1 'new cc-3-x --base origin/cc-1-x' $WORK/tp.log
 grep -count=1 'new cc-4-x --base origin/cc-1-x' $WORK/tp.log
 grep -count=1 'new cc-5-x --base origin/cc-1-x' $WORK/tp.log
 
-# Four concurrent agent processes need more real wall time to exit than one does.
-exec sleep 1.5
+cc-wait agent-done.log 'commits.sh repo-cc-[2-5]-x' 4
 
 # Tick: every dependent's dead run disposes, pushes its own branch cut off origin/cc-1-x, and opens
 # a stacked PR whose body carries "Merge after #42" -- the root's real PR number, read off this

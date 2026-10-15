@@ -3,17 +3,19 @@ package web_test
 import (
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"golang.org/x/net/html"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
@@ -24,9 +26,7 @@ func detailStore(t *testing.T, logPath string, startedAt, now time.Time) *storep
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "https://github.com/o/r/issues/76", Repo: "repo", Branch: "cc-76"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
@@ -84,8 +84,7 @@ func TestTheDeletedDetailRouteIs404(t *testing.T) {
 		"/ticket/" + url.PathEscape("sandbox://CC-1") + "/detail",
 		"/task/" + url.PathEscape("sandbox://CC-1") + "/detail",
 	} {
-		rec := httptest.NewRecorder()
-		server.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		rec := do(t, server, http.MethodGet, target, req{})
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s = %d, want 404", target, rec.Code)
 		}
@@ -98,21 +97,22 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/assets/htmx.min.js")
+	rec := do(t, server, http.MethodGet, "/assets/htmx.min.js", req{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/htmx.min.js = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "htmx") {
+	if !strings.Contains(rec.Body, "htmx") {
 		t.Error("/assets/htmx.min.js does not serve htmx")
 	}
 
-	page := get(t, server, "/tickets")
-	body := page.Body.String()
-	if !strings.Contains(body, `<script src="/assets/htmx.min.js"></script>`) {
-		t.Errorf("page does not load htmx from the binary:\n%s", body)
-	}
-	if strings.Contains(body, "//unpkg.com") || strings.Contains(body, "//cdn.") {
-		t.Error("page loads htmx over the network")
+	page := do(t, server, http.MethodGet, "/tickets", req{})
+	body := page.Body
+	root := htmltest.Parse(t, body)
+	root.One(t, `script[src="/assets/htmx.min.js"]`)
+	for _, script := range root.Find("script[src]") {
+		if src, _ := script.Attr("src"); strings.HasPrefix(src, "//") || strings.HasPrefix(src, "http") {
+			t.Errorf("page loads a network script: %s", script.HTML())
+		}
 	}
 }
 
@@ -122,25 +122,27 @@ func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	now := testNow
 	server := newServer(seededStore(t, now), now)
 
-	rec := get(t, server, "/tickets")
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/tickets", req{})
+	body := rec.Body
 
-	if strings.Contains(body, "http-equiv=\"refresh\"") {
-		t.Error("the meta refresh is still on the page")
+	root := htmltest.Parse(t, body)
+	board := root.One(t, "table#board")
+	attrs := map[string]string{
+		"hx-get": "/board?all=1", "hx-trigger": "every 5s",
+		"hx-sync": "this:drop", "hx-swap": "outerHTML",
 	}
-	for _, want := range []string{
-		`<table id="board" hx-get="/board?all=1" hx-trigger="every 5s" hx-sync="this:drop" hx-swap="outerHTML">`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page is missing %q:\n%s", want, body)
+	for name, want := range attrs {
+		if got, _ := board.Attr(name); got != want {
+			t.Errorf("board %s = %q, want %q", name, got, want)
 		}
 	}
-	if strings.Contains(body, `hx-select="#board"`) {
-		t.Errorf("the poll re-renders the whole document to select the board back out of it:\n%s", body)
+	if refresh := root.Find(`meta[http-equiv="refresh"]`); len(refresh) != 0 {
+		t.Errorf("page has meta refresh: %s", refresh[0].HTML())
+	}
+	if selects := root.Find(`[hx-select="#board"]`); len(selects) != 0 {
+		t.Errorf("board poll selects from a full document: %s", selects[0].HTML())
 	}
 }
-
-var hxAttrRE = regexp.MustCompile(`<(\w+)([^>]*\shx-[\w:-]+=[^>]*)>`)
 
 func TestVerbsNeedNoJavaScript(t *testing.T) {
 	t.Parallel()
@@ -154,40 +156,66 @@ func TestVerbsNeedNoJavaScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
-		tag, attrs := m[1], m[2]
-		if tag == "input" && strings.Contains(attrs, `id="rail-search"`) {
-			continue
-		}
-		if tag == "table" || tag == "div" || tag == "tr" || tag == "section" ||
-			(tag == "a" && !strings.Contains(attrs, "hx-post")) {
-			continue
-		}
-		if (tag == "input" || tag == "button") && strings.Contains(attrs, `hx-target="#board"`) {
-			continue
-		}
-		if tag == "form" && (strings.Contains(attrs, `method="post" action="/verb"`) ||
-			strings.Contains(attrs, `method="post" action="/launch/open"`)) {
-			continue
-		}
-		t.Errorf("a verb control carries htmx and so needs JavaScript: <%s%s>", tag, attrs)
+	root := htmltest.Parse(t, board)
+	verbForms := root.Find(`form[action="/verb"][method="post"][hx-post]`)
+	if len(verbForms) == 0 {
+		t.Error("board has no scriptless verb form")
 	}
-
-	for _, want := range []string{
-		`<form method="post" action="/verb" hx-post=`,
-		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
-		`<input type="checkbox" form="launch" name="ticket"`,
-	} {
-		if !strings.Contains(board, want) {
-			t.Errorf("the board is missing the scriptless path %q", want)
+	launch := root.One(t, `form#launch[method="post"][action="/launch/open"][hx-post="/launch/open"]`)
+	if selections := root.Find(`table#board input[type="checkbox"][form="launch"][name="ticket"]`); len(selections) == 0 {
+		t.Error("board has no scriptless ticket selections")
+	}
+	if got, want := len(root.Find("[hx-post]")), len(verbForms)+1; got != want {
+		t.Errorf("hx-post elements = %d, want %d verb forms and %s", got, want, launch.HTML())
+	}
+	var tags []string
+	seen := make(map[string]bool)
+	markup := html.NewTokenizer(strings.NewReader(board))
+	for tokenType := markup.Next(); tokenType != html.ErrorToken; tokenType = markup.Next() {
+		if tokenType != html.StartTagToken && tokenType != html.SelfClosingTagToken {
+			continue
+		}
+		tag := markup.Token().Data
+		if !seen[tag] {
+			tags = append(tags, tag)
+			seen[tag] = true
 		}
 	}
-	for _, m := range hxAttrRE.FindAllStringSubmatch(board, -1) {
-		attrs := m[2]
-		postsOnItsOwn := strings.Contains(attrs, `method="post" action="/verb"`) ||
-			strings.Contains(attrs, `method="post" action="/launch/open"`)
-		if strings.Contains(attrs, "hx-post") && !postsOnItsOwn {
-			t.Errorf("a verb posts over htmx rather than a form: <%s%s>", m[1], attrs)
+	for _, tag := range tags {
+		for _, element := range root.Find(tag) {
+			tokenizer := html.NewTokenizer(strings.NewReader(element.HTML()))
+			tokenType := tokenizer.Next()
+			if tokenType != html.StartTagToken && tokenType != html.SelfClosingTagToken {
+				t.Errorf("cannot inspect %s element", tag)
+				continue
+			}
+			startTag := tokenizer.Token()
+			var hasHTMX, posts bool
+			for _, attr := range startTag.Attr {
+				if strings.HasPrefix(attr.Key, "hx-") {
+					hasHTMX = true
+				}
+				if attr.Key == "hx-post" {
+					posts = true
+				}
+			}
+			if !hasHTMX {
+				continue
+			}
+			method, _ := element.Attr("method")
+			action, _ := element.Attr("action")
+			id, _ := element.Attr("id")
+			target, _ := element.Attr("hx-target")
+			formPosts := tag == "form" && method == "post" && (action == "/verb" || action == "/launch/open")
+			allowed := tag == "table" || tag == "div" || tag == "tr" || tag == "section" ||
+				(tag == "a" && !posts) || (tag == "input" && id == "rail-search") ||
+				((tag == "input" || tag == "button") && target == "#board") || formPosts
+			if !allowed {
+				t.Errorf("verb control needs JavaScript: %s", startTag.String())
+			}
+			if posts && !formPosts {
+				t.Errorf("verb posts over htmx rather than a form: %s", startTag.String())
+			}
 		}
 	}
 }
@@ -196,23 +224,23 @@ func TestDroppedKindsNeverReachTheRender(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	logPath := web.WriteRunLog(t, web.ReadTestdata("dropped_kinds.jsonl"))
+	logPath := writeRunLog(t, mustReadTestdata(t, "dropped_kinds.jsonl"))
 	ticket := "https://github.com/o/r/issues/76"
 	server := newServer(detailStore(t, logPath, now, now), now)
 
-	rec := get(t, server, sessionPagePath(ticket))
-	body := rec.Body.String()
+	rec := do(t, server, http.MethodGet, sessionPagePath(ticket), req{})
+	page := htmltest.Parse(t, rec.Body).One(t, "main#main")
 
 	for _, dropped := range []string{"deadbeef-session", "pondering-deeply"} {
-		if strings.Contains(body, dropped) {
-			t.Errorf("a dropped kind's raw text reached the render (%q):\n%s", dropped, body)
+		if strings.Contains(page.Text(), dropped) {
+			t.Errorf("dropped log kind reached session text: %q", dropped)
 		}
 	}
-	if !strings.Contains(body, "echo hi") {
-		t.Errorf("the one real event was dropped along with the unrenderable ones:\n%s", body)
+	if !strings.Contains(page.Text(), "echo hi") {
+		t.Error("real event absent from session text: want echo hi")
 	}
-	if !strings.Contains(body, "lines 4") {
-		t.Errorf("the line count does not cover the dropped lines too:\n%s", body)
+	if !strings.Contains(page.Text(), "lines 4") {
+		t.Error("session line count missing lines 4")
 	}
 }
 
@@ -222,18 +250,20 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 	now := testNow
 	store := seededStore(t, now)
 	server := newServer(store, now)
-	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 5s"`) {
-		t.Errorf("default board does not poll every 5s:\n%s", got)
+	board := htmltest.Parse(t, boardBody(t, server)).One(t, "table#board")
+	if got, _ := board.Attr("hx-trigger"); got != "every 5s" {
+		t.Errorf("default board hx-trigger = %q, want every 5s", got)
 	}
 
 	server = newServer(store, now, web.WithBoardPollSeconds(1))
-	if got := boardBody(t, server); !strings.Contains(got, `hx-trigger="every 1s"`) {
-		t.Errorf("board does not poll every 1s:\n%s", got)
+	board = htmltest.Parse(t, boardBody(t, server)).One(t, "table#board")
+	if got, _ := board.Attr("hx-trigger"); got != "every 1s" {
+		t.Errorf("board hx-trigger = %q, want every 1s", got)
 	}
 }
 
 func boardBody(t *testing.T, server *web.Server) string {
 	t.Helper()
-	rec := getHX(t, server, "/board")
-	return rec.Body.String()
+	rec := do(t, server, http.MethodGet, "/board", req{Header: http.Header{"Hx-Request": {"true"}}})
+	return rec.Body
 }

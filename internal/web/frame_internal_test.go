@@ -11,12 +11,13 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
-	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
 type boardTestClock struct{}
 
-func (boardTestClock) Now() time.Time { return time.Now() }
+var frameTestNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
+func (boardTestClock) Now() time.Time { return frameTestNow }
 
 func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
 	w := httptest.NewRecorder()
@@ -58,7 +59,7 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 		<-release
 		return []gh.RepoSummary{{FullName: "first"}}, nil
 	}}
-	now := time.Now()
+	now := frameTestNow
 	done := make(chan error, 1)
 	go func() {
 		_, err := cache.get(t.Context(), now)
@@ -87,15 +88,7 @@ func TestBlockedPushableFetchDoesNotBlockOtherReads(t *testing.T) {
 }
 
 func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
-	st, err := store.OpenStore(t.Context(), cctest.DSN(t))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
+	st := cctest.Store(t)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -113,7 +106,7 @@ func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
 		}))
 	fetchDone := make(chan error, 1)
 	go func() {
-		_, err := s.pushable.get(ctx, time.Now())
+		_, err := s.pushable.get(ctx, frameTestNow)
 		fetchDone <- err
 	}()
 	select {

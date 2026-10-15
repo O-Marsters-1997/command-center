@@ -14,3 +14,4 @@ if [ -n "$id" ]; then
 	mkdir -p "$HOME/.claude/projects/fake-project"
 	: > "$HOME/.claude/projects/fake-project/$id.jsonl"
 fi
+if [ -n "${CC_AGENT_LOG:-}" ]; then printf 'session.sh %s\n' "$mode" >> "${CC_AGENT_LOG%.log}-done.log"; fi

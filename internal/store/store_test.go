@@ -3,6 +3,7 @@ package store_test
 import (
 	"database/sql"
 	"errors"
+	"io/fs"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -21,12 +22,12 @@ import (
 
 func openStore(t *testing.T) *storepkg.Store {
 	t.Helper()
-	return openStoreAt(t, cctest.DSN(t))
+	return cctest.Store(t)
 }
 
 func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	t.Helper()
-	store, err := storepkg.OpenStore(t.Context(), dsn)
+	store, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -54,7 +55,7 @@ func gooseVersion(t *testing.T, dsn string) int64 {
 
 func latestMigration(t *testing.T) int64 {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join("migrations", "*.sql"))
+	paths, err := fs.Glob(storepkg.Migrations(), "migrations/*.sql")
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("list migrations: %v (found %d)", err, len(paths))
 	}
@@ -70,18 +71,54 @@ func latestMigration(t *testing.T) int64 {
 	return latest
 }
 
-func TestOpenStoreMigratesAFreshDatabase(t *testing.T) {
+func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 	t.Parallel()
 
 	dsn := cctest.DSN(t)
+	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
+		t.Fatalf("cloned goose version = %d, want %d", got, want)
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(t.Context(), "DROP TABLE goose_db_version"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	store := openStoreAt(t, dsn)
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
-		t.Fatalf("an empty database did not get the full schema: %v", err)
+		t.Fatalf("cloned database has no schema: %v", err)
 	}
+	db, err = sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close verification connection: %v", err)
+		}
+	})
+	var exists bool
+	err = db.QueryRowContext(t.Context(), "SELECT to_regclass('goose_db_version') IS NOT NULL").Scan(&exists)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Error("OpenStore restored goose_db_version on a cloned database, want no migration")
+	}
+}
+
+func TestOpenStoreMigratesAnUnmigratedDatabase(t *testing.T) {
+	t.Parallel()
+	dsn := cctest.UnmigratedDSN(t)
+	openStoreAt(t, dsn)
 	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d, want the latest migration %d", got, want)
+		t.Errorf("goose version = %d, want %d", got, want)
 	}
 }
 
@@ -89,7 +126,7 @@ func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
 	t.Parallel()
 
 	start := time.Now()
-	_, err := storepkg.OpenStore(t.Context(), "postgres://cc@127.0.0.1:1/cc?sslmode=disable")
+	_, err := storepkg.OpenStore("postgres://cc@127.0.0.1:1/cc?sslmode=disable")
 	if err == nil {
 		t.Fatal("OpenStore on a dead address succeeded")
 	}
@@ -104,12 +141,12 @@ func TestOpenStoreFailsFastOnAnUnreachableDatabase(t *testing.T) {
 func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
 	t.Parallel()
 
-	dsn := cctest.DSN(t)
+	dsn := cctest.UnmigratedDSN(t)
 	const opens = 4
 	errs := make(chan error, opens)
 	for range opens {
 		go func() {
-			st, err := storepkg.OpenStore(t.Context(), dsn)
+			st, err := storepkg.OpenStore(dsn, storepkg.MaxOpenConns(4))
 			if err == nil {
 				err = st.Close()
 			}
@@ -137,7 +174,7 @@ func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
 	q.Set("statement_timeout", "100")
 	u.RawQuery = q.Encode()
 
-	db, err := storepkg.OpenStore(t.Context(), u.String())
+	db, err := storepkg.OpenStore(u.String(), storepkg.MaxOpenConns(4))
 	if err != nil {
 		t.Fatal(err)
 	}

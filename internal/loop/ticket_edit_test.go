@@ -17,7 +17,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 
 	tickets := []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
@@ -58,68 +58,12 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 	}
 }
 
-func TestReimportDoesNotOverwriteAnAppliedEditTicketIntent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	url := "https://github.com/acme/alpha/issues/1"
-	seed := []storepkg.ImportedTicket{{
-		Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x", Status: "ready"},
-		Repo:   "alpha",
-	}}
-	if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
-		t.Fatalf("ImportTickets: %v", err)
-	}
-
-	edit := storepkg.EditRequest{Ticket: url, Branch: "cc-1-custom-branch", At: at.Add(time.Minute)}
-	if err := store.QueueEditTicketIntent(ctx, edit); err != nil {
-		t.Fatal(err)
-	}
-	lp := newLoop(
-		store, noOpObserve, fixedClock(at.Add(time.Minute)), config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-	)
-	if err := lp.RunOnce(ctx); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
-
-	again := []storepkg.ImportedTicket{{
-		Ticket: tracker.Ticket{
-			URL: url, Number: 1, Title: "Add x, renamed", Status: "in-progress",
-			BlockedBy: []string{"https://github.com/acme/alpha/issues/2"},
-		},
-		Repo: "alpha",
-	}}
-	if err := store.ImportTickets(ctx, "project:x", again, at.Add(time.Hour)); err != nil {
-		t.Fatalf("ImportTickets again: %v", err)
-	}
-
-	got, err := store.Tickets(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("tickets = %+v, want 1", got)
-	}
-	if got[0].Branch != "cc-1-custom-branch" {
-		t.Errorf("branch = %q, want the edited branch to survive re-import", got[0].Branch)
-	}
-	if len(got[0].BlockedBy) != 0 {
-		t.Errorf("blocked_by = %v, want the edited (cleared) blockers to survive re-import", got[0].BlockedBy)
-	}
-	if got[0].Title != "Add x, renamed" || got[0].Status != "in-progress" {
-		t.Errorf("title/status = %q/%q, want the re-imported tracker-owned values", got[0].Title, got[0].Status)
-	}
-}
-
 func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testAt
 
 	inFeature := "https://github.com/acme/alpha/issues/1"
 	outsider := "https://github.com/acme/beta/issues/2"

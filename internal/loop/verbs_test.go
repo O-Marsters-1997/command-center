@@ -11,15 +11,14 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// removeWorktreeFixture is one ticket fully run, pushed and recorded, its worktree cut for real --
-// the shape every remove-worktree test starts from before diverging (dirty, unpushed, or left
-// alone for a clean removal).
 type removeWorktreeFixture struct {
 	root, repoPath, worktreePath string
 	store                        *storepkg.Store
@@ -28,55 +27,20 @@ type removeWorktreeFixture struct {
 	ticket                       storepkg.Ticket
 	runID                        int64
 	at                           time.Time
-	ghLog                        string
-}
-
-// installFakeTpRemove puts a script named tp on PATH supporting `remove [--merged|--force]
-// <branch>`: it looks the branch's worktree path up via `git worktree list --porcelain` (run in
-// repoPath, matching tp.Remove's cmd.Dir) and delegates to real git, refusing a dirty worktree or
-// unpushed commits the same way real tp remove --merged does -- and skipping both checks the same
-// way real tp remove --force does -- so these tests never depend on, or risk touching, a real
-// treepad installation on the machine running them.
-func installFakeTpRemove(t *testing.T) {
-	t.Helper()
-	bin := t.TempDir()
-	script := "#!/bin/sh\n" +
-		"set -eu\n" +
-		"[ \"$1\" = remove ] || { echo 'fake tp: only remove is supported' >&2; exit 1; }\n" +
-		"shift\n" +
-		"forced=\n" +
-		"[ \"$1\" = --force ] && forced=1\n" +
-		"[ \"$1\" = --merged ] || [ \"$1\" = --force ] && shift\n" +
-		"branch=\"$1\"\n" +
-		"path=$(git worktree list --porcelain | awk -v b=\"branch refs/heads/$branch\" " +
-		"'/^worktree /{p=$2} $0==b{print p}')\n" +
-		"[ -n \"$path\" ] || { echo \"fake tp: no worktree for $branch\" >&2; exit 1; }\n" +
-		"if [ -z \"$forced\" ]; then\n" +
-		"  dirty=$(git -C \"$path\" status --porcelain)\n" +
-		"  [ -z \"$dirty\" ] || { echo 'fake tp: worktree is dirty' >&2; exit 1; }\n" +
-		"  if git -C \"$path\" rev-parse --verify -q \"refs/remotes/origin/$branch\" >/dev/null 2>&1; then\n" +
-		"    local_tip=$(git -C \"$path\" rev-parse \"refs/heads/$branch\")\n" +
-		"    remote_tip=$(git -C \"$path\" rev-parse \"refs/remotes/origin/$branch\")\n" +
-		"    [ \"$local_tip\" = \"$remote_tip\" ] || " +
-		"{ echo 'fake tp: branch has unpushed commits' >&2; exit 1; }\n" +
-		"  fi\n" +
-		"fi\n" +
-		"git worktree remove --force \"$path\"\n" +
-		"git branch -D \"$branch\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	forge                        *recordingForge
+	worktrees                    *recordingWorktrees
+	forgeOption                  loop.Option
+	failRemove                   bool
 }
 
 func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture {
 	t.Helper()
 	root, repoPath := repoWithOrigin(t)
-	installFakeTpRemove(t)
-	ghLog := installFakeGh(t, false)
+	forge := &recordingForge{}
+	worktrees := &recordingWorktrees{}
 	worktreePath := cutWorktree(t, repoPath, branch)
-	commitFile(t, worktreePath, "agent.txt", "agent was here\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", branch)
+	gittest.Commit(t, worktreePath, "agent.txt", "agent was here\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", branch)
 
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
@@ -84,7 +48,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 		t.Fatal(err)
 	}
 
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
@@ -113,7 +77,8 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 
 	return removeWorktreeFixture{
 		root: root, repoPath: repoPath, worktreePath: worktreePath,
-		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at, ghLog: ghLog,
+		store: store, ws: ws, cfg: cfg, ticket: ticket, runID: runID, at: at,
+		forge: forge, worktrees: worktrees, forgeOption: loop.WithForge(forge),
 	}
 }
 
@@ -143,11 +108,17 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 		t.Fatal(err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
-	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{})
+	worktreeOption := loop.WithWorktrees(f.worktrees)
+	if f.failRemove {
+		worktreeOption = loop.WithWorktrees(failingRemove{f.worktrees})
+	}
+	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{},
+		f.forgeOption, worktreeOption)
 	return lp.RunOnce(t.Context())
 }
 
 func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
@@ -161,8 +132,6 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	if _, err := os.Stat(f.worktreePath); !os.IsNotExist(err) {
 		t.Errorf("worktree still exists at %s", f.worktreePath)
 	}
-	// tp remove --merged deletes the *local* branch; the remote copy is GitHub's own
-	// deleteBranchOnMerge, unrelated to this call, so it is deliberately not asserted here.
 	if err := exec.Command("git", "-C", f.repoPath, "rev-parse", "--verify", "refs/heads/cc-1").Run(); err == nil {
 		t.Error("the local branch still exists after remove-worktree")
 	}
@@ -177,12 +146,8 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 		t.Error("no worktree_removed event")
 	}
 
-	ghLog, err := os.ReadFile(f.ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(ghLog), "issue close "+f.ticket.URL) {
-		t.Errorf("gh.log = %q, want an issue close call for %s", ghLog, f.ticket.URL)
+	if calls := f.forge.Calls("CloseIssue"); len(calls) != 1 || calls[0].Issue != f.ticket.URL {
+		t.Errorf("CloseIssue calls = %+v, want one close for %s", calls, f.ticket.URL)
 	}
 
 	tickets, err := f.store.Tickets(t.Context())
@@ -195,6 +160,7 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 }
 
 func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	dependent := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{f.ticket.URL}}
 	if err := f.store.UpsertTickets(t.Context(), []storepkg.Ticket{dependent}); err != nil {
@@ -222,6 +188,7 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 }
 
 func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{},
@@ -243,12 +210,8 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 		t.Error("no worktree_removed event")
 	}
 
-	ghLog, err := os.ReadFile(f.ghLog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(ghLog), "issue close "+f.ticket.URL) {
-		t.Errorf("gh.log = %q, want an issue close call for %s", ghLog, f.ticket.URL)
+	if calls := f.forge.Calls("CloseIssue"); len(calls) != 1 || calls[0].Issue != f.ticket.URL {
+		t.Errorf("CloseIssue calls = %+v, want one close for %s", calls, f.ticket.URL)
 	}
 
 	tickets, err := f.store.Tickets(t.Context())
@@ -261,6 +224,7 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 }
 
 func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
+	t.Parallel()
 	// A dependent whose blocker's PR closed unmerged after it ran: base_gone, not merged --
 	// remove-worktree's other eligible state.
 	f := newRemoveWorktreeFixture(t, "cc-2")
@@ -291,27 +255,10 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	}
 }
 
-// installFakeGhFailingIssueClose overrides the fixture's fake gh with one that fails only
-// `issue close`, so a test can exercise that failure without touching any other gh call the
-// verb might make.
-func installFakeGhFailingIssueClose(t *testing.T) {
-	t.Helper()
-	bin := t.TempDir()
-	script := "#!/bin/sh\n" +
-		"if [ \"$1 $2\" = \"issue close\" ]; then\n" +
-		"  echo 'fake gh: issue close failed' >&2\n" +
-		"  exit 1\n" +
-		"fi\n" +
-		"exit 0\n"
-	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
 func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
-	installFakeGhFailingIssueClose(t)
+	f.forgeOption = loop.WithForge(failingCloseIssue{f.forge})
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
 		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
@@ -328,7 +275,7 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasEvent(events, "remove_worktree_refused", "issue close failed") {
+	if !hasEvent(events, "remove_worktree_refused", "forge refused") {
 		t.Error("no remove_worktree_refused event naming the issue close failure")
 	}
 	tickets, err := f.store.Tickets(t.Context())
@@ -340,16 +287,50 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	}
 }
 
-func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing.T) {
+func TestRemoveWorktreeKeepsTheRowWhenRemovalFails(t *testing.T) {
+	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
-	tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
+	f.failRemove = true
+	obs := plan.Observation{
+		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
+		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
+	}
+	if err := f.requestRemoveWorktree(t, obs); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if _, err := os.Stat(f.worktreePath); err != nil {
+		t.Errorf("worktree after failed remove: %v, want it preserved", err)
+	}
+	events, err := f.store.Events(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, "remove_worktree_refused", "forge refused") {
+		t.Errorf("events = %+v, want a refused remove", events)
+	}
+	if calls := f.forge.Calls("CloseIssue"); len(calls) != 0 {
+		t.Errorf("CloseIssue calls = %+v, want none before removal succeeds", calls)
+	}
+	tickets, err := f.store.Tickets(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tickets) != 1 || tickets[0].URL != f.ticket.URL {
+		t.Errorf("tickets after failed remove = %+v, want the ticket retained", tickets)
+	}
+}
+
+func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing.T) {
+	t.Parallel()
+	f := newRemoveWorktreeFixture(t, "cc-1")
+	tip := gittest.Run(t, f.worktreePath, "rev-parse", "HEAD")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main", At: f.at,
 	}
 	if err := f.store.RecordPush(t.Context(), push); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+	gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
@@ -379,6 +360,7 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 }
 
 func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		advance   bool
@@ -388,17 +370,18 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 		{name: "tip ahead of the merged head", advance: true, wantFound: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newRemoveWorktreeFixture(t, "cc-1")
-			head := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
+			head := gittest.Run(t, f.worktreePath, "rev-parse", "HEAD")
 			stale := storepkg.Push{
 				Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
 			}
 			if err := f.store.RecordPush(t.Context(), stale); err != nil {
 				t.Fatal(err)
 			}
-			runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+			gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 			if tt.advance {
-				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "after the merged head")
+				gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "after the merged head")
 			}
 
 			obs := plan.Observation{
@@ -425,6 +408,7 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 }
 
 func TestRemoveWorktreeRefusals(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		pr     plan.PRState
@@ -444,14 +428,14 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			name: "unpushed commits", pr: plan.Merged, reason: "unpushed",
 			setup: func(t *testing.T, f removeWorktreeFixture) {
 				t.Helper()
-				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
+				gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "not pushed")
 			},
 		},
 		{
 			name: "pruned ref and a tip that moved past the last push", pr: plan.Merged, reason: "unpushed",
 			setup: func(t *testing.T, f removeWorktreeFixture) {
 				t.Helper()
-				tip := strings.TrimSpace(runGitOutput(t, "-C", f.worktreePath, "rev-parse", "HEAD"))
+				tip := gittest.Run(t, f.worktreePath, "rev-parse", "HEAD")
 				push := storepkg.Push{
 					Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main",
 					At: f.at,
@@ -459,8 +443,8 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 				if err := f.store.RecordPush(t.Context(), push); err != nil {
 					t.Fatal(err)
 				}
-				runGit(t, "-C", f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
-				runGit(t, "-C", f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
+				gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
+				gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
 			},
 		},
 		{
@@ -470,6 +454,7 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newRemoveWorktreeFixture(t, "cc-1")
 			tt.setup(t, f)
 			obs := plan.Observation{

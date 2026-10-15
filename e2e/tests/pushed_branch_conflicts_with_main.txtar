@@ -15,10 +15,8 @@ exec cc import project:single-task
 exec cc tick --count 1
 exec cc request POST '/launch?ticket=https://github.com/sandbox-org/single-task/issues/CC-1'
 exec cc tick --count 1
-exec sleep 0.5
 exec cc tick --count 1
-# The fake agent needs real wall time to exit before the next tick's liveness check reads it.
-exec sleep 0.5
+cc-wait agent-done.log 'commits.sh repo-cc-1-x'
 exec cc tick --count 1
 
 # main also adds agent.txt, with different content: cc-1's own push no longer merges cleanly.

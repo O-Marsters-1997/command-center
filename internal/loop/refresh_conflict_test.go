@@ -6,8 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/git"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -21,9 +24,9 @@ import (
 func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
-	commitFile(t, f.childWorktree, "shared.txt", "the child's line\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "child")
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	gittest.Commit(t, f.childWorktree, "shared.txt", "the child's line\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "child")
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.child.URL), Tip: plan.SHA(childTip), BaseSHA: plan.SHA(f.parentTip0),
 		BaseBranch: "parent", At: at,
@@ -32,9 +35,9 @@ func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f 
 		t.Fatal(err)
 	}
 
-	commitFile(t, f.parentWorktree, "shared.txt", "the parent's line\n")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "parent")
-	return strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	gittest.Commit(t, f.parentWorktree, "shared.txt", "the parent's line\n")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "parent")
+	return gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 }
 
 // conflictFixture wires a stacked pair whose refresh merge conflicts, over an observe phase that
@@ -54,7 +57,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	store := openStore(t)
 	f := newStackedFixture(t, repoPath, store, at)
 	parentTip1 := conflictingAdvance(t, repoPath, store, f, at)
-	childTip := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/child"))
+	childTip := gittest.Run(t, repoPath, "rev-parse", "refs/heads/child")
 
 	aliveRuns := map[string]bool{}
 	observe := func(ctx context.Context) (plan.Observation, error) {
@@ -76,7 +79,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	}
 
 	// Without a predicate every verdict flag stays false and the row reads `checking`.
-	cfg, ws := stackedConfigAndWorkspace(t, root)
+	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	clock := fixedClock(at.Add(time.Minute))
 	return conflictFixture{
 		f:         f,
@@ -104,8 +107,9 @@ func (c conflictFixture) midMerge(t *testing.T) bool {
 }
 
 func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConflicted(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 
 	c.tick(t) // the automatic pass merges the advanced parent and conflicts
@@ -116,85 +120,81 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	c.tick(t) // the next tick's observation is the one that reads MERGE_HEAD
 
 	page := renderPage(t, c.server)
-	if state := rowState(t, page, c.f.child.URL); state != "refresh_conflicted" {
-		t.Fatalf("child's state = %q, want refresh_conflicted", state)
+	row := webtest.RowFor(t, page, c.f.child.URL)
+	if state := row.State; state != "refresh_conflicted" {
+		t.Fatalf("child's state = %q, want refresh_conflicted:\n%s", state, row.Row.HTML())
 	}
 	if !strings.Contains(page, `value="`+string(plan.VerbAbort)+`"`) {
 		t.Errorf("page offers no abort button:\n%s", page)
 	}
 }
 
-func TestAbortClearsTheMidMergeAndTheRowLeavesRefreshConflictedForGood(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	c := newConflictFixture(t, root, repoPath, at)
-
-	c.tick(t)
-	c.tick(t)
-
-	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+func TestAbortConflictWithOptionalRefresh(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		verbs         []plan.Verb
+		wantMidMerge  bool
+		wantConflicts int
+		wantState     string
+	}{
+		{name: "abort alone", verbs: []plan.Verb{plan.VerbAbort}, wantState: "base_moved", wantConflicts: 1},
+		{name: "abort then refresh", verbs: []plan.Verb{plan.VerbAbort, plan.VerbRefresh},
+			wantMidMerge: true, wantConflicts: 2, wantState: "refresh_conflicted"},
 	}
-	c.tick(t)
-
-	if c.midMerge(t) {
-		t.Fatal("the child worktree is still mid-merge: abort did not run git merge --abort")
-	}
-	pending, err := c.store.PendingVerbIntents(t.Context(), plan.VerbAbort)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("pending abort intents = %+v, want none: consumed", pending)
-	}
-
-	// The tick after the abort is the one whose observation clears the state.
-	c.tick(t)
-	if c.midMerge(t) {
-		t.Fatal("the automatic pass re-conflicted the aborted merge: abort would be futile")
-	}
-	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state != "base_moved" {
-		t.Errorf("child's state after abort = %q, want base_moved: the base still moved, refresh is the human's now", state)
-	}
-}
-
-func TestAbortAndRefreshInOneTickRunInThatOrderRatherThanDroppingTheRefresh(t *testing.T) {
-	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-	c := newConflictFixture(t, root, repoPath, at)
-
-	c.tick(t)
-	c.tick(t)
-
-	for _, verb := range []plan.Verb{plan.VerbAbort, plan.VerbRefresh} {
-		if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	c.tick(t)
-
-	events, err := c.store.Events(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasEvent(events, "merge_aborted", "") {
-		t.Fatalf("events = %+v, want a merge_aborted", events)
-	}
-	conflicts := 0
-	for _, e := range events {
-		if e.Kind == "refresh_conflicted" {
-			conflicts++
-		}
-	}
-	if conflicts != 2 {
-		t.Errorf("refresh_conflicted events = %d, want 2: the refresh queued alongside the abort must act "+
-			"on the worktree the abort just freed, not be consumed and dropped", conflicts)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root, repoPath := repoWithOrigin(t)
+			at := testAt
+			c := newConflictFixture(t, root, repoPath, at)
+			c.tick(t)
+			c.tick(t)
+			for _, verb := range tt.verbs {
+				if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			c.tick(t)
+			c.tick(t)
+			if got := c.midMerge(t); got != tt.wantMidMerge {
+				t.Errorf("mid-merge after abort = %v, want %v", got, tt.wantMidMerge)
+			}
+			row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL)
+			if row.State != tt.wantState {
+				t.Errorf("child's state after abort = %q, want %q:\n%s", row.State, tt.wantState, row.Row.HTML())
+			}
+			pending, err := c.store.PendingVerbIntents(t.Context(), plan.VerbAbort)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pending) != 0 {
+				t.Errorf("pending abort intents = %+v, want none", pending)
+			}
+			events, err := c.store.Events(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !hasEvent(events, "merge_aborted", "") {
+				t.Errorf("events = %+v, want merge_aborted", events)
+			}
+			conflicts := 0
+			for _, event := range events {
+				if event.Kind == "refresh_conflicted" {
+					conflicts++
+				}
+			}
+			if conflicts != tt.wantConflicts {
+				t.Errorf("refresh_conflicted events = %d, want %d", conflicts, tt.wantConflicts)
+			}
+		})
 	}
 }
 
 func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 
 	c.tick(t)
@@ -219,23 +219,25 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 }
 
 func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
-	parentTip1 := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/parent"))
+	parentTip1 := gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 
 	c.tick(t)
 	c.tick(t)
 
-	commitFile(t, c.f.childWorktree, "shared.txt", "both lines, reconciled\n")
+	gittest.Commit(t, c.f.childWorktree, "shared.txt", "both lines, reconciled\n")
 	if c.midMerge(t) {
 		t.Fatal("committing the resolution left MERGE_HEAD behind")
 	}
 
 	c.tick(t)
 
-	if state := rowState(t, renderPage(t, c.server), c.f.child.URL); state == "refresh_conflicted" {
-		t.Error("child still reads refresh_conflicted after the conflict was resolved and committed by hand")
+	row := webtest.RowFor(t, renderPage(t, c.server), c.f.child.URL)
+	if row.State == "refresh_conflicted" {
+		t.Errorf("child still refresh_conflicted after hand resolution:\n%s", row.Row.HTML())
 	}
 	pushes, err := c.store.LatestPushes(t.Context())
 	if err != nil {
@@ -248,10 +250,11 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 }
 
 func TestAGitFailureDuringRefreshThatIsNotAConflictIsATickError(t *testing.T) {
+	t.Parallel()
 	root, repoPath := repoWithOrigin(t)
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
-	runGit(t, "-C", repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
+	gittest.Run(t, repoPath, "update-ref", "-d", "refs/remotes/origin/parent")
 
 	err := c.loop.RunOnce(t.Context())
 	if err == nil {

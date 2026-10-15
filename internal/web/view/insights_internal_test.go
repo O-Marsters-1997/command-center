@@ -61,10 +61,10 @@ func TestParseSinceOrDefault(t *testing.T) {
 		raw  string
 		want time.Time
 	}{
-		{"valid date", "2026-08-01", time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)},
-		{"absent", "", until.AddDate(0, 0, -insightsDefaultRangeDays)},
-		{"unparseable", "not-a-date", until.AddDate(0, 0, -insightsDefaultRangeDays)},
-		{"wrong format", "20/26/09", until.AddDate(0, 0, -insightsDefaultRangeDays)},
+		{name: "valid date", raw: "2026-08-01", want: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)},
+		{name: "absent", raw: "", want: until.AddDate(0, 0, -insightsDefaultRangeDays)},
+		{name: "unparseable", raw: "not-a-date", want: until.AddDate(0, 0, -insightsDefaultRangeDays)},
+		{name: "wrong format", raw: "20/26/09", want: until.AddDate(0, 0, -insightsDefaultRangeDays)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := parseSinceOrDefault(tc.raw, until); !got.Equal(tc.want) {

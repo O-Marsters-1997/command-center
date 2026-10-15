@@ -1,13 +1,9 @@
 package loop_test
 
 import (
-	"flag"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -39,58 +35,8 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 	return rec.Body.String()
 }
 
-func ticketRef(ticketURL string) string { return "#" + path.Base(ticketURL) }
-
-// rowHTML finds the whole <tr>...</tr> whose ticket-link button names ticketURL. Go's RE2 engine
-// has no lookahead to keep a lazy ".*?" from crossing a row boundary, so this splits on literal
-// "<tr" instead of matching in one regexp.
-func rowHTML(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	ref := ticketRef(ticketURL)
-	for _, block := range strings.Split(page, "<tr") {
-		if !strings.Contains(block, ref) {
-			continue
-		}
-		end := strings.Index(block, "</tr>")
-		if end < 0 {
-			continue
-		}
-		return "<tr" + block[:end+len("</tr>")]
-	}
-	t.Fatalf("no row found for %s in page:\n%s", ticketURL, page)
-	return ""
-}
-
-var (
-	glyphTextRE  = regexp.MustCompile(`<span class="glyph[^"]*">([^<]*)</span>`)
-	queuedVerbRE = regexp.MustCompile(`·\s*([\w-]+)\s*queued`)
-)
-
-func rowState(t *testing.T, page, ticketURL string) string {
-	t.Helper()
-	cell := rowCellAt(t, page, ticketURL, 1)
-	glyph := glyphTextRE.FindStringSubmatch(cell)
-	if glyph == nil {
-		t.Fatalf("no state glyph found for %s in cell:\n%s", ticketURL, cell)
-	}
-	state := glyph[1]
-	for _, m := range queuedVerbRE.FindAllStringSubmatch(cell, -1) {
-		state += " · " + m[1] + " queued"
-	}
-	return state
-}
-
-func rowCellAt(t *testing.T, page, ticketURL string, column int) string {
-	t.Helper()
-	row := rowHTML(t, page, ticketURL)
-	cells := regexp.MustCompile(`(?s)<td[^>]*>(.*?)</td>`).FindAllStringSubmatch(row, -1)
-	if column >= len(cells) {
-		t.Fatalf("no column %d found for %s in page:\n%s", column, ticketURL, page)
-	}
-	return strings.TrimSpace(cells[column][1])
-}
-
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
+	t.Parallel()
 	f := newLoopFixture(t,
 		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
 	for _, ticket := range f.Tickets {
@@ -102,9 +48,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 
 	f.Tick(t)
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Fatalf("implement spawns after launch = %d, want 1: max_agents caps the rest as queued",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 
 	var runningTicket string
@@ -130,9 +76,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	}
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Errorf("implement spawns after tick 2 = %d, want still 1: a cancelled launch starts nothing",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 	if len(f.Fake.Canceled) != 0 {
 		t.Errorf("canceled pgids = %v, want none: cancel never kills a live run", f.Fake.Canceled)
@@ -173,38 +119,17 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 }
 
 func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
+	t.Parallel()
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
 	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
 	authoriseTicket(t, f.Store, hidden.URL, composeHash(hidden.URL), testAt)
 	f.Tick(t)
 
-	if len(f.ImplementSpawns()) != 1 {
+	if len(f.Fake.Spawns) != 1 {
 		t.Fatalf("implement spawns = %d, want 1: the loop must act on HIDDEN whether or not any view ever scopes it out",
-			len(f.ImplementSpawns()))
+			len(f.Fake.Spawns))
 	}
 	if _, ok := f.Latest(t)[hidden.URL]; !ok {
 		t.Fatal("no run recorded for HIDDEN: the loop should have acted on it regardless of scope")
-	}
-}
-
-var update = flag.Bool("update", false, "regenerate golden files")
-
-const goldenPrompt = "testdata/prompt.golden.txt"
-
-// assertGolden compares got against the golden file at path, rewriting it under -update.
-func assertGolden(t *testing.T, path string, got []byte) {
-	t.Helper()
-
-	if *update {
-		if err := os.WriteFile(path, got, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden (regenerate with -update): %v", err)
-	}
-	if string(got) != string(want) {
-		t.Errorf("render differs from %s; rerun with -update to accept\n--- got ---\n%s", path, got)
 	}
 }

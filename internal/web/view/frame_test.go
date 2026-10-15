@@ -21,15 +21,7 @@ func (s *countingFrameStore) Repos(ctx context.Context) ([]store.Repo, error) {
 }
 
 func TestBoardRailAndHomeEachReadReposAndDeriveOnce(t *testing.T) {
-	st, err := store.OpenStore(t.Context(), cctest.DSN(t))
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := st.Close(); err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	})
+	st := cctest.Store(t)
 	reads := &countingFrameStore{Store: st}
 	r := NewReader(st, "", nil, 5, 0)
 	r.frameStore = reads
@@ -43,9 +35,9 @@ func TestBoardRailAndHomeEachReadReposAndDeriveOnce(t *testing.T) {
 		name   string
 		render func() error
 	}{
-		{"board", func() error { _, err := r.Board(t.Context(), now, Params{}); return err }},
-		{"rail", func() error { _, err := r.Rail(t.Context(), now, RailParams{}); return err }},
-		{"home", func() error { _, err := r.Home(t.Context(), now); return err }},
+		{name: "board", render: func() error { _, err := r.Board(t.Context(), now, Params{}); return err }},
+		{name: "rail", render: func() error { _, err := r.Rail(t.Context(), now, RailParams{}); return err }},
+		{name: "home", render: func() error { _, err := r.Home(t.Context(), now); return err }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			beforeRepos, beforeDerives := reads.repos, derives

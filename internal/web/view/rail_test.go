@@ -3,7 +3,6 @@ package view
 import (
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
@@ -40,7 +39,7 @@ func TestBuildRailGroupsByAttention(t *testing.T) {
 	rows[len(rows)-3].Worktree = "/wt"
 	rows[8].Worktree = "/wt"
 
-	rail := buildRail(rows, time.Now(), RailParams{Open: []string{"feature:billing"}})
+	rail := buildRail(rows, testNow, RailParams{Open: []string{"feature:billing"}})
 
 	if got := refs(rail.NeedsYou); !slices.Equal(got, []string{"#1", "#12"}) {
 		t.Errorf("NeedsYou = %v, want %v", got, []string{"#1", "#12"})
@@ -78,7 +77,7 @@ func TestBuildRailNamesTheProjectOnACardAndMarksEachFeatureOnce(t *testing.T) {
 	other := railRow("4", "Billing", plan.GlyphRunning)
 	other.Repo, other.Project, other.ProjectHue = "beta/web", "beta", 2
 
-	rail := buildRail([]Row{acme, loose, second, other}, time.Now(), RailParams{})
+	rail := buildRail([]Row{acme, loose, second, other}, testNow, RailParams{})
 
 	card := rail.NeedsYou[0]
 	if card.Context != "acme · Billing #1" || card.Project != (ProjectMark{Name: "acme", Hue: 1}) {
@@ -96,7 +95,7 @@ func TestBuildRailShowsALooseRepoWithoutAMark(t *testing.T) {
 	row := railRow("5", "", plan.GlyphFailed)
 	row.Repo = "olly/job-scraper"
 
-	rail := buildRail([]Row{row}, time.Now(), RailParams{})
+	rail := buildRail([]Row{row}, testNow, RailParams{})
 
 	if got := rail.NeedsYou[0]; got.Context != "olly/job-scraper #5" || got.Project.Name != "" {
 		t.Errorf("loose card = {%q %v}, want olly/job-scraper #5 and no mark", got.Context, got.Project)
@@ -111,7 +110,7 @@ func TestBuildRailGivesAnAwaitingInputCardReplyInPlaceOfAVerb(t *testing.T) {
 	row.Reason = "Which database?"
 	row.Verbs = []plan.Verb{plan.VerbFollowUp, plan.VerbReRun}
 
-	rail := buildRail([]Row{row}, time.Now(), RailParams{})
+	rail := buildRail([]Row{row}, testNow, RailParams{})
 
 	if len(rail.NeedsYou) != 1 {
 		t.Fatalf("NeedsYou = %d cards, want 1", len(rail.NeedsYou))
@@ -131,7 +130,7 @@ func TestBuildRailKeepsTheVerbWhenAnAwaitingInputRunCannotBeRepliedTo(t *testing
 	row.Reason = "Which database?"
 	row.Verbs = []plan.Verb{plan.VerbReRun}
 
-	got := buildRail([]Row{row}, time.Now(), RailParams{}).NeedsYou[0]
+	got := buildRail([]Row{row}, testNow, RailParams{}).NeedsYou[0]
 
 	if got.Reply || got.Verb != plan.VerbReRun {
 		t.Errorf("card = {Reply: %v, Verb: %q}, want no Reply and %q", got.Reply, got.Verb, plan.VerbReRun)

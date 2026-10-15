@@ -5,20 +5,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 )
 
 func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
+	t.Parallel()
 	_, repoPath := repoWithOrigin(t)
 
 	mergify := filepath.Join(repoPath, ".mergify.yml")
 	if err := os.WriteFile(mergify, []byte("pull_request_rules: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, "-C", repoPath, "add", ".mergify.yml")
-	runGit(t, "-C", repoPath, "commit", "-q", "-m", "add mergify config")
-	runGit(t, "-C", repoPath, "push", "-q", "origin", "main")
-	runGit(t, "-C", repoPath, "fetch", "-q", "origin")
+	gittest.Run(t, repoPath, "add", ".mergify.yml")
+	gittest.Run(t, repoPath, "commit", "-q", "-m", "add mergify config")
+	gittest.Run(t, repoPath, "push", "-q", "origin", "main")
+	gittest.Run(t, repoPath, "fetch", "-q", "origin")
 
 	clean, err := loop.MergifyHash(t.Context(), repoPath)
 	if err != nil {
@@ -36,12 +38,12 @@ func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 		t.Errorf("hash changed with a dirty working tree: %q then %q", clean, dirty)
 	}
 
-	runGit(t, "-C", repoPath, "checkout", "-q", "-b", "elsewhere")
-	runGit(t, "-C", repoPath, "checkout", "-q", "--", ".mergify.yml")
+	gittest.Run(t, repoPath, "checkout", "-q", "-b", "elsewhere")
+	gittest.Run(t, repoPath, "checkout", "-q", "--", ".mergify.yml")
 	if err := os.Remove(mergify); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, "-C", repoPath, "commit", "-q", "-am", "drop mergify config on another branch")
+	gittest.Run(t, repoPath, "commit", "-q", "-am", "drop mergify config on another branch")
 
 	elsewhere, err := loop.MergifyHash(t.Context(), repoPath)
 	if err != nil {

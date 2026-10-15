@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
@@ -27,13 +29,8 @@ func TestParseReadings(t *testing.T) {
 			ResetsAt: time.Unix(1788159600, 0).UTC(), At: at,
 		},
 	}
-	if len(got) != len(want) {
-		t.Fatalf("ParseReadings = %+v; want %+v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("reading %d = %+v; want %+v", i, got[i], want[i])
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ParseReadings() mismatch (-want +got):\n%s", diff)
 	}
 }
 

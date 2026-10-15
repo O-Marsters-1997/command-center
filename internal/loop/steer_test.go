@@ -2,14 +2,13 @@ package loop_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
@@ -22,12 +21,12 @@ func (stubbornRunner) Cancel(int) error { return nil }
 
 type steerFixture struct {
 	store     *storepkg.Store
-	dsn       string
 	fake      *runner.Fake
 	loop      *loop.Loop
 	ticket    storepkg.Ticket
 	sessionID string
 	repoPath  string
+	runsDir   string
 	at        time.Time
 }
 
@@ -35,17 +34,16 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	t.Helper()
 	root, repoPath := repoWithOrigin(t)
 	worktreePath := filepath.Join(t.TempDir(), "wt")
-	runGit(t, "-C", repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
-	baseline := strings.TrimSpace(runGitOutput(t, "-C", repoPath, "rev-parse", "refs/heads/cc-1"))
-	runGit(t, "-C", worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
+	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
+	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
+	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
+	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	at := testAt
 	runID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 		Session: storepkg.RunSession{StartNew: true},
@@ -79,7 +77,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		rn = wrap(fake)
 	}
 	return &steerFixture{
-		store: store, dsn: dsn, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, at: at,
+		store: store, fake: fake, ticket: ticket, sessionID: sessionID, repoPath: repoPath, runsDir: ws.RunsDir, at: at,
 		loop: newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, rn),
 	}
 }
@@ -111,6 +109,7 @@ func (f *steerFixture) pendingFollowUps(t *testing.T) int {
 }
 
 func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTick(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
 
@@ -126,9 +125,7 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	if !spawn.Resume || spawn.SessionID != f.sessionID {
 		t.Errorf("spawn = resume %v session %q, want a resume of %q", spawn.Resume, spawn.SessionID, f.sessionID)
 	}
-	if !strings.Contains(spawn.Prompt, "use sqlite instead") || !strings.Contains(spawn.Prompt, "cut off") {
-		t.Errorf("prompt = %q, want the interrupt wrapper around the message", spawn.Prompt)
-	}
+	assertPromptGolden(t, "testdata/prompt-steer-interrupt.golden.txt", spawn.Prompt, f.runsDir)
 	if got := f.pendingFollowUps(t); got != 0 {
 		t.Errorf("pending follow-ups = %d, want the intent consumed", got)
 	}
@@ -140,32 +137,36 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	if len(ids) != 2 {
 		t.Fatalf("runs = %v, want the interrupted run and its resume", ids)
 	}
-	if got := runGitOutput(t, "-C", f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); strings.TrimSpace(got) != "" {
+	if got := gittest.Run(t, f.repoPath, "ls-remote", "origin", "refs/heads/cc-1"); got != "" {
 		t.Errorf("origin carries cc-1 (%q), want a continued run with commits not pushed", got)
 	}
 }
 
 func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
 
 	f.tick(t)
 
-	db, err := sql.Open("pgx", f.dsn)
+	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = db.Close() }()
-	var outcome string
-	if err := db.QueryRow(`SELECT outcome FROM runs ORDER BY id LIMIT 1`).Scan(&outcome); err != nil {
+	if len(ids) != 2 {
+		t.Fatalf("runs = %v, want 2", ids)
+	}
+	first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome != plan.OutcomeContinued.String() {
-		t.Errorf("first run outcome = %q, want %q", outcome, plan.OutcomeContinued)
+	if !first.Outcome.IsSome() || first.Outcome.Unwrap() != plan.OutcomeContinued {
+		t.Errorf("first run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)
 	}
 }
 
 func TestARunThatSurvivesTheCancelKeepsTheFollowUpPending(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, func(fake *runner.Fake) runner.Runner { return stubbornRunner{fake} })
 	f.send(t, "use sqlite instead")
 
@@ -190,6 +191,7 @@ func TestARunThatSurvivesTheCancelKeepsTheFollowUpPending(t *testing.T) {
 }
 
 func TestTwoMessagesBeforeATickEachProduceTheirOwnResumeInOrder(t *testing.T) {
+	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "first message")
 	f.send(t, "second message")

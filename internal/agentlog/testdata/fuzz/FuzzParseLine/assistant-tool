@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Read\",\"id\":\"tool-1\",\"input\":{\"file_path\":\"a.go\"}}]}}")

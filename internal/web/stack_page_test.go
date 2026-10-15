@@ -4,7 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
+
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -24,9 +27,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 			BlockedBy: []string{"sandbox://ROOT"},
 		})
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	prs := map[plan.BranchRef]plan.PR{}
@@ -62,13 +63,15 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://ROOT", 4); got != "L1" {
-		t.Errorf("root stack = %q, want L1 (merge order 1, based on main)", got)
+	root := webtest.RowFor(t, page, "sandbox://ROOT")
+	if got := root.Stack.Text(); got != "L1" {
+		t.Errorf("root stack = %q, want L1 (merge order 1, based on main):\n%s", got, root.Row.HTML())
 	}
 	for _, c := range children {
 		ticket := "sandbox://" + c
-		if got := rowCellAt(t, page, ticket, 4); got != "L2 ← root" {
-			t.Errorf("%s stack = %q, want L2 ← root (merge order 2, based on root)", c, got)
+		row := webtest.RowFor(t, page, ticket)
+		if got := row.Stack.Text(); got != "L2 ← root" {
+			t.Errorf("%s stack = %q, want L2 ← root (merge order 2, based on root):\n%s", c, got, row.Row.HTML())
 		}
 	}
 }
@@ -82,9 +85,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 		{URL: "sandbox://PARENT", Repo: "repo", Branch: "parent"},
 		{URL: "sandbox://CHILD", Repo: "repo", Branch: "child", BlockedBy: []string{"sandbox://PARENT"}},
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, tickets...)
 
 	at := testNow
 	dispositionAsPushed(t, store, "sandbox://PARENT", at)
@@ -120,12 +121,16 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	server := openServer(track(t, store, repos...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	if got := rowCellAt(t, page, "sandbox://PARENT", 1); strings.Contains(got, "flag-warning") {
-		t.Errorf("root (main-based) state cell = %q, want no warning mark even with the label", got)
+	parent := webtest.RowFor(t, page, "sandbox://PARENT")
+	if marks := parent.Row.Find("mark.flag-warning"); len(marks) != 0 {
+		t.Errorf("root (main-based) has a warning mark, want none:\n%s", parent.Row.HTML())
 	}
-	got := rowCellAt(t, page, "sandbox://CHILD", 1)
-	if !strings.Contains(got, "ready-to-merge") {
-		t.Errorf("child (non-main-based) state cell = %q, want a warning mark naming ready-to-merge", got)
+	child := webtest.RowFor(t, page, "sandbox://CHILD")
+	marks := child.Row.Find("mark.flag-warning")
+	if len(marks) != 1 || !strings.Contains(marks[0].Text(), "warning") {
+		t.Errorf("child (non-main-based) has no warning mark:\n%s", child.Row.HTML())
+	} else if title, _ := marks[0].Attr("title"); !strings.Contains(title, "ready-to-merge") {
+		t.Errorf("child warning title = %q, want ready-to-merge:\n%s", title, child.Row.HTML())
 	}
 }
 
@@ -135,9 +140,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://MERGED", Repo: "repo", Branch: "merged"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
-	}
+	storetest.Tickets(t, store, ticket)
 
 	at := testNow
 	dispositionAsPushed(t, store, ticket.URL, at)
@@ -162,11 +165,16 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 	server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
 	page := renderPage(t, server)
 
-	got := rowCellAt(t, page, ticket.URL, 1)
+	row := webtest.RowFor(t, page, ticket.URL)
+	marks := row.Row.Find("mark.flag-warning")
+	if len(marks) != 1 {
+		t.Fatalf("state has %d warning marks, want one:\n%s", len(marks), row.Row.HTML())
+	}
+	got, _ := marks[0].Attr("title")
 	if !strings.Contains(got, "worktree removal refused: worktree is dirty") {
-		t.Errorf("state cell = %q, want the refusal's own detail in the warning", got)
+		t.Errorf("state warning = %q, want the refusal's detail:\n%s", got, row.Row.HTML())
 	}
 	if strings.Contains(got, "ready-to-merge") {
-		t.Errorf("state cell = %q, want the generic warning label, not the ready-to-merge one", got)
+		t.Errorf("state warning = %q, want the generic warning label:\n%s", got, row.Row.HTML())
 	}
 }
