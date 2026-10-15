@@ -30,7 +30,7 @@ type Loop struct {
 	worktrees  worktrees
 	validate   ValidateFunc
 	remoteOf   RemoteFunc
-	runner     agentRunner
+	runner     runner.Runner
 	cfg        config.Config
 	ws         config.Workspace
 	trackerFor tracker.Resolver
@@ -467,12 +467,9 @@ func (l *Loop) reconcileRuns(ctx context.Context, obs plan.Observation) error {
 		url := plan.TicketURL(run.TicketID)
 		if alive {
 			obs.MarkAlive(url)
-		} else {
-			obs.Runs[url] = plan.RunObservation{}
-		}
-		if alive {
 			continue
 		}
+		obs.Runs[url] = plan.RunObservation{}
 		if err := l.disposeRun(ctx, run, byTicket[url], obs); err != nil {
 			return fmt.Errorf("dispose run %d of %s: %w", run.ID, run.TicketID, err)
 		}
@@ -715,7 +712,6 @@ type spawnSpec struct {
 	ticket                           store.Ticket
 	worktree, baseline, hash, prompt string
 	kind                             plan.RunKind
-	promptFor                        func(runID plan.RunID) string
 	resumeSessionID, message         string
 }
 
@@ -739,13 +735,9 @@ func (l *Loop) spawnRun(ctx context.Context, t *tick, spec spawnSpec) (err error
 		return fmt.Errorf("insert run skeleton for %s: %w", ticket.URL, err)
 	}
 
-	promptFor := spec.promptFor
-	if promptFor == nil && (spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp) {
-		promptFor = func(runID plan.RunID) string { return spec.prompt + plan.ComposeAsking(l.questionPath(runID)) }
-	}
 	prompt := spec.prompt
-	if promptFor != nil {
-		prompt = promptFor(plan.RunID(runID))
+	if spec.kind == plan.RunKindAgent || spec.kind == plan.RunKindFollowUp {
+		prompt += plan.ComposeAsking(l.questionPath(plan.RunID(runID)))
 	}
 	promptPath := filepath.Join(l.ws.RunsDir, fmt.Sprintf("%d.prompt", runID))
 	if err := os.WriteFile(promptPath, []byte(prompt), 0o600); err != nil {
