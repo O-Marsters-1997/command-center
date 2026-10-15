@@ -4,21 +4,33 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func TestParseViewParamsTakesTheFirstSel(t *testing.T) {
+func TestParseViewParamsReadsRawScopesAndFirstSelection(t *testing.T) {
 	t.Parallel()
 
-	q, err := url.ParseQuery("sel=a&sel=b&ticket=x&ticket=y")
-	if err != nil {
-		t.Fatalf("url.ParseQuery(sel): %v", err)
-	}
-	got := ParseParams(q)
-	want := Params{Sel: "a", Tickets: []string{"x", "y"}}
-	if got.Sel != want.Sel || len(got.Tickets) != 2 ||
-		got.Tickets[0] != "x" || got.Tickets[1] != "y" {
-		t.Errorf("ParseParams(%q) = %+v, want %+v", q, got, want)
+	for _, tt := range []struct {
+		name, query string
+		want        Params
+	}{
+		{name: "repo", query: "repo=support-app", want: Params{Repo: "support-app", Log: LogAll}},
+		{name: "feature", query: "feature=cc-220", want: Params{Feature: "cc-220", Log: LogAll}},
+		{name: "first selection and all tickets", query: "sel=a&sel=b&ticket=x&ticket=y",
+			want: Params{Sel: "a", Tickets: []string{"x", "y"}, Log: LogAll}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			q, err := url.ParseQuery(tt.query)
+			if err != nil {
+				t.Fatalf("url.ParseQuery(%q): %v", tt.query, err)
+			}
+			if diff := cmp.Diff(tt.want, ParseParams(q)); diff != "" {
+				t.Errorf("ParseParams(%q) mismatch (-want +got):\n%s", tt.query, diff)
+			}
+		})
 	}
 }
 
@@ -45,30 +57,6 @@ func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
 				t.Errorf("ParseParams(%q).Log = %q, want %q", tc.query, got, tc.want)
 			}
 		})
-	}
-}
-
-func TestParseViewParamsReadsRepoRaw(t *testing.T) {
-	t.Parallel()
-
-	q, err := url.ParseQuery("repo=support-app")
-	if err != nil {
-		t.Fatalf("url.ParseQuery(repo): %v", err)
-	}
-	if got := ParseParams(q).Repo; got != "support-app" {
-		t.Errorf("ParseParams(%q).Repo = %q, want support-app", q, got)
-	}
-}
-
-func TestParseViewParamsReadsFeatureRaw(t *testing.T) {
-	t.Parallel()
-
-	q, err := url.ParseQuery("feature=cc-220")
-	if err != nil {
-		t.Fatalf("url.ParseQuery(feature): %v", err)
-	}
-	if got := ParseParams(q).Feature; got != "cc-220" {
-		t.Errorf("ParseParams(%q).Feature = %q, want cc-220", q, got)
 	}
 }
 

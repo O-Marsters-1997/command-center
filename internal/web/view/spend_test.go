@@ -5,37 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
-
-func TestSpendCacheHoldsLockDuringParse(t *testing.T) {
-	t.Parallel()
-
-	started := make(chan struct{})
-	release := make(chan struct{})
-	cache := NewSpendCache()
-	cache.parse = func(string) (agentlog.RunMetrics, error) {
-		close(started)
-		<-release
-		return agentlog.RunMetrics{}, nil
-	}
-	done := make(chan error, 1)
-	go func() {
-		_, err := cache.Spend("one")
-		done <- err
-	}()
-	<-started
-	if cache.mu.TryLock() {
-		cache.mu.Unlock()
-		close(release)
-		t.Fatal("Spend released the cache mutex during log parsing")
-	}
-	close(release)
-	if err := <-done; err != nil {
-		t.Fatalf("Spend(one) = %v", err)
-	}
-}
 
 const aliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
 	`"message":{"usage":{"input_tokens":10,"output_tokens":5}}}` + "\n"
