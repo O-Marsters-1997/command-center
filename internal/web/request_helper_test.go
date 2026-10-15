@@ -25,7 +25,7 @@ func TestDoSendsFormHeadersAndOrigin(t *testing.T) {
 		Form: url.Values{"repo": {"acme/new"}}, Header: http.Header{"Hx-Request": {"true"}},
 	})
 	if got.Code != http.StatusSeeOther || got.Location != "/repos/acme/new" {
-		t.Errorf("do = %+v, want 303 to /repos/acme/new", got)
+		t.Errorf("do = (%d, %q), want (303, /repos/acme/new)", got.Code, got.Location)
 	}
 }
 

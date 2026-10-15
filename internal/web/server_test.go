@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/google/go-cmp/cmp"
@@ -132,12 +133,12 @@ func TestServerRendersTheShellAroundTheBoard(t *testing.T) {
 	swap := renderPath(t, server, "/board?all=1")
 
 	if !strings.HasPrefix(swap, `<table id="board"`) {
-		t.Fatalf("GET /board did not render the table, so the join below proves nothing:\n%s", swap)
+		t.Fatalf("GET /board did not render a table: prefix %q", swap[:min(len(swap), 120)])
 	}
 	nested := strings.TrimSpace(swap)
 	if !strings.Contains(full, nested) {
-		t.Fatalf("GET /tickets does not nest the GET /board bytes verbatim\n--- board ---\n%s\n--- page ---\n%s",
-			swap, full)
+		t.Fatalf("GET /tickets does not nest the GET /board bytes verbatim; board refs = %v, page refs = %v",
+			ticketRefs(webtest.BoardRows(t, swap)), ticketRefs(webtest.BoardRows(t, full)))
 	}
 }
 
@@ -323,9 +324,7 @@ func TestPageRendersWaitingOnProducerDeployWhenOnlyTheCompatCheckIsRed(t *testin
 	if state := row.State; state != "waiting_on_producer_deploy" {
 		t.Fatalf("state = %q, want waiting_on_producer_deploy:\n%s", state, row.Row.HTML())
 	}
-	if !strings.Contains(page, `value="re-run"`) {
-		t.Error("page has no re-run button for the waiting_on_producer_deploy row")
-	}
+	row.Row.One(t, `button[name="verb"][value="re-run"]`)
 }
 
 func TestServerRejectsUnknownPaths(t *testing.T) {
@@ -401,7 +400,7 @@ func TestMutationRoutesCheckOrigin(t *testing.T) {
 						Form: route.form, Origin: tc.value,
 					})
 					if got.Code != tc.wantStatus {
-						t.Errorf("POST %s = %d, want %d: %s", route.target, got.Code, tc.wantStatus, got.Body)
+						t.Errorf("POST %s = %d, want %d", route.target, got.Code, tc.wantStatus)
 					}
 					if after := pendingMutationIntentCount(t, store); after != before+tc.wantIntents {
 						t.Errorf("pending intents = %d, want %d", after, before+tc.wantIntents)
@@ -444,7 +443,7 @@ func TestMutationRoutesAllowSameOrigin(t *testing.T) {
 
 			got := do(t, newServer(tc.seed(t), testNow), http.MethodPost, tc.target, req{Form: tc.form})
 			if got.Code != http.StatusSeeOther {
-				t.Errorf("POST %s = %d, want 303: %s", tc.target, got.Code, got.Body)
+				t.Errorf("POST %s = %d, want 303", tc.target, got.Code)
 			}
 		})
 	}
@@ -462,7 +461,7 @@ func TestMutationRoutesRejectWrongMethod(t *testing.T) {
 			t.Parallel()
 			got := do(t, server, http.MethodPut, target, req{})
 			if got.Code != http.StatusMethodNotAllowed {
-				t.Errorf("PUT %s = %d, want 405: %s", target, got.Code, got.Body)
+				t.Errorf("PUT %s = %d, want 405", target, got.Code)
 			}
 		})
 	}
@@ -474,7 +473,7 @@ func TestLaunchOpenRedirectsToFeature(t *testing.T) {
 		Form: url.Values{"feature": {"x"}}, Origin: "-",
 	})
 	if got.Code != http.StatusSeeOther || got.Location != "/f/x/launch" {
-		t.Errorf("POST /launch/open = %d %q, want 303 /f/x/launch: %s", got.Code, got.Location, got.Body)
+		t.Errorf("POST /launch/open = %d %q, want 303 /f/x/launch", got.Code, got.Location)
 	}
 }
 
@@ -484,7 +483,7 @@ func TestLaunchAcceptsASameOriginPost(t *testing.T) {
 	server := openServer(seededStore(t, testNow), fixedClock(testNow), "")
 	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Errorf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+		t.Errorf("POST /launch = %d %q, want 303 /", got.Code, got.Location)
 	}
 }
 
@@ -537,7 +536,7 @@ func TestCandidatesAndLaunchHandleAnArbitrarilySizedSlice(t *testing.T) {
 
 	launchResp := do(t, server, http.MethodPost, "/launch?"+query, req{})
 	if launchResp.Code != http.StatusSeeOther || launchResp.Location != "/" {
-		t.Fatalf("POST /launch = %d %q, want 303 /: %s", launchResp.Code, launchResp.Location, launchResp.Body)
+		t.Fatalf("POST /launch = %d %q, want 303 /", launchResp.Code, launchResp.Location)
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
@@ -590,17 +589,17 @@ func TestServerRendersARunningRowWithPgidAndElapsed(t *testing.T) {
 	server := newServer(store, now)
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	body := rec.Body
-	wants := []string{"running", "1m30s",
-		`<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`}
-	for _, want := range wants {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
+	row := webtest.RowFor(t, rec.Body, ticket.URL)
+	if got := row.State; got != "running" {
+		t.Errorf("row state = %q, want running: %s", got, row.Row.HTML())
 	}
+	if got := row.Elapsed.Text(); got != "1m30s" {
+		t.Errorf("elapsed = %q, want 1m30s: %s", got, row.Row.HTML())
+	}
+	row.Row.One(t, `button[name="verb"][value="kill"]`)
 }
 
 func TestLaunchStoresTheComposedHash(t *testing.T) {
@@ -618,7 +617,7 @@ func TestLaunchStoresTheComposedHash(t *testing.T) {
 	server := openServer(store, fixedClock(testNow), "")
 	got := do(t, server, http.MethodPost, "/launch?ticket=sandbox://CC-1", req{})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+		t.Fatalf("POST /launch = %d %q, want 303 /", got.Code, got.Location)
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
@@ -642,12 +641,10 @@ func TestPageLinksTheBuiltStylesheet(t *testing.T) {
 
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
 
-	body := rec.Body
-	if want := `<link rel="stylesheet" href="/assets/app.css">`; !strings.Contains(body, want) {
-		t.Errorf("page is missing %q", want)
-	}
-	if strings.Contains(body, "<style>") {
-		t.Error("page still inlines a stylesheet")
+	head := htmltest.Parse(t, rec.Body).One(t, "head")
+	head.One(t, `link[rel="stylesheet"][href="/assets/app.css"]`)
+	if styles := head.Find("style"); len(styles) != 0 {
+		t.Errorf("page still inlines a stylesheet: %s", styles[0].HTML())
 	}
 
 	css := do(t, server, http.MethodGet, "/page.css", req{})
@@ -695,10 +692,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	if got := row.State; got != "running · kill queued" {
 		t.Errorf("state = %q, want running · kill queued:\n%s", got, row.Row.HTML())
 	}
-	const killButton = `<button type="submit" class="btn btn-sm" name="verb" value="kill">kill</button>`
-	if !strings.Contains(page, killButton) {
-		t.Errorf("kill button missing while kill is queued; a queued intent is not a promise:\n%s", page)
-	}
+	row.Row.One(t, `button[name="verb"][value="kill"]`)
 
 	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
 		t.Fatal(err)
@@ -720,9 +714,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	if got := row.State; got != "running · follow-up queued" {
 		t.Errorf("state = %q, want consumed kill gone:\n%s", got, row.Row.HTML())
 	}
-	if !strings.Contains(page, killButton) {
-		t.Errorf("kill button missing after the tick consumed the intent:\n%s", page)
-	}
+	row.Row.One(t, `button[name="verb"][value="kill"]`)
 }
 
 func TestPageShowsAQueuedLaunchBeforeTheTickAuthorisesIt(t *testing.T) {
@@ -780,7 +772,7 @@ func TestLaunchRefusesASubmittedHashThatNoLongerComposes(t *testing.T) {
 	}
 	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
 	if got.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409: %s", got.Code, got.Body)
+		t.Fatalf("status = %d, want 409", got.Code)
 	}
 	for _, want := range []string{"sandbox://CC-2", previewed, recomposed} {
 		if !strings.Contains(got.Body, want) {
@@ -816,7 +808,7 @@ func TestLaunchIgnoresTheHashOfAnUncheckedRow(t *testing.T) {
 	}
 	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
 	if got.Code != http.StatusSeeOther || got.Location != "/" {
-		t.Fatalf("POST /launch = %d %q, want 303 /: %s", got.Code, got.Location, got.Body)
+		t.Fatalf("POST /launch = %d %q, want 303 /", got.Code, got.Location)
 	}
 
 	if err := store.ApplyLaunchIntents(ctx, testNow); err != nil {
@@ -839,7 +831,7 @@ func TestLaunchRejectsAMalformedHashField(t *testing.T) {
 	form := url.Values{"ticket": {"sandbox://CC-1"}, "hash": {"deadbeef"}}
 	got := do(t, server, http.MethodPost, "/launch", req{Form: form})
 	if got.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400: %s", got.Code, got.Body)
+		t.Fatalf("status = %d, want 400", got.Code)
 	}
 }
 

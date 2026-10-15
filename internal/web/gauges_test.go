@@ -1,12 +1,12 @@
 package web_test
 
 import (
-	"fmt"
-	"strings"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -29,15 +29,26 @@ func TestRailRendersTheLatestStoredReading(t *testing.T) {
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
-	board := renderPath(t, server, "/rail")
-
-	const meter = `<span class="meter"><span class="meter-fill" style="width: %d%%"></span></span>` +
-		`<span class="rail-pct">%d%%</span>`
-	if !strings.Contains(board, "<span>five-hour</span>"+fmt.Sprintf(meter, 42, 42)) {
-		t.Errorf("page does not show the newer five-hour reading (42%%):\n%s", board)
+	footer := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "footer.rail-footer")
+	gauges := footer.Find("span.rail-gauge")
+	if len(gauges) != 2 {
+		t.Fatalf("rail gauges = %d, want 2", len(gauges))
 	}
-	if !strings.Contains(board, "<span>weekly</span>"+fmt.Sprintf(meter, 0, 0)) {
-		t.Errorf("page does not show weekly at 0%% (no reading stored yet):\n%s", board)
+	for i, want := range []struct{ label, pct, width string }{
+		{label: "five-hour", pct: "42%", width: "width: 42%"},
+		{label: "weekly", pct: "0%", width: "width: 0%"},
+	} {
+		gauge := gauges[i]
+		if got := gauge.Find("span")[0].Text(); got != want.label {
+			t.Errorf("gauge label = %q, want %q in %s", got, want.label, gauge.HTML())
+		}
+		if got := gauge.One(t, "span.rail-pct").Text(); got != want.pct {
+			t.Errorf("%s gauge percentage = %q, want %q in %s", want.label, got, want.pct, gauge.HTML())
+		}
+		fill := gauge.One(t, "span.meter span.meter-fill")
+		if got, _ := fill.Attr("style"); got != want.width {
+			t.Errorf("%s gauge fill width = %q, want %q in %s", want.label, got, want.width, gauge.HTML())
+		}
 	}
 }
 
@@ -55,65 +66,51 @@ func TestRailGaugesSurviveARepeatedPollWithoutFlicker(t *testing.T) {
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
-	first := gaugeMarkup(t, renderPath(t, server, "/rail"))
-	second := gaugeMarkup(t, renderPath(t, server, "/rail"))
-	if first != second {
-		t.Errorf("gauge markup changed between two polls of the same reading:\n--- first ---\n%s\n--- second ---\n%s",
-			first, second)
+	markup := func() []string {
+		footer := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "footer.rail-footer")
+		gauges := footer.Find("span.rail-gauge")
+		if len(gauges) != 2 {
+			t.Fatalf("rail gauges = %d, want 2", len(gauges))
+		}
+		return []string{gauges[0].HTML(), gauges[1].HTML()}
+	}
+	first, second := markup(), markup()
+	if !slices.Equal(first, second) {
+		t.Errorf("gauge markup changed between polls: first = %q, second = %q", first, second)
 	}
 }
 
-func TestNoticeNamesSpendLimit5hAsTheReasonSpawningPaused(t *testing.T) {
+func TestSpendLimitNotice(t *testing.T) {
 	t.Parallel()
 
-	observedAt := testNow
-	store := seededStore(t, observedAt)
-	reading := agentlog.Reading{
-		Window: agentlog.FiveHour, Utilization: 0.82,
-		ResetsAt: observedAt.Add(time.Hour), At: observedAt,
-	}
-	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range []struct {
+		name        string
+		utilization float64
+		want        string
+	}{
+		{
+			name: "above limit", utilization: 0.82,
+			want: "spawning paused: five-hour usage is 82%, at or above the spend_limit_5h of 80%.",
+		},
+		{name: "below limit", utilization: 0.50, want: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			observedAt := testNow
+			store := seededStore(t, observedAt)
+			reading := agentlog.Reading{
+				Window: agentlog.FiveHour, Utilization: tt.utilization,
+				ResetsAt: observedAt.Add(time.Hour), At: observedAt,
+			}
+			if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
+				t.Fatal(err)
+			}
 
-	server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
-	board := renderPath(t, server, "/tickets")
-
-	if !strings.Contains(board, "spawning paused: five-hour usage is 82%, at or above the spend_limit_5h of 80%.") {
-		t.Errorf("page does not name spend_limit_5h as the reason spawning is paused:\n%s", board)
+			server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
+			notices := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "#notices")
+			if got := notices.Text(); got != tt.want {
+				t.Errorf("notices.Text() = %q, want %q in %s", got, tt.want, notices.HTML())
+			}
+		})
 	}
-}
-
-func TestNoticeStaysSilentBelowSpendLimit5h(t *testing.T) {
-	t.Parallel()
-
-	observedAt := testNow
-	store := seededStore(t, observedAt)
-	reading := agentlog.Reading{
-		Window: agentlog.FiveHour, Utilization: 0.50,
-		ResetsAt: observedAt.Add(time.Hour), At: observedAt,
-	}
-	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
-	}
-
-	server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))
-	board := renderPath(t, server, "/tickets")
-
-	if strings.Contains(board, "spawning paused") {
-		t.Errorf("page names spend_limit_5h though the reading is below it:\n%s", board)
-	}
-}
-
-func gaugeMarkup(t *testing.T, board string) string {
-	t.Helper()
-	start := strings.Index(board, `<span class="meter">`)
-	if start < 0 {
-		t.Fatalf("no gauge markup found in rail render:\n%s", board)
-	}
-	end := strings.Index(board[start:], "</footer>")
-	if end < 0 {
-		t.Fatalf("gauge markup never closes in rail render:\n%s", board)
-	}
-	return board[start : start+end]
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
@@ -57,8 +58,9 @@ func TestRefusedVerbOnHTMXIsAFlashFragment(t *testing.T) {
 	if got := rec.Header.Get("HX-Reswap"); got != "innerHTML" {
 		t.Errorf("HX-Reswap = %q, want innerHTML", got)
 	}
-	if !strings.Contains(rec.Body, `unsupported verb &#34;bogus-verb&#34;`) {
-		t.Errorf("flash does not carry the refusal: %q", rec.Body)
+	banner := htmltest.Parse(t, rec.Body).One(t, "p.banner")
+	if got := banner.Text(); got != `unsupported verb "bogus-verb"` {
+		t.Errorf("flash refusal = %q: %s", got, banner.HTML())
 	}
 }
 
@@ -78,9 +80,13 @@ func TestRefusedVerbWithoutHTMXKeepsItsStatus(t *testing.T) {
 func TestLayoutSwapsRefusalResponses(t *testing.T) {
 	t.Parallel()
 	body := renderPage(t, newServer(openStore(t), testNow))
-	for _, want := range []string{`name="htmx-config"`, `"code":"422"`, `id="flash"`, `aria-live="polite"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("layout lacks %s", want)
-		}
+	root := htmltest.Parse(t, body)
+	flash := root.One(t, "#flash")
+	if got, _ := flash.Attr("aria-live"); got != "polite" {
+		t.Errorf("flash aria-live = %q: %s", got, flash.HTML())
+	}
+	meta := root.One(t, `meta[name="htmx-config"]`)
+	if config, _ := meta.Attr("content"); !strings.Contains(config, `"code":"422"`) {
+		t.Errorf("htmx config lacks 422 response handling: %s", meta.HTML())
 	}
 }

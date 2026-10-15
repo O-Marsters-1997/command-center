@@ -2,11 +2,11 @@ package web_test
 
 import (
 	"net/http"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -55,14 +55,14 @@ func TestEveryRailLinkSwapsMain(t *testing.T) {
 
 	rail := renderPath(t, newServer(railStore(t, true), testNow), "/rail")
 
-	links := regexp.MustCompile(`<a class="rail-link"[^>]*>`).FindAllString(rail, -1)
+	links := htmltest.Parse(t, rail).Find("a.rail-link")
 	if len(links) == 0 {
-		t.Fatalf("the rail renders no links, so the check below proves nothing:\n%s", rail)
+		t.Fatal("the rail renders no links")
 	}
 	for _, link := range links {
-		for _, attr := range []string{`hx-select="#main"`, `hx-target="#main"`, `hx-push-url="true"`} {
-			if !strings.Contains(link, attr) {
-				t.Errorf("rail link %s is missing %s", link, attr)
+		for name, want := range map[string]string{"hx-select": "#main", "hx-target": "#main", "hx-push-url": "true"} {
+			if got, _ := link.Attr(name); got != want {
+				t.Errorf("rail link %s = %q, want %q: %s", name, got, want, link.HTML())
 			}
 		}
 	}
@@ -74,11 +74,11 @@ func TestRailDropsASettledTicketOnceItsWorktreeIsGone(t *testing.T) {
 	with := renderPath(t, newServer(railStore(t, true), testNow), "/rail")
 	without := renderPath(t, newServer(railStore(t, false), testNow), "/rail")
 
-	if !strings.Contains(with, `data-group="settled"`) {
-		t.Errorf("a merged ticket with a worktree is not under Settled:\n%s", with)
-	}
-	if strings.Contains(without, `data-group="settled"`) {
-		t.Errorf("a merged ticket with no worktree is still under Settled:\n%s", without)
+	withRail := htmltest.Parse(t, with).One(t, "#rail-body")
+	withRail.One(t, `[data-group="settled"]`)
+	withoutRail := htmltest.Parse(t, without).One(t, "#rail-body")
+	if settled := withoutRail.Find(`[data-group="settled"]`); len(settled) != 0 {
+		t.Errorf("settled group persists without worktree: %s", settled[0].HTML())
 	}
 }
 
@@ -93,13 +93,12 @@ func TestRailKeepsTheExpandedSetAndSelectionFromTheRequest(t *testing.T) {
 		"Cookie":         {"rail-open=feature:checkout"},
 	}})
 
-	body := got.Body
-	if !strings.Contains(body, `data-rail-key="feature:checkout" open`) {
-		t.Errorf("checkout was open in the cookie but rendered closed:\n%s", body)
+	rail := htmltest.Parse(t, got.Body).One(t, "#rail-body")
+	checkout := rail.One(t, `[data-rail-key="feature:checkout"]`)
+	if _, ok := checkout.Attr("open"); !ok {
+		t.Errorf("checkout rendered closed: %s", checkout.HTML())
 	}
-	if !strings.Contains(body, `aria-current="page"`) {
-		t.Errorf("the ticket in HX-Current-URL is not marked current:\n%s", body)
-	}
+	rail.One(t, `a[aria-current="page"]`)
 }
 
 func TestRailShowsALoopErrorInTheFooter(t *testing.T) {
@@ -111,8 +110,9 @@ func TestRailShowsALoopErrorInTheFooter(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := renderPath(t, newServer(st, testNow), "/rail")
-	if !strings.Contains(body, "gh exploded") {
-		t.Errorf("the last loop error is missing from the rail footer:\n%s", body)
+	rail := htmltest.Parse(t, body).One(t, "#rail-body")
+	if got := rail.Text(); !strings.Contains(got, "gh exploded") {
+		t.Errorf("rail error not shown: %q", got)
 	}
 }
 
@@ -122,16 +122,18 @@ func TestRailQueryNarrowsAndForcesOpenWithoutTouchingTheCookie(t *testing.T) {
 	server := newServer(railStore(t, true), testNow)
 	body := renderPath(t, server, "/rail?q=billing")
 
-	for _, want := range []string{`data-rail-forced`, `data-group="settled"`, `data-group="needs-you"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("GET /rail?q=billing is missing %q:\n%s", want, body)
+	rail := htmltest.Parse(t, body).One(t, "#rail-body")
+	for _, selector := range []string{`[data-rail-forced]`, `[data-group="settled"]`, `[data-group="needs-you"]`} {
+		if got := rail.Find(selector); len(got) == 0 {
+			t.Errorf("GET /rail?q=billing is missing %s", selector)
 		}
 	}
-	if !strings.Contains(body, "No match.") {
-		t.Errorf("a section with no match does not say so:\n%s", body)
+	if got := rail.Text(); !strings.Contains(got, "No match.") {
+		t.Errorf("rail empty section = %q", got)
 	}
-	if strings.Contains(renderPath(t, server, "/rail"), "data-rail-forced") {
-		t.Error("a rail without a query marks features forced")
+	plain := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, "#rail-body")
+	if forced := plain.Find("[data-rail-forced]"); len(forced) != 0 {
+		t.Errorf("unqueried rail forces open a feature: %s", forced[0].HTML())
 	}
 }
 
@@ -139,10 +141,11 @@ func TestRailQueryWithNoMatchAnywhereSaysSo(t *testing.T) {
 	t.Parallel()
 
 	body := renderPath(t, newServer(railStore(t, true), testNow), "/rail?q=zzzz")
-	if !strings.Contains(body, "Nothing matches “zzzz”.") {
-		t.Errorf("an unmatched query has no summary line:\n%s", body)
+	rail := htmltest.Parse(t, body).One(t, "#rail-body")
+	if got := rail.Text(); !strings.Contains(got, "Nothing matches “zzzz”.") {
+		t.Errorf("unmatched rail summary = %q", got)
 	}
-	if strings.Contains(body, `data-group=`) {
-		t.Errorf("an unmatched query still renders sections:\n%s", body)
+	if groups := rail.Find("[data-group]"); len(groups) != 0 {
+		t.Errorf("unmatched query renders a section: %s", groups[0].HTML())
 	}
 }

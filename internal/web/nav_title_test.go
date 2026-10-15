@@ -1,14 +1,10 @@
 package web_test
 
 import (
-	"regexp"
 	"strings"
 	"testing"
-)
 
-var (
-	titleTag    = regexp.MustCompile(`<title>([^<]*)</title>`)
-	currentNavs = regexp.MustCompile(`<a class="sidebar-item" href="([^"]*)"[^>]*aria-current="page"`)
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
 func TestPageTitleAndCurrentNavFollowThePage(t *testing.T) {
@@ -33,12 +29,15 @@ func TestPageTitleAndCurrentNavFollowThePage(t *testing.T) {
 
 			page := renderPath(t, server, tt.path)
 
-			if m := titleTag.FindStringSubmatch(page); m == nil || m[1] != tt.wantTitle {
-				t.Errorf("GET %s title = %v, want %q", tt.path, m, tt.wantTitle)
+			root := htmltest.Parse(t, page)
+			if got := root.One(t, "title").Text(); got != tt.wantTitle {
+				t.Errorf("GET %s title = %q, want %q", tt.path, got, tt.wantTitle)
 			}
-			current := currentNavs.FindAllStringSubmatch(page, -1)
-			if len(current) != 1 || !strings.HasPrefix(current[0][1], tt.wantCurrent) {
-				t.Errorf("GET %s current sidebar items = %q, want one under %s", tt.path, current, tt.wantCurrent)
+			current := root.Find(`nav#sidebar-nav a[aria-current="page"]`)
+			if len(current) != 1 {
+				t.Errorf("GET %s current sidebar items = %d, want one", tt.path, len(current))
+			} else if href, _ := current[0].Attr("href"); !strings.HasPrefix(href, tt.wantCurrent) {
+				t.Errorf("GET %s current sidebar href = %q, want prefix %q: %s", tt.path, href, tt.wantCurrent, current[0].HTML())
 			}
 		})
 	}
@@ -49,13 +48,11 @@ func TestSidebarSwapsOutOfBandOnNavigation(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/tickets")
 
-	for _, want := range []string{
-		`hx-select-oob="#sidebar-head,#sidebar-nav"`,
-		`id="sidebar-head"`,
-		`id="sidebar-nav"`,
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/tickets missing %s", want)
-		}
+	root := htmltest.Parse(t, page)
+	root.One(t, "#sidebar-head")
+	root.One(t, "#sidebar-nav")
+	app := root.One(t, "[hx-select-oob]")
+	if got, _ := app.Attr("hx-select-oob"); got != "#sidebar-head,#sidebar-nav" {
+		t.Errorf("app hx-select-oob = %q: %s", got, app.HTML())
 	}
 }

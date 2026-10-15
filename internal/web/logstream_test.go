@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -330,21 +331,18 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	server := newServer(detailStore(t, logPath, now, now), now)
 
 	rec := do(t, server, http.MethodGet, sessionPagePath(ticket), req{})
-	body := rec.Body
-
-	stream := fmt.Sprintf("/ticket/%s/log?from=%d&amp;records=0", url.PathEscape(ticket), info.Size())
-	for _, want := range []string{
-		`hx-ext="sse"`,
-		`sse-connect="` + stream + `"`,
-		`sse-swap="message"`,
-		`sse-close="end"`,
-		`hx-swap="beforeend"`,
-		`<span class="call-verb">Ran</span><code class="call-arg">step 3</code>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("session page is missing %q:\n%s", want, body)
+	main := htmltest.Parse(t, rec.Body).One(t, "main#main")
+	stream := fmt.Sprintf("/ticket/%s/log?from=%d&records=0", url.PathEscape(ticket), info.Size())
+	main.One(t, `[hx-ext="sse"][sse-connect="`+stream+`"][sse-swap="message"][sse-close="end"][hx-swap="beforeend"]`)
+	for _, call := range main.Find(".call-head") {
+		if call.One(t, ".call-arg").Text() == "step 3" {
+			if got := call.One(t, ".call-verb").Text(); got != "Ran" {
+				t.Errorf("call verb = %q, want Ran: %s", got, call.HTML())
+			}
+			return
 		}
 	}
+	t.Error("session transcript has no step 3 call")
 }
 
 func TestPageLoadsTheSSEExtensionAndGlue(t *testing.T) {
@@ -359,13 +357,7 @@ func TestPageLoadsTheSSEExtensionAndGlue(t *testing.T) {
 	}
 
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
-	body := rec.Body
-	for _, want := range []string{
-		`<script src="/assets/sse.min.js"></script>`,
-		`<script type="module" src="/assets/dist/glue.js"></script>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page is missing %q:\n%s", want, body)
-		}
-	}
+	root := htmltest.Parse(t, rec.Body)
+	root.One(t, `script[src="/assets/sse.min.js"]`)
+	root.One(t, `script[type="module"][src="/assets/dist/glue.js"]`)
 }

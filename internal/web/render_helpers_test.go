@@ -26,7 +26,7 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 	}
 	rec := do(t, server, http.MethodGet, path, r)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET %s: status = %d: %s", path, rec.Code, rec.Body)
+		t.Fatalf("GET %s: status = %d, want 200", path, rec.Code)
 	}
 	return rec.Body
 }

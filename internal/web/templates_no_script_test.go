@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
 var (
@@ -47,9 +49,11 @@ func TestHTMXConfigForbidsEvalAndInjectedStyles(t *testing.T) {
 
 	body := renderPath(t, newServer(seededStore(t, testNow), testNow), "/tickets")
 
+	meta := htmltest.Parse(t, body).One(t, `meta[name="htmx-config"]`)
+	config, _ := meta.Attr("content")
 	for _, want := range []string{`"allowEval":false`, `"includeIndicatorStyles":false`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("htmx-config is missing %s:\n%s", want, body)
+		if !strings.Contains(config, want) {
+			t.Errorf("htmx-config lacks %s: %s", want, meta.HTML())
 		}
 	}
 }

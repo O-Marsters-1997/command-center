@@ -3,9 +3,12 @@ package web_test
 import (
 	"encoding/json"
 	"net/http"
-	"regexp"
+	"strings"
 	"testing"
 
+	"golang.org/x/net/html"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
@@ -63,13 +66,22 @@ func TestGraphJSONMarshalsTheSameGroupsTheBoardRangesOver(t *testing.T) {
 	}
 }
 
-var hyphenatedTagRE = regexp.MustCompile(`<[a-zA-Z][a-zA-Z0-9]*-[a-zA-Z0-9-]*[\s>/]`)
-
 func TestBoardFragmentNeverContainsACustomElementTag(t *testing.T) {
 	t.Parallel()
 
-	board := renderBoard(t, seededServer(t))
-	if hyphenatedTagRE.MatchString(board) {
-		t.Errorf("GET /board contains a hyphenated tag name:\n%s", board)
+	board := htmltest.Parse(t, renderBoard(t, seededServer(t))).One(t, "table#board")
+	root, err := html.Parse(strings.NewReader(board.HTML()))
+	if err != nil {
+		t.Fatalf("parse board elements: %v", err)
 	}
+	var check func(*html.Node)
+	check = func(node *html.Node) {
+		if node.Type == html.ElementNode && strings.Contains(node.Data, "-") {
+			t.Errorf("GET /board contains a hyphenated element <%s>", node.Data)
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			check(child)
+		}
+	}
+	check(root)
 }

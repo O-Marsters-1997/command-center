@@ -3,11 +3,10 @@ package web_test
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
-	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -21,23 +20,23 @@ func TestPageOffersEveryLaunchableRowInOneLaunchForm(t *testing.T) {
 	server := newServer(seededStore(t, testNow), testNow)
 	rec := do(t, server, http.MethodGet, "/tickets", req{})
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
 	body := rec.Body
-	wants := []string{
-		`<form id="launch" method="post" action="/launch/open" hx-post="/launch/open"`,
-		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-1"`,
-		`<input type="checkbox" form="launch" name="ticket" value="sandbox://CC-2"`,
-		`<button type="submit" form="launch" class="btn">Launch selected</button>`,
-	}
-	for _, want := range wants {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
+	board := htmltest.Parse(t, body).One(t, "table#board")
+	form := htmltest.Parse(t, body).One(t, "form#launch")
+	for name, want := range map[string]string{"method": "post", "action": "/launch/open", "hx-post": "/launch/open"} {
+		if got, _ := form.Attr(name); got != want {
+			t.Errorf("launch form %s = %q, want %q: %s", name, got, want, form.HTML())
 		}
 	}
-	if strings.Contains(body, `value="launch"`) {
-		t.Errorf("launch is posted to /verb rather than /launch:\n%s", body)
+	for _, ticket := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+		board.One(t, `input[type="checkbox"][form="launch"][name="ticket"][value="`+ticket+`"]`)
+	}
+	htmltest.Parse(t, body).One(t, `button[form="launch"][type="submit"]`)
+	if wrong := board.Find(`button[value="launch"]`); len(wrong) != 0 {
+		t.Errorf("launch is posted to /verb: %s", wrong[0].HTML())
 	}
 }
 
@@ -62,23 +61,19 @@ func TestQueryChecksExactlyTheNamedTickets(t *testing.T) {
 	rec := do(t, server, http.MethodGet, target, req{})
 	body := rec.Body
 
-	for _, want := range []string{
-		`value="sandbox://A" checked`,
-		`value="sandbox://B" checked`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
+	board := htmltest.Parse(t, body).One(t, "table#board")
+	for _, ticket := range []string{"sandbox://A", "sandbox://B"} {
+		board.One(t, `input[name="ticket"][value="`+ticket+`"][checked]`)
 	}
-	if strings.Contains(body, `value="sandbox://C" checked`) {
-		t.Errorf("sandbox://C is checked but was not named in ?ticket=:\n%s", body)
+	board.One(t, `input[name="ticket"][value="sandbox://C"]`)
+	if checked := board.Find(`input[name="ticket"][value="sandbox://C"][checked]`); len(checked) != 0 {
+		t.Errorf("unnamed ticket is checked: %s", checked[0].HTML())
 	}
 }
 
 func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 	t.Parallel()
 
-	verbForm := regexp.MustCompile(`name="verb" value="([a-z-]+)"`)
 	for _, state := range plan.AllStates() {
 		t.Run(state.String(), func(t *testing.T) {
 			t.Parallel()
@@ -88,8 +83,9 @@ func TestPageRendersTheVerbsOfEveryState(t *testing.T) {
 				t.Fatal(err)
 			}
 			var got []plan.Verb
-			for _, m := range verbForm.FindAllStringSubmatch(board, -1) {
-				got = append(got, plan.Verb(m[1]))
+			for _, button := range htmltest.Parse(t, board).One(t, "table#board").Find(`button[name="verb"]`) {
+				value, _ := button.Attr("value")
+				got = append(got, plan.Verb(value))
 			}
 			if want := wantRowVerbs[state]; !slices.Equal(got, want) {
 				t.Errorf("verb forms for %s = %v, want %v", state, got, want)

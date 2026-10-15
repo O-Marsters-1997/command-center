@@ -11,6 +11,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 const spendAliveLine = `{"type":"assistant","timestamp":"2026-01-01T00:00:00.000Z","request_id":"r1",` +
@@ -59,8 +60,9 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
 	aliveServer := newServer(aliveStore, now)
 	got := do(t, aliveServer, http.MethodGet, "/tickets", req{})
-	if !strings.Contains(got.Body, "15 tok") {
-		t.Errorf("alive run's page does not contain \"15 tok\":\n%s", got.Body)
+	aliveSpend := webtest.RowFor(t, got.Body, aliveTicket.URL).Spend
+	if text := aliveSpend.Text(); !strings.Contains(text, "15 tok") {
+		t.Errorf("alive run spend = %q, want 15 tok", text)
 	}
 
 	endedTicket := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"}
@@ -71,7 +73,8 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
 	endedServer := newServer(endedStore, now)
 	got = do(t, endedServer, http.MethodGet, "/tickets", req{})
-	if strings.Contains(got.Body, "$1.23") {
-		t.Errorf("ended run's page contains \"$1.23\", want no dollar amount:\n%s", got.Body)
+	endedSpend := webtest.RowFor(t, got.Body, endedTicket.URL).Spend
+	if strings.Contains(endedSpend.Text(), "$1.23") {
+		t.Errorf("ended run spend contains dollar amount: %q", endedSpend.Text())
 	}
 }

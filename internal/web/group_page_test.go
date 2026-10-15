@@ -84,7 +84,7 @@ func TestBoardListsAFanOutBySection(t *testing.T) {
 	rows := webtest.BoardRows(t, page)
 
 	if got, want := len(rows), 5; got != want {
-		t.Fatalf("rendered %d rows, want %d:\n%s", got, want, page)
+		t.Fatalf("rendered %d rows, want %d; refs = %v", got, want, ticketRefs(rows))
 	}
 	if rows[0].Ref != ticketRef("sandbox://ROOT") {
 		t.Errorf("first row = %q, want the blocker's group line:\n%s", rows[0].Ref, rows[0].Row.HTML())
@@ -101,9 +101,7 @@ func TestBoardListsAFanOutBySection(t *testing.T) {
 		if got := row.Ticket.Text(); !strings.Contains(got, "sandbox://ROOT") {
 			t.Errorf("%s reason = %q, want blocker:\n%s", c, got, row.Row.HTML())
 		}
-		if !strings.Contains(page, `name="ticket" value="`+c+`"`) {
-			t.Errorf("%s lost its verb buttons:\n%s", c, page)
-		}
+		row.Row.One(t, `input[name="ticket"][value="`+c+`"]`)
 	}
 }
 
@@ -121,7 +119,8 @@ func TestBoardOrdersChildrenMergeFirstAndStably(t *testing.T) {
 		t.Errorf("row order = %v, want %v; first row:\n%s", got, want, webtest.BoardRows(t, page)[0].Row.HTML())
 	}
 	if again := boardFor(t, store); again != page {
-		t.Errorf("a second render of unchanged data differs:\n--- first ---\n%s\n--- second ---\n%s", page, again)
+		t.Errorf("a second render of unchanged data differs; first refs = %v, second refs = %v",
+			ticketRefs(webtest.BoardRows(t, page)), ticketRefs(webtest.BoardRows(t, again)))
 	}
 }
 
@@ -209,7 +208,8 @@ func TestBoardRendersATicketSetWithNoBlockersFlat(t *testing.T) {
 	page := boardFor(t, store)
 	rows := webtest.BoardRows(t, page)
 	if got, want := len(rows), len(tickets); got != want {
-		t.Errorf("rendered %d rows for %d tickets, want no extra group line:\n%s", got, want, page)
+		t.Errorf("rendered %d rows for %d tickets, want no extra group line; refs = %v",
+			got, want, ticketRefs(rows))
 	}
 }
 

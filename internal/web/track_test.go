@@ -3,9 +3,9 @@ package web_test
 import (
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
@@ -26,8 +26,27 @@ func TestTrackQueuesOneIntentWithoutConsultingTracker(t *testing.T) {
 	second := do(t, server, http.MethodPost, "/repos/track", request)
 
 	for _, rec := range []resp{first, second} {
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body, `data-state="cloning"`) {
-			t.Errorf("POST /repos/track = %d, want 200 reading cloning:\n%s", rec.Code, rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Errorf("POST /repos/track = %d, want 200", rec.Code)
+			continue
+		}
+		page := htmltest.Parse(t, rec.Body)
+		banners := page.Find("#repo-banner")
+		if len(banners) != 1 {
+			t.Errorf("POST /repos/track banners = %d, want one", len(banners))
+			continue
+		}
+		banner := banners[0]
+		if state, ok := banner.Attr("data-state"); !ok || state != "cloning" {
+			t.Errorf("POST /repos/track banner data-state = %q (present %t), want cloning", state, ok)
+		}
+		if paragraphs := banner.Find("p"); len(paragraphs) != 1 {
+			t.Errorf("POST /repos/track banner paragraphs = %d, want one", len(paragraphs))
+		} else if text := paragraphs[0].Text(); text != "Checking the repo on GitHub, then cloning it." {
+			t.Errorf("POST /repos/track banner text = %q, want cloning message", text)
+		}
+		if others := page.Find("#repo-banner [data-state]"); len(others) != 0 {
+			t.Errorf("POST /repos/track nested data-state elements = %d, want none", len(others))
 		}
 	}
 	intents, err := st.PendingVerbIntents(t.Context(), plan.VerbTrack)
@@ -89,8 +108,22 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 
 	bannerRequest := req{Header: http.Header{"Hx-Request": {"true"}}}
 	stale := do(t, server, http.MethodGet, "/repos/banner?repo=acme/new&seen=cloning", bannerRequest)
-	if stale.Header.Get("HX-Refresh") != "" || !strings.Contains(stale.Body, `hx-trigger="every 2s"`) {
-		t.Errorf("a cloning banner seen as cloning must poll without a refresh:\n%s", stale.Body)
+	if refresh := stale.Header.Get("HX-Refresh"); refresh != "" {
+		t.Errorf("cloning banner HX-Refresh = %q, want none", refresh)
+	}
+	if stale.Code != http.StatusOK {
+		t.Fatalf("GET cloning banner = %d, want 200", stale.Code)
+	}
+	staleBanners := htmltest.Parse(t, stale.Body).Find("#repo-banner")
+	if len(staleBanners) != 1 {
+		t.Fatalf("GET cloning banner elements = %d, want one", len(staleBanners))
+	}
+	staleBanner := staleBanners[0]
+	if trigger, ok := staleBanner.Attr("hx-trigger"); !ok || trigger != "every 2s" {
+		t.Errorf("cloning banner hx-trigger = %q (present %t), want every 2s", trigger, ok)
+	}
+	if other := staleBanner.Find("[hx-trigger]"); len(other) != 0 {
+		t.Errorf("cloning banner nested hx-trigger elements = %d, want none", len(other))
 	}
 
 	repo := storepkg.Repo{
@@ -104,6 +137,14 @@ func TestBannerPollsUntilTheStateChangesThenAsksForARefresh(t *testing.T) {
 	changed := do(t, server, http.MethodGet, "/repos/banner?repo=acme/new&seen=cloning", bannerRequest)
 	if changed.Header.Get("HX-Refresh") != "true" {
 		t.Errorf("a banner whose state moved from cloning must send HX-Refresh: true")
+	}
+	changedBanners := htmltest.Parse(t, changed.Body).Find("#repo-banner")
+	if len(changedBanners) != 1 {
+		t.Fatalf("GET ready banner elements = %d, want one", len(changedBanners))
+	}
+	changedBanner := changedBanners[0]
+	if trigger, ok := changedBanner.Attr("hx-trigger"); ok {
+		t.Errorf("ready banner hx-trigger = %q, want absent", trigger)
 	}
 }
 
@@ -162,10 +203,19 @@ func TestBannerNamesTheRepoState(t *testing.T) {
 			t.Parallel()
 			rec := do(t, server, http.MethodGet, "/repos/banner?repo="+tt.name, req{Header: http.Header{"Hx-Request": {"true"}}})
 			if rec.Code != http.StatusOK {
-				t.Fatalf("GET banner %s: %d: %s", tt.name, rec.Code, rec.Body)
+				t.Fatalf("GET banner %s: %d, want 200", tt.name, rec.Code)
 			}
-			if want := `data-state="` + tt.state + `"`; !strings.Contains(rec.Body, want) {
-				t.Errorf("banner for %s lacks %s:\n%s", tt.name, want, rec.Body)
+			page := htmltest.Parse(t, rec.Body)
+			banners := page.Find("#repo-banner")
+			if len(banners) != 1 {
+				t.Fatalf("banner for %s elements = %d, want one", tt.name, len(banners))
+			}
+			banner := banners[0]
+			if state, ok := banner.Attr("data-state"); !ok || state != tt.state {
+				t.Errorf("banner for %s data-state = %q (present %t), want %q", tt.name, state, ok, tt.state)
+			}
+			if others := page.Find("#repo-banner [data-state]"); len(others) != 0 {
+				t.Errorf("banner for %s nested data-state elements = %d, want none", tt.name, len(others))
 			}
 		})
 	}

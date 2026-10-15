@@ -2,8 +2,9 @@ package web_test
 
 import (
 	"net/http"
-	"strings"
 	"testing"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
 func TestFeatureLaunchRouteOpensTheDialogOverTheFeaturePage(t *testing.T) {
@@ -11,15 +12,10 @@ func TestFeatureLaunchRouteOpensTheDialogOverTheFeaturePage(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope/launch")
 
-	for _, want := range []string{
-		`data-section="ready"`,
-		`<dialog id="launch-modal-body"`,
-		`<cc-launch-modal feature="board-scope">`,
-	} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/f/board-scope/launch missing %s:\n%s", want, page)
-		}
-	}
+	root := htmltest.Parse(t, page)
+	root.One(t, `table#board tbody[data-section="ready"]`)
+	dialog := root.One(t, `dialog#launch-modal-body`)
+	dialog.One(t, `cc-launch-modal[feature="board-scope"]`)
 }
 
 func TestFeaturePageHasNoDialogUntilLaunchIsOpened(t *testing.T) {
@@ -27,8 +23,10 @@ func TestFeaturePageHasNoDialogUntilLaunchIsOpened(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/f/board-scope")
 
-	if strings.Contains(page, `<dialog id="launch-modal-body"`) {
-		t.Errorf("/f/board-scope rendered the launch dialog:\n%s", page)
+	root := htmltest.Parse(t, page)
+	root.One(t, `table#board`)
+	if dialogs := root.Find(`dialog#launch-modal-body`); len(dialogs) != 0 {
+		t.Errorf("/f/board-scope rendered the launch dialog: %s", dialogs[0].HTML())
 	}
 }
 
@@ -45,9 +43,8 @@ func TestLaunchPickerListsFeaturesWithLaunchableWork(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/launch")
 
-	for _, want := range []string{`href="/f/board-scope/launch"`, `href="/f/sqlc-migration/launch"`} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/launch missing %s:\n%s", want, page)
-		}
+	root := htmltest.Parse(t, page)
+	for _, href := range []string{"/f/board-scope/launch", "/f/sqlc-migration/launch"} {
+		root.One(t, `a[href="`+href+`"]`)
 	}
 }

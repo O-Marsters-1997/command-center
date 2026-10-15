@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 )
 
 func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
@@ -19,11 +21,13 @@ func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.Code)
 	}
 	body := resp.Body
-	if !strings.HasPrefix(strings.TrimSpace(body), `<table id="board"`) {
-		t.Errorf("htmx verb response is not the board fragment:\n%s", body)
+	root := htmltest.Parse(t, body)
+	board := root.One(t, "table#board")
+	if got := strings.TrimSpace(body); !strings.HasPrefix(got, "<table") {
+		t.Errorf("htmx verb response is not a table fragment: %q", got[:min(len(got), 120)])
 	}
-	if !strings.Contains(body, "kill queued") {
-		t.Errorf("the swapped board does not show the queued verb:\n%s", body)
+	if got := board.Text(); !strings.Contains(got, "kill queued") {
+		t.Error("board does not show queued kill")
 	}
 }
 
@@ -43,11 +47,13 @@ func TestBoardSwapIsTheTableAlone(t *testing.T) {
 	server := newServer(seededStore(t, testNow), testNow)
 	body := renderPath(t, server, "/board")
 
-	if !strings.HasPrefix(strings.TrimSpace(body), `<table id="board"`) {
-		t.Errorf("board swap is not the table:\n%s", body)
+	root := htmltest.Parse(t, body)
+	root.One(t, "table#board")
+	if got := strings.TrimSpace(body); !strings.HasPrefix(got, "<table") {
+		t.Errorf("board swap is not a table fragment: %q", got[:min(len(got), 120)])
 	}
-	if strings.Contains(body, "hx-swap-oob") {
-		t.Errorf("board swap still carries an out-of-band region:\n%s", body)
+	if regions := root.Find("[hx-swap-oob]"); len(regions) != 0 {
+		t.Errorf("board swap carries an out-of-band region: %s", regions[0].HTML())
 	}
 }
 
@@ -59,11 +65,8 @@ func TestAgesCarryTheAbsoluteInstantForTheClock(t *testing.T) {
 	server := newServer(store, observedAt.Add(90*time.Second))
 	body := renderPath(t, server, "/rail")
 
-	for _, want := range []string{
-		`<time datetime="2026-08-20T12:00:15Z">1m15s ago</time>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q:\n%s", want, body)
-		}
+	clock := htmltest.Parse(t, body).One(t, `time[datetime="2026-08-20T12:00:15Z"]`)
+	if got := clock.Text(); got != "1m15s ago" {
+		t.Errorf("rail clock = %q: %s", got, clock.HTML())
 	}
 }
