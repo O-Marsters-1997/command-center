@@ -20,7 +20,8 @@ func ComposeFollowUp(text string) string {
 	return fmt.Sprintf(
 		"You were not given a fresh worktree. This one already carries a branch, a diff and a git history "+
 			"a prior run produced; nothing remembers what that run was thinking, only what it committed. "+
-			"Run `git status`, `git diff` and `git log -5`, and read the PR description if one exists, before you touch anything.\n\n"+
+			"Run `git status`, `git diff` and `git log -5`, and read the PR description if one exists, "+
+			"before you touch anything.\n\n"+
 			"Below is the operator's own instruction, typed for this run. It is the whole of your task, "+
 			"not a restatement of the original ticket, and the ticket's acceptance criteria are not "+
 			"automatically still the bar.\n\n"+
