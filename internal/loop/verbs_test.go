@@ -45,7 +45,7 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://" + strings.ToUpper(branch), Repo: "repo", Branch: branch}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	at := testAt
@@ -53,23 +53,19 @@ func newRemoveWorktreeFixture(t *testing.T, branch string) removeWorktreeFixture
 		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	logPath := filepath.Join("runs", fmt.Sprintf("%d.jsonl", runID))
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: logPath}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
-	// Disposed as failed, deliberately: remove-worktree's own gate (merged, or base_gone) never
-	// consults a run's outcome, and a push-outcome run would make this same tick's own
-	// pushPushable step race to reconcile it too -- exactly the interference a focused verb
-	// test must not have to account for.
 	exitCode := 0
 	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomeFailed, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
@@ -87,7 +83,7 @@ func writeRunLogFiles(t *testing.T, runsDir string, runID int64) {
 	for _, ext := range []string{"jsonl", "prompt"} {
 		path := filepath.Join(runsDir, fmt.Sprintf("%d.%s", runID, ext))
 		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("WriteFile(%q): %v", path, err)
 		}
 	}
 }
@@ -105,7 +101,7 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 	t.Helper()
 	at := f.at.Add(time.Second)
 	if err := f.store.QueueVerbIntent(t.Context(), f.ticket.URL, "remove-worktree", at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	worktreeOption := loop.WithWorktrees(f.worktrees)
@@ -140,7 +136,7 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 	}
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "worktree_removed", "") {
 		t.Error("no worktree_removed event")
@@ -152,7 +148,7 @@ func TestRemoveWorktreeSucceedsForAMergedRowAndPrunesLogs(t *testing.T) {
 
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 0 {
 		t.Errorf("tickets = %+v, want the merged ticket's row dropped from the fleet", tickets)
@@ -164,7 +160,7 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	dependent := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{f.ticket.URL}}
 	if err := f.store.UpsertTickets(t.Context(), []storepkg.Ticket{dependent}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", dependent.URL, err)
 	}
 
 	obs := plan.Observation{
@@ -177,7 +173,7 @@ func TestRemoveWorktreeOnAMergedRowRepairsDependentsBlockedBy(t *testing.T) {
 
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != dependent.URL {
 		t.Fatalf("tickets = %+v, want only the dependent left", tickets)
@@ -201,7 +197,7 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if hasEvent(events, "remove_worktree_refused", "no worktree for cc-1") {
 		t.Error("a merged ticket with no observed worktree must not refuse")
@@ -216,7 +212,7 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 0 {
 		t.Errorf("tickets = %+v, want the row dropped even though the worktree was already gone", tickets)
@@ -225,13 +221,11 @@ func TestRemoveWorktreeSucceedsWhenTheWorktreeIsAlreadyGone(t *testing.T) {
 
 func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 	t.Parallel()
-	// A dependent whose blocker's PR closed unmerged after it ran: base_gone, not merged --
-	// remove-worktree's other eligible state.
 	f := newRemoveWorktreeFixture(t, "cc-2")
 	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	dependent := storepkg.Ticket{URL: f.ticket.URL, Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL}}
 	if err := f.store.UpsertTickets(t.Context(), []storepkg.Ticket{blocker, dependent}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(blocker, dependent): %v", err)
 	}
 
 	obs := plan.Observation{
@@ -248,7 +242,7 @@ func TestRemoveWorktreeSucceedsForABaseGoneRow(t *testing.T) {
 
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != blocker.URL {
 		t.Errorf("tickets = %+v, want only the dependent dropped, the blocker left alone", tickets)
@@ -273,14 +267,14 @@ func TestRemoveWorktreeTearsDownBeforeClosingTheIssue(t *testing.T) {
 	}
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "remove_worktree_refused", "forge refused") {
 		t.Error("no remove_worktree_refused event naming the issue close failure")
 	}
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %+v, want the row left in place to retry the close", tickets)
@@ -303,7 +297,7 @@ func TestRemoveWorktreeKeepsTheRowWhenRemovalFails(t *testing.T) {
 	}
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "remove_worktree_refused", "forge refused") {
 		t.Errorf("events = %+v, want a refused remove", events)
@@ -313,7 +307,7 @@ func TestRemoveWorktreeKeepsTheRowWhenRemovalFails(t *testing.T) {
 	}
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].URL != f.ticket.URL {
 		t.Errorf("tickets after failed remove = %+v, want the ticket retained", tickets)
@@ -328,7 +322,7 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 		Ticket: plan.TicketURL(f.ticket.URL), Tip: plan.SHA(tip), BaseSHA: "basesha", BaseBranch: "main", At: f.at,
 	}
 	if err := f.store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.ticket.URL, err)
 	}
 	gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 
@@ -345,14 +339,14 @@ func TestRemoveWorktreeForcesPastTpWhenTheRefIsPrunedButTheTipMatches(t *testing
 	}
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "worktree_removed", "forced") {
 		t.Error("no worktree_removed event recording that removal was forced")
 	}
 	tickets, err := f.store.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 0 {
 		t.Errorf("tickets = %+v, want the row dropped", tickets)
@@ -377,7 +371,7 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 				Ticket: plan.TicketURL(f.ticket.URL), Tip: "stale", BaseSHA: "basesha", BaseBranch: "main", At: f.at,
 			}
 			if err := f.store.RecordPush(t.Context(), stale); err != nil {
-				t.Fatal(err)
+				t.Fatalf("RecordPush(%q): %v", f.ticket.URL, err)
 			}
 			gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 			if tt.advance {
@@ -398,7 +392,7 @@ func TestRemoveWorktreeAtTheMergedHeadDespiteAStaleRecordedPush(t *testing.T) {
 			}
 			events, err := f.store.Events(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			if refused := hasEvent(events, "remove_worktree_refused", "unpushed"); refused != tt.wantFound {
 				t.Errorf("refused for unpushed commits = %v, want %v", refused, tt.wantFound)
@@ -420,7 +414,7 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			setup: func(t *testing.T, f removeWorktreeFixture) {
 				t.Helper()
 				if err := os.WriteFile(filepath.Join(f.worktreePath, "scratch.txt"), []byte("oops\n"), 0o600); err != nil {
-					t.Fatal(err)
+					t.Fatalf("WriteFile(scratch.txt): %v", err)
 				}
 			},
 		},
@@ -441,7 +435,7 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 					At: f.at,
 				}
 				if err := f.store.RecordPush(t.Context(), push); err != nil {
-					t.Fatal(err)
+					t.Fatalf("RecordPush(%q): %v", f.ticket.URL, err)
 				}
 				gittest.Run(t, f.repoPath, "update-ref", "-d", "refs/remotes/origin/cc-1")
 				gittest.Run(t, f.worktreePath, "commit", "-q", "--allow-empty", "-m", "diverged after prune")
@@ -470,7 +464,7 @@ func TestRemoveWorktreeRefusals(t *testing.T) {
 			}
 			events, err := f.store.Events(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			if !hasEvent(events, "remove_worktree_refused", tt.reason) {
 				t.Errorf("no remove_worktree_refused event naming %q", tt.reason)

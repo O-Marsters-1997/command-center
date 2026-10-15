@@ -67,14 +67,14 @@ func TestWriteAgentFilesIsIdempotent(t *testing.T) {
 	ws := writeAgentFiles(t)
 	first, err := os.ReadFile(ws.SettingsPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%q): %v", ws.SettingsPath, err)
 	}
 	if err := loop.WriteAgentFiles(ws); err != nil {
 		t.Fatalf("second WriteAgentFiles: %v", err)
 	}
 	second, err := os.ReadFile(ws.SettingsPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%q): %v", ws.SettingsPath, err)
 	}
 	if string(first) != string(second) {
 		t.Errorf("settings changed across calls:\n%s\nvs\n%s", first, second)

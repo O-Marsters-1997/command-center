@@ -41,7 +41,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 	)
 
 	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 	authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)
 
@@ -95,7 +95,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 
 	obs, _, err := store.LastObservation(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastObservation(): %v", err)
 	}
 	if len(obs.LocalTips) == 0 {
 		t.Error("the observation holds no local tips: observe must read them for the push step")

@@ -191,8 +191,6 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	gittest.Run(t, f.Repo, "push", "-q", "origin", "cc-1")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	// Already fully pushed and recorded, mirroring a merged/base_gone row that has since been
-	// torn down: RecordPush's own tip must match, or PushPlan would select it regardless.
 	tip := f.head(t, f.Repo, "refs/heads/cc-1")
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(f.Ticket.URL), Tip: plan.SHA(tip), BaseSHA: plan.SHA(tip), BaseBranch: "main", At: testAt,
@@ -201,11 +199,9 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 		t.Fatalf("RecordPush: %v", err)
 	}
 
-	// The worktree and the branch are both gone -- tp remove --force's real effect.
 	gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
 	gittest.Run(t, f.Repo, "branch", "-D", "cc-1")
 	delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
 	f.tick(t)
-	// A second tick too: the hazard is that every future tick would fail, not just the first.
 	f.tick(t)
 }

@@ -20,7 +20,7 @@ func repoByName(t *testing.T, st *storepkg.Store, name string) storepkg.Repo {
 	t.Helper()
 	repos, err := st.Repos(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos(): %v", err)
 	}
 	for _, repo := range repos {
 		if repo.Name == name {
@@ -38,7 +38,7 @@ func upsertRepoAs(t *testing.T, st *storepkg.Store, name string, state plan.Repo
 		repo.RefusalKind, repo.Refusal = plan.RefusalMergeSettings, "allows merge commits"
 	}
 	if err := st.UpsertRepo(t.Context(), repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo(%q): %v", name, err)
 	}
 }
 
@@ -110,14 +110,14 @@ func pathWithFakeGh(t *testing.T, apiJSON string) {
 	bin := t.TempDir()
 	git, err := exec.LookPath("git")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LookPath(git): %v", err)
 	}
 	if err := os.Symlink(git, filepath.Join(bin, "git")); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Symlink(%q): %v", git, err)
 	}
 	script := "#!/bin/sh\nprintf '%s' '" + apiJSON + "'\n"
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(gh): %v", err)
 	}
 	t.Setenv("PATH", bin)
 }
@@ -185,7 +185,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 	trackRepo(t, st, "repo", root+"/remote.git")
 	ticket := sandboxTicket("1")
 	if err := st.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 	forge := &recordingForge{}
 	observer := loop.NewObserver(st, forge, cfg)
@@ -246,7 +246,7 @@ func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
 	t.Parallel()
 	root, _ := repoWithOrigin(t)
 	if err := os.MkdirAll(config.CheckoutPath(root, "acme/broken"), 0o700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("MkdirAll(acme/broken): %v", err)
 	}
 	cfg, _ := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	st := openStore(t)
@@ -255,7 +255,7 @@ func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
 	brokenPR := branchRef("acme/broken", "cc-1")
 	previous := plan.Observation{PRs: map[plan.BranchRef]plan.PR{brokenPR: {Number: 7, State: plan.Open}}}
 	if err := st.SaveObservation(t.Context(), previous); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation(previous): %v", err)
 	}
 	observer := loop.NewObserver(st, &recordingForge{}, cfg)
 

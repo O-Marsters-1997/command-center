@@ -1,9 +1,6 @@
 package loop_test
 
 import (
-	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,21 +81,18 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 		t.Fatalf("pr ready calls after tick 1 = %d, want 0", got)
 	}
 
-	// Blocker merges, but the consumer's own CI is still red.
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("FAILURE"), "cc-1-tip")
 	f.tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 0 {
 		t.Fatalf("pr ready calls after tick 2 = %d, want 0", got)
 	}
 
-	// Both halves now hold: this is the tick that must call `gh pr ready`.
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
 	f.tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 1 {
 		t.Fatalf("pr ready calls after tick 3 = %d, want exactly 1", got)
 	}
 
-	// GitHub now reports the PR as ready, as a real observe would from here on.
 	f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{
 		Number: 1, State: plan.Open, IsDraft: false, HeadOid: "cc-1-tip", Checks: ciCheck("SUCCESS"),
 	}
@@ -159,24 +153,17 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	}
 }
 
-func TestDraftGateReadyFailurePreservesGhStderr(t *testing.T) {
+func TestDraftGateReadyFailureReportsForgeError(t *testing.T) {
+	t.Parallel()
 	f := newPushFixture(t)
 	f.seedDraftGate(t)
-	bin := t.TempDir()
-	script := "#!/bin/sh\necho 'fake gh: pr ready failed' >&2\nexit 1\n"
-	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-
+	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.Loop = newLoop(f.Store, func(context.Context) (plan.Observation, error) { return *f.Obs, nil },
-		fixedClock(testAt), f.cfg, f.ws, runner.ProcessRunner{})
 	f.tick(t)
 	events := f.events(t, "draft_ready_failed")
 	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL ||
 		!strings.Contains(events[0].Detail, "fake gh: pr ready failed") {
-		t.Errorf("events = %+v, want gh stderr in draft_ready_failed", events)
+		t.Errorf("events = %+v, want forge error in draft_ready_failed", events)
 	}
 }
 

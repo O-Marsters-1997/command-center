@@ -22,7 +22,7 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 	t.Helper()
 	launch := storepkg.LaunchRequest{Ticket: ticketURL, PromptHash: hash, Group: "group-" + ticketURL, At: at}
 	if err := store.QueueLaunchIntent(t.Context(), launch); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent(%q): %v", ticketURL, err)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	promptPath := f.Fake.Spawns[0].PromptPath
 	written, err := os.ReadFile(promptPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%q): %v", promptPath, err)
 	}
 	assertPromptGolden(t, "testdata/prompt-implement.golden.txt", string(written), filepath.Dir(promptPath))
 }
@@ -140,7 +140,7 @@ func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 
 			events, err := f.Store.Events(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			for _, e := range events {
 				if e.Kind == tt.kind && e.TicketURL == f.Tickets[0].URL && strings.Contains(e.Detail, tt.cause) {
@@ -180,19 +180,19 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
@@ -201,7 +201,6 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	fake := runner.NewFake()
 	fake.CanReap[999] = true
 	fake.ReapCode[999] = 0
-	// alive defaults to false in the map (zero value), i.e. the run reads dead this tick.
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
@@ -211,7 +210,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomeFailed) {
@@ -221,8 +220,6 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Errorf("exit code = %v, want 0", summary.ExitCode)
 	}
 
-	// A second run against the same branch, with a real commit after ITS OWN baseline: must
-	// derive push, and the first run's now-stale baseline must not leak into this one.
 	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 	newBaseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "more agent work")
@@ -231,11 +228,11 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: newBaseline, PromptHash: "hash-2",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	spawn2 := storepkg.Spawn{RunID: plan.RunID(runID2), Pgid: 1000, StartedAt: at, LogPath: "/state/runs/2.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn2); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID2, err)
 	}
 	fake.CanReap[1000] = true
 	fake.ReapCode[1000] = 0
@@ -245,7 +242,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	}
 	latest, err = store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	summary = latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomePush) {
@@ -295,23 +292,23 @@ func disposeKilledRun(t *testing.T, logBody string) (
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	logPath := filepath.Join(t.TempDir(), "1.jsonl")
 	if err := os.WriteFile(logPath, []byte(logBody), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", logPath, err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
@@ -319,7 +316,7 @@ func disposeKilledRun(t *testing.T, logBody string) (
 
 	fake := runner.NewFake()
 	fake.CanReap[999] = true
-	fake.ReapCode[999] = 137 // killed
+	fake.ReapCode[999] = 137
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
@@ -330,14 +327,14 @@ func disposeKilledRun(t *testing.T, logBody string) (
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	if summary := latest[plan.TicketURL(ticket.URL)]; summary.Outcome != option.Some(plan.OutcomeFailed) {
 		t.Errorf("summary = %+v, want failed (no commits after baseline)", summary)
 	}
 	cost, err := store.CCCostUSD(t.Context(), at.Add(time.Hour))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CCCostUSD(%v): %v", at.Add(time.Hour), err)
 	}
 	readings, err := store.LatestReadingsFull(t.Context())
 	if err != nil {
@@ -356,26 +353,26 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	logPath := filepath.Join(t.TempDir(), "run.jsonl")
 	line := `{"type":"rate_limit_event","rate_limit_info":{"unifiedWindows":{` +
 		`"five_hour":{"utilization":0.05,"resetsAt":1787665200},` +
 		`"seven_day":{"utilization":0.19,"resetsAt":1788159600}}}}` + "\n"
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", logPath, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: logPath}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
@@ -393,7 +390,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 
 	gauges, err := store.LatestReadings(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestReadings(): %v", err)
 	}
 	if got := gauges[agentlog.FiveHour]; got.Utilization != 0.05 {
 		t.Errorf("five_hour gauge = %+v; want utilization 0.05", got)
@@ -410,8 +407,6 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	gittest.Run(t, repoPath, "worktree", "add", "-b", "cc-1", worktreePath, "origin/main")
 	baseline := gittest.Run(t, repoPath, "rev-parse", "refs/heads/cc-1")
 
-	// The agent's commit reaches origin (via its own push, or a prior tick's pushPushable)
-	// before the worktree disappears -- issue #189's race.
 	gittest.Run(t, worktreePath, "commit", "-q", "--allow-empty", "-m", "agent work")
 	gittest.Run(t, worktreePath, "push", "-q", "origin", "cc-1")
 	originTip := gittest.Run(t, repoPath, "rev-parse", "refs/remotes/origin/cc-1")
@@ -420,23 +415,21 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	// No entry for "cc-1" in Worktrees: the worktree is gone by the time this tick disposes
-	// the run. BranchTips is what observe would have read from origin/cc-1 this tick.
 	obs := plan.Observation{BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "cc-1"): plan.SHA(originTip)}}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
@@ -452,7 +445,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomePush) {
@@ -470,22 +463,22 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "kill", at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, kill): %v", ticket.URL, err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
@@ -508,7 +501,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(t.Context(), "kill")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(kill): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending kill intents = %+v, want none: consumed", pending)
@@ -516,7 +509,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome.IsNone() {
@@ -551,7 +544,7 @@ func TestLoopSpendLimit5h(t *testing.T) {
 					ResetsAt: testAt.Add(time.Duration(i+1) * time.Hour), At: at,
 				}
 				if err := f.Store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-					t.Fatal(err)
+					t.Fatalf("RecordReadings(five-hour): %v", err)
 				}
 				f.Tick(t)
 				if len(f.Fake.Spawns) != tt.wantSpawns[i] {
@@ -572,23 +565,23 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.95, ResetsAt: at.Add(time.Hour), At: at}
 	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordReadings(five-hour): %v", err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}

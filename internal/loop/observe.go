@@ -17,20 +17,19 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// ObserveFunc reads the world. Any non-zero exit ends the tick before anything changes.
 type ObserveFunc func(ctx context.Context) (plan.Observation, error)
 
-func NewObserver(store *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc {
+func NewObserver(st *store.Store, forge gh.Forge, cfg config.Config) ObserveFunc {
 	return func(ctx context.Context) (plan.Observation, error) {
-		repos, err := observableRepos(ctx, store, cfg.DataDir)
+		repos, err := observableRepos(ctx, st, cfg.DataDir)
 		if err != nil {
 			return plan.Observation{}, fmt.Errorf("list observable repos: %w", err)
 		}
-		tickets, err := store.Tickets(ctx)
+		tickets, err := st.Tickets(ctx)
 		if err != nil {
 			return plan.Observation{}, fmt.Errorf("list tickets: %w", err)
 		}
-		prevObs, _, err := store.LastObservation(ctx)
+		prevObs, _, err := st.LastObservation(ctx)
 		if err != nil {
 			return plan.Observation{}, fmt.Errorf("last observation: %w", err)
 		}
@@ -66,8 +65,6 @@ func mergeObservation(dst *plan.Observation, src plan.Observation) {
 	maps.Copy(dst.SettingsSources, src.SettingsSources)
 }
 
-// carryForward copies repo's entries from the last observation into dst, so a repo that failed
-// to observe this tick keeps what it showed on the last good one rather than reading as empty.
 func carryForward(dst *plan.Observation, prev plan.Observation, repo string) {
 	keep := func(key plan.BranchRef) bool { return key.Repo == repo }
 	copyKeyed(dst.PRs, prev.PRs, keep)
@@ -269,9 +266,6 @@ func recordConflictsWithPeer(m map[plan.BranchRef]map[plan.BranchRef]bool, pair 
 	m[keyB][keyA] = conflicts
 }
 
-// observableRepos returns the repos the observer reads: those that are ready or refused and
-// already have a checkout. A repo still cloning, or refused before it was ever cloned, has
-// nothing to fetch.
 func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {
@@ -286,7 +280,6 @@ func observableRepos(ctx context.Context, st *store.Store, dataDir string) ([]st
 	}), nil
 }
 
-// ReadyRepos returns the tracked repos in the ready state: the only ones the loop works on.
 func ReadyRepos(ctx context.Context, st *store.Store) ([]store.Repo, error) {
 	repos, err := st.Repos(ctx)
 	if err != nil {

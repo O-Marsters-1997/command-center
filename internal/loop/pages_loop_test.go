@@ -43,7 +43,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		hash := composeHash(ticket.URL)
 		launch := storepkg.LaunchRequest{Ticket: ticket.URL, PromptHash: hash, Group: "group-a", At: testAt}
 		if err := f.Store.QueueLaunchIntent(t.Context(), launch); err != nil {
-			t.Fatal(err)
+			t.Fatalf("QueueLaunchIntent(%+v): %v", launch, err)
 		}
 	}
 
@@ -72,7 +72,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 		}
 	}
 	if err := f.Store.QueueVerbIntent(t.Context(), queuedSibling, "cancel", testAt.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, cancel): %v", queuedSibling, err)
 	}
 	f.Tick(t)
 
@@ -89,7 +89,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 
 	memberships, err := f.Store.LaunchMemberships(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LaunchMemberships(): %v", err)
 	}
 	for _, ticket := range f.Tickets {
 		if !memberships[plan.TicketURL(ticket.URL)].Cancelled {
@@ -102,7 +102,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 
 	events, err := f.Store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	var sawCancelEvent bool
 	for _, e := range events {
