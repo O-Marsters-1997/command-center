@@ -99,7 +99,13 @@ type Run struct {
 func Parse(r io.Reader) (Run, error) {
 	var run Run
 	var base time.Time
-	var ledger requestLedger
+	requests := newRequestReader()
+	type phaseUsage struct {
+		phase int
+		main  bool
+		usage RequestUsage
+	}
+	var byRequest []phaseUsage
 	var tail Tail
 	callPhase := map[string]int{}
 
@@ -141,9 +147,28 @@ func Parse(r io.Reader) (Run, error) {
 				callPhase[event.CallID] = len(run.Phases) - 1
 			}
 		}
-		ledger.note(parsed, len(run.Phases)-1)
+		if parsed.Type == "assistant" && parsed.RequestID != "" {
+			index, first := requests.add(parsed)
+			if first {
+				byRequest = append(byRequest, phaseUsage{phase: len(run.Phases) - 1, main: parsed.ParentToolUseID == ""})
+			} else if byRequest[index].phase < 0 {
+				byRequest[index].phase = len(run.Phases) - 1
+			}
+			if parsed.Message.Usage != (usage{}) {
+				byRequest[index].usage = requestUsage(parsed.Message.Model, parsed.Timestamp, parsed.Message.Usage)
+			}
+		}
 	})
-	ledger.settle(run.Phases)
+	for _, recorded := range byRequest {
+		if len(run.Phases) == 0 {
+			break
+		}
+		phase := &run.Phases[max(0, recorded.phase)]
+		if recorded.main {
+			phase.Turns++
+		}
+		phase.Spend += Weight(recorded.usage)
+	}
 	run.Start = base
 	if err != nil {
 		return run, fmt.Errorf("read agent log: %w", err)

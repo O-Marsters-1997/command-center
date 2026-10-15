@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -25,11 +26,23 @@ func TestParseMetrics(t *testing.T) {
 			fixture: "run27.jsonl",
 			want: agentlog.RunMetrics{
 				CostUSD: option.Some(cost),
-				Requests: []agentlog.Request{
-					{InputTokens: 2, CacheCreationTokens: 28560, CacheReadTokens: 24902, OutputTokens: 6},
-					{InputTokens: 2, CacheCreationTokens: 138, CacheReadTokens: 125101, OutputTokens: 8},
-					{InputTokens: 2, CacheCreationTokens: 241, CacheReadTokens: 176056, OutputTokens: 3},
-					{InputTokens: 2, CacheCreationTokens: 2562, CacheReadTokens: 253508, OutputTokens: 4},
+				Requests: []agentlog.RequestUsage{
+					{
+						At: time.Date(2026, 8, 25, 10, 56, 3, 651_000_000, time.UTC), Model: "claude-sonnet-5",
+						Input: 2, CacheCreate: 28560, CacheRead: 24902, Output: 6,
+					},
+					{
+						At: time.Date(2026, 8, 25, 11, 0, 2, 729_000_000, time.UTC), Model: "claude-sonnet-5",
+						Input: 2, CacheCreate: 138, CacheRead: 125101, Output: 8,
+					},
+					{
+						At: time.Date(2026, 8, 25, 11, 8, 48, 509_000_000, time.UTC), Model: "claude-sonnet-5",
+						Input: 2, CacheCreate: 241, CacheRead: 176056, Output: 3,
+					},
+					{
+						At: time.Date(2026, 8, 25, 11, 22, 17, 481_000_000, time.UTC), Model: "claude-sonnet-5",
+						Input: 2, CacheCreate: 2562, CacheRead: 253508, Output: 4,
+					},
 				},
 			},
 		},
@@ -37,10 +50,10 @@ func TestParseMetrics(t *testing.T) {
 			name:    "a run with no result line keeps its requests and has no cost",
 			fixture: "alive.jsonl",
 			want: agentlog.RunMetrics{
-				Requests: []agentlog.Request{
-					{InputTokens: 10, CacheCreationTokens: 20, CacheReadTokens: 30, OutputTokens: 5},
-					{InputTokens: 1, CacheCreationTokens: 2, CacheReadTokens: 3, OutputTokens: 4},
-					{OutputTokens: 7},
+				Requests: []agentlog.RequestUsage{
+					{At: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Input: 10, CacheCreate: 20, CacheRead: 30, Output: 5},
+					{At: time.Date(2026, 1, 1, 0, 0, 3, 0, time.UTC), Input: 1, CacheCreate: 2, CacheRead: 3, Output: 4},
+					{At: time.Date(2026, 1, 1, 0, 0, 4, 0, time.UTC), Output: 7},
 				},
 			},
 		},
@@ -48,7 +61,9 @@ func TestParseMetrics(t *testing.T) {
 			name:    "a dialect that emits no cost has no CostUSD, not zero",
 			fixture: "no_cost.jsonl",
 			want: agentlog.RunMetrics{
-				Requests: []agentlog.Request{{OutputTokens: 3}},
+				Requests: []agentlog.RequestUsage{
+					{At: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Model: "free-dialect-1", Output: 3},
+				},
 			},
 		},
 	}
@@ -83,7 +98,7 @@ func TestParseMetricsContextPerRequest(t *testing.T) {
 		t.Fatalf("got %d requests, want %d: %+v", len(got.Requests), len(want), got.Requests)
 	}
 	for i, r := range got.Requests {
-		context := r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens
+		context := r.Input + r.CacheCreate + r.CacheRead
 		if context != want[i] {
 			t.Errorf("request %d context = %d, want %d", i, context, want[i])
 		}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/spend"
 )
 
@@ -13,7 +14,7 @@ func TestSumWeightPrefersASettledRequestsOwnExactCost(t *testing.T) {
 
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	exact := 123.45
-	settled := agentlog.RequestUsage{At: at, Model: "claude-sonnet-5", Input: 1, CostUSD: &exact}
+	settled := agentlog.RequestUsage{At: at, Model: "claude-sonnet-5", Input: 1, CostUSD: option.Some(exact)}
 
 	got := spend.SumWeight([]agentlog.RequestUsage{settled}, at, at.Add(time.Minute))
 	if got != exact {
