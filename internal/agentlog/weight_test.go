@@ -7,40 +7,34 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-func TestWeightMatchesRun27sTotalCostUSD(t *testing.T) {
+func TestWeight(t *testing.T) {
 	t.Parallel()
 
-	const run27TotalCostUSD = 8.2887992
+	t.Run("matches run27's total cost", func(t *testing.T) {
+		t.Parallel()
+		const run27TotalCostUSD = 8.2887992
+		requests, err := agentlog.ParseTranscriptUsage("testdata/run27.jsonl")
+		if err != nil || len(requests) != 1 {
+			t.Fatalf("ParseTranscriptUsage(run27.jsonl) = %d entries, %v, want one", len(requests), err)
+		}
 
-	requests, err := agentlog.ParseTranscriptUsage("testdata/run27.jsonl")
-	if err != nil {
-		t.Fatalf("ParseTranscriptUsage: %v", err)
-	}
-	if len(requests) != 1 {
-		t.Fatalf("run27 is a settled run, want exactly one entry, got %d", len(requests))
-	}
+		got := agentlog.Weight(requests[0])
+		if off := math.Abs(got-run27TotalCostUSD) / run27TotalCostUSD; off > 0.01 {
+			t.Errorf("Weight(run27) = %v, want within 1%% of %v", got, run27TotalCostUSD)
+		}
+	})
 
-	got := agentlog.Weight(requests[0])
-	diff := math.Abs(got-run27TotalCostUSD) / run27TotalCostUSD
-	if diff > 0.01 {
-		t.Errorf("Weight(run27) = %v, want within 1%% of %v (off by %.2f%%)", got, run27TotalCostUSD, diff*100)
-	}
-}
-
-func TestWeightPricesByModelTier(t *testing.T) {
-	t.Parallel()
-
-	usage := agentlog.RequestUsage{Input: 1_000_000}
-	sonnet := agentlog.Weight(agentlog.RequestUsage{Model: "claude-sonnet-5", Input: usage.Input})
-	opus := agentlog.Weight(agentlog.RequestUsage{Model: "claude-opus-5-5", Input: usage.Input})
-	haiku := agentlog.Weight(agentlog.RequestUsage{Model: "claude-haiku-4-5-20251001", Input: usage.Input})
-
-	if !(haiku < sonnet && sonnet < opus) {
-		t.Errorf("want haiku < sonnet < opus, got haiku=%v sonnet=%v opus=%v", haiku, sonnet, opus)
-	}
-
-	unknown := agentlog.Weight(agentlog.RequestUsage{Model: "some-future-model", Input: usage.Input})
-	if unknown != sonnet {
-		t.Errorf("unknown model = %v, want the sonnet fallback %v", unknown, sonnet)
-	}
+	t.Run("prices by model tier, unknown as sonnet", func(t *testing.T) {
+		t.Parallel()
+		weigh := func(model string) float64 {
+			return agentlog.Weight(agentlog.RequestUsage{Model: model, Input: 1_000_000})
+		}
+		haiku, sonnet, opus := weigh("claude-haiku-4-5-20251001"), weigh("claude-sonnet-5"), weigh("claude-opus-5-5")
+		if !(haiku < sonnet && sonnet < opus) {
+			t.Errorf("Weight(haiku, sonnet, opus) = %v, %v, %v, want ascending", haiku, sonnet, opus)
+		}
+		if unknown := weigh("some-future-model"); unknown != sonnet {
+			t.Errorf("Weight(some-future-model) = %v, want the sonnet price %v", unknown, sonnet)
+		}
+	})
 }
