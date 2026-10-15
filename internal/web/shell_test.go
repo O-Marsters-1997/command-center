@@ -336,7 +336,7 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 	}
 	storetest.Tickets(t, store, blocker, dependent)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+		Ticket: dependent.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton: %v", err)

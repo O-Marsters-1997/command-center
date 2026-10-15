@@ -27,7 +27,7 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 	store := openStore(t)
 	storetest.Tickets(t, store, ticket)
 	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
+		Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)

@@ -29,7 +29,7 @@ func transcriptStore(t *testing.T, messages ...string) *storepkg.Store {
 		}
 		session.Message = message
 		runID, sessionID, err := st.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
-			Ticket: sessionTicket, Kind: kind, BaselineSHA: "base", PromptHash: "hash", Session: session,
+			Ticket: sessionTicket, Kind: kind, PromptHash: "hash", Session: session,
 		})
 		if err != nil {
 			t.Fatalf("InsertSessionRunSkeleton(%q): %v", sessionTicket, err)
