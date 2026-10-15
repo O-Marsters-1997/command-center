@@ -12,7 +12,7 @@ func TestDecodeFailsOnMalformedJSON(t *testing.T) {
 
 	raw, err := os.ReadFile(filepath.Join("testdata", "malformed_repo_settings.json"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(malformed_repo_settings.json): %v", err)
 	}
 	if _, err := Decode[RepoSettings](raw); err == nil {
 		t.Error("Decode(malformed) = nil error, want one")

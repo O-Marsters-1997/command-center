@@ -39,7 +39,7 @@ func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list feature labels: %w", err)
 	}
 	return decodeFeatures(out)
 }
@@ -48,18 +48,18 @@ func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, e
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
 		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(listLimit))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list tickets for %s: %w", feature, err)
 	}
 	issues, err := decodeIssues(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode tickets for %s: %w", feature, err)
 	}
 
 	tickets := make([]Ticket, 0, len(issues))
 	for _, issue := range issues {
 		blockedBy, err := s.blockedBy(ctx, issue.Number)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read blockers for issue %d: %w", issue.Number, err)
 		}
 		tickets = append(tickets, Ticket{
 			URL:       issue.URL,
@@ -76,7 +76,7 @@ func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, e
 func (s *githubSource) blockedBy(ctx context.Context, number int) ([]string, error) {
 	out, err := s.run(ctx, "api", "--paginate", fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", s.nwo(), number))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list blockers for issue %d: %w", number, err)
 	}
 	return decodeBlockedBy(out)
 }

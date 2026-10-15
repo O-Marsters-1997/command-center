@@ -43,7 +43,7 @@ func TestRemovalStateFor(t *testing.T) {
 				dir, _ := gittest.WithOrigin(t)
 				tip, err := git.RevParse(t.Context(), dir, "refs/heads/main")
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("RevParse(refs/heads/main): %v", err)
 				}
 				pruneRemoteTrackingRef(t, dir, "main")
 				return dir, []string{tip}
@@ -57,7 +57,7 @@ func TestRemovalStateFor(t *testing.T) {
 				dir, _ := gittest.WithOrigin(t)
 				tip, err := git.RevParse(t.Context(), dir, "refs/heads/main")
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("RevParse(refs/heads/main): %v", err)
 				}
 				pruneRemoteTrackingRef(t, dir, "main")
 				return dir, []string{"stale", tip}
@@ -71,7 +71,7 @@ func TestRemovalStateFor(t *testing.T) {
 				dir, _ := gittest.WithOrigin(t)
 				tip, err := git.RevParse(t.Context(), dir, "refs/heads/main")
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("RevParse(refs/heads/main): %v", err)
 				}
 				pruneRemoteTrackingRef(t, dir, "main")
 				gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "committed after the merge, never pushed")
@@ -111,7 +111,7 @@ func TestDirty(t *testing.T) {
 			mutate: func(t *testing.T, dir string) {
 				t.Helper()
 				if err := os.WriteFile(filepath.Join(dir, "scratch.txt"), []byte("x\n"), 0o600); err != nil {
-					t.Fatal(err)
+					t.Fatalf("WriteFile(scratch.txt): %v", err)
 				}
 			},
 			want: true,
@@ -140,9 +140,6 @@ func pruneRemoteTrackingRef(t *testing.T, repoPath, branch string) {
 	gittest.Run(t, repoPath, "update-ref", "-d", "refs/remotes/origin/"+branch)
 }
 
-// TestWorktreePathsKeepsAMidRebaseWorktreeUnderItsBranch covers issue #91: git calls a rebasing
-// worktree "detached", which dropped it from Observation.Worktrees and Observation.MidMerge
-// alike, so the row read review_me while its worktree sat on an unresolved conflict.
 func TestWorktreePathsKeepsAMidRebaseWorktreeUnderItsBranch(t *testing.T) {
 	t.Parallel()
 
@@ -165,16 +162,13 @@ func TestWorktreePathsKeepsAMidRebaseWorktreeUnderItsBranch(t *testing.T) {
 	}
 }
 
-// repoWithAConflictedRebase leaves worktree stopped on a rebase conflict, the state a restack
-// onto a squash-merged base lands in when both branches touched the same lines (issue #85).
 func repoWithAConflictedRebase(t *testing.T) (repo, worktree string) {
 	t.Helper()
 	repo = gittest.Init(t)
-	// git worktree list reports the symlink-resolved path, which on macOS is /private/var/...
-	// for a /var/... TempDir, so the expectation has to be resolved the same way.
+	// On macOS Git reports /private/var for a /var TempDir through the symlink.
 	tmp, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("EvalSymlinks(TempDir): %v", err)
 	}
 	worktree = filepath.Join(tmp, "feature")
 
@@ -195,9 +189,7 @@ func repoWithAConflictedRebase(t *testing.T) (repo, worktree string) {
 	return repo, worktree
 }
 
-// TestMidMergeClearsOnceAResolvedRebaseFinishes covers issue #91's other half. git leaves
-// REBASE_HEAD behind after rebase --continue, so reading that ref pinned the row to
-// refresh_conflicted for good, and the abort it then offered failed with "no rebase in progress".
+// Git leaves REBASE_HEAD after rebase --continue, even when the rebase finishes.
 func TestMidMergeClearsOnceAResolvedRebaseFinishes(t *testing.T) {
 	t.Parallel()
 
@@ -214,12 +206,10 @@ func TestMidMergeClearsOnceAResolvedRebaseFinishes(t *testing.T) {
 	}
 }
 
-// resolveRebase does what a human does at the conflict and nothing else: write the file, add it,
-// continue.
 func resolveRebase(t *testing.T, worktree string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(worktree, "shared.txt"), []byte("both sides\n"), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(shared.txt): %v", err)
 	}
 	gittest.Run(t, worktree, "add", "shared.txt")
 	gittest.Run(t, worktree, "-c", "core.editor=true", "rebase", "--continue")
@@ -251,7 +241,7 @@ func TestTipIfPresent(t *testing.T) {
 	dir := gittest.Init(t)
 	want, err := git.RevParse(t.Context(), dir, "refs/heads/main")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RevParse(refs/heads/main): %v", err)
 	}
 
 	got, present, err := git.TipIfPresent(t.Context(), dir, "refs/heads/main")

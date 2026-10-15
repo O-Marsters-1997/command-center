@@ -8,9 +8,8 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// CheckRepoOnGitHub reads fullName's merge settings and default branch from GitHub by name, so it
-// runs before any clone. A repo it accepts answers an empty kind; a refusal answers a
-// plan.Refusal* kind and the reason to show. A gh failure is an error, never a pass.
+// CheckRepoOnGitHub reads GitHub merge settings before cloning; a GitHub error
+// is not treated as a passing configuration check.
 func CheckRepoOnGitHub(ctx context.Context, fullName string) (kind plan.RefusalKind, reason string, err error) {
 	settings, err := gh.ReadRepoSettings(ctx, fullName)
 	if err != nil {

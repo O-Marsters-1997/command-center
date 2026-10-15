@@ -55,7 +55,7 @@ func TestEnsureCheckoutClonesThenReusesTheClone(t *testing.T) {
 
 	marker := filepath.Join(checkout, "not-from-a-second-clone")
 	if err := os.WriteFile(marker, nil, 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", marker, err)
 	}
 	if err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout); err != nil {
 		t.Fatalf("second EnsureCheckout: %v", err)
@@ -89,8 +89,6 @@ func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 	gittest.Run(t, repoPath, "config", "core.sshCommand", "false")
 	gittest.Run(t, repoPath, "remote", "set-url", "origin", "git@github.com:o/r.git")
 
-	// The fetch that follows fails, since git@github.com:o/r is not a repository anyone can
-	// reach from a test. What must not happen is the origin comparison refusing first.
 	repo := repoConfig{Name: "r", Remote: "https://github.com/o/r", Checkout: repoPath}
 	err := git.EnsureCheckout(t.Context(), repo.Name, repo.Remote, repo.Checkout)
 	if errors.Is(err, git.ErrOriginMismatch) {
@@ -98,8 +96,6 @@ func TestEnsureCheckoutAcceptsTheOtherURLFormForTheSameRepo(t *testing.T) {
 	}
 }
 
-// TestEnsureCheckoutEnablesRerere covers both arms. rerere is local config, so a re-clone on a
-// fresh machine would otherwise lose it, and the live checkout predates the change.
 func TestEnsureCheckoutEnablesRerere(t *testing.T) {
 	t.Parallel()
 	_, remote := gittest.WithOrigin(t)
