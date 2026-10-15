@@ -27,7 +27,7 @@ func originedRepo(t *testing.T, settings string) string {
 func writeIn(t *testing.T, dir, name, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", filepath.Join(dir, name), err)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestTheCommittedSettingsFileHoldsWhatTheRepoBlockHeld(t *testing.T) {
 
 	body, err := os.ReadFile("../../" + config.SettingsFile)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%s): %v", "../../"+config.SettingsFile, err)
 	}
 	got, err := config.ParseRepoSettings(string(body))
 	if err != nil {

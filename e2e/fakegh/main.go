@@ -1,6 +1,3 @@
-// Command fakegh stands in for the gh CLI in end-to-end tests. It answers from a JSON fixture
-// staged at $CC_GH_FIXTURE, keyed on the first two argv words ("pr list", "pr create", …) or a
-// longer argv prefix to disambiguate one shape of a call from the rest; the longest key wins.
 package main
 
 import (
@@ -13,7 +10,6 @@ import (
 	"strings"
 )
 
-// response is one fixture entry: what gh would have printed and exited with.
 type response struct {
 	Stdout string `json:"stdout"`
 	Stderr string `json:"stderr"`
@@ -25,7 +21,6 @@ func main() {
 }
 
 func run(args []string, getenv func(string) string, stdout, stderr io.Writer) int {
-	// Logged before the fixture is consulted so an unanswerable call still shows up in the log.
 	if logPath := getenv("CC_GH_LOG"); logPath != "" {
 		if err := appendLine(logPath, strings.Join(args, " ")); err != nil {
 			printf(stderr, "fakegh: %v\n", err)
@@ -73,8 +68,6 @@ func appendLine(path, line string) (err error) {
 	return nil
 }
 
-// matchKey returns the longest fixture key that is a whole-word prefix of the argv, falling back
-// to the two-word key when none is.
 func matchKey(fixture map[string]response, args []string) string {
 	joined := strings.Join(args, " ") + " "
 	best := fixtureKey(args)
@@ -93,7 +86,6 @@ func fixtureKey(args []string) string {
 	return strings.Join(args, " ")
 }
 
-// printf writes to w, discarding the write error: these are diagnostics on a test fake.
 func printf(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }

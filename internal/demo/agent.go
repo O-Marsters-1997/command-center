@@ -16,9 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// Agent is the fake agent Runner. A spawned run writes stream-json to its log as sim time passes
-// and, when its scripted duration is up, commits the scenario's files into the worktree with real
-// git.
+// Agent simulates a run's stream-json log and commits scenario files with real Git.
 type Agent struct {
 	clock  loop.Clock
 	issues []issue
@@ -44,7 +42,7 @@ type agentRun struct {
 	rng       *rand.Rand
 }
 
-func NewAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
+func newAgent(clock loop.Clock, issues []issue, seed int64) *Agent {
 	return &Agent{
 		clock: clock, issues: issues, runs: map[int]*agentRun{}, spawns: map[int]int{},
 		seed: seed,
@@ -83,8 +81,7 @@ func (a *Agent) Spawn(ctx context.Context, cfg runner.SpawnConfig) (runner.Spawn
 	return runner.SpawnResult{Pid: a.nextPid}, nil
 }
 
-// Step plays every live run up to the current sim time: one more assistant turn each, and the
-// commit and result line for a run whose time is up.
+// Step advances live agent runs to the current simulation time.
 func (a *Agent) Step(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
