@@ -78,6 +78,7 @@ lives in pure `.ts` under `bun test`.
 
 ## Tests
 
+- Before writing or reviewing a test, load the testing-policy skill.
 - `go-idiomatic`'s Testing section is the authority on how a test is written.
 - `internal/cctest` reuses one `cc-cctest-v1` container across test binaries and worktrees, with
   a database per test cloned from a migration-hashed template. It sweeps disconnected test databases
