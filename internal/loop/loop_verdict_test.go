@@ -34,8 +34,6 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 		}
 	}
 
-	// An injected clock that keeps moving, standing in for a real outage's wall-clock span,
-	// while every observe across it fails.
 	boom := errors.New("gh pr list: exit status 1")
 	failing := newLoop(store, func(context.Context) (plan.Observation, error) {
 		return plan.Observation{}, boom
@@ -54,8 +52,6 @@ func TestCheckingTicksOnlyAdvanceOnSuccessfulObserve(t *testing.T) {
 		t.Errorf("checking ticks = %d after 3 successful and 50 failed observes an hour apart, want 3", got)
 	}
 
-	// Observe succeeding again resumes the count from where it left off, not from the elapsed
-	// wall time.
 	if err := ok.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

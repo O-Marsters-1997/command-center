@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -108,6 +109,32 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 				if !strings.Contains(page, `value="`+string(verb)+`"`) {
 					t.Errorf("page does not offer %s:\n%s", verb, page)
 				}
+			}
+		})
+	}
+}
+
+func TestFailedVerificationTruncatesAtValidUTF8(t *testing.T) {
+	t.Parallel()
+	for _, spacing := range []string{" ", "  "} {
+		t.Run("exit spacing "+spacing, func(t *testing.T) {
+			t.Parallel()
+			p := newPushFixture(t)
+			f := newStackedFixture(t, p.Repo, p.Store, testAt)
+			parentTip := advanceParent(t, p.Repo, f)
+			*p.Obs = baseObservation(f, parentTip)
+			command := []string{"sh", "-c", "awk 'BEGIN { for (i=0; i<3000; i++) printf \"é\" }';" + spacing + "exit 1"}
+			cfg, ws := testConfigAndWorkspace(t, p.root, 0, nil)
+			p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
+			p.cfg, p.ws = cfg, ws
+			p.reset(testAt.Add(time.Minute), runner.ProcessRunner{})
+			p.tick(t)
+			events := p.events(t, "verification_failed")
+			if len(events) != 1 {
+				t.Fatalf("verification_failed events = %d, want 1", len(events))
+			}
+			if !utf8.ValidString(events[0].Detail) {
+				t.Error("utf8.ValidString(verification detail) = false, want true")
 			}
 		})
 	}

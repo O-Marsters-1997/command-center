@@ -190,6 +190,7 @@ func (l *Loop) verifyOne(ctx context.Context, ticket plan.Ticket, worktreePath s
 	if len(detail) > maxVerifyDetail {
 		detail = detail[:maxVerifyDetail] + " …(truncated)"
 	}
+	detail = strings.ToValidUTF8(detail, "")
 	return l.event(ctx, string(ticket.URL), store.EventVerificationFailed, detail)
 }
 

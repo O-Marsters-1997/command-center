@@ -27,25 +27,25 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 	runID, err := store.InsertRunSkeleton(t.Context(), storepkg.RunSkeleton{
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: baseline, PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	long := "Which database?\n" + strings.Repeat("x", 5000)
 	questionPath := filepath.Join(ws.RunsDir, fmt.Sprintf("%d.question", runID))
 	if err := os.WriteFile(questionPath, []byte(long), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", questionPath, err)
 	}
 
 	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
@@ -59,7 +59,7 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 
 	latest, err := store.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket(): %v", err)
 	}
 	summary := latest[plan.TicketURL(ticket.URL)]
 	if summary.Outcome != option.Some(plan.OutcomeAsked) {

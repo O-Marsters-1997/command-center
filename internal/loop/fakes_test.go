@@ -37,7 +37,7 @@ func repoWithOrigin(t *testing.T) (root, repoPath string) {
 	seed := gittest.Init(t)
 	gittest.Run(t, ".", "init", "-q", "-b", "main", "--bare", remote)
 	if err := os.MkdirAll(filepath.Dir(repoPath), 0o700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("MkdirAll(%q): %v", filepath.Dir(repoPath), err)
 	}
 	gittest.Run(t, ".", "clone", "-q", seed, repoPath)
 	for key, value := range map[string]string{"user.name": "t", "user.email": "t@example.com", "commit.gpgsign": "false"} {
@@ -252,7 +252,7 @@ func trackRepo(t *testing.T, store *storepkg.Store, name, remote string) {
 	t.Helper()
 	repo := storepkg.Repo{Name: name, Remote: remote, Phase: plan.RepoReady, TrackedAt: testAt}
 	if err := store.UpsertRepo(t.Context(), repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo(%q): %v", name, err)
 	}
 }
 

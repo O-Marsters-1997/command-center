@@ -95,7 +95,7 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 		t.Errorf("observed_at = %s, want the injected clock %s", got.ObservedAt, at)
 	}
 	if got.PRs[branchRef("cc-sandbox", "cc-1-first")].State != plan.Open {
-		t.Errorf("prs = %+v", got.PRs)
+		t.Errorf("prs = %+v, want cc-1-first open", got.PRs)
 	}
 }
 
@@ -152,8 +152,6 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Fatalf("first RunOnce: %v", err)
 	}
 
-	// Queued after the only successful tick, so the failing tick below is the only one that
-	// could apply it — and inv. 10 says a failed observe must apply no transition at all.
 	launch := storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: bad}
 	if err := store.QueueLaunchIntent(ctx, launch); err != nil {
 		t.Fatalf("QueueLaunchIntent: %v", err)
@@ -180,8 +178,6 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Errorf("memberships = %+v, want none: a failed observe must apply no queued intent", memberships)
 	}
 
-	// inv. 10: the tick applied no transition, so the last good observation is still the one
-	// the page renders — and its age keeps growing.
 	after, found, err := store.LastObservation(ctx)
 	if err != nil || !found {
 		t.Fatalf("LastObservation: found=%v err=%v", found, err)
@@ -202,7 +198,7 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Errorf("error at = %s, want %s", tickErr.At, bad)
 	}
 	if !strings.Contains(tickErr.Message, "exit status 1") {
-		t.Errorf("error message = %q", tickErr.Message)
+		t.Errorf("error message = %q, want exit status 1", tickErr.Message)
 	}
 
 	events, err := store.Events(ctx)

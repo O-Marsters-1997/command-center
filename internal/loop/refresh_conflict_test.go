@@ -19,8 +19,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-// conflictingAdvance has both branches add the same path with different contents, so refresh's
-// step-3 merge can only conflict, and re-records the child's push against the pre-advance base.
 func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f stackedFixture, at time.Time) string {
 	t.Helper()
 
@@ -32,7 +30,7 @@ func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f 
 		BaseBranch: "parent", At: at,
 	}
 	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.child.URL, err)
 	}
 
 	gittest.Commit(t, f.parentWorktree, "shared.txt", "the parent's line\n")
@@ -40,14 +38,11 @@ func conflictingAdvance(t *testing.T, repoPath string, store *storepkg.Store, f 
 	return gittest.Run(t, repoPath, "rev-parse", "refs/heads/parent")
 }
 
-// conflictFixture wires a stacked pair whose refresh merge conflicts, over an observe phase that
-// reads MERGE_HEAD fresh on every tick.
 type conflictFixture struct {
-	f      stackedFixture
-	loop   *loop.Loop
-	server *web.Server
-	store  *storepkg.Store
-	// aliveRuns is the liveness every tick's observation reports.
+	f         stackedFixture
+	loop      *loop.Loop
+	server    *web.Server
+	store     *storepkg.Store
 	aliveRuns map[string]bool
 }
 
@@ -78,7 +73,6 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 		return obs, nil
 	}
 
-	// Without a predicate every verdict flag stays false and the row reads `checking`.
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	clock := fixedClock(at.Add(time.Minute))
 	return conflictFixture{
@@ -101,7 +95,7 @@ func (c conflictFixture) midMerge(t *testing.T) bool {
 	t.Helper()
 	mid, err := git.MidMerge(t.Context(), c.f.childWorktree)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("MidMerge(%q): %v", c.f.childWorktree, err)
 	}
 	return mid
 }
@@ -112,12 +106,12 @@ func TestAConflictingRefreshLeavesTheWorktreeMidMergeAndTheRowReadsRefreshConfli
 	at := testAt
 	c := newConflictFixture(t, root, repoPath, at)
 
-	c.tick(t) // the automatic pass merges the advanced parent and conflicts
+	c.tick(t)
 	if !c.midMerge(t) {
 		t.Fatal("the child worktree has no MERGE_HEAD: the conflicting merge did not leave it mid-merge")
 	}
 
-	c.tick(t) // the next tick's observation is the one that reads MERGE_HEAD
+	c.tick(t)
 
 	page := renderPage(t, c.server)
 	row := webtest.RowFor(t, page, c.f.child.URL)
@@ -152,7 +146,7 @@ func TestAbortConflictWithOptionalRefresh(t *testing.T) {
 			c.tick(t)
 			for _, verb := range tt.verbs {
 				if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
-					t.Fatal(err)
+					t.Fatalf("QueueVerbIntent(%q, %q): %v", c.f.child.URL, verb, err)
 				}
 			}
 			c.tick(t)
@@ -166,14 +160,14 @@ func TestAbortConflictWithOptionalRefresh(t *testing.T) {
 			}
 			pending, err := c.store.PendingVerbIntents(t.Context(), plan.VerbAbort)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("PendingVerbIntents(abort): %v", err)
 			}
 			if len(pending) != 0 {
 				t.Errorf("pending abort intents = %+v, want none", pending)
 			}
 			events, err := c.store.Events(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			if !hasEvent(events, "merge_aborted", "") {
 				t.Errorf("events = %+v, want merge_aborted", events)
@@ -202,7 +196,7 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 
 	c.aliveRuns[c.f.child.URL] = true
 	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, abort): %v", c.f.child.URL, err)
 	}
 	c.tick(t)
 
@@ -211,7 +205,7 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	}
 	events, err := c.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "merge_abort_failed", "a run is alive") {
 		t.Errorf("events = %+v, want a merge_abort_failed naming the live run", events)
@@ -241,7 +235,7 @@ func TestAHumanResolvingTheConflictByHandClearsTheStateWithNoVerb(t *testing.T) 
 	}
 	pushes, err := c.store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes(): %v", err)
 	}
 	if got := pushes[plan.TicketURL(c.f.child.URL)].BaseSHAAtPush; string(got) != parentTip1 {
 		t.Errorf("child's recorded base sha = %s, want the advanced parent tip %s: the push step delivers the "+
@@ -263,7 +257,7 @@ func TestAGitFailureDuringRefreshThatIsNotAConflictIsATickError(t *testing.T) {
 
 	events, eventsErr := c.store.Events(t.Context())
 	if eventsErr != nil {
-		t.Fatal(eventsErr)
+		t.Fatalf("Events(): %v", eventsErr)
 	}
 	if hasEvent(events, "refresh_conflicted", "") {
 		t.Errorf("events = %+v, want no refresh_conflicted: the worktree is not mid-merge", events)

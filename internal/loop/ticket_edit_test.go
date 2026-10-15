@@ -24,12 +24,12 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
 	}
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%d tickets): %v", len(tickets), err)
 	}
 	if err := store.QueueEditTicketIntent(ctx, storepkg.EditRequest{
 		Ticket: "sandbox://CC-2", Branch: "cc-2-renamed", BlockedBy: []string{"sandbox://CC-1"}, At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueEditTicketIntent(CC-2): %v", err)
 	}
 
 	lp := newLoop(store, noOpObserve, fixedClock(at), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
@@ -39,7 +39,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 
 	got, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	edited := ticketsByURLForTest(t, got)["sandbox://CC-2"]
 	if edited.Branch != "cc-2-renamed" {
@@ -51,7 +51,7 @@ func TestLoopAppliesAPendingEditTicketIntent(t *testing.T) {
 
 	pending, err := store.PendingEditTicketIntents(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents(): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending edit intents = %+v, want the applied one consumed", pending)
@@ -82,7 +82,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 		Ticket: inFeature, Branch: "cc-1-add-x", BlockedBy: []string{outsider}, At: at.Add(time.Minute),
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueEditTicketIntent(%q): %v", inFeature, err)
 	}
 
 	lp := newLoop(
@@ -94,7 +94,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 
 	got, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	edited := ticketsByURLForTest(t, got)[inFeature]
 	if len(edited.BlockedBy) != 0 {
@@ -103,7 +103,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 
 	pending, err := store.PendingEditTicketIntents(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents(): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending edit intents = %+v, want the refused one consumed rather than retried", pending)
@@ -111,7 +111,7 @@ func TestLoopRecordsAClosureRefusalOnAnEditTicketIntent(t *testing.T) {
 
 	lastErr, failed, err := store.LastImportError(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastImportError(): %v", err)
 	}
 	if !failed || lastErr.Feature != "project:x" || !strings.Contains(lastErr.Message, outsider) {
 		t.Errorf("LastImportError = %+v, failed=%v, want project:x naming %s", lastErr, failed, outsider)

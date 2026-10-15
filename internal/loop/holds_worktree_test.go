@@ -20,18 +20,18 @@ func dispositionAs(t *testing.T, store *storepkg.Store, ticketURL string, outcom
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticketURL, err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	exitCode := 0
 	if err := store.RecordDisposition(t.Context(), storepkg.Disposition{
 		RunID: plan.RunID(runID), Outcome: outcome, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 }
 
@@ -59,7 +59,7 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if hasEvent(events, "refreshed", "") || hasEvent(events, "refresh_refused", "") {
 		t.Errorf("events = %+v, want no refresh activity while awaiting input", events)
@@ -71,7 +71,7 @@ func TestAutoRefreshLeavesAnAwaitingInputWorktreeUntouchedUntilItLeavesThatState
 	}
 	events, err = store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refreshed", "") {
 		t.Errorf("events = %+v, want a refreshed event once the ticket left awaiting input", events)
@@ -128,7 +128,7 @@ func TestRemoveWorktreeRefusesAnAwaitingInputTicket(t *testing.T) {
 	}
 	events, err := f.store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "remove_worktree_refused", "awaiting an answer") {
 		t.Errorf("events = %+v, want a remove_worktree_refused naming the awaited answer", events)

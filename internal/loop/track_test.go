@@ -37,7 +37,7 @@ func trackLoop(t *testing.T, st *storepkg.Store, validations *[]string) *loop.Lo
 func queueTrack(t *testing.T, st *storepkg.Store, repo string) {
 	t.Helper()
 	if _, err := st.QueueTrackIntent(t.Context(), repo, testAt); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueTrackIntent(%q): %v", repo, err)
 	}
 }
 

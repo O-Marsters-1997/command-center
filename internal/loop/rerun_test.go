@@ -68,8 +68,17 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 			if len(fake.Spawns) != 1 {
 				t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 			}
-			if want := tt.wantPath(f); fake.Spawns[0].WorktreePath != want {
-				t.Errorf("re-run worktree = %q, want %q", fake.Spawns[0].WorktreePath, want)
+			want := tt.wantPath(f)
+			want, err = filepath.EvalSymlinks(want)
+			if err != nil {
+				t.Fatalf("EvalSymlinks(want worktree): %v", err)
+			}
+			got, err := filepath.EvalSymlinks(fake.Spawns[0].WorktreePath)
+			if err != nil {
+				t.Fatalf("EvalSymlinks(spawn worktree): %v", err)
+			}
+			if got != want {
+				t.Errorf("re-run worktree = %q, want %q", got, want)
 			}
 			if fake.Spawns[0].SystemPromptPath != f.ws.SystemPromptPath {
 				t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, f.ws.SystemPromptPath)

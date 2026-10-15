@@ -41,7 +41,7 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets(%q): %v", ticket.URL, err)
 	}
 	at := testAt
 	runID, sessionID, err := store.InsertSessionRunSkeleton(t.Context(), storepkg.RunSkeleton{
@@ -49,21 +49,21 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 		Session: storepkg.RunSession{StartNew: true},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertSessionRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	spawn := storepkg.Spawn{RunID: plan.RunID(runID), Pgid: 999, StartedAt: at, LogPath: "/state/runs/1.jsonl"}
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.ClaudeProjectsDir = t.TempDir()
 	project := filepath.Join(cfg.ClaudeProjectsDir, "-some-project")
 	if err := os.MkdirAll(project, 0o700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("MkdirAll(%q): %v", project, err)
 	}
 	if err := os.WriteFile(filepath.Join(project, sessionID+".jsonl"), []byte("{}\n"), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", sessionID+".jsonl", err)
 	}
 
 	obs := plan.Observation{
@@ -88,7 +88,7 @@ func (f *steerFixture) send(t *testing.T, text string) {
 		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: f.at,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntentWithPayload(%q, follow-up): %v", f.ticket.URL, err)
 	}
 }
 
@@ -103,7 +103,7 @@ func (f *steerFixture) pendingFollowUps(t *testing.T) int {
 	t.Helper()
 	pending, err := f.store.PendingVerbIntents(t.Context(), plan.VerbFollowUp)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(follow-up): %v", err)
 	}
 	return len(pending)
 }
@@ -132,7 +132,7 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 
 	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunIDsForTicket(%q): %v", f.ticket.URL, err)
 	}
 	if len(ids) != 2 {
 		t.Fatalf("runs = %v, want the interrupted run and its resume", ids)
@@ -151,14 +151,14 @@ func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
 
 	ids, err := f.store.RunIDsForTicket(t.Context(), f.ticket.URL)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunIDsForTicket(%q): %v", f.ticket.URL, err)
 	}
 	if len(ids) != 2 {
 		t.Fatalf("runs = %v, want 2", ids)
 	}
 	first, err := f.store.RunDetails(t.Context(), plan.RunID(ids[0]))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunDetails(%d): %v", ids[0], err)
 	}
 	if !first.Outcome.IsSome() || first.Outcome.Unwrap() != plan.OutcomeContinued {
 		t.Errorf("first run outcome = %v, want %q", first.Outcome, plan.OutcomeContinued)
