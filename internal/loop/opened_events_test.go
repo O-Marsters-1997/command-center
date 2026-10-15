@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -42,7 +44,7 @@ func TestRecordOpenedEvents(t *testing.T) {
 			}
 			observed := tt.initial
 			lp := newLoop(store, func(context.Context) (plan.Observation, error) { return observed, nil },
-				fixedClock(testAt), config.Config{}, config.Workspace{}, runner.ProcessRunner{})
+				cctest.Clock{At: testAt}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
 			for tick := range 3 {
 				if tick == 1 {
 					observed = prObserved

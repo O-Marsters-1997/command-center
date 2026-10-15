@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -108,7 +110,7 @@ func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Obse
 	if f.failRemove {
 		worktreeOption = loop.WithWorktrees(failingRemove{f.worktrees})
 	}
-	lp := newLoop(f.store, observe, fixedClock(at), f.cfg, f.ws, runner.ProcessRunner{},
+	lp := newLoop(f.store, observe, cctest.Clock{At: at}, f.cfg, f.ws, runner.ProcessRunner{},
 		f.forgeOption, worktreeOption)
 	return lp.RunOnce(t.Context())
 }

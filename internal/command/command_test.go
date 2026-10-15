@@ -27,8 +27,10 @@ func TestOutputReturnsStdoutRunInDir(t *testing.T) {
 func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	longArg := strings.Repeat("x", 5000)
+	line := `echo "$GIT_TERMINAL_PROMPT $GH_PROMPT_DISABLED"; echo partial; echo boom >&2; exit 3`
 
-	out, err := command.Output(t.Context(), dir, "sh", "-c", "echo partial; echo boom >&2; exit 3")
+	out, err := command.Output(t.Context(), dir, "sh", "-c", line, longArg)
 	if err == nil {
 		t.Fatal("Output(exit 3) = nil error, want one")
 	}
@@ -36,15 +38,16 @@ func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
 	if !errors.As(err, &cmdErr) {
 		t.Fatalf("Output error = %v, want *command.Error", err)
 	}
-	if cmdErr.Cmd != "sh -c echo partial; echo boom >&2; exit 3" || cmdErr.Dir != dir || cmdErr.Stderr != "boom" {
-		t.Errorf("Output error fields = %+v, want command, dir and stderr", cmdErr)
+	if !strings.HasPrefix(cmdErr.Cmd, "sh -c "+line) || len(cmdErr.Cmd) > 200 ||
+		!strings.HasSuffix(cmdErr.Cmd, "...") || cmdErr.Dir != dir || cmdErr.Stderr != "boom" {
+		t.Errorf("Output error fields = %+v, want truncated command, dir and stderr", cmdErr)
 	}
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
 		t.Errorf("Output error = %v, want an *exec.ExitError with code 3", err)
 	}
-	if strings.TrimSpace(string(out)) != "partial" {
-		t.Errorf("Output stdout on failure = %q, want %q", out, "partial")
+	if strings.TrimSpace(string(out)) != "0 1\npartial" {
+		t.Errorf("Output stdout on failure = %q, want prompts disabled and partial output", out)
 	}
 }
 
@@ -77,33 +80,5 @@ func TestOutputReturnsWhenAGrandchildHoldsStdoutOpen(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("Output(stalled child) took %v, want it bounded by timeout plus WaitDelay", elapsed)
-	}
-}
-
-func TestOutputSwitchesPromptsOff(t *testing.T) {
-	t.Parallel()
-	out, err := command.Output(t.Context(), "", "sh", "-c", `echo "$GIT_TERMINAL_PROMPT $GH_PROMPT_DISABLED"`)
-	if err != nil {
-		t.Fatalf("Output(echo env): %v", err)
-	}
-	if got := strings.TrimSpace(string(out)); got != "0 1" {
-		t.Errorf("GIT_TERMINAL_PROMPT and GH_PROMPT_DISABLED = %q, want %q", got, "0 1")
-	}
-}
-
-func TestOutputErrorTruncatesALongCommandLine(t *testing.T) {
-	t.Parallel()
-	body := strings.Repeat("x", 5000)
-
-	_, err := command.Output(t.Context(), "", "sh", "-c", "exit 1", body)
-	if err == nil {
-		t.Fatal("Output(exit 1) = nil error, want one")
-	}
-	var cmdErr *command.Error
-	if !errors.As(err, &cmdErr) {
-		t.Fatalf("Output error = %v, want *command.Error", err)
-	}
-	if len(cmdErr.Cmd) > 200 || cmdErr.Dir != "" {
-		t.Errorf("Output command = %q, dir = %q, want at most 200 bytes and no dir", cmdErr.Cmd, cmdErr.Dir)
 	}
 }

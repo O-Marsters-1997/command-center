@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -18,7 +20,7 @@ func fragmentServer(t *testing.T) *web.Server {
 	storetest.Tickets(t, st, storepkg.Ticket{
 		URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
 	})
-	return openServer(st, fixedClock(testNow), "")
+	return openServer(st, cctest.Clock{At: testNow}, "")
 }
 
 func TestFragmentRoutesSendAPlainRequestToTheirHostPage(t *testing.T) {

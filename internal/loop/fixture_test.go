@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
@@ -109,7 +111,7 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	}
 	return &loopFixture{
 		Store:     store,
-		Loop:      newLoop(store, noOpObserve, fixedClock(testAt), cfg, ws, fake, loop.WithForge(forge), cut),
+		Loop:      newLoop(store, noOpObserve, cctest.Clock{At: testAt}, cfg, ws, fake, loop.WithForge(forge), cut),
 		Fake:      fake,
 		Forge:     forge,
 		Worktrees: worktrees,
@@ -184,7 +186,7 @@ func newPushFixture(t *testing.T, opts ...loop.Option) *pushFixture {
 func (f *pushFixture) reset(at time.Time, rn runner.Runner, opts ...loop.Option) {
 	observe := func(context.Context) (plan.Observation, error) { return *f.Obs, nil }
 	options := append([]loop.Option{loop.WithForge(f.Forge)}, opts...)
-	f.Loop = newLoop(f.Store, observe, fixedClock(at), f.cfg, f.ws, rn, options...)
+	f.Loop = newLoop(f.Store, observe, cctest.Clock{At: at}, f.cfg, f.ws, rn, options...)
 }
 
 func (f *pushFixture) tick(t *testing.T) {

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -44,7 +46,7 @@ func TestPageIsAWellFormedDocument(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
-	server := openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
+	server := openServer(shellStore(t, &now, ""), cctest.Clock{At: now}, "/data/fleet-hq")
 	body := renderPath(t, server, "/tickets")
 
 	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {

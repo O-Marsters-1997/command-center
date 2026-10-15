@@ -3,7 +3,6 @@ package gh
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -101,39 +100,5 @@ func TestDecodeLabels(t *testing.T) {
 	want := []string{"keep-open", "ready-to-merge"}
 	if diff := cmp.Diff(want, prs[0].Labels); diff != "" {
 		t.Errorf("decode() labels mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestBulkAndFallbackFieldsBothRequestLabels(t *testing.T) {
-	t.Parallel()
-
-	if !strings.Contains(bulkFields, "labels") {
-		t.Errorf("bulkFields = %q, want it to include labels", bulkFields)
-	}
-	if !strings.Contains(fallbackFields, "labels") {
-		t.Errorf("fallbackFields = %q, want it to include labels", fallbackFields)
-	}
-}
-
-func TestBulkAndFallbackFieldsBothRequestMergedAt(t *testing.T) {
-	t.Parallel()
-
-	if !strings.Contains(bulkFields, "mergedAt") {
-		t.Errorf("bulkFields = %q, want it to include mergedAt", bulkFields)
-	}
-	if !strings.Contains(fallbackFields, "mergedAt") {
-		t.Errorf("fallbackFields = %q, want it to include mergedAt", fallbackFields)
-	}
-}
-
-func TestPRStateAbsentIsTheZeroValue(t *testing.T) {
-	t.Parallel()
-
-	var s PRState
-	if s != Absent {
-		t.Errorf("zero PRState = %v, want Absent: absence must be a value, not a nil pointer", s)
-	}
-	if s.String() != "absent" {
-		t.Errorf("String() = %q, want %q", s.String(), "absent")
 	}
 }

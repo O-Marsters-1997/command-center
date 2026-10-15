@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -57,7 +59,7 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 		repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "defaults", now
 		return repo, nil
 	}
-	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
+	lp := newLoop(st, idle, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -91,7 +93,7 @@ func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *tes
 		repo.Phase = plan.RepoReady
 		return repo, nil
 	}
-	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
+	lp := newLoop(st, idle, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -189,7 +191,7 @@ func TestBreakingTheSettingsFileRefusesTheRepoWithinATickAndFixingItHeals(t *tes
 	}
 	forge := &recordingForge{}
 	observer := loop.NewObserver(st, forge, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+	lp := newLoop(st, observer, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{},
 		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 	tick := func() storepkg.Repo {
 		t.Helper()
@@ -229,7 +231,7 @@ func TestARefusedRepoOtherThanSettingsParseWaitsForTrackEvenWithCleanSettings(t 
 	upsertRepoAs(t, st, "repo", plan.RepoRefused)
 	forge := &recordingForge{}
 	observer := loop.NewObserver(st, forge, cfg)
-	lp := newLoop(st, observer, fixedClock(testAt), cfg, ws, runner.ProcessRunner{},
+	lp := newLoop(st, observer, cctest.Clock{At: testAt}, cfg, ws, runner.ProcessRunner{},
 		loop.WithForge(forge), loop.WithWorktrees(&recordingWorktrees{}))
 
 	if err := lp.RunOnce(t.Context()); err != nil {

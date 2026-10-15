@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -73,7 +75,7 @@ func boardFor(t *testing.T, store *storepkg.Store) string {
 	t.Helper()
 
 	at := testNow
-	return renderBoard(t, openServer(track(t, store, named("repo")...), fixedClock(at), ""))
+	return renderBoard(t, openServer(track(t, store, named("repo")...), cctest.Clock{At: at}, ""))
 }
 
 func TestBoardListsAFanOutBySection(t *testing.T) {

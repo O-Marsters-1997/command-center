@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
@@ -25,7 +27,7 @@ func TestProjectScopeKeepsAGroupWholeAndCarriesItInEveryLink(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 
 	body := renderPath(t, server, "/tickets?project=ACME")
 	root := htmltest.Parse(t, body)

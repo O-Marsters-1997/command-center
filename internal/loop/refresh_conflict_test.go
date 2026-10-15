@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -74,7 +76,7 @@ func newConflictFixture(t *testing.T, root, repoPath string, at time.Time) confl
 	}
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	clock := fixedClock(at.Add(time.Minute))
+	clock := cctest.Clock{At: at.Add(time.Minute)}
 	return conflictFixture{
 		f:         f,
 		aliveRuns: aliveRuns,

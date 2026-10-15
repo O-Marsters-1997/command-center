@@ -6,6 +6,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
@@ -13,6 +14,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
 
 func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testing.T) {
@@ -23,11 +25,11 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 	pushSettingsFile(t, config.CheckoutPath(root, "repo"), "[checks]\nsuccess = \"CI\"\n")
 
 	issue := tracker.Ticket{URL: "https://github.com/acme/repo/issues/1", Number: 1, Title: "Add x"}
-	source := fakeTrackerSource{
-		features: []tracker.Feature{"project:x"},
-		tickets:  map[string][]tracker.Ticket{"project:x": {issue}},
+	source := &trackertest.Source{
+		Features: []tracker.Feature{"project:x"},
+		Tickets:  map[string][]tracker.Ticket{"project:x": {issue}},
 	}
-	resolve := func(tracker.Kind, string) (tracker.Source, error) { return source, nil }
+	resolve := trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/repo": source})
 
 	store := openStore(t)
 	trackRepo(t, store, "repo", "git@github.com:acme/repo.git")
@@ -36,7 +38,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 	worktrees := &recordingWorktrees{}
 	runner := runner.NewFake()
 	lp := newLoop(
-		store, loop.NewObserver(store, forge, cfg), fixedClock(at), cfg, ws, runner,
+		store, loop.NewObserver(store, forge, cfg), cctest.Clock{At: at}, cfg, ws, runner,
 		loop.WithForge(forge), loop.WithWorktrees(worktrees), loop.WithTrackerSource(resolve),
 	)
 
@@ -53,7 +55,7 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 	}
 	row := func() webtest.BoardRow {
 		t.Helper()
-		return webtest.RowFor(t, renderPage(t, openServer(store, fixedClock(at), "")), issue.URL)
+		return webtest.RowFor(t, renderPage(t, openServer(store, cctest.Clock{At: at}, "")), issue.URL)
 	}
 
 	tick()

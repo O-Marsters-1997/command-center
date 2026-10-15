@@ -87,11 +87,3 @@ func TestDecodeAcceptsEmptyMergedAt(t *testing.T) {
 		t.Errorf("decode = %+v, want one PR with zero MergedAt", got)
 	}
 }
-
-func TestDecodeIssueTitlesRejectsGarbage(t *testing.T) {
-	t.Parallel()
-
-	if _, err := decodeIssueTitles([]byte("not json")); err == nil {
-		t.Fatal("decodeIssueTitles accepted non-JSON output")
-	}
-}

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -60,7 +62,7 @@ func TestPageRendersStackDepthAndMergeOrderForAFiveRowStack(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	root := webtest.RowFor(t, page, "sandbox://ROOT")
@@ -118,7 +120,7 @@ func TestPageWarnsOnANonMainReadyToMergeLabel(t *testing.T) {
 	}
 
 	repos := named("repo")
-	server := openServer(track(t, store, repos...), fixedClock(at), "")
+	server := openServer(track(t, store, repos...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	parent := webtest.RowFor(t, page, "sandbox://PARENT")
@@ -162,7 +164,7 @@ func TestPageWarnsOnARemoveWorktreeRefusal(t *testing.T) {
 		t.Fatalf("SaveObservation: %v", err)
 	}
 
-	server := openServer(track(t, store, named("repo")...), fixedClock(at), "")
+	server := openServer(track(t, store, named("repo")...), cctest.Clock{At: at}, "")
 	page := renderPage(t, server)
 
 	row := webtest.RowFor(t, page, ticket.URL)

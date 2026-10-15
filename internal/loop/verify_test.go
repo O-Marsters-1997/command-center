@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/config"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -100,7 +102,7 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 			if remoteTip != s.originalTip {
 				t.Errorf("remote %s tip = %s, want unchanged %s", s.branch, remoteTip, s.originalTip)
 			}
-			page := renderPage(t, openServer(p.Store, fixedClock(testAt.Add(time.Minute)), ""))
+			page := renderPage(t, openServer(p.Store, cctest.Clock{At: testAt.Add(time.Minute)}, ""))
 			row := webtest.RowFor(t, page, s.ticketURL)
 			if row.State != "verification_failed" {
 				t.Errorf("row state = %q, want verification_failed:\n%s", row.State, row.Row.HTML())

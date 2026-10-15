@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
@@ -109,7 +111,7 @@ func TestSpendLimitNotice(t *testing.T) {
 
 			server := web.NewServer(web.Deps{
 				Logger: slog.New(slog.DiscardHandler), Store: store,
-				Clock: fixedClock(observedAt.Add(45 * time.Second)), SpendLimit5h: 80,
+				Clock: cctest.Clock{At: observedAt.Add(45 * time.Second)}, SpendLimit5h: 80,
 			})
 			notices := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "#notices")
 			if got := notices.Text(); got != tt.want {

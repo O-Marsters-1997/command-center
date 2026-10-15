@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
@@ -203,7 +205,7 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -319,7 +321,7 @@ func disposeKilledRun(t *testing.T, logBody string) (
 	fake.ReapCode[999] = 137
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, fake)
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -383,7 +385,7 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -438,7 +440,7 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 	fake.ReapCode[999] = 0
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -490,7 +492,7 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	fake.ReapCode[4242] = 143
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	lp := newLoop(store, observe, fixedClock(at.Add(time.Minute)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(time.Minute)}, cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -592,7 +594,7 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	cfg.SpendLimit5h = 80
-	lp := newLoop(store, observe, fixedClock(at.Add(30*time.Second)), cfg, ws, fake)
+	lp := newLoop(store, observe, cctest.Clock{At: at.Add(30 * time.Second)}, cfg, ws, fake)
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

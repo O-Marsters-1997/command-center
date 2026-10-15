@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
@@ -17,7 +19,7 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 	st := openStore(t)
 	var logs bytes.Buffer
 	server := web.NewServer(web.Deps{
-		Logger: slog.New(slog.NewTextHandler(&logs, nil)), Store: st, Clock: fixedClock(testNow),
+		Logger: slog.New(slog.NewTextHandler(&logs, nil)), Store: st, Clock: cctest.Clock{At: testNow},
 	})
 	if err := st.Close(); err != nil {
 		t.Fatalf("Close: %v", err)

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/cctest"
+
 	"golang.org/x/net/html"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
@@ -19,7 +21,7 @@ func TestScopeMenuListsProjectsThenLooseReposWithKeys(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateProject(acme): %v", err)
 	}
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 
 	body := renderPath(t, server, "/tickets")
 	page := htmltest.Parse(t, body)
@@ -70,7 +72,7 @@ func TestScopeMenuSummaryNamesTheScope(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateProject(acme): %v", err)
 	}
-	server := openServer(st, fixedClock(testNow), "")
+	server := openServer(st, cctest.Clock{At: testNow}, "")
 
 	project := htmltest.Parse(t, renderPath(t, server, "/tickets?project=acme")).One(t, "[data-scope-menu] summary")
 	project.One(t, `[data-hue][aria-hidden="true"]`)
