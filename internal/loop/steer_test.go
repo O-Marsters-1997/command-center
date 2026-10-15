@@ -142,7 +142,7 @@ func TestAFollowUpOnARunningTicketCancelsDisposesContinuedAndResumesInTheSameTic
 	}
 }
 
-func TestTheInterruptedRunNoLongerAwaitsDisposition(t *testing.T) {
+func TestTheInterruptedRunIsRecordedAsContinued(t *testing.T) {
 	t.Parallel()
 	f := newSteerFixture(t, nil)
 	f.send(t, "use sqlite instead")
@@ -164,6 +164,19 @@ func TestTheInterruptedRunNoLongerAwaitsDisposition(t *testing.T) {
 		if run.ID == ids[0] {
 			t.Errorf("interrupted run %d still awaits disposition", ids[0])
 		}
+	}
+	events, err := f.store.Events(t.Context())
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	var disposed []storepkg.Event
+	for _, event := range events {
+		if event.Kind == storepkg.EventRunDisposed && event.TicketURL == f.ticket.URL {
+			disposed = append(disposed, event)
+		}
+	}
+	if len(disposed) != 1 || disposed[0].Detail != plan.OutcomeContinued.String() {
+		t.Errorf("disposed events = %+v, want one continued disposition", disposed)
 	}
 }
 
