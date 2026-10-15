@@ -1,321 +1,71 @@
 package store_test
 
 import (
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
-	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func TestApplyLaunchIntentsGroupsIntoOneLaunch(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	dsn := cctest.DSN(t)
-	store := openStoreAt(t, dsn)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", BlockedBy: []string{"sandbox://CC-1"}},
+func launchTickets(t *testing.T, store *storepkg.Store, urls ...string) {
+	t.Helper()
+	tickets := make([]storepkg.Ticket, 0, len(urls))
+	for _, url := range urls {
+		tickets = append(tickets, storepkg.Ticket{URL: url, Repo: "cc-sandbox", Branch: "branch-" + url})
 	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
+	if err := store.UpsertTickets(t.Context(), tickets); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
+}
 
-	at := testNow
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent CC-1: %v", err)
+func queueLaunch(t *testing.T, store *storepkg.Store, req storepkg.LaunchRequest) {
+	t.Helper()
+	if err := store.QueueLaunchIntent(t.Context(), req); err != nil {
+		t.Fatalf("QueueLaunchIntent(%s): %v", req.Ticket, err)
 	}
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent CC-2: %v", err)
-	}
+}
 
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
+func applyLaunches(t *testing.T, store *storepkg.Store, at time.Time) {
+	t.Helper()
+	if err := store.ApplyLaunchIntents(t.Context(), at); err != nil {
 		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
+}
 
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
-		t.Errorf("memberships = %+v, want both tickets active", memberships)
-	}
-
-	events, err := store.Events(ctx)
+func readEvents(t *testing.T, store *storepkg.Store) []storepkg.Event {
+	t.Helper()
+	events, err := store.Events(t.Context())
 	if err != nil {
 		t.Fatalf("Events: %v", err)
 	}
-	if len(events) != 1 {
-		t.Fatalf("events = %d, want exactly one launch event for the one group", len(events))
-	}
-
-	hashes := launchMemberHashes(t, dsn)
-	if len(hashes) != 2 {
-		t.Fatalf("launch_members = %d, want 2", len(hashes))
-	}
-	if hashes["sandbox://CC-1"] == "" || hashes["sandbox://CC-2"] == "" {
-		t.Errorf("hashes = %+v, want non-empty prompt_hash per member", hashes)
-	}
-	if hashes["sandbox://CC-1"] == hashes["sandbox://CC-2"] {
-		t.Errorf("hashes = %+v, want distinct prompt_hash per member", hashes)
-	}
+	return events
 }
 
-func TestApplyLaunchIntentsSeparatesGroupsIntoDistinctLaunches(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := testNow
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent(CC-1): %v", err)
-	}
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-b", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent(CC-2): %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents: %v", err)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if len(events) != 2 {
-		t.Errorf("events = %d, want two separate launch events for two groups", len(events))
-	}
-}
-
-func TestApplyLaunchIntentsIsIdempotentOnceConsumed(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := testNow
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent(CC-1): %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("first ApplyLaunchIntents: %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(2*time.Second)); err != nil {
-		t.Fatalf("second ApplyLaunchIntents: %v", err)
-	}
-
-	events, err := store.Events(ctx)
-	if err != nil {
-		t.Fatalf("Events: %v", err)
-	}
-	if len(events) != 1 {
-		t.Errorf("events = %d, want 1: a consumed intent must not be applied twice", len(events))
-	}
-}
-
-func TestLaunchMembershipsExcludesUnauthorisedTickets(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-
-	memberships, err := store.LaunchMemberships(ctx)
+func readMemberships(t *testing.T, store *storepkg.Store) map[plan.TicketURL]plan.LaunchMembership {
+	t.Helper()
+	memberships, err := store.LaunchMemberships(t.Context())
 	if err != nil {
 		t.Fatalf("LaunchMemberships: %v", err)
 	}
-	if len(memberships) != 0 {
-		t.Errorf("memberships = %+v, want none with no launches", memberships)
-	}
-}
-
-func TestCancelLaunchesForCancelsEveryActiveLaunchAndCountsMembers(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
-		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3-third"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := testNow
-	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-			Ticket: ticketID, PromptHash: "hash", Group: "group-a", At: at,
-		}); err != nil {
-			t.Fatalf("QueueLaunchIntent(%s): %v", ticketID, err)
-		}
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents: %v", err)
-	}
-
-	members, err := store.CancelLaunchesFor(ctx, "sandbox://CC-2")
-	if err != nil {
-		t.Fatalf("CancelLaunchesFor: %v", err)
-	}
-	if members != 3 {
-		t.Errorf("members = %d, want 3: every ticket the launch withdraws", members)
-	}
-
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"} {
-		if !memberships[plan.TicketURL(ticketID)].Cancelled {
-			t.Errorf("memberships = %+v, want %s cancelled too: every sibling, not just the one named",
-				memberships, ticketID)
-		}
-	}
-}
-
-func TestCancelLaunchesForOnAnUnauthorisedTicketCancelsNothing(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-
-	members, err := store.CancelLaunchesFor(ctx, "sandbox://GHOST")
-	if err != nil {
-		t.Fatalf("CancelLaunchesFor: %v", err)
-	}
-	if members != 0 {
-		t.Errorf("members = %d, want 0", members)
-	}
-}
-
-func TestLaunchMembershipsExcludeARelaunchedTicketFromCancelled(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := testNow
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent(hash-1): %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents (first launch): %v", err)
-	}
-	if _, err := store.CancelLaunchesFor(ctx, ticket.URL); err != nil {
-		t.Fatalf("CancelLaunchesFor(%s): %v", ticket.URL, err)
-	}
-	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-		Ticket: ticket.URL, PromptHash: "hash-2", Group: "group-b", At: at.Add(3 * time.Second),
-	}); err != nil {
-		t.Fatalf("QueueLaunchIntent(hash-2): %v", err)
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(4*time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents (relaunch): %v", err)
-	}
-
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	if got := memberships[plan.TicketURL(ticket.URL)]; got.Cancelled || got.LaunchID == 0 {
-		t.Errorf("membership = %+v, want %s active under its new launch, not cancelled", got, ticket.URL)
-	}
-}
-
-func TestLaunchMembershipsNameTheLaunchAndItsMemberCount(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatalf("UpsertTickets: %v", err)
-	}
-
-	at := testNow
-	for _, ticketID := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
-		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-			Ticket: ticketID, PromptHash: "hash", Group: "group-a", At: at,
-		}); err != nil {
-			t.Fatalf("QueueLaunchIntent(%s): %v", ticketID, err)
-		}
-	}
-	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatalf("ApplyLaunchIntents: %v", err)
-	}
-
-	memberships, err := store.LaunchMemberships(ctx)
-	if err != nil {
-		t.Fatalf("LaunchMemberships: %v", err)
-	}
-	cc1, ok := memberships["sandbox://CC-1"]
-	if !ok {
-		t.Fatalf("memberships = %+v, want sandbox://CC-1 present", memberships)
-	}
-	if cc1.Members != 2 {
-		t.Errorf("CC-1 members = %d, want 2", cc1.Members)
-	}
-	if cc1.LaunchID == 0 {
-		t.Error("CC-1 launch id is 0, want the real launch id")
-	}
-	if got := memberships["sandbox://CC-2"].LaunchID; got != cc1.LaunchID {
-		t.Errorf("CC-2 launch id = %d, want CC-1's launch id %d: same group", got, cc1.LaunchID)
-	}
+	return memberships
 }
 
 func launchMemberHashes(t *testing.T, dsn string) map[string]string {
 	t.Helper()
-
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open db directly: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	rows, err := db.Query(`SELECT ticket_id, prompt_hash FROM launch_members`)
+	rows, err := openRawDB(t, dsn).Query(`SELECT ticket_id, prompt_hash FROM launch_members`)
 	if err != nil {
 		t.Fatalf("query launch_members: %v", err)
 	}
-	defer func() { _ = rows.Close() }()
-
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Errorf("close launch_members rows: %v", err)
+		}
+	}()
 	hashes := map[string]string{}
 	for rows.Next() {
 		var ticketID, hash string
@@ -330,40 +80,172 @@ func launchMemberHashes(t *testing.T, dsn string) map[string]string {
 	return hashes
 }
 
-func TestFeatureFirstLaunchIsTheEarliestLaunchOfTheFeature(t *testing.T) {
+func TestStore_ApplyLaunchIntents(t *testing.T) {
 	t.Parallel()
 
+	t.Run("groups one group into one launch with each member's hash", func(t *testing.T) {
+		t.Parallel()
+		dsn := cctest.DSN(t)
+		store := openStoreAt(t, dsn)
+		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-a", At: testNow})
+		applyLaunches(t, store, testNow.Add(time.Second))
+
+		memberships := readMemberships(t, store)
+		if memberships["sandbox://CC-1"].LaunchID == 0 || memberships["sandbox://CC-2"].LaunchID == 0 {
+			t.Errorf("LaunchMemberships() = %+v, want both tickets active", memberships)
+		}
+		if got := readEvents(t, store); len(got) != 1 {
+			t.Errorf("Events() = %+v, want one launch event for the one group", got)
+		}
+		want := map[string]string{"sandbox://CC-1": "hash-1", "sandbox://CC-2": "hash-2"}
+		if diff := cmp.Diff(want, launchMemberHashes(t, dsn)); diff != "" {
+			t.Errorf("launch_members prompt hashes mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("separates groups into distinct launches", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-2", PromptHash: "hash-2", Group: "group-b", At: testNow})
+		applyLaunches(t, store, testNow.Add(time.Second))
+
+		if got := readEvents(t, store); len(got) != 2 {
+			t.Errorf("Events() = %+v, want two launch events for two groups", got)
+		}
+	})
+
+	t.Run("is idempotent once consumed", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		launchTickets(t, store, "sandbox://CC-1")
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: "sandbox://CC-1", PromptHash: "hash-1", Group: "group-a", At: testNow})
+		applyLaunches(t, store, testNow.Add(time.Second))
+		applyLaunches(t, store, testNow.Add(2*time.Second))
+
+		if got := readEvents(t, store); len(got) != 1 {
+			t.Errorf("Events() after two applies = %+v, want one launch event", got)
+		}
+	})
+}
+
+func TestStore_LaunchMemberships(t *testing.T) {
+	t.Parallel()
+
+	t.Run("none without launches", func(t *testing.T) {
+		t.Parallel()
+		if got := readMemberships(t, openStore(t)); len(got) != 0 {
+			t.Errorf("LaunchMemberships() = %+v, want none", got)
+		}
+	})
+
+	t.Run("names the launch and its member count", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		launchTickets(t, store, "sandbox://CC-1", "sandbox://CC-2")
+		for _, ticket := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+			queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash", Group: "group-a", At: testNow})
+		}
+		applyLaunches(t, store, testNow.Add(time.Second))
+
+		memberships := readMemberships(t, store)
+		cc1 := memberships["sandbox://CC-1"]
+		if cc1.LaunchID == 0 || cc1.Members != 2 {
+			t.Errorf("LaunchMemberships()[CC-1] = %+v, want a launch id with 2 members", cc1)
+		}
+		if got := memberships["sandbox://CC-2"].LaunchID; got != cc1.LaunchID {
+			t.Errorf("LaunchMemberships()[CC-2].LaunchID = %d, want CC-1's %d", got, cc1.LaunchID)
+		}
+	})
+
+	t.Run("a relaunched ticket is not cancelled", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		const ticket = "sandbox://CC-1"
+		launchTickets(t, store, ticket)
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash-1", Group: "group-a", At: testNow})
+		applyLaunches(t, store, testNow.Add(time.Second))
+		if _, err := store.CancelLaunchesFor(t.Context(), ticket); err != nil {
+			t.Fatalf("CancelLaunchesFor(%s): %v", ticket, err)
+		}
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash-2", Group: "group-b", At: testNow.Add(3 * time.Second)})
+		applyLaunches(t, store, testNow.Add(4*time.Second))
+
+		if got := readMemberships(t, store)[ticket]; got.Cancelled || got.LaunchID == 0 {
+			t.Errorf("LaunchMemberships()[CC-1] = %+v, want active under its new launch", got)
+		}
+	})
+}
+
+func TestStore_CancelLaunchesFor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("cancels every sibling in the launch and counts them", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		urls := []string{"sandbox://CC-1", "sandbox://CC-2", "sandbox://CC-3"}
+		launchTickets(t, store, urls...)
+		for _, ticket := range urls {
+			queueLaunch(t, store, storepkg.LaunchRequest{Ticket: ticket, PromptHash: "hash", Group: "group-a", At: testNow})
+		}
+		applyLaunches(t, store, testNow.Add(time.Second))
+
+		members, err := store.CancelLaunchesFor(t.Context(), "sandbox://CC-2")
+		if err != nil || members != 3 {
+			t.Errorf("CancelLaunchesFor(CC-2) = %d, %v, want 3, nil", members, err)
+		}
+		memberships := readMemberships(t, store)
+		for _, ticket := range urls {
+			if !memberships[plan.TicketURL(ticket)].Cancelled {
+				t.Errorf("LaunchMemberships()[%s].Cancelled = false, want true", ticket)
+			}
+		}
+	})
+
+	t.Run("an unauthorised ticket cancels nothing", func(t *testing.T) {
+		t.Parallel()
+		members, err := openStore(t).CancelLaunchesFor(t.Context(), "sandbox://GHOST")
+		if err != nil || members != 0 {
+			t.Errorf("CancelLaunchesFor(GHOST) = %d, %v, want 0, nil", members, err)
+		}
+	})
+}
+
+func TestStore_FeatureFirstLaunch(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
-	store := openStoreAt(t, cctest.DSN(t))
-	tickets := []storepkg.Ticket{
+	store := openStore(t)
+	if err := store.UpsertTickets(ctx, []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1", Feature: "f"},
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2", Feature: "f"},
 		{URL: "sandbox://CC-3", Repo: "cc-sandbox", Branch: "cc-3", Feature: "g"},
-	}
-	if err := store.UpsertTickets(ctx, tickets); err != nil {
+	}); err != nil {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
-	first := testNow
-	later := first.Add(time.Hour)
+	first, later := testNow, testNow.Add(time.Hour)
 	for _, launch := range []struct {
 		ticket string
 		at     time.Time
 	}{{"sandbox://CC-2", later}, {"sandbox://CC-1", first}} {
-		if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
-			Ticket: launch.ticket, PromptHash: "hash", Group: launch.ticket, At: launch.at,
-		}); err != nil {
-			t.Fatalf("QueueLaunchIntent %s: %v", launch.ticket, err)
-		}
-		if err := store.ApplyLaunchIntents(ctx, launch.at); err != nil {
-			t.Fatalf("ApplyLaunchIntents: %v", err)
-		}
+		queueLaunch(t, store, storepkg.LaunchRequest{Ticket: launch.ticket, PromptHash: "hash", Group: launch.ticket, At: launch.at})
+		applyLaunches(t, store, launch.at)
 	}
 
-	got, err := store.FeatureFirstLaunch(ctx, "f")
-	if err != nil || !got.Equal(first) {
-		t.Errorf("FeatureFirstLaunch(f) = %v, %v; want %v, nil", got, err, first)
-	}
-	if _, err := store.FeatureFirstLaunch(ctx, "g"); !errors.Is(err, storepkg.ErrNotFound) {
-		t.Errorf("FeatureFirstLaunch(g) = %v, want ErrNotFound", err)
-	}
+	t.Run("the earliest launch of the feature", func(t *testing.T) {
+		t.Parallel()
+		got, err := store.FeatureFirstLaunch(ctx, "f")
+		if err != nil || !got.Equal(first) {
+			t.Errorf("FeatureFirstLaunch(f) = %v, %v, want %v, nil", got, err, first)
+		}
+	})
+
+	t.Run("a feature never launched", func(t *testing.T) {
+		t.Parallel()
+		if _, err := store.FeatureFirstLaunch(ctx, "g"); !errors.Is(err, storepkg.ErrNotFound) {
+			t.Errorf("FeatureFirstLaunch(g) error = %v, want ErrNotFound", err)
+		}
+	})
 }

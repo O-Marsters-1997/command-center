@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func TestIsUniqueViolationMatchesOnlyTheNamedConstraint(t *testing.T) {
+func TestIsUniqueViolation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -27,7 +27,7 @@ func TestIsUniqueViolationMatchesOnlyTheNamedConstraint(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := isUniqueViolation(tt.err, "projects_name_key"); got != tt.want {
-				t.Errorf("isUniqueViolation(%v) = %v, want %v", tt.err, got, tt.want)
+				t.Errorf("isUniqueViolation(%v, projects_name_key) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
 	}
