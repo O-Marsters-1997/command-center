@@ -25,7 +25,6 @@ const (
 type RunKind string
 
 const (
-	RunKindUnknown  RunKind = ""
 	RunKindAgent    RunKind = "agent"
 	RunKindFollowUp RunKind = "follow_up"
 )
