@@ -37,7 +37,7 @@ var testEnv = config.Env{Home: "/home/test", UserConfigDir: "/home/test/.config"
 
 type manualClock struct{ at time.Time }
 
-func (c manualClock) Now() time.Time                    { return c.at }
+func (c manualClock) Now() time.Time                     { return c.at }
 func (manualClock) After(time.Duration) <-chan time.Time { return nil }
 
 func newApp(t *testing.T, configPath string, env config.Env, opts ...app.Option) *app.App {

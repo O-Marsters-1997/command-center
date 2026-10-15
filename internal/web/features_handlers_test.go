@@ -1,8 +1,6 @@
 package web_test
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,26 +11,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
-
-type fakeTrackerSource struct{ features []tracker.Feature }
-
-func (f fakeTrackerSource) Features(context.Context) ([]tracker.Feature, error) {
-	return f.features, nil
-}
-
-func (fakeTrackerSource) Tickets(context.Context, string) ([]tracker.Ticket, error) {
-	return nil, nil
-}
-
-func resolveByRemote(byRemote map[string]tracker.Source) tracker.Resolver {
-	return func(_ tracker.Kind, remote string) (tracker.Source, error) {
-		src, ok := byRemote[remote]
-		if !ok {
-			return nil, fmt.Errorf("resolveByRemote: no source for %q", remote)
-		}
-		return src, nil
-	}
-}
 
 func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	t.Parallel()

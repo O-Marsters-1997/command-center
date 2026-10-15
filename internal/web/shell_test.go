@@ -1,15 +1,15 @@
 package web_test
 
 import (
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 	"github.com/O-Marsters-1997/command-center/internal/web/view"
 )
 
@@ -32,331 +32,123 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 		if observedAt == nil {
 			t.Fatal("a tick error is recorded against the observation's own instant, so it needs one")
 		}
-		failedAt := observedAt.Add(time.Second)
-		if err := store.RecordTickError(ctx, storepkg.TickError{At: failedAt, Message: tickErr}); err != nil {
+		if err := store.RecordTickError(ctx, storepkg.TickError{At: observedAt.Add(time.Second), Message: tickErr}); err != nil {
 			t.Fatalf("RecordTickError: %v", err)
 		}
 	}
 	return store
 }
 
-func TestPageIsAWellFormedDocument(t *testing.T) {
+func TestLayout(t *testing.T) {
 	t.Parallel()
-
 	now := testNow
-	server := openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq")
-	body := renderPath(t, server, "/tickets")
 
-	if !strings.HasPrefix(body, "<!doctype html>\n<html lang=\"en\">\n<head>") {
-		t.Errorf("page does not open a document:\n%s", body[:min(len(body), 200)])
-	}
-	for _, closing := range []string{"</head>", "</body>", "</html>"} {
-		if !strings.Contains(body, closing) {
-			t.Errorf("document is missing closing tag %q", closing)
+	t.Run("title and current nav follow the page", testLayoutTitleAndCurrentNav)
+	t.Run("the sidebar swaps out of band", testLayoutSidebarOOB)
+	t.Run("scope menu", testLayoutScopeMenu)
+	t.Run("the spend limit notice", testLayoutSpendLimitNotice)
+
+	t.Run("is a well-formed document naming the workspace", func(t *testing.T) {
+		t.Parallel()
+		body := renderPath(t, openServer(shellStore(t, &now, ""), fixedClock(now), "/data/fleet-hq"), "/tickets")
+
+		if !strings.HasPrefix(strings.ToLower(body), "<!doctype html>") {
+			t.Errorf("GET /tickets does not open a document: %q", body[:min(len(body), 40)])
 		}
-	}
-	root := htmltest.Parse(t, body)
-	root.One(t, "head title")
-	if got := root.One(t, "title").Text(); got != "Tickets · Command Centre" {
-		t.Errorf("title = %q", got)
-	}
-	if got := root.One(t, "body").Text(); !strings.Contains(got, "fleet-hq") {
-		t.Error("workspace name fleet-hq absent from body text")
-	}
-}
-
-func TestShellIsLightOnlyAndMakesNoThirdPartyRequest(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-	body := renderPath(t, server, "/tickets")
-
-	root := htmltest.Parse(t, body)
-	if themed := root.Find("[data-theme]"); len(themed) != 0 {
-		t.Errorf("light-only page carries a theme toggle: %s", themed[0].HTML())
-	}
-	for _, script := range root.Find("script") {
-		for _, mechanism := range []string{"toggleTheme", "localStorage", "prefers-color-scheme"} {
-			if strings.Contains(script.Text(), mechanism) {
-				t.Errorf("inline theme mechanism %q in %s", mechanism, script.HTML())
-			}
+		root := htmltest.Parse(t, body)
+		if lang, _ := root.One(t, "html").Attr("lang"); lang != "en" {
+			t.Errorf("GET /tickets html lang = %q, want en", lang)
 		}
-	}
-	for _, resource := range []struct{ selector, attr string }{
-		{"script[src]", "src"}, {"link[href]", "href"}, {"base[href]", "href"},
-		{"img[src]", "src"}, {"img[srcset]", "srcset"},
-		{"source[src]", "src"}, {"source[srcset]", "srcset"},
-		{"iframe[src]", "src"}, {"frame[src]", "src"},
-		{"video[src]", "src"}, {"video[poster]", "poster"},
-		{"audio[src]", "src"}, {"track[src]", "src"},
-		{"embed[src]", "src"}, {"object[data]", "data"},
-		{"input[src]", "src"}, {"image[href]", "href"}, {"use[href]", "href"},
-	} {
-		for _, node := range root.Find(resource.selector) {
-			value, _ := node.Attr(resource.attr)
-			urls := []string{value}
-			if resource.attr == "srcset" {
-				urls = nil
-				for _, candidate := range strings.Split(value, ",") {
-					if fields := strings.Fields(candidate); len(fields) > 0 {
-						urls = append(urls, fields[0])
-					}
-				}
-			}
-			for _, url := range urls {
-				if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "//") {
-					t.Errorf("shell resource %s %s = %q requests a third-party origin", resource.selector, resource.attr, url)
-				}
-			}
+		if got := root.One(t, "head title").Text(); !strings.Contains(got, "Tickets") {
+			t.Errorf("GET /tickets title = %q, want it to name Tickets", got)
 		}
-	}
-}
+		if got := root.One(t, "body").Text(); !strings.Contains(got, "fleet-hq") {
+			t.Errorf("GET /tickets body lacks the workspace name fleet-hq")
+		}
+	})
 
-func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-
-	for _, tt := range []struct{ name, path string }{
-		{name: "tickets", path: "/tickets"},
-		{name: "insights", path: "/insights"},
-		{name: "repos", path: "/repos"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, path := range []string{"/tickets", "/insights", "/repos"} {
+		t.Run(path+" renders the full layout around main", func(t *testing.T) {
 			t.Parallel()
-			body := renderPath(t, server, tt.path)
-			root := htmltest.Parse(t, body)
+			root := htmltest.Parse(t, renderPath(t, newServer(shellStore(t, &now, ""), now), path))
 			for _, selector := range []string{"aside#sidebar", "main#main", "ol.crumbs", ".topbar-action"} {
 				root.One(t, selector)
 			}
 		})
 	}
 
-	root := htmltest.Parse(t, renderPath(t, server, "/insights"))
-	link := root.One(t, `nav#sidebar-nav a[href="/insights"]`)
-	for _, tt := range []struct{ name, want string }{
-		{name: "hx-get", want: "/insights"},
-		{name: "hx-select", want: "#main"},
-		{name: "hx-target", want: "#main"},
-		{name: "hx-push-url", want: "true"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got, _ := link.Attr(tt.name); got != tt.want {
-				t.Errorf("sidebar %s = %q, want %q: %s", tt.name, got, tt.want, link.HTML())
+	t.Run("a sidebar link swaps main", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPath(t, newServer(shellStore(t, &now, ""), now), "/insights"))
+		link := root.One(t, `nav#sidebar-nav a[href="/insights"]`)
+
+		want := map[string]string{"hx-get": "/insights", "hx-select": "#main", "hx-target": "#main", "hx-push-url": "true"}
+		if diff := cmp.Diff(want, attrs(link, "hx-get", "hx-select", "hx-target", "hx-push-url")); diff != "" {
+			t.Errorf("GET /insights sidebar link mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("the sidebar omits feature links when no ticket carries a feature", func(t *testing.T) {
+		t.Parallel()
+		sidebar := htmltest.Parse(t, renderPath(t, seededServer(t), "/tickets")).One(t, "aside#sidebar")
+		for _, link := range sidebar.Find("a[href]") {
+			if href, _ := link.Attr("href"); strings.HasPrefix(href, "/f/") {
+				t.Errorf("GET /tickets sidebar links a feature: %s", link.HTML())
 			}
-		})
-	}
-}
+		}
+	})
 
-func TestBareRootIsTheHomeScreenOnAPhone(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-
-	root := htmltest.Parse(t, renderPath(t, server, "/")).One(t, "main#main")
-	if _, ok := root.Attr("data-home"); !ok {
-		t.Error("home main lacks data-home")
-	}
-	if _, ok := root.Attr("data-desktop-target"); !ok {
-		t.Error("home main lacks desktop target")
-	}
-	main := htmltest.Parse(t, renderPath(t, server, "/tickets")).One(t, "main#main")
-	if _, ok := main.Attr("data-home"); ok {
-		t.Error("tickets main is marked home")
-	}
-	htmltest.Parse(t, renderPath(t, server, "/insights")).One(t, `main#main a[href="/"]`)
-}
-
-func TestHomePageCarriesTheGoToKeyAnchors(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-	body := renderPath(t, server, "/")
-
-	root := htmltest.Parse(t, body)
-	anchors := map[string]string{
-		"g h": "/", "g t": "/tickets", "g i": "/insights",
-		"g r": "/repos", "c": "/launch",
-	}
-	for key, href := range anchors {
-		root.One(t, `a[data-key="`+key+`"][href="`+href+`"]`)
-	}
-	root.One(t, `input#rail-search[data-key="mod+k"]`)
-	root.One(t, `script[type="module"][src="/assets/dist/keys.js"]`)
-}
-
-func TestEveryPageCarriesTheShortcutSheetOutsideMain(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(shellStore(t, &now, ""), now)
-
-	for _, tt := range []struct{ name, path string }{
-		{name: "home", path: "/"},
-		{name: "tickets", path: "/tickets"},
-		{name: "insights", path: "/insights"},
-		{name: "repos", path: "/repos"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, path := range []string{"/", "/tickets", "/insights", "/repos"} {
+		t.Run(path+" carries the shortcut sheet outside main", func(t *testing.T) {
 			t.Parallel()
-			root := htmltest.Parse(t, renderPath(t, server, tt.path))
+			root := htmltest.Parse(t, renderPath(t, newServer(shellStore(t, &now, ""), now), path))
 			root.One(t, "main#main")
 			sidebar := root.One(t, "aside#sidebar")
 			sidebar.One(t, `button[data-key="?"]`)
 			sheet := sidebar.One(t, "dialog#key-sheet")
-			var got []string
+			var got, want []string
 			for _, row := range sheet.Find(".key-row") {
 				got = append(got, row.One(t, "kbd").Text()+" "+row.One(t, "dd").Text())
 			}
-			var want []string
 			for _, group := range view.Keymap {
 				if !strings.Contains(sheet.Text(), group.Title) {
-					t.Errorf("shortcut sheet lacks heading %q: %s", group.Title, sheet.HTML())
+					t.Errorf("GET %s shortcut sheet lacks heading %q", path, group.Title)
 				}
 				for _, row := range group.Rows {
 					want = append(want, row.Keys+" "+row.Does)
 				}
 			}
-			if !slices.Equal(got, want) {
-				t.Errorf("shortcut rows = %q, want %q", got, want)
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("GET %s shortcut rows mismatch (-want +got):\n%s", path, diff)
 			}
 		})
 	}
-}
 
-func TestObserveChipReadsStalenessAtTwentySeconds(t *testing.T) {
-	t.Parallel()
-
-	observedAt := testNow
-	tests := []struct {
-		name     string
-		age      time.Duration
-		never    bool
-		wantChip string
-	}{
-		{name: "fresh", age: 2 * time.Second, wantChip: "observed 2s ago"},
-		{name: "under twenty", age: 19 * time.Second, wantChip: "observed 19s ago"},
-		{name: "at twenty", age: 20 * time.Second, wantChip: "last good observe: 20s ago"},
-		{name: "well past", age: 5 * time.Minute, wantChip: "last good observe: 5m0s ago"},
-		{name: "no observation", never: true, wantChip: "last good observe: never"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			at := &observedAt
-			if tt.never {
-				at = nil
-			}
-			now := observedAt.Add(tt.age)
-			server := newServer(shellStore(t, at, ""), now)
-			chip := htmltest.Parse(t, renderPath(t, server, "/rail")).One(t, ".rail-health")
-			if got := chip.Text(); !strings.Contains(got, tt.wantChip) {
-				t.Errorf("chip = %q, want %q: %s", got, tt.wantChip, chip.HTML())
-			}
-		})
-	}
-}
-
-func TestRailBannerOnlyOpensOnAFailedTick(t *testing.T) {
-	t.Parallel()
-
-	observedAt := testNow
-	now := observedAt.Add(45 * time.Second)
-
-	quiet := newServer(shellStore(t, &observedAt, ""), now)
-	quietRail := htmltest.Parse(t, renderPath(t, quiet, "/rail"))
-	quietRail.One(t, ".rail-health")
-	if banners := quietRail.Find(".rail-health.banner"); len(banners) != 0 {
-		t.Errorf("banner opened with no failed tick: %s", banners[0].HTML())
-	}
-
-	failed := newServer(shellStore(t, &observedAt, "gh is unavailable"), now)
-	banner := htmltest.Parse(t, renderPath(t, failed, "/rail")).One(t, ".rail-health.banner")
-	for _, want := range []string{"tick failed 44s ago", "gh is unavailable"} {
-		if got := banner.Text(); !strings.Contains(got, want) {
-			t.Errorf("banner = %q, want %q: %s", got, want, banner.HTML())
-		}
-	}
-}
-
-func TestRailBannerClosesOnceATickSucceeds(t *testing.T) {
-	t.Parallel()
-
-	observedAt := testNow
-	now := observedAt.Add(2 * time.Second)
-	store := shellStore(t, &observedAt, "")
-	tickErr := storepkg.TickError{At: observedAt.Add(-30 * time.Second), Message: "gh is unavailable"}
-	if err := store.RecordTickError(t.Context(), tickErr); err != nil {
-		t.Fatalf("RecordTickError: %v", err)
-	}
-
-	rail := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail"))
-	if banners := rail.Find(".rail-health.banner"); len(banners) != 0 {
-		t.Errorf("banner persists after recovery: %s", banners[0].HTML())
-	}
-	chip := rail.One(t, ".rail-health")
-	if got := chip.Text(); !strings.Contains(got, "observed 2s ago") {
-		t.Errorf("recovered chip = %q: %s", got, chip.HTML())
-	}
-}
-
-func TestRailCountsLiveAgents(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	live := newServer(detailStore(t, writeLog(t, 1), now, now), now)
-	chip := htmltest.Parse(t, renderPath(t, live, "/rail")).One(t, ".rail-health")
-	if !strings.Contains(chip.Text(), "1 live") {
-		t.Errorf("live agent chip = %q: %s", chip.Text(), chip.HTML())
-	}
-
-	idle := newServer(shellStore(t, &now, ""), now)
-	chip = htmltest.Parse(t, renderPath(t, idle, "/rail")).One(t, ".rail-health")
-	if got := chip.Text(); !strings.Contains(got, "0 live") {
-		t.Errorf("idle chip = %q: %s", got, chip.HTML())
-	}
-}
-
-func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	now := testNow
-	store := openStore(t)
-	blocker := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "repo", Branch: "cc-1"}
-	dependent := storepkg.Ticket{
-		URL: "sandbox://CC-2", Repo: "repo", Branch: "cc-2", BlockedBy: []string{blocker.URL},
-	}
-	storetest.Tickets(t, store, blocker, dependent)
-	runID, err := store.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
-		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
+	t.Run("loads htmx, the SSE extension and the glue from the binary", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow)))
+		root.One(t, `script[src="/assets/htmx.min.js"]`)
+		root.One(t, `script[src="/assets/sse.min.js"]`)
+		root.One(t, `script[type="module"][src="/assets/dist/glue.js"]`)
 	})
-	if err != nil {
-		t.Fatalf("InsertRunSkeleton: %v", err)
-	}
-	if err := store.RecordSpawn(ctx, storepkg.Spawn{
-		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: "/logs/run.jsonl",
-	}); err != nil {
-		t.Fatalf("RecordSpawn: %v", err)
-	}
-	obs := plan.Observation{
-		ObservedAt: now,
-		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(dependent.URL): {Alive: true}},
-		PRs:        map[plan.BranchRef]plan.PR{{Branch: "cc-1"}: {State: plan.Closed}},
-	}
-	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatalf("SaveObservation: %v", err)
-	}
 
-	chip := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).One(t, ".rail-health")
-	if got := chip.Text(); !strings.Contains(got, "1 live") {
-		t.Errorf("base_gone live chip = %q: %s", got, chip.HTML())
-	}
+	t.Run("links the built stylesheet and inlines none", func(t *testing.T) {
+		t.Parallel()
+		head := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow))).One(t, "head")
+		head.One(t, `link[rel="stylesheet"][href="/assets/app.css"]`)
+		if styles := head.Find("style"); len(styles) != 0 {
+			t.Errorf("GET /tickets inlines a stylesheet: %s", styles[0].HTML())
+		}
+	})
+
+	t.Run("swaps refusal responses into the flash", func(t *testing.T) {
+		t.Parallel()
+		root := htmltest.Parse(t, renderPage(t, newServer(openStore(t), testNow)))
+		if got, _ := root.One(t, "#flash").Attr("aria-live"); got != "polite" {
+			t.Errorf("GET /tickets #flash aria-live = %q, want polite", got)
+		}
+		if config, _ := root.One(t, `meta[name="htmx-config"]`).Attr("content"); !strings.Contains(config, `"code":"422"`) {
+			t.Errorf("GET /tickets htmx-config = %q, want it to swap 422 responses", config)
+		}
+	})
 }

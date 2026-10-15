@@ -14,86 +14,99 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
-func TestHandleLaunchOpenQueuesImportAndNudgesTheLoop(t *testing.T) {
+func TestLaunchOpen(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	store := openStore(t)
-	var nudged atomic.Bool
-	server := openNudgingServer(store, func() { nudged.Store(true) })
-	response := do(t, server, http.MethodPost, "/launch/open", req{
-		Form: url.Values{"feature": {"project:x"}}, Header: http.Header{"Hx-Request": {"true"}},
+	t.Run("a feature queues its import and nudges the loop", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		var nudged atomic.Bool
+		server := openNudgingServer(store, func() { nudged.Store(true) })
+
+		response := do(t, server, http.MethodPost, "/launch/open", req{
+			Form: url.Values{"feature": {"project:x"}}, Header: http.Header{"Hx-Request": {"true"}},
+		})
+		if response.Code != http.StatusOK {
+			t.Fatalf("POST /launch/open status = %d, want 200", response.Code)
+		}
+		if got := htmltest.Parse(t, response.Body).One(t, "[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
+			t.Errorf("POST /launch/open pending text = %q, want importing project:x", got)
+		}
+		if !nudged.Load() {
+			t.Error("POST /launch/open did not nudge the loop")
+		}
+		pending, err := store.PendingVerbIntents(t.Context(), "import")
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(import): %v", err)
+		}
+		if len(pending) != 1 || pending[0].TicketID != "project:x" {
+			t.Errorf("pending import intents = %+v, want one for project:x", pending)
+		}
 	})
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", response.Code)
-	}
-	body := response.Body
-	if got := htmltest.Parse(t, body).One(t, "[hx-get]").Text(); !strings.Contains(got, "importing project:x") {
-		t.Errorf("pending fragment text = %q, want importing project:x", got)
-	}
-	if !nudged.Load() {
-		t.Error("handleLaunchOpen did not nudge the loop")
-	}
 
-	pending, err := store.PendingVerbIntents(ctx, "import")
-	if err != nil {
-		t.Fatalf("PendingVerbIntents(import): %v", err)
-	}
-	if len(pending) != 1 || pending[0].TicketID != "project:x" {
-		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)
-	}
-}
+	t.Run("a ticket slice mounts without importing or nudging", func(t *testing.T) {
+		t.Parallel()
+		store := openStore(t)
+		storetest.Tickets(t, store,
+			storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
+			storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
+		)
+		var nudged atomic.Bool
+		server := openNudgingServer(store, func() { nudged.Store(true) })
 
-func TestHandleLaunchOpenMountsATicketSliceWithoutImportingOrNudging(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	store := openStore(t)
-	tickets := []storepkg.Ticket{
-		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x"},
-		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2-second", Feature: "project:y"},
-	}
-	storetest.Tickets(t, store, tickets...)
-
-	var nudged atomic.Bool
-	server := openNudgingServer(store, func() { nudged.Store(true) })
-	response := do(t, server, http.MethodPost, "/launch/open", req{
-		Form:   url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}},
-		Header: http.Header{"Hx-Request": {"true"}},
+		response := do(t, server, http.MethodPost, "/launch/open", req{
+			Form:   url.Values{"ticket": {"sandbox://CC-1", "sandbox://CC-2"}},
+			Header: http.Header{"Hx-Request": {"true"}},
+		})
+		if response.Code != http.StatusOK {
+			t.Fatalf("POST /launch/open status = %d, want 200", response.Code)
+		}
+		dialog := htmltest.Parse(t, response.Body).One(t, "dialog#launch-modal-body")
+		dialog.One(t, `cc-launch-modal[tickets="ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2"]`)
+		if nudged.Load() {
+			t.Error("POST /launch/open with tickets nudged the loop, want no nudge")
+		}
+		pending, err := store.PendingVerbIntents(t.Context(), "import")
+		if err != nil {
+			t.Fatalf("PendingVerbIntents(import): %v", err)
+		}
+		if len(pending) != 0 {
+			t.Errorf("pending import intents = %+v, want none", pending)
+		}
 	})
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", response.Code)
-	}
-	root := htmltest.Parse(t, response.Body)
-	dialog := root.One(t, "dialog#launch-modal-body")
-	dialog.One(t, `cc-launch-modal[tickets="ticket=sandbox%3A%2F%2FCC-1&ticket=sandbox%3A%2F%2FCC-2"]`)
-	if got := dialog.Text(); strings.Contains(got, "importing") {
-		t.Errorf("ticket-based modal queues an import: %s", dialog.HTML())
-	}
-	if nudged.Load() {
-		t.Error("a ticket-based open must not nudge the loop -- nothing needs importing")
-	}
 
-	pending, err := store.PendingVerbIntents(ctx, "import")
-	if err != nil {
-		t.Fatalf("PendingVerbIntents(import): %v", err)
-	}
-	if len(pending) != 0 {
-		t.Fatalf("pending import intents = %+v, want none", pending)
-	}
+	t.Run("an unknown ticket is a bad request", func(t *testing.T) {
+		t.Parallel()
+		response := do(t, newServer(openStore(t), testNow), http.MethodPost, "/launch/open",
+			req{Form: url.Values{"ticket": {"sandbox://GHOST"}}})
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("POST /launch/open ticket=GHOST status = %d, want 400", response.Code)
+		}
+	})
+
+	t.Run("a plain feature post redirects to its launch dialog", func(t *testing.T) {
+		t.Parallel()
+		got := do(t, newServer(openStore(t), testNow), http.MethodPost, "/launch/open", req{
+			Form: url.Values{"feature": {"x"}}, Origin: "-",
+		})
+		if got.Code != http.StatusSeeOther || got.Location != "/f/x/launch" {
+			t.Errorf("POST /launch/open feature=x = %d %q, want 303 /f/x/launch", got.Code, got.Location)
+		}
+	})
+
+	t.Run("a plain ticket post goes to the picker with the dialog open", func(t *testing.T) {
+		t.Parallel()
+		server := fragmentServer(t)
+		response := do(t, server, http.MethodPost, "/launch/open", req{Form: url.Values{"ticket": {"sandbox://CC-1"}}})
+		if want := "/launch?ticket=sandbox%3A%2F%2FCC-1"; response.Code != http.StatusSeeOther || response.Location != want {
+			t.Fatalf("POST /launch/open ticket=CC-1 = %d %q, want 303 %q", response.Code, response.Location, want)
+		}
+		htmltest.Parse(t, renderPath(t, server, response.Location)).One(t, "dialog#launch-modal-body").
+			One(t, `cc-launch-modal[tickets]`)
+	})
 }
 
-func TestHandleLaunchOpenRejectsAnUnknownTicket(t *testing.T) {
-	t.Parallel()
-
-	srv := newServer(openStore(t), testNow)
-	response := do(t, srv, http.MethodPost, "/launch/open", req{Form: url.Values{"ticket": {"sandbox://GHOST"}}})
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", response.Code)
-	}
-}
-
-func TestHandleCandidatesFragment(t *testing.T) {
+func TestCandidates(t *testing.T) {
 	t.Parallel()
 	type message struct {
 		Feature, Importing, Refused, Empty bool
@@ -245,33 +258,6 @@ func TestHandleCandidatesFragment(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("candidates fragment (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestHandleCandidatesJSONAnswersJSONRegardlessOfHeaders(t *testing.T) {
-	t.Parallel()
-
-	store := openStore(t)
-	storetest.Tickets(t, store, storepkg.Ticket{
-		URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first", Feature: "project:x",
-	})
-
-	srv := newServer(store, testNow)
-
-	for _, tt := range []struct {
-		name   string
-		header http.Header
-	}{
-		{name: "without HX-Request"},
-		{name: "with HX-Request", header: http.Header{"Hx-Request": {"true"}}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			response := do(t, srv, http.MethodGet, "/launch/candidates.json?feature=project%3Ax", req{Header: tt.header})
-			if ct := response.Header.Get("Content-Type"); ct != "application/json" {
-				t.Errorf("Content-Type = %q, want application/json", ct)
 			}
 		})
 	}

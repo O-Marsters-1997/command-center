@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"net/http"
 	"testing"
 	"time"
 
@@ -11,56 +10,45 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func TestRunningRowGlyphPulses(t *testing.T) {
+func testBoardGlyphs(t *testing.T) {
 	t.Parallel()
 
-	ticket := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
-	startedAt := testNow
-	now := startedAt.Add(90 * time.Second)
-	st := runningRowStore(t, ticket, startedAt, now)
+	t.Run("a running row's glyph pulses", func(t *testing.T) {
+		t.Parallel()
+		ticket := store.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
+		now := testNow.Add(90 * time.Second)
+		page := renderPage(t, newServer(runningRowStore(t, ticket, testNow, now), now))
 
-	server := newServer(st, now)
-	rec := do(t, server, http.MethodGet, "/tickets", req{})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	row := htmltest.Parse(t, rec.Body).One(t, `tr.group`)
-	if glyphs := row.Find(`.glyph-running.glyph-pulse`); len(glyphs) != 1 {
-		t.Errorf("running row has %d pulsing glyphs, want one: %s", len(glyphs), row.HTML())
-	}
-}
-
-func TestEndedRunsGlyphDoesNotPulse(t *testing.T) {
-	t.Parallel()
-
-	now := testNow
-	server := newServer(seededStore(t, now), now)
-
-	rec := do(t, server, http.MethodGet, "/tickets", req{})
-	board := htmltest.Parse(t, rec.Body).One(t, `table#board`)
-	for _, word := range []string{"ready", "blocked"} {
-		board.One(t, `.glyph-`+word)
-	}
-	if glyphs := board.Find(`.glyph-pulse`); len(glyphs) != 0 {
-		t.Errorf("ended board has %d pulsing glyphs: %s", len(glyphs), glyphs[0].HTML())
-	}
-}
-
-func TestBoardRendersEveryGlyphWordAsAClass(t *testing.T) {
-	t.Parallel()
-
-	body, err := web.RenderStatesBoard(plan.AllStates())
-	if err != nil {
-		t.Fatalf("RenderStatesBoard: %v", err)
-	}
-
-	board := htmltest.Parse(t, body).One(t, "table#board")
-	for _, word := range []string{
-		"failed", "attention", "running", "pending", "checking", "ready", "blocked", "done",
-	} {
-		if got := board.Find(`.glyph-` + word); len(got) == 0 {
-			t.Errorf("board has no glyph for %q", word)
+		row := htmltest.Parse(t, page).One(t, `tr.group`)
+		if glyphs := row.Find(`.glyph-running.glyph-pulse`); len(glyphs) != 1 {
+			t.Errorf("GET /tickets running row has %d pulsing glyphs, want 1", len(glyphs))
 		}
-	}
+	})
+
+	t.Run("an ended board's glyphs do not pulse", func(t *testing.T) {
+		t.Parallel()
+		board := htmltest.Parse(t, renderPage(t, newServer(seededStore(t, testNow), testNow))).One(t, `table#board`)
+
+		for _, word := range []string{"ready", "blocked"} {
+			board.One(t, `.glyph-`+word)
+		}
+		if glyphs := board.Find(`.glyph-pulse`); len(glyphs) != 0 {
+			t.Errorf("GET /tickets ended board has %d pulsing glyphs, want 0", len(glyphs))
+		}
+	})
+
+	t.Run("every glyph word renders as a class", func(t *testing.T) {
+		t.Parallel()
+		body, err := web.RenderStatesBoard(plan.AllStates())
+		if err != nil {
+			t.Fatalf("RenderStatesBoard: %v", err)
+		}
+
+		board := htmltest.Parse(t, body).One(t, "table#board")
+		for _, word := range []string{"failed", "attention", "running", "pending", "checking", "ready", "blocked", "done"} {
+			if got := board.Find(`.glyph-` + word); len(got) == 0 {
+				t.Errorf("RenderStatesBoard(all states) has no glyph-%s", word)
+			}
+		}
+	})
 }

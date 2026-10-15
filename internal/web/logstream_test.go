@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
-	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
 const logTicket = "https://github.com/o/r/issues/77"
@@ -68,14 +68,71 @@ func jsonToolLine(text string) string {
 		`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":%q}}]}}`, text)
 }
 
-func renderedToolLine(t *testing.T, text string) string {
+type sseEvent struct {
+	Name string
+	ID   string
+	Data []string
+}
+
+func (e sseEvent) HTML() string { return strings.Join(e.Data, "\n") }
+
+func parseSSE(body string) []sseEvent {
+	var events []sseEvent
+	for _, frame := range strings.Split(body, "\n\n") {
+		if frame == "" {
+			continue
+		}
+		var e sseEvent
+		for _, line := range strings.Split(frame, "\n") {
+			field, value, _ := strings.Cut(line, ":")
+			value = strings.TrimPrefix(value, " ")
+			switch field {
+			case "event":
+				e.Name = value
+			case "id":
+				e.ID = value
+			case "data":
+				e.Data = append(e.Data, value)
+			}
+		}
+		events = append(events, e)
+	}
+	return events
+}
+
+func messageEvents(events []sseEvent) []sseEvent {
+	var out []sseEvent
+	for _, e := range events {
+		if e.Name == "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func callArgs(t *testing.T, events []sseEvent) []string {
 	t.Helper()
 
-	html, err := web.RenderLogLine(agentlog.Event{Kind: agentlog.Cmd, Tool: "Bash", Detail: text}, false)
-	if err != nil {
-		t.Fatalf("RenderLogLine: %v", err)
+	var args []string
+	for _, e := range messageEvents(events) {
+		for _, arg := range htmltest.Parse(t, e.HTML()).Find(".call-arg") {
+			args = append(args, arg.Text())
+		}
 	}
-	return string(html)
+	return args
+}
+
+func streamedFrom(t *testing.T, logPath string, query string) []sseEvent {
+	t.Helper()
+
+	now := testNow
+	store, runID := runStore(t, logPath, now)
+	endRun(t, store, runID, now)
+	rec := do(t, newServer(store, now), http.MethodGet, logStreamPath(0)+query, req{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET log stream = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	return parseSSE(rec.Body)
 }
 
 func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
@@ -89,7 +146,29 @@ func endRun(t *testing.T, store *storepkg.Store, runID int64, at time.Time) {
 	}
 }
 
-func TestLogStreamsOneEventPerLine(t *testing.T) {
+func TestLogStream(t *testing.T) {
+	t.Parallel()
+
+	for name, run := range map[string]func(*testing.T){
+		"streams one event per line":                  testLogStreamsOneEventPerLine,
+		"applies the log filter":                      testLogStreamFilter,
+		"carries multi-line output as one event":      testLogStreamMultiLineOutput,
+		"resumes from the offset the fragment drew":   testLogStreamResumesFromOffset,
+		"is empty for a ticket with no run":           testLogStreamEmptyWithoutRun,
+		"sends an error frame when the log is unread": testLogStreamErrorFrame,
+		"refuses a malformed offset":                  testLogStreamMalformedOffset,
+		"retires itself when the run has ended":       testLogStreamRetiresWhenRunEnded,
+		"resumes a reconnect from Last-Event-ID":      testLogStreamResumesFromLastEventID,
+		"follows until the run ends":                  testLogStreamFollowsUntilRunEnds,
+		"leaves the run alone when the client leaves": testLogStreamLeavesRunAlone,
+		"is connected from the session page":          testSessionConnectsToStream,
+		"loads the SSE extension and glue":            testPageLoadsSSEExtension,
+	} {
+		t.Run(name, run)
+	}
+}
+
+func testLogStreamsOneEventPerLine(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -108,20 +187,67 @@ func TestLogStreamsOneEventPerLine(t *testing.T) {
 	if got := rec.Header.Get("Content-Type"); got != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", got)
 	}
-	body := rec.Body
-	firstOffset := int64(len(first) + 1)
-	for _, want := range []string{
-		fmt.Sprintf("id: %d\ndata: %s\n\n", firstOffset, renderedToolLine(t, "first")),
-		`<code class="call-arg">&lt;script&gt;alert(1)&lt;/script&gt;</code>`,
-		"data: " + renderedToolLine(t, "third") + "\n\n",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("stream is missing %q:\n%q", want, body)
+	events := parseSSE(rec.Body)
+	messages := messageEvents(events)
+	if len(messages) != 3 {
+		t.Fatalf("stream carried %d events, want 3: %q", len(messages), rec.Body)
+	}
+	if want := strconv.Itoa(len(first) + 1); messages[0].ID != want {
+		t.Errorf("first event id = %q, want %q", messages[0].ID, want)
+	}
+	wantArgs := []string{"first", `<script>alert(1)</script>`, "third"}
+	if diff := cmp.Diff(wantArgs, callArgs(t, events)); diff != "" {
+		t.Errorf("streamed call args mismatch (-want +got):\n%s", diff)
+	}
+	for _, e := range messages {
+		if scripts := htmltest.Parse(t, e.HTML()).Find("script"); len(scripts) != 0 {
+			t.Errorf("stream carries %d live <script> elements, want 0", len(scripts))
 		}
 	}
 }
 
-func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
+func testLogStreamFilter(t *testing.T) {
+	t.Parallel()
+
+	logPath := writeRunLog(t, mustReadTestdata(t, "run.jsonl"))
+	events := streamedFrom(t, logPath, "&log=fails")
+
+	messages := messageEvents(events)
+	if len(messages) != 1 {
+		t.Fatalf("log=fails streamed %d events, want 1 (the run's one failure): %v", len(messages), messages)
+	}
+	if got := messages[0].HTML(); !strings.Contains(got, "FAIL") {
+		t.Errorf("log=fails streamed %q, want the failing output", got)
+	}
+}
+
+func testLogStreamMultiLineOutput(t *testing.T) {
+	t.Parallel()
+
+	logPath := writeRunLog(t, `{"type":"user","message":{"content":[{"type":"tool_result","is_error":true,`+
+		`"content":"--- FAIL: TestX\nwant y"}]}}`+"\n")
+	events := streamedFrom(t, logPath, "")
+
+	messages := messageEvents(events)
+	if len(messages) != 1 {
+		t.Fatalf("stream carried %d events, want exactly 1: %v", len(messages), events)
+	}
+	failAt, wantAt := -1, -1
+	for i, line := range messages[0].Data {
+		switch {
+		case strings.Contains(line, "--- FAIL: TestX"):
+			failAt = i
+		case strings.Contains(line, "want y"):
+			wantAt = i
+		}
+	}
+	if failAt < 0 || wantAt < 0 || failAt == wantAt {
+		t.Errorf("output lines are on data lines %d and %d of %q, want one data line per output line",
+			failAt, wantAt, messages[0].Data)
+	}
+}
+
+func testLogStreamResumesFromOffset(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -139,12 +265,12 @@ func TestLogStreamResumesFromTheOffsetTheFragmentRendered(t *testing.T) {
 	if strings.Contains(body, "already read") {
 		t.Errorf("stream resent a line the fragment already rendered:\n%q", body)
 	}
-	if want := "data: " + renderedToolLine(t, "new one") + "\n\n"; !strings.Contains(body, want) {
-		t.Errorf("stream is missing the line after the offset:\n%q", body)
+	if diff := cmp.Diff([]string{"new one"}, callArgs(t, parseSSE(body))); diff != "" {
+		t.Errorf("streamed call args after the offset mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
+func testLogStreamEmptyWithoutRun(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -160,7 +286,7 @@ func TestLogStreamIsEmptyForATicketWithNoRun(t *testing.T) {
 	}
 }
 
-func TestLogStreamSendsAnErrorFrameWhenTheLogCannotBeRead(t *testing.T) {
+func testLogStreamErrorFrame(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -175,7 +301,7 @@ func TestLogStreamSendsAnErrorFrameWhenTheLogCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestLogStreamRefusesAMalformedOffset(t *testing.T) {
+func testLogStreamMalformedOffset(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -188,7 +314,7 @@ func TestLogStreamRefusesAMalformedOffset(t *testing.T) {
 	}
 }
 
-func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
+func testLogStreamRetiresWhenRunEnded(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -205,7 +331,7 @@ func TestLogStreamRetiresItselfWhenTheRunHasEnded(t *testing.T) {
 	}
 }
 
-func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
+func testLogStreamResumesFromLastEventID(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -224,12 +350,12 @@ func TestLogStreamResumesAReconnectFromItsLastEventID(t *testing.T) {
 	if strings.Contains(body, "swapped already") {
 		t.Errorf("a reconnect resent a line the browser had already swapped:\n%q", body)
 	}
-	if want := renderedToolLine(t, "not yet"); !strings.Contains(body, want) {
-		t.Errorf("a reconnect skipped the line after its last event:\n%q", body)
+	if diff := cmp.Diff([]string{"not yet"}, callArgs(t, parseSSE(body))); diff != "" {
+		t.Errorf("reconnect call args mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestLogStreamFollowsUntilTheRunEnds(t *testing.T) {
+func testLogStreamFollowsUntilRunEnds(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -279,7 +405,7 @@ func (w flushObserver) Flush() {
 	w.onFlush()
 }
 
-func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
+func testLogStreamLeavesRunAlone(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -318,7 +444,7 @@ func TestLogStreamLeavesTheRunAloneWhenTheClientGoesAway(t *testing.T) {
 	}
 }
 
-func TestSessionConnectsThePreToTheStream(t *testing.T) {
+func testSessionConnectsToStream(t *testing.T) {
 	t.Parallel()
 
 	now := testNow
@@ -345,7 +471,7 @@ func TestSessionConnectsThePreToTheStream(t *testing.T) {
 	t.Error("session transcript has no step 3 call")
 }
 
-func TestPageLoadsTheSSEExtensionAndGlue(t *testing.T) {
+func testPageLoadsSSEExtension(t *testing.T) {
 	t.Parallel()
 
 	now := testNow

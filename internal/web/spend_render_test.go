@@ -1,7 +1,6 @@
 package web_test
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,34 +46,31 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 	return store
 }
 
-func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
+func spendCell(t *testing.T, log string, alive bool) string {
+	t.Helper()
+	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
+	path := filepath.Join(t.TempDir(), "1.jsonl")
+	if err := os.WriteFile(path, []byte(log), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q): %v", path, err)
+	}
+	page := renderPage(t, newServer(spendRowStore(t, ticket, path, alive, testNow), testNow))
+	return webtest.RowFor(t, page, ticket.URL).Spend.Text()
+}
+
+func testBoardSpend(t *testing.T) {
 	t.Parallel()
 
-	now := testNow
+	t.Run("a live run shows its tokens", func(t *testing.T) {
+		t.Parallel()
+		if got := spendCell(t, spendAliveLine, true); !strings.Contains(got, "15 tok") {
+			t.Errorf("GET /tickets live run spend = %q, want 15 tok", got)
+		}
+	})
 
-	aliveTicket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
-	alivePath := filepath.Join(t.TempDir(), "1.jsonl")
-	if err := os.WriteFile(alivePath, []byte(spendAliveLine), 0o600); err != nil {
-		t.Fatalf("WriteFile(%q): %v", alivePath, err)
-	}
-	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
-	aliveServer := newServer(aliveStore, now)
-	got := do(t, aliveServer, http.MethodGet, "/tickets", req{})
-	aliveSpend := webtest.RowFor(t, got.Body, aliveTicket.URL).Spend
-	if text := aliveSpend.Text(); !strings.Contains(text, "15 tok") {
-		t.Errorf("alive run spend = %q, want 15 tok", text)
-	}
-
-	endedTicket := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"}
-	endedPath := filepath.Join(t.TempDir(), "2.jsonl")
-	if err := os.WriteFile(endedPath, []byte(spendAliveLine+spendResultLine), 0o600); err != nil {
-		t.Fatalf("WriteFile(%q): %v", endedPath, err)
-	}
-	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
-	endedServer := newServer(endedStore, now)
-	got = do(t, endedServer, http.MethodGet, "/tickets", req{})
-	endedSpend := webtest.RowFor(t, got.Body, endedTicket.URL).Spend
-	if strings.Contains(endedSpend.Text(), "$1.23") {
-		t.Errorf("ended run spend contains dollar amount: %q", endedSpend.Text())
-	}
+	t.Run("an ended run never shows dollars", func(t *testing.T) {
+		t.Parallel()
+		if got := spendCell(t, spendAliveLine+spendResultLine, false); strings.Contains(got, "$") {
+			t.Errorf("GET /tickets ended run spend = %q, want no dollar amount", got)
+		}
+	})
 }
