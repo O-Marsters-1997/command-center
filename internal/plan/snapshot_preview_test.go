@@ -4,10 +4,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func TestSnapshotPreview(t *testing.T) {
+func TestSnapshot_Preview(t *testing.T) {
 	t.Parallel()
 
 	type wantRow struct {
@@ -68,60 +70,53 @@ func TestSnapshotPreview(t *testing.T) {
 
 			rows, err := derive(tt.rules, tt.in).Preview(tt.selection)
 			if err != nil {
-				t.Fatalf("Preview error = %v, want nil", err)
+				t.Fatalf("Preview(%v) error = %v", tt.selection, err)
 			}
-			if len(rows) != len(tt.want) {
-				t.Fatalf("Preview returned %d rows, want %d", len(rows), len(tt.want))
-			}
+			got := map[plan.TicketURL]wantRow{}
 			for _, row := range rows {
-				want := tt.want[row.Ticket.URL]
-				if row.Label != want.label || row.Base != want.base {
-					t.Errorf("%s = %v on %q, want %v on %q",
-						row.Ticket.URL, row.Label, row.Base, want.label, want.base)
-				}
+				got[row.Ticket.URL] = wantRow{label: row.Label, base: row.Base}
 				if row.Prompt != plan.Compose(row.Ticket) || row.PromptHash != plan.Hash(row.Prompt) {
-					t.Errorf("%s prompt and hash do not follow Compose", row.Ticket.URL)
+					t.Errorf("Preview(%v) row %s prompt and hash do not follow Compose", tt.selection, row.Ticket.URL)
 				}
+			}
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(wantRow{})); diff != "" {
+				t.Errorf("Preview(%v) mismatch (-want +got):\n%s", tt.selection, diff)
 			}
 		})
 	}
-}
 
-func TestSnapshotPreviewRejectsAnUnknownTicket(t *testing.T) {
-	t.Parallel()
-	snap := derive(plan.Rules{}, plan.Input{Tickets: []plan.Ticket{ticket("1", "cc-1-first")}})
-	rows, err := snap.Preview([]plan.TicketURL{"sandbox://CC-404"})
-	if !errors.Is(err, plan.ErrUnknownTicket) {
-		t.Errorf("Preview(unknown ticket) = %v, want ErrUnknownTicket", err)
-	}
-	if rows != nil {
-		t.Errorf("Preview(unknown ticket) = %v, want nil rows", rows)
-	}
-}
-
-func TestSnapshotPreviewCarriesTheBaseTicketsRunForAStackedRow(t *testing.T) {
-	t.Parallel()
-
-	first := ticket("1", "cc-1-first")
-	second := ticket("2", "cc-2-second", first.URL)
-	snap := derive(plan.Rules{Stacking: map[string]bool{"r": true}}, plan.Input{
-		Tickets: []plan.Ticket{first, second},
-		Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {ID: 1}},
+	t.Run("an unknown ticket", func(t *testing.T) {
+		t.Parallel()
+		snap := derive(plan.Rules{}, plan.Input{Tickets: []plan.Ticket{ticket("1", "cc-1-first")}})
+		rows, err := snap.Preview([]plan.TicketURL{"sandbox://CC-404"})
+		if !errors.Is(err, plan.ErrUnknownTicket) || rows != nil {
+			t.Errorf("Preview(sandbox://CC-404) = %v, %v, want nil, ErrUnknownTicket", rows, err)
+		}
 	})
 
-	rows, err := snap.Preview([]plan.TicketURL{second.URL})
-	if err != nil {
-		t.Fatalf("Preview(%s): %v", second.URL, err)
-	}
-	if want, _ := snap.Entry(first.URL); rows[0].BaseRun.IsNone() || want.Run.IsNone() {
-		t.Fatalf("BaseRun = %v, want the base ticket's run %v", rows[0].BaseRun, want.Run)
-	}
+	t.Run("a stacked row carries its base ticket's run", func(t *testing.T) {
+		t.Parallel()
+		first := ticket("1", "cc-1-first")
+		second := ticket("2", "cc-2-second", first.URL)
+		snap := derive(plan.Rules{Stacking: map[string]bool{"r": true}}, plan.Input{
+			Tickets: []plan.Ticket{first, second},
+			Runs:    map[plan.TicketURL]plan.RunSummary{first.URL: {ID: 1}},
+		})
 
-	rows, err = snap.Preview([]plan.TicketURL{first.URL})
-	if err != nil {
-		t.Fatalf("Preview(%s): %v", first.URL, err)
-	}
-	if rows[0].BaseRun.IsSome() {
-		t.Errorf("a main-based row has BaseRun %v, want None", rows[0].BaseRun)
-	}
+		rows, err := snap.Preview([]plan.TicketURL{second.URL})
+		if err != nil {
+			t.Fatalf("Preview(%s) error = %v", second.URL, err)
+		}
+		if base, _ := snap.Entry(first.URL); rows[0].BaseRun.IsNone() || base.Run.IsNone() {
+			t.Errorf("Preview(%s).BaseRun = %v, want the base ticket's run %v", second.URL, rows[0].BaseRun, base.Run)
+		}
+
+		rows, err = snap.Preview([]plan.TicketURL{first.URL})
+		if err != nil {
+			t.Fatalf("Preview(%s) error = %v", first.URL, err)
+		}
+		if rows[0].BaseRun.IsSome() {
+			t.Errorf("Preview(%s).BaseRun = %v, want None for a main-based row", first.URL, rows[0].BaseRun)
+		}
+	})
 }

@@ -55,6 +55,13 @@ func TestPreview(t *testing.T) {
 			wantLabel:      plan.Refused,
 			reasonNames:    "cc-1-first",
 		},
+		{
+			name:        "a refused blocker has no open or merged pull request",
+			unlock:      plan.Unlock{Blocking: []plan.TicketURL{"sandbox://CC-9"}},
+			slice:       map[plan.TicketURL]bool{},
+			wantLabel:   plan.Refused,
+			reasonNames: "no open or merged pull request",
+		},
 	}
 
 	for _, tt := range tests {
@@ -63,23 +70,11 @@ func TestPreview(t *testing.T) {
 
 			label, reason := plan.Preview(tt.unlock, tt.slice, tt.activeLaunchID, tt.conflictedBase)
 			if label != tt.wantLabel {
-				t.Errorf("label = %v, want %v (reason %q)", label, tt.wantLabel, reason)
+				t.Errorf("Preview(%+v) label = %v, want %v (reason %q)", tt.unlock, label, tt.wantLabel, reason)
 			}
 			if tt.reasonNames != "" && !strings.Contains(string(reason), tt.reasonNames) {
-				t.Errorf("reason %q does not name %q", reason, tt.reasonNames)
+				t.Errorf("Preview(%+v) reason = %q, want it to name %q", tt.unlock, reason, tt.reasonNames)
 			}
 		})
-	}
-}
-
-func TestPreviewRefusedNamesNoOpenOrMergedPullRequest(t *testing.T) {
-	t.Parallel()
-
-	_, reason := plan.Preview(
-		plan.Unlock{Blocking: []plan.TicketURL{"sandbox://CC-9"}},
-		map[plan.TicketURL]bool{}, 0, "",
-	)
-	if !strings.Contains(string(reason), "no open or merged pull request") {
-		t.Errorf("reason %q does not say the blocker has no open or merged pull request", reason)
 	}
 }

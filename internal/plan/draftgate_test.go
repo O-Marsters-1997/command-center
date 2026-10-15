@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
@@ -63,14 +65,14 @@ func TestDraftGate(t *testing.T) {
 
 			draft, reason := plan.DraftGate(tt.gating, tt.prs, tt.verdictGreen)
 			if draft != tt.wantDraft {
-				t.Errorf("draft = %v, want %v (reason %q)", draft, tt.wantDraft, reason)
+				t.Errorf("DraftGate(%v, green %t) draft = %t, want %t (reason %q)", tt.prs, tt.verdictGreen, draft, tt.wantDraft, reason)
 			}
 			if reason == "" {
-				t.Error("reason is empty; the page renders it on a drafted row")
+				t.Errorf("DraftGate(%v, green %t) reason = \"\", want one", tt.prs, tt.verdictGreen)
 			}
 			for _, want := range tt.reasonHas {
 				if !strings.Contains(string(reason), want) {
-					t.Errorf("reason %q does not contain %q", reason, want)
+					t.Errorf("DraftGate(%v, green %t) reason = %q, want it to name %q", tt.prs, tt.verdictGreen, reason, want)
 				}
 			}
 		})
@@ -92,8 +94,7 @@ func TestGatingBlockers(t *testing.T) {
 		consumer.URL:  consumer,
 	}
 
-	got := plan.GatingBlockers(consumer, byURL)
-	if len(got) != 1 || got[0].URL != crossRepo.URL {
-		t.Errorf("GatingBlockers = %+v, want only %s", got, crossRepo.URL)
+	if diff := cmp.Diff([]plan.Ticket{crossRepo}, plan.GatingBlockers(consumer, byURL)); diff != "" {
+		t.Errorf("GatingBlockers(%s) mismatch (-want +got):\n%s", consumer.URL, diff)
 	}
 }
