@@ -8,12 +8,15 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gh/ghtest"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	"github.com/O-Marsters-1997/command-center/internal/runner/runnertest"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
+	"github.com/O-Marsters-1997/command-center/internal/tp/tptest"
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
@@ -43,9 +46,9 @@ func newLoop(
 type loopFixture struct {
 	Store     *storepkg.Store
 	Loop      *loop.Loop
-	Fake      *runner.Fake
-	Forge     *recordingForge
-	Worktrees *recordingWorktrees
+	Fake      *runnertest.Runner
+	Forge     *ghtest.Forge
+	Worktrees *tptest.Worktrees
 	Cfg       config.Config
 	WS        config.Workspace
 	Root      string
@@ -100,9 +103,9 @@ func newLoopFixture(t *testing.T, opts ...fixtureOption) *loopFixture {
 	if err := store.UpsertTickets(t.Context(), fc.tickets); err != nil {
 		t.Fatalf("UpsertTickets(%d tickets): %v", len(fc.tickets), err)
 	}
-	fake := runner.NewFake()
-	forge := &recordingForge{}
-	worktrees := &recordingWorktrees{}
+	fake := &runnertest.Runner{}
+	forge := &ghtest.Forge{}
+	worktrees := &tptest.Worktrees{}
 	cut := loop.WithWorktrees(worktrees)
 	if fc.tpFails {
 		cut = loop.WithWorktrees(failingCut{worktrees})
@@ -156,7 +159,7 @@ type pushFixture struct {
 	Store                  *storepkg.Store
 	Ticket                 storepkg.Ticket
 	Obs                    *plan.Observation
-	Forge                  *recordingForge
+	Forge                  *ghtest.Forge
 	Loop                   *loop.Loop
 	root                   string
 	cfg                    config.Config
@@ -173,7 +176,7 @@ func newPushFixture(t *testing.T, opts ...loop.Option) *pushFixture {
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	f := &pushFixture{
 		Repo: repo, Origin: filepath.Join(root, "remote.git"), Worktree: worktree,
-		Store: st, Ticket: ticket, Forge: &recordingForge{}, root: root, cfg: cfg, ws: ws,
+		Store: st, Ticket: ticket, Forge: &ghtest.Forge{}, root: root, cfg: cfg, ws: ws,
 		Obs: &plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktree},
 			PRs: map[plan.BranchRef]plan.PR{}},
 	}

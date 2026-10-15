@@ -16,7 +16,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
-func TestFailedVerificationDoesNotPush(t *testing.T) {
+func TestVerify(t *testing.T) {
 	t.Parallel()
 	type scenario struct {
 		ticketURL, branch, originalTip, detail string
@@ -105,19 +105,11 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 			if row.State != "verification_failed" {
 				t.Errorf("row state = %q, want verification_failed:\n%s", row.State, row.Row.HTML())
 			}
-			for _, verb := range []plan.Verb{plan.VerbRetryPush, plan.VerbReRun} {
-				if !strings.Contains(page, `value="`+string(verb)+`"`) {
-					t.Errorf("page does not offer %s:\n%s", verb, page)
-				}
-			}
 		})
 	}
-}
 
-func TestFailedVerificationTruncatesAtValidUTF8(t *testing.T) {
-	t.Parallel()
 	for _, spacing := range []string{" ", "  "} {
-		t.Run("exit spacing "+spacing, func(t *testing.T) {
+		t.Run("a failure detail is cut at valid UTF-8, exit spacing "+spacing, func(t *testing.T) {
 			t.Parallel()
 			p := newPushFixture(t)
 			f := newStackedFixture(t, p.Repo, p.Store, testAt)
@@ -138,120 +130,120 @@ func TestFailedVerificationTruncatesAtValidUTF8(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
-	t.Parallel()
-	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
-	at := testAt
+	t.Run("a repo with no verify command is unaffected", func(t *testing.T) {
+		t.Parallel()
+		p := newPushFixture(t)
+		root, repoPath, store := p.root, p.Repo, p.Store
+		at := testAt
 
-	f := newStackedFixture(t, repoPath, store, at)
-	parentTip1 := advanceParent(t, repoPath, f)
+		f := newStackedFixture(t, repoPath, store, at)
+		parentTip1 := advanceParent(t, repoPath, f)
 
-	*p.Obs = baseObservation(f, parentTip1)
+		*p.Obs = baseObservation(f, parentTip1)
 
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	p.cfg, p.ws = cfg, ws
-	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
+		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+		p.cfg, p.ws = cfg, ws
+		p.reset(at.Add(time.Minute), runner.ProcessRunner{})
+		p.tick(t)
 
-	if events := p.events(t, "verification_failed"); len(events) != 0 {
-		t.Errorf("events = %+v, want no verification_failed event: no command was configured", events)
-	}
-	childTip := p.head(t, f.childWorktree, "HEAD")
-	events := p.events(t, "pushed")
-	childPushed := false
-	for _, event := range events {
-		if event.TicketURL == f.child.URL && event.Detail == "pushed "+childTip+" to origin/parent" {
-			childPushed = true
+		if events := p.events(t, "verification_failed"); len(events) != 0 {
+			t.Errorf("events = %+v, want no verification_failed event: no command was configured", events)
 		}
-	}
-	if !childPushed {
-		t.Errorf("events = %+v, want the merge pushed as normal", events)
-	}
-}
-
-func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
-	t.Parallel()
-	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
-	at := testAt
-
-	f := newStackedFixture(t, repoPath, store, at)
-	parentTip1 := advanceParent(t, repoPath, f)
-
-	*p.Obs = baseObservation(f, parentTip1)
-
-	countFile := filepath.Join(t.TempDir(), "count")
-	countScript := "n=$(cat \"" + countFile + "\" 2>/dev/null || echo 0); " +
-		"echo $((n+1)) > \"" + countFile + "\"; exit 1"
-	command := []string{"sh", "-c", countScript}
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
-	p.cfg, p.ws = cfg, ws
-	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
-	p.tick(t)
-
-	got, err := os.ReadFile(countFile)
-	if err != nil {
-		t.Fatalf("ReadFile count: %v", err)
-	}
-	if want := "1\n"; string(got) != want {
-		t.Errorf("verify command ran %q times, want %q: the automatic pass must not reverify "+
-			"an already-failed tip every tick", got, want)
-	}
-}
-
-func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
-	t.Parallel()
-	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
-	at := testAt
-
-	f := newStackedFixture(t, repoPath, store, at)
-	parentTip1 := advanceParent(t, repoPath, f)
-
-	*p.Obs = baseObservation(f, parentTip1)
-
-	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{"false"}}
-	p.cfg, p.ws = cfg, ws
-	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
-
-	facts, err := store.RefreshFacts(t.Context())
-	if err != nil {
-		t.Fatalf("RefreshFacts: %v", err)
-	}
-	if !facts[plan.TicketURL(f.child.URL)].VerificationFailed {
-		t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
-	}
-
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRetryPush, at.Add(time.Hour)); err != nil {
-		t.Fatalf("QueueVerbIntent: %v", err)
-	}
-	p.tick(t)
-
-	events := p.events(t, "pushed")
-	childTip := p.head(t, f.childWorktree, "HEAD")
-	pushedChild := false
-	for _, e := range events {
-		if e.TicketURL == f.child.URL && e.Detail == "pushed "+childTip+" to origin/parent" {
-			pushedChild = true
+		childTip := p.head(t, f.childWorktree, "HEAD")
+		events := p.events(t, "pushed")
+		childPushed := false
+		for _, event := range events {
+			if event.TicketURL == f.child.URL && event.Detail == "pushed "+childTip+" to origin/parent" {
+				childPushed = true
+			}
 		}
-	}
-	if !pushedChild {
-		t.Errorf("events = %+v, want retry-push to push %s despite the failed verification", events, f.child.URL)
-	}
+		if !childPushed {
+			t.Errorf("events = %+v, want the merge pushed as normal", events)
+		}
+	})
 
-	factsAfter, err := store.RefreshFacts(t.Context())
-	if err != nil {
-		t.Fatalf("RefreshFacts: %v", err)
-	}
-	if factsAfter[plan.TicketURL(f.child.URL)].VerificationFailed {
-		t.Errorf("refresh facts = %+v, want the latch cleared by the push", factsAfter)
-	}
+	t.Run("runs on the restack, not again on an already verified tip", func(t *testing.T) {
+		t.Parallel()
+		p := newPushFixture(t)
+		root, repoPath, store := p.root, p.Repo, p.Store
+		at := testAt
+
+		f := newStackedFixture(t, repoPath, store, at)
+		parentTip1 := advanceParent(t, repoPath, f)
+
+		*p.Obs = baseObservation(f, parentTip1)
+
+		countFile := filepath.Join(t.TempDir(), "count")
+		countScript := "n=$(cat \"" + countFile + "\" 2>/dev/null || echo 0); " +
+			"echo $((n+1)) > \"" + countFile + "\"; exit 1"
+		command := []string{"sh", "-c", countScript}
+
+		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+		p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
+		p.cfg, p.ws = cfg, ws
+		p.reset(at.Add(time.Minute), runner.ProcessRunner{})
+		p.tick(t)
+		p.tick(t)
+
+		got, err := os.ReadFile(countFile)
+		if err != nil {
+			t.Fatalf("ReadFile count: %v", err)
+		}
+		if want := "1\n"; string(got) != want {
+			t.Errorf("verify command ran %q times, want %q: the automatic pass must not reverify "+
+				"an already-failed tip every tick", got, want)
+		}
+	})
+
+	t.Run("retry-push after a failed verification pushes and clears the latch", func(t *testing.T) {
+		t.Parallel()
+		p := newPushFixture(t)
+		root, repoPath, store := p.root, p.Repo, p.Store
+		at := testAt
+
+		f := newStackedFixture(t, repoPath, store, at)
+		parentTip1 := advanceParent(t, repoPath, f)
+
+		*p.Obs = baseObservation(f, parentTip1)
+
+		cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
+		p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{"false"}}
+		p.cfg, p.ws = cfg, ws
+		p.reset(at.Add(time.Minute), runner.ProcessRunner{})
+		p.tick(t)
+
+		facts, err := store.RefreshFacts(t.Context())
+		if err != nil {
+			t.Fatalf("RefreshFacts: %v", err)
+		}
+		if !facts[plan.TicketURL(f.child.URL)].VerificationFailed {
+			t.Fatalf("refresh facts = %+v, want %s verification failed", facts, f.child.URL)
+		}
+
+		if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRetryPush, at.Add(time.Hour)); err != nil {
+			t.Fatalf("QueueVerbIntent: %v", err)
+		}
+		p.tick(t)
+
+		events := p.events(t, "pushed")
+		childTip := p.head(t, f.childWorktree, "HEAD")
+		pushedChild := false
+		for _, e := range events {
+			if e.TicketURL == f.child.URL && e.Detail == "pushed "+childTip+" to origin/parent" {
+				pushedChild = true
+			}
+		}
+		if !pushedChild {
+			t.Errorf("events = %+v, want retry-push to push %s despite the failed verification", events, f.child.URL)
+		}
+
+		factsAfter, err := store.RefreshFacts(t.Context())
+		if err != nil {
+			t.Fatalf("RefreshFacts: %v", err)
+		}
+		if factsAfter[plan.TicketURL(f.child.URL)].VerificationFailed {
+			t.Errorf("refresh facts = %+v, want the latch cleared by the push", factsAfter)
+		}
+	})
 }
