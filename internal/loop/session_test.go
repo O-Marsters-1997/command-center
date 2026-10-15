@@ -18,10 +18,11 @@ type followUpCase struct {
 }
 
 type followUpResult struct {
-	spawn     runner.SpawnConfig
-	sessionID string
-	row       storepkg.SessionRun
-	runsDir   string
+	spawn           runner.SpawnConfig
+	sessionID       string
+	storedSessionID string
+	row             storepkg.SessionRun
+	runsDir         string
 }
 
 func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
@@ -93,11 +94,16 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	if len(runs) == 0 {
 		t.Fatal("SessionRunsForTicket returned no follow-up")
 	}
+	latestSessionID, err := store.LatestSessionID(t.Context(), ticket.URL)
+	if err != nil {
+		t.Fatalf("LatestSessionID(%q): %v", ticket.URL, err)
+	}
 	return followUpResult{
-		spawn:     fake.Spawns[0],
-		sessionID: sessionID,
-		row:       runs[len(runs)-1],
-		runsDir:   ws.RunsDir,
+		spawn:           fake.Spawns[0],
+		sessionID:       sessionID,
+		storedSessionID: latestSessionID,
+		row:             runs[len(runs)-1],
+		runsDir:         ws.RunsDir,
 	}
 }
 
@@ -107,6 +113,9 @@ func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
 
 	if !got.spawn.Resume || got.spawn.SessionID != got.sessionID {
 		t.Errorf("spawn = resume %v session %q, want a resume of %q", got.spawn.Resume, got.spawn.SessionID, got.sessionID)
+	}
+	if got.storedSessionID != got.sessionID {
+		t.Errorf("latest stored session = %q, want resumed session %q", got.storedSessionID, got.sessionID)
 	}
 	if got.row.Message != "now fix the other test" {
 		t.Errorf("run message = %q, want the owner's raw text", got.row.Message)

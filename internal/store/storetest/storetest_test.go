@@ -29,6 +29,10 @@ func TestRunSeedsDisposedAndAliveRuns(t *testing.T) {
 	if len(runs) != 1 || runs[0].ID != completedID || runs[0].Message != "first run" {
 		t.Errorf("SessionRunsForTicket = %+v, want the seeded run with its message", runs)
 	}
+	sessionID, err := st.LatestSessionID(t.Context(), ticket.URL)
+	if err != nil || sessionID == "" {
+		t.Errorf("LatestSessionID(%q) = %q, %v; want a seeded session", ticket.URL, sessionID, err)
+	}
 	latest, err := st.LatestRunsByTicket(t.Context())
 	if err != nil {
 		t.Fatalf("LatestRunsByTicket: %v", err)
