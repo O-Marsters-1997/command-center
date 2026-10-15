@@ -1,7 +1,5 @@
 package plan
 
-// StackDepth is branch's distance from a root along the base chain: zero for a branch with no
-// recorded base or one based on main.
 func StackDepth(branch string, baseByBranch map[string]string) int {
 	depth := 0
 	visited := map[string]bool{branch: true}
@@ -16,9 +14,6 @@ func StackDepth(branch string, baseByBranch map[string]string) int {
 	}
 }
 
-// WaveCount is the number of dependency waves among tickets: one more than the longest blocking
-// chain. blocking maps each ticket to the tickets it waits on; blockers outside the map are
-// ignored.
 func WaveCount(blocking map[TicketURL][]TicketURL) int {
 	depth := make(map[TicketURL]int, len(blocking))
 	visiting := make(map[TicketURL]bool, len(blocking))

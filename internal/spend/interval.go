@@ -1,6 +1,3 @@
-// Package spend fits the subscription's utilization windows to what was actually spent: Intervals
-// samples between consecutive readings, and Fit finds each window's dollars-per-utilization
-// factor through the origin.
 package spend
 
 import (
@@ -21,8 +18,6 @@ type Interval struct {
 
 type Weigher func(start, end time.Time) (float64, error)
 
-// Intervals pairs each reading with the previous one for its window, and returns the latest
-// reading per window for the caller to persist as the next call's previous.
 func Intervals(
 	readings []agentlog.Reading, previous map[agentlog.Window]agentlog.Reading, weigh Weigher,
 ) ([]Interval, map[agentlog.Window]agentlog.Reading, error) {

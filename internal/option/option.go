@@ -1,4 +1,3 @@
-// Package option provides Option, a value that may be absent.
 package option
 
 import (
@@ -6,28 +5,24 @@ import (
 	"fmt"
 )
 
-// Option is a value that may be absent. It is comparable with == when T is.
+// Option holds a value that may be absent. It is comparable when T is.
 type Option[T any] struct {
 	value T
 	ok    bool
 }
 
-// Some wraps a present value.
 func Some[T any](v T) Option[T] {
 	return Option[T]{value: v, ok: true}
 }
 
-// None returns an absent value.
 func None[T any]() Option[T] {
 	return Option[T]{}
 }
 
-// IsSome reports whether a value is present.
 func (o Option[T]) IsSome() bool {
 	return o.ok
 }
 
-// IsNone reports whether no value is present.
 func (o Option[T]) IsNone() bool {
 	return !o.ok
 }
@@ -40,7 +35,6 @@ func (o Option[T]) Unwrap() T {
 	return o.value
 }
 
-// UnwrapOr returns the contained value, or fallback if absent.
 func (o Option[T]) UnwrapOr(fallback T) T {
 	if !o.ok {
 		return fallback
@@ -48,7 +42,7 @@ func (o Option[T]) UnwrapOr(fallback T) T {
 	return o.value
 }
 
-// MarshalJSON encodes Some as the JSON of its value and None as null.
+// MarshalJSON encodes Some as its value and None as null.
 func (o Option[T]) MarshalJSON() ([]byte, error) {
 	if !o.ok {
 		return []byte("null"), nil
@@ -60,7 +54,7 @@ func (o Option[T]) MarshalJSON() ([]byte, error) {
 	return b, nil
 }
 
-// UnmarshalJSON decodes null as None and any other JSON value as Some.
+// UnmarshalJSON decodes null as None and all other JSON values as Some.
 func (o *Option[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		*o = None[T]()
@@ -74,7 +68,6 @@ func (o *Option[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// String implements fmt.Stringer.
 func (o Option[T]) String() string {
 	if !o.ok {
 		return "None"
