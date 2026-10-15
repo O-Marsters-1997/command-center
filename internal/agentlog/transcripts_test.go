@@ -23,20 +23,20 @@ func TestLoadRequestsCountsAnInteractiveTranscriptAndItsSubagent(t *testing.T) {
 	dir := t.TempDir()
 	project := filepath.Join(dir, "-Users-olly-some-project")
 	if err := os.MkdirAll(project, 0o755); err != nil {
-		t.Fatal(err)
+		t.Fatalf("MkdirAll(project): %v", err)
 	}
 
 	interactive := oneMillionInputTokensLine("2026-01-01T00:00:00.000Z", "r1") + "\n" +
 		oneMillionInputTokensLine("2026-01-01T01:00:00.000Z", "r2") + "\n"
 	if err := os.WriteFile(filepath.Join(project, "session.jsonl"), []byte(interactive), 0o644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(session.jsonl): %v", err)
 	}
 	subagent := oneMillionInputTokensLine("2026-01-01T00:30:00.000Z", "s1") + "\n"
 	if err := os.WriteFile(filepath.Join(project, "subagent-s1.jsonl"), []byte(subagent), 0o644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(subagent-s1.jsonl): %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(project, "notes.txt"), []byte("not a transcript"), 0o644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(notes.txt): %v", err)
 	}
 
 	requests, err := agentlog.LoadRequests(dir)

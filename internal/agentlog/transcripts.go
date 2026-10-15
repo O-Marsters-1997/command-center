@@ -7,9 +7,8 @@ import (
 	"path/filepath"
 )
 
-// LoadRequests reads every request from every *.jsonl transcript under dir, subagent transcripts
-// included, since Claude Code writes those as ordinary sibling files. A dir that does not exist
-// yet yields none rather than erroring.
+// LoadRequests reads usage from all JSONL transcripts under dir.
+// Claude Code writes subagent transcripts alongside the main transcript.
 func LoadRequests(dir string) ([]RequestUsage, error) {
 	var requests []RequestUsage
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {

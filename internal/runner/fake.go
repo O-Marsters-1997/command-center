@@ -6,11 +6,10 @@ import (
 	"time"
 )
 
-// ErrSpawnFailed is what Fake.Spawn returns when FailNext is set.
+// ErrSpawnFailed reports a configured Fake.Spawn failure.
 var ErrSpawnFailed = errors.New("spawn failed")
 
-// Fake is a Runner that never touches the OS. Spawn hands out sequential pids; Liveness and
-// Reap answer from the maps a test controls directly.
+// Fake is an in-memory Runner for tests.
 type Fake struct {
 	Spawns   []SpawnConfig
 	NextPid  int
@@ -21,7 +20,6 @@ type Fake struct {
 	Canceled []int
 }
 
-// NewFake returns a Fake with empty state.
 func NewFake() *Fake {
 	return &Fake{Alive: map[int]bool{}, ReapCode: map[int]int{}, CanReap: map[int]bool{}}
 }

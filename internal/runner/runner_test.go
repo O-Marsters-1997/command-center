@@ -13,19 +13,15 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// commitsScript is the absolute path to testdata/agents/commits.sh (the fake agent that
-// commits a file and exits 0), which lives at the module root.
 func commitsScript(t *testing.T) string {
 	t.Helper()
 	abs, err := filepath.Abs("../../testdata/agents/commits.sh")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Abs(commits.sh): %v", err)
 	}
 	return abs
 }
 
-// waitForFile polls for path to exist, failing the test after a short deadline. Spawn does not
-// wait on the process, so the test must poll for the side effect it produces instead.
 func waitForFile(t *testing.T, path string) {
 	t.Helper()
 	exists := func() bool {
@@ -51,10 +47,6 @@ func pollUntil(within time.Duration, done func() bool) bool {
 	return true
 }
 
-// reapExit blocks until a spawned agent has exited, asserting it exited cleanly. Every Spawn
-// test must call it before returning: the spawned process writes inside a t.TempDir, and Go
-// fires that directory's RemoveAll at cleanup — a child still running there fails the removal,
-// and testing.T reports that against the whole package rather than this one test.
 func reapExit(t *testing.T, pid int) {
 	t.Helper()
 	exitCode, ok := runner.ProcessRunner{}.Reap(pid)
@@ -66,8 +58,6 @@ func reapExit(t *testing.T, pid int) {
 	}
 }
 
-// spawnCase describes one ProcessRunner.Spawn run. script is the body of a throwaway agent that
-// writes its observation to dump; command, when set, replaces the script as AgentCommand[0].
 type spawnCase struct {
 	name        string
 	script      string
@@ -83,7 +73,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "input")
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("WriteFile(input): %v", err)
 		}
 		return path
 	}
@@ -120,7 +110,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 				}
 				logged, err := os.ReadFile(cfg.LogFile.Name())
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("ReadFile(log): %v", err)
 				}
 				if len(logged) != 0 {
 					t.Errorf("commits.sh wrote no stdout/stderr, but the log file has content: %q", logged)
@@ -208,11 +198,11 @@ func TestProcessRunnerSpawn(t *testing.T) {
 				t.Helper()
 				want, err := filepath.EvalSymlinks(cfg.WorktreePath)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("EvalSymlinks(worktree): %v", err)
 				}
 				got, err := filepath.EvalSymlinks(strings.TrimSpace(dump))
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("EvalSymlinks(dump): %v", err)
 				}
 				if got != want {
 					t.Errorf("agent ran in %q, want the worktree %q", got, want)
@@ -231,7 +221,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 			}
 			logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Create(run log): %v", err)
 			}
 			t.Cleanup(func() { _ = logFile.Close() })
 			cfg.LogFile = logFile
@@ -247,7 +237,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 				scriptPath := filepath.Join(t.TempDir(), "agent.sh")
 				body := strings.ReplaceAll(tt.script, "$DUMP", dump)
 				if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
-					t.Fatal(err)
+					t.Fatalf("WriteFile(agent script): %v", err)
 				}
 				cfg.AgentCommand = append([]string{scriptPath}, tt.command...)
 			} else {
@@ -277,8 +267,8 @@ func TestProcessRunnerSpawn(t *testing.T) {
 }
 
 func TestProcessRunnerSpawnStripsSecret(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("RUNNER_SECRET_CHILD") != "1" {
-		t.Parallel()
 		cmd := exec.Command(os.Args[0], "-test.run=^TestProcessRunnerSpawnStripsSecret$")
 		cmd.Env = append(os.Environ(), "RUNNER_SECRET_CHILD=1", "ANTHROPIC_API_KEY=test-secret-key")
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -293,11 +283,11 @@ func TestProcessRunnerSpawnStripsSecret(t *testing.T) {
 	dump := filepath.Join(worktree, "env.txt")
 	script := filepath.Join(t.TempDir(), "agent.sh")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nenv > \"$1\"\n"), 0o755); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(agent script): %v", err)
 	}
 	logFile, err := os.Create(filepath.Join(t.TempDir(), "run.jsonl"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Create(run log): %v", err)
 	}
 	t.Cleanup(func() {
 		if err := logFile.Close(); err != nil {

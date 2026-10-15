@@ -15,9 +15,8 @@ const (
 	SevenDay Window = "seven_day"
 )
 
-// Reading is one window's utilization off a rate_limit_event line. At is the nearest preceding
-// line's own timestamp, since the event itself carries none -- which is what lets two logs that
-// replay the same transcript up to the same point agree on when it happened, and so store it once.
+// Reading is one rate-limit window's utilization.
+// The CLI's rate_limit_event has no timestamp, so At uses the preceding line's time.
 type Reading struct {
 	Window      Window
 	Utilization float64
@@ -25,8 +24,7 @@ type Reading struct {
 	At          time.Time
 }
 
-// ParseReadings reads a run's log for every rate_limit_event line, returning one Reading per
-// window it reports. A log with no such line returns no readings and no error.
+// ParseReadings returns one Reading per rate-limit window reported in a log.
 func ParseReadings(logPath string) ([]Reading, error) {
 	var readings []Reading
 	err := forEachLine(logPath, func(parsed logLine, last time.Time) {

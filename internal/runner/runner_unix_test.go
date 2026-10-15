@@ -1,7 +1,12 @@
+//go:build unix
+
 package runner_test
 
 import (
+	"errors"
+	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
@@ -9,34 +14,28 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 )
 
-// startRealProcess starts a real, briefly-long-lived process as its own group leader and
-// returns its pid plus the wall-clock time it actually started. t.Cleanup kills it.
 func startRealProcess(t *testing.T, seconds int) (pid int, startedAt time.Time) {
 	t.Helper()
-	cmd := exec.Command("sleep", itoaHelper(seconds))
+	cmd := exec.Command("sleep", strconv.Itoa(seconds))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start real process: %v", err)
 	}
 	startedAt = time.Now()
-	t.Cleanup(func() { _ = cmd.Process.Kill() })
+	t.Cleanup(func() {
+		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			t.Errorf("Kill(sleep): %v", err)
+		}
+		var exitErr *exec.ExitError
+		if err := cmd.Wait(); err != nil && !errors.As(err, &exitErr) {
+			t.Errorf("Wait(sleep): %v", err)
+		}
+	})
 	return cmd.Process.Pid, startedAt
 }
 
-func itoaHelper(n int) string {
-	digits := "0123456789"
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{digits[n%10]}, b...)
-		n /= 10
-	}
-	return string(b)
-}
-
 func TestLivenessReportsAliveForARunningProcessWithAMatchingStartTime(t *testing.T) {
+	t.Parallel()
 	pid, startedAt := startRealProcess(t, 10)
 
 	alive, err := runner.ProcessRunner{}.Liveness(pid, startedAt, time.Now())
@@ -48,22 +47,29 @@ func TestLivenessReportsAliveForARunningProcessWithAMatchingStartTime(t *testing
 	}
 }
 
-func TestLivenessReportsDeadForANonexistentPid(t *testing.T) {
+func TestLivenessReportsDeadForAReapedPid(t *testing.T) {
 	t.Parallel()
 
-	// A pid that (almost certainly) names nothing at all. Deliberately 5 digits: macOS's ps
-	// rejects some larger values outright ("process id too large") rather than reporting no
-	// match, which would otherwise make this assertion fragile.
-	alive, err := runner.ProcessRunner{}.Liveness(99999, time.Now(), time.Now())
+	// macOS ps rejects oversized pid values, so use a child pid that the test has reaped.
+	cmd := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Start(reaped child): %v", err)
+	}
+	pid := cmd.Process.Pid
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("Wait(reaped child): %v", err)
+	}
+	alive, err := runner.ProcessRunner{}.Liveness(pid, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("Liveness: %v", err)
 	}
 	if alive {
-		t.Error("Liveness reported alive for a pid that does not exist")
+		t.Error("Liveness reported alive for a reaped child")
 	}
 }
 
 func TestLivenessReportsDeadForALivePidRecordedWithADifferentStartTime(t *testing.T) {
+	t.Parallel()
 	pid, startedAt := startRealProcess(t, 30)
 	reusedPidStart := startedAt.Add(6 * time.Second)
 
@@ -87,10 +93,11 @@ func TestLivenessReportsDeadForALivePidRecordedWithADifferentStartTime(t *testin
 }
 
 func TestReapReturnsTheRealExitCode(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command("/bin/sh", "-c", "exit 3")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Start(exit 3): %v", err)
 	}
 	pid := cmd.Process.Pid
 
@@ -123,10 +130,11 @@ func TestReapReportsNotOkForAPidThatIsNotOurChild(t *testing.T) {
 }
 
 func TestLivenessReportsDeadForAnExitedProcess(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command("/bin/sh", "-c", "exit 0")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Start(exit 0): %v", err)
 	}
 	pid := cmd.Process.Pid
 	startedAt := time.Now()
@@ -140,5 +148,8 @@ func TestLivenessReportsDeadForAnExitedProcess(t *testing.T) {
 	}
 	if !pollUntil(2*time.Second, dead) {
 		t.Error("Liveness still reports alive for a process that exited immediately")
+	}
+	if _, ok := (runner.ProcessRunner{}).Reap(pid); !ok {
+		t.Errorf("Reap(%d) = not a child, want child", pid)
 	}
 }

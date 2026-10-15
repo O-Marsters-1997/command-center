@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,6 +20,29 @@ const (
 	pidReuseTolerance = 5 * time.Second
 	psTimeout         = 10 * time.Second
 )
+
+// Spawn starts an agent as a process-group leader.
+// Go's exec.CommandContext kills only its leader on cancellation, not its subprocesses.
+func (ProcessRunner) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
+	if len(cfg.AgentCommand) == 0 {
+		return SpawnResult{}, errors.New("spawn agent: agent_command is empty")
+	}
+	argv := buildArgv(cfg)
+	if len(argv) == 0 {
+		return SpawnResult{}, errors.New("spawn agent: agent_command builds an empty argv")
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Dir = cfg.WorktreePath
+	cmd.Stdout = cfg.LogFile
+	cmd.Stderr = cfg.LogFile
+	cmd.Env = stripAPIKey(os.Environ())
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		return SpawnResult{}, fmt.Errorf("spawn agent %s: %w", argv[0], err)
+	}
+	return SpawnResult{Pid: cmd.Process.Pid}, nil
+}
 
 // Liveness reports whether pgid is still the process launched at wantStart. It uses ps, not
 // kill(-pgid, 0): on Darwin a group whose leader is a zombie returns EPERM, not ESRCH.
@@ -57,7 +82,7 @@ func psStatAndEtime(pid int) (stat, etime string, ok bool) {
 	return fields[0], fields[1], true
 }
 
-// ps's elapsed-time format is [[DD-]hh:]mm:ss on both GNU and BSD.
+// GNU and BSD ps both emit [[DD-]hh:]mm:ss for elapsed time.
 func parseEtime(s string) (time.Duration, error) {
 	days := 0
 	if before, after, found := strings.Cut(s, "-"); found {
@@ -103,7 +128,6 @@ const (
 	cancelDeadline     = 2 * time.Second
 )
 
-// Cancel terminates every process in pgid: SIGTERM, then poll, then SIGKILL as a backstop.
 func (ProcessRunner) Cancel(pgid int) error {
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return fmt.Errorf("SIGTERM process group %d: %w", pgid, err)
@@ -124,8 +148,6 @@ func (ProcessRunner) Cancel(pgid int) error {
 	return nil
 }
 
-// Reap collects a dead child's exit code. ok is false when pid is not our direct child, as after
-// a restart when a recovered run belongs to init.
 func (ProcessRunner) Reap(pid int) (exitCode int, ok bool) {
 	var status syscall.WaitStatus
 	if _, err := syscall.Wait4(pid, &status, 0, nil); err != nil {

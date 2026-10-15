@@ -12,6 +12,7 @@ import (
 )
 
 func TestOutputReturnsStdoutRunInDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	out, err := command.Output(t.Context(), dir, "pwd")
@@ -24,6 +25,7 @@ func TestOutputReturnsStdoutRunInDir(t *testing.T) {
 }
 
 func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	out, err := command.Output(t.Context(), dir, "sh", "-c", "echo partial; echo boom >&2; exit 3")
@@ -47,6 +49,7 @@ func TestOutputErrorNamesCommandDirAndStderr(t *testing.T) {
 }
 
 func TestRunDiscardsStdoutAndNamesTheFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	err := command.Run(t.Context(), dir, "sh", "-c", "echo boom >&2; exit 2")
@@ -63,6 +66,7 @@ func TestRunDiscardsStdoutAndNamesTheFailure(t *testing.T) {
 }
 
 func TestOutputReturnsWhenAGrandchildHoldsStdoutOpen(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
@@ -77,6 +81,7 @@ func TestOutputReturnsWhenAGrandchildHoldsStdoutOpen(t *testing.T) {
 }
 
 func TestOutputSwitchesPromptsOff(t *testing.T) {
+	t.Parallel()
 	out, err := command.Output(t.Context(), "", "sh", "-c", `echo "$GIT_TERMINAL_PROMPT $GH_PROMPT_DISABLED"`)
 	if err != nil {
 		t.Fatalf("Output(echo env): %v", err)
@@ -87,6 +92,7 @@ func TestOutputSwitchesPromptsOff(t *testing.T) {
 }
 
 func TestOutputErrorTruncatesALongCommandLine(t *testing.T) {
+	t.Parallel()
 	body := strings.Repeat("x", 5000)
 
 	_, err := command.Output(t.Context(), "", "sh", "-c", "exit 1", body)
