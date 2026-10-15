@@ -1,4 +1,13 @@
 import { describe, expect, test } from "bun:test";
+
+declare module "bun:test" {
+  namespace test {
+    function each<const Row extends readonly unknown[]>(cases: readonly Row[]):
+      (name: string, run: (...args: [...Row]) => void | Promise<void>) => void;
+    function each<const Value extends string>(cases: readonly Value[]):
+      (name: string, run: (value: Value) => void | Promise<void>) => void;
+  }
+}
 import {
   activate,
   bindingFor,
@@ -87,35 +96,35 @@ function fake(
 }
 
 describe("bindingFor", () => {
-  test("names a bare key in lower case", () => {
-    expect(bindingFor(press("r"), false)).toBe("r");
-    expect(bindingFor(press("?", { shiftKey: true }), false)).toBe("?");
-    expect(bindingFor(press("Escape"), false)).toBe("escape");
-  });
-
-  test("uses Meta as mod on Apple platforms and Ctrl elsewhere", () => {
-    expect(bindingFor(press("k", { metaKey: true }), true)).toBe("mod+k");
-    expect(bindingFor(press("k", { ctrlKey: true }), true)).toBeNull();
-    expect(bindingFor(press("k", { ctrlKey: true }), false)).toBe("mod+k");
-    expect(bindingFor(press("k", { metaKey: true }), false)).toBeNull();
-  });
-
-  test("leaves every other modified key to the browser", () => {
-    expect(bindingFor(press("r", { metaKey: true }), true)).toBeNull();
-    expect(bindingFor(press("r", { altKey: true }), false)).toBeNull();
-    expect(bindingFor(press("R", { shiftKey: true }), false)).toBeNull();
-    expect(bindingFor(press("g", { repeat: true }), false)).toBeNull();
-    expect(bindingFor(press("g", { isComposing: true }), false)).toBeNull();
+  test.each([
+    ["lowercase letter", press("r"), false, "r"],
+    ["shifted punctuation", press("?", { shiftKey: true }), false, "?"],
+    ["lowercase Escape", press("Escape"), false, "escape"],
+    ["Apple Meta+K", press("k", { metaKey: true }), true, "mod+k"],
+    ["Apple Ctrl+K", press("k", { ctrlKey: true }), true, null],
+    ["other Ctrl+K", press("k", { ctrlKey: true }), false, "mod+k"],
+    ["other Meta+K", press("k", { metaKey: true }), false, null],
+    ["modified letter", press("r", { metaKey: true }), true, null],
+    ["Alt key", press("r", { altKey: true }), false, null],
+    ["shifted letter", press("R", { shiftKey: true }), false, null],
+    ["repeat", press("g", { repeat: true }), false, null],
+    ["composition", press("g", { isComposing: true }), false, null],
+    ["Apple modified digit", press("1", { metaKey: true }), true, null],
+    ["other modified digit", press("1", { ctrlKey: true }), false, null],
+  ] as const)("%s", (_, key, apple, expected) => {
+    expect(bindingFor(key, apple)).toBe(expected);
   });
 });
 
 describe("isApplePlatform", () => {
-  test("prefers userAgentData and falls back to navigator.platform", () => {
-    expect(isApplePlatform({ userAgentData: { platform: "macOS" }, platform: "Linux" })).toBe(true);
-    expect(isApplePlatform({ userAgentData: { platform: "Windows" }, platform: "MacIntel" })).toBe(false);
-    expect(isApplePlatform({ platform: "iPhone" })).toBe(true);
-    expect(isApplePlatform({ platform: "Win32" })).toBe(false);
-    expect(isApplePlatform({})).toBe(false);
+  test.each([
+    ["userAgentData wins for Apple", { userAgentData: { platform: "macOS" }, platform: "Linux" }, true],
+    ["userAgentData wins for Windows", { userAgentData: { platform: "Windows" }, platform: "MacIntel" }, false],
+    ["legacy iPhone", { platform: "iPhone" }, true],
+    ["legacy Windows", { platform: "Win32" }, false],
+    ["missing platform", {}, false],
+  ] as const)("%s", (_, source, expected) => {
+    expect(isApplePlatform(source)).toBe(expected);
   });
 });
 
@@ -163,11 +172,6 @@ describe("the g chord", () => {
     expect(state.lookup(press("1"), null)).toBe("1");
   });
 
-  test("a modified digit is left to the browser", () => {
-    expect(bindingFor(press("1", { metaKey: true }), true)).toBeNull();
-    expect(bindingFor(press("1", { ctrlKey: true }), false)).toBeNull();
-  });
-
   test("clear drops a pending prefix", () => {
     const state = createKeyState(false, fakeClock().timers);
     state.lookup(press("g"), null);
@@ -184,12 +188,9 @@ describe("the g chord", () => {
 });
 
 describe("field and Enter guards", () => {
-  test("typing in a field reaches no binding", () => {
+  test.each(["g", "t", "c"])("typing %s in a field reaches no binding", (key) => {
     const state = createKeyState(false, fakeClock().timers);
-    const input = focused(["input"]);
-    expect(state.lookup(press("g"), input)).toBeNull();
-    expect(state.lookup(press("t"), input)).toBeNull();
-    expect(state.lookup(press("c"), input)).toBeNull();
+    expect(state.lookup(press(key), focused(["input"]))).toBeNull();
   });
 
   test("typing g in a field does not arm the chord", () => {
@@ -210,13 +211,15 @@ describe("field and Enter guards", () => {
     expect(state.lookup(press("k", { ctrlKey: true }), select)).toBe("mod+k");
   });
 
-  test("Enter on a link, button or summary is left to the element", () => {
+  test.each([
+    ["link", focused(["a"]), null],
+    ["button", focused(["button"]), null],
+    ["summary", focused(["summary"]), null],
+    ["div", focused(["div"]), "enter"],
+    ["nothing", null, "enter"],
+  ] as const)("Enter on %s", (_, target, expected) => {
     const state = createKeyState(false, fakeClock().timers);
-    for (const tag of ["a", "button", "summary"]) {
-      expect(state.lookup(press("Enter"), focused([tag]))).toBeNull();
-    }
-    expect(state.lookup(press("Enter"), focused(["div"]))).toBe("enter");
-    expect(state.lookup(press("Enter"), null)).toBe("enter");
+    expect(state.lookup(press("Enter"), target)).toBe(expected);
   });
 });
 
@@ -273,28 +276,18 @@ function rail(current: number | null, count: number, folded: number[] = []) {
 }
 
 describe("walkRail", () => {
-  test("J and K step from the current link", () => {
-    const r = rail(1, 3);
-    walkRail(r.links, 1);
-    walkRail(r.links, -1);
-    expect(r.clicks).toEqual([2, 0]);
-  });
-
-  test("with no current link J goes first and K goes last", () => {
-    const r = rail(null, 3);
-    walkRail(r.links, 1);
-    walkRail(r.links, -1);
-    expect(r.clicks).toEqual([0, 2]);
-  });
-
-  test("does nothing past either end", () => {
-    const last = rail(2, 3);
-    const first = rail(0, 3);
-    expect(walkRail(last.links, 1)).toBeNull();
-    expect(walkRail(first.links, -1)).toBeNull();
-    expect(walkRail([], 1)).toBeNull();
-    expect(last.clicks).toEqual([]);
-    expect(first.clicks).toEqual([]);
+  test.each([
+    ["J from current", 1, 3, 1, [2]],
+    ["K from current", 1, 3, -1, [0]],
+    ["J without current", null, 3, 1, [0]],
+    ["K without current", null, 3, -1, [2]],
+    ["J past end", 2, 3, 1, []],
+    ["K past start", 0, 3, -1, []],
+    ["empty rail", null, 0, 1, []],
+  ] as const)("%s", (_, current, count, step, clicks) => {
+    const r = rail(current, count);
+    expect(walkRail(r.links, step)).toBe(r.links[clicks[0] ?? -1] ?? null);
+    expect(r.clicks).toEqual(clicks);
   });
 
   test("unfolds a closed details before clicking", () => {
@@ -331,40 +324,20 @@ describe("searchKey", () => {
     return b;
   }
 
-  test("Enter clicks the first match and keeps the query", () => {
-    const b = box("auth");
+  test.each([
+    ["Enter with matches", { key: "Enter", query: "auth", matches: 2, handled: true, clicks: ["a"], value: "auth", events: [], blurs: 1 }],
+    ["Enter without matches", { key: "Enter", query: "zzz", matches: 0, handled: true, clicks: [], value: "zzz", events: [], blurs: 0 }],
+    ["Escape with query", { key: "Escape", query: "auth", matches: 0, handled: true, clicks: [], value: "", events: ["search"], blurs: 1 }],
+    ["Escape without query", { key: "Escape", query: "", matches: 0, handled: true, clicks: [], value: "", events: [], blurs: 1 }],
+    ["unhandled key", { key: "a", query: "x", matches: 0, handled: false, clicks: [], value: "x", events: [], blurs: 0 }],
+  ] as const)("%s", (_, scenario) => {
+    const b = box(scenario.query);
     const clicks: string[] = [];
-    const links = [{ click: () => clicks.push("a") }, { click: () => clicks.push("b") }];
-    expect(searchKey("Enter", b, links)).toBe(true);
-    expect(clicks).toEqual(["a"]);
-    expect(b.value).toBe("auth");
-    expect(b.blurs).toBe(1);
-  });
-
-  test("Escape on an empty box blurs without a search event", () => {
-    const b = box("");
-    searchKey("Escape", b, []);
-    expect(b.events).toEqual([]);
-    expect(b.blurs).toBe(1);
-  });
-
-  test("Enter with no match does nothing", () => {
-    const b = box("zzz");
-    expect(searchKey("Enter", b, [])).toBe(true);
-    expect(b.blurs).toBe(0);
-    expect(b.value).toBe("zzz");
-    expect(b.events).toEqual([]);
-  });
-
-  test("Escape clears, fires search and blurs", () => {
-    const b = box("auth");
-    expect(searchKey("Escape", b, [])).toBe(true);
-    expect(b.value).toBe("");
-    expect(b.events).toEqual(["search"]);
-    expect(b.blurs).toBe(1);
-  });
-
-  test("other keys are left alone", () => {
-    expect(searchKey("a", box("x"), [])).toBe(false);
+    const links = Array.from({ length: scenario.matches }, (_, i) => ({ click: () => clicks.push(String.fromCharCode(97 + i)) }));
+    expect(searchKey(scenario.key, b, links)).toBe(scenario.handled);
+    expect(clicks).toEqual(scenario.clicks);
+    expect(b.value).toBe(scenario.value);
+    expect(b.events).toEqual(scenario.events);
+    expect(b.blurs).toBe(scenario.blurs);
   });
 });
