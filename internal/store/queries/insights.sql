@@ -15,9 +15,6 @@ GROUP BY t.url, t.title, t.feature, m.merged_at
 ORDER BY m.merged_at;
 
 -- name: BoardTicketSpend :many
--- One row per ticket in scope, weighing every run disposed before its own pr_merged event when
--- merged, or every run disposed so far when still open -- the same weighing MergedTicketSpend
--- uses, generalised past merged-only tickets and off any date window (ADR 10).
 WITH merges AS (
     SELECT ticket_id, at AS merged_at FROM events WHERE kind = 'pr_merged'
 )
@@ -33,7 +30,6 @@ WHERE (sqlc.narg(repo)::text IS NULL OR t.repo = sqlc.narg(repo))
 GROUP BY t.url, m.merged_at;
 
 -- name: WithdrawnTicketWaste :one
--- Every disposed run belonging to a ticket withdrawn without ever merging.
 SELECT COALESCE(SUM(r.cost_usd), 0)::double precision AS waste_usd
 FROM tickets t
 JOIN runs r ON r.ticket_id = t.url AND r.ended_at IS NOT NULL
