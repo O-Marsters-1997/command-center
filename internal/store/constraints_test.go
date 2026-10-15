@@ -22,8 +22,9 @@ func openRawDB(t *testing.T, dsn string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
@@ -131,7 +132,7 @@ func TestEachCheckListsExactlyItsGoSet(t *testing.T) {
 				`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = $1`, tt.constraint,
 			).Scan(&definition)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("QueryRowContext(%s).Scan: %v", tt.constraint, err)
 			}
 			var got []string
 			for _, m := range literal.FindAllStringSubmatch(definition, -1) {

@@ -7,8 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// RemovalRefusals returns each ticket's most recent remove-worktree refusal, keyed by
-// ticket URL.
+// RemovalRefusals returns each ticket's latest remove-worktree refusal.
 func (s *Store) RemovalRefusals(ctx context.Context) (map[plan.TicketURL]string, error) {
 	rows, err := s.q.ListLatestRemovalRefusals(ctx, string(EventRemoveWorktreeRefused))
 	if err != nil {

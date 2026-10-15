@@ -72,7 +72,6 @@ func upsertRepo(ctx context.Context, q *ccdb.Queries, r Repo) error {
 	return nil
 }
 
-// SetRepoState writes r's state, refusal and settings read onto the row named r.Name.
 func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 	n, err := s.q.SetRepoState(ctx, ccdb.SetRepoStateParams{
 		Name: r.Name, State: string(r.Phase),
@@ -83,8 +82,7 @@ func (s *Store) SetRepoState(ctx context.Context, r Repo) error {
 	return matchedRow(n, err, fmt.Sprintf("set repo %s phase %s", r.Name, r.Phase))
 }
 
-// QueueTrackIntent queues a Track for repo unless one is already pending, and reports whether it
-// queued.
+// QueueTrackIntent reports false if a Track is already pending for the repo.
 func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time) (bool, error) {
 	pending, err := s.TrackPending(ctx, repo)
 	if err != nil {
@@ -99,7 +97,7 @@ func (s *Store) QueueTrackIntent(ctx context.Context, repo string, at time.Time)
 	return true, nil
 }
 
-// TrackPending reports whether a Track for repo, ignoring case, has been queued and not yet applied.
+// TrackPending matches repo names case-insensitively.
 func (s *Store) TrackPending(ctx context.Context, repo string) (bool, error) {
 	intents, err := s.PendingVerbIntents(ctx, plan.VerbTrack)
 	if err != nil {

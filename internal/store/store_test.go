@@ -20,6 +20,8 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
+var testNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+
 func openStore(t *testing.T) *storepkg.Store {
 	t.Helper()
 	return cctest.Store(t)
@@ -43,8 +45,9 @@ func gooseVersion(t *testing.T, dsn string) int64 {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	defer func() { _ = db.Close() }()
 	var v int64
 	if err := db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v); err != nil {
@@ -80,13 +83,14 @@ func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	if _, err := db.ExecContext(t.Context(), "DROP TABLE goose_db_version"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("DROP TABLE goose_db_version: %v", err)
 	}
 	if err := db.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("db.Close: %v", err)
 	}
 	store := openStoreAt(t, dsn)
 	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
@@ -96,8 +100,9 @@ func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 	}
 	db, err = sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("close verification connection: %v", err)
@@ -106,7 +111,7 @@ func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 	var exists bool
 	err = db.QueryRowContext(t.Context(), "SELECT to_regclass('goose_db_version') IS NOT NULL").Scan(&exists)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueryRowContext(to_regclass).Scan: %v", err)
 	}
 	if exists {
 		t.Error("OpenStore restored goose_db_version on a cloned database, want no migration")
@@ -168,7 +173,7 @@ func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
 
 	u, err := url.Parse(cctest.DSN(t))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("url.Parse(test DSN): %v", err)
 	}
 	q := u.Query()
 	q.Set("statement_timeout", "100")
@@ -176,7 +181,7 @@ func TestOpenStoreAppliesStatementTimeout(t *testing.T) {
 
 	db, err := storepkg.OpenStore(u.String(), storepkg.MaxOpenConns(4))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("OpenStore(timeout DSN): %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
@@ -194,10 +199,10 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("first.UpsertTickets: %v", err)
 	}
 	if err := first.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("first.Close: %v", err)
 	}
 
 	second := openStoreAt(t, dsn)
@@ -206,7 +211,7 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	}
 	tickets, err := second.Tickets(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("second.Tickets: %v", err)
 	}
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
@@ -268,8 +273,9 @@ func TestUpsertTicketWithNoBlockersRoundTripsAsEmptyArray(t *testing.T) {
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	defer func() { _ = db.Close() }()
 
 	var raw string
@@ -285,12 +291,13 @@ func TestBlockedByRejectsInvalidJSONAtTheDatabase(t *testing.T) {
 	t.Parallel()
 
 	dsn := cctest.DSN(t)
-	openStoreAt(t, dsn) // migrate the database before writing to it directly
+	openStoreAt(t, dsn)
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
+	db.SetMaxOpenConns(4)
 	defer func() { _ = db.Close() }()
 
 	_, err = db.Exec(
@@ -309,34 +316,34 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
 	at := time.Now()
 	if err := store.QueueLaunchIntent(ctx, storepkg.LaunchRequest{
 		Ticket: ticket.URL, PromptHash: "hash-1", Group: "group-a", At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueLaunchIntent: %v", err)
 	}
 	if err := store.ApplyLaunchIntents(ctx, at.Add(time.Second)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ApplyLaunchIntents: %v", err)
 	}
 
 	runID, err := store.InsertRunSkeleton(
 		ctx, storepkg.RunSkeleton{Ticket: ticket.URL, Kind: "agent", PromptHash: "hash-1"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	push := storepkg.Push{
 		Ticket: plan.TicketURL(ticket.URL), Tip: "deadbeef", BaseSHA: "cafebabe", BaseBranch: "main", At: at,
 	}
 	if err := store.RecordPush(ctx, push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush: %v", err)
 	}
 
 	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
@@ -345,7 +352,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(tickets) != 0 {
 		t.Errorf("tickets = %+v, want none left after WithdrawTicket", tickets)
@@ -353,7 +360,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 
 	runIDs, err := store.RunIDsForTicket(ctx, ticket.URL)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunIDsForTicket: %v", err)
 	}
 	if len(runIDs) != 1 || runIDs[0] != runID {
 		t.Errorf("run ids = %v, want the run to survive withdrawal", runIDs)
@@ -361,7 +368,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 
 	tips, err := store.LastPushedTips(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LastPushedTips: %v", err)
 	}
 	if tips[plan.TicketURL(ticket.URL)] != "deadbeef" {
 		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
@@ -369,7 +376,7 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 
 	memberships, err := store.LaunchMemberships(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LaunchMemberships: %v", err)
 	}
 	if _, ok := memberships[plan.TicketURL(ticket.URL)]; !ok {
 		t.Errorf("memberships = %+v, want the launch membership to survive withdrawal", memberships)
@@ -386,7 +393,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"},
 	}
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	for _, e := range []storepkg.Event{
@@ -399,7 +406,7 @@ func TestTicketEventsAfterReturnsOnlyThisTicketsNewerEvents(t *testing.T) {
 		{At: at, Kind: storepkg.EventTickError},
 	} {
 		if err := store.AppendEvent(ctx, e); err != nil {
-			t.Fatal(err)
+			t.Fatalf("AppendEvent(%s): %v", e.Kind, err)
 		}
 	}
 
@@ -431,7 +438,7 @@ func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
 	const ticketURL = "sandbox://CC-1"
 	tickets := []storepkg.Ticket{{URL: ticketURL, Repo: "cc-sandbox", Branch: "cc-1"}}
 	if err := store.UpsertTickets(ctx, tickets); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	const total, pageSize = 7, 3
@@ -444,7 +451,7 @@ func TestTicketEventsAfterPagesWithoutGapsOrRepeats(t *testing.T) {
 		kind := kinds[i]
 		want = append(want, kind)
 		if err := store.AppendEvent(ctx, storepkg.Event{At: at, TicketURL: ticketURL, Kind: kind}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("AppendEvent(%s): %v", kind, err)
 		}
 	}
 
@@ -478,16 +485,16 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 
 	at := time.Now()
 	ticketEvent := storepkg.Event{At: at, TicketURL: ticket.URL, Kind: storepkg.EventPushed}
 	if err := store.AppendEvent(ctx, ticketEvent); err != nil {
-		t.Fatal(err)
+		t.Fatalf("AppendEvent(ticket): %v", err)
 	}
 	if err := store.AppendEvent(ctx, storepkg.Event{At: at, Kind: storepkg.EventTickError}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("AppendEvent(tick error): %v", err)
 	}
 
 	if err := store.WithdrawTicket(ctx, ticket.URL, at.Add(time.Hour), false); err != nil {
@@ -496,7 +503,7 @@ func TestWithdrawTicketLeavesEventsAlone(t *testing.T) {
 
 	events, err := store.Events(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events: %v", err)
 	}
 	if len(events) != 2 {
 		t.Errorf("events = %+v, want both the ticket-scoped and the fleet event left", events)

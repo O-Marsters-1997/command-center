@@ -40,7 +40,7 @@ func TestReadsThatDecideAWriteRunOnTheTransactionsConnection(t *testing.T) {
 	s.DB().SetMaxOpenConns(1)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 
 	url := "https://github.com/acme/alpha/issues/1"
 	tickets := []storepkg.ImportedTicket{

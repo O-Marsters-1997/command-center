@@ -24,14 +24,14 @@ func TestRunSeedsDisposedAndAliveRuns(t *testing.T) {
 	})
 	details, err := st.RunDetails(t.Context(), plan.RunID(completedID))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RunDetails(%d): %v", completedID, err)
 	}
 	if details.SessionID == "" || details.Message != "first run" || !details.Outcome.IsSome() {
 		t.Errorf("RunDetails = %+v, want a disposed session with its message", details)
 	}
 	latest, err := st.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket: %v", err)
 	}
 	if got := latest[plan.TicketURL(ticket.URL)].Outcome; !got.IsSome() || got.Unwrap() != plan.OutcomePush {
 		t.Errorf("LatestRunsByTicket outcome = %v, want push", got)
@@ -39,7 +39,7 @@ func TestRunSeedsDisposedAndAliveRuns(t *testing.T) {
 	storetest.Run(t, st, storetest.RunOpts{TicketURL: ticket.URL, Kind: plan.RunKindAgent, StartedAt: at})
 	latest, err = st.LatestRunsByTicket(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunsByTicket after alive run: %v", err)
 	}
 	if got := latest[plan.TicketURL(ticket.URL)].Outcome; got.IsSome() {
 		t.Errorf("alive run outcome = %v, want none", got)
@@ -61,7 +61,7 @@ func TestTicketsAndPushedSeedTheStore(t *testing.T) {
 	})
 	pushes, err := st.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
 	if got := pushes[plan.TicketURL(ticket.URL)]; got.PushedTip != "head" || got.BaseSHAAtPush != "base" {
 		t.Errorf("LatestPushes[%s] = %+v, want head/base", ticket.URL, got)

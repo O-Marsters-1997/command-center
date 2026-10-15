@@ -48,13 +48,13 @@ type Store struct {
 
 type Option func(*sql.DB)
 
-// MaxOpenConns limits the store pool's concurrent connections.
+// MaxOpenConns sets the store pool's concurrent connection limit.
 func MaxOpenConns(n int) Option { return func(db *sql.DB) { db.SetMaxOpenConns(n) } }
 
-// Migrations returns the embedded files used to key test database templates.
+// Migrations exposes the embedded migrations used to key test database templates.
 func Migrations() fs.FS { return migrations }
 
-// OpenStore connects to dsn and migrates it unless opened from a prepared template.
+// OpenStore connects and migrates the database unless opened from a prepared test template.
 func OpenStore(dsn string, opts ...Option) (*Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
 	defer cancel()
@@ -121,8 +121,7 @@ func (s *Store) Close() error {
 	return nil
 }
 
-// UpsertTickets writes a ticket row directly, every column at once, keyed on url.
-// Tests use it to seed an exact row; production imports through ImportTickets.
+// UpsertTickets seeds entire ticket rows directly; production imports through ImportTickets.
 func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
 	rows := make([]ticketRow, 0, len(tickets))
 	for _, t := range tickets {
@@ -210,7 +209,7 @@ func (s *Store) inTx(ctx context.Context, fn func(q *ccdb.Queries) error) error 
 	return nil
 }
 
-// Tickets returns every ticket row not withdrawn, ordered by url.
+// Tickets excludes withdrawn rows and orders by URL.
 func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	rows, err := s.q.ListTickets(ctx)
 	if err != nil {
@@ -240,8 +239,7 @@ func (s *Store) Tickets(ctx context.Context) ([]Ticket, error) {
 	return tickets, nil
 }
 
-// FeatureConflictError reports a ticket already stored under a different feature than the one
-// being imported.
+// FeatureConflictError reports a ticket stored under a different feature than its import.
 type FeatureConflictError struct {
 	URL, Existing, Importing string
 }
@@ -253,9 +251,7 @@ func (e *FeatureConflictError) Error() string {
 
 func (e *FeatureConflictError) refusedTicket() string { return e.URL }
 
-// ImportTickets upserts one feature's tracker tickets, keyed on url, withdrawing and later
-// restoring rows the tracker stops and resumes returning. branch and blocked_by are seeded
-// once; a merged-and-withdrawn blocker is pruned from every other ticket's blocked_by.
+// ImportTickets refreshes tracker rows, preserving seeded branch and blockers while pruning merged blockers.
 func (s *Store) ImportTickets(
 	ctx context.Context, feature string, tickets []ImportedTicket, now time.Time,
 ) error {
@@ -415,8 +411,7 @@ func repairBlockedBy(ctx context.Context, qtx *ccdb.Queries, withdrawn map[strin
 	return matchedRow(n, err, fmt.Sprintf("repair blocked_by of %d tickets", len(updates)))
 }
 
-// WithdrawTicket retracts a ticket without deleting its row, so runs, pushes and events keep
-// their foreign key. When merged, it also prunes the URL from every other ticket's blocked_by.
+// WithdrawTicket retains historical references and prunes merged blockers from other tickets.
 func (s *Store) WithdrawTicket(ctx context.Context, url string, now time.Time, merged bool) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
 		n, err := q.WithdrawTicket(ctx, ccdb.WithdrawTicketParams{WithdrawnAt: notNullTime(now), URL: url})
@@ -479,8 +474,7 @@ const (
 	metaLastVerdicts  = "last_verdicts"
 )
 
-// CheckingTicks returns each ticket's count of successful ticks since it last had anything to
-// resolve into a CI verdict. verdict.Input.Now derives from this, never wall clock.
+// CheckingTicks counts successful ticks while each ticket awaits a CI verdict, not wall time.
 func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, error) {
 	ticks := map[plan.TicketURL]int{}
 	if _, err := s.getMeta(ctx, metaCheckingTicks, &ticks); err != nil {
@@ -489,7 +483,6 @@ func (s *Store) CheckingTicks(ctx context.Context) (map[plan.TicketURL]int, erro
 	return ticks, nil
 }
 
-// IncrementCheckingTicks bumps every named ticket's counter by one per successful tick.
 func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -504,7 +497,6 @@ func (s *Store) IncrementCheckingTicks(ctx context.Context, ticketURLs []plan.Ti
 	return nil
 }
 
-// ResetCheckingTicks zeroes one ticket's counter on every fresh push.
 func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL) error {
 	ticks, err := s.CheckingTicks(ctx)
 	if err != nil {
@@ -520,7 +512,7 @@ func (s *Store) ResetCheckingTicks(ctx context.Context, ticketID plan.TicketURL)
 	return nil
 }
 
-// LastVerdicts returns each ticket's most recently recorded CI verdict label, keyed by ticket URL.
+// LastVerdicts returns the latest recorded CI verdict per ticket URL.
 func (s *Store) LastVerdicts(ctx context.Context) (map[string]string, error) {
 	verdicts := map[string]string{}
 	if _, err := s.getMeta(ctx, metaLastVerdicts, &verdicts); err != nil {
@@ -536,7 +528,7 @@ func (s *Store) SaveLastVerdicts(ctx context.Context, verdicts map[string]string
 	return nil
 }
 
-// SaveObservation replaces the persisted observation. Only a successful tick calls it.
+// SaveObservation replaces the persisted observation after a successful tick.
 func (s *Store) SaveObservation(ctx context.Context, obs plan.Observation) error {
 	if err := s.putMeta(ctx, metaObservation, obs); err != nil {
 		return fmt.Errorf("write %s meta: %w", metaObservation, err)
@@ -567,7 +559,7 @@ func (s *Store) RecordTickError(ctx context.Context, tickErr TickError) error {
 	return nil
 }
 
-// LastError returns the last tick failure. A later success does not clear it.
+// LastError retains the last tick failure even after a successful tick.
 func (s *Store) LastError(ctx context.Context) (option.Option[TickError], error) {
 	var tickErr TickError
 	found, err := s.getMeta(ctx, metaLastError, &tickErr)
@@ -580,7 +572,7 @@ func (s *Store) LastError(ctx context.Context) (option.Option[TickError], error)
 	return option.Some(tickErr), nil
 }
 
-// ImportError is the last feature-conflict import refusal.
+// ImportError holds the last feature-conflict import refusal.
 type ImportError struct {
 	At      time.Time `json:"at"`
 	Feature string    `json:"feature"`
@@ -592,7 +584,7 @@ type importRefusal interface {
 	refusedTicket() string
 }
 
-// RecordImportRefusal stores refusal as the last import failure and appends its audit event.
+// RecordImportRefusal persists the last import refusal and appends an audit event.
 func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal importRefusal, now time.Time) error {
 	importErr := ImportError{At: now, Feature: feature, Message: refusal.Error()}
 	if err := s.putMeta(ctx, metaImportError, importErr); err != nil {
@@ -607,7 +599,7 @@ func (s *Store) RecordImportRefusal(ctx context.Context, feature string, refusal
 	return nil
 }
 
-// LastImportError returns the last import refusal; a later success does not clear it.
+// LastImportError retains the last import refusal even after a successful import.
 func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) {
 	var importErr ImportError
 	found, err := s.getMeta(ctx, metaImportError, &importErr)
@@ -617,7 +609,7 @@ func (s *Store) LastImportError(ctx context.Context) (ImportError, bool, error) 
 	return importErr, found, nil
 }
 
-// Event is one append-only audit row.
+// Event holds an append-only audit row.
 type Event struct {
 	ID        int64
 	At        time.Time
