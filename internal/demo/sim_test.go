@@ -16,13 +16,14 @@ var recoveryVerb = map[string]string{
 }
 
 func TestGeneratedBoardDrainsAfterRecovery(t *testing.T) {
+	t.Parallel()
 	sim, err := NewSim(t.Context(), slog.New(slog.DiscardHandler), Generate(6, 12))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewSim: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := sim.Close(); err != nil {
-			t.Error(err)
+			t.Errorf("Close(sim): %v", err)
 		}
 	})
 
@@ -30,7 +31,7 @@ func TestGeneratedBoardDrainsAfterRecovery(t *testing.T) {
 	pressed := map[string]string{}
 	for tick := 0; tick < 300 && !allMerged(sim); tick++ {
 		if err := sim.Tick(t.Context()); err != nil {
-			t.Fatal(err)
+			t.Fatalf("Tick(sim): %v", err)
 		}
 		for _, i := range sim.issues {
 			state := sim.board[i.ID]

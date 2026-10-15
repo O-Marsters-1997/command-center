@@ -39,24 +39,18 @@ type options struct {
 
 type Option func(*options)
 
-// WithClock replaces the real clock, making the rendered page byte-stable in tests.
 func WithClock(clock loop.Clock) Option {
 	return func(o *options) { o.clock = clock }
 }
 
-// WithObserver replaces the observe phase, so a tick runs without git or gh.
 func WithObserver(observe loop.ObserveFunc) Option {
 	return func(o *options) { o.observe = observe }
 }
 
-// WithValidator replaces how a cloning repo is settled into ready or refused, so a test or the
-// e2e build runs without GitHub.
 func WithValidator(validate loop.ValidateFunc) Option {
 	return func(o *options) { o.validate = validate }
 }
 
-// WithRemoteSource replaces the gh lookup of a tracked repo's clone URL, so a test or the e2e
-// build runs without GitHub.
 func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
 	return func(o *options) { o.remoteOf = remoteOf }
 }
@@ -91,13 +85,13 @@ func New(
 		}
 	}()
 
-	store, err := store.OpenStore(cfg.DatabaseURL)
+	st, err := store.OpenStore(cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, store.Close())
+			err = errors.Join(err, st.Close())
 		}
 	}()
 
@@ -107,7 +101,7 @@ func New(
 
 	observe := settings.observe
 	if observe == nil {
-		observe = loop.NewObserver(store, gh.CLI{}, cfg)
+		observe = loop.NewObserver(st, gh.CLI{}, cfg)
 	}
 
 	var loopOpts []loop.Option
@@ -118,19 +112,19 @@ func New(
 		loopOpts = append(loopOpts, loop.WithRemoteSource(settings.remoteOf))
 	}
 	lp := loop.New(loop.Deps{
-		Logger: logger, Store: store, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
+		Logger: logger, Store: st, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
 		Config: cfg, Workspace: ws,
 	}, loopOpts...)
 	webOpts = append(webOpts, web.WithSpendLimit5h(cfg.SpendLimit5h), web.WithBoardPollSeconds(cfg.BoardPollSeconds))
 	server := web.NewServer(web.Deps{
-		Logger: logger, Store: store, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
+		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 	}, webOpts...)
 
 	return &App{
 		cfg:    cfg,
 		logger: logger,
 		lock:   lock,
-		store:  store,
+		store:  st,
 		loop:   lp,
 		server: server,
 	}, nil
@@ -145,7 +139,6 @@ func (a *App) RunOnce(ctx context.Context) error {
 
 func (a *App) Handler() http.Handler { return a.server }
 
-// Run ticks and serves until the context is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -155,8 +148,7 @@ func (a *App) Run(ctx context.Context) error {
 		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(a.cfg.Port)),
 		Handler:           a.server,
 		ReadHeaderTimeout: 5 * time.Second,
-		// An open log stream is an active connection until its request context is cancelled, and
-		// Shutdown waits on active connections. Without this it waits out the whole grace period.
+		// net/http Shutdown waits for active streams; cancel their request contexts first.
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 

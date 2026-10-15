@@ -27,20 +27,14 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// testdataDir is absolute because the harness commands run with the script's work directory as
-// their cwd, not the package's.
 var testdataDir string
 
-// agentsDir is the repo-root testdata/agents directory, holding the fake agent scripts a
-// config fixture's agent_command points at. Absolute for the same reason as testdataDir.
 var agentsDir string
 
 func TestMain(m *testing.M) {
 	os.Exit(runScripts(m))
 }
 
-// runScripts builds the binaries the scripts exec and puts them first on PATH. It is separate
-// from TestMain so the deferred cleanup runs before os.Exit.
 func runScripts(m *testing.M) (code int) {
 	abs, err := filepath.Abs("testdata")
 	if err != nil {
@@ -63,8 +57,6 @@ func runScripts(m *testing.M) (code int) {
 	}
 	defer func() { _ = os.RemoveAll(bin) }()
 
-	// The fakes are installed under the names of the tools they stand in for: putting this
-	// directory first on PATH is the whole substitution mechanism.
 	if err := errors.Join(
 		build(bin, "cc", "./cmd/cc", "-tags=e2e"),
 		build(bin, "gh", "./e2e/fakegh"),
@@ -81,8 +73,6 @@ func runScripts(m *testing.M) (code int) {
 	return m.Run()
 }
 
-// build compiles pkg into dir under the given name. The module root is one level up from the
-// package directory the test binary runs in.
 func build(dir, name, pkg string, flags ...string) error {
 	args := append([]string{"build"}, flags...)
 	cmd := exec.Command("go", append(args, "-o", filepath.Join(dir, name), pkg)...)
@@ -94,6 +84,7 @@ func build(dir, name, pkg string, flags ...string) error {
 }
 
 func TestScripts(t *testing.T) {
+	t.Parallel()
 	testscript.Run(t, testscript.Params{
 		Dir:   "tests",
 		Setup: setup,
@@ -111,15 +102,16 @@ func TestScripts(t *testing.T) {
 }
 
 func TestScriptsDoNotSleep(t *testing.T) {
+	t.Parallel()
 	sleepCommand := regexp.MustCompile(`\bexec\s+sleep(?:\s|$)`)
 	files, err := filepath.Glob("tests/*.txtar")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Glob(tests/*.txtar): %v", err)
 	}
 	for _, path := range files {
 		body, err := os.ReadFile(path)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ReadFile(%s): %v", path, err)
 		}
 		for lineNo, line := range strings.Split(string(body), "\n") {
 			if sleepCommand.MatchString(strings.TrimSpace(line)) {
@@ -182,9 +174,6 @@ func ccWait(ts *testscript.TestScript, neg bool, args []string) {
 	}
 }
 
-// ccInitRepo builds the repository the config points at, plus the bare origin it fetches from.
-// Observe's first act is `git fetch origin --prune`, so without a remote every script
-// fail-closes before it reaches its assertion. An optional name argument builds a further repo.
 func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) > 1 {
 		ts.Fatalf("usage: cc-init-repo [name]")
@@ -195,8 +184,6 @@ func ccInitRepo(ts *testscript.TestScript, neg bool, args []string) {
 	}
 	work := ts.Getenv("WORK")
 	repo := filepath.Join(work, name)
-	// The default repo's remote keeps its original bare name (every existing script references
-	// $WORK/remote.git directly); a second repo gets its own, name-prefixed, remote instead.
 	remoteName := "remote.git"
 	if name != "repo" {
 		remoteName = name + "-remote.git"
@@ -238,10 +225,6 @@ func publishRepoSettings(ts *testscript.TestScript, name string) {
 	ts.Check(ts.Exec("git", "-C", repo, "push", "-q", "origin", "main"))
 }
 
-// ccConfig installs a named config fixture at cc's default path, so no script ever passes
-// --config. A free port is forced rather than left to the fixture: scripts run in parallel and a
-// fixed port collides. {{agents}} is substituted with agentsDir so a fixture's agent_command can
-// point at a fake agent script without hardcoding this checkout's absolute path.
 func ccConfig(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 1 {
 		ts.Fatalf("usage: cc-config <name>")
@@ -306,8 +289,6 @@ func trackRepos(ts *testscript.TestScript, blocks []map[string]any) {
 	}
 }
 
-// ccFakeGh stages the fixture the fake gh answers from. It is read at exec time, so a script
-// may restage it between ticks.
 func ccFakeGh(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 1 {
 		ts.Fatalf("usage: cc-fake-gh <name>")
@@ -317,9 +298,6 @@ func ccFakeGh(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(os.WriteFile(ts.Getenv("CC_GH_FIXTURE"), body, 0o600))
 }
 
-// ccFakeGhHead stages a gh fixture template whose {{head}} placeholder is replaced with the real
-// current tip of a branch in the repo -- the verdict scripts' way of pointing a fixture's
-// headRefOid at a commit whose SHA a script cannot know ahead of time.
 func ccFakeGhHead(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 2 {
 		ts.Fatalf("usage: cc-fake-gh-head <fixture> <branch>")
@@ -335,12 +313,8 @@ func ccFakeGhHead(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(os.WriteFile(ts.Getenv("CC_GH_FIXTURE"), body, 0o600))
 }
 
-// daemonReady is the line cc logs once it holds the flock and is about to serve.
 const daemonReady = "addr=http://"
 
-// ccDaemon starts a real cc in the background and returns only once it is holding the flock.
-// The readiness poll is the point: sleeping instead would make the second-instance assertion a
-// race, and a flaky test at the bottom of a stack is the worst place for one.
 func ccDaemon(ts *testscript.TestScript, neg bool, args []string) {
 	if neg || len(args) != 0 {
 		ts.Fatalf("usage: cc-daemon")
@@ -393,12 +367,6 @@ func setup(env *testscript.Env) error {
 	return nil
 }
 
-// scriptEnv is the environment a script and anything it starts run under. HOME is the work
-// directory because os.UserConfigDir honours it: that alone redirects the state dir, so no
-// test-only environment variable has to exist in production code.
-//
-// The git identity is passed by environment, and the system config suppressed, so cc-init-repo
-// can commit on a CI runner with no gitconfig at all.
 func scriptEnv(work, databaseURL string) []string {
 	return []string{
 		"HOME=" + work,
@@ -408,15 +376,10 @@ func scriptEnv(work, databaseURL string) []string {
 		"GIT_COMMITTER_NAME=Command Centre",
 		"GIT_COMMITTER_EMAIL=cc@example.com",
 		"CC_DATA_DIR=" + filepath.Join(work, "cc-data"),
-		// One database per script, exactly as each script gets its own CC_DATA_DIR: scripts
-		// run in parallel against one server.
 		"CC_DATABASE_URL=" + databaseURL,
 		"CC_GH_FIXTURE=" + filepath.Join(work, "gh-fixture.json"),
 		"CC_GH_LOG=" + filepath.Join(work, "gh.log"),
 		"CC_TP_LOG=" + filepath.Join(work, "tp.log"),
-		// Read by testdata/agents/commits.sh and empty.sh, inherited by every spawned agent
-		// process (runner.ProcessRunner.Spawn never strips it) -- a script's proof of exactly how
-		// many times an agent actually ran, distinct from tp.log's cuts or events' own count.
 		"CC_AGENT_LOG=" + filepath.Join(work, "agent.log"),
 	}
 }

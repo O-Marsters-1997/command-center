@@ -68,8 +68,6 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	}
 
 	body := fetch("/tickets")
-	// The two tickets seeded straight into the store before New both derive from the stub's
-	// snapshot: CC-1 has no blockers, CC-2's blocker now has an open PR.
 	for _, want := range []string{"sandbox://CC-1", "sandbox://CC-2", "ready"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page does not contain %q:\n%s", want, body)
@@ -92,7 +90,11 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = first.Close() })
+	t.Cleanup(func() {
+		if err := first.Close(); err != nil {
+			t.Errorf("Close(first app): %v", err)
+		}
+	})
 
 	if _, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv); err == nil {
 		t.Fatal("a second instance started against the same workspace")
@@ -108,16 +110,16 @@ func appConfig(t *testing.T) string {
 	root, repoPath := repoWithOrigin(t)
 	checkout := config.CheckoutPath(dataDir, sandboxRepo)
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("MkdirAll(%s): %v", filepath.Dir(checkout), err)
 	}
 	if err := os.Rename(repoPath, checkout); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Rename(%s, %s): %v", repoPath, checkout, err)
 	}
 	configPath := filepath.Join(root, "command-centre.toml")
 	dsn := cctest.DSN(t)
 	body := fmt.Sprintf("port = %d\ndata_dir = %q\ndatabase_url = %q\n", freePort(t), dataDir, dsn)
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", configPath, err)
 	}
 	seed(t, dsn, func(db *store.Store) error {
 		repo := store.Repo{
@@ -138,21 +140,18 @@ func seed(t *testing.T, dsn string, write func(*store.Store) error) {
 	t.Helper()
 	db, err := store.OpenStore(dsn, store.MaxOpenConns(4))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("OpenStore(%s): %v", dsn, err)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			t.Fatal(err)
+			t.Errorf("Close(seed store): %v", err)
 		}
 	}()
 	if err := write(db); err != nil {
-		t.Fatal(err)
+		t.Fatalf("write(seed store): %v", err)
 	}
 }
 
-// TestRunReturnsNilOnACleanShutdown pins the exit status of Ctrl-C. main exits 1 on any
-// non-nil error from Run, so a shutdown path that reports failure turns every normal stop into
-// exit status 1.
 func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 	t.Parallel()
 	configPath := appConfig(t)
@@ -163,7 +162,11 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = inst.Close() })
+	t.Cleanup(func() {
+		if err := inst.Close(); err != nil {
+			t.Errorf("Close(app): %v", err)
+		}
+	})
 
 	done := make(chan error, 1)
 	go func() { done <- inst.Run(ctx) }()
@@ -187,15 +190,19 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hold a port: %v", err)
 	}
-	t.Cleanup(func() { _ = held.Close() })
+	t.Cleanup(func() {
+		if err := held.Close(); err != nil {
+			t.Errorf("Close(listener): %v", err)
+		}
+	})
 	port := held.Addr().(*net.TCPAddr).Port
 	body, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%s): %v", configPath, err)
 	}
 	body = regexp.MustCompile(`port = \d+\n`).ReplaceAll(body, []byte("port = "+strconv.Itoa(port)+"\n"))
 	if err := os.WriteFile(configPath, body, 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", configPath, err)
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
@@ -203,7 +210,11 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = inst.Close() })
+	t.Cleanup(func() {
+		if err := inst.Close(); err != nil {
+			t.Errorf("Close(app): %v", err)
+		}
+	})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -230,19 +241,24 @@ func fixedClock(at time.Time) loop.Clock { return frozenClock{at} }
 var testEnv = config.Env{Home: "/home/test", UserConfigDir: "/home/test/.config"}
 
 func TestNewStartsWithNoTrackedRepos(t *testing.T) {
+	t.Parallel()
 	env := testEnv
 	env.DataDir = t.TempDir()
 	env.DatabaseURL = cctest.DSN(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(configPath, nil, 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", configPath, err)
 	}
 
 	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, env)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { _ = inst.Close() })
+	t.Cleanup(func() {
+		if err := inst.Close(); err != nil {
+			t.Errorf("Close(app): %v", err)
+		}
+	})
 
 	if err := inst.RunOnce(t.Context()); err != nil {
 		t.Errorf("RunOnce with no repos = %v, want nil", err)
@@ -250,6 +266,7 @@ func TestNewStartsWithNoTrackedRepos(t *testing.T) {
 }
 
 func TestNewNamesTheStepThatFailed(t *testing.T) {
+	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "absent.toml")
 
 	_, err := app.New(t.Context(), slog.New(slog.DiscardHandler), missing, config.Env{})
@@ -265,6 +282,10 @@ func freePort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("find a free port: %v", err)
 	}
-	defer func() { _ = l.Close() }()
+	defer func() {
+		if err := l.Close(); err != nil {
+			t.Errorf("Close(free-port listener): %v", err)
+		}
+	}()
 	return l.Addr().(*net.TCPAddr).Port
 }

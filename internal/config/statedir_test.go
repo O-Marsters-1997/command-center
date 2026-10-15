@@ -52,7 +52,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 	fromKey := t.TempDir()
 	got, err := config.ResolveDataDir(fromKey, env)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveDataDir(%s): %v", fromKey, err)
 	}
 	if got != fromKey {
 		t.Errorf("data dir = %q, want the config key %q", got, fromKey)
@@ -60,7 +60,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 
 	got, err = config.ResolveDataDir("", env)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveDataDir(empty, env): %v", err)
 	}
 	if got != env.DataDir {
 		t.Errorf("data dir = %q, want CC_DATA_DIR %q", got, env.DataDir)
@@ -69,7 +69,7 @@ func TestResolveDataDirPrefersTheConfigKeyThenTheEnvironment(t *testing.T) {
 	env.DataDir = ""
 	got, err = config.ResolveDataDir("", env)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveDataDir(empty, default): %v", err)
 	}
 	if want := filepath.Join(env.UserConfigDir, "command-centre"); got != want {
 		t.Errorf("data dir = %q, want the default %q", got, want)
@@ -85,7 +85,7 @@ func TestEnvFromReadsTheNamedVariables(t *testing.T) {
 	}
 	got, err := config.EnvFrom(func(key string) string { return vars[key] })
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("EnvFrom(vars): %v", err)
 	}
 	want := config.Env{
 		DataDir: "/data", DatabaseURL: "postgres://x", AgentCommand: `["a"]`,
@@ -111,26 +111,24 @@ func TestResolveDataDirExpandsHome(t *testing.T) {
 
 	got, err := config.ResolveDataDir("~/cc-data", config.Env{Home: home})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveDataDir(~/cc-data): %v", err)
 	}
 	if want := filepath.Join(home, "cc-data"); got != want {
 		t.Errorf("data dir = %q, want %q", got, want)
 	}
 }
 
-// TestResolveWorkspaceIgnoresTheWorkingDirectory is the bug the grandparent rule caused: running
-// from anywhere, with any --config, must reach one workspace. The data dir is the only input.
 func TestResolveWorkspaceIgnoresTheWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
 	dataDir := t.TempDir()
 	first, err := config.ResolveWorkspace(dataDir)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveWorkspace(%s): %v", dataDir, err)
 	}
 	second, err := config.ResolveWorkspace(dataDir)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ResolveWorkspace(%s): %v", dataDir, err)
 	}
 	if first != second {
 		t.Errorf("two resolutions of %s differ:\n%+v\n%+v", dataDir, first, second)

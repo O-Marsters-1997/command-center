@@ -8,6 +8,7 @@ import (
 )
 
 func TestGenerateIsDeterministic(t *testing.T) {
+	t.Parallel()
 	want := fmt.Sprintf("%+v", demo.Generate(42, 12))
 	if got := fmt.Sprintf("%+v", demo.Generate(42, 12)); got != want {
 		t.Errorf("Generate(42, 12) differs between calls:\n got %s\nwant %s", got, want)

@@ -73,8 +73,7 @@ func buildIssues(sc Scenario, sb *Sandbox) ([]issue, error) {
 	return issues, nil
 }
 
-// SimClock is a loop.Clock that only moves when Advance is called, so a run plays without
-// sleeping.
+// SimClock advances only when Advance is called.
 type SimClock struct {
 	mu      sync.Mutex
 	now     time.Time
@@ -121,8 +120,7 @@ func (c *SimClock) Advance(d time.Duration) {
 	c.waiters = pending
 }
 
-// Sim plays a Scenario: the real loop and board over real git, against the fake forge, tracker
-// and agent. It only changes the world the loop observes and presses launch as a human would.
+// Sim plays a scenario through the real loop and board against fake external services.
 type Sim struct {
 	scenario Scenario
 	clock    *SimClock
@@ -155,8 +153,8 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 		return nil, fmt.Errorf("build issues: %w", err)
 	}
 	clock := NewSimClock(simStart)
-	forge := NewForge(clock, sb, issues)
-	agent := NewAgent(clock, issues, sc.Seed)
+	forge := newForge(clock, sb, issues)
+	agent := newAgent(clock, issues, sc.Seed)
 	resolve := trackerSource(issues)
 
 	ws, err := workspaceIn(sb)
@@ -245,8 +243,6 @@ func workspaceIn(sb *Sandbox) (config.Workspace, error) {
 	return ws, nil
 }
 
-// Tick plays one loop tick: the world moves, the loop runs, then the sim reads every board state
-// and presses launch for tickets that reached ready.
 func (s *Sim) Tick(ctx context.Context) error {
 	if err := s.landMain(ctx); err != nil {
 		return fmt.Errorf("land main: %w", err)
@@ -275,8 +271,6 @@ func (s *Sim) Tick(ctx context.Context) error {
 	return nil
 }
 
-// Serve runs the sim at speed sim seconds per real second and serves its board on addr until ctx
-// is cancelled.
 func Serve(ctx context.Context, logger *slog.Logger, sc Scenario, speed float64, addr string) error {
 	sim, err := NewSim(ctx, logger, sc)
 	if err != nil {

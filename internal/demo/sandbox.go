@@ -21,8 +21,7 @@ import (
 
 var errMergeConflict = errors.New("branch conflicts with main")
 
-// Sandbox is the real-git half of the demo world: one bare origin per repo, a checkout the loop
-// works in, and a throwaway database. Close removes all of it.
+// Sandbox holds the demo's real Git origins, checkouts and disposable database.
 type Sandbox struct {
 	root     string
 	DSN      string
@@ -143,8 +142,7 @@ func (r *sandboxRepo) squashMerge(ctx context.Context, branch, message string) e
 	return nil
 }
 
-// LandOnMain commits files to the named scenario repo's origin main, as a push that did not
-// come from cc.
+// LandOnMain simulates an external commit on a scenario repo's main branch.
 func (s *Sandbox) LandOnMain(ctx context.Context, repoName string, files map[string]string) error {
 	idx := slices.IndexFunc(s.repos, func(r *sandboxRepo) bool { return r.scenarioName == repoName })
 	if idx < 0 {

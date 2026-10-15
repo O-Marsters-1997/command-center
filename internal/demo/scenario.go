@@ -8,9 +8,7 @@ const (
 	resultConflict = "conflict"
 )
 
-// Scenario is one demo run: the repos, the ticket DAG, each ticket's script and the commits that
-// land on main. Every duration is sim time, from the run's start or, where a field says so, from
-// the event that starts it.
+// Scenario defines one demo run's repositories, ticket DAG, scripts and external commits.
 type Scenario struct {
 	Seed    int64
 	Repos   []Repo
@@ -18,7 +16,7 @@ type Scenario struct {
 	Main    []Main
 }
 
-// Repo is one repository the sandbox hosts a bare origin for, seeded with Files on main.
+// Repo defines a sandbox origin seeded with Files on main.
 type Repo struct {
 	Name        string
 	Stacking    bool
@@ -26,8 +24,7 @@ type Repo struct {
 	Files       map[string]string
 }
 
-// Ticket is one issue in the DAG and the script the world plays for it. A ticket whose first
-// spawn fails succeeds on the next; CI lists each successive check run's outcome.
+// Ticket defines an issue and its scripted agent and CI outcomes.
 type Ticket struct {
 	ID          string
 	Repo        string
@@ -43,7 +40,7 @@ type Ticket struct {
 	CompatFails bool
 }
 
-// Main is a commit landing on a repo's origin main at sim time At, not from cc.
+// Main defines an external commit on a repo's origin main at sim time At.
 type Main struct {
 	At    time.Duration
 	Repo  string

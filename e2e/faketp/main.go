@@ -1,6 +1,3 @@
-// Command faketp stands in for the treepad CLI (tp) in end-to-end tests. It implements the two
-// commands the app uses — new and remove — by delegating to real git, so worktree layout and
-// branch-deletion refusals are genuine rather than simulated.
 package main
 
 import (
@@ -19,9 +16,6 @@ func main() {
 }
 
 func run(args []string, getenv func(string) string, stdout, stderr io.Writer) int {
-	// Logged before anything else, mirroring fakegh's CC_GH_LOG, so a call that goes on to
-	// fail (CC_TP_FAIL) still shows up — that is the whole point of fail_cut.txtar's assertion
-	// that tp new was attempted exactly once.
 	if logPath := getenv("CC_TP_LOG"); logPath != "" {
 		if err := appendLine(logPath, strings.Join(args, " ")); err != nil {
 			printf(stderr, "faketp: %v\n", err)
@@ -100,9 +94,8 @@ func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// --merged asserts the caller already knows branch merged upstream, so it skips only the
-	// ancestor check `git branch -d` would otherwise fail on a squash merge — it still refuses a
-	// dirty worktree (git worktree remove without --force) and unpushed commits (issue #147).
+	// Git's branch -d rejects squash-merged branches; treepad's --merged skips that
+	// ancestor check but still refuses dirty worktrees and unpushed commits.
 	if merged {
 		path := siblingPath(root, branch)
 		if code := gitRun(root, stdout, stderr, "worktree", "remove", path); code != 0 {
@@ -119,9 +112,8 @@ func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 		return gitRun(root, stdout, stderr, "branch", "-D", branch)
 	}
 
-	// Real tp removes the worktree first and only then deletes the branch, so a `git branch -d`
-	// refusal on a squash-merged branch leaves the worktree gone and the branch behind. That is
-	// surprising but faithful, and the e2e tests depend on it — do not reorder.
+	// Treepad removes the worktree before deleting its branch; on a squash merge,
+	// git branch -d may then refuse, leaving the branch but not the worktree.
 	worktreeArgs := []string{"worktree", "remove"}
 	if force {
 		worktreeArgs = append(worktreeArgs, "--force")
@@ -137,8 +129,7 @@ func removeWorktree(args []string, root string, stdout, stderr io.Writer) int {
 	return gitRun(root, stdout, stderr, "branch", deleteFlag, branch)
 }
 
-// hasUnpushedCommits reads as clean when the remote-tracking ref won't resolve at all -- the
-// post-prune gap treepad's own docs describe, where there is nothing left to compare against.
+// Treepad treats a missing remote-tracking ref as clean after the remote branch is pruned.
 func hasUnpushedCommits(root, branch string, stderr io.Writer) (unpushed bool, code int) {
 	remote, err := gitOutput(root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch)
 	var exitErr *exec.ExitError
@@ -164,9 +155,7 @@ func gitOutput(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// siblingPath mirrors treepad's layout: worktrees are siblings of the repo, named
-// <repo-slug>-<branch-slug>. The app never recomputes this — it reads
-// `git worktree list --porcelain` — but the fake must place them where real tp does.
+// Treepad puts worktrees beside the repo as <repo-slug>-<branch-slug>.
 func siblingPath(root, branch string) string {
 	return filepath.Join(filepath.Dir(root), slug(filepath.Base(root))+"-"+slug(branch))
 }
@@ -212,7 +201,6 @@ func gitRun(dir string, stdout, stderr io.Writer, args ...string) int {
 	return 0
 }
 
-// printf writes to w, discarding the write error: these are diagnostics on a test fake.
 func printf(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }
