@@ -48,7 +48,7 @@ func (c *SpendCache) Spend(path string) (int, error) {
 func tokensOf(metrics agentlog.RunMetrics) int {
 	var tokens int
 	for _, r := range metrics.Requests {
-		tokens += int(r.InputTokens + r.CacheCreationTokens + r.CacheReadTokens + r.OutputTokens)
+		tokens += int(r.Input + r.CacheCreate + r.CacheRead + r.Output)
 	}
 	return tokens
 }

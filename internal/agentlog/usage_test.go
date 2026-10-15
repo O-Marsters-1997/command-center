@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
 func TestParseTranscriptUsageOnASettledRunReturnsItsOneCumulativeEntry(t *testing.T) {
@@ -26,13 +27,12 @@ func TestParseTranscriptUsageOnASettledRunReturnsItsOneCumulativeEntry(t *testin
 		Model: "claude-sonnet-5",
 		Input: 82, Output: 35983, CacheRead: 9858576, CacheCreate: 62232,
 	}
-	if got[0].CostUSD == nil {
-		t.Fatal("ParseTranscriptUsage() CostUSD = nil, want the result line's cost")
+	if got[0].CostUSD.IsNone() {
+		t.Fatal("ParseTranscriptUsage() CostUSD = None, want the result line's cost")
 	}
 	const wantCostUSD = 8.288799200000001
-	want.CostUSD = new(float64)
-	*want.CostUSD = wantCostUSD
-	if diff := cmp.Diff(want, got[0]); diff != "" {
+	want.CostUSD = option.Some(wantCostUSD)
+	if diff := cmp.Diff(want, got[0], cmp.Comparer(func(a, b option.Option[float64]) bool { return a == b })); diff != "" {
 		t.Errorf("ParseTranscriptUsage() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -50,7 +50,7 @@ func TestParseTranscriptUsageOnAnInteractiveTranscriptSumsEveryRequest(t *testin
 		{At: time.Date(2026, 1, 1, 0, 0, 3, 0, time.UTC), Input: 1, Output: 4, CacheRead: 3, CacheCreate: 2},
 		{At: time.Date(2026, 1, 1, 0, 0, 4, 0, time.UTC), Input: 0, Output: 7, CacheRead: 0, CacheCreate: 0},
 	}
-	if diff := cmp.Diff(want, got); diff != "" {
+	if diff := cmp.Diff(want, got, cmp.Comparer(func(a, b option.Option[float64]) bool { return a == b })); diff != "" {
 		t.Errorf("ParseTranscriptUsage() mismatch (-want +got):\n%s", diff)
 	}
 }

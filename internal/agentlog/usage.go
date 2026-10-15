@@ -3,6 +3,8 @@ package agentlog
 import (
 	"fmt"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
 // RequestUsage is a transcript's token spend by category and model.
@@ -11,48 +13,60 @@ type RequestUsage struct {
 	At                                    time.Time
 	Model                                 string
 	Input, Output, CacheRead, CacheCreate int64
-	CostUSD                               *float64
+	CostUSD                               option.Option[float64]
+}
+
+type requestReader struct {
+	seen     map[string]int
+	requests []RequestUsage
+}
+
+func newRequestReader() requestReader {
+	return requestReader{seen: make(map[string]int)}
+}
+
+func (r *requestReader) add(parsed logLine) (int, bool) {
+	if parsed.Type != "assistant" || parsed.RequestID == "" {
+		return 0, false
+	}
+	if index, ok := r.seen[parsed.RequestID]; ok {
+		return index, false
+	}
+	index := len(r.requests)
+	r.seen[parsed.RequestID] = index
+	r.requests = append(r.requests, requestUsage(parsed.Message.Model, parsed.Timestamp, parsed.Message.Usage))
+	return index, true
+}
+
+func readUsage(logPath string) (requests []RequestUsage, settled option.Option[RequestUsage], decoded int, err error) {
+	reader := newRequestReader()
+	var model string
+	err = forEachLine(logPath, func(parsed logLine, last time.Time) {
+		decoded++
+		if parsed.Message.Model != "" {
+			model = parsed.Message.Model
+		}
+		if parsed.Type == "result" {
+			request := requestUsage(model, last, parsed.Usage)
+			if parsed.CostUSD != nil {
+				request.CostUSD = option.Some(*parsed.CostUSD)
+			}
+			settled = option.Some(request)
+			return
+		}
+		reader.add(parsed)
+	})
+	return reader.requests, settled, decoded, err
 }
 
 // ParseTranscriptUsage reads a transcript's settled total or its deduplicated request usage.
 func ParseTranscriptUsage(logPath string) ([]RequestUsage, error) {
-	var (
-		requests []RequestUsage
-		settled  *RequestUsage
-		model    string
-		seen     map[string]bool
-	)
-
-	err := forEachLine(logPath, func(parsed logLine, last time.Time) {
-		if parsed.Message.Model != "" {
-			model = parsed.Message.Model
-		}
-
-		switch parsed.Type {
-		case "result":
-			request := requestUsage(model, last, parsed.Usage)
-			request.CostUSD = parsed.CostUSD
-			settled = &request
-		case "assistant":
-			if parsed.RequestID == "" {
-				return
-			}
-			if seen == nil {
-				seen = make(map[string]bool)
-			}
-			if seen[parsed.RequestID] {
-				return
-			}
-			seen[parsed.RequestID] = true
-			requests = append(requests, requestUsage(parsed.Message.Model, parsed.Timestamp, parsed.Message.Usage))
-		}
-	})
+	requests, settled, _, err := readUsage(logPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse transcript usage: %w", err)
 	}
-
-	if settled != nil {
-		return []RequestUsage{*settled}, nil
+	if settled.IsSome() {
+		return []RequestUsage{settled.Unwrap()}, nil
 	}
 	return requests, nil
 }

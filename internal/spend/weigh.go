@@ -12,8 +12,8 @@ func SumWeight(requests []agentlog.RequestUsage, start, end time.Time) float64 {
 		if r.At.Before(start) || !r.At.Before(end) {
 			continue
 		}
-		if r.CostUSD != nil {
-			total += *r.CostUSD
+		if r.CostUSD.IsSome() {
+			total += r.CostUSD.Unwrap()
 			continue
 		}
 		total += agentlog.Weight(r)
