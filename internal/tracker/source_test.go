@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
 func fakeRun(t *testing.T) func(ctx context.Context, args ...string) ([]byte, error) {
@@ -67,17 +69,13 @@ func TestGithubSourceTicketsReadsEveryBlockedByPage(t *testing.T) {
 func TestGithubSourceFullPageErrors(t *testing.T) {
 	t.Parallel()
 
-	page := "[" + strings.Repeat(`{"name":"project:x"},`, listLimit-1) + `{"name":"project:y"}]`
+	page := "[" + strings.Repeat(`{"name":"project:x"},`, gh.ListLimit-1) + `{"name":"project:y"}]`
 	run := func(context.Context, ...string) ([]byte, error) { return []byte(page), nil }
 	src := &githubSource{owner: "o", repo: "r", run: run}
 
 	_, err := src.Features(t.Context())
-	var full *fullPageError
-	if !errors.As(err, &full) {
-		t.Fatalf("Features() error = %v, want *fullPageError", err)
-	}
-	if full.limit != listLimit {
-		t.Errorf("fullPageError.limit = %d, want %d", full.limit, listLimit)
+	if !errors.Is(err, gh.ErrFullPage) {
+		t.Fatalf("Features() error = %v, want gh.ErrFullPage", err)
 	}
 }
 

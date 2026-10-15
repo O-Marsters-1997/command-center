@@ -12,7 +12,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 const heldWorktreeRefusal = "the agent is awaiting an answer; its worktree stays as it left it"
@@ -233,7 +232,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 	repoPath := l.checkout(ticket.Repo)
 	worktreePath, worktreePresent := obs.Worktrees[ticket.Ref()]
 
-	mode := tp.RemoveMerged
+	mode := git.RemoveMerged
 	if worktreePresent {
 		dirty, err := git.Dirty(ctx, worktreePath)
 		if err != nil {
@@ -254,7 +253,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		switch state {
 		case git.RemovableByMerged:
 		case git.RemovableByForce:
-			mode = tp.RemoveForced
+			mode = git.RemoveForced
 		case git.NotRemovable:
 			return refuse("worktree holds unpushed commits")
 		case git.RemovalUnknown:
@@ -274,7 +273,7 @@ func (l *Loop) removeWorktreeOne(ctx context.Context, e plan.Entry, obs plan.Obs
 		return fmt.Errorf("prune run logs of %s: %w", url, err)
 	}
 	var detail string
-	if mode == tp.RemoveForced {
+	if mode == git.RemoveForced {
 		detail = "forced: origin ref pruned, branch at a proven tip"
 	}
 	if err := l.event(ctx, url, store.EventWorktreeRemoved, detail); err != nil {

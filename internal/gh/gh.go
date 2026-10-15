@@ -2,9 +2,12 @@ package gh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 // PRState is a pull request's state; its zero value represents absence.
@@ -52,13 +55,10 @@ type Snapshot struct {
 	ByBranch map[string]PR `json:"by_branch"`
 }
 
-const listLimit = 100
+const ListLimit = 100
 
-type fullPageError struct{ limit int }
-
-func (e *fullPageError) Error() string {
-	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
-}
+// ErrFullPage reports a list that filled --limit, so results may be truncated.
+var ErrFullPage = errors.New("gh list returned a full page, results may be truncated")
 
 const bulkFields = "number,headRefName,headRefOid,baseRefName,baseRefOid,isDraft,state," +
 	"statusCheckRollup,author,labels,mergedAt"
@@ -68,8 +68,8 @@ const fallbackFields = "number,state,baseRefName,headRefOid,labels,mergedAt"
 // List reads tracked branches' pull requests, including merged and closed PRs
 // omitted by GitHub's open-only bulk listing.
 func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapshot, error) {
-	out, err := Run(ctx, repoPath, "pr", "list", "--state", "open",
-		"--limit", strconv.Itoa(listLimit), "--json", bulkFields)
+	out, err := command.Output(ctx, repoPath, "gh", "pr", "list", "--state", "open",
+		"--limit", strconv.Itoa(ListLimit), "--json", bulkFields)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("list open pull requests: %w", err)
 	}
@@ -77,8 +77,8 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("decode pr list for %s: %w", repoPath, err)
 	}
-	if len(prs) >= listLimit {
-		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, &fullPageError{limit: listLimit})
+	if len(prs) >= ListLimit {
+		return Snapshot{}, fmt.Errorf("read pr list for %s: %w", repoPath, ErrFullPage)
 	}
 
 	byBranch := make(map[string]PR, len(tracked))
@@ -90,7 +90,7 @@ func (CLI) List(ctx context.Context, repoPath string, tracked []string) (Snapsho
 		if _, ok := byBranch[branch]; ok {
 			continue
 		}
-		out, err := Run(ctx, repoPath, "pr", "list", "--state", "all", "--head", branch,
+		out, err := command.Output(ctx, repoPath, "gh", "pr", "list", "--state", "all", "--head", branch,
 			"--limit", "1", "--json", fallbackFields)
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("list pull requests for %s: %w", branch, err)
@@ -132,7 +132,7 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 	if draft {
 		args = append(args, "--draft")
 	}
-	_, err := Run(ctx, repoPath, args...)
+	_, err := command.Output(ctx, repoPath, "gh", args...)
 	if err != nil {
 		return fmt.Errorf("create pull request: %w", err)
 	}
@@ -140,7 +140,7 @@ func (CLI) Create(ctx context.Context, repoPath, base, body string, draft bool) 
 }
 
 func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
-	_, err := Run(ctx, repoPath, "pr", "ready", branch)
+	_, err := command.Output(ctx, repoPath, "gh", "pr", "ready", branch)
 	if err != nil {
 		return fmt.Errorf("ready pull request %s: %w", branch, err)
 	}
@@ -148,7 +148,7 @@ func (CLI) Ready(ctx context.Context, repoPath, branch string) error {
 }
 
 func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
-	_, err := Run(ctx, repoPath, "pr", "comment", branch, "--body", body)
+	_, err := command.Output(ctx, repoPath, "gh", "pr", "comment", branch, "--body", body)
 	if err != nil {
 		return fmt.Errorf("comment on pull request %s: %w", branch, err)
 	}
@@ -158,7 +158,7 @@ func (CLI) Comment(ctx context.Context, repoPath, branch, body string) error {
 // Edit re-points branch's pull request at base. It is idempotent: GitHub's own
 // delete-branch-on-merge retarget may have got there first.
 func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
-	_, err := Run(ctx, repoPath, "pr", "edit", branch, "--base", base)
+	_, err := command.Output(ctx, repoPath, "gh", "pr", "edit", branch, "--base", base)
 	if err != nil {
 		return fmt.Errorf("edit pull request %s: %w", branch, err)
 	}
@@ -166,7 +166,7 @@ func (CLI) Edit(ctx context.Context, repoPath, branch, base string) error {
 }
 
 func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
-	_, err := Run(ctx, repoPath, "issue", "close", issueURL)
+	_, err := command.Output(ctx, repoPath, "gh", "issue", "close", issueURL)
 	if err != nil {
 		return fmt.Errorf("close issue %s: %w", issueURL, err)
 	}
@@ -174,7 +174,8 @@ func (CLI) CloseIssue(ctx context.Context, repoPath, issueURL string) error {
 }
 
 func (CLI) IssueTitles(ctx context.Context, repoPath string) (map[string]string, error) {
-	out, err := Run(ctx, repoPath, "issue", "list", "--json", "number,title,url", "--limit", strconv.Itoa(listLimit))
+	out, err := command.Output(ctx, repoPath, "gh", "issue", "list", "--json", "number,title,url",
+		"--limit", strconv.Itoa(ListLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list issue titles: %w", err)
 	}
@@ -190,8 +191,8 @@ func decodeIssueTitles(raw []byte) (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
 	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
+	if len(decoded) >= ListLimit {
+		return nil, fmt.Errorf("read issues: %w", ErrFullPage)
 	}
 	titles := make(map[string]string, len(decoded))
 	for _, issue := range decoded {

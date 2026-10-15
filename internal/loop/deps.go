@@ -11,7 +11,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	"github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
@@ -26,7 +25,7 @@ type forge interface {
 
 type worktrees interface {
 	New(ctx context.Context, repoPath, branch, baseRef string) error
-	Remove(ctx context.Context, repoPath, branch string, mode tp.RemoveMode) error
+	Remove(ctx context.Context, repoPath, branch string, mode git.RemoveMode) error
 }
 
 type agentRunner interface {
