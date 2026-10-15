@@ -1,4 +1,4 @@
-package loop_test
+package loop
 
 import (
 	"os"
@@ -6,12 +6,23 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
-	"github.com/O-Marsters-1997/command-center/internal/loop"
 )
+
+func repoForMergify(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	repo := gittest.Init(t)
+	remote := filepath.Join(root, "remote.git")
+	gittest.Run(t, ".", "init", "-q", "-b", "main", "--bare", remote)
+	gittest.Run(t, repo, "remote", "add", "origin", remote)
+	gittest.Run(t, repo, "push", "-q", "-u", "origin", "main")
+	gittest.Run(t, repo, "fetch", "-q", "origin")
+	return repo
+}
 
 func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	t.Parallel()
-	_, repoPath := repoWithOrigin(t)
+	repoPath := repoForMergify(t)
 
 	mergify := filepath.Join(repoPath, ".mergify.yml")
 	if err := os.WriteFile(mergify, []byte("pull_request_rules: []\n"), 0o600); err != nil {
@@ -22,7 +33,7 @@ func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	gittest.Run(t, repoPath, "push", "-q", "origin", "main")
 	gittest.Run(t, repoPath, "fetch", "-q", "origin")
 
-	clean, err := loop.MergifyHash(t.Context(), repoPath)
+	clean, err := mergifyHash(t.Context(), repoPath)
 	if err != nil {
 		t.Fatalf("MergifyHash(%q): %v", repoPath, err)
 	}
@@ -30,7 +41,7 @@ func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	if err := os.WriteFile(mergify, []byte("pull_request_rules: [tampered]\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(%q): %v", mergify, err)
 	}
-	dirty, err := loop.MergifyHash(t.Context(), repoPath)
+	dirty, err := mergifyHash(t.Context(), repoPath)
 	if err != nil {
 		t.Fatalf("MergifyHash(%q): %v", repoPath, err)
 	}
@@ -45,7 +56,7 @@ func TestMergifyHashReadsTheRefNotTheWorkingTree(t *testing.T) {
 	}
 	gittest.Run(t, repoPath, "commit", "-q", "-am", "drop mergify config on another branch")
 
-	elsewhere, err := loop.MergifyHash(t.Context(), repoPath)
+	elsewhere, err := mergifyHash(t.Context(), repoPath)
 	if err != nil {
 		t.Fatalf("hashing off another branch failed, so it is still reading the working tree: %v", err)
 	}

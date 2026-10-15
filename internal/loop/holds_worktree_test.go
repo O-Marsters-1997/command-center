@@ -117,10 +117,9 @@ func TestRemoveWorktreeRefusesAnAwaitingInputTicket(t *testing.T) {
 	t.Parallel()
 	f := newRemoveWorktreeFixture(t, "cc-1")
 	dispositionAs(t, f.store, f.ticket.URL, plan.OutcomeAsked, f.at.Add(time.Second))
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): f.worktreePath},
-		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "cc-1"): {State: plan.Merged}},
-	}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = f.worktreePath
+	obs.PRs[branchRef("repo", "cc-1")] = plan.PR{State: plan.Merged}
 
 	if err := f.requestRemoveWorktree(t, obs); err != nil {
 		t.Fatalf("RunOnce: %v", err)

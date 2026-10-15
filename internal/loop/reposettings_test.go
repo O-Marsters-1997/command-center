@@ -13,7 +13,7 @@ import (
 func TestTheObserverReadsSettingsFromOriginMainEachTickAndNeverFromABranch(t *testing.T) {
 	t.Parallel()
 	f := newPushFixture(t)
-	cfg, _ := testConfigAndWorkspace(t, f.root, 1, []string{"true"})
+	cfg, _ := testConfigAndWorkspace(t, f.Root, 1, []string{"true"})
 	store := f.Store
 	trackRepo(t, store, "repo", f.Origin)
 	observer := loop.NewObserver(store, &recordingForge{}, cfg)
@@ -50,7 +50,7 @@ func TestAnUnreadableSettingsFileSkipsTheRepoAndRecordsTheError(t *testing.T) {
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 	f.Obs.SettingsErrors = map[string]string{"repo": "line 2: unknown key \"stackin\""}
-	f.tick(t)
+	f.Tick(t)
 
 	if gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 was pushed although its repo's settings could not be read")
@@ -70,7 +70,7 @@ func TestAPushTouchingTheSettingsFileIsRefusedWhateverTheRepoDenies(t *testing.T
 	gittest.Commit(t, f.Worktree, config.SettingsFile, "deny = []\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 	f.Obs.Settings = map[string]config.RepoSettings{"repo": {}}
-	f.tick(t)
+	f.Tick(t)
 
 	if gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 was pushed although it changes " + config.SettingsFile)

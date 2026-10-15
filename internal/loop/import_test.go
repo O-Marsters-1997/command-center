@@ -170,7 +170,8 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	}
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
-	seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}
+	seed := plan.NewObservation(testAt)
+	seed.Settings["alpha"] = config.RepoSettings{Tracker: "linear"}
 	if err := store.SaveObservation(ctx, seed); err != nil {
 		t.Fatalf("SaveObservation(seed): %v", err)
 	}

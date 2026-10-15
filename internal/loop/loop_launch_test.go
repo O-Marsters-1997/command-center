@@ -2,6 +2,7 @@ package loop_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +13,20 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
+	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func noOpObserve(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
+func noOpObserve(context.Context) (plan.Observation, error) { return plan.NewObservation(testAt), nil }
+
+type failingSpawn struct{ runner.Runner }
+
+func (failingSpawn) Spawn(context.Context, runner.SpawnConfig) (runner.SpawnResult, error) {
+	return runner.SpawnResult{}, errors.New("spawn failed")
+}
 
 func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string, at time.Time) {
 	t.Helper()
@@ -30,7 +38,7 @@ func authoriseTicket(t *testing.T, store *storepkg.Store, ticketURL, hash string
 
 func TestLoopCutsAndSpawnsAnEligibleTicket(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t)
+	f := newLoopFixture(t, fixture{})
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
@@ -70,7 +78,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 	t.Parallel()
 	ticket := sandboxTicket("1")
 	ticket.Body = "fake ticket body"
-	f := newLoopFixture(t, withTickets(ticket))
+	f := newLoopFixture(t, fixture{Tickets: []storepkg.Ticket{ticket}})
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
@@ -87,7 +95,7 @@ func TestLoopWritesTheComposedPromptAndTicketBody(t *testing.T) {
 
 func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t)
+	f := newLoopFixture(t, fixture{})
 	authoriseTicket(t, f.Store, f.Tickets[0].URL, plan.Hash("a prompt this ticket never composed to"), testAt)
 	for range 3 {
 		f.Tick(t)
@@ -104,7 +112,8 @@ func TestLoopNeverSpawnsOnAPromptHashMismatch(t *testing.T) {
 
 func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t, withFailingTp())
+	f := newLoopFixture(t, fixture{})
+	f.resetLaunch(f.Fake, loop.WithWorktrees(failingCut{f.Worktrees}))
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
@@ -123,20 +132,28 @@ func TestLoopRecordsCutFailedWithoutClaimingAPgid(t *testing.T) {
 func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name      string
-		opts      []fixtureOption
-		failSpawn bool
-		kind      storepkg.EventKind
-		cause     string
+		name  string
+		setup func(*testing.T) *fixture
+		kind  storepkg.EventKind
+		cause string
 	}{
-		{name: "cut", opts: []fixtureOption{withFailingTp()}, kind: storepkg.EventCutFailed, cause: "forge refused"},
-		{name: "spawn", failSpawn: true, kind: storepkg.EventSpawnFailed, cause: "spawn failed"},
+		{name: "cut", setup: func(t *testing.T) *fixture {
+			t.Helper()
+			f := newLoopFixture(t, fixture{})
+			f.resetLaunch(f.Fake, loop.WithWorktrees(failingCut{f.Worktrees}))
+			return f
+		}, kind: storepkg.EventCutFailed, cause: "forge refused"},
+		{name: "spawn", setup: func(t *testing.T) *fixture {
+			t.Helper()
+			f := newLoopFixture(t, fixture{})
+			f.resetLaunch(failingSpawn{Runner: f.Fake})
+			return f
+		}, kind: storepkg.EventSpawnFailed, cause: "spawn failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			f := newLoopFixture(t, tt.opts...)
-			f.Fake.FailNext = tt.failSpawn
+			f := tt.setup(t)
 			f.AuthoriseAll(t)
 			f.Tick(t)
 
@@ -156,7 +173,7 @@ func TestLoopRecordsAnEventCarryingTheCauseOfAFailedCutOrSpawn(t *testing.T) {
 
 func TestLoopCapsLaunchesAtMaxAgentsMinusCurrentlyRunning(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t, withTickets(sandboxTicket("1"), sandboxTicket("2")))
+	f := newLoopFixture(t, fixture{Tickets: []storepkg.Ticket{sandboxTicket("1"), sandboxTicket("2")}})
 	f.AuthoriseAll(t)
 	f.Tick(t)
 
@@ -197,7 +214,8 @@ func TestLoopDisposesADeadRunByCommitsAfterItsOwnBaseline(t *testing.T) {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -313,7 +331,8 @@ func disposeKilledRun(t *testing.T, logBody string) (
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -377,7 +396,8 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -432,7 +452,8 @@ func TestLoopDisposesADeadRunByOriginTipWhenTheWorktreeIsGone(t *testing.T) {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	obs := plan.Observation{BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", "cc-1"): plan.SHA(originTip)}}
+	obs := plan.NewObservation(testAt)
+	obs.BranchTips[branchRef("repo", "cc-1")] = plan.SHA(originTip)
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -485,7 +506,8 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 		t.Fatalf("QueueVerbIntent(%q, kill): %v", ticket.URL, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()
@@ -539,7 +561,7 @@ func TestLoopSpendLimit5h(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			f := newLoopFixture(t, withSpendLimit5h(80))
+			f := newLoopFixture(t, fixture{SpendLimit5h: 80})
 			f.AuthoriseAll(t)
 			for i, utilization := range tt.utilizations {
 				at := testAt.Add(time.Duration(i) * time.Second)
@@ -588,7 +610,8 @@ func TestLoopSpendPauseNeverKillsALiveRun(t *testing.T) {
 		t.Fatalf("RecordReadings(five-hour): %v", err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
 	fake := runner.NewFake()

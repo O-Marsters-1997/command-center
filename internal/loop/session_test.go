@@ -76,9 +76,8 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, follow-up): %v", ticket.URL, err)
 	}
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},
-	}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
 	lp := newLoop(store, observe, cctest.Clock{At: at}, cfg, ws, fake)
@@ -153,7 +152,7 @@ func TestFollowUpSpawnsFreshWhenTheRunHasNoSession(t *testing.T) {
 
 func TestALaunchedAgentRunStartsASessionAndOtherKindsDoNot(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t)
+	f := newLoopFixture(t, fixture{})
 	f.AuthoriseAll(t)
 
 	f.Tick(t)

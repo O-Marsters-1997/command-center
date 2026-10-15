@@ -18,22 +18,22 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name     string
-		prepare  func(t *testing.T, f *pushFixture)
-		wantPath func(f *pushFixture) string
+		prepare  func(t *testing.T, f *fixture)
+		wantPath func(f *fixture) string
 	}{
 		{
 			name:     "existing worktree",
-			prepare:  func(*testing.T, *pushFixture) {},
-			wantPath: func(f *pushFixture) string { return f.Worktree },
+			prepare:  func(*testing.T, *fixture) {},
+			wantPath: func(f *fixture) string { return f.Worktree },
 		},
 		{
 			name: "gone worktree is cut afresh",
-			prepare: func(t *testing.T, f *pushFixture) {
+			prepare: func(t *testing.T, f *fixture) {
 				t.Helper()
 				gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
 				delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
 			},
-			wantPath: func(f *pushFixture) string { return filepath.Join(filepath.Dir(f.Repo), "wt-"+f.Ticket.Branch) },
+			wantPath: func(f *fixture) string { return filepath.Join(filepath.Dir(f.Repo), "wt-"+f.Ticket.Branch) },
 		},
 	}
 	for _, tt := range tests {
@@ -65,7 +65,7 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 			tt.prepare(t, f)
 			fake := runner.NewFake()
 			f.reset(testAt.Add(time.Second), fake, loop.WithWorktrees(worktrees))
-			f.tick(t)
+			f.Tick(t)
 
 			if len(fake.Spawns) != 1 {
 				t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
@@ -82,8 +82,8 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 			if got != want {
 				t.Errorf("re-run worktree = %q, want %q", got, want)
 			}
-			if fake.Spawns[0].SystemPromptPath != f.ws.SystemPromptPath {
-				t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, f.ws.SystemPromptPath)
+			if fake.Spawns[0].SystemPromptPath != f.WS.SystemPromptPath {
+				t.Errorf("system prompt path = %q, want %q", fake.Spawns[0].SystemPromptPath, f.WS.SystemPromptPath)
 			}
 			latest, err := f.Store.LatestRunsByTicket(t.Context())
 			if err != nil {

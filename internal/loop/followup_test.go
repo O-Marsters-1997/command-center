@@ -23,7 +23,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	}
 	fake := runner.NewFake()
 	f.reset(testAt, fake)
-	f.tick(t)
+	f.Tick(t)
 
 	if len(fake.Spawns) != 1 {
 		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
@@ -35,7 +35,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 	if spawned.SystemPromptPath != "" {
 		t.Errorf("system prompt path = %q, want none: the single-shot warning is implement-only", spawned.SystemPromptPath)
 	}
-	assertPromptGolden(t, "testdata/prompt-follow-up-fresh.golden.txt", spawned.Prompt, f.ws.RunsDir)
+	assertPromptGolden(t, "testdata/prompt-follow-up-fresh.golden.txt", spawned.Prompt, f.WS.RunsDir)
 	if !strings.Contains(spawned.Prompt, "now fix the other test") {
 		t.Errorf("prompt = %q, want it to carry the typed instruction", spawned.Prompt)
 	}
@@ -52,7 +52,7 @@ func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testi
 		t.Errorf("kind = %q, want follow_up", summary.Kind)
 	}
 
-	promptOnDisk, err := os.ReadFile(filepath.Join(f.ws.RunsDir, "1.prompt"))
+	promptOnDisk, err := os.ReadFile(filepath.Join(f.WS.RunsDir, "1.prompt"))
 	if err != nil {
 		t.Fatalf("ReadFile prompt: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	}
 	fake := runner.NewFake()
 	f.reset(testAt, fake)
-	f.tick(t)
+	f.Tick(t)
 
 	if len(fake.Spawns) != 0 {
 		t.Fatalf("spawns = %d, want 0: follow-up never cuts a fresh worktree", len(fake.Spawns))

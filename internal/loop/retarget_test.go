@@ -267,12 +267,11 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 				t.Fatalf("RecordPush(repointed child): %v", err)
 			}
 		}
-		obs := plan.Observation{
-			Worktrees:  map[plan.BranchRef]string{branchRef("repo", "child"): "/repos/child"},
-			BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): plan.SHA(observedMainTip)},
-			PRs:        prs,
-			Settings:   map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
-		}
+		obs := plan.NewObservation(testAt)
+		obs.Worktrees[branchRef("repo", "child")] = "/repos/child"
+		obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = plan.SHA(observedMainTip)
+		obs.PRs = prs
+		obs.Settings["repo"] = config.RepoSettings{Stacking: true, Checks: verdict.Predicate{Success: "CI"}}
 		if err := store.SaveObservation(ctx, obs); err != nil {
 			t.Fatalf("SaveObservation(): %v", err)
 		}

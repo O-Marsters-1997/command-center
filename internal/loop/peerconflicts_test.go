@@ -3,28 +3,24 @@ package loop
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
 func peerRef(branch string) plan.BranchRef { return plan.BranchRef{Repo: "r", Branch: branch} }
 
-func MergifyHash(ctx context.Context, repoPath string) (string, error) {
-	return mergifyHash(ctx, repoPath)
-}
-
 func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	t.Parallel()
 
 	a, b, c := peerRef("a"), peerRef("b"), peerRef("c")
 	tips := map[plan.BranchRef]plan.SHA{a: "sha-a", b: "sha-b", c: "sha-c"}
-	prev := plan.Observation{
-		BranchTips: map[plan.BranchRef]plan.SHA{a: "sha-a", b: "sha-b", c: "sha-c"},
-		ConflictsWithPeer: map[plan.BranchRef]map[plan.BranchRef]bool{
-			a: {b: true, c: false},
-			b: {a: true, c: false},
-			c: {a: false, b: false},
-		},
+	prev := plan.NewObservation(time.Time{})
+	prev.BranchTips = map[plan.BranchRef]plan.SHA{a: "sha-a", b: "sha-b", c: "sha-c"}
+	prev.ConflictsWithPeer = map[plan.BranchRef]map[plan.BranchRef]bool{
+		a: {b: true, c: false},
+		b: {a: true, c: false},
+		c: {a: false, b: false},
 	}
 	calls := 0
 	merges := func(context.Context, string, string, string) (bool, error) {
@@ -52,13 +48,12 @@ func TestRecordPeerConflictsRecomputesOnlyPairsWithAMovedTip(t *testing.T) {
 
 	a, b, c := peerRef("a"), peerRef("b"), peerRef("c")
 	tips := map[plan.BranchRef]plan.SHA{a: "sha-a-new", b: "sha-b", c: "sha-c"}
-	prev := plan.Observation{
-		BranchTips: map[plan.BranchRef]plan.SHA{a: "sha-a", b: "sha-b", c: "sha-c"},
-		ConflictsWithPeer: map[plan.BranchRef]map[plan.BranchRef]bool{
-			a: {b: true, c: false},
-			b: {a: true, c: false},
-			c: {a: false, b: false},
-		},
+	prev := plan.NewObservation(time.Time{})
+	prev.BranchTips = map[plan.BranchRef]plan.SHA{a: "sha-a", b: "sha-b", c: "sha-c"}
+	prev.ConflictsWithPeer = map[plan.BranchRef]map[plan.BranchRef]bool{
+		a: {b: true, c: false},
+		b: {a: true, c: false},
+		c: {a: false, b: false},
 	}
 	var recomputed []string
 	merges := func(_ context.Context, _ string, tipA, tipB string) (bool, error) {

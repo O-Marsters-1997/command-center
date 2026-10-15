@@ -29,11 +29,11 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 	}
 	tests := []struct {
 		name  string
-		setup func(*testing.T, *pushFixture) scenario
+		setup func(*testing.T, *fixture) scenario
 	}{
 		{
 			name: "failed restack command",
-			setup: func(t *testing.T, p *pushFixture) scenario {
+			setup: func(t *testing.T, p *fixture) scenario {
 				t.Helper()
 				f := newStackedFixture(t, p.Repo, p.Store, testAt)
 				childTip := gittest.Run(t, f.childWorktree, "rev-parse", "HEAD")
@@ -46,9 +46,9 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 		},
 		{
 			name: "clean merge with duplicate declaration fails go vet",
-			setup: func(t *testing.T, p *pushFixture) scenario {
+			setup: func(t *testing.T, p *fixture) scenario {
 				t.Helper()
-				root, repoPath := p.root, p.Repo
+				root, repoPath := p.Root, p.Repo
 				gittest.Commit(t, repoPath, "go.mod", "module fixture\n\ngo 1.21\n")
 				gittest.Commit(t, repoPath, "helpers.go", "package fixture\n\nfunc Base() {}\n")
 				gittest.Run(t, repoPath, "push", "-q", "origin", "main")
@@ -76,11 +76,11 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 			t.Parallel()
 			p := newPushFixture(t)
 			s := tt.setup(t, p)
-			cfg, ws := testConfigAndWorkspace(t, p.root, 0, nil)
+			cfg, ws := testConfigAndWorkspace(t, p.Root, 0, nil)
 			p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: s.command}
-			p.cfg, p.ws = cfg, ws
+			p.Cfg, p.WS = cfg, ws
 			p.reset(testAt.Add(time.Minute), runner.ProcessRunner{})
-			p.tick(t)
+			p.Tick(t)
 			merged, err := os.ReadFile(s.mergedFile)
 			if err != nil {
 				t.Fatalf("ReadFile %s: %v", s.mergedFile, err)
@@ -99,7 +99,7 @@ func TestFailedVerificationDoesNotPush(t *testing.T) {
 					t.Errorf("pushed event = %+v, want none for %s", event, s.ticketURL)
 				}
 			}
-			remoteTip := gittest.Run(t, filepath.Join(p.root, "remote.git"), "rev-parse", "refs/heads/"+s.branch)
+			remoteTip := gittest.Run(t, filepath.Join(p.Root, "remote.git"), "rev-parse", "refs/heads/"+s.branch)
 			if remoteTip != s.originalTip {
 				t.Errorf("remote %s tip = %s, want unchanged %s", s.branch, remoteTip, s.originalTip)
 			}
@@ -127,11 +127,11 @@ func TestFailedVerificationTruncatesAtValidUTF8(t *testing.T) {
 			parentTip := advanceParent(t, p.Repo, f)
 			*p.Obs = baseObservation(f, parentTip)
 			command := []string{"sh", "-c", "awk 'BEGIN { for (i=0; i<3000; i++) printf \"é\" }';" + spacing + "exit 1"}
-			cfg, ws := testConfigAndWorkspace(t, p.root, 0, nil)
+			cfg, ws := testConfigAndWorkspace(t, p.Root, 0, nil)
 			p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
-			p.cfg, p.ws = cfg, ws
+			p.Cfg, p.WS = cfg, ws
 			p.reset(testAt.Add(time.Minute), runner.ProcessRunner{})
-			p.tick(t)
+			p.Tick(t)
 			events := p.events(t, "verification_failed")
 			if len(events) != 1 {
 				t.Fatalf("verification_failed events = %d, want 1", len(events))
@@ -146,7 +146,7 @@ func TestFailedVerificationTruncatesAtValidUTF8(t *testing.T) {
 func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
+	root, repoPath, store := p.Root, p.Repo, p.Store
 	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -155,9 +155,9 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 	*p.Obs = baseObservation(f, parentTip1)
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
-	p.cfg, p.ws = cfg, ws
+	p.Cfg, p.WS = cfg, ws
 	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
+	p.Tick(t)
 
 	if events := p.events(t, "verification_failed"); len(events) != 0 {
 		t.Errorf("events = %+v, want no verification_failed event: no command was configured", events)
@@ -178,7 +178,7 @@ func TestARepoWithNoVerifyCommandConfiguredIsUnaffected(t *testing.T) {
 func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
+	root, repoPath, store := p.Root, p.Repo, p.Store
 	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -193,10 +193,10 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: command}
-	p.cfg, p.ws = cfg, ws
+	p.Cfg, p.WS = cfg, ws
 	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
-	p.tick(t)
+	p.Tick(t)
+	p.Tick(t)
 
 	got, err := os.ReadFile(countFile)
 	if err != nil {
@@ -211,7 +211,7 @@ func TestVerificationRunsOnTheRestackNotOnAnAlreadyVerifiedTip(t *testing.T) {
 func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	t.Parallel()
 	p := newPushFixture(t)
-	root, repoPath, store := p.root, p.Repo, p.Store
+	root, repoPath, store := p.Root, p.Repo, p.Store
 	at := testAt
 
 	f := newStackedFixture(t, repoPath, store, at)
@@ -221,9 +221,9 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	p.Obs.Settings["repo"] = config.RepoSettings{Stacking: true, VerifyCommand: []string{"false"}}
-	p.cfg, p.ws = cfg, ws
+	p.Cfg, p.WS = cfg, ws
 	p.reset(at.Add(time.Minute), runner.ProcessRunner{})
-	p.tick(t)
+	p.Tick(t)
 
 	facts, err := store.RefreshFacts(t.Context())
 	if err != nil {
@@ -238,7 +238,7 @@ func TestRetryPushAfterAFailedVerificationClearsTheLatch(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
-	p.tick(t)
+	p.Tick(t)
 
 	events := p.events(t, "pushed")
 	childTip := p.head(t, f.childWorktree, "HEAD")

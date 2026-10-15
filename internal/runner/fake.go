@@ -2,12 +2,8 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"time"
 )
-
-// ErrSpawnFailed reports a configured Fake.Spawn failure.
-var ErrSpawnFailed = errors.New("spawn failed")
 
 // Fake is an in-memory Runner for tests.
 type Fake struct {
@@ -16,7 +12,6 @@ type Fake struct {
 	Alive    map[int]bool
 	ReapCode map[int]int
 	CanReap  map[int]bool
-	FailNext bool
 	Canceled []int
 }
 
@@ -26,10 +21,6 @@ func NewFake() *Fake {
 
 func (f *Fake) Spawn(_ context.Context, cfg SpawnConfig) (SpawnResult, error) {
 	f.Spawns = append(f.Spawns, cfg)
-	if f.FailNext {
-		f.FailNext = false
-		return SpawnResult{}, ErrSpawnFailed
-	}
 	f.NextPid++
 	f.Alive[f.NextPid] = true
 	return SpawnResult{Pid: f.NextPid}, nil

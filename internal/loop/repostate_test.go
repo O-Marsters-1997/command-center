@@ -261,7 +261,8 @@ func TestOneReposFetchFailureLeavesTheOthersObserved(t *testing.T) {
 	trackRepo(t, st, "repo", root+"/remote.git")
 	upsertRepoAs(t, st, "acme/broken", plan.RepoReady)
 	brokenPR := branchRef("acme/broken", "cc-1")
-	previous := plan.Observation{PRs: map[plan.BranchRef]plan.PR{brokenPR: {Number: 7, State: plan.Open}}}
+	previous := plan.NewObservation(testAt)
+	previous.PRs[brokenPR] = plan.PR{Number: 7, State: plan.Open}
 	if err := st.SaveObservation(t.Context(), previous); err != nil {
 		t.Fatalf("SaveObservation(previous): %v", err)
 	}
