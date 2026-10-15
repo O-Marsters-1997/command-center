@@ -7,7 +7,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/option"
 )
 
-// ErrUnknownTicket indicates a preview selection not present in the snapshot.
+// ErrUnknownTicket indicates a ticket absent from the snapshot.
 var ErrUnknownTicket = errors.New("unknown ticket")
 
 type PreviewLabel int
@@ -31,9 +31,6 @@ func (l PreviewLabel) String() string {
 	}
 }
 
-// Preview labels one ticket's row in a launch preview. A locked ticket starts on unlock only if
-// every blocker is in the requested slice, and a non-empty conflictedBase refuses whatever the
-// blockers say.
 func Preview(
 	unlock Unlock, slice map[TicketURL]bool, activeLaunchID int64, conflictedBase string,
 ) (PreviewLabel, Reason) {
@@ -55,9 +52,6 @@ func Preview(
 	return OnUnlock, unlock.Reason
 }
 
-// ProspectiveBase is the base an OnUnlock row would get once unlocked, computed without an
-// existing PR by the rule Unlocked applies to its single-blocker, open-PR arm. Unlock.BaseBranch stays empty for
-// a blocked row.
 func ProspectiveBase(t Ticket, byURL map[TicketURL]Ticket, stacking bool) string {
 	var sameRepo []Ticket
 	for _, blockerURL := range t.BlockedBy {

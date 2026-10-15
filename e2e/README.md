@@ -136,7 +136,3 @@ Every script, and everything it starts, runs with:
 5. Assert on the page's HTML, on `GET /events`, and on the fake logs. The three
    together are how a script distinguishes "the app decided this" from "the app
    actually did this".
-
-Thirteen scripts contain `exec sleep 0.5`. It is always waiting for a real spawned
-agent process to exit between ticks, never for the app's own timing. Nothing in
-the app is polled for.

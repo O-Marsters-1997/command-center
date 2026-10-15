@@ -21,7 +21,6 @@ type launchPayload struct {
 	Group      string `json:"group"`
 }
 
-// QueueLaunchIntent records one ticket's authorisation to launch.
 func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
 	payload, err := json.Marshal(launchPayload{PromptHash: l.PromptHash, Group: l.Group})
 	if err != nil {
@@ -38,8 +37,7 @@ func (s *Store) QueueLaunchIntent(ctx context.Context, l LaunchRequest) error {
 	return nil
 }
 
-// ApplyLaunchIntents turns every unconsumed launch intent into a launches row per group
-// plus a launch_members row per intent, marking each consumed.
+// ApplyLaunchIntents groups unconsumed launch intents and marks them consumed atomically.
 func (s *Store) ApplyLaunchIntents(ctx context.Context, now time.Time) error {
 	return s.inTx(ctx, func(q *ccdb.Queries) error {
 		nowUTC := now.UTC()
@@ -118,8 +116,7 @@ func insertLaunch(ctx context.Context, q *ccdb.Queries, at time.Time, members []
 	return nil
 }
 
-// LaunchMemberships returns every ticket in an active launch, keyed by ticket URL, plus a
-// Cancelled entry for a ticket whose launch was cancelled and not relaunched.
+// LaunchMemberships includes cancelled tickets until they are relaunched.
 func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.LaunchMembership, error) {
 	rows, err := s.q.ListLaunchMemberships(ctx, maxLaunchMemberships)
 	if err != nil {
@@ -147,8 +144,7 @@ func (s *Store) LaunchMemberships(ctx context.Context) (map[plan.TicketURL]plan.
 	return memberships, nil
 }
 
-// CancelLaunchesFor cancels every active launch the ticket belongs to, returning how many
-// memberships it withdraws.
+// CancelLaunchesFor returns the number of memberships withdrawn across active launches.
 func (s *Store) CancelLaunchesFor(ctx context.Context, ticketID string) (int, error) {
 	var members int
 	err := s.inTx(ctx, func(q *ccdb.Queries) error {

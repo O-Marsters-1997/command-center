@@ -51,23 +51,23 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 	line := `{"type":"assistant","timestamp":"2026-08-20T12:00:01Z",` +
 		`"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}]}}` + "\n"
 	if err := os.WriteFile(logPath, []byte(line), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", logPath, err)
 	}
 	if opts.KeepPrompt {
 		if err := os.WriteFile(filepath.Join(dir, "1.prompt"), []byte(opts.Prompt), 0o600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("WriteFile(1.prompt): %v", err)
 		}
 	}
 	runID, err := st.InsertRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: sessionTicket, Kind: opts.Kind, BaselineSHA: "base", PromptHash: "hash",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", sessionTicket, err)
 	}
 	if err := st.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 99, StartedAt: testNow, LogPath: logPath,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	if !opts.Alive {
 		exitCode := 0
@@ -75,7 +75,7 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 			RunID: plan.RunID(runID), Outcome: opts.Outcome, ExitCode: option.Some(exitCode),
 			Cost: option.None[float64](), EndedAt: testNow,
 		}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordDisposition(%d): %v", runID, err)
 		}
 	}
 	obs := plan.Observation{
@@ -83,12 +83,14 @@ func sessionStoreInFeature(t *testing.T, opts sessionRunOpts) (*storepkg.Store, 
 		Runs:       map[plan.TicketURL]plan.RunObservation{sessionTicket: {Alive: opts.Alive}},
 	}
 	if err := st.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return st, line
 }
 
 func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
+	t.Parallel()
+
 	for _, tt := range []struct {
 		name string
 		kind plan.RunKind
@@ -97,6 +99,7 @@ func TestSessionPageShowsHeaderAndPromptByteForByte(t *testing.T) {
 		{name: "follow-up", kind: plan.RunKindFollowUp},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			prompt := "Implement <b>#1</b>\n  & keep   spacing\n"
 			st, _ := sessionStore(t, sessionRunOpts{Kind: tt.kind, Prompt: prompt, KeepPrompt: true, Alive: true})
 			body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
@@ -182,7 +185,7 @@ func TestSessionRefRoundTripsThroughItsPath(t *testing.T) {
 	t.Parallel()
 	ref, err := view.ParseSessionRef(sessionTicket)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ParseSessionRef(%q): %v", sessionTicket, err)
 	}
 	want := view.SessionRef{Owner: "acme", Name: "web", N: "1"}
 	if ref != want {
@@ -206,14 +209,14 @@ func TestSessionPageShowsTheMergeLineOfARunWhoseLogWasPruned(t *testing.T) {
 	st, _ := sessionStore(t, sessionRunOpts{Kind: "agent"})
 	logPath, _, err := st.LatestRunLog(ctx, sessionTicket)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestRunLog(%q): %v", sessionTicket, err)
 	}
 	if err := os.Remove(logPath); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Remove(%q): %v", logPath, err)
 	}
 	merged := storepkg.Event{At: testNow, TicketURL: sessionTicket, Kind: "pr_merged", Detail: "PR #1 merged"}
 	if err := st.AppendEvent(ctx, merged); err != nil {
-		t.Fatal(err)
+		t.Fatalf("AppendEvent(pr_merged): %v", err)
 	}
 
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1")
@@ -263,7 +266,7 @@ func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntentWithPayload(follow-up): %v", err)
 	}
 
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
@@ -324,7 +327,7 @@ func TestMergedSessionAnchorsRemoveWorktreeAndOpenPR(t *testing.T) {
 		PRs:        map[plan.BranchRef]plan.PR{branchRef("acme/web", "cc-1"): pr},
 	}
 	if err := st.SaveObservation(t.Context(), obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	body := renderPath(t, newServer(st, testNow), "/s/acme/web/1/actions")
@@ -380,11 +383,13 @@ func TestSessionVerbToastsAndShowsPending(t *testing.T) {
 }
 
 func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
+	t.Parallel()
+
 	st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
 	if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntentWithPayload(kill): %v", err)
 	}
 	srv := newServer(st, testNow)
 	confirm := `kill on https://github.com/acme/web/issues/1 signals the process group of ` +
@@ -394,6 +399,7 @@ func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
 		{name: "feature", path: "/f/checkout", verbPath: "/verb?feature=checkout"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			board := htmltest.Parse(t, renderPath(t, srv, tc.path)).One(t, "table#board")
 			board.One(t, `[data-section="in-progress"]`)
 			form := board.One(t, `form[hx-post="`+tc.verbPath+`"]`)

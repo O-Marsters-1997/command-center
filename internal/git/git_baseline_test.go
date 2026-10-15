@@ -1,8 +1,10 @@
 package git_test
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/git"
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 )
@@ -22,13 +24,23 @@ func TestBranchTipReadsTheCurrentTip(t *testing.T) {
 	}
 }
 
+func TestRevParsePreservesCommandError(t *testing.T) {
+	t.Parallel()
+
+	_, err := git.RevParse(t.Context(), gittest.Init(t), "refs/heads/missing")
+	var commandErr *command.Error
+	if !errors.As(err, &commandErr) {
+		t.Fatalf("RevParse(missing) error = %v, want *command.Error", err)
+	}
+}
+
 func TestCommitsSinceCountsCommitsAfterBaseline(t *testing.T) {
 	t.Parallel()
 
 	dir := gittest.Init(t)
 	baseline, err := git.BranchTip(t.Context(), dir, "main")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("BranchTip(main): %v", err)
 	}
 
 	n, err := git.CommitsSince(t.Context(), dir, baseline, "HEAD")

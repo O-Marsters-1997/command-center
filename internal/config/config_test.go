@@ -17,14 +17,12 @@ func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "command-centre.toml")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%s): %v", path, err)
 	}
 	return path
 }
 
-// TestLoadIgnoresATaskBlock covers phase 7: [[task]] is no longer decoded into anything, so
-// a config still carrying one from before the tracker import lands loads exactly as if it were
-// absent, rather than refusing to start.
+// Older user config files can still carry [[task]] blocks after tracker migration.
 func TestLoadIgnoresATaskBlock(t *testing.T) {
 	t.Parallel()
 
@@ -110,7 +108,7 @@ func agentCommandLine(t *testing.T, argv []string) string {
 	t.Helper()
 	quoted, err := json.Marshal(argv)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Marshal(agent command): %v", err)
 	}
 	return "agent_command = " + string(quoted) + "\n"
 }
@@ -129,7 +127,6 @@ func TestLoadAgentCommandOverridesTheDefault(t *testing.T) {
 			want: withRequiredParts("my-agent", "--model", "claude-opus-5"),
 		},
 		{
-			// An empty array is how an operator turns spawning off: Spawn rejects it by design.
 			name: "an explicit empty array stays empty rather than falling back",
 			line: "agent_command = []\n",
 			want: []string{},
@@ -151,6 +148,7 @@ func TestLoadAgentCommandOverridesTheDefault(t *testing.T) {
 }
 
 func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
+	t.Parallel()
 	complete := []string{
 		"claude", "-p", "{prompt}",
 		"--append-system-prompt-file", "{system_prompt}",
@@ -178,6 +176,7 @@ func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+" in agent_command", func(t *testing.T) {
+			t.Parallel()
 			_, err := config.Load(writeConfig(t, agentCommandLine(t, tt.argv)), testEnv)
 			var missing *config.MissingKeyError
 			if !errors.As(err, &missing) || missing.Key != tt.missing {
@@ -185,9 +184,10 @@ func TestLoadRefusesAnArgvMissingARequiredPart(t *testing.T) {
 			}
 		})
 		t.Run(tt.name+" in CC_AGENT_COMMAND", func(t *testing.T) {
+			t.Parallel()
 			raw, err := json.Marshal(tt.argv)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Marshal(%v): %v", tt.argv, err)
 			}
 			env := testEnv
 			env.AgentCommand = string(raw)
@@ -257,15 +257,14 @@ func TestLoadMaxTurns(t *testing.T) {
 	}
 }
 
-// TestAgentCommandEnvOverridesTheTrackedOne covers phase 5: the config is tracked and the same
-// on every machine, so a local wrapper (caffeinate, a sandbox) arrives by environment.
 func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
+	t.Parallel()
 	tracked := withRequiredParts("claude", "-p", "{prompt}")
 	path := writeConfig(t, agentCommandLine(t, tracked))
 
 	got, err := config.Load(path, testEnv)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Load(%s): %v", path, err)
 	}
 	if !slices.Equal(got.AgentCommand, tracked) {
 		t.Errorf("agent_command with no override = %v, want the tracked %v", got.AgentCommand, tracked)
@@ -274,13 +273,13 @@ func TestAgentCommandEnvOverridesTheTrackedOne(t *testing.T) {
 	override := withRequiredParts("caffeinate", "-i", "claude", "-p", "{prompt}")
 	raw, err := json.Marshal(override)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Marshal(%v): %v", override, err)
 	}
 	env := testEnv
 	env.AgentCommand = string(raw)
 	got, err = config.Load(path, env)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Load(%s, override): %v", path, err)
 	}
 	if want := override; !slices.Equal(got.AgentCommand, want) {
 		t.Errorf("agent_command = %v, want the override %v", got.AgentCommand, want)

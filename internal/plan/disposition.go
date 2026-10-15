@@ -5,8 +5,6 @@ import (
 	"slices"
 )
 
-// Outcome is a dead run's disposition, recorded on runs.outcome as data, never inferred from
-// missing events.
 type Outcome int
 
 const (
@@ -47,8 +45,6 @@ func ParseOutcome(s string) (Outcome, error) {
 	return 0, fmt.Errorf("unknown outcome %q", s)
 }
 
-// Disposition derives a dead run's outcome from commits after its own baseline_sha: any commit
-// at all means the agent left something behind to push.
 func Disposition(commitsAfterBaseline int) Outcome {
 	if commitsAfterBaseline > 0 {
 		return OutcomePush

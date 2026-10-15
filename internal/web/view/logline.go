@@ -17,8 +17,6 @@ const (
 	LineCall   LineShape = "call"
 )
 
-// LogLine is one line of the run log as logline.tmpl renders it: the agent's prose, a skill, or
-// one tool call alongside the result that answered it.
 type LogLine struct {
 	Kind    string
 	Shape   LineShape
@@ -53,8 +51,6 @@ type DiffRow struct {
 	Op, Text string
 }
 
-// LineOf is the line for one event read alone, as the live tail reads it: a call and its result
-// arrive on separate lines, so each renders as its own row.
 func LineOf(e agentlog.Event) LogLine {
 	switch e.Kind {
 	case agentlog.Say:

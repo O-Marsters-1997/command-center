@@ -18,9 +18,8 @@ import (
 )
 
 // ErrSessionNotFound is returned when no tracked ticket matches the session route.
-var ErrSessionNotFound = errors.New("no such session")
+var ErrSessionNotFound = errors.New("view: no such session")
 
-// Session is the page for one ticket's latest run.
 type SessionPage struct {
 	Chrome
 	Row            Row
@@ -57,7 +56,6 @@ type Turn struct {
 	Ask string
 }
 
-// Prompt is the run's own prompt file. Kept is false when the file is gone.
 type Prompt struct {
 	Text string
 	Kept bool
@@ -91,7 +89,6 @@ func SessionPath(ticketURL string) string {
 	return ref.Path()
 }
 
-// Session derives the session page for /s/{owner}/{name}/{n}.
 func (r *Reader) Session(ctx context.Context, now time.Time, ref SessionRef, raw bool) (SessionPage, error) {
 	tickets, err := r.store.Tickets(ctx)
 	if err != nil {

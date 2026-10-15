@@ -16,9 +16,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
 
-// fakeTrackerSource answers Features and Tickets from fixed data, so a test drives import.go's
-// consumers without shelling out to gh. ticketCalls, when set, counts Tickets calls so a test can
-// pin that a caller never makes one.
 type fakeTrackerSource struct {
 	features    []tracker.Feature
 	tickets     map[string][]tracker.Ticket
@@ -36,9 +33,6 @@ func (f fakeTrackerSource) Tickets(_ context.Context, feature string) ([]tracker
 	return f.tickets[feature], nil
 }
 
-// resolveByRemote builds a TrackerSource that dispatches on the normalised remote
-// tracker.ForRemote passes it (host/owner/repo, e.g. github.com/acme/alpha), so a multi-repo test
-// can give each repo its own fixed answers.
 func resolveByRemote(byRemote map[string]tracker.Source) tracker.Resolver {
 	return func(_ tracker.Kind, remote string) (tracker.Source, error) {
 		src, ok := byRemote[remote]
@@ -56,7 +50,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	store := openStore(t)
 	at := testAt
 	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 
 	src := fakeTrackerSource{
@@ -80,7 +74,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].Branch != "cc-1-add-x" || tickets[0].Repo != "alpha" {
 		t.Fatalf("tickets = %+v, want one imported row for alpha", tickets)
@@ -88,7 +82,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(ctx, "import")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(import): %v", err)
 	}
 	if len(pending) != 0 {
 		t.Errorf("pending import intents = %+v, want the applied one consumed", pending)
@@ -129,7 +123,7 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 				t.Fatalf("seed ImportTickets: %v", err)
 			}
 			if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
-				t.Fatal(err)
+				t.Fatalf("QueueVerbIntent(project:y, import): %v", err)
 			}
 			src := fakeTrackerSource{
 				features: []tracker.Feature{"project:y"},
@@ -144,28 +138,28 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 			}
 			tickets, err := store.Tickets(ctx)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Tickets(): %v", err)
 			}
 			if len(tickets) != 1 || tickets[0].URL != outsider || tickets[0].Feature != "project:x" {
 				t.Errorf("tickets = %+v, want only the outsider under project:x", tickets)
 			}
 			pending, err := store.PendingVerbIntents(ctx, "import")
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("PendingVerbIntents(import): %v", err)
 			}
 			if len(pending) != 0 {
 				t.Errorf("pending import intents = %+v, want the refused one consumed", pending)
 			}
 			lastErr, failed, err := store.LastImportError(ctx)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("LastImportError(): %v", err)
 			}
 			if !failed || lastErr.Feature != "project:y" || !strings.Contains(lastErr.Message, tt.refusedURL) {
 				t.Errorf("LastImportError = %+v, failed=%v, want project:y naming %s", lastErr, failed, tt.refusedURL)
 			}
 			events, err := store.Events(ctx)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			found := false
 			for _, e := range events {
@@ -187,7 +181,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	store := openStore(t)
 	at := testAt
 	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 
 	src := fakeTrackerSource{
@@ -202,7 +196,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	cfg := config.Config{}
 	seed := plan.Observation{Settings: map[string]config.RepoSettings{"alpha": {Tracker: "linear"}}}
 	if err := store.SaveObservation(ctx, seed); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation(seed): %v", err)
 	}
 
 	lp := newLoop(
@@ -215,7 +209,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets(): %v", err)
 	}
 	if len(tickets) != 1 || tickets[0].Source != "linear" {
 		t.Fatalf("tickets = %+v, want source linear from the repo's own configured tracker", tickets)

@@ -19,9 +19,6 @@ func TestCloseUnderBlockedByAllowsABlockerInsideTheFeature(t *testing.T) {
 	}
 }
 
-// TestCloseUnderBlockedByAllowsAWithdrawnUnmergedBlockerStillTaggedToTheFeature
-// pins that a blocker withdrawn without merging is never reassigned,
-// so it must not manufacture a closure violation just for being momentarily inactive.
 func TestCloseUnderBlockedByAllowsAWithdrawnUnmergedBlockerStillTaggedToTheFeature(t *testing.T) {
 	t.Parallel()
 
@@ -42,7 +39,7 @@ func TestCloseUnderBlockedByRefusesABlockerOutsideTheFeature(t *testing.T) {
 	ticketFeature := fixedFeature(map[string]string{"outside": "project:y"})
 	got, err := closeUnderBlockedBy("project:x", tickets, ticketFeature, neverMerged)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("closeUnderBlockedBy(project:x): %v", err)
 	}
 	if got == nil {
 		t.Fatal("closeUnderBlockedBy = nil, want a violation")
@@ -75,7 +72,7 @@ func TestCloseUnderBlockedByRefusesABlockerNeverImported(t *testing.T) {
 	}
 	got, err := closeUnderBlockedBy("project:x", tickets, neverFeature, neverMerged)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("closeUnderBlockedBy(project:x): %v", err)
 	}
 	if got == nil {
 		t.Fatal("closeUnderBlockedBy = nil, want a violation: an unseen blocker is outside the feature and unmerged")

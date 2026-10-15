@@ -20,7 +20,7 @@ func TestServerErrorHidesCauseAndLogsIt(t *testing.T) {
 		Logger: slog.New(slog.NewTextHandler(&logs, nil)), Store: st, Clock: fixedClock(testNow),
 	})
 	if err := st.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Close: %v", err)
 	}
 
 	rec := do(t, server, http.MethodGet, "/tickets", req{})

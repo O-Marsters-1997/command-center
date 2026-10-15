@@ -13,9 +13,6 @@ func (c LaunchCandidate) eligible() bool {
 	return c.Unlock.Unlocked && c.Authorised && c.PromptHashMatches && !c.HasRun && c.ConflictedBase == ""
 }
 
-// LaunchPlan selects the ticket URLs to cut and spawn: every eligible candidate in input order,
-// capped at maxAgents minus currentlyRunning. spendPaused stops every new spawn and leaves live
-// runs alone.
 func LaunchPlan(candidates []LaunchCandidate, currentlyRunning, maxAgents int, spendPaused bool) []TicketURL {
 	if spendPaused {
 		return nil

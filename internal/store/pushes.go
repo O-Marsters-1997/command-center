@@ -8,8 +8,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// RecordPush writes one successful push row; its pushed_tip is what later ticks
-// compare against, so a duplicate push or PR create stops once it lands.
+// RecordPush persists the tip against which later ticks suppress duplicate pushes and PR creation.
 func (s *Store) RecordPush(ctx context.Context, p Push) error {
 	err := s.q.RecordPush(ctx, ccdb.RecordPushParams{
 		TicketID:      string(p.Ticket),
@@ -27,9 +26,7 @@ func (s *Store) RecordPush(ctx context.Context, p Push) error {
 	return nil
 }
 
-// RestackedSinceLastPush names every ticket whose branch the app rebased since it last
-// recorded a push of it, the only licence the push step has to lease-force.
-// The comparison is >= because a retarget stamps its push and restack with one clock reading.
+// RestackedSinceLastPush authorizes lease-force pushes after a restack since the last push.
 func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]bool, error) {
 	rows, err := s.q.RestackedSinceLastPush(ctx, string(EventRestacked))
 	if err != nil {
@@ -46,7 +43,7 @@ func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]
 	return restacked, nil
 }
 
-// LastPushedTips returns each ticket's most recently recorded pushed_tip.
+// LastPushedTips returns the latest recorded pushed tip per ticket.
 func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA, error) {
 	pushes, err := s.LatestPushes(ctx)
 	if err != nil {
@@ -60,7 +57,7 @@ func (s *Store) LastPushedTips(ctx context.Context) (map[plan.TicketURL]plan.SHA
 	return tips, nil
 }
 
-// LatestPushes returns each ticket's latest recorded push, keyed by ticket URL.
+// LatestPushes returns the latest recorded push per ticket URL.
 func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushRow, error) {
 	rows, err := s.q.ListLatestPushes(ctx)
 	if err != nil {
@@ -79,8 +76,7 @@ func (s *Store) LatestPushes(ctx context.Context) (map[plan.TicketURL]plan.PushR
 	return pushes, nil
 }
 
-// PushFacts returns every ticket's outstanding push-policy problem, keyed by ticket URL.
-// A failure blocks the automatic retry; a refusal never does.
+// PushFacts blocks automatic retries after failures but not refusals.
 func (s *Store) PushFacts(ctx context.Context) (map[plan.TicketURL]plan.PushFact, error) {
 	kinds, err := encodeJSON("push fact kinds", []EventKind{EventPushRefused, EventPushFailed})
 	if err != nil {

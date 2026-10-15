@@ -1,6 +1,3 @@
-// Package agentlog reads a run's log — the agent CLI's stream-json, one object per line — into
-// the phases, tool lines and result a person can read without opening the JSON. It is pure: an
-// io.Reader in, values out, no store and no clock.
 package agentlog
 
 import (
@@ -18,8 +15,7 @@ import (
 	"time"
 )
 
-// Kind is what a kept line is to a reader: the skill that opens a phase, a file touched, any
-// other tool call, the two outcomes a tool result carries, and the agent's own prose.
+// Kind identifies a rendered stream-json event category.
 type Kind int
 
 const (
@@ -59,8 +55,6 @@ func (k Kind) String() string {
 	}
 }
 
-// Event is one kept line. At is measured off the run's first kept event, so it is zero on an
-// Event from ParseLine, which has no run to measure against.
 type Event struct {
 	At          time.Duration
 	Kind        Kind
@@ -76,8 +70,7 @@ type Event struct {
 	Elapsed     time.Duration
 }
 
-// Phase is the work between one Skill tool use and the next. A run's first phase has no skill:
-// everything before the agent loaded one belongs to it.
+// Phase groups events between Skill tool uses.
 type Phase struct {
 	Skill  string
 	Note   string
@@ -87,7 +80,6 @@ type Phase struct {
 	Spend  float64
 }
 
-// Result is the run's own last word on itself, taken from the final result line.
 type Result struct {
 	Outcome  string
 	Duration time.Duration
@@ -95,8 +87,6 @@ type Result struct {
 	CostUSD  float64
 }
 
-// Run is one log read whole: its phases in order, the result once the run has ended, and the
-// count of whole lines behind them.
 type Run struct {
 	Phases []Phase
 	Result *Result
@@ -105,8 +95,7 @@ type Run struct {
 	End    time.Duration
 }
 
-// Parse reads a log into phases. A run that is still writing ends in a partial line, which is
-// left out rather than failing the read, so a live log parses as the lines already whole.
+// Parse reads the complete lines of a stream-json log into phases.
 func Parse(r io.Reader) (Run, error) {
 	var run Run
 	var base time.Time
@@ -162,8 +151,7 @@ func Parse(r io.Reader) (Run, error) {
 	return run, nil
 }
 
-// ParseLine reads one log line into its events, none for a line no reader wants: a system line,
-// a rate limit, the agent's thinking, and anything it cannot decode.
+// ParseLine returns the renderable events from one stream-json line.
 func ParseLine(line []byte) []Event {
 	parsed, err := decode(line)
 	if err != nil {
@@ -196,12 +184,10 @@ func (run *Run) append(event Event) {
 }
 
 type logLine struct {
-	Type      string    `json:"type"`
-	Timestamp time.Time `json:"timestamp"`
-	RequestID string    `json:"request_id"`
-	// ParentToolUseID names the tool_use id of the Task call that spawned this line's thread, and
-	// is empty on every main-thread line.
-	ParentToolUseID string `json:"parent_tool_use_id"`
+	Type            string    `json:"type"`
+	Timestamp       time.Time `json:"timestamp"`
+	RequestID       string    `json:"request_id"`
+	ParentToolUseID string    `json:"parent_tool_use_id"`
 	Message         struct {
 		Model   string         `json:"model"`
 		Content []contentBlock `json:"content"`
@@ -304,8 +290,7 @@ func (l logLine) result() Result {
 	}
 }
 
-// Tail reads a live log one line at a time, dropping the results that only announce a Skill
-// launch, as Parse does.
+// Tail reads live log lines into renderable events.
 type Tail struct {
 	skillCalls map[string]bool
 	cmdCalls   map[string]cmdCall
@@ -545,7 +530,7 @@ func joinNonEmpty(parts ...string) string {
 	return strings.Join(slices.DeleteFunc(slices.Clone(parts), func(p string) bool { return p == "" }), "\n")
 }
 
-// The CLI writes a tool result's content either as a bare string or as Messages API blocks.
+// The CLI emits tool results as either strings or Messages API blocks.
 func (b contentBlock) resultText() string {
 	var whole string
 	if json.Unmarshal(b.Content, &whole) == nil {
@@ -587,7 +572,6 @@ func boundOutput(whole string) (string, int) {
 	return kept, len(lines)
 }
 
-// Ordered most specific first: Bash input has both command and description.
 var primaryInputKeys = []string{"command", "file_path", "pattern", "path", "url", "query", "description", "prompt"}
 
 func primaryInput(input map[string]any) string {

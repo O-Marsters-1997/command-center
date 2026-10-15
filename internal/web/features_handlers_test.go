@@ -39,15 +39,15 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	url := "https://github.com/acme/alpha/issues/1"
-	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: url, Number: 1, Title: "Add x"}, Repo: "alpha"}}
+	ticketURL := "https://github.com/acme/alpha/issues/1"
+	seed := []storepkg.ImportedTicket{{Ticket: tracker.Ticket{URL: ticketURL, Number: 1, Title: "Add x"}, Repo: "alpha"}}
 	if err := store.ImportTickets(ctx, "project:x", seed, testNow); err != nil {
 		t.Fatalf("seed ImportTickets: %v", err)
 	}
 
-	conflict := &storepkg.FeatureConflictError{URL: url, Existing: "project:x", Importing: "project:y"}
+	conflict := &storepkg.FeatureConflictError{URL: ticketURL, Existing: "project:x", Importing: "project:y"}
 	if err := store.RecordImportRefusal(ctx, "project:y", conflict, testNow); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordImportRefusal(project:y): %v", err)
 	}
 
 	result := do(t, newServer(store, testNow), http.MethodGet, "/repos", req{})
@@ -57,7 +57,7 @@ func TestHandleFeaturesShowsTheLastRefusal(t *testing.T) {
 	body := result.Body
 	root := htmltest.Parse(t, body).One(t, "main#main")
 	text := root.Text()
-	if !strings.Contains(text, "project:y") || !strings.Contains(text, url) ||
+	if !strings.Contains(text, "project:y") || !strings.Contains(text, ticketURL) ||
 		!strings.Contains(text, "already belongs to feature") {
 		t.Error("refusal text missing feature, ticket URL, or already belongs to feature")
 	}
@@ -82,7 +82,7 @@ func TestHandleImportFeatureQueuesImportAndNudgesTheLoop(t *testing.T) {
 
 	pending, err := store.PendingVerbIntents(ctx, "import")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(import): %v", err)
 	}
 	if len(pending) != 1 || pending[0].TicketID != "project:x" {
 		t.Fatalf("pending import intents = %+v, want one queued for project:x", pending)

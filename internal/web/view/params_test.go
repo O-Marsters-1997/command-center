@@ -12,7 +12,7 @@ func TestParseViewParamsTakesTheFirstSel(t *testing.T) {
 
 	q, err := url.ParseQuery("sel=a&sel=b&ticket=x&ticket=y")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("url.ParseQuery(sel): %v", err)
 	}
 	got := ParseParams(q)
 	want := Params{Sel: "a", Tickets: []string{"x", "y"}}
@@ -39,7 +39,7 @@ func TestParseViewParamsNormalizesTheLogFilter(t *testing.T) {
 
 			q, err := url.ParseQuery(tc.query)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("url.ParseQuery(%q): %v", tc.query, err)
 			}
 			if got := ParseParams(q).Log; got != tc.want {
 				t.Errorf("ParseParams(%q).Log = %q, want %q", tc.query, got, tc.want)
@@ -53,7 +53,7 @@ func TestParseViewParamsReadsRepoRaw(t *testing.T) {
 
 	q, err := url.ParseQuery("repo=support-app")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("url.ParseQuery(repo): %v", err)
 	}
 	if got := ParseParams(q).Repo; got != "support-app" {
 		t.Errorf("ParseParams(%q).Repo = %q, want support-app", q, got)
@@ -65,7 +65,7 @@ func TestParseViewParamsReadsFeatureRaw(t *testing.T) {
 
 	q, err := url.ParseQuery("feature=cc-220")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("url.ParseQuery(feature): %v", err)
 	}
 	if got := ParseParams(q).Feature; got != "cc-220" {
 		t.Errorf("ParseParams(%q).Feature = %q, want cc-220", q, got)

@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// RequestUsage is one transcript's token spend, split by pricing category and tagged with the
-// model and the time it happened, so Weight can price it and a caller can bucket it by interval.
-// CostUSD is set only for a settled run, whose result line already carries its exact spend.
+// RequestUsage is a transcript's token spend by category and model.
+// CostUSD is present only when the CLI reports a settled run's exact spend.
 type RequestUsage struct {
 	At                                    time.Time
 	Model                                 string
@@ -15,9 +14,7 @@ type RequestUsage struct {
 	CostUSD                               *float64
 }
 
-// ParseTranscriptUsage reads a transcript's token spend. A settled run (one ending in a result
-// line) reports that line's own cumulative usage as a single entry; an interactive session, which
-// never emits one, falls back to summing every request instead, deduped by request_id.
+// ParseTranscriptUsage reads a transcript's settled total or its deduplicated request usage.
 func ParseTranscriptUsage(logPath string) ([]RequestUsage, error) {
 	var (
 		requests []RequestUsage

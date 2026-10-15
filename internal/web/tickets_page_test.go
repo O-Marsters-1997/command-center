@@ -23,19 +23,24 @@ func TestTicketsPageShowsEveryFeatureInSections(t *testing.T) {
 
 	page := renderPath(t, threeFeatureServer(t), "/tickets")
 
-	for _, url := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
-		webtest.RowFor(t, page, url)
+	for _, ticketURL := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
+		webtest.RowFor(t, page, ticketURL)
 	}
 	root := htmltest.Parse(t, page)
 	all := root.One(t, `nav[aria-label="ticket filters"] a[href="/tickets"]`)
-	attrs := map[string]string{
-		"hx-get": "/tickets", "hx-select": "#main", "hx-target": "#main",
-		"hx-swap": "outerHTML", "hx-push-url": "true",
-	}
-	for name, want := range attrs {
-		if got, _ := all.Attr(name); got != want {
-			t.Errorf("All %s = %q, want %q: %s", name, got, want, all.HTML())
-		}
+	for _, tt := range []struct{ name, want string }{
+		{name: "hx-get", want: "/tickets"},
+		{name: "hx-select", want: "#main"},
+		{name: "hx-target", want: "#main"},
+		{name: "hx-swap", want: "outerHTML"},
+		{name: "hx-push-url", want: "true"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got, _ := all.Attr(tt.name); got != tt.want {
+				t.Errorf("All %s = %q, want %q: %s", tt.name, got, tt.want, all.HTML())
+			}
+		})
 	}
 	if current, _ := all.Attr("aria-current"); current != "page" {
 		t.Errorf("All aria-current = %q: %s", current, all.HTML())
@@ -55,14 +60,19 @@ func TestTicketsFilterKeepsOneSectionAndMarksItsTab(t *testing.T) {
 	}
 	root := htmltest.Parse(t, page)
 	blocked := root.One(t, `nav[aria-label="ticket filters"] a[href="/tickets?filter=blocked"]`)
-	attrs := map[string]string{
-		"hx-get": "/tickets?filter=blocked", "hx-select": "#main",
-		"hx-target": "#main", "hx-swap": "outerHTML", "hx-push-url": "true",
-	}
-	for name, want := range attrs {
-		if got, _ := blocked.Attr(name); got != want {
-			t.Errorf("Blocked %s = %q, want %q: %s", name, got, want, blocked.HTML())
-		}
+	for _, tt := range []struct{ name, want string }{
+		{name: "hx-get", want: "/tickets?filter=blocked"},
+		{name: "hx-select", want: "#main"},
+		{name: "hx-target", want: "#main"},
+		{name: "hx-swap", want: "outerHTML"},
+		{name: "hx-push-url", want: "true"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got, _ := blocked.Attr(tt.name); got != tt.want {
+				t.Errorf("Blocked %s = %q, want %q: %s", tt.name, got, tt.want, blocked.HTML())
+			}
+		})
 	}
 	if current, _ := blocked.Attr("aria-current"); current != "page" {
 		t.Errorf("Blocked aria-current = %q: %s", current, blocked.HTML())

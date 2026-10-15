@@ -11,6 +11,8 @@ import (
 )
 
 func TestNewObservationAllocatesEveryMapAndMarksAlive(t *testing.T) {
+	t.Parallel()
+
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	obs := plan.NewObservation(at)
 	if obs.ObservedAt != at {

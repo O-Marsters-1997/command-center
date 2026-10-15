@@ -15,7 +15,7 @@ func TestBoardAndSessionTemplatesDoNotDecideDomainPresentation(t *testing.T) {
 		`)"[^}]*\}\}`)
 	files, err := templateFiles.ReadDir(".")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadDir(templates): %v", err)
 	}
 	for _, file := range files {
 		name := file.Name()
@@ -24,7 +24,7 @@ func TestBoardAndSessionTemplatesDoNotDecideDomainPresentation(t *testing.T) {
 		}
 		body, err := templateFiles.ReadFile(name)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ReadFile(%q): %v", name, err)
 		}
 		if match := fieldComparison.Find(body); match != nil {
 			t.Errorf("%s compares domain value: %s", name, match)

@@ -21,12 +21,12 @@ func migrateTo(t *testing.T, dsn string, version int64) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS("migrations"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("goose.NewProvider: %v", err)
 	}
 	if _, err := provider.UpTo(t.Context(), version); err != nil {
 		t.Fatalf("migrate to %d: %v", version, err)
@@ -62,7 +62,7 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 
 	tickets, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	byURL := ticketsByURLForTest(t, tickets)
 	if got := byURL["https://x/1"].SyncedAt; !got.IsZero() {
@@ -74,14 +74,14 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 
 	followUps, err := store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(follow_up): %v", err)
 	}
 	if len(followUps) != 1 || followUps[0].Payload != `fix "the" flaky test` {
 		t.Errorf("follow-up intents = %+v, want the legacy prompt decoded", followUps)
 	}
 	edits, err := store.PendingEditTicketIntents(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingEditTicketIntents: %v", err)
 	}
 	if len(edits) != 1 || edits[0].Branch != "nb" || len(edits[0].BlockedBy) != 1 {
 		t.Errorf("edit intents = %+v", edits)
@@ -89,14 +89,14 @@ func TestColumnTypeMigrationsConvertLegacyRows(t *testing.T) {
 
 	events, err := store.Events(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events: %v", err)
 	}
 	if len(events) != 1 || events[0].Detail != "" {
 		t.Errorf("events = %+v, want the NULL detail backfilled to empty", events)
 	}
 	ticks, err := store.CheckingTicks(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CheckingTicks: %v", err)
 	}
 	if ticks["https://x/1"] != 2 {
 		t.Errorf("checking ticks = %v", ticks)
@@ -113,11 +113,11 @@ func TestImportedTicketReadsBackSyncedAtAsTheImportClock(t *testing.T) {
 		{Ticket: tracker.Ticket{URL: "https://x/1", Number: 1, Title: "t"}, Repo: "r", Source: "github"},
 	}
 	if err := store.ImportTickets(ctx, "project:x", tickets, now); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ImportTickets: %v", err)
 	}
 	got, err := store.Tickets(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Tickets: %v", err)
 	}
 	if len(got) != 1 || !got[0].SyncedAt.Equal(now) {
 		t.Errorf("Tickets() = %+v, want synced_at %v", got, now)
@@ -129,16 +129,16 @@ func TestFollowUpIntentPayloadRoundTripsAsJSON(t *testing.T) {
 
 	ctx := t.Context()
 	store := openStore(t)
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := testNow
 	prompt := "line one\nline \"two\""
 	if err := store.QueueVerbIntentWithPayload(ctx, storepkg.VerbRequest{
 		Ticket: "https://x/1", Verb: plan.VerbFollowUp, Payload: prompt, At: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntentWithPayload: %v", err)
 	}
 	got, err := store.PendingVerbIntents(ctx, plan.VerbFollowUp)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("PendingVerbIntents(follow_up): %v", err)
 	}
 	if len(got) != 1 || got[0].Payload != prompt {
 		t.Errorf("intents = %+v, want payload %q", got, prompt)
@@ -153,7 +153,7 @@ func TestMigratedSchemaHasTypedColumnsAndNamedConstraints(t *testing.T) {
 	openStoreAt(t, dsn)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sql.Open(pgx): %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 

@@ -20,22 +20,21 @@ func shellStore(t *testing.T, observedAt *time.Time, tickErr string) *storepkg.S
 	store := openStore(t)
 	ticket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1-first"}
 	if err := store.UpsertTickets(ctx, []storepkg.Ticket{ticket}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertTickets: %v", err)
 	}
 	if observedAt != nil {
 		obs := plan.Observation{ObservedAt: *observedAt, PRs: map[plan.BranchRef]plan.PR{}}
 		if err := store.SaveObservation(ctx, obs); err != nil {
-			t.Fatal(err)
+			t.Fatalf("SaveObservation: %v", err)
 		}
 	}
 	if tickErr != "" {
 		if observedAt == nil {
 			t.Fatal("a tick error is recorded against the observation's own instant, so it needs one")
-			return nil
 		}
 		failedAt := observedAt.Add(time.Second)
 		if err := store.RecordTickError(ctx, storepkg.TickError{At: failedAt, Message: tickErr}); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordTickError: %v", err)
 		}
 	}
 	return store
@@ -137,14 +136,18 @@ func TestNavigationSwapsMainAndADirectLoadRendersTheFullLayout(t *testing.T) {
 
 	root := htmltest.Parse(t, renderPath(t, server, "/insights"))
 	link := root.One(t, `nav#sidebar-nav a[href="/insights"]`)
-	attrs := map[string]string{
-		"hx-get": "/insights", "hx-select": "#main",
-		"hx-target": "#main", "hx-push-url": "true",
-	}
-	for name, want := range attrs {
-		if got, _ := link.Attr(name); got != want {
-			t.Errorf("sidebar %s = %q, want %q: %s", name, got, want, link.HTML())
-		}
+	for _, tt := range []struct{ name, want string }{
+		{name: "hx-get", want: "/insights"},
+		{name: "hx-select", want: "#main"},
+		{name: "hx-target", want: "#main"},
+		{name: "hx-push-url", want: "true"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got, _ := link.Attr(tt.name); got != tt.want {
+				t.Errorf("sidebar %s = %q, want %q: %s", tt.name, got, tt.want, link.HTML())
+			}
+		})
 	}
 }
 
@@ -291,7 +294,7 @@ func TestRailBannerClosesOnceATickSucceeds(t *testing.T) {
 	store := shellStore(t, &observedAt, "")
 	tickErr := storepkg.TickError{At: observedAt.Add(-30 * time.Second), Message: "gh is unavailable"}
 	if err := store.RecordTickError(t.Context(), tickErr); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordTickError: %v", err)
 	}
 
 	rail := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail"))
@@ -336,12 +339,12 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		Ticket: dependent.URL, Kind: "agent", BaselineSHA: "basesha1234", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: now, LogPath: "/logs/run.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn: %v", err)
 	}
 	obs := plan.Observation{
 		ObservedAt: now,
@@ -349,7 +352,7 @@ func TestRailCountsALiveRunWhoseRowReadsBaseGone(t *testing.T) {
 		PRs:        map[plan.BranchRef]plan.PR{{Branch: "cc-1"}: {State: plan.Closed}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 
 	chip := htmltest.Parse(t, renderPath(t, newServer(store, now), "/rail")).One(t, ".rail-health")

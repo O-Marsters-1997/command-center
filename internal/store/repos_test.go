@@ -20,7 +20,7 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", Phase: plan.RepoCloning, TrackedAt: trackedAt,
 	}
 	if err := store.UpsertRepo(ctx, repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo: %v", err)
 	}
 
 	refused := repo
@@ -35,7 +35,7 @@ func TestSetRepoStateRecordsARefusal(t *testing.T) {
 
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	repo.Phase, repo.RefusalKind, repo.Refusal = plan.RepoRefused, plan.RefusalMergeSettings, "merge commits allowed"
 	if diff := cmp.Diff([]storepkg.Repo{repo}, repos); diff != "" {
@@ -51,7 +51,7 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", Phase: plan.RepoCloning, TrackedAt: trackedAt,
 	}
 	if err := store.UpsertRepo(ctx, repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo: %v", err)
 	}
 
 	repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "origin/main", trackedAt.Add(time.Hour)
@@ -61,7 +61,7 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	if diff := cmp.Diff([]storepkg.Repo{repo}, repos); diff != "" {
 		t.Errorf("Repos() mismatch (-want +got):\n%s", diff)

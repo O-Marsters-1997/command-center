@@ -22,8 +22,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-// mergeParentIntoMain is what merging the parent's pull request leaves behind: main carries the
-// parent's commits and the parent's branch is gone from the remote (both repos delete on merge).
 func mergeParentIntoMain(t *testing.T, repoPath string) {
 	t.Helper()
 	gittest.Run(t, repoPath, "push", "-q", "origin", "parent:main")
@@ -43,8 +41,6 @@ func mergedObservation(f stackedFixture, childBaseRef string) plan.Observation {
 
 func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T) {
 	t.Parallel()
-	// The axis is the base GitHub reports the descendant's PR on: ours to re-point, or already
-	// re-pointed by GitHub itself.
 	for _, childBaseRef := range []string{"parent", "main"} {
 		t.Run("github has it on "+childBaseRef, func(t *testing.T) {
 			t.Parallel()
@@ -74,7 +70,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 
 			pushes, err := store.LatestPushes(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("LatestPushes(): %v", err)
 			}
 			row := pushes[plan.TicketURL(f.child.URL)]
 			if row.BaseBranch != "main" {
@@ -90,7 +86,7 @@ func TestRetargetRepointsAnOpenDescendantAtMainWhenItsParentMerges(t *testing.T)
 
 			events, err := store.Events(t.Context())
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("Events(): %v", err)
 			}
 			if !hasEvent(events, "retargeted", "child") {
 				t.Errorf("events = %+v, want a retargeted event naming the child's branch", events)
@@ -130,7 +126,7 @@ func TestASecondTickOverARetargetedRowAppendsNoDuplicatePushRow(t *testing.T) {
 
 	pushes, err := store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes(): %v", err)
 	}
 	if got := pushes[plan.TicketURL(f.child.URL)].PushedAt; !got.Equal(firstTick) {
 		t.Errorf("child's latest push row is stamped %s, want the first tick's %s: an unchanged base "+
@@ -159,12 +155,10 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 		t.Fatalf("retarget RunOnce: %v", err)
 	}
 
-	// Someone else's work lands on main after the retarget, so the merge the refresh performs is
-	// observable rather than an already-up-to-date no-op.
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
-		t.Fatal(err)
+		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("refresh RunOnce: %v", err)
@@ -175,7 +169,7 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refreshed", "merged origin/child then origin/main") {
 		t.Errorf("events = %+v, want a refreshed event naming origin/main, never the deleted parent", events)
@@ -203,7 +197,7 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "retarget_failed", "forge refused") {
 		t.Errorf("events = %+v, want a retarget_failed event naming gh's own refusal", events)
@@ -214,13 +208,12 @@ func TestAFailedRetargetRecordsAnEventAndNeverStallsTheTick(t *testing.T) {
 
 	pushes, err := store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("LatestPushes(): %v", err)
 	}
 	if got := pushes[plan.TicketURL(f.child.URL)].BaseBranch; got != "parent" {
 		t.Errorf("child's recorded base = %q, want parent unchanged: only a successful edit records one", got)
 	}
 
-	// The next tick retries, since a retarget is idempotent and nothing was recorded.
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("second RunOnce: %v", err)
 	}
@@ -252,21 +245,21 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 		ctx := t.Context()
 		store := openStore(t)
 		if err := store.UpsertTickets(ctx, tickets); err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpsertTickets(%d tickets): %v", len(tickets), err)
 		}
 		dispositionAsPushed(t, store, "sandbox://CHILD", at)
 		push := storepkg.Push{
 			Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: parentTip, BaseBranch: "parent", At: at,
 		}
 		if err := store.RecordPush(ctx, push); err != nil {
-			t.Fatal(err)
+			t.Fatalf("RecordPush(child): %v", err)
 		}
 		if retargeted {
 			repointed := storepkg.Push{
 				Ticket: "sandbox://CHILD", Tip: childTip, BaseSHA: "main-tip", BaseBranch: "main", At: at,
 			}
 			if err := store.RecordPush(ctx, repointed); err != nil {
-				t.Fatal(err)
+				t.Fatalf("RecordPush(repointed child): %v", err)
 			}
 		}
 		obs := plan.Observation{
@@ -276,7 +269,7 @@ func TestARetargetedRowExpiresAgainIfMainAdvancesPastTheRetarget(t *testing.T) {
 			Settings:   map[string]config.RepoSettings{"repo": {Stacking: true, Checks: verdict.Predicate{Success: "CI"}}},
 		}
 		if err := store.SaveObservation(ctx, obs); err != nil {
-			t.Fatal(err)
+			t.Fatalf("SaveObservation(): %v", err)
 		}
 		return webtest.RowFor(t, renderPage(t, openServer(store, fixedClock(at), "")), "sandbox://CHILD")
 	}
@@ -334,7 +327,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 		BaseBranch: "parent", At: at,
 	}
 	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.child.URL, err)
 	}
 
 	mergeParentIntoMain(t, repoPath)
@@ -353,7 +346,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_conflicted", "") {
 		t.Errorf("events = %+v, want a refresh_conflicted event: retargeting onto main must merge main, "+
@@ -365,7 +358,7 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 
 	mid, err := git.MidMerge(t.Context(), f.childWorktree)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("MidMerge(%q): %v", f.childWorktree, err)
 	}
 	if !mid {
 		t.Errorf("child worktree is not left mid-merge, so the next tick's observation cannot derive " +
@@ -373,9 +366,8 @@ func TestARetargetOntoMainWhoseContentConflictsEndsRefreshConflicted(t *testing.
 	}
 }
 
-// squashParentIntoMain is what GitHub's squash-merge leaves behind, and what mergeParentIntoMain
-// deliberately is not: main carries the parent's content under one new commit sharing no
-// ancestry with the parent's own, and the branch is gone from the remote.
+// GitHub's squash merge leaves the content on main in a new commit with no ancestry
+// from the parent's commits, and deletes the parent's remote branch.
 func squashParentIntoMain(t *testing.T, root, repoPath string) {
 	t.Helper()
 	clone := cloneForCommit(t, root, "squash-clone")
@@ -426,7 +418,7 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "restacked", "restacked onto origin/main") {
 		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/main", events)
@@ -448,10 +440,6 @@ func TestASquashMergedParentIsRestackedAwayInsteadOfMergedBack(t *testing.T) {
 		}
 	}
 
-	// The restack rewrote the branch, so the next tick's push has to lease rather than
-	// fast-forward, or the work never reaches the pull request. This also pins the comparison
-	// RestackedSinceLastPush makes: retargetOne stamps its push row and this restack with one
-	// clock reading, so a strict > there leaves the branch stranded at its pre-restack tip.
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("push RunOnce: %v", err)
 	}
@@ -488,7 +476,7 @@ func TestABaseBranchRewrittenUnderARowIsRestackedOntoNotMergedBack(t *testing.T)
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "restacked", "restacked onto origin/parent") {
 		t.Fatalf("events = %+v, want a restacked event naming a restack onto origin/parent", events)
@@ -529,7 +517,7 @@ func TestARewriteTheAppDidNotPerformIsNeverForcePushed(t *testing.T) {
 	}
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "push_failed", "") {
 		t.Errorf("events = %+v, want a push_failed event: a diverged branch the app did not restack "+
@@ -553,7 +541,7 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 		BaseBranch: "parent", At: at,
 	}
 	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.child.URL, err)
 	}
 
 	squashParentIntoMain(t, root, repoPath)
@@ -575,24 +563,23 @@ func TestAConflictedRestackStillLicensesTheLeaseAfterAHandResolution(t *testing.
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "refresh_conflicted", "") {
 		t.Fatalf("events = %+v, want refresh_conflicted: the child's parent.txt conflicts with main's", events)
 	}
 	restacked, err := store.RestackedSinceLastPush(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RestackedSinceLastPush(): %v", err)
 	}
 	if !restacked[plan.TicketURL(f.child.URL)] {
 		t.Fatalf("RestackedSinceLastPush = %v, want the child: the app's own rebase --onto rewrote "+
 			"this branch, and a conflict interrupts that rather than handing it to anyone else", restacked)
 	}
 
-	// What a human does at the conflict, and all they do: resolve, continue, touch nothing else.
 	conflicted := filepath.Join(f.childWorktree, "parent.txt")
 	if err := os.WriteFile(conflicted, []byte("both rewrites, reconciled\n"), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", conflicted, err)
 	}
 	gittest.Run(t, f.childWorktree, "add", "parent.txt")
 	gittest.Run(t, f.childWorktree, "-c", "core.editor=true", "rebase", "--continue")
@@ -624,7 +611,7 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 		BaseBranch: "parent", At: at,
 	}
 	if err := store.RecordPush(t.Context(), push); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordPush(%q): %v", f.child.URL, err)
 	}
 
 	squashParentIntoMain(t, root, repoPath)
@@ -632,8 +619,6 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
 	mainSHA := gittest.Run(t, repoPath, "rev-parse", "origin/main")
 
-	// The worktree is already mid-rebase when the retarget fires, which is the state a stack
-	// restacking one level at a time is in almost all the time.
 	if out, err := runGitAllowingFailure(t, f.childWorktree, "rebase", "--onto", "origin/main", f.parentTip0); err == nil {
 		t.Fatalf("the setup rebase succeeded, want it stopped on a conflict: %s", out)
 	}
@@ -653,14 +638,12 @@ func TestARetargetWhoseRefreshDeclinesLeavesTheRowStale(t *testing.T) {
 
 	events, err := store.Events(t.Context())
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Events(): %v", err)
 	}
 	if !hasEvent(events, "retargeted", "at main") {
 		t.Fatalf("events = %+v, want a retargeted event: the control this test rests on", events)
 	}
 
-	// Whoever was resolving the conflict finishes by abandoning it, and the branch is back where
-	// it was: still built on the parent's own commit, still needing main.
 	gittest.Run(t, f.childWorktree, "rebase", "--abort")
 	obs.MidMerge[branchRef("repo", "child")] = false
 

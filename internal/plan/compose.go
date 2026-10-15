@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-// Compose renders the prompt a launch authorises. The implement instruction always leads,
-// since a slash command has to open the prompt.
 func Compose(t Ticket) string {
 	prompt := "/implement " + string(t.URL)
 	if t.WorkedExampleBranch != "" {
@@ -45,8 +43,6 @@ func ComposeMessage(text string, after Outcome) string {
 	return fmt.Sprintf("The owner's follow-up instruction:\n\n%s", text)
 }
 
-// Hash fingerprints a composed prompt: consent is bound to content, so a launch stores it at
-// authorisation and the tick refuses to spawn on a mismatch.
 func Hash(composed string) string {
 	sum := sha256.Sum256([]byte(composed))
 	return hex.EncodeToString(sum[:])

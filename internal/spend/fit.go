@@ -7,7 +7,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
 
-// MinSamples is the fewest trailing samples a window needs before its factor is trusted.
 const MinSamples = 5
 
 const (
@@ -20,8 +19,6 @@ type Result struct {
 	Samples int
 }
 
-// Fit finds each window's least-squares-through-the-origin factor relating dollar weight to
-// utilization rise, over samples in the trailing seven days, dropping outliers on a second pass.
 func Fit(samples []Interval, now time.Time) map[agentlog.Window]Result {
 	cutoff := now.Add(-trailingWindow)
 	byWindow := make(map[agentlog.Window][]Interval)

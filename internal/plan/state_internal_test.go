@@ -12,7 +12,7 @@ func TestEveryNamedStateHasARow(t *testing.T) {
 
 	file, err := parser.ParseFile(token.NewFileSet(), "plan.go", nil, 0)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ParseFile(plan.go): %v", err)
 	}
 
 	var named []string

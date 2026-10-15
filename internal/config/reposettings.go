@@ -28,7 +28,6 @@ type SettingsParseError struct {
 func (e *SettingsParseError) Error() string { return fmt.Sprintf("line %d: %v", e.Line, e.Err) }
 func (e *SettingsParseError) Unwrap() error { return e.Err }
 
-// Source says where a repo's settings came from.
 type Source string
 
 const (
@@ -36,11 +35,8 @@ const (
 	SourceFile     Source = "origin/main"
 )
 
-// RepoSettings is everything a target repo says about itself in SettingsFile. It is declared in
-// internal/plan, which must stay pure and so cannot import this package.
 type RepoSettings = plan.RepoSettings
 
-// DefaultRepoSettings is what a repo without SettingsFile gets.
 func DefaultRepoSettings() RepoSettings {
 	return RepoSettings{Tracker: string(tracker.GitHub)}
 }
@@ -67,7 +63,6 @@ func ReadRepoSettings(ctx context.Context, checkout string) (RepoSettings, Sourc
 	return settings, SourceFile, nil
 }
 
-// ParseRepoSettings decodes a SettingsFile body.
 func ParseRepoSettings(body string) (RepoSettings, error) {
 	settings := DefaultRepoSettings()
 	md, err := toml.Decode(body, &settings)

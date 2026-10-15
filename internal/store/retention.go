@@ -16,7 +16,7 @@ const (
 	pruneBatch              = 1000
 )
 
-// PruneHistory deletes one batch per table of history past ADR 20's retention.
+// PruneHistory deletes at most one batch per table past the retention period.
 func (s *Store) PruneHistory(ctx context.Context, now time.Time) error {
 	now = now.UTC()
 	if _, err := s.q.PruneConsumedIntents(ctx, ccdb.PruneConsumedIntentsParams{

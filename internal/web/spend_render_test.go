@@ -30,19 +30,19 @@ func spendRowStore(t *testing.T, ticket storepkg.Ticket, logPath string, alive b
 		Ticket: ticket.URL, Kind: "agent", BaselineSHA: "deadbeef", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%q): %v", ticket.URL, err)
 	}
 	if err := store.RecordSpawn(ctx, storepkg.Spawn{
 		RunID: plan.RunID(runID), Pgid: 4242, StartedAt: at, LogPath: logPath,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%q): %v", ticket.URL, err)
 	}
 	obs := plan.Observation{
 		ObservedAt: at,
 		Runs:       map[plan.TicketURL]plan.RunObservation{plan.TicketURL(ticket.URL): {Alive: alive}},
 	}
 	if err := store.SaveObservation(ctx, obs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("SaveObservation: %v", err)
 	}
 	return store
 }
@@ -55,7 +55,7 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	aliveTicket := storepkg.Ticket{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"}
 	alivePath := filepath.Join(t.TempDir(), "1.jsonl")
 	if err := os.WriteFile(alivePath, []byte(spendAliveLine), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", alivePath, err)
 	}
 	aliveStore := spendRowStore(t, aliveTicket, alivePath, true, now)
 	aliveServer := newServer(aliveStore, now)
@@ -68,7 +68,7 @@ func TestBoardRendersTokensAndNeverDollars(t *testing.T) {
 	endedTicket := storepkg.Ticket{URL: "sandbox://CC-2", Repo: "cc-sandbox", Branch: "cc-2"}
 	endedPath := filepath.Join(t.TempDir(), "2.jsonl")
 	if err := os.WriteFile(endedPath, []byte(spendAliveLine+spendResultLine), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(%q): %v", endedPath, err)
 	}
 	endedStore := spendRowStore(t, endedTicket, endedPath, false, now)
 	endedServer := newServer(endedStore, now)

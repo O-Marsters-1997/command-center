@@ -13,8 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// InsertRunSkeleton reserves a runs row before the process exists; pgid and log_path
-// land in a later RecordSpawn.
+// InsertRunSkeleton reserves a run before its process exists; RecordSpawn fills in its process details.
 func (s *Store) InsertRunSkeleton(ctx context.Context, r RunSkeleton) (int64, error) {
 	id, _, err := s.InsertSessionRunSkeleton(ctx, r)
 	if err != nil {
@@ -83,7 +82,6 @@ func (s *Store) LatestSessionID(ctx context.Context, ticketID string) (string, e
 	return id, nil
 }
 
-// RecordSpawn writes the pgid, its process start time and the log path onto a reserved run.
 func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
 	n, err := s.q.RecordSpawn(ctx, ccdb.RecordSpawnParams{
 		Pgid:          sql.NullInt64{Int64: int64(sp.Pgid), Valid: true},
@@ -118,7 +116,7 @@ func (s *Store) RecordQuestion(ctx context.Context, runID int64, question string
 	return matchedRow(n, err, fmt.Sprintf("record question for run %d", runID))
 }
 
-// InsertCutFailedRun records a run that never got a worktree: no baseline, no pgid.
+// InsertCutFailedRun records a run that never got a worktree, baseline or process.
 func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash string, at time.Time) (int64, error) {
 	id, err := s.q.InsertCutFailedRun(ctx, ccdb.InsertCutFailedRunParams{
 		TicketID:   notNull(ticketID),
@@ -132,7 +130,7 @@ func (s *Store) InsertCutFailedRun(ctx context.Context, ticketID, promptHash str
 	return id, nil
 }
 
-// PendingRun is one run this tick must check for liveness and, if it has died, dispose of.
+// PendingRun is a run awaiting a liveness check and disposition.
 type PendingRun struct {
 	ID            int64
 	TicketID      string
@@ -143,7 +141,7 @@ type PendingRun struct {
 	LogPath       string
 }
 
-// PendingRunsAwaitingDisposition returns every run with a pgid but no outcome yet.
+// PendingRunsAwaitingDisposition excludes runs without a process or with an outcome.
 func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRun, error) {
 	rows, err := s.q.PendingRunsAwaitingDisposition(ctx)
 	if err != nil {
@@ -166,7 +164,7 @@ func (s *Store) PendingRunsAwaitingDisposition(ctx context.Context) ([]PendingRu
 	return pending, nil
 }
 
-// LatestRunsByTicket returns each ticket's most recent run (highest id).
+// LatestRunsByTicket selects the highest run ID per ticket.
 func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan.RunSummary, error) {
 	rows, err := s.q.ListLatestRunsByTicket(ctx)
 	if err != nil {
@@ -207,14 +205,13 @@ func (s *Store) LatestRunsByTicket(ctx context.Context) (map[plan.TicketURL]plan
 	return summaries, nil
 }
 
-// VerbIntent is one queued action against a ticket. Payload is empty for verbs that carry none.
+// VerbIntent holds a queued ticket action; verbs without arguments have an empty payload.
 type VerbIntent struct {
 	ID       int64
 	TicketID string
 	Payload  string
 }
 
-// QueueVerbIntent records one requested verb against a ticket.
 func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.Verb, at time.Time) error {
 	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:       at.UTC(),
@@ -227,7 +224,6 @@ func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.
 	return nil
 }
 
-// QueueVerbIntentWithPayload is QueueVerbIntent for a verb that carries an argument.
 func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) error {
 	encoded, err := json.Marshal(v.Payload)
 	if err != nil {
@@ -245,7 +241,7 @@ func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) e
 	return nil
 }
 
-// PendingVerbIntents returns every unconsumed intent for verb, oldest first.
+// PendingVerbIntents returns unconsumed intents for a verb in creation order.
 func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbIntent, error) {
 	rows, err := s.q.PendingVerbIntents(ctx, string(verb))
 	if err != nil {
@@ -263,7 +259,7 @@ func (s *Store) PendingVerbIntents(ctx context.Context, verb plan.Verb) ([]VerbI
 	return intents, nil
 }
 
-// PendingIntentsByTicket returns every unconsumed intent, keyed by ticket, most recent last.
+// PendingIntentsByTicket groups unconsumed intents by ticket in creation order.
 func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[plan.TicketURL][]plan.Verb, error) {
 	rows, err := s.q.PendingIntentsByTicket(ctx)
 	if err != nil {
@@ -282,7 +278,6 @@ func (s *Store) PendingIntentsByTicket(ctx context.Context) (map[plan.TicketURL]
 	return byTicket, nil
 }
 
-// ConsumeVerbIntent marks one intent consumed, so a later tick never applies it again.
 func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) error {
 	n, err := s.q.ConsumeVerbIntent(ctx, ccdb.ConsumeVerbIntentParams{
 		ConsumedAt: notNullTime(at.UTC()),
@@ -291,7 +286,7 @@ func (s *Store) ConsumeVerbIntent(ctx context.Context, id int64, at time.Time) e
 	return matchedRow(n, err, fmt.Sprintf("consume intent %d", id))
 }
 
-// ActiveLaunchHashes returns the authorised prompt hash per ticket in an active launch.
+// ActiveLaunchHashes excludes cancelled launches.
 func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, error) {
 	rows, err := s.q.ActiveLaunchHashes(ctx)
 	if err != nil {
@@ -305,7 +300,7 @@ func (s *Store) ActiveLaunchHashes(ctx context.Context) (map[string]string, erro
 	return hashes, nil
 }
 
-// RunIDsForTicket returns every run id recorded for a ticket, oldest first.
+// RunIDsForTicket orders run IDs oldest first.
 func (s *Store) RunIDsForTicket(ctx context.Context, ticketID string) ([]int64, error) {
 	ids, err := s.q.RunIDsForTicket(ctx, notNull(ticketID))
 	if err != nil {

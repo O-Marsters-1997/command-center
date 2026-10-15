@@ -1,4 +1,3 @@
-// Command cc runs the Command Centre: one reconcile loop plus one status page.
 package main
 
 import (

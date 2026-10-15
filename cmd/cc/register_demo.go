@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -35,7 +36,7 @@ func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 		return fmt.Errorf("parse demo flags: %w", err)
 	}
 	if flags.NArg() > 0 || *tickets < 1 || !(*speed > 0 && *speed <= 1000) {
-		return fmt.Errorf("usage: cc demo [--seed N] [--tickets N] [--speed X] [--port N]")
+		return errors.New("usage: cc demo [--seed N] [--tickets N] [--speed X] [--port N]")
 	}
 
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(*port))

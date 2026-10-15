@@ -8,7 +8,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store/ccdb"
 )
 
-// TicketSpend is one merged ticket's dollar weight, summed by run kind.
+// TicketSpend splits a merged ticket's dollar weight by run kind.
 type TicketSpend struct {
 	Ticket      string
 	Title       string
@@ -18,13 +18,11 @@ type TicketSpend struct {
 	FollowUpUSD float64
 }
 
-// TotalUSD is every run's weight regardless of kind.
 func (t TicketSpend) TotalUSD() float64 {
 	return t.AgentUSD + t.FollowUpUSD
 }
 
-// MergedTicketSpend returns one point per ticket whose pr_merged event falls in
-// [since, until], weighing every run disposed before that event.
+// MergedTicketSpend includes runs disposed before each merge in the inclusive time range.
 func (s *Store) MergedTicketSpend(ctx context.Context, q SpendQuery) ([]TicketSpend, error) {
 	rows, err := s.q.MergedTicketSpend(ctx, ccdb.MergedTicketSpendParams{
 		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,
@@ -43,19 +41,17 @@ func (s *Store) MergedTicketSpend(ctx context.Context, q SpendQuery) ([]TicketSp
 	return points, nil
 }
 
-// BoardTicketSpend is one ticket's own weight right now, merged or not.
+// BoardTicketSpend holds a ticket's current weight, merged or not.
 type BoardTicketSpend struct {
 	AgentUSD, FollowUpUSD float64
 	Merged                bool
 }
 
-// TotalUSD is every run's weight regardless of kind.
 func (t BoardTicketSpend) TotalUSD() float64 {
 	return t.AgentUSD + t.FollowUpUSD
 }
 
-// BoardTicketSpend returns every ticket in scope's weight, keyed by ticket URL: runs
-// disposed before pr_merged when merged, every disposed run when open.
+// BoardTicketSpend includes runs disposed before merge for merged tickets and all disposed runs for open ones.
 func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map[string]BoardTicketSpend, error) {
 	rows, err := s.q.BoardTicketSpend(ctx, ccdb.BoardTicketSpendParams{
 		Repo:    nullIfEmpty(repo),
@@ -75,7 +71,7 @@ func (s *Store) BoardTicketSpend(ctx context.Context, repo, feature string) (map
 	return byURL, nil
 }
 
-// WithdrawnTicketWaste sums every disposed run of a ticket withdrawn without merging.
+// WithdrawnTicketWaste excludes tickets withdrawn after merging.
 func (s *Store) WithdrawnTicketWaste(ctx context.Context, q SpendQuery) (float64, error) {
 	usd, err := s.q.WithdrawnTicketWaste(ctx, ccdb.WithdrawnTicketWasteParams{
 		Repo: nullIfEmpty(q.Repo), Feature: nullIfEmpty(q.Feature), Timezone: q.timezone(), Since: q.Since, Until: q.Until,

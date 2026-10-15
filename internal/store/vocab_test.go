@@ -16,12 +16,12 @@ func TestReadingARowWithNullRefusalKindDecodesToUnknown(t *testing.T) {
 		Name: "acme/cc", Remote: "git@github.com:acme/cc.git", Phase: plan.RepoReady, TrackedAt: trackedAt,
 	}
 	if err := store.UpsertRepo(ctx, repo); err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertRepo: %v", err)
 	}
 
 	repos, err := store.Repos(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Repos: %v", err)
 	}
 	if len(repos) != 1 || repos[0].RefusalKind != plan.RefusalUnknown {
 		t.Errorf("Repos() = %+v, want one repo with RefusalUnknown", repos)

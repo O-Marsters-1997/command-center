@@ -24,13 +24,13 @@ func TestSessionRunsForTicketReturnsTheLatestSessionInOrder(t *testing.T) {
 		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertSessionRunSkeleton (old session): %v", err)
 	}
 	launchID, session, err := store.InsertSessionRunSkeleton(ctx, storepkg.RunSkeleton{
 		Ticket: ticket, Kind: "agent", PromptHash: "hash", Session: storepkg.RunSession{StartNew: true},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertSessionRunSkeleton (new session): %v", err)
 	}
 	if session == oldSession {
 		t.Fatal("a second launch reused the first session")
@@ -39,12 +39,12 @@ func TestSessionRunsForTicketReturnsTheLatestSessionInOrder(t *testing.T) {
 		Ticket: ticket, Kind: "follow_up", Session: storepkg.RunSession{JoinID: session, Message: "go on"},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertSessionRunSkeleton (follow-up): %v", err)
 	}
 
 	got, err = store.SessionRunsForTicket(ctx, ticket)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("SessionRunsForTicket(%s): %v", ticket, err)
 	}
 	want := []storepkg.SessionRun{{ID: launchID}, {ID: firstID, Message: "go on"}}
 	if !slices.Equal(got, want) {
@@ -62,7 +62,7 @@ func TestSessionRunsForTicketIsEmptyWhenTheLatestRunHasNoSession(t *testing.T) {
 
 	skeleton := storepkg.RunSkeleton{Ticket: ticket, Kind: "agent", PromptHash: "hash"}
 	if _, err := store.InsertRunSkeleton(ctx, skeleton); err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton: %v", err)
 	}
 	got, err := store.SessionRunsForTicket(ctx, ticket)
 	if err != nil || len(got) != 0 {

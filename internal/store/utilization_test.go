@@ -17,7 +17,6 @@ func TestRecordReadingsDedupesOverlappingRuns(t *testing.T) {
 	resetsAt := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
 	reading := agentlog.Reading{Window: agentlog.FiveHour, Utilization: 0.05, ResetsAt: resetsAt, At: at}
 
-	// Two overlapping runs each parse the same rate_limit_event out of their own log.
 	if err := store.RecordReadings(ctx, []agentlog.Reading{reading}); err != nil {
 		t.Fatalf("RecordReadings (first run): %v", err)
 	}

@@ -15,7 +15,7 @@ func TestBoardAsksBeforeOnlyDestructiveVerbs(t *testing.T) {
 
 	body, err := web.RenderStatesBoard([]plan.State{plan.NeedsYou, plan.PRMerged})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("RenderStatesBoard: %v", err)
 	}
 
 	board := htmltest.Parse(t, body).One(t, "table#board")

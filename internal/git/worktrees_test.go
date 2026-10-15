@@ -23,7 +23,7 @@ func fakeTp(t *testing.T, exitCode int) (bin, argsPath string) {
 		"printf '%s\\n' \"$PWD\" \"$@\" > " + argsPath + "\n" +
 		"exit " + strconv.Itoa(exitCode) + "\n"
 	if err := os.WriteFile(filepath.Join(bin, "tp"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+		t.Fatalf("WriteFile(tp): %v", err)
 	}
 	return bin, argsPath
 }
@@ -53,11 +53,11 @@ func TestTpInvocations(t *testing.T) {
 			lines := strings.Split(strings.TrimRight(string(got), "\n"), "\n")
 			wantDir, err := filepath.EvalSymlinks(repoPath)
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("EvalSymlinks(repoPath): %v", err)
 			}
 			gotDir, err := filepath.EvalSymlinks(lines[0])
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("EvalSymlinks(recorded directory): %v", err)
 			}
 			if gotDir != wantDir {
 				t.Errorf("cmd.Dir = %q, want %q", gotDir, wantDir)
@@ -100,6 +100,7 @@ func runTpChild(t *testing.T, child tpChild) {
 }
 
 func TestTpChild(t *testing.T) {
+	t.Parallel()
 	action := os.Getenv("CC_TEST_TP_ACTION")
 	if action == "" {
 		return

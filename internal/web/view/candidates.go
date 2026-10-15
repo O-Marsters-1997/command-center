@@ -11,7 +11,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// Candidate is one ticket the launch preview would start, as GET /launch/candidates serves it.
 type Candidate struct {
 	URL         string   `json:"url"`
 	Ref         string   `json:"ref"`
@@ -27,8 +26,6 @@ type Candidate struct {
 	Prompt      string   `json:"-"`
 }
 
-// LaunchModal is the launch modal fragment's view model. Exactly one of Pending, Refused and Empty
-// explains a feature that has nothing to show yet.
 type LaunchModal struct {
 	Feature      string
 	FeatureQuery string
@@ -66,9 +63,6 @@ func (r *Reader) loadCandidateInputs(ctx context.Context, now time.Time) (candid
 	return candidateInputs{tickets: tickets, snap: snap}, nil
 }
 
-// Candidates previews what launching the selection in q would start: every ticket of ?feature=, or
-// the repeated ?ticket= values. A request that selects nothing or something unlaunchable is an
-// InvalidError.
 func (r *Reader) Candidates(ctx context.Context, now time.Time, q url.Values) ([]Candidate, error) {
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {
@@ -125,8 +119,6 @@ func candidateSelection(q url.Values, tickets []store.Ticket) ([]string, error) 
 	return requested, nil
 }
 
-// FeatureModal is the launch modal for a whole feature: pending while its import is queued, then
-// the last import's refusal or an empty notice when nothing was imported.
 func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string) (LaunchModal, error) {
 	view := LaunchModal{Feature: feature, FeatureQuery: url.QueryEscape(feature)}
 
@@ -168,7 +160,6 @@ func (r *Reader) FeatureModal(ctx context.Context, now time.Time, feature string
 	return view, nil
 }
 
-// TicketModal is the launch modal for the requested tickets, refused if the preview rejects them.
 func (r *Reader) TicketModal(ctx context.Context, now time.Time, requested []string) (LaunchModal, error) {
 	in, err := r.loadCandidateInputs(ctx, now)
 	if err != nil {

@@ -34,19 +34,19 @@ func dispositionAsPushed(t *testing.T, st *store.Store, ticketURL string, at tim
 		Ticket: ticketURL, Kind: "agent", PromptHash: "hash-1",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("InsertRunSkeleton(%s): %v", ticketURL, err)
 	}
 	if err := st.RecordSpawn(t.Context(), store.Spawn{
 		RunID: plan.RunID(runID), Pgid: 111, StartedAt: at, LogPath: "/state/runs/1.jsonl",
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 	exitCode := 0
 	if err := st.RecordDisposition(t.Context(), store.Disposition{
 		RunID: plan.RunID(runID), Outcome: plan.OutcomePush, ExitCode: option.Some(exitCode),
 		Cost: option.None[float64](), EndedAt: at,
 	}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordDisposition(%d): %v", runID, err)
 	}
 }
 
@@ -127,7 +127,7 @@ func track(t *testing.T, st *store.Store, repos ...store.Repo) *store.Store {
 	for _, repo := range repos {
 		repo.Phase, repo.TrackedAt = plan.RepoReady, testNow
 		if err := st.UpsertRepo(t.Context(), repo); err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpsertRepo(%s): %v", repo.Name, err)
 		}
 	}
 	return st

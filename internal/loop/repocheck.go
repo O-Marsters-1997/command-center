@@ -14,16 +14,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-// ValidateFunc settles one tracked repo into ready or refused. An error means the answer is not
-// known yet (gh unreachable), so the repo keeps its state and is tried again.
 type ValidateFunc func(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error)
 
-// RemoteFunc finds the clone URL of the GitHub repo named owner/name.
 type RemoteFunc func(ctx context.Context, fullName string) (string, error)
 
-// ValidateRepo checks repo on GitHub, ensures its checkout and reads its settings, ending ready
-// with the settings read or refused with the kind that stopped it. The GitHub check runs first, so
-// a repo it refuses is never cloned.
 func ValidateRepo(ctx context.Context, dataDir string, repo store.Repo, now time.Time) (store.Repo, error) {
 	kind, reason, err := git.CheckRepoOnGitHub(ctx, repo.Name)
 	if err != nil {
@@ -52,8 +46,6 @@ func refuse(repo store.Repo, kind plan.RefusalKind, reason string) store.Repo {
 	return repo
 }
 
-// validateCloningRepos settles every repo still cloning. One repo's unknown answer is recorded
-// as a tick error and does not hold up the others.
 func (l *Loop) validateCloningRepos(ctx context.Context) error {
 	repos, err := l.store.Repos(ctx)
 	if err != nil {
@@ -93,9 +85,6 @@ func (l *Loop) recordTickError(ctx context.Context, message string) error {
 	return nil
 }
 
-// applyTrackIntents puts each tracked repo into cloning, so the validation that follows in the
-// same tick settles it. A ready repo is left alone; a refused one is validated afresh. A repo
-// whose remote GitHub will not give is refused for Track again.
 func (l *Loop) applyTrackIntents(ctx context.Context) error {
 	return l.eachIntent(ctx, plan.VerbTrack, func(intent store.VerbIntent) error {
 		repos, err := l.store.Repos(ctx)

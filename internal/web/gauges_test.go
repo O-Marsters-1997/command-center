@@ -25,7 +25,7 @@ func TestRailRendersTheLatestStoredReading(t *testing.T) {
 		ResetsAt: observedAt.Add(2 * time.Hour), At: observedAt,
 	}
 	if err := store.RecordReadings(t.Context(), []agentlog.Reading{older, newer}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordReadings: %v", err)
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
@@ -62,7 +62,7 @@ func TestRailGaugesSurviveARepeatedPollWithoutFlicker(t *testing.T) {
 		ResetsAt: observedAt.Add(24 * time.Hour), At: observedAt,
 	}
 	if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RecordReadings: %v", err)
 	}
 
 	server := newServer(store, observedAt.Add(45*time.Second))
@@ -103,7 +103,7 @@ func TestSpendLimitNotice(t *testing.T) {
 				ResetsAt: observedAt.Add(time.Hour), At: observedAt,
 			}
 			if err := store.RecordReadings(t.Context(), []agentlog.Reading{reading}); err != nil {
-				t.Fatal(err)
+				t.Fatalf("RecordReadings: %v", err)
 			}
 
 			server := newServer(store, observedAt.Add(45*time.Second), web.WithSpendLimit5h(80))

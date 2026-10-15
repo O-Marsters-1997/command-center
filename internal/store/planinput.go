@@ -9,7 +9,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-// VerdictFacts reads each ticket's latest push and how long its verdict has been checking.
+// VerdictFacts measures checking time in successful ticks rather than wall time.
 func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	pushRows, err := s.LatestPushes(ctx)
 	if err != nil {
@@ -26,8 +26,7 @@ func (s *Store) VerdictFacts(ctx context.Context) (plan.VerdictFacts, error) {
 	return plan.VerdictFacts{PushRows: pushRows, CheckingFor: checkingFor}, nil
 }
 
-// PlanInput reads every durable fact and the last observation into a plan.Input.
-// The caller sets Now.
+// PlanInput leaves Now for the caller to set.
 func (s *Store) PlanInput(ctx context.Context) (plan.Input, error) {
 	tickets, err := s.Tickets(ctx)
 	if err != nil {
