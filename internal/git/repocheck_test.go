@@ -14,7 +14,7 @@ func readRepoSettingsFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ReadFile(%s): %v", name, err)
 	}
 	return raw
 }

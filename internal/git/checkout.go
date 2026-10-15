@@ -12,12 +12,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
-// ErrOriginMismatch indicates that the checkout belongs to a different remote.
 var ErrOriginMismatch = errors.New("checkout origin differs from the configured remote")
 
-// EnsureCheckout clones remote into checkout when absent, otherwise verifies its origin. It never
-// resets, pulls or checks anything out. An empty remote means a path repo, never cloned or
-// origin-checked.
+// EnsureCheckout clones a missing checkout or verifies its origin without resetting it.
+// An empty remote means a local path repo, never cloned or origin-checked.
 func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 	switch _, err := os.Stat(checkout); {
 	case errors.Is(err, os.ErrNotExist):
@@ -25,9 +23,12 @@ func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 			return fmt.Errorf("repo %s: no checkout at %s, and no remote to clone from", name, checkout)
 		}
 		if err := clone(ctx, name, remote, checkout); err != nil {
-			return err
+			return fmt.Errorf("clone repo %s: %w", name, err)
 		}
-		return enableRerere(ctx, checkout)
+		if err := enableRerere(ctx, checkout); err != nil {
+			return fmt.Errorf("configure rerere for %s: %w", checkout, err)
+		}
+		return nil
 	case err != nil:
 		return fmt.Errorf("repo %s: stat %s: %w", name, checkout, err)
 	}
@@ -41,13 +42,14 @@ func EnsureCheckout(ctx context.Context, name, remote, checkout string) error {
 			name, checkout, origin, remote, ErrOriginMismatch)
 	}
 	if err := enableRerere(ctx, checkout); err != nil {
-		return err
+		return fmt.Errorf("configure rerere for %s: %w", checkout, err)
 	}
-	return Fetch(ctx, checkout)
+	if err := Fetch(ctx, checkout); err != nil {
+		return fmt.Errorf("fetch checkout %s: %w", checkout, err)
+	}
+	return nil
 }
 
-// A rebase drops the merge commit a resolution was committed as, so every restack re-hits the
-// same conflict unless rerere replays it.
 func enableRerere(ctx context.Context, repoPath string) error {
 	for _, key := range []string{"rerere.enabled", "rerere.autoupdate"} {
 		if _, err := git(ctx, repoPath, "config", key, "true"); err != nil {
@@ -67,27 +69,22 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	return nil
 }
 
-// OriginURL reads repoPath's origin remote URL.
 func OriginURL(ctx context.Context, repoPath string) (string, error) {
 	out, err := git(ctx, repoPath, "remote", "get-url", "origin")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read origin URL: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
-// SameRemote decides whether two git URLs name one repository. The ssh and https forms differ in
-// scheme, in carrying a user, and in the .git suffix, so all three are stripped before comparing.
 func SameRemote(a, b string) bool {
 	return NormaliseRemote(a) == NormaliseRemote(b)
 }
 
-// NormaliseRemote reduces a git URL to its lower-case host/owner/repo form.
 func NormaliseRemote(url string) string {
 	return strings.ToLower(hostPath(url))
 }
 
-// FullName reads a remote's owner/name, keeping the case it is written in.
 func FullName(remote string) (string, error) {
 	host, fullName, _ := strings.Cut(hostPath(remote), "/")
 	owner, name, ok := strings.Cut(fullName, "/")
@@ -109,7 +106,6 @@ func hostPath(url string) string {
 	if scheme := strings.Index(url, "://"); scheme >= 0 {
 		url = url[scheme+3:]
 	} else if colon := strings.Index(url, ":"); colon >= 0 && !strings.Contains(url[:colon], "/") {
-		// scp-like: git@github.com:owner/repo
 		url = url[:colon] + "/" + url[colon+1:]
 	}
 	if at := strings.Index(url, "@"); at >= 0 {

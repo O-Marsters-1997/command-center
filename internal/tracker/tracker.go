@@ -1,5 +1,3 @@
-// Package tracker owns everything about reading an issue tracker, so nothing above it knows
-// GitHub exists.
 package tracker
 
 import (
@@ -16,8 +14,6 @@ const GitHub Kind = "github"
 
 type Feature string
 
-// Ticket is one in-flight issue as the tracker reports it. It is deliberately not
-// loop.Ticket: this package never learns the app's columns.
 type Ticket struct {
 	URL       string
 	Number    int
@@ -59,15 +55,13 @@ func ownerRepo(remote string) (owner, repo string, ok bool) {
 
 type Resolver func(kind Kind, remote string) (Source, error)
 
-// ForRemote resolves the Source for a repo's configured remote. A repo with no remote has no
-// tracker to read, which is ok=false rather than an error.
 func ForRemote(resolve Resolver, kind Kind, remote string) (src Source, ok bool, err error) {
 	if remote == "" {
 		return nil, false, nil
 	}
 	src, err = resolve(kind, git.NormaliseRemote(remote))
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("resolve tracker for %s: %w", remote, err)
 	}
 	return src, true, nil
 }
