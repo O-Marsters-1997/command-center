@@ -83,6 +83,13 @@ func TestRailDropsASettledTicketOnceItsWorktreeIsGone(t *testing.T) {
 
 	withRail := htmltest.Parse(t, with).One(t, "#rail-body")
 	withRail.One(t, `[data-group="settled"]`)
+	withRail.One(t, `button[value="remove-worktree"]`)
+	for _, group := range []string{"needs-you", "in-flight"} {
+		withRail.One(t, `[data-group="`+group+`"]`)
+	}
+	if got := strings.TrimSpace(with); !strings.HasPrefix(got, `<div id="rail-body"`) {
+		t.Errorf("rail response is not a fragment: %q", got[:min(len(got), 120)])
+	}
 	withoutRail := htmltest.Parse(t, without).One(t, "#rail-body")
 	if settled := withoutRail.Find(`[data-group="settled"]`); len(settled) != 0 {
 		t.Errorf("settled group persists without worktree: %s", settled[0].HTML())

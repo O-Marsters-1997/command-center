@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
+	"github.com/O-Marsters-1997/command-center/internal/store/storetest"
 )
 
 func TestFeatureGraphPageMarksTheGraphTabCurrentAndScopesItsData(t *testing.T) {
@@ -31,6 +33,7 @@ func TestFeatureGraphPageMarksTheGraphTabCurrentAndScopesItsData(t *testing.T) {
 		}
 	}
 	main.One(t, `cc-graph[data-src="/graph.json?feature=board-scope"]`)
+	main.One(t, `script[src="/assets/dist/graph.js"]`)
 }
 
 func TestFeatureGraphPageUnknownFeatureIs404(t *testing.T) {
@@ -39,4 +42,13 @@ func TestFeatureGraphPageUnknownFeatureIs404(t *testing.T) {
 	if rec := do(t, threeFeatureServer(t), http.MethodGet, "/f/bogus/graph", req{}); rec.Code != http.StatusNotFound {
 		t.Errorf("GET /f/bogus/graph: status = %d, want 404", rec.Code)
 	}
+}
+
+func TestFeatureGraphPageEncodesTheFeatureInItsDataURL(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	storetest.Tickets(t, store, storepkg.Ticket{URL: "sandbox://CC-1", Feature: "project:two-tasks", Branch: "cc-1"})
+	page := renderPath(t, newServer(store, testNow), "/f/project:two-tasks/graph")
+	htmltest.Parse(t, page).One(t, `cc-graph[data-src="/graph.json?feature=project%3atwo-tasks"]`)
 }

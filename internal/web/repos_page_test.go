@@ -266,6 +266,25 @@ func TestScopedRepoPageListsOnlyThisReposFeaturesAndNamesOtherRepos(t *testing.T
 		t.Errorf("unimported feature offers reimport: %s", reimport[0].HTML())
 	}
 	main.One(t, `form[action="/features/project:x/import"]`)
+	for _, tt := range []struct{ name, feature, imported string }{
+		{"imported", "project:x", "yes"}, {"not imported", "project:y", "no"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			found := false
+			for _, row := range main.Find("tr") {
+				if len(row.Find(`a[href="/f/`+tt.feature+`"]`)) == 0 {
+					continue
+				}
+				found = true
+				if cells := row.Find("td"); len(cells) < 2 || cells[1].Text() != tt.imported {
+					t.Errorf("%s imported cell = %s, want %s", tt.feature, row.HTML(), tt.imported)
+				}
+			}
+			if !found {
+				t.Errorf("repo features omit %s", tt.feature)
+			}
+		})
+	}
 }
 
 func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
@@ -285,6 +304,22 @@ func TestScopedRepoPageForAnUnknownRepoSaysNotTracked(t *testing.T) {
 	}
 	if board := main.Find("table#board"); len(board) != 0 {
 		t.Errorf("unknown repo offers board: %s", board[0].HTML())
+	}
+}
+
+func TestOldImportRouteIsGone(t *testing.T) {
+	t.Parallel()
+
+	server := newServer(openStore(t), testNow)
+	for _, tt := range []struct{ name, method string }{
+		{"get", http.MethodGet}, {"post", http.MethodPost},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			response := do(t, server, tt.method, "/import", req{})
+			if response.Code != http.StatusNotFound {
+				t.Errorf("%s /import = %d, want 404", tt.method, response.Code)
+			}
+		})
 	}
 }
 

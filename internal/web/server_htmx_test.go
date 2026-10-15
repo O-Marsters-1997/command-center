@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/htmltest"
+	"github.com/O-Marsters-1997/command-center/internal/web/webtest"
 )
 
 func TestVerbAnswersAnHtmxRequestWithTheBoard(t *testing.T) {
@@ -49,11 +50,20 @@ func TestBoardSwapIsTheTableAlone(t *testing.T) {
 
 	root := htmltest.Parse(t, body)
 	root.One(t, "table#board")
+	for _, ticket := range []string{"sandbox://CC-1", "sandbox://CC-2"} {
+		webtest.RowFor(t, body, ticket)
+	}
 	if got := strings.TrimSpace(body); !strings.HasPrefix(got, "<table") {
 		t.Errorf("board swap is not a table fragment: %q", got[:min(len(got), 120)])
 	}
 	if regions := root.Find("[hx-swap-oob]"); len(regions) != 0 {
 		t.Errorf("board swap carries an out-of-band region: %s", regions[0].HTML())
+	}
+	if shell := root.Find("main#main"); len(shell) != 0 {
+		t.Errorf("board swap carries the page shell: %s", shell[0].HTML())
+	}
+	if strings.Contains(body, "launch selected") || strings.Contains(body, `<form id="launch"`) {
+		t.Error("board swap carries the launch form")
 	}
 }
 
