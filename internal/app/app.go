@@ -67,10 +67,6 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	var webOpts []web.Option
-	if loc, err := time.LoadLocation(env.TZ); env.TZ != "" && err == nil {
-		webOpts = append(webOpts, web.WithLocation(loc))
-	}
 	ws, err := config.ResolveWorkspace(cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace: %w", err)
@@ -115,10 +111,10 @@ func New(
 		Logger: logger, Store: st, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
 		Config: cfg, Workspace: ws,
 	}, loopOpts...)
-	webOpts = append(webOpts, web.WithSpendLimit5h(cfg.SpendLimit5h), web.WithBoardPollSeconds(cfg.BoardPollSeconds))
 	server := web.NewServer(web.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
-	}, webOpts...)
+		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,
+	})
 
 	return &App{
 		cfg:    cfg,

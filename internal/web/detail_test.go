@@ -2,6 +2,7 @@ package web_test
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,7 +256,9 @@ func TestBoardPollIntervalComesFromTheServer(t *testing.T) {
 		t.Errorf("default board hx-trigger = %q, want every 5s", got)
 	}
 
-	server = newServer(store, now, web.WithBoardPollSeconds(1))
+	server = web.NewServer(web.Deps{
+		Logger: slog.New(slog.DiscardHandler), Store: store, Clock: fixedClock(now), BoardPollSeconds: 1,
+	})
 	board = htmltest.Parse(t, boardBody(t, server)).One(t, "table#board")
 	if got, _ := board.Attr("hx-trigger"); got != "every 1s" {
 		t.Errorf("board hx-trigger = %q, want every 1s", got)

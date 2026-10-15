@@ -26,16 +26,19 @@ func renderFragment(w http.ResponseWriter, r *http.Request, host, block string, 
 	return renderHTML(w, block, data)
 }
 
-func returnPath(back, fallback string) string {
+func returnPath(back, prefix, fallback string) string {
 	u, err := url.Parse(back)
 	if err != nil || u.Scheme != "" || u.Host != "" || !strings.HasPrefix(back, "/") ||
-		strings.HasPrefix(back, "//") || strings.Contains(back, `\`) {
+		strings.HasPrefix(back, "//") || strings.Contains(back, `\`) || !strings.HasPrefix(u.Path, prefix) {
 		return fallback
 	}
 	for seg := range strings.SplitSeq(u.Path, "/") {
 		if seg == "." || seg == ".." {
 			return fallback
 		}
+	}
+	if prefix == "/s/" {
+		return u.EscapedPath()
 	}
 	return back
 }

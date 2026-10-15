@@ -24,7 +24,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) err
 	}
 	repos := r.PostForm["repo"]
 	for _, repo := range repos {
-		if !repoName.MatchString(repo) || hasDotSegment(repo) {
+		if !validRepo(repo) {
 			return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 		}
 	}
@@ -66,7 +66,7 @@ func (s *Server) handleSetRepoProject(w http.ResponseWriter, r *http.Request) er
 		return errorf(http.StatusBadRequest, "malformed form: %w", err)
 	}
 	repo := r.PathValue("owner") + "/" + r.PathValue("name")
-	if !repoName.MatchString(repo) || hasDotSegment(repo) {
+	if !validRepo(repo) {
 		return errorf(http.StatusBadRequest, "repo %q is not owner/name", repo)
 	}
 	if err := s.store.SetRepoProject(r.Context(), repo, strings.TrimSpace(r.PostForm.Get("project"))); err != nil {
@@ -80,10 +80,6 @@ func (s *Server) respondRepoGroups(w http.ResponseWriter, r *http.Request) error
 		seeOther(w, r, "/repos")
 		return nil
 	}
-	return s.renderRepoGroups(w, r)
-}
-
-func (s *Server) renderRepoGroups(w http.ResponseWriter, r *http.Request) error {
 	groups, err := s.view.RepoGroups(r.Context())
 	if err != nil {
 		return fmt.Errorf("render repo groups: %w", err)

@@ -195,8 +195,8 @@ func NewSim(ctx context.Context, logger *slog.Logger, sc Scenario) (_ *Sim, err 
 		loop.WithForge(forge), loop.WithWorktrees(Worktrees{}), loop.WithTrackerSource(resolve),
 	)
 	server := web.NewServer(
-		web.Deps{Logger: logger, Store: st, Clock: clock, DataDir: ws.DataDir},
-		web.WithTrackerSource(resolve), web.WithBoardPollSeconds(1),
+		web.Deps{Logger: logger, Store: st, Clock: clock, DataDir: ws.DataDir, BoardPollSeconds: 1},
+		web.WithTrackerSource(resolve),
 	)
 
 	s := &Sim{
