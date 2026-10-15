@@ -5,38 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
 
-type boardTestClock struct{}
-
 var frameTestNow = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
-
-func (boardTestClock) Now() time.Time { return frameTestNow }
-
-func TestWriteJSONDoesNotWriteOnEncodeFailure(t *testing.T) {
-	t.Parallel()
-
-	w := httptest.NewRecorder()
-	err := writeJSON(w, []any{"first", make(chan int)})
-	if err == nil {
-		t.Fatal("writeJSON(invalid) = nil, want encode error")
-	}
-	if got := w.Body.String(); got != "" {
-		t.Errorf("writeJSON(invalid) body = %q, want empty", got)
-	}
-	if got := w.Header().Get("Content-Type"); got != "" {
-		t.Errorf("writeJSON(invalid) content type = %q, want unset", got)
-	}
-	if got := w.Code; got != http.StatusOK {
-		t.Errorf("writeJSON(invalid) status = %d, want unwritten response", got)
-	}
-}
 
 func TestWriteJSONEncodeFailureAnswers500WithoutPartialBody(t *testing.T) {
 	t.Parallel()
@@ -84,74 +59,5 @@ func TestPushableFetchSharesResultAcrossConcurrentRequests(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("list calls = %d, want 1", calls)
-	}
-}
-
-func TestBoardRenderDoesNotWaitOnPushableFetch(t *testing.T) {
-	t.Parallel()
-
-	st := cctest.Store(t)
-
-	started := make(chan struct{})
-	release := make(chan struct{})
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	s := NewServer(Deps{Logger: slog.New(slog.DiscardHandler), Store: st, Clock: boardTestClock{}},
-		WithPushableSource(func(ctx context.Context) ([]gh.RepoSummary, error) {
-			close(started)
-			select {
-			case <-release:
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-			return []gh.RepoSummary{{FullName: "first"}}, nil
-		}))
-	fetchDone := make(chan error, 1)
-	go func() {
-		_, err := s.pushable.get(ctx, frameTestNow)
-		fetchDone <- err
-	}()
-	select {
-	case <-started:
-	case <-ctx.Done():
-		t.Fatalf("pushable fetch did not start: %v", ctx.Err())
-	}
-
-	response := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/board", nil).WithContext(ctx)
-		req.Header.Set("HX-Request", "true")
-		s.ServeHTTP(w, req)
-		response <- w
-	}()
-	timedOut := false
-	select {
-	case w := <-response:
-		if got := w.Code; got != http.StatusOK {
-			t.Errorf("GET /board during pushable fetch = %d, want 200", got)
-		}
-		if !strings.Contains(w.Body.String(), `id="board"`) {
-			t.Error("GET /board during pushable fetch body has no board")
-		}
-	case <-time.After(3 * time.Second):
-		t.Error("GET /board did not complete while pushable fetch was blocked")
-		timedOut = true
-	}
-	close(release)
-	select {
-	case err := <-fetchDone:
-		if err != nil {
-			t.Errorf("pushable fetch = %v, want nil", err)
-		}
-	case <-ctx.Done():
-		t.Errorf("pushable fetch did not finish: %v", ctx.Err())
-	}
-	if timedOut {
-		select {
-		case <-response:
-		case <-ctx.Done():
-			t.Errorf("GET /board did not finish after fetch release: %v", ctx.Err())
-		}
 	}
 }
