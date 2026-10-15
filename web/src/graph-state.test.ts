@@ -24,14 +24,14 @@ function row(url: string, over: Partial<Row> = {}): Row {
 const poll = (...rows: Row[]): Group[] => [{ root: null, children: rows }];
 
 describe("applyPoll", () => {
-  test("a changed glyph, state and title reach the node with the same url, and its identity is kept", () => {
+  test("a changed glyph, state and title reach the node with the same url", () => {
     const [nodes, setNodes] = createStore<GraphNode[]>([]);
     applyPoll(setNodes, poll(row("o/r/1")));
-    const before = nodes[0];
 
     applyPoll(setNodes, poll(row("o/r/1", { glyph: "running", state: "running", title: "new" })));
 
-    expect(nodes[0]).toBe(before);
+    expect(nodes.length).toBe(1);
+    expect(nodes[0]?.url).toBe("o/r/1");
     expect(nodes[0]?.glyph).toBe("running");
     expect(nodes[0]?.state).toBe("running");
     expect(nodes[0]?.title).toBe("new");

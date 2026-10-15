@@ -276,18 +276,7 @@ func TestProcessRunnerSpawn(t *testing.T) {
 }
 
 func TestProcessRunnerSpawnStripsSecret(t *testing.T) {
-	t.Parallel()
-	if os.Getenv("RUNNER_SECRET_CHILD") != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestProcessRunnerSpawnStripsSecret$")
-		cmd.Env = append(os.Environ(), "RUNNER_SECRET_CHILD=1", "ANTHROPIC_API_KEY=test-secret-key")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("Spawn with secret: %v: %s", err, out)
-		}
-		return
-	}
-	if os.Getenv("ANTHROPIC_API_KEY") != "test-secret-key" {
-		t.Fatal("secret fixture was not installed in the isolated process")
-	}
+	t.Setenv("ANTHROPIC_API_KEY", "test-secret-key")
 	worktree := t.TempDir()
 	dump := filepath.Join(worktree, "env.txt")
 	script := filepath.Join(t.TempDir(), "agent.sh")
