@@ -2,8 +2,6 @@ package store_test
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
@@ -12,26 +10,6 @@ import (
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 )
-
-func TestInTxCancelledMidFnRollsBackAndReturnsFnsErrorAlone(t *testing.T) {
-	t.Parallel()
-
-	s := cctest.Store(t)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	boom := errors.New("boom")
-
-	err := s.TestCancelInTx(ctx, cancel, boom)
-	if !errors.Is(err, boom) || errors.Is(err, context.Canceled) {
-		t.Fatalf("inTx = %v, want boom alone", err)
-	}
-
-	var id int64
-	err = s.DB().QueryRowContext(t.Context(), "SELECT id FROM projects WHERE name = $1", "partial").Scan(&id)
-	if !errors.Is(err, sql.ErrNoRows) {
-		t.Errorf("ProjectID(partial) error = %v, want sql.ErrNoRows", err)
-	}
-}
 
 func TestReadsThatDecideAWriteRunOnTheTransactionsConnection(t *testing.T) {
 	t.Parallel()

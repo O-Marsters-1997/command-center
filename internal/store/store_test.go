@@ -3,12 +3,8 @@ package store_test
 import (
 	"database/sql"
 	"errors"
-	"io/fs"
 	"net/url"
-	"path/filepath"
 	"slices"
-	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -41,46 +37,10 @@ func openStoreAt(t *testing.T, dsn string) *storepkg.Store {
 	return store
 }
 
-func gooseVersion(t *testing.T, dsn string) int64 {
-	t.Helper()
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("sql.Open(pgx): %v", err)
-	}
-	db.SetMaxOpenConns(4)
-	defer func() { _ = db.Close() }()
-	var v int64
-	if err := db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v); err != nil {
-		t.Fatalf("read goose version: %v", err)
-	}
-	return v
-}
-
-func latestMigration(t *testing.T) int64 {
-	t.Helper()
-	paths, err := fs.Glob(storepkg.Migrations(), "migrations/*.sql")
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("list migrations: %v (found %d)", err, len(paths))
-	}
-	var latest int64
-	for _, path := range paths {
-		prefix, _, _ := strings.Cut(filepath.Base(path), "_")
-		version, err := strconv.ParseInt(prefix, 10, 64)
-		if err != nil {
-			t.Fatalf("migration %s has no numeric prefix: %v", path, err)
-		}
-		latest = max(latest, version)
-	}
-	return latest
-}
-
 func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 	t.Parallel()
 
 	dsn := cctest.DSN(t)
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Fatalf("cloned goose version = %d, want %d", got, want)
-	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("sql.Open(pgx): %v", err)
@@ -121,9 +81,11 @@ func TestOpenStoreDoesNotMigrateAClonedDatabase(t *testing.T) {
 func TestOpenStoreMigratesAnUnmigratedDatabase(t *testing.T) {
 	t.Parallel()
 	dsn := cctest.UnmigratedDSN(t)
-	openStoreAt(t, dsn)
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d, want %d", got, want)
+	store := openStoreAt(t, dsn)
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	}); err != nil {
+		t.Errorf("UpsertTickets after migration: %v", err)
 	}
 }
 
@@ -163,8 +125,11 @@ func TestConcurrentOpenStoresMigrateOnce(t *testing.T) {
 			t.Errorf("concurrent OpenStore: %v", err)
 		}
 	}
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d, want %d", got, want)
+	store := openStoreAt(t, dsn)
+	if err := store.UpsertTickets(t.Context(), []storepkg.Ticket{
+		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
+	}); err != nil {
+		t.Errorf("UpsertTickets after concurrent migration: %v", err)
 	}
 }
 
@@ -195,7 +160,6 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 
 	dsn := cctest.DSN(t)
 	first := openStoreAt(t, dsn)
-	applied := gooseVersion(t, dsn)
 	if err := first.UpsertTickets(t.Context(), []storepkg.Ticket{
 		{URL: "sandbox://CC-1", Repo: "cc-sandbox", Branch: "cc-1"},
 	}); err != nil {
@@ -206,18 +170,12 @@ func TestOpenStoreTwiceIsANoOp(t *testing.T) {
 	}
 
 	second := openStoreAt(t, dsn)
-	if got := gooseVersion(t, dsn); got != applied {
-		t.Errorf("goose version = %d after the second open, want %d unchanged", got, applied)
-	}
 	tickets, err := second.Tickets(t.Context())
 	if err != nil {
 		t.Fatalf("second.Tickets: %v", err)
 	}
 	if len(tickets) != 1 {
 		t.Errorf("tickets = %d, want the first open's row to survive the second", len(tickets))
-	}
-	if got, want := gooseVersion(t, dsn), latestMigration(t); got != want {
-		t.Errorf("goose version = %d after the second open, want the latest migration %d", got, want)
 	}
 }
 

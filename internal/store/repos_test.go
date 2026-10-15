@@ -53,13 +53,23 @@ func TestSetRepoStateRecordsTheSettingsRead(t *testing.T) {
 	if err := store.UpsertRepo(ctx, repo); err != nil {
 		t.Fatalf("UpsertRepo: %v", err)
 	}
+	repos, err := store.Repos(ctx)
+	if err != nil {
+		t.Fatalf("Repos: %v", err)
+	}
+	if len(repos) != 1 {
+		t.Fatalf("Repos() returned %d repos, want 1", len(repos))
+	}
+	if got := repos[0].RefusalKind; got != plan.RefusalUnknown {
+		t.Errorf("Repos()[0].RefusalKind = %q, want %q", got, plan.RefusalUnknown)
+	}
 
 	repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "origin/main", trackedAt.Add(time.Hour)
 	if err := store.SetRepoState(ctx, repo); err != nil {
 		t.Fatalf("SetRepoState: %v", err)
 	}
 
-	repos, err := store.Repos(ctx)
+	repos, err = store.Repos(ctx)
 	if err != nil {
 		t.Fatalf("Repos: %v", err)
 	}
