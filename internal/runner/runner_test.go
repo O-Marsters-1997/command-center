@@ -15,7 +15,7 @@ import (
 
 func commitsScript(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs("../../testdata/agents/commits.sh")
+	abs, err := filepath.Abs("testdata/commits.sh")
 	if err != nil {
 		t.Fatalf("Abs(commits.sh): %v", err)
 	}
@@ -65,6 +65,15 @@ type spawnCase struct {
 	configure   func(t *testing.T, cfg *runner.SpawnConfig)
 	dumpOutside bool
 	check       func(t *testing.T, cfg runner.SpawnConfig, pid int, dump string)
+}
+
+func TestSpawnRejectsACommandThatBuildsAnEmptyArgv(t *testing.T) {
+	t.Parallel()
+	cfg := runner.SpawnConfig{AgentCommand: []string{"{session}"}, WorktreePath: t.TempDir()}
+
+	if _, err := (runner.ProcessRunner{}).Spawn(t.Context(), cfg); err == nil {
+		t.Error("Spawn(agent_command building an empty argv) = nil error, want one")
+	}
 }
 
 func TestProcessRunnerSpawn(t *testing.T) {

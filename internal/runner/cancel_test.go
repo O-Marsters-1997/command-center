@@ -14,7 +14,7 @@ import (
 
 func sleepsScript(t *testing.T) string {
 	t.Helper()
-	abs, err := filepath.Abs("../../testdata/agents/sleeps.sh")
+	abs, err := filepath.Abs("testdata/sleeps.sh")
 	if err != nil {
 		t.Fatalf("Abs(sleeps.sh): %v", err)
 	}

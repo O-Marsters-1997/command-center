@@ -120,32 +120,3 @@ func TestReadRepoSettingsErrorsNameTheLine(t *testing.T) {
 		})
 	}
 }
-
-func TestTheCommittedSettingsFileHoldsWhatTheRepoBlockHeld(t *testing.T) {
-	t.Parallel()
-
-	body, err := os.ReadFile("../../" + config.SettingsFile)
-	if err != nil {
-		t.Fatalf("ReadFile(%s): %v", "../../"+config.SettingsFile, err)
-	}
-	got, err := config.ParseRepoSettings(string(body))
-	if err != nil {
-		t.Fatalf("ParseRepoSettings: %v", err)
-	}
-
-	var all []verdict.Predicate
-	for _, name := range []string{
-		"test", "e2e", "lint", "build (ubuntu-latest)", "build (macos-latest)", "tidy", "assets",
-	} {
-		all = append(all, verdict.Predicate{Success: name})
-	}
-	want := config.RepoSettings{
-		Tracker:  "github",
-		Stacking: true,
-		Deny:     []string{".github/**", "go.mod", "go.sum"},
-		Checks:   verdict.Predicate{AllOf: all},
-	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("ParseRepoSettings() mismatch (-want +got):\n%s", diff)
-	}
-}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/O-Marsters-1997/command-center/internal/agentlog"
 )
@@ -23,32 +24,88 @@ func cmdsOf(run agentlog.Run) []agentlog.Event {
 	return cmds
 }
 
-func TestParseRun27Commands(t *testing.T) {
+func TestTail_Read(t *testing.T) {
 	t.Parallel()
-
-	f, err := os.Open("testdata/run27.jsonl")
-	if err != nil {
-		t.Fatalf("open fixture: %v", err)
-	}
-	defer func() { _ = f.Close() }()
-	run, err := agentlog.Parse(f)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	cmds := cmdsOf(run)
-	if len(cmds) != 2 {
-		t.Fatalf("Parse yields %d Cmd events; want 2 (%+v)", len(cmds), cmds)
-	}
-	passed, failed := cmds[0], cmds[1]
-	if !passed.Done || passed.ExitCode != 0 || passed.Elapsed <= 0 ||
-		!strings.HasPrefix(passed.Output, "internal/cc/app_test.go\ninternal/cc/app.go\n") {
-		t.Errorf("passing Cmd = %+v; want exit 0, a duration and stdout as output", passed)
-	}
-	if !failed.Done || failed.ExitCode != 1 || failed.Elapsed <= 0 ||
-		failed.Output != "go is /opt/homebrew/bin/go\nrtk is /opt/homebrew/bin/rtk" {
-		t.Errorf("failing Cmd = %+v; want exit 1, a duration and the output without its Exit code prefix", failed)
-	}
+	t.Run("run27 matches the complete parse", func(t *testing.T) {
+		t.Parallel()
+		data, err := os.ReadFile("testdata/run27.jsonl")
+		if err != nil {
+			t.Fatalf("ReadFile(run27.jsonl): %v", err)
+		}
+		findOutput, err := os.ReadFile("testdata/run27.find-output.golden")
+		if err != nil {
+			t.Fatalf("ReadFile(run27.find-output.golden): %v", err)
+		}
+		want := agentlog.Run{
+			Lines: 23,
+			Start: time.Date(2026, 8, 25, 10, 56, 4, 185*int(time.Millisecond), time.UTC),
+			End:   1573296 * time.Millisecond,
+			Result: &agentlog.Result{
+				Outcome: "success", Duration: 561464 * time.Millisecond,
+				Turns: 42, CostUSD: 8.288799200000001,
+			},
+			Phases: []agentlog.Phase{
+				{
+					Turns: 1, Spend: 0.38171008,
+					Events: []agentlog.Event{
+						{Kind: agentlog.Say, Detail: "I'll start by exploring the existing code structure — " +
+							"the `internal/cc` package, the `plan` package, and the untracked test file already present."},
+						{At: 1099 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
+							Detail: "find internal/cc internal/plan -type f | sort",
+							CallID: "toolu_01TFGB4Saexqc9Ctwccjqo8U", Output: string(findOutput), OutputLines: 93,
+							Done: true, Elapsed: 1328 * time.Millisecond},
+						{At: 1843 * time.Millisecond, Kind: agentlog.File, Tool: "Read",
+							Detail: "/Users/dev/Documents/personal/ai-development/" +
+								"command-center-cc-74-grouped-board/internal/cc/group_page_test.go",
+							CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi"},
+						{At: 1852 * time.Millisecond, Kind: agentlog.Pass, Detail: "1\tpackage cc_test",
+							CallID: "toolu_01SVRG41A6CCGzYD3fFb7Emi", Output: "1\tpackage cc_test\n2\t", OutputLines: 2},
+					},
+				},
+				{
+					Skill: "go-idiomatic", At: 238544 * time.Millisecond,
+					Turns: 2, Spend: 0.19796928000000003,
+					Events: []agentlog.Event{
+						{At: 764324 * time.Millisecond, Kind: agentlog.Cmd, Tool: "Bash",
+							Detail: "type go; type rtk 2>/dev/null; alias go 2>/dev/null",
+							CallID: "toolu_019SuUKTAJWXx7GiPbakYQSe",
+							Output: "go is /opt/homebrew/bin/go\nrtk is /opt/homebrew/bin/rtk", OutputLines: 2,
+							Done: true, ExitCode: 1, Elapsed: 2477 * time.Millisecond},
+					},
+				},
+				{
+					Skill: "clean-comments",
+					Turns: 1, Spend: 0.19517952000000002,
+					Note: "internal/cc/export_test.go internal/cc/group_page_test.go " +
+						"internal/cc/server.go",
+					At: 1573296 * time.Millisecond,
+				},
+			},
+		}
+		parsed := parseString(t, string(data))
+		if diff := cmp.Diff(want, parsed, cmpopts.EquateApprox(0, 1e-12)); diff != "" {
+			t.Errorf("Parse(run27) mismatch (-want +got):\n%s", diff)
+		}
+		var tail agentlog.Tail
+		var finished []agentlog.Event
+		for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
+			for _, e := range tail.Read([]byte(line)) {
+				if e.Kind == agentlog.Cmd && e.Done {
+					finished = append(finished, e)
+				}
+			}
+		}
+		commands := cmdsOf(parsed)
+		for i := range finished {
+			if i >= len(commands) {
+				break
+			}
+			finished[i].At = commands[i].At
+		}
+		if diff := cmp.Diff(commands, finished); diff != "" {
+			t.Errorf("Tail Cmd mismatch (-want +got):\n%s", diff)
+		}
+	})
 }
 
 func TestParseCommandResults(t *testing.T) {
@@ -139,37 +196,5 @@ func TestParseCommandResults(t *testing.T) {
 				t.Errorf("Cmd mismatch (-want +got):\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestTailEmitsTheCmdEventsParseDoes(t *testing.T) {
-	t.Parallel()
-
-	data, err := os.ReadFile("testdata/run27.jsonl")
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-
-	var tail agentlog.Tail
-	var finished []agentlog.Event
-	for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
-		for _, e := range tail.Read([]byte(line)) {
-			if e.Kind == agentlog.Cmd && e.Done {
-				finished = append(finished, e)
-			}
-		}
-	}
-
-	want := cmdsOf(parseString(t, string(data)))
-	for i := range finished {
-		if i >= len(want) {
-			break
-		}
-		got := finished[i]
-		got.At = want[i].At
-		finished[i] = got
-	}
-	if diff := cmp.Diff(want, finished); diff != "" {
-		t.Errorf("Tail Cmd mismatch (-want +got):\n%s", diff)
 	}
 }

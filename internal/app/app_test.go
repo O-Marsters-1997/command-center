@@ -22,6 +22,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/cctest"
 	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/web/hx"
@@ -151,7 +152,8 @@ func appConfig(t *testing.T) string {
 	t.Helper()
 	dataDir := t.TempDir()
 
-	root, repoPath := repoWithOrigin(t)
+	repoPath, origin := gittest.WithOrigin(t)
+	root := filepath.Dir(origin)
 	checkout := config.CheckoutPath(dataDir, sandboxRepo)
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		t.Fatalf("MkdirAll(%s): %v", filepath.Dir(checkout), err)
