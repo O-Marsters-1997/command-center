@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,9 +38,10 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	stub := func(context.Context) (plan.Observation, error) { return observed, nil }
 
 	ctx := t.Context()
-	inst, err := app.New(
-		ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithClock(cctest.Clock{At: at}), app.WithObserver(stub),
-	)
+	inst, err := app.New(ctx, app.Deps{
+		Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: testEnv,
+		Clock: cctest.Clock{At: at}, Observe: stub,
+	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -53,17 +54,59 @@ func TestNewRunsATickAndServesThePage(t *testing.T) {
 	if err := inst.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
+	cfg, err := config.Load(configPath, testEnv)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	serveCtx, stop := context.WithCancel(ctx)
+	t.Cleanup(stop)
+	done := make(chan error, 1)
+	go func() { done <- inst.Run(serveCtx) }()
+	terminated := false
+	t.Cleanup(func() {
+		stop()
+		if terminated {
+			return
+		}
+		if err := <-done; err != nil {
+			t.Errorf("Run: %v", err)
+		}
+	})
+	client := &http.Client{Timeout: 2 * time.Second}
 
 	fetch := func(path string) string {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		req.Header.Set(hx.HeaderRequest, "true")
-		rec := httptest.NewRecorder()
-		inst.Handler().ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("GET %s: status = %d, want 200", path, rec.Code)
+		url := fmt.Sprintf("http://127.0.0.1:%d%s", cfg.Port, path)
+		deadline := time.After(5 * time.Second)
+		for {
+			req, err := http.NewRequestWithContext(serveCtx, http.MethodGet, url, nil)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
+			}
+			req.Header.Set(hx.HeaderRequest, "true")
+			resp, err := client.Do(req)
+			if err == nil {
+				body, readErr := io.ReadAll(resp.Body)
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					t.Fatalf("Close(GET %s): %v", path, closeErr)
+				}
+				if readErr != nil {
+					t.Fatalf("ReadAll(GET %s): %v", path, readErr)
+				}
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("GET %s: status = %d, want 200", path, resp.StatusCode)
+				}
+				return string(body)
+			}
+			select {
+			case runErr := <-done:
+				terminated = true
+				t.Fatalf("Run before GET %s = %v", path, runErr)
+			case <-deadline:
+				t.Fatalf("GET %s did not connect: %v", path, err)
+			case <-time.After(10 * time.Millisecond):
+			}
 		}
-		return rec.Body.String()
 	}
 
 	body := fetch("/tickets")
@@ -85,7 +128,7 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 	configPath := appConfig(t)
 
 	ctx := t.Context()
-	first, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv)
+	first, err := app.New(ctx, app.Deps{Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: testEnv})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -95,7 +138,9 @@ func TestNewRefusesASecondInstance(t *testing.T) {
 		}
 	})
 
-	if _, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv); err == nil {
+	if _, err := app.New(ctx, app.Deps{
+		Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: testEnv,
+	}); err == nil {
 		t.Fatal("a second instance started against the same workspace")
 	}
 }
@@ -157,7 +202,9 @@ func TestRunReturnsNilOnACleanShutdown(t *testing.T) {
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
 	ctx, cancel := context.WithCancel(t.Context())
-	inst, err := app.New(ctx, slog.New(slog.DiscardHandler), configPath, testEnv, app.WithObserver(stub))
+	inst, err := app.New(ctx, app.Deps{
+		Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: testEnv, Observe: stub,
+	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -205,7 +252,9 @@ func TestRunReturnsTheBindErrorWithoutCancellation(t *testing.T) {
 	}
 
 	stub := func(context.Context) (plan.Observation, error) { return plan.Observation{}, nil }
-	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, testEnv, app.WithObserver(stub))
+	inst, err := app.New(t.Context(), app.Deps{
+		Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: testEnv, Observe: stub,
+	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -242,7 +291,7 @@ func TestNewStartsWithNoTrackedRepos(t *testing.T) {
 		t.Fatalf("WriteFile(%s): %v", configPath, err)
 	}
 
-	inst, err := app.New(t.Context(), slog.New(slog.DiscardHandler), configPath, env)
+	inst, err := app.New(t.Context(), app.Deps{Logger: slog.New(slog.DiscardHandler), ConfigPath: configPath, Env: env})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -261,7 +310,7 @@ func TestNewNamesTheStepThatFailed(t *testing.T) {
 	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "absent.toml")
 
-	_, err := app.New(t.Context(), slog.New(slog.DiscardHandler), missing, config.Env{})
+	_, err := app.New(t.Context(), app.Deps{Logger: slog.New(slog.DiscardHandler), ConfigPath: missing})
 
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("New(missing config) = %v, want it to wrap os.ErrNotExist", err)

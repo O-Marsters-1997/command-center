@@ -30,40 +30,22 @@ type App struct {
 	server *web.Server
 }
 
-type options struct {
-	clock    loop.Clock
-	observe  loop.ObserveFunc
-	validate loop.ValidateFunc
-	remoteOf loop.RemoteFunc
+type Deps struct {
+	Logger     *slog.Logger
+	ConfigPath string
+	Env        config.Env
+	Clock      loop.Clock
+	Observe    loop.ObserveFunc
+	Validate   loop.ValidateFunc
+	RemoteOf   loop.RemoteFunc
 }
 
-type Option func(*options)
-
-func WithClock(clock loop.Clock) Option {
-	return func(o *options) { o.clock = clock }
-}
-
-func WithObserver(observe loop.ObserveFunc) Option {
-	return func(o *options) { o.observe = observe }
-}
-
-func WithValidator(validate loop.ValidateFunc) Option {
-	return func(o *options) { o.validate = validate }
-}
-
-func WithRemoteSource(remoteOf loop.RemoteFunc) Option {
-	return func(o *options) { o.remoteOf = remoteOf }
-}
-
-func New(
-	ctx context.Context, logger *slog.Logger, configPath string, env config.Env, opts ...Option,
-) (app *App, err error) {
-	settings := options{clock: loop.RealClock{}}
-	for _, opt := range opts {
-		opt(&settings)
+func New(ctx context.Context, deps Deps) (app *App, err error) {
+	if deps.Clock == nil {
+		deps.Clock = loop.RealClock{}
 	}
 
-	cfg, err := config.Load(configPath, env)
+	cfg, err := config.Load(deps.ConfigPath, deps.Env)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -95,23 +77,23 @@ func New(
 		return nil, fmt.Errorf("write agent files: %w", err)
 	}
 
-	observe := settings.observe
+	observe := deps.Observe
 	if observe == nil {
 		observe = loop.NewObserver(st, gh.CLI{}, cfg)
 	}
 
 	lp := loop.New(loop.Deps{
-		Logger: logger, Store: st, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
-		Config: cfg, Workspace: ws, Validate: settings.validate, RemoteOf: settings.remoteOf,
+		Logger: deps.Logger, Store: st, Clock: deps.Clock, Runner: runner.ProcessRunner{}, Observe: observe,
+		Config: cfg, Workspace: ws, Validate: deps.Validate, RemoteOf: deps.RemoteOf,
 	})
 	server := web.NewServer(web.Deps{
-		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
+		Logger: deps.Logger, Store: st, Clock: deps.Clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,
 	})
 
 	return &App{
 		cfg:    cfg,
-		logger: logger,
+		logger: deps.Logger,
 		lock:   lock,
 		store:  st,
 		loop:   lp,
@@ -125,8 +107,6 @@ func (a *App) RunOnce(ctx context.Context) error {
 	}
 	return nil
 }
-
-func (a *App) Handler() http.Handler { return a.server }
 
 func (a *App) Run(ctx context.Context) error {
 	ctx, stop := context.WithCancel(ctx)

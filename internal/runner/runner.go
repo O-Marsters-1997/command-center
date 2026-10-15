@@ -59,16 +59,13 @@ func sessionArgs(cfg SpawnConfig) []string {
 }
 
 func buildArgv(cfg SpawnConfig) []string {
-	omitWhenEmpty := map[string]string{
-		"{system_prompt}": cfg.SystemPromptPath,
-	}
 	argv := make([]string, 0, len(cfg.AgentCommand))
 	for _, a := range cfg.AgentCommand {
 		if a == "{session}" {
 			argv = append(argv, sessionArgs(cfg)...)
 			continue
 		}
-		if path, ok := omitWhenEmpty[a]; ok && path == "" {
+		if a == "{system_prompt}" && cfg.SystemPromptPath == "" {
 			if len(argv) > 0 {
 				argv = argv[:len(argv)-1]
 			}
