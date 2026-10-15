@@ -60,7 +60,7 @@ tidy:
     go mod tidy
 
 assets:
-    cd web && bun install && bun run build
+    cd web && bun install --frozen-lockfile && bun run build
 
 # Regenerate the committed internal/store/ccdb from internal/store/queries and the schema.
 sqlc:
