@@ -26,7 +26,7 @@ func (s *Store) RecordPush(ctx context.Context, p Push) error {
 	return nil
 }
 
-// RestackedSinceLastPush authorizes lease-force pushes after a restack since the last push.
+// RestackedSinceLastPush authorizes lease-force pushes when a restack is at or after the last push.
 func (s *Store) RestackedSinceLastPush(ctx context.Context) (map[plan.TicketURL]bool, error) {
 	rows, err := s.q.RestackedSinceLastPush(ctx, string(EventRestacked))
 	if err != nil {

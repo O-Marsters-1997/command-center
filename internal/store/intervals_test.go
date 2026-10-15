@@ -67,6 +67,7 @@ func TestRecordReadingsAndIntervalsFitsAKnownFactor(t *testing.T) {
 	if got.Samples != 5 {
 		t.Errorf("Samples = %d; want 5", got.Samples)
 	}
+	// One million Sonnet input tokens cost $6.40 at the calibrated vendor rate.
 	const wantFactor = 0.02 / 6.40
 	if diff := (got.Factor - wantFactor) / wantFactor; diff > 0.01 || diff < -0.01 {
 		t.Errorf("Factor = %v; want within 1%% of %v", got.Factor, wantFactor)
