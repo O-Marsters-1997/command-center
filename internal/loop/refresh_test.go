@@ -94,21 +94,19 @@ func advanceParent(t *testing.T, repoPath string, f stackedFixture) string {
 }
 
 func baseObservation(f stackedFixture, parentTip string) plan.Observation {
-	return plan.Observation{
-		Worktrees: map[plan.BranchRef]string{
-			branchRef("repo", "parent"): f.parentWorktree, branchRef("repo", "child"): f.childWorktree,
-		},
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
-			branchRef("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
-		},
-		BranchTips: map[plan.BranchRef]plan.SHA{
-			branchRef("repo", "parent"): plan.SHA(parentTip), branchRef("repo", plan.DefaultBaseBranch): plan.SHA(f.mainSHA),
-		},
-		Runs:     map[plan.TicketURL]plan.RunObservation{},
-		MidMerge: map[plan.BranchRef]bool{},
-		Settings: map[string]config.RepoSettings{"repo": {Stacking: true}},
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees = map[plan.BranchRef]string{
+		branchRef("repo", "parent"): f.parentWorktree, branchRef("repo", "child"): f.childWorktree,
 	}
+	obs.PRs = map[plan.BranchRef]plan.PR{
+		branchRef("repo", "parent"): {Number: 1, HeadRef: "parent", State: plan.Open},
+		branchRef("repo", "child"):  {Number: 2, HeadRef: "child", State: plan.Open},
+	}
+	obs.BranchTips = map[plan.BranchRef]plan.SHA{
+		branchRef("repo", "parent"): plan.SHA(parentTip), branchRef("repo", plan.DefaultBaseBranch): plan.SHA(f.mainSHA),
+	}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true}
+	return obs
 }
 
 func TestAutomaticRefreshMergesTheAdvancedParentAndThePushStepDeliversItSameTick(t *testing.T) {

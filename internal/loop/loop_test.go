@@ -68,12 +68,9 @@ func TestRunOnceRecordsTheObservation(t *testing.T) {
 	store := openStore(t)
 	at := testAt
 
-	observed := plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("cc-sandbox", "cc-1-first"): {Number: 41, HeadRef: "cc-1-first", State: plan.Open},
-		},
-		Worktrees: map[plan.BranchRef]string{branchRef("cc-sandbox", "cc-1-first"): "/tmp/cc-1-first"},
-	}
+	observed := plan.NewObservation(testAt)
+	observed.PRs[branchRef("cc-sandbox", "cc-1-first")] = plan.PR{Number: 41, HeadRef: "cc-1-first", State: plan.Open}
+	observed.Worktrees[branchRef("cc-sandbox", "cc-1-first")] = "/tmp/cc-1-first"
 	lp := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		cctest.Clock{At: at}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})
@@ -136,9 +133,8 @@ func TestRunOnceFailedObserveChangesNothing(t *testing.T) {
 		t.Fatalf("UpsertTickets: %v", err)
 	}
 
-	observed := plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{branchRef("cc-sandbox", "cc-1-first"): {Number: 41, State: plan.Open}},
-	}
+	observed := plan.NewObservation(testAt)
+	observed.PRs[branchRef("cc-sandbox", "cc-1-first")] = plan.PR{Number: 41, State: plan.Open}
 	ok := newLoop(store,
 		func(context.Context) (plan.Observation, error) { return observed, nil },
 		cctest.Clock{At: good}, config.Config{}, config.Workspace{}, runner.ProcessRunner{})

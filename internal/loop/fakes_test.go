@@ -61,6 +61,7 @@ type forgeCall struct {
 }
 
 type recordingForge struct {
+	gh.Forge
 	mu       sync.Mutex
 	calls    []forgeCall
 	Snapshot gh.Snapshot
@@ -116,11 +117,6 @@ func (f *recordingForge) Edit(_ context.Context, repo, branch, base string) erro
 
 func (f *recordingForge) CloseIssue(_ context.Context, repo, issue string) error {
 	f.record(forgeCall{Method: "CloseIssue", Repo: repo, Issue: issue})
-	return nil
-}
-
-func (f *recordingForge) Comment(_ context.Context, repo, issue, body string) error {
-	f.record(forgeCall{Method: "Comment", Repo: repo, Issue: issue, Body: body})
 	return nil
 }
 

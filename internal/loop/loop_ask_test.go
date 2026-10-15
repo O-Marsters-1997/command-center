@@ -50,7 +50,8 @@ func TestLoopDisposesARunThatWroteItsQuestionFileAsAskedEvenWithCommits(t *testi
 		t.Fatalf("WriteFile(%q): %v", questionPath, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	fake := runner.NewFake()
 	fake.CanReap[999] = true

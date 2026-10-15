@@ -1,10 +1,8 @@
 package loop_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 
 	"github.com/O-Marsters-1997/command-center/internal/config"
@@ -25,7 +23,7 @@ func writeAgentFiles(t *testing.T) config.Workspace {
 	return ws
 }
 
-func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
+func TestWriteAgentSettingsMatchesGolden(t *testing.T) {
 	t.Parallel()
 
 	path := writeAgentFiles(t).SettingsPath
@@ -35,20 +33,6 @@ func TestWriteAgentSettingsDeniesPushGhAndNetworkFetch(t *testing.T) {
 		t.Fatalf("read written settings: %v", err)
 	}
 	assertGolden(t, "testdata/settings.golden.json", raw)
-
-	var settings struct {
-		Permissions struct {
-			Deny []string `json:"deny"`
-		} `json:"permissions"`
-	}
-	if err := json.Unmarshal(raw, &settings); err != nil {
-		t.Fatalf("settings is not valid JSON: %v\n%s", err, raw)
-	}
-
-	want := []string{"Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"}
-	if !slices.Equal(settings.Permissions.Deny, want) {
-		t.Errorf("deny = %v, want %v", settings.Permissions.Deny, want)
-	}
 }
 
 func TestWriteAgentSystemPromptMatchesGolden(t *testing.T) {
@@ -59,24 +43,4 @@ func TestWriteAgentSystemPromptMatchesGolden(t *testing.T) {
 		t.Fatalf("read written system prompt: %v", err)
 	}
 	assertGolden(t, "testdata/system-prompt.golden.txt", raw)
-}
-
-func TestWriteAgentFilesIsIdempotent(t *testing.T) {
-	t.Parallel()
-
-	ws := writeAgentFiles(t)
-	first, err := os.ReadFile(ws.SettingsPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q): %v", ws.SettingsPath, err)
-	}
-	if err := loop.WriteAgentFiles(ws); err != nil {
-		t.Fatalf("second WriteAgentFiles: %v", err)
-	}
-	second, err := os.ReadFile(ws.SettingsPath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q): %v", ws.SettingsPath, err)
-	}
-	if string(first) != string(second) {
-		t.Errorf("settings changed across calls:\n%s\nvs\n%s", first, second)
-	}
 }

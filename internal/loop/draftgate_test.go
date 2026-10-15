@@ -18,7 +18,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-func (f *pushFixture) seedDraftGate(t *testing.T) {
+func (f *fixture) seedDraftGate(t *testing.T) {
 	t.Helper()
 	f.Ticket.BlockedBy = []string{"sandbox://PLA-40"}
 	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
@@ -37,16 +37,16 @@ func ciCheck(conclusion string) map[string]plan.CheckState {
 func draftConsumerPR(
 	blockerState plan.PRState, consumerChecks map[string]plan.CheckState, tip string,
 ) plan.Observation {
-	return plan.Observation{
-		PRs: map[plan.BranchRef]plan.PR{
-			branchRef("repo", "cc-1"): {
-				Number: 1, State: plan.Open, IsDraft: true, HeadOid: plan.SHA(tip), Checks: consumerChecks,
-			},
-			branchRef("services", "pla-40"): {State: blockerState},
+	obs := plan.NewObservation(testAt)
+	obs.PRs = map[plan.BranchRef]plan.PR{
+		branchRef("repo", "cc-1"): {
+			Number: 1, State: plan.Open, IsDraft: true, HeadOid: plan.SHA(tip), Checks: consumerChecks,
 		},
-		BranchTips: map[plan.BranchRef]plan.SHA{branchRef("repo", plan.DefaultBaseBranch): "main-tip"},
-		Settings:   map[string]config.RepoSettings{"repo": {Checks: verdict.Predicate{Success: "CI"}}},
+		branchRef("services", "pla-40"): {State: blockerState},
 	}
+	obs.BranchTips[branchRef("repo", plan.DefaultBaseBranch)] = "main-tip"
+	obs.Settings["repo"] = config.RepoSettings{Checks: verdict.Predicate{Success: "CI"}}
+	return obs
 }
 
 func TestDraftGateStaysDraftUntilBlockerMergedAndVerdictGreen(t *testing.T) {
@@ -65,7 +65,7 @@ func TestDraftGateStaysDraftUntilBlockerMergedAndVerdictGreen(t *testing.T) {
 			f := newPushFixture(t)
 			f.seedDraftGate(t)
 			*f.Obs = draftConsumerPR(tt.blockerState, ciCheck(tt.conclusion), "cc-1-tip")
-			f.tick(t)
+			f.Tick(t)
 			if got := len(f.Forge.Calls("Ready")); got != 0 {
 				t.Errorf("pr ready calls = %d, want 0", got)
 			}
@@ -78,19 +78,19 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 	f := newPushFixture(t)
 	f.seedDraftGate(t)
 	*f.Obs = draftConsumerPR(plan.Open, ciCheck("FAILURE"), "cc-1-tip")
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 0 {
 		t.Fatalf("pr ready calls after tick 1 = %d, want 0", got)
 	}
 
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("FAILURE"), "cc-1-tip")
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 0 {
 		t.Fatalf("pr ready calls after tick 2 = %d, want 0", got)
 	}
 
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 1 {
 		t.Fatalf("pr ready calls after tick 3 = %d, want exactly 1", got)
 	}
@@ -99,7 +99,7 @@ func TestDraftGateUnDraftsOnceAndCallsReadyExactlyOnce(t *testing.T) {
 		Number: 1, State: plan.Open, IsDraft: false, HeadOid: "cc-1-tip", Checks: ciCheck("SUCCESS"),
 	}
 	for range 9 {
-		f.tick(t)
+		f.Tick(t)
 	}
 	if got := len(f.Forge.Calls("Ready")); got != 1 {
 		t.Errorf("pr ready calls across ten ticks = %d, want exactly 1", got)
@@ -112,7 +112,7 @@ func TestDraftGateClosedBlockerNeverReadies(t *testing.T) {
 	f.seedDraftGate(t)
 	*f.Obs = draftConsumerPR(plan.Closed, ciCheck("SUCCESS"), "cc-1-tip")
 	for range 5 {
-		f.tick(t)
+		f.Tick(t)
 	}
 	if got := len(f.Forge.Calls("Ready")); got != 0 {
 		t.Errorf("pr ready calls = %d, want 0: the gating blocker's PR closed unmerged", got)
@@ -132,7 +132,7 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	f.seedDraftGate(t)
 	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 1 {
 		t.Fatalf("pr ready calls after tick 1 = %d, want 1 (the failed attempt)", got)
 	}
@@ -144,7 +144,7 @@ func TestDraftGateReadyFailureIsRetriedNextTickWithoutAVerb(t *testing.T) {
 	}
 
 	f.reset(testAt, runner.ProcessRunner{})
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Ready")); got != 2 {
 		t.Errorf("pr ready calls after tick 2 = %d, want 2 (retried automatically)", got)
 	}
@@ -161,7 +161,7 @@ func TestDraftGateReadyFailureReportsForgeError(t *testing.T) {
 	f.seedDraftGate(t)
 	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingReady{f.Forge}))
 	*f.Obs = draftConsumerPR(plan.Merged, ciCheck("SUCCESS"), "cc-1-tip")
-	f.tick(t)
+	f.Tick(t)
 	events := f.events(t, "draft_ready_failed")
 	if len(events) != 1 || events[0].TicketURL != f.Ticket.URL ||
 		!strings.Contains(events[0].Detail, "fake gh: pr ready failed") {
@@ -180,11 +180,10 @@ func TestDraftPRCountsAsOpenForASameRepoDependent(t *testing.T) {
 	}
 	storetest.Tickets(t, store, tickets...)
 
-	obs := plan.Observation{
-		Worktrees: map[plan.BranchRef]string{branchRef("repo", "parent"): "/repos/parent"},
-		PRs:       map[plan.BranchRef]plan.PR{branchRef("repo", "parent"): {Number: 1, State: plan.Open, IsDraft: true}},
-		Settings:  map[string]config.RepoSettings{"repo": {Stacking: true}},
-	}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "parent")] = "/repos/parent"
+	obs.PRs[branchRef("repo", "parent")] = plan.PR{Number: 1, State: plan.Open, IsDraft: true}
+	obs.Settings["repo"] = config.RepoSettings{Stacking: true}
 	if err := store.SaveObservation(t.Context(), obs); err != nil {
 		t.Fatalf("SaveObservation: %v", err)
 	}
@@ -209,7 +208,7 @@ func TestPushOneOpensADraftPRForATicketWithAGatingEdge(t *testing.T) {
 	blocker := storepkg.Ticket{URL: "sandbox://PLA-40", Repo: "services", Branch: "pla-40"}
 	storetest.Tickets(t, f.Store, f.Ticket, blocker)
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
+	f.Tick(t)
 
 	if got := f.Forge.Calls("Create"); len(got) != 1 || !got[0].Draft {
 		t.Errorf("forge Create calls = %+v, want one draft PR for a ticket with a gating edge", got)
@@ -221,7 +220,7 @@ func TestPushOneOpensANonDraftPRWithNoGatingEdge(t *testing.T) {
 	f := newPushFixture(t)
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
+	f.Tick(t)
 
 	if got := f.Forge.Calls("Create"); len(got) != 1 || got[0].Draft {
 		t.Errorf("forge Create calls = %+v, want one non-draft PR for a plain ticket", got)

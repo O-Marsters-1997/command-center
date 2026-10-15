@@ -36,7 +36,8 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 		t.Fatalf("QueueVerbIntent(%q, re-run): %v", tickets[0].URL, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 1, []string{"true"})
 	fake := runner.NewFake()
@@ -86,7 +87,8 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
 
-	obs := plan.Observation{Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}}
+	obs := plan.NewObservation(testAt)
+	obs.Worktrees[branchRef("repo", "cc-1")] = worktreePath
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 	cfg, ws := testConfigAndWorkspace(t, root, 0, nil)
 	fake := runner.NewFake()
@@ -105,7 +107,7 @@ func TestARunDisposedInAbsorbIsPushedInTheSameTick(t *testing.T) {
 
 func TestATickPrunesTickErrorsPastRetention(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t)
+	f := newLoopFixture(t, fixture{})
 	stale := storepkg.Event{At: testAt.Add(-31 * 24 * time.Hour), Kind: storepkg.EventTickError, Detail: "old"}
 	recent := storepkg.Event{At: testAt.Add(-time.Hour), Kind: storepkg.EventTickError, Detail: "new"}
 	for _, e := range []storepkg.Event{stale, recent} {

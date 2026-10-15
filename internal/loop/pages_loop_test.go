@@ -37,8 +37,9 @@ func renderPath(t *testing.T, server *web.Server, path string) string {
 
 func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 	t.Parallel()
-	f := newLoopFixture(t,
-		withTickets(sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4")))
+	f := newLoopFixture(t, fixture{Tickets: []storepkg.Ticket{
+		sandboxTicket("1"), sandboxTicket("2"), sandboxTicket("3"), sandboxTicket("4"),
+	}})
 	for _, ticket := range f.Tickets {
 		hash := composeHash(ticket.URL)
 		launch := storepkg.LaunchRequest{Ticket: ticket.URL, PromptHash: hash, Group: "group-a", At: testAt}
@@ -121,7 +122,7 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 func TestLoopReconcilesATicketTheRepoScopeHides(t *testing.T) {
 	t.Parallel()
 	hidden := storepkg.Ticket{URL: "sandbox://HIDDEN", Repo: "other", Branch: "hidden"}
-	f := newLoopFixture(t, withMaxAgents(2), withExtraRepo("other"), withTickets(hidden))
+	f := newLoopFixture(t, fixture{MaxAgents: 2, ExtraRepo: "other", Tickets: []storepkg.Ticket{hidden}})
 	authoriseTicket(t, f.Store, hidden.URL, composeHash(hidden.URL), testAt)
 	f.Tick(t)
 

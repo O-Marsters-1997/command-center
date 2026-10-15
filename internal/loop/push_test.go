@@ -48,7 +48,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 	f := newPushFixture(t)
 	gittest.Commit(t, f.Worktree, ".github/workflows/x.yml", "name: x\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
+	f.Tick(t)
 
 	if gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 must not exist on the remote: the diff hit the push policy")
@@ -67,7 +67,7 @@ func TestPushPushableRefusesAPolicyHitAndNeverPushes(t *testing.T) {
 		!strings.Contains(events[0].Detail, ".github/workflows/x.yml") {
 		t.Errorf("events = %+v, want a push_refused event naming the path", events)
 	}
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.events(t, "push_refused")); got != 1 {
 		t.Errorf("push_refused events after a second tick = %d, want 1: no auto-retry", got)
 	}
@@ -78,7 +78,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 	f := newPushFixture(t)
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
-	f.tick(t)
+	f.Tick(t)
 
 	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Fatal("cc-1 was not pushed to the remote")
@@ -96,7 +96,7 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 		t.Error("no pushes row recorded")
 	}
 
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Create")); got != 1 {
 		t.Errorf("Create calls after a second tick = %d, want 1", got)
 	}
@@ -108,7 +108,7 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 	f.Obs.PRs[branchRef("repo", "cc-1")] = plan.PR{Number: 7, HeadRef: "cc-1", State: plan.Open}
-	f.tick(t)
+	f.Tick(t)
 
 	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Error("cc-1 was not pushed to the remote")
@@ -132,7 +132,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	gittest.Commit(t, f.Worktree, "agent.txt", "agent was here\n")
 	dispositionAsPushed(t, f.Store, f.Ticket.URL, testAt)
 	f.reset(testAt, runner.ProcessRunner{}, loop.WithForge(failingCreate{f.Forge}))
-	f.tick(t)
+	f.Tick(t)
 	if !gittest.HasRef(t, f.Origin, "refs/heads/cc-1") {
 		t.Fatal("the push itself must still succeed even though pr create fails")
 	}
@@ -155,7 +155,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Create")); got != 1 {
 		t.Errorf("Create calls after an automatic tick = %d, want 1: no auto-retry", got)
 	}
@@ -164,7 +164,7 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "retry-push", testAt.Add(time.Second)); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
-	f.tick(t)
+	f.Tick(t)
 	if got := len(f.Forge.Calls("Create")); got != 2 {
 		t.Fatalf("Create calls after retry-push = %d, want 2", got)
 	}
@@ -202,6 +202,6 @@ func TestPushPushableSkipsATicketWhoseBranchWasRemoved(t *testing.T) {
 	gittest.Run(t, f.Repo, "worktree", "remove", "--force", f.Worktree)
 	gittest.Run(t, f.Repo, "branch", "-D", "cc-1")
 	delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
-	f.tick(t)
-	f.tick(t)
+	f.Tick(t)
+	f.Tick(t)
 }
