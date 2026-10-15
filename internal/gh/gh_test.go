@@ -17,6 +17,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
+	"github.com/O-Marsters-1997/command-center/internal/gh/ghtest"
 )
 
 var errGH = errors.New("gh exited 1")
@@ -75,6 +76,63 @@ func at(clock string) time.Time {
 		panic(err)
 	}
 	return t
+}
+
+func recordedOutput(t *testing.T, prs []gh.PR) []byte {
+	t.Helper()
+	states := map[gh.PRState]string{gh.Open: "OPEN", gh.Merged: "MERGED", gh.Closed: "CLOSED"}
+	rows := []map[string]any{}
+	for _, pr := range prs {
+		labels := []map[string]string{}
+		for _, l := range pr.Labels {
+			labels = append(labels, map[string]string{"name": l})
+		}
+		mergedAt := ""
+		if !pr.MergedAt.IsZero() {
+			mergedAt = pr.MergedAt.Format(time.RFC3339)
+		}
+		rows = append(rows, map[string]any{
+			"number": pr.Number, "headRefName": pr.HeadRef, "headRefOid": pr.HeadOid,
+			"baseRefName": pr.BaseRef, "baseRefOid": pr.BaseOid, "isDraft": pr.IsDraft,
+			"state": states[pr.State], "author": map[string]string{"login": pr.AuthorLogin},
+			"labels": labels, "mergedAt": mergedAt, "statusCheckRollup": []any{},
+		})
+	}
+	out, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatalf("encode recorded output: %v", err)
+	}
+	return out
+}
+
+func TestCLI(t *testing.T) {
+	t.Parallel()
+	ghtest.RunContract(t, func(t *testing.T, seed ghtest.Seed) gh.Forge {
+		return fakeGH(func(args []string) ([]byte, error) {
+			var out []byte
+			switch i := slices.Index(args, "--head"); {
+			case args[0] == "issue" && args[1] == "list":
+				issues := []map[string]string{}
+				for url, title := range seed.Titles {
+					issues = append(issues, map[string]string{"url": url, "title": title})
+				}
+				raw, err := json.Marshal(issues)
+				if err != nil {
+					t.Fatalf("encode recorded issues: %v", err)
+				}
+				out = raw
+			case args[0] == "pr" && args[1] == "list" && i >= 0:
+				match := slices.DeleteFunc(slices.Clone(seed.PRs), func(pr gh.PR) bool { return pr.HeadRef != args[i+1] })
+				out = recordedOutput(t, match)
+			case args[0] == "pr" && args[1] == "list":
+				open := slices.DeleteFunc(slices.Clone(seed.PRs), func(pr gh.PR) bool { return pr.State != gh.Open })
+				out = recordedOutput(t, open)
+			default:
+				return nil, nil
+			}
+			return onlyRequestedFields(t, out, args), nil
+		})
+	})
 }
 
 func TestCLI_List(t *testing.T) {

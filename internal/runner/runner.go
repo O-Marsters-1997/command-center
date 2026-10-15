@@ -34,8 +34,25 @@ type SpawnResult struct {
 	Pid int
 }
 
+type Clock interface {
+	Now() time.Time
+	After(d time.Duration) <-chan time.Time
+}
+
+type Process struct {
+	Zombie  bool
+	Elapsed time.Duration
+}
+
+type ProcessTable interface {
+	Lookup(pid int) (p Process, found bool, err error)
+}
+
 // ProcessRunner runs agent processes on Unix.
-type ProcessRunner struct{}
+type ProcessRunner struct {
+	Clock     Clock
+	Processes ProcessTable
+}
 
 func substitute(arg string, cfg SpawnConfig) string {
 	arg = strings.ReplaceAll(arg, "{worktree}", cfg.WorktreePath)

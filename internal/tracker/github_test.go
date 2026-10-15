@@ -2,6 +2,7 @@ package tracker_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
+	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
 
 const remote = "github.com/O-Marsters-1997/command-center"
@@ -65,6 +67,60 @@ func recordedGitHub(t *testing.T) func(args []string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("no recorded output for gh %s", strings.Join(args, " "))
 	}
+}
+
+func recordedTracker(t *testing.T, byFeature map[string][]tracker.Ticket) func(args []string) ([]byte, error) {
+	t.Helper()
+	encode := func(v any) []byte {
+		out, err := json.Marshal(v)
+		if err != nil {
+			t.Fatalf("encode recorded output: %v", err)
+		}
+		return out
+	}
+	return func(args []string) ([]byte, error) {
+		switch {
+		case args[0] == "label":
+			labels := []map[string]string{{"name": "bug"}}
+			for feature := range byFeature {
+				labels = append(labels, map[string]string{"name": feature})
+			}
+			return encode(labels), nil
+		case args[0] == "issue":
+			feature := args[slices.Index(args, "--label")+1]
+			issues := []map[string]any{}
+			for _, ticket := range byFeature[feature] {
+				labels := []map[string]string{{"name": feature}}
+				if ticket.Status != "" {
+					labels = append(labels, map[string]string{"name": "status:" + ticket.Status})
+				}
+				issues = append(issues, map[string]any{
+					"number": ticket.Number, "title": ticket.Title, "body": ticket.Body, "url": ticket.URL, "labels": labels,
+				})
+			}
+			return encode(issues), nil
+		case args[0] == "api":
+			deps := []map[string]string{{"html_url": "https://github.com/o/r/issues/99", "state": "closed"}}
+			for _, tickets := range byFeature {
+				for _, ticket := range tickets {
+					if strings.HasSuffix(args[len(args)-1], fmt.Sprintf("/issues/%d/dependencies/blocked_by", ticket.Number)) {
+						for _, url := range ticket.BlockedBy {
+							deps = append(deps, map[string]string{"html_url": url, "state": "open"})
+						}
+					}
+				}
+			}
+			return encode(deps), nil
+		}
+		return nil, fmt.Errorf("no recorded output for gh %s", strings.Join(args, " "))
+	}
+}
+
+func TestGithubSource(t *testing.T) {
+	t.Parallel()
+	trackertest.RunContract(t, func(t *testing.T, byFeature map[string][]tracker.Ticket) tracker.Source {
+		return sourceReplaying(t, recordedTracker(t, byFeature))
+	})
 }
 
 func TestGithubSource_Features(t *testing.T) {

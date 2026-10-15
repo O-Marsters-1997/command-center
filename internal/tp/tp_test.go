@@ -3,12 +3,15 @@ package tp_test
 import (
 	"context"
 	"errors"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/tp"
+	"github.com/O-Marsters-1997/command-center/internal/tp/tptest"
 )
 
 type ran struct{ dir, line string }
@@ -19,6 +22,18 @@ func recordingTP(runs *[]ran, err error) tp.CLI {
 		return nil, err
 	}
 	return tp.CLI{Exec: command.ExecutorFunc(run)}
+}
+
+func TestCLI(t *testing.T) {
+	t.Parallel()
+	bin := filepath.Join(t.TempDir(), "tp")
+	if out, err := exec.Command("go", "build", "-o", bin, "../../e2e/faketp").CombinedOutput(); err != nil {
+		t.Fatalf("build fake tp: %v: %s", err, out)
+	}
+	run := func(ctx context.Context, timeout time.Duration, dir, _ string, args ...string) ([]byte, error) {
+		return command.OutputWithin(ctx, timeout, dir, bin, args...)
+	}
+	tptest.RunContract(t, func(*testing.T) tp.Worktrees { return tp.CLI{Exec: command.ExecutorFunc(run)} })
 }
 
 func TestCLI_New(t *testing.T) {
