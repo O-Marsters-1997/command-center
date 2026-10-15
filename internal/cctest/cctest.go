@@ -3,6 +3,7 @@ package cctest
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -38,19 +39,8 @@ const (
 
 var ErrNoServer = errors.New("no test Postgres: start Docker, or set " + serverEnv)
 
-var entrypoint = fmt.Sprintf(`
-(
-	idle=0
-	while sleep 10; do
-		n=$(psql -U "$POSTGRES_USER" -d postgres -tAc \
-			"SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend' \
-			AND pid <> pg_backend_pid()" 2>/dev/null) || { idle=0; continue; }
-		if [ "$n" = 0 ]; then idle=$((idle + 10)); else idle=0; fi
-		if [ "$idle" -ge %d ]; then kill -INT 1; fi
-	done
-) &
-exec docker-entrypoint.sh "$@"
-`, int(staleAfter.Seconds()))
+//go:embed entrypoint.sh
+var entrypoint string
 
 var testDatabase = regexp.MustCompile(`^cc_test_([0-9]+)_[0-9a-f]{8}$`)
 
@@ -184,6 +174,7 @@ func runAndConnect(ctx context.Context) (*server, error) {
 	c, err := postgres.Run(ctx, image,
 		testcontainers.WithReuseByName(containerName),
 		testcontainers.WithEntrypoint("sh", "-c", entrypoint, "cctest"),
+		testcontainers.WithEnv(map[string]string{"CCTEST_IDLE_SECONDS": strconv.Itoa(int(staleAfter.Seconds()))}),
 		testcontainers.WithCmd("postgres", "-c", "fsync=off", "-c", "max_connections=500"),
 		testcontainers.WithTmpfs(map[string]string{"/var/lib/postgresql/data": "rw"}),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) { hc.AutoRemove = true }),
