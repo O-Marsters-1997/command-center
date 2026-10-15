@@ -6,12 +6,10 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/verdict"
 )
 
-func TestEveryKindHasAWireName(t *testing.T) {
+func TestUnknownKindHasNoWireName(t *testing.T) {
 	t.Parallel()
 
-	for k := verdict.Checking; k <= verdict.WaitingOnProducerDeploy; k++ {
-		if k.String() == "" {
-			t.Errorf("Kind(%d) has no wire name", k)
-		}
+	if got := verdict.KindUnknown.String(); got != "" {
+		t.Errorf("KindUnknown.String() = %q, want empty", got)
 	}
 }

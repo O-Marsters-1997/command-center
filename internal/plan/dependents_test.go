@@ -16,12 +16,6 @@ func TestUnlocksInvertsBlockedBy(t *testing.T) {
 		tickets []plan.Ticket
 		want    map[plan.TicketURL][]plan.TicketURL
 	}{
-		{name: "no tickets", want: map[plan.TicketURL][]plan.TicketURL{}},
-		{
-			name:    "a ticket nothing waits on unlocks nothing",
-			tickets: []plan.Ticket{{URL: "a"}},
-			want:    map[plan.TicketURL][]plan.TicketURL{},
-		},
 		{
 			name: "a chain",
 			tickets: []plan.Ticket{

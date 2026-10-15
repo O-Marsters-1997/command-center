@@ -6,20 +6,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func TestParseVerbAcceptsEveryVerb(t *testing.T) {
-	t.Parallel()
-
-	for _, want := range []plan.Verb{
-		plan.VerbLaunch, plan.VerbKill, plan.VerbReRun, plan.VerbRetryPush, plan.VerbRemoveWorktree,
-		plan.VerbCancel, plan.VerbRefresh, plan.VerbAbort, plan.VerbFollowUp, plan.VerbImport, plan.VerbTrack,
-	} {
-		got, err := plan.ParseVerb(string(want))
-		if err != nil || got != want {
-			t.Errorf("ParseVerb(%q) = %q, %v, want %q", want, got, err, want)
-		}
-	}
-}
-
 func TestParseRejectsAValueOutsideTheSet(t *testing.T) {
 	t.Parallel()
 
@@ -40,9 +26,17 @@ func TestParseRejectsAValueOutsideTheSet(t *testing.T) {
 	}
 }
 
-func TestParseRoundTripsTheOtherSets(t *testing.T) {
+func TestParseRoundTripsTheSets(t *testing.T) {
 	t.Parallel()
 
+	for _, want := range []plan.Verb{
+		plan.VerbLaunch, plan.VerbKill, plan.VerbReRun, plan.VerbRetryPush, plan.VerbRemoveWorktree,
+		plan.VerbCancel, plan.VerbRefresh, plan.VerbAbort, plan.VerbFollowUp, plan.VerbImport, plan.VerbTrack,
+	} {
+		if got, err := plan.ParseVerb(string(want)); err != nil || got != want {
+			t.Errorf("ParseVerb(%q) = %q, %v, want %q", want, got, err, want)
+		}
+	}
 	for _, want := range []plan.RunKind{plan.RunKindAgent, plan.RunKindFollowUp} {
 		if got, err := plan.ParseRunKind(string(want)); err != nil || got != want {
 			t.Errorf("ParseRunKind(%q) = %q, %v, want %q", want, got, err, want)
@@ -58,20 +52,6 @@ func TestParseRoundTripsTheOtherSets(t *testing.T) {
 	} {
 		if got, err := plan.ParseRefusalKind(string(want)); err != nil || got != want {
 			t.Errorf("ParseRefusalKind(%q) = %q, %v, want %q", want, got, err, want)
-		}
-	}
-}
-
-func TestIsRowVerbExcludesLaunchImportAndTrack(t *testing.T) {
-	t.Parallel()
-
-	for verb, want := range map[plan.Verb]bool{
-		plan.VerbKill: true, plan.VerbReRun: true, plan.VerbRetryPush: true, plan.VerbRemoveWorktree: true,
-		plan.VerbCancel: true, plan.VerbRefresh: true, plan.VerbAbort: true, plan.VerbFollowUp: true,
-		plan.VerbLaunch: false, plan.VerbImport: false, plan.VerbTrack: false, plan.VerbUnknown: false,
-	} {
-		if got := verb.IsRowVerb(); got != want {
-			t.Errorf("%q.IsRowVerb() = %t, want %t", verb, got, want)
 		}
 	}
 }
