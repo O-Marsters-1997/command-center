@@ -156,3 +156,16 @@ func TestFullNameKeepsCaseAcrossURLForms(t *testing.T) {
 		}
 	}
 }
+
+func TestFullNameRejectsNonRoundTrippingGitSuffix(t *testing.T) {
+	t.Parallel()
+	for _, remote := range []string{
+		"githuB.Com:0/.git.git",
+		"git@github.com:owner/repo.git.git",
+		"https://github.com/owner/repo.git.git",
+	} {
+		if got, err := git.FullName(remote); err == nil {
+			t.Errorf("FullName(%q) = %q, want an error", remote, got)
+		}
+	}
+}

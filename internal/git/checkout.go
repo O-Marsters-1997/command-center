@@ -91,7 +91,8 @@ func NormaliseRemote(url string) string {
 func FullName(remote string) (string, error) {
 	host, fullName, _ := strings.Cut(hostPath(remote), "/")
 	owner, name, ok := strings.Cut(fullName, "/")
-	if !ok || host == "" || !pathSegment(owner) || !pathSegment(name) || strings.Contains(name, "/") {
+	if !ok || host == "" || !pathSegment(owner) || !pathSegment(name) ||
+		strings.Contains(name, "/") || strings.HasSuffix(name, ".git") {
 		return "", fmt.Errorf("remote %q does not name an owner/name repository", remote)
 	}
 	return fullName, nil
