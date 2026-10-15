@@ -194,11 +194,11 @@ func (l *Loop) applyRemoveWorktreeIntents(ctx context.Context, snap plan.Snapsho
 		if !ok {
 			return nil
 		}
-		lastPushed, err := l.store.LastPushedTips(ctx)
+		lastPushed, err := l.store.LatestPushes(ctx)
 		if err != nil {
-			return fmt.Errorf("last pushed tips: %w", err)
+			return fmt.Errorf("latest pushes: %w", err)
 		}
-		if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL]); err != nil {
+		if err := l.removeWorktreeOne(ctx, e, obs, lastPushed[e.Ticket.URL].PushedTip); err != nil {
 			return fmt.Errorf("%s/%s: %w", e.Ticket.Repo, e.Ticket.Branch, err)
 		}
 		return nil

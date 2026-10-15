@@ -71,10 +71,10 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		}
 	}
 
-	if err := store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: at,
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: plan.VerbFollowUp, Payload: option.Some[any]("now fix the other test"), At: at,
 	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload(%q, follow-up): %v", ticket.URL, err)
+		t.Fatalf("QueueVerbIntent(%q, follow-up): %v", ticket.URL, err)
 	}
 	obs := plan.Observation{
 		Worktrees: map[plan.BranchRef]string{branchRef("repo", "cc-1"): worktreePath}, PRs: map[plan.BranchRef]plan.PR{},

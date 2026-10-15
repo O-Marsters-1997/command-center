@@ -68,19 +68,11 @@ func (s *Store) RecordSpawn(ctx context.Context, sp Spawn) error {
 }
 
 func (s *Store) RecordDisposition(ctx context.Context, d Disposition) error {
-	var exitCodeParam sql.NullInt64
-	if d.ExitCode.IsSome() {
-		exitCodeParam = sql.NullInt64{Int64: int64(d.ExitCode.Unwrap()), Valid: true}
-	}
-	var costParam sql.NullFloat64
-	if d.Cost.IsSome() {
-		costParam = sql.NullFloat64{Float64: d.Cost.Unwrap(), Valid: true}
-	}
 	n, err := s.q.RecordDisposition(ctx, ccdb.RecordDispositionParams{
 		Outcome:  notNull(d.Outcome.String()),
-		ExitCode: exitCodeParam,
+		ExitCode: nullOption(d.ExitCode, func(v int) sql.NullInt64 { return sql.NullInt64{Int64: int64(v), Valid: true} }),
 		EndedAt:  notNullTime(d.EndedAt.UTC()),
-		CostUsd:  costParam,
+		CostUsd:  nullOption(d.Cost, func(v float64) sql.NullFloat64 { return sql.NullFloat64{Float64: v, Valid: true} }),
 		ID:       int64(d.RunID),
 	})
 	return matchedRow(n, err, fmt.Sprintf("record disposition for run %d", d.RunID))
@@ -187,24 +179,23 @@ type VerbIntent struct {
 	Payload  string
 }
 
-func (s *Store) QueueVerbIntent(ctx context.Context, ticketID string, verb plan.Verb, at time.Time) error {
-	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
-		At:       at.UTC(),
-		TicketID: ticketID,
-		Verb:     string(verb),
-	})
-	if err != nil {
-		return fmt.Errorf("queue %s intent for %s: %w", verb, ticketID, err)
-	}
-	return nil
+type VerbRequest struct {
+	Ticket  string
+	Verb    plan.Verb
+	At      time.Time
+	Payload option.Option[any]
 }
 
-func (s *Store) QueueVerbIntentWithPayload(ctx context.Context, v VerbRequest) error {
-	encoded, err := json.Marshal(v.Payload)
-	if err != nil {
-		return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
+func (s *Store) QueueVerbIntent(ctx context.Context, v VerbRequest) error {
+	var encoded json.RawMessage
+	if v.Payload.IsSome() {
+		var err error
+		encoded, err = json.Marshal(v.Payload.Unwrap())
+		if err != nil {
+			return fmt.Errorf("encode %s intent payload for %s: %w", v.Verb, v.Ticket, err)
+		}
 	}
-	err = s.q.QueueVerbIntentWithPayload(ctx, ccdb.QueueVerbIntentWithPayloadParams{
+	err := s.q.QueueVerbIntent(ctx, ccdb.QueueVerbIntentParams{
 		At:       v.At.UTC(),
 		TicketID: v.Ticket,
 		Verb:     string(v.Verb),

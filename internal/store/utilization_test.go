@@ -24,9 +24,9 @@ func TestRecordReadingsDedupesOverlappingRuns(t *testing.T) {
 		t.Fatalf("RecordReadings (second run): %v", err)
 	}
 
-	gauges, err := store.LatestReadings(ctx)
+	gauges, err := store.LatestReadingsFull(ctx)
 	if err != nil {
-		t.Fatalf("LatestReadings: %v", err)
+		t.Fatalf("LatestReadingsFull: %v", err)
 	}
 	if len(gauges) != 1 {
 		t.Fatalf("gauges = %+v; want exactly one reading stored", gauges)
@@ -37,7 +37,7 @@ func TestRecordReadingsDedupesOverlappingRuns(t *testing.T) {
 	}
 }
 
-func TestLatestReadingsReturnsTheNewestPerWindow(t *testing.T) {
+func TestLatestReadingsFullReturnsTheNewestPerWindow(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -63,9 +63,9 @@ func TestLatestReadingsReturnsTheNewestPerWindow(t *testing.T) {
 		t.Fatalf("RecordReadings: %v", err)
 	}
 
-	gauges, err := store.LatestReadings(ctx)
+	gauges, err := store.LatestReadingsFull(ctx)
 	if err != nil {
-		t.Fatalf("LatestReadings: %v", err)
+		t.Fatalf("LatestReadingsFull: %v", err)
 	}
 	if len(gauges) != 2 {
 		t.Fatalf("gauges = %+v; want one per window", gauges)
@@ -78,13 +78,13 @@ func TestLatestReadingsReturnsTheNewestPerWindow(t *testing.T) {
 	}
 }
 
-func TestLatestReadingsWithNoneStoredIsEmpty(t *testing.T) {
+func TestLatestReadingsFullWithNoneStoredIsEmpty(t *testing.T) {
 	t.Parallel()
 
 	store := openStore(t)
-	gauges, err := store.LatestReadings(t.Context())
+	gauges, err := store.LatestReadingsFull(t.Context())
 	if err != nil {
-		t.Fatalf("LatestReadings: %v", err)
+		t.Fatalf("LatestReadingsFull: %v", err)
 	}
 	if len(gauges) != 0 {
 		t.Errorf("gauges = %+v; want none", gauges)

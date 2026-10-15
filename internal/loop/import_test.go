@@ -22,7 +22,7 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	at := testAt
-	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
+	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: at}); err != nil {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 			if err := store.ImportTickets(ctx, "project:x", seed, at); err != nil {
 				t.Fatalf("seed ImportTickets: %v", err)
 			}
-			if err := store.QueueVerbIntent(ctx, "project:y", "import", at); err != nil {
+			if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:y", Verb: "import", At: at}); err != nil {
 				t.Fatalf("QueueVerbIntent(project:y, import): %v", err)
 			}
 			src := &trackertest.Source{
@@ -156,7 +156,7 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 	ctx := t.Context()
 	store := openStore(t)
 	at := testAt
-	if err := store.QueueVerbIntent(ctx, "project:x", "import", at); err != nil {
+	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: "project:x", Verb: "import", At: at}); err != nil {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 

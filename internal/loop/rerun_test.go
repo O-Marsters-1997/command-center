@@ -57,7 +57,9 @@ func TestReRunSpawnsASecondRun(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("RecordDisposition: %v", err)
 			}
-			if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "re-run", testAt.Add(time.Second)); err != nil {
+			if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+				Ticket: f.Ticket.URL, Verb: "re-run", At: testAt.Add(time.Second),
+			}); err != nil {
 				t.Fatalf("QueueVerbIntent: %v", err)
 			}
 			tt.prepare(t, f)

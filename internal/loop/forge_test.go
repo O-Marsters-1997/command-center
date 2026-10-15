@@ -13,6 +13,7 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/loop"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
+	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 	"github.com/O-Marsters-1997/command-center/internal/tracker"
 	"github.com/O-Marsters-1997/command-center/internal/tracker/trackertest"
 )
@@ -42,7 +43,9 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 		Config: cfg, Workspace: ws, Runner: runner, Tracker: resolve,
 	}, loop.WithForge(forge), loop.WithWorktrees(worktrees))
 
-	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: "project:x", Verb: plan.VerbImport, At: at,
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 	}
 	authoriseTicket(t, store, issue.URL, composeHash(issue.URL), at)

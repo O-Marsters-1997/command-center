@@ -324,11 +324,11 @@ func TestWithdrawTicketHidesItButKeepsItsHistory(t *testing.T) {
 		t.Errorf("run ids = %v, want the run to survive withdrawal", runIDs)
 	}
 
-	tips, err := store.LastPushedTips(ctx)
+	tips, err := store.LatestPushes(ctx)
 	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
-	if tips[plan.TicketURL(ticket.URL)] != "deadbeef" {
+	if tips[plan.TicketURL(ticket.URL)].PushedTip != "deadbeef" {
 		t.Errorf("last pushed tips = %+v, want the push to survive withdrawal", tips)
 	}
 

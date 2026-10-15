@@ -102,7 +102,9 @@ func runLogFilesExist(runsDir string, runID int64) bool {
 func (f removeWorktreeFixture) requestRemoveWorktree(t *testing.T, obs plan.Observation) error {
 	t.Helper()
 	at := f.at.Add(time.Second)
-	if err := f.store.QueueVerbIntent(t.Context(), f.ticket.URL, "remove-worktree", at); err != nil {
+	if err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.ticket.URL, Verb: "remove-worktree", At: at,
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, remove-worktree): %v", f.ticket.URL, err)
 	}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }

@@ -147,7 +147,9 @@ func TestAbortConflictWithOptionalRefresh(t *testing.T) {
 			c.tick(t)
 			c.tick(t)
 			for _, verb := range tt.verbs {
-				if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, verb, at.Add(time.Hour)); err != nil {
+				if err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+					Ticket: c.f.child.URL, Verb: verb, At: at.Add(time.Hour),
+				}); err != nil {
 					t.Fatalf("QueueVerbIntent(%q, %q): %v", c.f.child.URL, verb, err)
 				}
 			}
@@ -197,7 +199,9 @@ func TestAbortNeverTouchesAWorktreeWithALiveRun(t *testing.T) {
 	c.tick(t)
 
 	c.aliveRuns[c.f.child.URL] = true
-	if err := c.store.QueueVerbIntent(t.Context(), c.f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	if err := c.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: c.f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, abort): %v", c.f.child.URL, err)
 	}
 	c.tick(t)

@@ -687,7 +687,7 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	store := runningRowStore(t, ticket, startedAt, now)
 	server := newServer(store, now)
 
-	if err := store.QueueVerbIntent(ctx, ticket.URL, "kill", now); err != nil {
+	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{Ticket: ticket.URL, Verb: "kill", At: now}); err != nil {
 		t.Fatalf("QueueVerbIntent(kill): %v", err)
 	}
 	page := renderPage(t, server)
@@ -697,7 +697,9 @@ func TestPageShowsQueuedVerbsBesideTheState(t *testing.T) {
 	}
 	row.Row.One(t, `button[name="verb"][value="kill"]`)
 
-	if err := store.QueueVerbIntent(ctx, ticket.URL, "follow-up", now.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(ctx, storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: "follow-up", At: now.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 	}
 	queued := webtest.RowFor(t, renderPage(t, server), ticket.URL)

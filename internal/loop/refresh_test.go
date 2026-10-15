@@ -280,7 +280,9 @@ func TestManualRefreshVerbRecordsWhyItDidNothingWhileARunIsAlive(t *testing.T) {
 	obs.Runs[plan.TicketURL(f.child.URL)] = plan.RunObservation{Alive: true}
 	observe := func(context.Context) (plan.Observation, error) { return obs, nil }
 
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 
@@ -359,7 +361,9 @@ func TestRefusedFastForwardReadsNeedsYouAndIsNotAutoRetriedButTheVerbRetries(t *
 	}
 
 	gittest.Run(t, f.childWorktree, "push", "-q", "--force", "origin", "child")
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -434,7 +438,9 @@ func TestAutoRefreshRetriesOnceTheBranchIsResolvedAndPushedOutsideTheApp(t *test
 	cloneHead := gittest.Run(t, clone, "rev-parse", "HEAD")
 	obs.BranchTips[branchRef("repo", "child")] = plan.SHA(cloneHead)
 
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -481,7 +487,9 @@ func TestAutoRefreshRetriesOnceTheBaseMovesPastTheFailedMerge(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -546,7 +554,9 @@ func TestAutoRefreshDoesNotRetryAnUnchangedConflict(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbAbort, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbAbort, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, abort): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {
@@ -599,7 +609,9 @@ func TestTheRefreshVerbRecordsWhyItDeclined(t *testing.T) {
 		t.Errorf("events = %+v, want no refresh_refused from an automatic tick", events)
 	}
 
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {

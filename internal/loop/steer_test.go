@@ -12,6 +12,7 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/loop"
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	"github.com/O-Marsters-1997/command-center/internal/runner"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
@@ -86,11 +87,11 @@ func newSteerFixture(t *testing.T, wrap func(*runner.Fake) runner.Runner) *steer
 
 func (f *steerFixture) send(t *testing.T, text string) {
 	t.Helper()
-	err := f.store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: text, At: f.at,
+	err := f.store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.ticket.URL, Verb: plan.VerbFollowUp, Payload: option.Some[any](text), At: f.at,
 	})
 	if err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload(%q, follow-up): %v", f.ticket.URL, err)
+		t.Fatalf("QueueVerbIntent(%q, follow-up): %v", f.ticket.URL, err)
 	}
 }
 

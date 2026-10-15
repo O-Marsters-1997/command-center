@@ -7,18 +7,17 @@ package ccdb
 
 import (
 	"context"
-	"database/sql"
 )
 
 const listLatestRemovalRefusals = `-- name: ListLatestRemovalRefusals :many
-SELECT DISTINCT ON (ticket_id) ticket_id, detail
+SELECT DISTINCT ON (ticket_id) COALESCE(ticket_id, '') AS ticket_id, detail
 FROM events
 WHERE ticket_id IS NOT NULL AND kind = $1
 ORDER BY ticket_id, id DESC
 `
 
 type ListLatestRemovalRefusalsRow struct {
-	TicketID sql.NullString
+	TicketID string
 	Detail   string
 }
 
