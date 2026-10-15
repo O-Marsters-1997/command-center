@@ -390,9 +390,9 @@ func TestLoopDisposesARunAndRecordsItsUtilizationReadings(t *testing.T) {
 		t.Fatalf("RunOnce: %v", err)
 	}
 
-	gauges, err := store.LatestReadings(t.Context())
+	gauges, err := store.LatestReadingsFull(t.Context())
 	if err != nil {
-		t.Fatalf("LatestReadings(): %v", err)
+		t.Fatalf("LatestReadingsFull(): %v", err)
 	}
 	if got := gauges[agentlog.FiveHour]; got.Utilization != 0.05 {
 		t.Errorf("five_hour gauge = %+v; want utilization 0.05", got)
@@ -479,7 +479,9 @@ func TestLoopAppliesAKillIntentThenDisposesTheNowDeadRun(t *testing.T) {
 	if err := store.RecordSpawn(t.Context(), spawn); err != nil {
 		t.Fatalf("RecordSpawn(%d): %v", runID, err)
 	}
-	if err := store.QueueVerbIntent(t.Context(), ticket.URL, "kill", at.Add(time.Second)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: ticket.URL, Verb: "kill", At: at.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, kill): %v", ticket.URL, err)
 	}
 

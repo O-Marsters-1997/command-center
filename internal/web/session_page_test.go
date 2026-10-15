@@ -274,10 +274,10 @@ func TestSessionComposerFollowsTheState(t *testing.T) {
 func TestRunningSessionShowsAQueuedMessageUntilTheLoopConsumesIt(t *testing.T) {
 	t.Parallel()
 	running, _ := sessionStore(t, sessionRunOpts{Kind: "agent", Prompt: "p", KeepPrompt: true, Alive: true})
-	if err := running.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: "use sqlite instead", At: testNow,
+	if err := running.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: sessionTicket, Verb: plan.VerbFollowUp, Payload: option.Some[any]("use sqlite instead"), At: testNow,
 	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload(follow-up): %v", err)
+		t.Fatalf("QueueVerbIntent(follow-up): %v", err)
 	}
 
 	body := renderPath(t, newServer(running, testNow), "/s/acme/web/1")
@@ -397,10 +397,10 @@ func TestSeededBoardFeatureAndSessionKeepTheSameVerbControls(t *testing.T) {
 	t.Parallel()
 
 	st, _ := sessionStore(t, sessionRunOpts{Kind: plan.RunKindAgent, Prompt: "p", KeepPrompt: true, Alive: true})
-	if err := st.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
+	if err := st.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
 		Ticket: sessionTicket, Verb: plan.VerbKill, At: testNow,
 	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload(kill): %v", err)
+		t.Fatalf("QueueVerbIntent(kill): %v", err)
 	}
 	srv := newServer(st, testNow)
 	confirm := `kill on https://github.com/acme/web/issues/1 signals the process group of ` +

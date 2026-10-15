@@ -16,10 +16,7 @@ func (s *Store) RemovalRefusals(ctx context.Context) (map[plan.TicketURL]string,
 
 	refusals := map[plan.TicketURL]string{}
 	for _, row := range rows {
-		if !row.TicketID.Valid {
-			continue
-		}
-		refusals[plan.TicketURL(row.TicketID.String)] = row.Detail
+		refusals[plan.TicketURL(row.TicketID)] = row.Detail
 	}
 	return refusals, nil
 }

@@ -32,7 +32,9 @@ func TestARunOnceNeverSpawnsPastMaxAgentsAcrossAVerbAndAnAutomaticLaunch(t *test
 	at := testAt
 	dispositionAsPushed(t, store, tickets[0].URL, at)
 	authoriseTicket(t, store, tickets[1].URL, composeHash(tickets[1].URL), at)
-	if err := store.QueueVerbIntent(t.Context(), tickets[0].URL, "re-run", at); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: tickets[0].URL, Verb: "re-run", At: at,
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, re-run): %v", tickets[0].URL, err)
 	}
 

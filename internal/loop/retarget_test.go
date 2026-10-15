@@ -160,7 +160,9 @@ func TestRefreshOnARetargetedRowMergesOriginMainAndNeverTheDeletedParent(t *test
 
 	advanceMain(t, root, "main-fix.txt", "someone else's landed work\n")
 	gittest.Run(t, repoPath, "fetch", "-q", "--prune", "origin")
-	if err := store.QueueVerbIntent(t.Context(), f.child.URL, plan.VerbRefresh, at.Add(time.Hour)); err != nil {
+	if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.child.URL, Verb: plan.VerbRefresh, At: at.Add(time.Hour),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, refresh): %v", f.child.URL, err)
 	}
 	if err := lp.RunOnce(t.Context()); err != nil {

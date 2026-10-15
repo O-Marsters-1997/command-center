@@ -21,7 +21,7 @@ type frame struct {
 	projects map[string]ProjectMark
 	rows     []Row
 	lastErr  option.Option[store.TickError]
-	gauges   map[agentlog.Window]store.Gauge
+	gauges   map[agentlog.Window]agentlog.Reading
 	chrome   Chrome
 
 	project     store.Project
@@ -49,7 +49,7 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	if f.lastErr, err = r.store.LastError(ctx); err != nil {
 		return frame{}, fmt.Errorf("load last error: %w", err)
 	}
-	if f.gauges, err = r.store.LatestReadings(ctx); err != nil {
+	if f.gauges, err = r.store.LatestReadingsFull(ctx); err != nil {
 		return frame{}, fmt.Errorf("load latest readings: %w", err)
 	}
 	if f.split, err = r.gaugeSplit(ctx, now); err != nil {

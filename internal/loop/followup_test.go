@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/O-Marsters-1997/command-center/internal/option"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
@@ -15,10 +16,10 @@ import (
 func TestFollowUpSpawnsAFreshRunInTheExistingWorktreeWithTheTypedPrompt(t *testing.T) {
 	t.Parallel()
 	f := newPushFixture(t)
-	if err := f.Store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "now fix the other test", At: testAt,
+	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: option.Some[any]("now fix the other test"), At: testAt,
 	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload: %v", err)
+		t.Fatalf("QueueVerbIntent: %v", err)
 	}
 	fake := runner.NewFake()
 	f.reset(testAt, fake)
@@ -72,10 +73,10 @@ func TestFollowUpRefusesWithNoWorktree(t *testing.T) {
 	t.Parallel()
 	f := newPushFixture(t)
 	delete(f.Obs.Worktrees, branchRef("repo", "cc-1"))
-	if err := f.Store.QueueVerbIntentWithPayload(t.Context(), storepkg.VerbRequest{
-		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: "do the thing", At: testAt,
+	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.Ticket.URL, Verb: plan.VerbFollowUp, Payload: option.Some[any]("do the thing"), At: testAt,
 	}); err != nil {
-		t.Fatalf("QueueVerbIntentWithPayload: %v", err)
+		t.Fatalf("QueueVerbIntent: %v", err)
 	}
 	fake := runner.NewFake()
 	f.reset(testAt, fake)

@@ -127,7 +127,9 @@ func TestHandleCandidatesFragment(t *testing.T) {
 			name: "pending import", path: featurePath,
 			seed: func(t *testing.T, store *storepkg.Store) {
 				t.Helper()
-				if err := store.QueueVerbIntent(t.Context(), "project:x", "import", testNow); err != nil {
+				if err := store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+					Ticket: "project:x", Verb: "import", At: testNow,
+				}); err != nil {
 					t.Fatalf("QueueVerbIntent(project:x, import): %v", err)
 				}
 			},

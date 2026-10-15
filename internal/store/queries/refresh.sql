@@ -1,5 +1,5 @@
 -- name: ListLatestRefreshOutcomes :many
-SELECT DISTINCT ON (e.ticket_id) e.ticket_id, e.kind, e.detail
+SELECT DISTINCT ON (e.ticket_id) COALESCE(e.ticket_id, '') AS ticket_id, e.kind, e.detail
 FROM events e
 LEFT JOIN (
     SELECT ticket_id, MAX(pushed_at) AS pushed_at FROM pushes GROUP BY ticket_id

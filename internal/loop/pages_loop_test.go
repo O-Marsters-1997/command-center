@@ -71,7 +71,9 @@ func TestCancelLeavesARunningMemberUntouchedAndBlocksTheRest(t *testing.T) {
 			break
 		}
 	}
-	if err := f.Store.QueueVerbIntent(t.Context(), queuedSibling, "cancel", testAt.Add(time.Second)); err != nil {
+	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: queuedSibling, Verb: "cancel", At: testAt.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent(%q, cancel): %v", queuedSibling, err)
 	}
 	f.Tick(t)

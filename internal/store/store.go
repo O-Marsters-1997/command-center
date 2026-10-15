@@ -123,11 +123,26 @@ func (s *Store) Close() error {
 
 // UpsertTickets seeds entire ticket rows directly; production imports through ImportTickets.
 func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
+	rows, err := rowsOf(tickets)
+	if err != nil {
+		return err
+	}
+	encoded, err := encodeJSON("tickets", lastPerURL(rows))
+	if err != nil {
+		return err
+	}
+	if err := s.q.UpsertTickets(ctx, encoded); err != nil {
+		return fmt.Errorf("upsert %d tickets: %w", len(tickets), err)
+	}
+	return nil
+}
+
+func rowsOf(tickets []Ticket) ([]ticketRow, error) {
 	rows := make([]ticketRow, 0, len(tickets))
 	for _, t := range tickets {
 		blockedBy, err := encodeBlockedBy(t.BlockedBy)
 		if err != nil {
-			return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
+			return nil, fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
 		}
 		row := ticketRow{
 			URL: t.URL, Repo: t.Repo, Branch: t.Branch, BlockedBy: blockedBy, Source: t.Source,
@@ -139,14 +154,7 @@ func (s *Store) UpsertTickets(ctx context.Context, tickets []Ticket) error {
 		}
 		rows = append(rows, row)
 	}
-	encoded, err := encodeJSON("tickets", lastPerURL(rows))
-	if err != nil {
-		return err
-	}
-	if err := s.q.UpsertTickets(ctx, encoded); err != nil {
-		return fmt.Errorf("upsert %d tickets: %w", len(tickets), err)
-	}
-	return nil
+	return rows, nil
 }
 
 type ticketRow struct {
@@ -275,23 +283,22 @@ func (s *Store) ImportTickets(
 			existing[row.URL] = row.Feature
 		}
 
-		rows := make([]ticketRow, 0, len(tickets))
+		imported := make([]Ticket, 0, len(tickets))
 		for _, t := range tickets {
 			if prior := existing[t.URL]; prior != "" && prior != feature {
 				return &FeatureConflictError{URL: t.URL, Existing: prior, Importing: feature}
 			}
 
 			returned[t.URL] = true
-			var blockedBy []byte
-			blockedBy, err = encodeBlockedBy(t.BlockedBy)
-			if err != nil {
-				return fmt.Errorf("encode blocked_by for %s: %w", t.URL, err)
-			}
-			rows = append(rows, ticketRow{
+			imported = append(imported, Ticket{
 				URL: t.URL, Repo: t.Repo, Source: t.Source, Feature: feature, Title: t.Title, Body: t.Body,
-				Status: t.Status, SyncedAt: &syncedAt, Branch: tracker.BranchSlug(t.Number, t.Title),
-				BlockedBy: blockedBy,
+				Status: t.Status, SyncedAt: syncedAt, Branch: tracker.BranchSlug(t.Number, t.Title),
+				BlockedBy: t.BlockedBy,
 			})
+		}
+		rows, err := rowsOf(imported)
+		if err != nil {
+			return err
 		}
 		encodedRows, err := encodeJSON("imported tickets", lastPerURL(rows))
 		if err != nil {
@@ -464,6 +471,14 @@ func notNull(s string) sql.NullString {
 
 func notNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t, Valid: true}
+}
+
+func nullOption[T, N any](v option.Option[T], encode func(T) N) N {
+	if v.IsSome() {
+		return encode(v.Unwrap())
+	}
+	var zero N
+	return zero
 }
 
 const (

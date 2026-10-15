@@ -104,7 +104,7 @@ type windowSplit struct {
 	CCUSD float64
 }
 
-func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit) []Gauge {
+func deriveGauges(gauges map[agentlog.Window]agentlog.Reading, split map[agentlog.Window]windowSplit) []Gauge {
 	return []Gauge{
 		deriveGauge("five-hour", agentlog.FiveHour, gauges, split),
 		deriveGauge("weekly", agentlog.SevenDay, gauges, split),
@@ -112,7 +112,8 @@ func deriveGauges(gauges map[agentlog.Window]store.Gauge, split map[agentlog.Win
 }
 
 func deriveGauge(
-	label string, window agentlog.Window, gauges map[agentlog.Window]store.Gauge, split map[agentlog.Window]windowSplit,
+	label string, window agentlog.Window,
+	gauges map[agentlog.Window]agentlog.Reading, split map[agentlog.Window]windowSplit,
 ) Gauge {
 	view := Gauge{Label: label, Pct: spend.Pct(gauges[window].Utilization), ResetsAt: gauges[window].ResetsAt}
 	w := split[window]

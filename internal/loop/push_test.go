@@ -88,11 +88,11 @@ func TestPushPushablePushesAndCreatesAPROnceThenStaysIdempotent(t *testing.T) {
 		t.Errorf("Create calls = %+v, want one non-draft PR based on main", calls)
 	}
 
-	tips, err := f.Store.LastPushedTips(t.Context())
+	tips, err := f.Store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
-	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
+	if tips[plan.TicketURL(f.Ticket.URL)].PushedTip == "" {
 		t.Error("no pushes row recorded")
 	}
 
@@ -117,11 +117,11 @@ func TestPushPushableAdoptsAnExistingOpenPRRatherThanDuplicating(t *testing.T) {
 		t.Errorf("Create calls = %d, want 0: an open PR must be adopted, never duplicated", got)
 	}
 
-	tips, err := f.Store.LastPushedTips(t.Context())
+	tips, err := f.Store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
-	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
+	if tips[plan.TicketURL(f.Ticket.URL)].PushedTip == "" {
 		t.Error("no pushes row recorded despite adopting the existing PR")
 	}
 }
@@ -147,11 +147,11 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	if !facts[plan.TicketURL(f.Ticket.URL)].Failed {
 		t.Fatal("push facts must record the failure")
 	}
-	tips, err := f.Store.LastPushedTips(t.Context())
+	tips, err := f.Store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
-	if tips[plan.TicketURL(f.Ticket.URL)] != "" {
+	if tips[plan.TicketURL(f.Ticket.URL)].PushedTip != "" {
 		t.Error("no pushes row until the PR is actually opened")
 	}
 
@@ -161,18 +161,20 @@ func TestPushFailureIsNotRetriedAutomaticallyButRetryPushBypassesTheGate(t *test
 	}
 
 	f.reset(testAt, runner.ProcessRunner{})
-	if err := f.Store.QueueVerbIntent(t.Context(), f.Ticket.URL, "retry-push", testAt.Add(time.Second)); err != nil {
+	if err := f.Store.QueueVerbIntent(t.Context(), storepkg.VerbRequest{
+		Ticket: f.Ticket.URL, Verb: "retry-push", At: testAt.Add(time.Second),
+	}); err != nil {
 		t.Fatalf("QueueVerbIntent: %v", err)
 	}
 	f.tick(t)
 	if got := len(f.Forge.Calls("Create")); got != 2 {
 		t.Fatalf("Create calls after retry-push = %d, want 2", got)
 	}
-	tips, err = f.Store.LastPushedTips(t.Context())
+	tips, err = f.Store.LatestPushes(t.Context())
 	if err != nil {
-		t.Fatalf("LastPushedTips: %v", err)
+		t.Fatalf("LatestPushes: %v", err)
 	}
-	if tips[plan.TicketURL(f.Ticket.URL)] == "" {
+	if tips[plan.TicketURL(f.Ticket.URL)].PushedTip == "" {
 		t.Error("pushes row missing after a successful retry-push")
 	}
 
