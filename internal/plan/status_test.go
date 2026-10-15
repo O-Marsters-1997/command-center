@@ -45,6 +45,18 @@ func TestStatus(t *testing.T) {
 			want:       plan.Queued,
 			wantReason: "waiting on sandbox://CC-1's PR",
 		},
+		{
+			name: "closed blocker without a prior run stays blocked",
+			unlock: plan.Unlock{Reason: "blocked by sandbox://CC-1", BlockerClosed: true,
+				Blocking: []plan.TicketURL{"sandbox://CC-1"}},
+			want: plan.Blocked, wantReason: "blocked by sandbox://CC-1",
+		},
+		{
+			name: "closed blocker without a prior run stays queued when authorised",
+			unlock: plan.Unlock{Reason: "blocked by sandbox://CC-1", BlockerClosed: true,
+				Blocking: []plan.TicketURL{"sandbox://CC-1"}},
+			authorised: true, want: plan.Queued, wantReason: "waiting on sandbox://CC-1's PR",
+		},
 	}
 
 	for _, tt := range tests {
@@ -108,35 +120,39 @@ func TestStatusDerivesCancelledForAMemberWithNoRun(t *testing.T) {
 	}
 }
 
-func TestStatusNeverDerivesCancelledOnceItHasRun(t *testing.T) {
-	t.Parallel()
-
-	state, _ := plan.Status(plan.Facts{
-		Unlock:          plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-		LatestRun:       option.Some(plan.RunFact{Alive: true}),
-		CancelledMember: true,
-	})
-	if state != plan.Running {
-		t.Errorf("state = %v, want running: a row that ever ran is never cancelled", state)
-	}
-}
-
 func TestStatusWithLatestRun(t *testing.T) {
 	t.Parallel()
 
 	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
 
 	tests := []struct {
-		name       string
-		latestRun  option.Option[plan.RunFact]
-		wantState  plan.State
-		reasonHas  string
-		reasonHasA string // second required substring, for the failed-with-log-path case
+		name            string
+		latestRun       option.Option[plan.RunFact]
+		cancelledMember bool
+		conflictedBase  string
+		wantState       plan.State
+		reasonHas       string
+		reasonHasA      string // second required substring, for the failed-with-log-path case
 	}{
 		{
 			name:      "an alive run derives running regardless of unlock or authorisation",
 			latestRun: option.Some(plan.RunFact{Alive: true}),
 			wantState: plan.Running,
+		},
+		{
+			name:            "a live run outranks cancellation",
+			latestRun:       option.Some(plan.RunFact{Alive: true}),
+			cancelledMember: true, wantState: plan.Running,
+		},
+		{
+			name:           "a live run outranks a conflicted base",
+			latestRun:      option.Some(plan.RunFact{Alive: true}),
+			conflictedBase: "cc-1-first", wantState: plan.Running,
+		},
+		{
+			name:      "a dead undisposed run stays ready",
+			latestRun: option.Some(plan.RunFact{Alive: false}),
+			wantState: plan.Ready, reasonHas: "no blockers",
 		},
 		{
 			name: "a dead run with no commits derives failed, naming the log path",
@@ -376,7 +392,10 @@ func TestStatusWithLatestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, reason := plan.Status(plan.Facts{Unlock: unlocked, Authorised: false, LatestRun: tt.latestRun})
+			state, reason := plan.Status(plan.Facts{
+				Unlock: unlocked, LatestRun: tt.latestRun,
+				CancelledMember: tt.cancelledMember, ConflictedBase: tt.conflictedBase,
+			})
 			if state != tt.wantState {
 				t.Errorf("state = %v, want %v (reason %q)", state, tt.wantState, reason)
 			}
@@ -434,43 +453,6 @@ func TestStatusDerivesPRMergedOverALaterRunsOwnDisposition(t *testing.T) {
 	}
 }
 
-func TestStatusStillDerivesFailedWithoutAMergedPR(t *testing.T) {
-	t.Parallel()
-
-	unlocked := plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"}
-	state, _ := plan.Status(plan.Facts{
-		Unlock: unlocked, Authorised: false,
-		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.Some(plan.OutcomeFailed)}),
-	})
-	if state != plan.Failed {
-		t.Errorf("state = %v, want failed", state)
-	}
-}
-
-func TestStatusDerivesAnUndisposedRunAsNotFailed(t *testing.T) {
-	t.Parallel()
-
-	state, _ := plan.Status(plan.Facts{
-		Unlock:    plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-		LatestRun: option.Some(plan.RunFact{Alive: false, Outcome: option.None[plan.Outcome]()}),
-	})
-	if state == plan.Failed {
-		t.Errorf("state = %v, want anything but failed for a run with no outcome", state)
-	}
-}
-
-func TestStatusIgnoresANilLatestRun(t *testing.T) {
-	t.Parallel()
-
-	state, reason := plan.Status(plan.Facts{
-		Unlock:     plan.Unlock{Unlocked: true, BaseBranch: "main", Reason: "no blockers"},
-		Authorised: false,
-	})
-	if state != plan.Ready || reason != "no blockers" {
-		t.Errorf("state = %v, reason = %q, want ready/\"no blockers\"", state, reason)
-	}
-}
-
 func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	t.Parallel()
 
@@ -506,24 +488,6 @@ func TestStatusDerivesBaseGoneOverAnythingElseOnceItHasRun(t *testing.T) {
 	}
 }
 
-func TestStatusNeverDerivesBaseGoneWithoutAPriorRun(t *testing.T) {
-	t.Parallel()
-
-	blockerClosed := plan.Unlock{
-		Reason: "blocked by sandbox://CC-1", BlockerClosed: true, Blocking: []plan.TicketURL{"sandbox://CC-1"},
-	}
-
-	state, _ := plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: false, LatestRun: option.None[plan.RunFact]()})
-	if state != plan.Blocked {
-		t.Errorf("state = %v, want blocked: no run ever happened", state)
-	}
-
-	state, _ = plan.Status(plan.Facts{Unlock: blockerClosed, Authorised: true, LatestRun: option.None[plan.RunFact]()})
-	if state != plan.Queued {
-		t.Errorf("state = %v, want queued: authorised but never launched", state)
-	}
-}
-
 func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 	t.Parallel()
 
@@ -539,19 +503,5 @@ func TestStatusBlocksOnAConflictedBase(t *testing.T) {
 		if !strings.Contains(string(reason), "cc-1-first") {
 			t.Errorf("reason %q does not name the conflicted base", reason)
 		}
-	}
-}
-
-func TestStatusPrefersARunToAConflictedBase(t *testing.T) {
-	t.Parallel()
-
-	state, _ := plan.Status(plan.Facts{
-		Unlock:         plan.Unlock{Unlocked: true, BaseBranch: "cc-1-first"},
-		Authorised:     true,
-		ConflictedBase: "cc-1-first",
-		LatestRun:      option.Some(plan.RunFact{Alive: true}),
-	})
-	if state != plan.Running {
-		t.Errorf("state = %v, want running", state)
 	}
 }

@@ -37,10 +37,11 @@ func TestLoopAppliesAPendingImportIntent(t *testing.T) {
 	trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
 	cfg := config.Config{}
 
-	lp := newLoop(
-		store, noOpObserve, cctest.Clock{At: at}, cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src})),
-	)
+	lp := newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
+		Runner:  runner.ProcessRunner{},
+		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
+	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
@@ -103,9 +104,11 @@ func TestLoopRecordsImportRefusalsWithoutHaltingTheTick(t *testing.T) {
 				Tickets:  map[string][]tracker.Ticket{"project:y": {tt.imported}},
 			}
 			trackRepo(t, store, "alpha", "git@github.com:acme/alpha.git")
-			lp := newLoop(store, noOpObserve, cctest.Clock{At: at.Add(time.Hour)},
-				config.Config{}, config.Workspace{}, runner.ProcessRunner{},
-				loop.WithTrackerSource(trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src})))
+			lp := newLoopWithDeps(loop.Deps{
+				Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at.Add(time.Hour)},
+				Runner:  runner.ProcessRunner{},
+				Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
+			})
 			if err := lp.RunOnce(ctx); err != nil {
 				t.Fatalf("RunOnce: want the refusal handled in-tick, got %v", err)
 			}
@@ -172,10 +175,11 @@ func TestLoopSetsTicketSourceFromTheReposConfiguredTracker(t *testing.T) {
 		t.Fatalf("SaveObservation(seed): %v", err)
 	}
 
-	lp := newLoop(
-		store, noOpObserve, cctest.Clock{At: at}, cfg, config.Workspace{}, runner.ProcessRunner{},
-		loop.WithTrackerSource(trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src})),
-	)
+	lp := newLoopWithDeps(loop.Deps{
+		Store: store, Observe: noOpObserve, Clock: cctest.Clock{At: at}, Config: cfg,
+		Runner:  runner.ProcessRunner{},
+		Tracker: trackertest.ByRemote(map[string]*trackertest.Source{"github.com/acme/alpha": src}),
+	})
 	if err := lp.RunOnce(ctx); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}

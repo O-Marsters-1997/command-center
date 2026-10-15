@@ -9,6 +9,10 @@ import (
 
 func peerRef(branch string) plan.BranchRef { return plan.BranchRef{Repo: "r", Branch: branch} }
 
+func MergifyHash(ctx context.Context, repoPath string) (string, error) {
+	return mergifyHash(ctx, repoPath)
+}
+
 func TestRecordPeerConflictsReusesUnmovedTips(t *testing.T) {
 	t.Parallel()
 

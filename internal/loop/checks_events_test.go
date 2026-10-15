@@ -26,6 +26,7 @@ func TestRecordChecksLandedAppendsOnePerCheckThatLands(t *testing.T) {
 	pending := plan.CheckState{Name: "Build", Status: "IN_PROGRESS"}
 	passed := plan.CheckState{Name: "Build", Status: "COMPLETED", Conclusion: "SUCCESS"}
 	failed := plan.CheckState{Name: "Lint", Status: "COMPLETED", Conclusion: "FAILURE"}
+	skipped := plan.CheckState{Name: "Optional", Status: "COMPLETED", Conclusion: "SKIPPED"}
 	observe := func(checks ...plan.CheckState) plan.Observation {
 		byName := map[string]plan.CheckState{}
 		for _, c := range checks {
@@ -72,6 +73,8 @@ func TestRecordChecksLandedAppendsOnePerCheckThatLands(t *testing.T) {
 	check("after an unchanged tick", landed(observe(passed, failed)), "Build passed", "Lint failed")
 	landed(observe(pending, failed))
 	check("after a re-run lands again", landed(observe(passed, failed)), "Build passed", "Lint failed", "Build passed")
+	check("after a skipped check lands", landed(observe(passed, failed, skipped)),
+		"Build passed", "Lint failed", "Build passed", "Optional skipped")
 }
 
 func TestRecordChecksLandedIgnoresChecksAlreadyTerminalInThePreviousObservation(t *testing.T) {

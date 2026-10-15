@@ -37,10 +37,10 @@ func TestALoopDrivesATicketFromReadyToReviewMeWithForgeAndWorktreeFakes(t *testi
 	forge := &recordingForge{}
 	worktrees := &recordingWorktrees{}
 	runner := runner.NewFake()
-	lp := newLoop(
-		store, loop.NewObserver(store, forge, cfg), cctest.Clock{At: at}, cfg, ws, runner,
-		loop.WithForge(forge), loop.WithWorktrees(worktrees), loop.WithTrackerSource(resolve),
-	)
+	lp := newLoopWithDeps(loop.Deps{
+		Store: store, Observe: loop.NewObserver(store, forge, cfg), Clock: cctest.Clock{At: at},
+		Config: cfg, Workspace: ws, Runner: runner, Tracker: resolve,
+	}, loop.WithForge(forge), loop.WithWorktrees(worktrees))
 
 	if err := store.QueueVerbIntent(t.Context(), "project:x", plan.VerbImport, at); err != nil {
 		t.Fatalf("QueueVerbIntent(project:x, import): %v", err)

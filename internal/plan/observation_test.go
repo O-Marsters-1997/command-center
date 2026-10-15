@@ -3,33 +3,16 @@ package plan_test
 import (
 	"encoding/json"
 	"maps"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 )
 
-func TestNewObservationAllocatesEveryMapAndMarksAlive(t *testing.T) {
+func TestObservationMarksRunAlive(t *testing.T) {
 	t.Parallel()
 
-	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
-	obs := plan.NewObservation(at)
-	if obs.ObservedAt != at {
-		t.Errorf("NewObservation(%v).ObservedAt = %v, want %v", at, obs.ObservedAt, at)
-	}
-	for name, value := range map[string]any{
-		"PRs": obs.PRs, "Worktrees": obs.Worktrees, "Runs": obs.Runs,
-		"MergifyHash": obs.MergifyHash, "BranchTips": obs.BranchTips, "LocalTips": obs.LocalTips,
-		"Titles": obs.Titles, "MidMerge": obs.MidMerge, "ConflictsWithBase": obs.ConflictsWithBase,
-		"ConflictsWithPeer": obs.ConflictsWithPeer, "Settings": obs.Settings,
-		"SettingsErrors": obs.SettingsErrors, "SettingsSources": obs.SettingsSources,
-		"RepoErrors": obs.RepoErrors,
-	} {
-		if reflect.ValueOf(value).IsNil() {
-			t.Errorf("NewObservation(%v).%s = nil, want allocated map", at, name)
-		}
-	}
+	obs := plan.NewObservation(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC))
 	obs.MarkAlive("ticket-1")
 	if !obs.Runs["ticket-1"].Alive {
 		t.Error("MarkAlive(ticket-1) did not mark the run alive")

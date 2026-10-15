@@ -2,6 +2,7 @@ package loop_test
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,11 +20,21 @@ import (
 )
 
 var testAt = time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+var discardLog = slog.New(slog.DiscardHandler)
+
+func branchRef(repo, branch string) plan.BranchRef { return plan.BranchRef{Repo: repo, Branch: branch} }
 
 func newLoop(
 	st *storepkg.Store, observe loop.ObserveFunc, clock loop.Clock, cfg config.Config, ws config.Workspace,
 	rn runner.Runner, opts ...loop.Option,
 ) *loop.Loop {
+	return newLoopWithDeps(loop.Deps{
+		Store: st, Observe: observe, Clock: clock, Config: cfg, Workspace: ws, Runner: rn,
+	}, opts...)
+}
+
+func newLoopWithDeps(deps loop.Deps, opts ...loop.Option) *loop.Loop {
+	observe := deps.Observe
 	completeObserve := func(ctx context.Context) (plan.Observation, error) {
 		obs, err := observe(ctx)
 		if err != nil {
@@ -37,9 +48,8 @@ func newLoop(
 		}
 		return obs, nil
 	}
-	return loop.New(loop.Deps{
-		Logger: discardLog, Store: st, Clock: clock, Runner: rn, Observe: completeObserve, Config: cfg, Workspace: ws,
-	}, opts...)
+	deps.Logger, deps.Observe = discardLog, completeObserve
+	return loop.New(deps, opts...)
 }
 
 type loopFixture struct {
