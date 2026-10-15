@@ -120,24 +120,16 @@ func (r *Reader) Repos(ctx context.Context, now time.Time) (ReposPage, error) {
 }
 
 func (r *Reader) RepoGroups(ctx context.Context) ([]RepoGroup, error) {
-	groups, _, err := r.repoGroups(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load repo groups: %w", err)
-	}
-	return groups, nil
-}
-
-func (r *Reader) repoGroups(ctx context.Context) ([]RepoGroup, NewProjectForm, error) {
 	repos, err := r.store.Repos(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, fmt.Errorf("load repos: %w", err)
+		return nil, fmt.Errorf("load repo groups: load repos: %w", err)
 	}
 	projects, err := r.store.Projects(ctx)
 	if err != nil {
-		return nil, NewProjectForm{}, fmt.Errorf("load projects: %w", err)
+		return nil, fmt.Errorf("load repo groups: load projects: %w", err)
 	}
-	groups, form := repoGroups(repos, projects)
-	return groups, form, nil
+	groups, _ := repoGroups(repos, projects)
+	return groups, nil
 }
 
 func repoGroups(repos []store.Repo, projects []store.Project) ([]RepoGroup, NewProjectForm) {

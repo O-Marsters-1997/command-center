@@ -19,6 +19,7 @@ type frame struct {
 	snap     plan.Snapshot
 	repos    []store.Repo
 	projects map[string]ProjectMark
+	rows     []Row
 	lastErr  option.Option[store.TickError]
 	gauges   map[agentlog.Window]store.Gauge
 	chrome   Chrome
@@ -62,15 +63,12 @@ func (r *Reader) loadFrame(ctx context.Context, now time.Time, p Params) (frame,
 	f.in.Now = now
 	f.snap = plan.RulesFor(plan.Daemon{}, f.in.Obs).Derive(f.in)
 	f.projects = projectMarks(f.repos)
-	f.chrome = r.buildChrome(chromeInput{
-		tickets: f.tickets, obs: f.in.Obs, observed: f.in.Observed,
-		lastErr: f.lastErr, gauges: f.gauges, split: f.split,
-	}, now, p)
+	f.rows = deriveRows(f.tickets, f.in, f.snap, f.projects)
+	f.chrome = r.buildChrome(f)
 	f.chrome.scopeToProject(f.project)
 	f.chrome.ScopeMenu = scopeChoices(ScopeList(projects, f.repos), f.project.Name, p.Repo)
 	f.chrome.RefusedRepos = refusedRepos(f.repos)
-	rows := deriveRows(f.tickets, f.in, f.snap, nil)
-	rows = scopeRailRows(rows, RailParams{
+	rows := scopeRailRows(f.rows, RailParams{
 		Project: f.project.Name, Repo: p.Repo, projectRepos: f.project.Repos,
 	})
 	for _, row := range rows {

@@ -220,7 +220,7 @@ func statusOf(err error) int {
 	if se, ok := errors.AsType[statusError](err); ok {
 		return se.status
 	}
-	if view.IsInvalid(err) {
+	if _, ok := errors.AsType[view.InvalidError](err); ok {
 		return http.StatusBadRequest
 	}
 	for _, m := range statusMap {
