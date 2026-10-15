@@ -1,6 +1,6 @@
 export const MARGIN = 24;
 
-export interface Metrics {
+interface Metrics {
   colW: number;
   rowH: number;
   nodeW: number;
@@ -63,7 +63,7 @@ export function stackByColumn<T extends { col: number }>(
   });
 }
 
-export interface Edge<T> {
+interface Edge<T> {
   from: T;
   to: T;
 }

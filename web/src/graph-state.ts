@@ -8,7 +8,7 @@ export interface GraphNode extends Row {
   y: number;
 }
 
-export function placeNodes(groups: Group[]): GraphNode[] {
+function placeNodes(groups: Group[]): GraphNode[] {
   const rows = groups.flatMap((g) => (g.root ? [g.root, ...g.children] : g.children));
   return layoutWaves(rows, CARD);
 }
