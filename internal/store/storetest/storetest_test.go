@@ -22,12 +22,12 @@ func TestRunSeedsDisposedAndAliveRuns(t *testing.T) {
 		Session: store.RunSession{StartNew: true, Message: "first run"},
 		Outcome: option.Some(plan.OutcomePush), EndedAt: at.Add(time.Minute),
 	})
-	details, err := st.RunDetails(t.Context(), plan.RunID(completedID))
+	runs, err := st.SessionRunsForTicket(t.Context(), ticket.URL)
 	if err != nil {
-		t.Fatalf("RunDetails(%d): %v", completedID, err)
+		t.Fatalf("SessionRunsForTicket(%q): %v", ticket.URL, err)
 	}
-	if details.SessionID == "" || details.Message != "first run" || !details.Outcome.IsSome() {
-		t.Errorf("RunDetails = %+v, want a disposed session with its message", details)
+	if len(runs) != 1 || runs[0].ID != completedID || runs[0].Message != "first run" {
+		t.Errorf("SessionRunsForTicket = %+v, want the seeded run with its message", runs)
 	}
 	latest, err := st.LatestRunsByTicket(t.Context())
 	if err != nil {

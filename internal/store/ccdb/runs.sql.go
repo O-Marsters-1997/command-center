@@ -481,26 +481,6 @@ func (q *Queries) RecordSpawn(ctx context.Context, arg RecordSpawnParams) (int64
 	return result.RowsAffected()
 }
 
-const runDetails = `-- name: RunDetails :one
-SELECT COALESCE(session_id::text, '')::text AS session_id,
-       COALESCE(message, '')::text AS message,
-       COALESCE(outcome, '')::text AS outcome
-FROM runs WHERE id = $1
-`
-
-type RunDetailsRow struct {
-	SessionID string
-	Message   string
-	Outcome   string
-}
-
-func (q *Queries) RunDetails(ctx context.Context, id int64) (RunDetailsRow, error) {
-	row := q.db.QueryRowContext(ctx, runDetails, id)
-	var i RunDetailsRow
-	err := row.Scan(&i.SessionID, &i.Message, &i.Outcome)
-	return i, err
-}
-
 const runIDsForTicket = `-- name: RunIDsForTicket :many
 SELECT id FROM runs WHERE ticket_id = $1 ORDER BY id
 `

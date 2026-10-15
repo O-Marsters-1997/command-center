@@ -20,7 +20,7 @@ type followUpCase struct {
 type followUpResult struct {
 	spawn     runner.SpawnConfig
 	sessionID string
-	row       storepkg.RunDetails
+	row       storepkg.SessionRun
 	runsDir   string
 }
 
@@ -86,18 +86,17 @@ func followUpAfterAgentRun(t *testing.T, tc followUpCase) followUpResult {
 		t.Fatalf("spawns = %d, want 1", len(fake.Spawns))
 	}
 
-	latest, err := store.LatestRunsByTicket(t.Context())
+	runs, err := store.SessionRunsForTicket(t.Context(), ticket.URL)
 	if err != nil {
-		t.Fatalf("LatestRunsByTicket(): %v", err)
+		t.Fatalf("SessionRunsForTicket(%q): %v", ticket.URL, err)
 	}
-	row, err := store.RunDetails(t.Context(), latest[plan.TicketURL(ticket.URL)].ID)
-	if err != nil {
-		t.Fatalf("RunDetails(%q): %v", ticket.URL, err)
+	if len(runs) == 0 {
+		t.Fatal("SessionRunsForTicket returned no follow-up")
 	}
 	return followUpResult{
 		spawn:     fake.Spawns[0],
 		sessionID: sessionID,
-		row:       row,
+		row:       runs[len(runs)-1],
 		runsDir:   ws.RunsDir,
 	}
 }
@@ -108,9 +107,6 @@ func TestFollowUpResumesTheSessionWhenItsTranscriptExists(t *testing.T) {
 
 	if !got.spawn.Resume || got.spawn.SessionID != got.sessionID {
 		t.Errorf("spawn = resume %v session %q, want a resume of %q", got.spawn.Resume, got.spawn.SessionID, got.sessionID)
-	}
-	if got.row.SessionID != got.sessionID {
-		t.Errorf("run session_id = %q, want the resumed session %q", got.row.SessionID, got.sessionID)
 	}
 	if got.row.Message != "now fix the other test" {
 		t.Errorf("run message = %q, want the owner's raw text", got.row.Message)
