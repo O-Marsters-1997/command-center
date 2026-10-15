@@ -3,13 +3,14 @@ package gh
 import (
 	"context"
 	"fmt"
+
+	"github.com/O-Marsters-1997/command-center/internal/command"
 )
 
 type RepoSummary struct {
 	FullName      string
 	SSHURL        string
 	DefaultBranch string
-	Archived      bool
 }
 
 type RepoSettings struct {
@@ -19,7 +20,7 @@ type RepoSettings struct {
 }
 
 func ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error) {
-	out, err := Run(ctx, "", "api", "repos/"+fullName,
+	out, err := command.Output(ctx, "", "gh", "api", "repos/"+fullName,
 		"--jq", "{allow_merge_commit, allow_rebase_merge, default_branch}")
 	if err != nil {
 		return RepoSettings{}, fmt.Errorf("repo settings for %s: %w", fullName, err)
@@ -32,7 +33,7 @@ func ReadRepoSettings(ctx context.Context, fullName string) (RepoSettings, error
 }
 
 func RepoRemote(ctx context.Context, fullName string) (string, error) {
-	out, err := Run(ctx, "", "api", "repos/"+fullName, "--jq", "{ssh_url}")
+	out, err := command.Output(ctx, "", "gh", "api", "repos/"+fullName, "--jq", "{ssh_url}")
 	if err != nil {
 		return "", fmt.Errorf("remote of %s: %w", fullName, err)
 	}
@@ -47,7 +48,7 @@ func RepoRemote(ctx context.Context, fullName string) (string, error) {
 }
 
 func PushableRepos(ctx context.Context) ([]RepoSummary, error) {
-	out, err := Run(ctx, "", "api", "--paginate",
+	out, err := command.Output(ctx, "", "gh", "api", "--paginate",
 		"user/repos?affiliation=owner,collaborator,organization_member&per_page=100")
 	if err != nil {
 		return nil, fmt.Errorf("list user repos: %w", err)

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	ccgit "github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 type Worktrees struct{}
@@ -19,7 +18,7 @@ func (Worktrees) New(ctx context.Context, repoPath, branch, baseRef string) erro
 	return nil
 }
 
-func (Worktrees) Remove(ctx context.Context, repoPath, branch string, _ tp.RemoveMode) error {
+func (Worktrees) Remove(ctx context.Context, repoPath, branch string, _ ccgit.RemoveMode) error {
 	worktrees, err := ccgit.WorktreePaths(ctx, repoPath)
 	if err != nil {
 		return fmt.Errorf("list worktrees of %s: %w", repoPath, err)

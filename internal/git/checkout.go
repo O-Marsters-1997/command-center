@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 var ErrOriginMismatch = errors.New("checkout origin differs from the configured remote")
@@ -63,7 +62,7 @@ func clone(ctx context.Context, name, remote, checkout string) error {
 	if err := os.MkdirAll(filepath.Dir(checkout), 0o700); err != nil {
 		return fmt.Errorf("repo %s: create %s: %w", name, filepath.Dir(checkout), err)
 	}
-	if err := command.RunWithin(ctx, tp.LongTimeout, "", "git", "clone", remote, checkout); err != nil {
+	if err := command.RunWithin(ctx, LongTimeout, "", "git", "clone", remote, checkout); err != nil {
 		return fmt.Errorf("repo %s: clone %s: %w", name, remote, err)
 	}
 	return nil

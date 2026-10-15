@@ -48,14 +48,10 @@ func TestDecodeIssueTitles(t *testing.T) {
 func TestDecodeIssueTitlesFullPageErrors(t *testing.T) {
 	t.Parallel()
 
-	raw := "[" + strings.Repeat(`{"title":"t","url":"u"},`, listLimit-1) + `{"title":"t","url":"v"}]`
+	raw := "[" + strings.Repeat(`{"title":"t","url":"u"},`, ListLimit-1) + `{"title":"t","url":"v"}]`
 	_, err := decodeIssueTitles([]byte(raw))
-	var full *fullPageError
-	if !errors.As(err, &full) {
-		t.Fatalf("decodeIssueTitles() error = %v, want *fullPageError", err)
-	}
-	if full.limit != listLimit {
-		t.Errorf("fullPageError.limit = %d, want %d", full.limit, listLimit)
+	if !errors.Is(err, ErrFullPage) {
+		t.Fatalf("decodeIssueTitles() error = %v, want ErrFullPage", err)
 	}
 }
 

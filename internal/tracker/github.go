@@ -6,16 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/gh"
 )
-
-const listLimit = 100
-
-type fullPageError struct{ limit int }
-
-func (e *fullPageError) Error() string {
-	return fmt.Sprintf("gh list returned a full page at --limit %d, results may be truncated", e.limit)
-}
 
 type githubSource struct {
 	owner, repo string
@@ -23,21 +16,15 @@ type githubSource struct {
 }
 
 func newGithubSource(owner, repo string) *githubSource {
-	return &githubSource{owner: owner, repo: repo, run: runGH}
-}
-
-func runGH(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := gh.Run(ctx, "", args...)
-	if err != nil {
-		return nil, fmt.Errorf("query github tracker: %w", err)
-	}
-	return out, nil
+	return &githubSource{owner: owner, repo: repo, run: func(ctx context.Context, args ...string) ([]byte, error) {
+		return command.Output(ctx, "", "gh", args...)
+	}}
 }
 
 func (s *githubSource) nwo() string { return s.owner + "/" + s.repo }
 
 func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
-	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(listLimit))
+	out, err := s.run(ctx, "label", "list", "-R", s.nwo(), "--json", "name", "--limit", strconv.Itoa(gh.ListLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list feature labels: %w", err)
 	}
@@ -46,7 +33,7 @@ func (s *githubSource) Features(ctx context.Context) ([]Feature, error) {
 
 func (s *githubSource) Tickets(ctx context.Context, feature string) ([]Ticket, error) {
 	out, err := s.run(ctx, "issue", "list", "-R", s.nwo(), "--state", "open",
-		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(listLimit))
+		"--label", feature, "--json", "number,title,body,url,labels", "--limit", strconv.Itoa(gh.ListLimit))
 	if err != nil {
 		return nil, fmt.Errorf("list tickets for %s: %w", feature, err)
 	}
@@ -96,8 +83,8 @@ func decodeFeatures(raw []byte) ([]Feature, error) {
 			features = append(features, Feature(label.Name))
 		}
 	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read labels: %w", &fullPageError{limit: listLimit})
+	if len(decoded) >= gh.ListLimit {
+		return nil, fmt.Errorf("read labels: %w", gh.ErrFullPage)
 	}
 	return features, nil
 }
@@ -115,8 +102,8 @@ func decodeIssues(raw []byte) ([]rawIssue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("issue list: %w", err)
 	}
-	if len(decoded) >= listLimit {
-		return nil, fmt.Errorf("read issues: %w", &fullPageError{limit: listLimit})
+	if len(decoded) >= gh.ListLimit {
+		return nil, fmt.Errorf("read issues: %w", gh.ErrFullPage)
 	}
 	return decoded, nil
 }

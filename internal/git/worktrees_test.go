@@ -2,6 +2,7 @@ package git_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/O-Marsters-1997/command-center/internal/command"
 	"github.com/O-Marsters-1997/command-center/internal/git"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 func fakeTp(t *testing.T, exitCode int) (bin, argsPath string) {
@@ -80,6 +80,14 @@ func TestTpFailureNamesTheBranch(t *testing.T) {
 	}
 }
 
+func TestRemoveUnknownMode(t *testing.T) {
+	t.Parallel()
+	err := (git.CLI{}).Remove(t.Context(), t.TempDir(), "cc-1", git.RemoveUnknown)
+	if err == nil {
+		t.Fatal("Remove(RemoveUnknown) = nil, want error")
+	}
+}
+
 type tpChild struct {
 	bin, repoPath, action string
 	failing               bool
@@ -111,9 +119,9 @@ func TestTpChild(t *testing.T) {
 	case "New", "New passes the base":
 		err = (git.CLI{}).New(t.Context(), repo, "cc-1-first", "origin/main")
 	case "Remove", "Remove merged":
-		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", tp.RemoveMerged)
+		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", git.RemoveMerged)
 	case "Remove forced":
-		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", tp.RemoveForced)
+		err = (git.CLI{}).Remove(t.Context(), repo, "cc-1-first", git.RemoveForced)
 	default:
 		t.Fatalf("unknown tp action %q", action)
 	}
@@ -131,6 +139,13 @@ func TestTpChild(t *testing.T) {
 		}
 		if cmdErr.Cmd != want || cmdErr.Dir != repo {
 			t.Errorf("CLI(%s) command = %q in %q, want %q in %q", action, cmdErr.Cmd, cmdErr.Dir, want, repo)
+		}
+		prefix := "create worktree cc-1-first: "
+		if action != "New" {
+			prefix = "remove worktree cc-1-first: "
+		}
+		if got, want := fmt.Sprint(err), prefix+fmt.Sprint(cmdErr); got != want {
+			t.Errorf("CLI(%s) error = %q, want one context prefix %q", action, err, prefix)
 		}
 	} else if err != nil {
 		t.Errorf("CLI(%s) = %v, want nil", action, err)

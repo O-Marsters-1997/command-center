@@ -21,7 +21,6 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/gittest"
 	"github.com/O-Marsters-1997/command-center/internal/plan"
 	storepkg "github.com/O-Marsters-1997/command-center/internal/store"
-	"github.com/O-Marsters-1997/command-center/internal/tp"
 )
 
 func openStore(t *testing.T) *storepkg.Store {
@@ -165,7 +164,7 @@ func (w *recordingWorktrees) New(ctx context.Context, repo, branch, base string)
 	return nil
 }
 
-func (w *recordingWorktrees) Remove(ctx context.Context, repo, branch string, mode tp.RemoveMode) error {
+func (w *recordingWorktrees) Remove(ctx context.Context, repo, branch string, mode git.RemoveMode) error {
 	paths, err := git.WorktreePaths(ctx, repo)
 	if err != nil {
 		return err
@@ -174,7 +173,7 @@ func (w *recordingWorktrees) Remove(ctx context.Context, repo, branch string, mo
 	if !ok {
 		return errors.New("no worktree for " + branch)
 	}
-	if mode != tp.RemoveForced {
+	if mode != git.RemoveForced {
 		out, err := worktreeGitOutput(ctx, path, "status", "--porcelain")
 		if err != nil {
 			return err
@@ -210,8 +209,8 @@ func (w *recordingWorktrees) Remove(ctx context.Context, repo, branch string, mo
 type failingCut struct{ *recordingWorktrees }
 type failingRemove struct{ *recordingWorktrees }
 
-func (w failingCut) New(context.Context, string, string, string) error              { return errForge }
-func (w failingRemove) Remove(context.Context, string, string, tp.RemoveMode) error { return errForge }
+func (w failingCut) New(context.Context, string, string, string) error               { return errForge }
+func (w failingRemove) Remove(context.Context, string, string, git.RemoveMode) error { return errForge }
 
 func worktreeGit(ctx context.Context, repo string, args ...string) error {
 	_, err := worktreeGitOutput(ctx, repo, args...)
