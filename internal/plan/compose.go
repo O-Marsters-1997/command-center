@@ -16,10 +16,21 @@ func Compose(t Ticket) string {
 	return prompt
 }
 
-const followUpSkillPath = "cc/skills/follow-up/SKILL.md"
-
 func ComposeFollowUp(text string) string {
-	return fmt.Sprintf("Follow %s. Your instruction:\n\n%s", followUpSkillPath, text)
+	return fmt.Sprintf(
+		"You were not given a fresh worktree. This one already carries a branch, a diff and a git history "+
+			"a prior run produced; nothing remembers what that run was thinking, only what it committed. "+
+			"Run `git status`, `git diff` and `git log -5`, and read the PR description if one exists, "+
+			"before you touch anything.\n\n"+
+			"Below is the operator's own instruction, typed for this run. It is the whole of your task, "+
+			"not a restatement of the original ticket, and the ticket's acceptance criteria are not "+
+			"automatically still the bar.\n\n"+
+			"Carry it out, run the checks the repo defines for the code you touched, and commit each "+
+			"distinct change separately. Do not push: the daemon that spawned you reads this worktree's "+
+			"commits to decide when to push, and an uncommitted fix reads as a run that did nothing. "+
+			"If the instruction asks for something your settings deny, do the rest, commit it, and say "+
+			"in your final message what you could not do and why.\n\n"+
+			"Your instruction:\n\n%s", text)
 }
 
 func ComposeAsking(questionPath string) string {

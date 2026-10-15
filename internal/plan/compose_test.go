@@ -38,10 +38,13 @@ func TestComposeFollowUp(t *testing.T) {
 	t.Parallel()
 
 	got := plan.ComposeFollowUp("fix the flaky assertion in TestThing")
-	for _, want := range []string{"cc/skills/follow-up/SKILL.md", "fix the flaky assertion in TestThing"} {
+	for _, want := range []string{"Do not push", "git log -5", "fix the flaky assertion in TestThing"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("ComposeFollowUp(text) = %q, want it to mention %q", got, want)
 		}
+	}
+	if strings.Contains(got, "SKILL.md") {
+		t.Errorf("ComposeFollowUp = %q, want it to name no skill file", got)
 	}
 	if strings.Contains(got, "/implement") {
 		t.Errorf("ComposeFollowUp(text) = %q, want no implement instruction", got)
