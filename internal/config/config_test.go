@@ -377,7 +377,20 @@ func TestLoadNamesEveryBadField(t *testing.T) {
 				t.Fatal("Load error = nil, want one")
 			}
 			for _, field := range tt.want {
-				if !errors.Is(err, &config.InvalidValueError{Key: field}) && !errors.Is(err, &config.MissingKeyError{Key: field}) {
+				found := false
+				var joined interface{ Unwrap() []error }
+				if !errors.As(err, &joined) {
+					t.Fatalf("Load error = %v, want joined field errors", err)
+				}
+				for _, cause := range joined.Unwrap() {
+					var invalid *config.InvalidValueError
+					var missing *config.MissingKeyError
+					if errors.As(cause, &invalid) && invalid.Key == field ||
+						errors.As(cause, &missing) && missing.Key == field {
+						found = true
+					}
+				}
+				if !found {
 					t.Errorf("Load error = %v, want invalid or missing %s", err, field)
 				}
 			}

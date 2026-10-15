@@ -84,43 +84,34 @@ func psStatAndEtime(pid int) (stat, etime string, ok bool) {
 
 // GNU and BSD ps both emit [[DD-]hh:]mm:ss for elapsed time.
 func parseEtime(s string) (time.Duration, error) {
-	days := 0
+	hours := 0
 	if before, after, found := strings.Cut(s, "-"); found {
 		d, err := strconv.Atoi(before)
 		if err != nil {
 			return 0, fmt.Errorf("day component %q: %w", before, err)
 		}
-		days, s = d, after
+		hours, s = d*24, after
 	}
 
 	parts := strings.Split(s, ":")
-	var h, m, sec int
-	var err error
 	switch len(parts) {
 	case 2:
-		if m, err = strconv.Atoi(parts[0]); err != nil {
-			return 0, fmt.Errorf("minutes %q: %w", parts[0], err)
-		}
-		if sec, err = strconv.Atoi(parts[1]); err != nil {
-			return 0, fmt.Errorf("seconds %q: %w", parts[1], err)
-		}
 	case 3:
-		if h, err = strconv.Atoi(parts[0]); err != nil {
+		h, err := strconv.Atoi(parts[0])
+		if err != nil {
 			return 0, fmt.Errorf("hours %q: %w", parts[0], err)
 		}
-		if m, err = strconv.Atoi(parts[1]); err != nil {
-			return 0, fmt.Errorf("minutes %q: %w", parts[1], err)
-		}
-		if sec, err = strconv.Atoi(parts[2]); err != nil {
-			return 0, fmt.Errorf("seconds %q: %w", parts[2], err)
-		}
+		hours += h
+		parts = parts[1:]
 	default:
 		return 0, fmt.Errorf("unrecognised format %q", s)
 	}
-
-	total := time.Duration(days)*24*time.Hour + time.Duration(h)*time.Hour +
-		time.Duration(m)*time.Minute + time.Duration(sec)*time.Second
-	return total, nil
+	duration := fmt.Sprintf("%dh%sm%ss", hours, parts[0], parts[1])
+	elapsed, err := time.ParseDuration(duration)
+	if err != nil {
+		return 0, fmt.Errorf("parse elapsed time %q: %w", s, err)
+	}
+	return elapsed, nil
 }
 
 const (

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -22,21 +21,17 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/store"
 )
 
-func subcmd(args []string) command {
-	if len(args) == 0 {
-		return nil
-	}
-	switch args[0] {
-	case "open":
-		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
-			return open(ctx, configPath, env, os.Stdout, os.Stderr)
-		}
-	default:
-		return nil
-	}
+func openCommand(ctx context.Context, deps app.Deps) error {
+	return open(ctx, deps.ConfigPath, deps.Env, os.Stdout, os.Stderr)
 }
 
-func appOptions() []app.Option { return nil }
+func e2eCommand(ctx context.Context, deps app.Deps, _ []string) error {
+	return run(ctx, deps)
+}
+
+func newApp(ctx context.Context, deps app.Deps) (*app.App, error) {
+	return app.New(ctx, deps)
+}
 
 func open(ctx context.Context, configPath string, env config.Env, stdout, stderr io.Writer) error {
 	cfg, err := config.Load(configPath, env)
@@ -60,11 +55,7 @@ func open(ctx context.Context, configPath string, env config.Env, stdout, stderr
 		fmt.Fprintln(stderr, "cc open: no tracked repo matches this directory; falling back to the home page")
 	}
 
-	listening, err := daemonListening(cfg.Port)
-	if err != nil {
-		return fmt.Errorf("probe daemon on port %d: %w", cfg.Port, err)
-	}
-	if !listening {
+	if !daemonListening(cfg.Port, stderr) {
 		fmt.Fprintf(stderr, "cc open: no daemon listening on port %d\n", cfg.Port)
 		fmt.Fprintln(stdout, target)
 		return nil
@@ -93,13 +84,14 @@ func trackedRepos(ctx context.Context, databaseURL string) (_ []store.Repo, err 
 	return repos, nil
 }
 
-func daemonListening(port int) (bool, error) {
+func daemonListening(port int, stderr io.Writer) bool {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
 	if err != nil {
-		return false, nil
+		return false
 	}
 	if err := conn.Close(); err != nil {
-		return true, fmt.Errorf("close daemon probe: %w", err)
+		fmt.Fprintf(stderr, "cc open: close daemon probe: %v\n", err)
+		return true
 	}
-	return true, nil
+	return true
 }

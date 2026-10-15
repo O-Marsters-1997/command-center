@@ -21,26 +21,17 @@ import (
 	"github.com/O-Marsters-1997/command-center/internal/web"
 )
 
-func Lookup(args []string) func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
-	if len(args) == 0 {
-		return nil
-	}
+func Run(ctx context.Context, deps app.Deps, args []string) error {
 	rest := args[1:]
 	switch args[0] {
 	case "tick":
-		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
-			return tick(ctx, logger, configPath, env, rest)
-		}
+		return tick(ctx, deps.Logger, deps.ConfigPath, deps.Env, rest)
 	case "request":
-		return func(ctx context.Context, logger *slog.Logger, configPath string, env config.Env) error {
-			return request(ctx, logger, configPath, env, rest)
-		}
+		return request(ctx, deps.Logger, deps.ConfigPath, deps.Env, rest)
 	case "import":
-		return func(ctx context.Context, _ *slog.Logger, configPath string, env config.Env) error {
-			return importFeature(ctx, configPath, env, rest)
-		}
+		return importFeature(ctx, deps.ConfigPath, deps.Env, rest)
 	default:
-		return nil
+		return errors.New("unknown e2e command")
 	}
 }
 
@@ -51,9 +42,9 @@ func tick(ctx context.Context, logger *slog.Logger, configPath string, env confi
 		return fmt.Errorf("parse tick flags: %w", err)
 	}
 
-	instance, err := app.New(
-		ctx, logger, configPath, env, app.WithValidator(SandboxValidate), app.WithRemoteSource(SandboxRemote),
-	)
+	instance, err := app.New(ctx, app.Deps{
+		Logger: logger, ConfigPath: configPath, Env: env, Validate: SandboxValidate, RemoteOf: SandboxRemote,
+	})
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}

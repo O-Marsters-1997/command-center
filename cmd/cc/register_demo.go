@@ -12,19 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/O-Marsters-1997/command-center/internal/config"
+	"github.com/O-Marsters-1997/command-center/internal/app"
 	"github.com/O-Marsters-1997/command-center/internal/demo"
 )
-
-func demoSubcmd(args []string) command {
-	if len(args) == 0 || args[0] != "demo" {
-		return nil
-	}
-	rest := args[1:]
-	return func(ctx context.Context, logger *slog.Logger, _ string, _ config.Env) error {
-		return runDemo(ctx, logger, rest)
-	}
-}
 
 func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 	flags := flag.NewFlagSet("demo", flag.ContinueOnError)
@@ -45,4 +35,8 @@ func runDemo(ctx context.Context, logger *slog.Logger, args []string) error {
 		return fmt.Errorf("serve demo: %w", err)
 	}
 	return nil
+}
+
+func demoCommand(ctx context.Context, deps app.Deps) error {
+	return runDemo(ctx, deps.Logger, flag.Args()[1:])
 }

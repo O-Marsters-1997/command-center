@@ -66,8 +66,6 @@ func resolve(f fileConfig, env Env) (Config, error) {
 	return cfg, nil
 }
 
-const agentCommandEnv = "CC_AGENT_COMMAND"
-
 func agentCommandFrom(configured []string, env Env) ([]string, error) {
 	if env.AgentCommand == "" {
 		return configured, nil
@@ -91,11 +89,6 @@ func (e *MissingKeyError) Error() string {
 	return fmt.Sprintf("agent_command lacks %s, which every run needs", e.Key)
 }
 
-func (e *MissingKeyError) Is(target error) bool {
-	other, ok := target.(*MissingKeyError)
-	return ok && e.Key == other.Key
-}
-
 // InvalidValueError identifies a config key whose supplied value is invalid.
 type InvalidValueError struct {
 	Key string
@@ -104,11 +97,6 @@ type InvalidValueError struct {
 
 func (e *InvalidValueError) Error() string { return fmt.Sprintf("%s: %v", e.Key, e.Err) }
 func (e *InvalidValueError) Unwrap() error { return e.Err }
-func (e *InvalidValueError) Is(target error) bool {
-	other, ok := target.(*InvalidValueError)
-	return ok && e.Key == other.Key
-}
-
 func (c Config) validate() error {
 	var errs []error
 	if c.Port < 1 || c.Port > 65535 {
