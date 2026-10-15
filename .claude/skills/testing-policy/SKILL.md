@@ -158,8 +158,6 @@ internal structs.
 Code without a testable surface yet. Don't write a test that reaches around the gap; add the seam
 first.
 
-- **`web/view` builders:** rail, scope filters, insights chart, log detail and params are
-  unexported → export the pure builders.
 - **Port fakes:** forge and worktree fakes live in `loop`'s tests, `runner.Fake` ships in `runner`,
   and `demo` has its own; the worktree fake re-implements `tp`'s refusals → one fake per port in
   `<owner>test` with a contract suite.

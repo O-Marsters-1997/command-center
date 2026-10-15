@@ -18,14 +18,14 @@ const insightsDefaultRangeDays = 30
 const insightsDateFormat = "2006-01-02"
 
 type InsightsResponse struct {
-	Since        string              `json:"since"`
-	Until        string              `json:"until"`
-	Timezone     string              `json:"timezone"`
-	Points       []insightsPointJSON `json:"points"`
-	WastePctWeek float64             `json:"waste_pct_week"`
+	Since        string          `json:"since"`
+	Until        string          `json:"until"`
+	Timezone     string          `json:"timezone"`
+	Points       []InsightsPoint `json:"points"`
+	WastePctWeek float64         `json:"waste_pct_week"`
 }
 
-type insightsPointJSON struct {
+type InsightsPoint struct {
 	Ticket          string  `json:"ticket"`
 	Title           string  `json:"title"`
 	Feature         string  `json:"feature"`
@@ -98,7 +98,7 @@ func mergedDay(mergedAt, timezone string) string {
 	return at.In(loc).Format(insightsDateFormat)
 }
 
-func buildMergedRows(points []insightsPointJSON, timezone string) []MergedRow {
+func buildMergedRows(points []InsightsPoint, timezone string) []MergedRow {
 	rows := make([]MergedRow, 0, len(points))
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
@@ -156,7 +156,7 @@ func untilReset(now, at time.Time) string {
 	return fmt.Sprintf("in %dh %02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
-func buildSpendSplit(points []insightsPointJSON) SpendSplit {
+func buildSpendSplit(points []InsightsPoint) SpendSplit {
 	var agent, followUp, total float64
 	for _, p := range points {
 		agent += p.AgentPctWeek
@@ -183,17 +183,24 @@ func (r *Reader) InsightsPage(ctx context.Context, now time.Time, q url.Values) 
 	if err != nil {
 		return InsightsPage{}, fmt.Errorf("load insights: %w", err)
 	}
+	return NewInsightsPage(chrome, resp, now), nil
+}
+
+func NewInsightsPage(chrome Chrome, resp InsightsResponse, now time.Time) InsightsPage {
 	return InsightsPage{
 		Chrome: chrome, Chart: buildInsightsChart(resp),
 		Limits: buildLimits(chrome.Gauges, now), Split: buildSpendSplit(resp.Points),
 		Merged: buildMergedRows(resp.Points, resp.Timezone),
-	}, nil
+	}
+}
+
+func InsightsRange(now time.Time, rawSince string) (since, until time.Time, timezone string) {
+	until = civilDate(now)
+	return parseSinceOrDefault(rawSince, until), until, insightsTimezone(now.Location())
 }
 
 func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (InsightsResponse, error) {
-	tz := insightsTimezone(now.Location())
-	until := civilDate(now)
-	since := parseSinceOrDefault(q.Get("since"), until)
+	since, until, tz := InsightsRange(now, q.Get("since"))
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		return InsightsResponse{}, fmt.Errorf("load timezone %s: %w", tz, err)
@@ -218,11 +225,11 @@ func (r *Reader) Insights(ctx context.Context, now time.Time, q url.Values) (Ins
 
 	resp := InsightsResponse{
 		Since: since.Format(insightsDateFormat), Until: until.Format(insightsDateFormat), Timezone: tz,
-		Points: make([]insightsPointJSON, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
+		Points: make([]InsightsPoint, len(merged)), WastePctWeek: spend.PctWeek(wasteUSD, factor),
 	}
 	for i, p := range merged {
 		agentPct, followUpPct, totalPct := spend.KindPctWeek(p.AgentUSD, p.FollowUpUSD, factor)
-		resp.Points[i] = insightsPointJSON{
+		resp.Points[i] = InsightsPoint{
 			Ticket: p.Ticket, Title: p.Title, Feature: p.Feature, MergedAt: p.MergedAt.UTC().Format(time.RFC3339),
 			PctWeek:         totalPct,
 			AgentPctWeek:    agentPct,
