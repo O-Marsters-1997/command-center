@@ -79,7 +79,7 @@ type insightsJSON struct {
 	Until        string          `json:"until"`
 	Timezone     string          `json:"timezone"`
 	Points       []insightsPoint `json:"points"`
-	WastePctWeek float64         `json:"waste_pct_week"`
+	WastePctWeek json.RawMessage `json:"waste_pct_week"`
 }
 
 type insightsPoint struct {
@@ -116,6 +116,14 @@ func TestHandleInsightsServesTheDocumentedShape(t *testing.T) {
 	if body.Timezone == "" {
 		t.Error("timezone is empty")
 	}
+	if len(body.WastePctWeek) == 0 {
+		t.Error("waste_pct_week is absent")
+	} else {
+		var waste float64
+		if err := json.Unmarshal(body.WastePctWeek, &waste); err != nil {
+			t.Errorf("decode waste_pct_week: %v", err)
+		}
+	}
 	if len(body.Points) != 1 || body.Points[0].Ticket != "sandbox://CC-1" {
 		t.Fatalf("points = %+v, want the one seeded ticket", body.Points)
 	}
@@ -133,5 +141,32 @@ func TestHandleInsightsFallsBackToThirtyDaysOnBadSince(t *testing.T) {
 		if body.Since != "2026-08-21" {
 			t.Errorf("query %q: since = %q, want the 30-day default 2026-08-21", query, body.Since)
 		}
+	}
+}
+
+func TestHandleInsightsHistoricalRangeAndRepoScope(t *testing.T) {
+	t.Parallel()
+
+	store := openStore(t)
+	insightsTicket(t, store, "sandbox://CC-1", "cc-sandbox", "feat-a")
+	mergedAt := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mergeInsightsTicket(t, store, "sandbox://CC-1", mergedAt)
+	server := newServer(store, testNow)
+
+	resp, included := fetchInsights(t, server, "since=2019-12-01")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /insights.json status = %d, want 200", resp.Code)
+	}
+	if included.Since != "2019-12-01" || included.Until != "2026-08-20" || included.Timezone == "" {
+		t.Errorf("range and timezone = (%q, %q, %q), want (2019-12-01, 2026-08-20, nonempty)",
+			included.Since, included.Until, included.Timezone)
+	}
+	if len(included.Points) != 1 || included.Points[0].Ticket != "sandbox://CC-1" {
+		t.Errorf("points = %+v, want the merged ticket", included.Points)
+	}
+
+	_, excluded := fetchInsights(t, server, "since=2019-12-01&repo=not-a-repo")
+	if len(excluded.Points) != 0 {
+		t.Errorf("points for unknown repo = %+v, want none", excluded.Points)
 	}
 }

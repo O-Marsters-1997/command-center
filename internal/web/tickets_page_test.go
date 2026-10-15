@@ -26,6 +26,20 @@ func TestTicketsPageShowsEveryFeatureInSections(t *testing.T) {
 	for _, ticketURL := range []string{"sandbox://ROOT", "sandbox://CHILD", "sandbox://LONE"} {
 		webtest.RowFor(t, page, ticketURL)
 	}
+	for _, tt := range []struct{ name, url, state string }{
+		{"root", "sandbox://ROOT", "ready"}, {"child", "sandbox://CHILD", "blocked"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			row := webtest.RowFor(t, page, tt.url)
+			if row.State != tt.state {
+				t.Errorf("%s state = %q, want %q", tt.url, row.State, tt.state)
+			}
+		})
+	}
+	child := webtest.RowFor(t, page, "sandbox://CHILD")
+	if got := child.Ticket.Text(); !strings.Contains(got, "after #ROOT") {
+		t.Errorf("CHILD blocker = %q, want ROOT", got)
+	}
 	root := htmltest.Parse(t, page)
 	all := root.One(t, `nav[aria-label="ticket filters"] a[href="/tickets"]`)
 	for _, tt := range []struct{ name, want string }{

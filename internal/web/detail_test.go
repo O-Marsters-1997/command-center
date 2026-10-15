@@ -117,6 +117,14 @@ func TestHTMXIsServedFromTheBinary(t *testing.T) {
 	}
 }
 
+func TestBoardRowLinksToItsSession(t *testing.T) {
+	t.Parallel()
+
+	now := testNow
+	body := renderPath(t, newServer(detailStore(t, writeLog(t, 1), now, now), now), "/tickets")
+	htmltest.Parse(t, body).One(t, `table#board a[href="/s/o/r/76"]`)
+}
+
 func TestBoardPollsItselfInsteadOfReloading(t *testing.T) {
 	t.Parallel()
 

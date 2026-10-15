@@ -147,6 +147,17 @@ func TestSessionRawTabServesTheJSONL(t *testing.T) {
 	}
 }
 
+func TestSessionRawTabExplainsMissingLog(t *testing.T) {
+	t.Parallel()
+
+	st := openStore(t)
+	storetest.Tickets(t, st, storepkg.Ticket{URL: sessionTicket, Repo: "acme/web", Branch: "cc-1"})
+	main := htmltest.Parse(t, renderPath(t, newServer(st, testNow), "/s/acme/web/1?log=raw")).One(t, "main#main")
+	if got := main.Text(); !strings.Contains(got, "No log was kept for this run") {
+		t.Errorf("raw tab = %q, want missing-log explanation", got)
+	}
+}
+
 func TestSessionPageShowsTheWorktreeToShellInto(t *testing.T) {
 	t.Parallel()
 	now := testNow

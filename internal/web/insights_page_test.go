@@ -25,6 +25,17 @@ func TestInsightsPageCarriesRepoAndFeatureScopeThrough(t *testing.T) {
 	}
 }
 
+func TestInsightsPageShowsEmptySpendModules(t *testing.T) {
+	t.Parallel()
+
+	main := htmltest.Parse(t, renderPath(t, newServer(openStore(t), testNow), "/insights")).One(t, "main#main")
+	main.One(t, `[aria-label="limits"]`)
+	main.One(t, `[aria-label="spend split"]`)
+	if got := main.Text(); !strings.Contains(got, "no merged tickets in range") {
+		t.Errorf("empty insights = %q, want no merged tickets in range", got)
+	}
+}
+
 func TestInsightsPageRendersMergedTicketsAsAnSVGChart(t *testing.T) {
 	t.Parallel()
 
