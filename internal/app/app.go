@@ -100,17 +100,10 @@ func New(
 		observe = loop.NewObserver(st, gh.CLI{}, cfg)
 	}
 
-	var loopOpts []loop.Option
-	if settings.validate != nil {
-		loopOpts = append(loopOpts, loop.WithValidator(settings.validate))
-	}
-	if settings.remoteOf != nil {
-		loopOpts = append(loopOpts, loop.WithRemoteSource(settings.remoteOf))
-	}
 	lp := loop.New(loop.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, Runner: runner.ProcessRunner{}, Observe: observe,
-		Config: cfg, Workspace: ws,
-	}, loopOpts...)
+		Config: cfg, Workspace: ws, Validate: settings.validate, RemoteOf: settings.remoteOf,
+	})
 	server := web.NewServer(web.Deps{
 		Logger: logger, Store: st, Clock: settings.clock, DataDir: ws.DataDir, Nudger: lp.Nudger(),
 		SpendLimit5h: cfg.SpendLimit5h, BoardPollSeconds: cfg.BoardPollSeconds,

@@ -57,7 +57,10 @@ func TestTheFirstTickSettlesEachCloningRepoIntoReadyOrRefused(t *testing.T) {
 		repo.Phase, repo.SettingsSource, repo.SettingsReadAt = plan.RepoReady, "defaults", now
 		return repo, nil
 	}
-	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
+	lp := newLoopWithDeps(loop.Deps{
+		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Runner: runner.ProcessRunner{}, Validate: validate,
+	})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -91,7 +94,10 @@ func TestAValidatorThatCannotAnswerLeavesTheRepoCloningAndTheOthersSettle(t *tes
 		repo.Phase = plan.RepoReady
 		return repo, nil
 	}
-	lp := newLoop(st, idle, fixedClock(testAt), cfg, ws, runner.ProcessRunner{}, loop.WithValidator(validate))
+	lp := newLoopWithDeps(loop.Deps{
+		Store: st, Observe: idle, Clock: fixedClock(testAt), Config: cfg, Workspace: ws,
+		Runner: runner.ProcessRunner{}, Validate: validate,
+	})
 
 	if err := lp.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce: %v", err)

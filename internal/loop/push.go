@@ -17,16 +17,20 @@ func (l *Loop) pushPushable(ctx context.Context, snap plan.Snapshot, obs plan.Ob
 	}
 
 	var candidates []plan.PushCandidate
-	for _, e := range snap.Entries {
+	if err := eachEntry(snap, func(e plan.Entry) bool {
 		if e.Run.IsNone() || e.Run.Unwrap().Outcome != option.Some(plan.OutcomePush) {
-			continue
+			return false
 		}
-		tip, ok := obs.LocalTips[e.Ticket.Ref()]
-		if !ok || obs.Runs[e.Ticket.URL].Alive {
-			continue
-		}
+		_, ok := obs.LocalTips[e.Ticket.Ref()]
+		return ok && !obs.Runs[e.Ticket.URL].Alive
+	}, func(e plan.Entry) error {
 		candidates = append(candidates,
-			plan.PushCandidate{URL: e.Ticket.URL, LocalTip: tip, LastPushedTip: lastPushed[e.Ticket.URL]})
+			plan.PushCandidate{
+				URL: e.Ticket.URL, LocalTip: obs.LocalTips[e.Ticket.Ref()], LastPushedTip: lastPushed[e.Ticket.URL],
+			})
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	toPush := plan.PushPlan(candidates)
@@ -73,15 +77,9 @@ func (l *Loop) applyRetryPushIntents(ctx context.Context, snap plan.Snapshot, ob
 	})
 }
 
-type pushTarget struct {
-	repoPath, branch string
-	recordedTip      plan.SHA
-	restacked        bool
-}
-
-func pushBranch(ctx context.Context, target pushTarget) error {
-	repoPath, branch, recordedTip := target.repoPath, target.branch, string(target.recordedTip)
-	if !target.restacked || recordedTip == "" {
+func pushBranch(ctx context.Context, repoPath, branch string, tip plan.SHA, restacked bool) error {
+	recordedTip := string(tip)
+	if !restacked || recordedTip == "" {
 		return wrapGit("push "+branch, git.Push(ctx, repoPath, branch))
 	}
 	descended, err := git.Ancestor(ctx, repoPath, recordedTip, branch)
@@ -119,10 +117,7 @@ func (l *Loop) pushOne(ctx context.Context, e plan.Entry, localTip plan.SHA, obs
 	if err != nil {
 		return fmt.Errorf("restacked since last push: %w", err)
 	}
-	target := pushTarget{
-		repoPath: repoPath, branch: t.Branch, recordedTip: pushedTips[t.URL], restacked: restacked[t.URL],
-	}
-	if err := pushBranch(ctx, target); err != nil {
+	if err := pushBranch(ctx, repoPath, t.Branch, pushedTips[t.URL], restacked[t.URL]); err != nil {
 		return l.event(ctx, url, store.EventPushFailed, err.Error())
 	}
 
