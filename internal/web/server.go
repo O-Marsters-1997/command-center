@@ -365,7 +365,7 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("load board: %w", err)
 	}
-	return writeJSON(w, board.Groups)
+	return writeJSON(w, view.Graph(board.Groups))
 }
 
 func writeJSON(w http.ResponseWriter, v any) error {
