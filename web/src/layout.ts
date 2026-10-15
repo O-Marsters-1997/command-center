@@ -113,7 +113,9 @@ export function traceChain<T extends { url: string }>(url: string, edges: Edge<T
     const queue = [url];
     const seen = new Set([url]);
     while (queue.length > 0) {
-      for (const next of adjacent.get(queue.pop() as string) ?? []) {
+      const current = queue.pop();
+      if (current === undefined) break;
+      for (const next of adjacent.get(current) ?? []) {
         if (seen.has(next)) continue;
         seen.add(next);
         traced.add(next);
@@ -122,10 +124,4 @@ export function traceChain<T extends { url: string }>(url: string, edges: Edge<T
     }
   }
   return traced;
-}
-
-export function sessionPath(ticketURL: string): string {
-  const parts = ticketURL.replace(/\/$/, "").split("/");
-  if (parts.length < 5 || parts[parts.length - 2] !== "issues") return "";
-  return `/s/${parts[parts.length - 4]}/${parts[parts.length - 3]}/${parts[parts.length - 1]}`;
 }

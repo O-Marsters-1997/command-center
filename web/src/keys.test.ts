@@ -320,7 +320,7 @@ describe("searchKey", () => {
   function box(value: string): SearchBox & { events: string[]; blurs: number } {
     const b = {
       value,
-      events: [] as string[],
+      events: new Array<string>(),
       blurs: 0,
       blur: () => void b.blurs++,
       dispatchEvent: (e: Event) => {

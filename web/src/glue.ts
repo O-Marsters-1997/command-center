@@ -116,7 +116,7 @@ function eventElement(e: Event): Element | null {
 
 function initGlue(): void {
   document.addEventListener("htmx:responseError", (e) => {
-    const detail = (e as CustomEvent<{ xhr?: { status?: number } }>).detail;
+    const detail = e instanceof CustomEvent ? e.detail : undefined;
     show(failureText("responseError", detail?.xhr?.status));
   });
   document.addEventListener("htmx:sendError", () => show(failureText("sendError")));
@@ -129,7 +129,7 @@ function initGlue(): void {
     const el = eventElement(e);
     if (!(el instanceof HTMLFormElement)) return;
     el.removeAttribute("aria-busy");
-    const detail = (e as CustomEvent<{ successful?: boolean }>).detail;
+    const detail = e instanceof CustomEvent ? e.detail : undefined;
     if (detail?.successful && el.hasAttribute("data-reset-on-success")) el.reset();
   });
 
